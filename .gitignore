@@ -3,6 +3,28 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Authentication preview: local credentials and generated files
+.goblin-auth/
+.goblin-browser-test/
+node_modules/
+playwright-report/
+test-results/
+goblin-auth-preview.tar
+
+# Secrets, including copies outside the default data directory
+auth.json
+auth.json.*
+owner-token
+owner-token.*
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+id_rsa
+id_ed25519
+
 # User-specific files
 *.rsuser
 *.suo

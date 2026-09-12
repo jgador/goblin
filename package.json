@@ -1,0 +1,21 @@
+{
+  "name": "goblin-auth-preview",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:codex": "node scripts/check-codex.mjs",
+    "test:browser": "playwright test"
+  },
+  "dependencies": {
+    "@openai/codex": "0.154.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
