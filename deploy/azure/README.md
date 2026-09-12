@@ -11,56 +11,68 @@ will resolve, but it is not a ready-to-use Goblin setup page.
 
 ## Deploy through the Azure portal
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#view/Microsoft_Azure_CreateUIDef/CustomDeploymentBlade/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.json/uiFormDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2FuiFormDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.portal.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2FcreateUiDefinition.json)
 
-The button loads both the ARM template and `uiFormDefinition.json`. Both files
-must be published and publicly accessible at the linked GitHub URLs. The form
-uses Azure's built-in `Microsoft.Compute.CredentialsCombo` control to generate
-and download a key during creation; the ARM template alone does not provide
-that dialog.
+The button loads `azuredeploy.portal.json` with `createUiDefinition.json` using
+Azure's native custom-template creation flow. Both files must be publicly
+accessible at the linked URLs. The installer is intended to keep configuration,
+key generation, private-key download, and deployment inside Azure Portal.
 
-1. Sign in and select your subscription, resource group, and region on **Basics**.
-   Use a dedicated resource group; `rg-goblin-prod` is the suggested default name.
-   Keep **Company or software name** as `Goblin` or replace it with your own name.
-2. On **Save your VM access key**, choose **Generate new key pair**. Technical
-   users can instead choose a public key already in Azure or supply their own.
-3. Leave **Enable direct SSH access now** unchecked unless you need terminal
-   access immediately. Enabling it also requires your source IP/CIDR.
-4. Review **Advanced settings**; resource-name overrides are optional.
-5. On **Review + create**, select **Create**, then Azure's **Download private key
-   and create resource** action. Save the downloaded file for later VM access.
-6. Follow installation in Azure's deployment page. After success, open
-   **Outputs** for resource names, public IP, hostname, the readiness command,
-   and an SSH command with instructions for using your saved key later.
+**Portal verification pending:** this replaces the Form view route that displayed
+only a public-key input. It follows Azure's [Linux VM example](https://github.com/Azure/azure-quickstart-templates/tree/master/quickstarts/microsoft.compute/vm-trustedlaunch-linux)
+and [credentials control documentation](https://learn.microsoft.com/en-us/azure/azure-resource-manager/managed-applications/microsoft-compute-credentialscombo).
+The new route's selector, download dialog, and final key installation still need
+a live portal test. This is a candidate fix, not a verified installation flow.
 
-The form explains the download in plain language:
+The intended customer steps are:
 
-> Save this file somewhere safe: you will need it if you want to connect directly
-> to your VM later. It is not needed for everyday Goblin use. Azure will not let
-> you download the same private key again.
+1. On **Basics**, select your subscription, resource group, and region. Use a
+   dedicated resource group; `rg-goblin-prod` is the suggested default name.
+   Keep **Company or software name** as `Goblin` or enter your own name.
+2. In the VM credentials section on the same page, choose **Generate new key
+   pair** and give the key a name. Existing-key options remain available for
+   administrators who already have a key pair.
+3. Leave **Advanced settings** at their defaults unless needed. Direct SSH network
+   access is closed by default; enabling it requires an allowed source IP/CIDR.
+4. On **Review + create**, select **Create**, then **Download private key and
+   create resource**. Save the file for direct VM access later. It is not needed
+   for everyday Goblin use. Azure does not offer another download of the same
+   private key. Using an existing key pair does not produce a new download.
+5. Follow installation on Azure's deployment page. After success, open **Outputs**
+   for resource names, public IP, hostname, and administration commands.
 
-Azure keeps the public key and supplies it to the template. The private key is
-downloaded to the customer's computer and is not passed to the template, put in
-deployment outputs, or stored in Key Vault. If an existing public key is used,
-the customer must already have its matching private key; no new download occurs.
-Key download does not enable public SSH by itself.
+The public-key text field is labeled **SSH public key**. The private-key download
+is a separate action handled by Azure during creation. Only the public key is
+passed to the template and installed on the VM. The private key stays on the
+customer's computer; it is not in deployment outputs or Key Vault.
 
-The portal form explicitly selects a resource group so Azure's credentials
-control has a group for its SSH-key resource. That selection is passed as the
-template's `resourceGroupName` override. The raw ARM/CLI entry point still
-generates the resource group name when the override is omitted.
+The native creation flow selects or creates the resource group before deploying
+the resource-group-scoped `portal.bicep` template. It uses the same VM module and
+naming defaults as the subscription-scoped `main.bicep` CLI entry point. The portal
+uses the resource-group name chosen on **Basics**; the CLI entry point can still
+create a group with an automatically generated name. The portal entry point tags
+the VM and its resources; it does not change the selected resource group's tags.
 
-For a local preview, open the [Form view sandbox](https://aka.ms/form/sandbox),
-select package type **CustomTemplate**, load `azuredeploy.json`, replace the
-generated form with `uiFormDefinition.json`, and select **Preview**. Selecting
-**Create** starts a real deployment. Before distributing the installer, verify
-key generation, the download dialog, and VM access using the downloaded key in
-a live Azure portal deployment; schema validation alone does not exercise them.
+For a local UI preview, open the [Create UI Definition Sandbox](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade),
+paste `createUiDefinition.json`, and select **Preview**. The UI preview does not
+prove that the key download and deployment work together. For the full test,
+publish both linked JSON files and use the button. Verify that **Generate new key
+pair** is visible, a private key can be downloaded, and the matching public key is
+installed on the VM. Then test access with the downloaded key using restricted SSH.
+Do not direct customers to generate keys elsewhere if this check fails; the
+in-portal workflow still needs a fix.
+
+The portal template allows an empty public key during review because Azure
+creates a new key after the final **Create** action. If the public key is still
+missing when the VM extension runs, installation fails in Azure with a
+**VM access-key setup** error. That check prevents an apparently successful
+installation without the expected SSH key; resources may already exist at that
+point. Raw CLI installations can intentionally omit a key.
 
 Users can also upload just `azuredeploy.json` through Azure Portal **Deploy a
 custom template → Build your own template in the editor → Load file**, or use
 the CLI instructions below. These raw-template paths accept an existing public
-key or no SSH key; they do not run the guided key-download workflow. The ARM JSON
+key or no SSH key; they do not generate or download a key. The ARM JSON
 is self-contained and embeds its modules and bootstrap script.
 
 Administrators with appropriate Azure permissions can use the VM's **Run
@@ -80,11 +92,12 @@ should present progress and failures in place, with a clear explanation and
 expandable technical details. It must be able to report provisioning failures
 even if the VM or Goblin application never starts.
 
-This is a **subscription-scoped deployment** so it can create the resource group
-with a generated or overridden name. The deploying identity needs permission to
-deploy at subscription scope and create the resource group and its resources;
-subscription-level Contributor is one way to grant those permissions. Resource
-group-only access is insufficient for this entry point.
+The portal entry point deploys at **resource-group scope**. The deploying identity
+needs permission to deploy the VM, networking, extensions, and SSH-key resource
+in the selected group. Creating a new resource group also requires subscription
+permission to create it. The CLI entry point uses **subscription scope**, needs
+permission to deploy there and create its resource group, and is not suitable
+for an identity with access only to an existing resource group.
 
 Azure charges for the VM, managed disk, public IP, and applicable network usage.
 The default VM is `Standard_D4s_v5` (4 vCPUs, 16 GiB RAM), with a 128 GiB Standard
@@ -203,8 +216,8 @@ workloads. The upstream project explains [the runtime boundary](https://github.c
 The network permits public HTTP and HTTPS for future application ingress. It
 does not expose the Kubernetes API to the internet. Public SSH is disabled unless
 you supply both a public key and a source address; password authentication is
-disabled in both modes. The guided portal flow installs the public key that
-matches the downloaded private key. A raw-template deployment that omits the
+disabled in both modes. The guided portal flow installs the supplied public key;
+the customer must retain its matching private key. A raw-template deployment that omits the
 optional key has no SSH login credential.
 K3s includes Traefik, but no Goblin ingress or trusted HTTPS certificate is
 configured. Do not interpret a Traefik response as an installed application.
@@ -215,8 +228,8 @@ and NIC; deleting the resource group also deletes the resources and data inside 
 
 ## Use the saved key or add SSH access later
 
-If you used the guided download flow, the matching public key is already installed
-on the VM. When direct access is needed, allow inbound TCP port 22 from your IP
+If you supplied a public key during deployment, it is already installed on the
+VM. When direct access is needed, allow inbound TCP port 22 from your IP
 in the VM subnet's network security group and connect using the saved private
 key, administrator username, and public hostname. You do not need to create
 another key pair.
@@ -292,12 +305,15 @@ portal; an unchanged successful extension is not a general-purpose upgrade job.
 
 ## Maintain and validate the template
 
-Edit `main.bicep`, `modules/vm.bicep`, or `bootstrap.sh`, then regenerate the
-self-contained portal artifact with Bicep:
+Edit the Bicep or bootstrap sources, then regenerate both self-contained ARM
+artifacts. Keep the shared parameter defaults and naming rules in `main.bicep`
+and `portal.bicep` aligned:
 
 ```bash
 bicep build deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json
+bicep build deploy/azure/portal.bicep --outfile deploy/azure/azuredeploy.portal.json
 bash -n deploy/azure/bootstrap.sh
+sh -n deploy/azure/missing-ssh-key.sh
 ```
 
 Commit the regenerated JSON together with its sources. Then run Azure's validation
@@ -305,9 +321,11 @@ command above with real parameters in the intended subscription. Compilation and
 validation do not replace a live deployment check of image pulls, runtime behavior,
 and regional capacity. Update pinned versions and their digests together.
 
-Validate `uiFormDefinition.json` against its published Azure Form view schema and
-check that every `view.outputs.parameters` key matches an ARM parameter. The
-credentials control's `sshPublicKey` is empty during review when generating a
-new key; Azure supplies it after the creation/download step. The template keeps
-an empty default to permit that pre-generation review and raw deployments without
-SSH. Validate the completed portal flow before treating the key as installed.
+Validate `createUiDefinition.json` against its published CreateUiDefinition schema
+and check that `parameters.outputs` maps exactly to `azuredeploy.portal.json`'s
+parameters. Do not use the old `uiFormDefinitionUri` route with this file.
+
+The credentials control returns an empty `sshPublicKey` while reviewing a newly
+generated key. The template must accept that review state; the extension guard
+rejects a missing key at installation time for the portal entry point. Verify
+both review validation and the final key handoff in a live portal deployment.

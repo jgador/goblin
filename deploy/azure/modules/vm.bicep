@@ -6,6 +6,8 @@ param tags object
 param dnsLabel string
 param adminUsername string
 param adminSshPublicKey string
+@description('Fail bootstrap if the portal did not supply the expected SSH public key. CLI deployments may omit a key.')
+param requireSshPublicKey bool = false
 param vmSize string
 param osDiskSizeGB int
 param sshSourceAddressPrefix string
@@ -205,7 +207,9 @@ resource bootstrap 'Microsoft.Compute/virtualMachines/extensions@2024-11-01' = {
     typeHandlerVersion: '2.1'
     autoUpgradeMinorVersion: true
     settings: {
-      script: base64(loadTextContent('../bootstrap.sh'))
+      script: base64(requireSshPublicKey && empty(trim(adminSshPublicKey))
+        ? loadTextContent('../missing-ssh-key.sh')
+        : loadTextContent('../bootstrap.sh'))
     }
   }
 }
