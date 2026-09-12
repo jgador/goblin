@@ -1,0 +1,79 @@
+:root{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#272e29;background:#f5f5ef;font-synthesis:none;line-height:1.5;--green:#243d2c;--muted:#6c746c;--border:#e2e5dc}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:radial-gradient(ellipse at 80% 30%,#e8eedf55,transparent 55%)}
+button,input,summary{font:inherit}
+button,a,input,summary{-webkit-tap-highlight-color:transparent}
+button,a,summary{touch-action:manipulation}
+a{color:var(--green);text-underline-offset:3px}
+button{cursor:pointer}
+button:disabled{opacity:.55;cursor:wait}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #79a557;outline-offset:4px}
+.topbar{padding:26px 42px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.brand{display:flex;align-items:center;gap:10px;color:#243d2c;font-size:25px;font-weight:720;letter-spacing:-1px;text-decoration:none}
+.preview{font-size:10px;letter-spacing:.08em;font-weight:600;color:var(--muted);border:1px solid #dce2d6;border-radius:5px;padding:3px 6px;margin-left:3px;text-transform:uppercase}
+main{width:100%;max-width:520px;margin:42px auto 50px;padding:0 24px;flex:1}
+.intro{margin-bottom:28px}
+.eyebrow,.step{font-size:10px;letter-spacing:.16em;font-weight:700;color:#6b7e60;margin:0 0 17px}
+h1{font-size:clamp(38px,7vw,49px);line-height:1.09;letter-spacing:-2.1px;font-weight:600;margin:0 0 17px}
+.lead{font-size:15px;color:var(--muted);max-width:360px;margin:0;line-height:1.7}
+.card{border:1px solid var(--border);border-radius:18px;background:#fffefb;padding:30px;box-shadow:0 8px 32px #243d2c06}
+.card .step{font-size:9px;margin-bottom:12px}
+h2{font-size:22px;letter-spacing:-.65px;line-height:1.3;font-weight:600;margin:0 0 16px}
+h3{font-size:16px;font-weight:650;margin:0}
+.description,.option>p{font-size:13px;line-height:1.7;color:var(--muted);margin:0 0 20px}
+.option-heading{display:flex;gap:10px;align-items:center;margin:22px 0 6px}
+.recommended{font-size:10px;padding:3px 7px;border-radius:5px;background:#edf3e6;color:#526e39}
+.primary,.secondary{display:flex;align-items:center;justify-content:center;gap:12px;border-radius:8px;padding:12px 15px;min-height:46px;font-size:13px;font-weight:600;transition:background .15s ease}
+.primary{background:var(--green);border:1px solid var(--green);color:#fff}
+.primary:hover{background:#34563e}
+.primary span{margin-left:auto;color:#c5d7b9}
+.secondary{background:#fffefb;border:1px solid #d4dbcd;color:var(--green)}
+.secondary:hover{background:#f2f5ec}
+.full{width:100%}
+.button-link{text-decoration:none}
+.quiet{padding:6px 0;background:transparent;border:0;color:#617159;font-size:12px;font-weight:550;white-space:nowrap}
+.quiet:hover{text-decoration:underline;text-underline-offset:3px}
+.footnote{font-size:11px;color:#7b837a;line-height:1.65;margin:13px 0 0}
+.option .footnote{font-size:11px;margin:11px 0 0;color:#7b837a}
+details{border-top:1px solid var(--border);margin-top:24px;padding-top:19px}
+summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;color:#5a6658;font-size:12px}
+summary::-webkit-details-marker{display:none}
+summary span{font-size:17px;font-weight:400}
+details[open] summary{margin-bottom:18px}
+details[open] summary span{transform:rotate(45deg)}
+label{display:block;font-size:12px;font-weight:550;margin-bottom:7px}
+input{width:100%;padding:11px 12px;border:1px solid #d7decf;border-radius:7px;background:#fff;color:#243d2c;font-size:14px;outline:none;margin-bottom:13px}
+input:focus{border-color:#7d9a63;box-shadow:0 0 0 3px #e7efd9}
+input::placeholder{color:#a0a99a}
+.below-card{font-size:11px;color:#929b8b;text-align:center;margin:18px 0 0}
+.device-code-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f2f5eb;border:1px solid #e0e7d6;padding:16px;border-radius:9px;margin:22px 0 15px}
+#device-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:23px;letter-spacing:2px;color:#345234;overflow-wrap:anywhere}
+.waiting{font-size:11px;color:#728267;display:flex;align-items:center;justify-content:center;gap:7px;margin:17px 0 23px}
+.dot{width:6px;height:6px;border-radius:50%;background:#8daa6f;animation:pulse 1.8s infinite}
+.device-login-setup{background:#f2f5eb;border:1px solid #e0e7d6;border-radius:8px;padding:13px 14px;margin:0 0 16px;color:#5b6f4a}
+.device-login-setup>p{font-size:12px;line-height:1.65;margin:0 0 8px}
+.device-login-help{border:0;padding:0;margin:0}
+.device-login-help summary{font-size:11px;gap:10px;color:var(--green)}
+.device-login-help[open] summary{margin-bottom:12px}
+.device-login-steps{font-size:12px;line-height:1.7;color:#5f6d57}
+.device-login-steps p{margin:0 0 12px}
+.device-login-steps p:last-child{margin-bottom:0}
+.device-login-steps ol{padding-left:20px;margin:0 0 12px}
+.device-login-steps li{padding-left:2px;margin-bottom:7px}
+.cancel{margin-top:14px}
+.success-mark{display:flex;align-items:center;justify-content:center;width:43px;height:43px;border-radius:50%;background:#e8f1dd;color:#4d7137;font-size:22px;margin-bottom:21px}
+.account-row{display:flex;align-items:center;justify-content:space-between;gap:15px;border:1px solid var(--border);border-radius:9px;padding:15px;margin:20px 0}
+.account-method{font-size:13px;font-weight:600;margin:0}
+.account-detail{font-size:11px;color:var(--muted);margin:3px 0 0;overflow-wrap:anywhere}
+.connected-badge{font-size:9px;font-weight:600;color:#567543;background:#edf4e6;padding:4px 7px;border-radius:5px;white-space:nowrap}
+#connected-panel .secondary{margin-top:24px}
+.message{font-size:12px;line-height:1.65;background:#fff2e9;border:1px solid #eed8c5;color:#805333;padding:12px 14px;border-radius:8px;margin-top:20px;overflow-wrap:anywhere}
+.message.info{background:#f1f5eb;border-color:#dde6d2;color:#5b6f4a}
+.working,.loading{font-size:12px;color:var(--muted)}
+.working{margin:18px 0 0}
+footer{font-size:10px;color:#929b8b;padding:0 24px 22px;text-align:center}
+footer span{padding:0 7px;color:#bdc5b7}
+@keyframes pulse{50%{opacity:.35}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+@media(max-width:520px){.topbar{padding:20px 24px}main{margin-top:27px}.card{padding:24px}#device-code{font-size:20px;letter-spacing:1px}.account-row{align-items:flex-start}.account-detail{max-width:210px}}

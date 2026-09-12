@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <title>Connect your account · Goblin</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/styles.css">
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Goblin home"><img src="/icon.svg" alt="" width="30" height="30">goblin<span class="preview">preview</span></a>
+      <button class="quiet" id="lock-button" type="button" hidden>Lock preview</button>
+    </header>
+
+    <main>
+      <div class="intro">
+        <p class="eyebrow">MAKE YOURSELF AT HOME</p>
+        <h1>Your workspace.<br>Your account.</h1>
+        <p class="lead">Connect Codex to the account you want to use with Goblin.</p>
+      </div>
+
+      <div class="card" id="card" aria-busy="false">
+        <div id="loading-panel" class="loading" role="status">Opening your workspace…</div>
+
+        <section id="locked-panel" hidden aria-labelledby="locked-heading">
+          <p class="step">WORKSPACE ACCESS</p>
+          <h2 id="locked-heading">Open your workspace</h2>
+          <p class="description">Enter the workspace access code from your server to manage this connection.</p>
+          <form id="unlock-form">
+            <label for="workspace-code">Workspace access code</label>
+            <input id="workspace-code" name="workspace-code" type="password" autocomplete="off" spellcheck="false" required maxlength="256">
+            <button class="primary full" type="submit">Open workspace <span aria-hidden="true">↗</span></button>
+          </form>
+          <p class="footnote">This code opens Goblin. You’ll connect your ChatGPT account or API key next.</p>
+        </section>
+
+        <section id="connect-panel" hidden aria-labelledby="connect-heading">
+          <p class="step">CONNECT CODEX</p>
+          <h2 id="connect-heading">Choose how to sign in</h2>
+          <div class="option">
+            <div class="option-heading"><h3>ChatGPT</h3><span class="recommended">Recommended</span></div>
+            <p>Use the Codex access included with your ChatGPT plan or workspace.</p>
+            <div data-device-login-help></div>
+            <button id="chatgpt-button" class="primary full" type="button">Continue with ChatGPT <span aria-hidden="true">↗</span></button>
+            <p class="footnote">You’ll sign in on OpenAI’s website using a one-time code.</p>
+          </div>
+          <details id="api-key-option">
+            <summary>Use an OpenAI API key instead <span aria-hidden="true">+</span></summary>
+            <form id="api-key-form">
+              <p class="description">API usage is billed separately from your ChatGPT subscription.</p>
+              <label for="api-key">OpenAI API key</label>
+              <input id="api-key" name="api-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" required minlength="20" maxlength="4096">
+              <button class="secondary full" type="submit">Connect API key</button>
+              <p class="footnote">Get a key from the <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>. Connecting checks the key without generating a model response.</p>
+            </form>
+          </details>
+        </section>
+
+        <section id="pending-panel" hidden aria-labelledby="pending-heading">
+          <p class="step">CONTINUE IN YOUR BROWSER</p>
+          <h2 id="pending-heading">Finish signing in to ChatGPT</h2>
+          <p class="description">Open the sign-in page and enter this one-time code. Keep this tab open; it will update when you’re connected.</p>
+          <div class="device-code-row"><code id="device-code" aria-label="One-time sign-in code"></code><button id="copy-code" class="quiet" type="button">Copy code</button></div>
+          <a id="verification-link" class="primary full button-link" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in <span aria-hidden="true">↗</span></a>
+          <p class="waiting" role="status"><span class="dot" aria-hidden="true"></span>Waiting for you to finish signing in</p>
+          <div data-device-login-help></div>
+          <button id="cancel-button" class="quiet cancel" type="button">Cancel sign-in</button>
+        </section>
+
+        <section id="connected-panel" hidden aria-labelledby="connected-heading">
+          <div class="success-mark" aria-hidden="true">✓</div>
+          <p class="step">CONNECTION SAVED</p>
+          <h2 id="connected-heading">You’re connected</h2>
+          <div class="account-row"><div><p id="account-method" class="account-method"></p><p id="account-detail" class="account-detail"></p></div><span class="connected-badge">Connected</span></div>
+          <p class="description" id="connected-description"></p>
+          <p class="footnote">This preview checks authentication. Running an agent task will be available in a later step.</p>
+          <button id="disconnect-button" class="secondary full" type="button">Disconnect Codex</button>
+        </section>
+
+        <div id="message" class="message" role="alert" hidden></div>
+        <p id="working" class="working" role="status" hidden>Working…</p>
+      </div>
+      <p class="below-card">Your connection stays with this workspace.</p>
+    </main>
+    <template id="device-login-help-template">
+      <aside class="device-login-setup" aria-label="ChatGPT sign-in setup">
+        <p>Before your first sign-in, enable <strong>Device Code Authentication</strong> in ChatGPT.</p>
+        <details class="device-login-help">
+          <summary>How to enable device-code login <span aria-hidden="true">+</span></summary>
+          <div class="device-login-steps">
+            <p><strong>Workspace account</strong></p>
+            <ol>
+              <li>Open <a href="https://chatgpt.com" target="_blank" rel="noopener noreferrer">ChatGPT</a> and go to <strong>Workspace settings</strong>.</li>
+              <li>Open <strong>Permissions &amp; roles</strong>.</li>
+              <li>Select the role that applies to your account, usually the default workspace role.</li>
+              <li>Under <strong>Codex Local</strong>, enable <strong>Codex Local access</strong>.</li>
+              <li>Enable <strong>Device Code Authentication</strong>.</li>
+            </ol>
+            <p>If you see “Please contact your workspace admin to enable device code authentication,” ask your admin to enable both permissions for your role.</p>
+            <p><strong>Personal account:</strong> enable device-code login under <strong>Settings → Security</strong> in ChatGPT.</p>
+            <p>Then return to OpenAI’s sign-in page and try again. If the code has expired, cancel sign-in here and start again.</p>
+          </div>
+        </details>
+      </aside>
+    </template>
+    <footer>Goblin <span aria-hidden="true">/</span> Your self-hosted AI coworker</footer>
+  </body>
+</html>

@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goblin-preview
+---
+# Kept separate from the Sandbox so replacing the Sandbox preserves the login.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: goblin-auth-data
+  namespace: goblin-preview
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: agents.x-k8s.io/v1beta1
+kind: Sandbox
+metadata:
+  name: goblin-auth
+  namespace: goblin-preview
+spec:
+  podTemplate:
+    metadata:
+      labels:
+        app: goblin-auth-preview
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: auth
+          image: goblin-auth-preview:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8787
+          env:
+            - name: GOBLIN_PUBLIC_ORIGIN
+              value: http://localhost:8787
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: temporary
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: goblin-auth-data
+        - name: temporary
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblin-auth-preview
+  namespace: goblin-preview
+spec:
+  type: ClusterIP
+  selector:
+    app: goblin-auth-preview
+  ports:
+    - name: http
+      port: 8787
+      targetPort: http
+---
+# Preview access is through kubectl port-forward, not other pods or ingress.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goblin-auth-preview
+  namespace: goblin-preview
+spec:
+  podSelector:
+    matchLabels:
+      app: goblin-auth-preview
+  policyTypes: [Ingress]
+  ingress: []
