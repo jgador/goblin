@@ -262,6 +262,55 @@ changes: later template deployments can reset network rules, so review the
 planned networking changes before redeploying. Use VMAccess to manage keys on an
 existing VM; changing deployment parameters is not a substitute for that step.
 
+### Windows SSH private-key permissions
+
+If Windows OpenSSH reports `UNPROTECTED PRIVATE KEY FILE`, `bad permissions`,
+or `Permissions ... are too open`, it is refusing to use the local private key.
+The resulting `Permission denied (publickey)` does not by itself mean that the
+VM's public key is incorrect.
+
+The downloaded `.pem` file contains your private SSH key. Someone who can read
+it could use it to authenticate as you wherever its matching public key is
+authorized. OpenSSH checks the file's permissions and rejects keys readable by
+unrelated accounts. An `UNKNOWN\UNKNOWN` entry is an account identifier (SID)
+that Windows cannot resolve to a name. Removing its permission entry removes
+its access to the file; it does not delete an account.
+
+To inspect the key's current permissions in PowerShell, adjust the filename to
+match your downloaded key:
+
+```powershell
+$keyPath = "$env:USERPROFILE\.ssh\ssh-goblin.pem"
+icacls $keyPath
+```
+
+Common permission markers are `(F)` for full control, `(R)` for read, `(M)` for
+modify, and `(I)` for a permission inherited from the parent folder.
+
+For a more readable view, including the file owner:
+
+```powershell
+$acl = Get-Acl -LiteralPath $keyPath
+
+$acl | Select-Object Owner
+
+$acl.Access | Format-Table IdentityReference, FileSystemRights, AccessControlType, IsInherited -AutoSize
+```
+
+These commands only display permissions. They do not change the file or reveal
+the private key's contents.
+
+To correct the permissions through File Explorer:
+
+1. Right-click the `.pem` file and open **Properties → Security → Advanced**.
+2. Check that your Windows account owns the file and has read access. Use
+   **Change** beside the owner or **Add** to correct these if needed.
+3. If inheritance is enabled, select **Disable inheritance → Convert inherited
+   permissions into explicit permissions on this object**.
+4. Remove access entries for unrelated accounts, including the SID identified
+   in the SSH error. Keep your own account's access.
+5. Select **Apply**, then **OK**. Inspect the permissions again and retry SSH.
+
 ## Check readiness or diagnose a failed bootstrap
 
 Run the deployment's `readinessCommand` output, or open the VM's Azure Portal
