@@ -1,6 +1,6 @@
 interface:
   display_name: "Commit and Push"
-  short_description: "Commit Goblin changes and push to GitHub"
+  short_description: "Commit all Goblin changes together and push to GitHub"
 policy:
   allow_implicit_invocation: false
   products:
