@@ -9,8 +9,16 @@ const environmentNames = [
   "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
 ];
 
-// This bridge deliberately exposes only authentication. It never forwards a
-// browser-supplied RPC method, starts a thread, or executes an agent task.
+// The preview supports authentication and short prompt tests. Disable tools
+// that could execute code or access external context in its private runtime.
+const disabledFeatures = [
+  "shell_tool", "unified_exec", "shell_snapshot", "view_image", "image_generation",
+  "apps", "plugins", "remote_plugin", "multi_agent", "hooks", "memories", "goals",
+  "code_mode", "code_mode_host", "skill_search", "skill_mcp_dependency_install",
+  "sleep_tool", "request_permissions_tool", "workspace_dependencies",
+];
+
+// Browser input is never used as an RPC method or runtime configuration.
 export class Codex extends EventEmitter {
   constructor({ codexHome, home, workspace, command = process.execPath,
     args = [launcher], environment = process.env, timeoutMs = 20_000 }) {
@@ -47,6 +55,14 @@ export class Codex extends EventEmitter {
       "-c", 'model_provider="openai"',
       "-c", 'cli_auth_credentials_store="file"',
       "-c", "analytics.enabled=false",
+      ...disabledFeatures.flatMap((name) => ["-c", `features.${name}=false`]),
+      "-c", 'web_search="disabled"',
+      "-c", 'sandbox_mode="read-only"',
+      "-c", 'approval_policy="never"',
+      "-c", "project_doc_max_bytes=0",
+      "-c", "skills.include_instructions=false",
+      "-c", "memories.generate_memories=false",
+      "-c", "memories.use_memories=false",
     ], { cwd: options.workspace, env, stdio: ["pipe", "pipe", "ignore"] });
     this.child = child;
     let buffer = "";
@@ -120,7 +136,7 @@ export class Codex extends EventEmitter {
         if (child) { child.kill(); this.fail(child); }
       }, this.options.timeoutMs);
       timer.unref();
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve, reject, timer, method });
       try { this.send({ id, method, params }); }
       catch (error) {
         clearTimeout(timer);
@@ -133,7 +149,7 @@ export class Codex extends EventEmitter {
   receive(message) {
     if (message.method) {
       if (message.id !== undefined) {
-        this.send({ id: message.id, error: { code: -32601, message: "Only authentication is supported." } });
+        this.send({ id: message.id, error: { code: -32601, message: "Interactive tools are disabled in this preview." } });
       } else {
         this.emit("notification", message);
       }
@@ -146,7 +162,9 @@ export class Codex extends EventEmitter {
     if (message.error) {
       // Upstream errors can contain URLs, codes, or tokens. Never return or log them.
       request.reject(new PublicError("codex_request_failed",
-        "Codex could not complete this request. For ChatGPT, check that device-code login is enabled, then retry.", 502));
+        request.method === "account/login/start"
+          ? "Codex could not complete this request. For ChatGPT, check that device-code login is enabled, then retry."
+          : "Codex could not complete this request. Please retry.", 502));
     } else {
       request.resolve(message.result);
     }

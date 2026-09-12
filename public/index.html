@@ -76,7 +76,17 @@
           <h2 id="connected-heading">You’re connected</h2>
           <div class="account-row"><div><p id="account-method" class="account-method"></p><p id="account-detail" class="account-detail"></p></div><span class="connected-badge">Connected</span></div>
           <p class="description" id="connected-description"></p>
-          <p class="footnote">This preview checks authentication. Running an agent task will be available in a later step.</p>
+          <form id="prompt-form" class="prompt-test">
+            <label for="test-prompt">Try a simple prompt</label>
+            <textarea id="test-prompt" name="prompt" rows="3" maxlength="500" required>Say hello in one sentence.</textarea>
+            <p class="footnote">Send a small request using this account. It counts toward your ChatGPT usage limits or API billing.</p>
+            <button class="primary full" type="submit">Send test prompt</button>
+          </form>
+          <div id="prompt-result" class="prompt-result" role="status" aria-live="polite" hidden>
+            <p class="prompt-success">Response received</p>
+            <pre id="prompt-reply"></pre>
+            <p id="prompt-details" class="footnote"></p>
+          </div>
           <button id="disconnect-button" class="secondary full" type="button">Disconnect Codex</button>
         </section>
 
