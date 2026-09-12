@@ -30,3 +30,8 @@ npm start
 Open http://localhost:8787 and enter the workspace access code stored in
 `.goblin-auth/owner-token`. See the [preview guide](docs/authentication-preview.md)
 for sign-in, persistence checks, and deployment to your VM.
+
+The backend, browser UI, tests, and support scripts are written in TypeScript.
+`npm start` builds the app into `dist/` before launching it. Use
+`npm run typecheck` to check types without producing build files, or `npm test`
+to build and run the unit tests.

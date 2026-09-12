@@ -1,9 +1,12 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { fileURLToPath } from "node:url";
-import { PublicError, runtimeError } from "./errors.mjs";
+import type { Readable, Writable } from "node:stream";
+import { PublicError, runtimeError } from "./errors.js";
+import { isRecord } from "./json.js";
+import type { CodexEvents, CodexRequests, CodexResponses } from "./protocol.js";
 
-const launcher = fileURLToPath(new URL("../node_modules/@openai/codex/bin/codex.js", import.meta.url));
+const launcher = fileURLToPath(import.meta.resolve("@openai/codex/bin/codex.js"));
 const environmentNames = [
   "PATH", "LANG", "LC_ALL", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR",
   "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
@@ -19,9 +22,36 @@ const disabledFeatures = [
 ];
 
 // Browser input is never used as an RPC method or runtime configuration.
-export class Codex extends EventEmitter {
+export interface CodexOptions {
+  codexHome: string;
+  home: string;
+  workspace: string;
+  command?: string;
+  args?: string[];
+  environment?: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}
+
+type CodexChild = ChildProcessByStdio<Writable, Readable, null>;
+interface PendingRequest {
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
+  timer: NodeJS.Timeout;
+  method: keyof CodexRequests;
+}
+
+export class Codex extends EventEmitter<CodexEvents> {
+  readonly options: Required<CodexOptions>;
+  ready: boolean;
+  child: CodexChild | null;
+  private starting: Promise<void> | null;
+  private pending: Map<number, PendingRequest>;
+  private nextId: number;
+  private closed: boolean;
+  private retiring: Promise<void>;
+
   constructor({ codexHome, home, workspace, command = process.execPath,
-    args = [launcher], environment = process.env, timeoutMs = 20_000 }) {
+    args = [launcher], environment = process.env, timeoutMs = 20_000 }: CodexOptions) {
     super();
     this.options = { codexHome, home, workspace, command, args, environment, timeoutMs };
     this.ready = false;
@@ -99,14 +129,14 @@ export class Codex extends EventEmitter {
     }
   }
 
-  fail(child) {
+  fail(child: CodexChild) {
     if (this.child !== child) return;
     this.child = null;
     this.ready = false;
     // Don't let a replacement process refresh the same credentials while an
     // unhealthy predecessor is still alive.
     if (child.pid && child.exitCode === null && child.signalCode === null) {
-      this.retiring = new Promise((resolveRetiring) => {
+      this.retiring = new Promise<void>((resolveRetiring) => {
         const timeout = setTimeout(() => child.kill("SIGKILL"), 2000);
         timeout.unref();
         child.once("exit", () => { clearTimeout(timeout); resolveRetiring(); });
@@ -121,14 +151,19 @@ export class Codex extends EventEmitter {
     this.emit("disconnected");
   }
 
-  send(message) {
+  private send(message: Record<string, unknown>) {
     if (!this.child?.stdin.writable) throw runtimeError();
     this.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
-  request(method, params = {}) {
+  request<Method extends keyof CodexRequests>(method: Method,
+    ...args: CodexRequests[Method] extends undefined ? [params?: undefined] : [params: CodexRequests[Method]]
+  ): Promise<CodexResponses[Method]> {
+    const [params = {}] = args;
     const id = this.nextId++;
-    return new Promise((resolve, reject) => {
+    // The response type is asserted only at the wire boundary. Authentication
+    // and prompt handlers retain their runtime checks before using the data.
+    return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new PublicError("runtime_timeout", "Codex took too long to respond. Please retry.", 504));
@@ -143,18 +178,21 @@ export class Codex extends EventEmitter {
         this.pending.delete(id);
         reject(error);
       }
-    });
+    }) as Promise<CodexResponses[Method]>;
   }
 
-  receive(message) {
-    if (message.method) {
+  private receive(message: unknown) {
+    if (!isRecord(message)) throw runtimeError();
+    if (typeof message.method === "string") {
       if (message.id !== undefined) {
         this.send({ id: message.id, error: { code: -32601, message: "Interactive tools are disabled in this preview." } });
       } else {
-        this.emit("notification", message);
+        this.emit("notification", { method: message.method,
+          params: isRecord(message.params) ? message.params : {} });
       }
       return;
     }
+    if (typeof message.id !== "number") return;
     const request = this.pending.get(message.id);
     if (!request) return;
     clearTimeout(request.timer);
@@ -174,7 +212,7 @@ export class Codex extends EventEmitter {
     this.closed = true;
     const child = this.child;
     if (!child) { await this.retiring; return; }
-    await new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       const timeout = setTimeout(() => { child.kill("SIGKILL"); resolve(); }, 2000);
       timeout.unref();
       child.once("exit", () => { clearTimeout(timeout); resolve(); });

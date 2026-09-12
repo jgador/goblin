@@ -1,17 +1,21 @@
-import { PublicError, runtimeError } from "./errors.mjs";
+import { PublicError, runtimeError } from "./errors.js";
+import { isRecord } from "./json.js";
+import type { Codex } from "./codex.js";
+import type { CodexNotification } from "./protocol.js";
+import type { PromptResult } from "../shared/api.js";
 
 const maxReplyLength = 8000;
 const cancelled = () => new PublicError("prompt_cancelled", "The prompt test was cancelled.", 408);
 
-function generationError(error) {
-  const info = error?.codexErrorInfo;
-  const status = typeof info === "object" && info !== null
-    ? Object.values(info).find((value) => Number.isInteger(value?.httpStatusCode))?.httpStatusCode
+function generationError(error: unknown) {
+  const info = isRecord(error) ? error.codexErrorInfo : undefined;
+  const status = isRecord(info)
+    ? Object.values(info).filter(isRecord).find((value) => Number.isInteger(value.httpStatusCode))?.httpStatusCode
     : null;
   if (info === "unauthorized" || status === 401) {
     return new PublicError("prompt_unauthorized", "OpenAI rejected the saved login. Disconnect Codex and sign in again.", 502);
   }
-  if (["usageLimitExceeded", "rateLimitExceeded"].includes(info) || status === 429) {
+  if (info === "usageLimitExceeded" || info === "rateLimitExceeded" || status === 429) {
     return new PublicError("prompt_limit_reached", "The connected account has reached a usage or rate limit. Check your plan or API billing, then retry later.", 429);
   }
   if (status === 403) {
@@ -22,22 +26,22 @@ function generationError(error) {
 
 // One fresh, ephemeral thread per test. Only final assistant text is returned;
 // raw events, reasoning, error bodies, and credentials never reach the browser.
-export async function runPrompt(codex, prompt, { signal, timeoutMs = 90_000 } = {}) {
+export async function runPrompt(codex: Codex, prompt: string,
+  { signal, timeoutMs = 90_000 }: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<Omit<PromptResult, "authType">> {
   if (signal?.aborted) throw cancelled();
   const startedAt = Date.now();
-  let threadId;
-  let turnId;
+  let threadId: string | undefined;
+  let turnId: string | undefined;
   let finished = false;
-  let timer;
-  let resolveTurn;
-  let rejectTurn;
-  const messages = new Map();
-  const completion = new Promise((resolve, reject) => { resolveTurn = resolve; rejectTurn = reject; });
+  let timer: NodeJS.Timeout | undefined;
+  const messages = new Map<string, string>();
+  const { promise: completion, resolve: resolveTurn, reject: rejectTurn } = Promise.withResolvers<string>();
   // Notifications can finish the turn before turn/start's response arrives.
   completion.catch(() => {});
 
-  function saveMessage(item) {
-    if (item?.type !== "agentMessage" || item.phase === "commentary") return;
+  function saveMessage(item: unknown) {
+    if (!isRecord(item) || item.type !== "agentMessage" || item.phase === "commentary") return;
     if (typeof item.id !== "string" || typeof item.text !== "string") return;
     messages.set(item.id, item.text);
     if (messages.size > 32 || [...messages.values()].join("\n\n").length > maxReplyLength) {
@@ -45,18 +49,19 @@ export async function runPrompt(codex, prompt, { signal, timeoutMs = 90_000 } = 
     }
   }
 
-  function notification({ method, params }) {
+  function notification({ method, params }: CodexNotification) {
     if (!threadId || params?.threadId !== threadId) return;
-    const eventTurnId = params.turnId ?? params.turn?.id;
+    const turn = isRecord(params.turn) ? params.turn : undefined;
+    const eventTurnId = params.turnId ?? turn?.id;
     if (typeof eventTurnId !== "string") return;
     if (turnId && eventTurnId !== turnId) return;
     turnId ??= eventTurnId;
     if (method === "item/completed") saveMessage(params.item);
-    if (method === "turn/completed") {
+    if (method === "turn/completed" && turn) {
       finished = true;
-      if (params.turn.status === "failed") return rejectTurn(generationError(params.turn.error));
-      if (params.turn.status !== "completed") return rejectTurn(cancelled());
-      for (const item of params.turn.items ?? []) saveMessage(item);
+      if (turn.status === "failed") return rejectTurn(generationError(turn.error));
+      if (turn.status !== "completed") return rejectTurn(cancelled());
+      for (const item of Array.isArray(turn.items) ? turn.items : []) saveMessage(item);
       const reply = [...messages.values()].join("\n\n").trim();
       if (!reply) return rejectTurn(new PublicError("prompt_empty_reply", "The model finished without a text reply. Please retry.", 502));
       resolveTurn(reply);

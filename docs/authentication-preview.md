@@ -13,6 +13,11 @@ npm ci
 npm start
 ```
 
+`npm start` compiles the TypeScript backend and browser code into `dist/`, copies
+the static assets, and starts the compiled server. After editing sources, restart
+it to rebuild. To build separately, run `npm run build`, then launch with
+`node dist/src/main.js`. Generated files in `dist/` are ignored by Git.
+
 Open **http://localhost:8787**. In another terminal, read the workspace access
 code and enter it on the page:
 
@@ -120,6 +125,10 @@ docker run --rm --name goblin-auth-preview \
   goblin-auth-preview:0.1.0
 ```
 
+The image builds TypeScript in a separate stage. The final image contains the
+compiled server, browser assets, and production dependencies; it does not need
+the TypeScript compiler at runtime.
+
 In another terminal, read the workspace access code:
 
 ```bash
@@ -215,11 +224,17 @@ contain authentication details. Error messages give safe retry guidance.
 ## Automated checks
 
 ```bash
+npm run typecheck
 npm test
 npm run test:codex
 npx playwright install --with-deps chromium
 npm run test:browser
 ```
+
+The test commands build first, so unit tests and fixture processes exercise the
+compiled code. Type checking also covers tests and scripts. Playwright loads its
+TypeScript configuration and browser tests directly. The browser module uses
+only type imports from `shared/api.ts`, so it needs no client framework or bundler.
 
 The unit tests exercise the HTTP and JSON-RPC paths with a fake Codex
 process: login notifications, cancellation, expiry, persistence, logout,

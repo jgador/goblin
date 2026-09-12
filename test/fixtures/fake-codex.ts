@@ -1,17 +1,26 @@
 import { createInterface } from "node:readline";
 import { readFile, writeFile, appendFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import type { Account } from "../../shared/api.js";
+import type { CodexRequests } from "../../src/protocol.js";
+
+type ClientMessage = {
+  [Method in keyof CodexRequests]: { id: number; method: Method; params: CodexRequests[Method] };
+}[keyof CodexRequests]
+  | { id?: number; method: "initialized"; params?: undefined }
+  | { id?: number; method?: undefined; params?: undefined };
 
 const scenario = process.argv[2];
 const root = process.env.CODEX_HOME;
+if (!root) throw new Error("The fixture requires a private CODEX_HOME.");
 const accountFile = join(root, "auth.json");
-const send = (message) => process.stdout.write(`${JSON.stringify(message)}\n`);
-const result = (id, value) => send({ id, result: value });
+const send = (message: Record<string, unknown>) => process.stdout.write(`${JSON.stringify(message)}\n`);
+const result = (id: number | undefined, value: unknown) => send({ id, result: value });
 let initialized = false;
 let acknowledged = false;
-let login = null;
-let timer;
-let promptTimer;
+let login: string | null = null;
+let timer: NodeJS.Timeout | undefined;
+let promptTimer: NodeJS.Timeout | undefined;
 let threadNumber = 0;
 await writeFile(join(root, "environment.json"), JSON.stringify(process.env));
 
@@ -25,7 +34,7 @@ async function finishLogin() {
 }
 
 for await (const line of createInterface({ input: process.stdin })) {
-  const { id, method, params } = JSON.parse(line);
+  const { id, method, params } = JSON.parse(line) as ClientMessage;
   if (!method) continue;
   if (method.startsWith("thread/") || method.startsWith("turn/")) {
     await appendFile(join(root, "prompt-requests.jsonl"), `${JSON.stringify({ method, params })}\n`);
@@ -40,7 +49,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   } else if (method === "account/read") {
     if (scenario === "hang") continue;
     try { await readFile(join(root, "complete-login")); await finishLogin(); } catch {}
-    let account = null;
+    let account: Account | null = null;
     try { account = JSON.parse(await readFile(accountFile, "utf8")); } catch {}
     if (account?.type === "apiKey") account = { type: "apiKey" };
     result(id, { account, requiresOpenaiAuth: true });
@@ -80,11 +89,12 @@ for await (const line of createInterface({ input: process.stdin })) {
       approvalPolicy: params.approvalPolicy });
   } else if (method === "turn/start") {
     const threadId = params.threadId;
+    const prompt = params.input[0].text;
     const turnId = `test-turn-${threadNumber}`;
     const started = { id: turnId, status: "inProgress", items: [] };
     send({ method: "turn/started", params: { threadId, turn: started } });
     function complete() {
-      const failed = scenario === "prompt-fail" || scenario === "prompt-partial-failure" || params.input[0].text === "Trigger a simulated failure.";
+      const failed = scenario === "prompt-fail" || scenario === "prompt-partial-failure" || prompt === "Trigger a simulated failure.";
       const message = { type: "agentMessage", id: "answer", phase: "final_answer",
         text: scenario === "prompt-large" ? "x".repeat(8001) : "Hello from the connected account." };
       send({ method: "item/completed", params: { threadId: "another-thread", turnId, item: { ...message, text: "Wrong thread" } } });

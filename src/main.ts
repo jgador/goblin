@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { createApplication } from "./server.mjs";
+import { createApplication } from "./server.js";
 
 process.umask(0o077);
 const port = Number(process.env.GOBLIN_PORT || 8787);
