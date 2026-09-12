@@ -7,15 +7,23 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node src/main.mjs",
-    "test": "node --test test/*.test.mjs",
-    "test:codex": "node scripts/check-codex.mjs",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.browser.json && node dist/scripts/copy-assets.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.browser.json --noEmit",
+    "prestart": "npm run build",
+    "start": "node dist/src/main.js",
+    "pretest": "npm run build",
+    "test": "node --test dist/test/*.test.js",
+    "pretest:codex": "npm run build",
+    "test:codex": "node dist/scripts/check-codex.js",
+    "pretest:browser": "npm run build",
     "test:browser": "playwright test"
   },
   "dependencies": {
     "@openai/codex": "0.154.0"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.13.4",
+    "typescript": "7.0.2"
   }
 }

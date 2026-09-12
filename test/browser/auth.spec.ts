@@ -3,7 +3,7 @@ import { writeFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 
 test("owner can connect, cancel, complete ChatGPT sign-in, and switch to an API key", async ({ page }) => {
-  const errors = [];
+  const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open your workspace" })).toBeVisible();

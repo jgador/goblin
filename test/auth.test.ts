@@ -1,20 +1,40 @@
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, stat, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { request as httpRequest } from "node:http";
-import { createApplication } from "../src/server.mjs";
-import { checkApiKey } from "../src/auth.mjs";
-import { PublicError } from "../src/errors.mjs";
+import { request as httpRequest, type RequestOptions } from "node:http";
+import { createApplication } from "../src/server.js";
+import { checkApiKey, type ApiKeyVerifier } from "../src/auth.js";
+import { PublicError } from "../src/errors.js";
+import { isRecord } from "../src/json.js";
+import type { ApiFailure, ApiResponses } from "../shared/api.js";
 
-const fixture = fileURLToPath(new URL("./fixtures/fake-codex.mjs", import.meta.url));
+const fixture = fileURLToPath(new URL("./fixtures/fake-codex.js", import.meta.url));
 const origin = "http://localhost:8787";
 const exampleKey = "sk-test-ONLY-A-FAKE-KEY-1234567890";
 
-async function start(t, options = {}) {
+interface TestOptions {
+  dataDir?: string;
+  scenario?: string;
+  timeoutMs?: number;
+  promptTimeoutMs?: number;
+  verifyApiKey?: ApiKeyVerifier;
+  keepData?: boolean;
+}
+
+type ResponseBody<Path extends string> = Path extends keyof ApiResponses ? ApiResponses[Path] : Record<string, unknown>;
+interface TestResponse<Path extends string> {
+  status: number;
+  headers: Headers;
+  body: Record<string, unknown>;
+  readonly data: ResponseBody<Path>;
+  readonly error: ApiFailure["error"];
+}
+
+async function start(t: TestContext, options: TestOptions = {}) {
   const dataDir = options.dataDir || await mkdtemp(join(tmpdir(), "goblin-test-"));
   const app = await createApplication({ dataDir, publicOrigin: origin,
     codexOptions: { args: [fixture, options.scenario || "manual"],
@@ -24,13 +44,15 @@ async function start(t, options = {}) {
     verifyApiKey: options.verifyApiKey || (async () => "accepted"),
     promptTimeoutMs: options.promptTimeoutMs,
   });
-  await new Promise((resolve) => app.server.listen(0, "127.0.0.1", resolve));
-  const url = `http://127.0.0.1:${app.server.address().port}`;
+  await new Promise<void>((resolve) => app.server.listen(0, "127.0.0.1", resolve));
+  const address = app.server.address();
+  assert.ok(address && typeof address !== "string");
+  const url = `http://127.0.0.1:${address.port}`;
   let cookie = "";
   let closed = false;
   async function close() { if (!closed) { closed = true; await app.close(); } }
   t.after(async () => { await close(); if (!options.keepData) await rm(dataDir, { recursive: true, force: true }); });
-  async function request(path, body, overrides = {}) {
+  async function request<Path extends string>(path: Path, body?: unknown, overrides: RequestOptions = {}): Promise<TestResponse<Path>> {
     return new Promise((resolveRequest, reject) => {
       const request = httpRequest(`${url}${path}`, {
         method: body === undefined ? "GET" : "POST",
@@ -43,9 +65,25 @@ async function start(t, options = {}) {
         response.on("data", (chunk) => { raw += chunk; });
         response.on("end", () => {
           try {
-            resolveRequest({ status: response.statusCode,
-              headers: new Headers(Object.entries(response.headers).map(([name, value]) => [name, Array.isArray(value) ? value.join(",") : value])),
-              body: JSON.parse(raw) });
+            const body: unknown = JSON.parse(raw);
+            const status = response.statusCode;
+            assert.ok(status !== undefined && isRecord(body));
+            resolveRequest({ status,
+              headers: new Headers(Object.entries(response.headers).flatMap(([name, value]): [string, string][] =>
+                value === undefined ? [] : [[name, Array.isArray(value) ? value.join(",") : value]])),
+              body,
+              get data() {
+                assert.equal(status, 200);
+                assert.ok(!("error" in body));
+                return body as ResponseBody<Path>;
+              },
+              get error() {
+                assert.ok(status >= 400 && isRecord(body.error));
+                assert.equal(typeof body.error.code, "string");
+                assert.equal(typeof body.error.message, "string");
+                return body.error as ApiFailure["error"];
+              },
+            });
           } catch (error) { reject(error); }
         });
       });
@@ -56,7 +94,9 @@ async function start(t, options = {}) {
   async function unlock() {
     const response = await request("/api/session", { token: (await readFile(app.tokenFile, "utf8")).trim() });
     assert.equal(response.status, 200);
-    cookie = response.headers.get("set-cookie").split(";")[0];
+    const setCookie = response.headers.get("set-cookie");
+    assert.ok(setCookie);
+    cookie = setCookie.split(";")[0];
     return response;
   }
   return { app, dataDir, request, unlock, close, url };
@@ -68,8 +108,8 @@ test("workspace access is required, cookies are private, and credential files ar
   assert.equal((await ctx.request("/api/auth/chatgpt", {})).status, 401);
   assert.equal((await ctx.request("/api/session", { token: "wrong" })).status, 401);
   const session = await ctx.unlock();
-  assert.match(session.headers.get("set-cookie"), /HttpOnly/);
-  assert.match(session.headers.get("set-cookie"), /SameSite=Strict/);
+  assert.match(session.headers.get("set-cookie") ?? "", /HttpOnly/);
+  assert.match(session.headers.get("set-cookie") ?? "", /SameSite=Strict/);
   assert.equal((await ctx.request("/codex/auth.json")).status, 404);
   assert.equal((await ctx.request("/owner-token")).status, 404);
   assert.equal((await ctx.request("/api/rpc", { method: "turn/start" })).status, 404);
@@ -82,7 +122,7 @@ test("mutations reject foreign origins and unexpected hosts", async (t) => {
   await ctx.unlock();
   const foreign = await ctx.request("/api/auth/chatgpt", {}, { headers: { Origin: "https://attacker.example" } });
   assert.equal(foreign.status, 403);
-  assert.equal(foreign.body.error.code, "invalid_origin");
+  assert.equal(foreign.error.code, "invalid_origin");
   assert.equal((await ctx.request("/api/status", undefined, { headers: { Host: "attacker.example" } })).status, 403);
   assert.equal((await ctx.request("/api/auth/chatgpt", {}, { headers: { Origin: "null" } })).status, 403);
 });
@@ -100,7 +140,7 @@ test("oversized and non-JSON requests are rejected before authentication changes
   await ctx.unlock();
   assert.equal((await ctx.request("/api/auth/api-key", { apiKey: "x".repeat(9000) })).status, 413);
   assert.equal((await ctx.request("/api/auth/chatgpt", {}, { headers: { "Content-Type": "text/plain" } })).status, 415);
-  assert.equal((await ctx.request("/api/status")).body.account, null);
+  assert.equal((await ctx.request("/api/status")).data.account, null);
 });
 
 test("ChatGPT device flow completes through Codex notifications", async (t) => {
@@ -108,12 +148,13 @@ test("ChatGPT device flow completes through Codex notifications", async (t) => {
   await ctx.unlock();
   const login = await ctx.request("/api/auth/chatgpt", {});
   assert.equal(login.status, 200);
-  assert.equal(login.body.login.userCode, "ABCD-1234");
-  assert.equal(login.body.login.verificationUrl, "https://auth.openai.com/codex/device");
+  assert.ok(login.data.login);
+  assert.equal(login.data.login.userCode, "ABCD-1234");
+  assert.equal(login.data.login.verificationUrl, "https://auth.openai.com/codex/device");
   await delay(100);
   const status = await ctx.request("/api/status");
-  assert.deepEqual(status.body.account, { type: "chatgpt", email: "owner@example.test", planType: "plus" });
-  assert.equal(status.body.login, null);
+  assert.deepEqual(status.data.account, { type: "chatgpt", email: "owner@example.test", planType: "plus" });
+  assert.equal(status.data.login, null);
   const env = JSON.parse(await readFile(join(ctx.dataDir, "codex/environment.json"), "utf8"));
   assert.equal(env.OPENAI_API_KEY, undefined);
   assert.equal(env.CODEX_API_KEY, undefined);
@@ -129,10 +170,10 @@ test("a pending login can be canceled, rejects overlapping logins, and can be re
   assert.equal((await ctx.request("/api/auth/chatgpt", {})).status, 409);
   assert.equal((await ctx.request("/api/auth/api-key", { apiKey: exampleKey })).status, 409);
   const canceled = await ctx.request("/api/auth/cancel", {});
-  assert.equal(canceled.body.login, null);
-  assert.equal(canceled.body.account, null);
+  assert.equal(canceled.data.login, null);
+  assert.equal(canceled.data.account, null);
   await delay(20);
-  assert.equal((await ctx.request("/api/status")).body.notice, null);
+  assert.equal((await ctx.request("/api/status")).data.notice, null);
   assert.equal((await ctx.request("/api/auth/chatgpt", {})).status, 200);
 });
 
@@ -142,8 +183,9 @@ test("expired login and upstream errors reveal no upstream secrets", async (t) =
   await ctx.request("/api/auth/chatgpt", {});
   await delay(100);
   const result = await ctx.request("/api/status");
-  assert.equal(result.body.login, null);
-  assert.equal(result.body.notice.kind, "error");
+  assert.equal(result.data.login, null);
+  assert.ok(result.data.notice);
+  assert.equal(result.data.notice.kind, "error");
   assert.doesNotMatch(JSON.stringify(result.body), /secret-upstream-code/);
   const failed = await start(t, { scenario: "fail-device" });
   await failed.unlock();
@@ -157,24 +199,24 @@ test("the UI never receives an arbitrary upstream verification URL", async (t) =
   await ctx.unlock();
   const result = await ctx.request("/api/auth/chatgpt", {});
   assert.equal(result.status, 502);
-  assert.equal(result.body.error.code, "unexpected_login_response");
+  assert.equal(result.error.code, "unexpected_login_response");
   assert.doesNotMatch(JSON.stringify(result.body), /attacker/);
-  assert.equal((await ctx.request("/api/status")).body.login, null);
+  assert.equal((await ctx.request("/api/status")).data.login, null);
 });
 
 test("API key login and logout use Codex storage without returning the key", async (t) => {
-  let checkedKey;
+  let checkedKey: string | undefined;
   const ctx = await start(t, { verifyApiKey: async (key) => { checkedKey = key; return "accepted"; } });
   await ctx.unlock();
   const result = await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
   assert.equal(result.status, 200);
   assert.equal(checkedKey, exampleKey);
-  assert.deepEqual(result.body.account, { type: "apiKey" });
-  assert.equal(result.body.verification, "accepted");
+  assert.deepEqual(result.data.account, { type: "apiKey" });
+  assert.equal(result.data.verification, "accepted");
   assert.doesNotMatch(JSON.stringify(result.body), /FAKE-KEY/);
   assert.equal((await ctx.request("/api/auth/chatgpt", {})).status, 409);
   const logout = await ctx.request("/api/auth/logout", {});
-  assert.equal(logout.body.account, null);
+  assert.equal(logout.data.account, null);
   await assert.rejects(readFile(join(ctx.dataDir, "codex/auth.json")), { code: "ENOENT" });
 });
 
@@ -186,10 +228,11 @@ test("rejected API keys are not persisted; restricted-key verification is explic
   const restricted = await start(t, { verifyApiKey: async () => "unverified" });
   await restricted.unlock();
   const result = await restricted.request("/api/auth/api-key", { apiKey: exampleKey });
-  assert.equal(result.body.verification, "unverified");
-  assert.match(result.body.notice.message, /Model access has not been tested/);
+  assert.equal(result.data.verification, "unverified");
+  assert.ok(result.data.notice);
+  assert.match(result.data.notice.message, /Model access has not been tested/);
   assert.equal((await restricted.request("/api/prompt", { prompt: "Hello" })).status, 200);
-  const verified = (await restricted.request("/api/status")).body;
+  const verified = (await restricted.request("/api/status")).data;
   assert.equal(verified.verification, "accepted");
   assert.equal(verified.notice, null);
 });
@@ -202,10 +245,10 @@ test("saved authentication survives process replacement and stays isolated betwe
   const restored = await start(t, { dataDir: first.dataDir });
   assert.equal((await restored.request("/api/status")).status, 401);
   await restored.unlock();
-  assert.deepEqual((await restored.request("/api/status")).body.account, { type: "apiKey" });
+  assert.deepEqual((await restored.request("/api/status")).data.account, { type: "apiKey" });
   const separate = await start(t);
   await separate.unlock();
-  assert.equal((await separate.request("/api/status")).body.account, null);
+  assert.equal((await separate.request("/api/status")).data.account, null);
 });
 
 test("locking the preview invalidates its browser session without disconnecting Codex", async (t) => {
@@ -215,7 +258,7 @@ test("locking the preview invalidates its browser session without disconnecting 
   assert.equal((await ctx.request("/api/session/lock", {})).status, 200);
   assert.equal((await ctx.request("/api/status")).status, 401);
   await ctx.unlock();
-  assert.deepEqual((await ctx.request("/api/status")).body.account, { type: "apiKey" });
+  assert.deepEqual((await ctx.request("/api/status")).data.account, { type: "apiKey" });
 });
 
 test("a stalled Codex request times out and doesn't leave a reusable pending process", async (t) => {
@@ -227,9 +270,10 @@ test("a stalled Codex request times out and doesn't leave a reusable pending pro
 });
 
 test("API key verification uses a fixed endpoint, never follows redirects, and makes no model request", async () => {
-  const check = async (status) => checkApiKey(exampleKey, async (url, options) => {
+  const check = async (status: number) => checkApiKey(exampleKey, async (url, options) => {
     assert.equal(url, "https://api.openai.com/v1/models");
-    assert.equal(options.headers.Authorization, `Bearer ${exampleKey}`);
+    assert.ok(options);
+    assert.equal(new Headers(options.headers).get("Authorization"), `Bearer ${exampleKey}`);
     assert.equal(options.redirect, "error");
     assert.equal(options.body, undefined);
     return new Response("{}", { status });
@@ -240,6 +284,7 @@ test("API key verification uses a fixed endpoint, never follows redirects, and m
   await assert.rejects(check(401), { code: "invalid_api_key" });
   await assert.rejects(check(503), { code: "verification_unavailable" });
   await assert.rejects(checkApiKey(exampleKey, async () => { throw new Error(exampleKey); }), (error) => {
+    assert.ok(error instanceof PublicError);
     assert.equal(error.code, "verification_unavailable");
     assert.doesNotMatch(error.message, /FAKE-KEY/);
     return true;
@@ -261,12 +306,13 @@ test("prompt tests require a connected owner and use one isolated thread", async
   await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
   const result = await ctx.request("/api/prompt", { prompt: "Say hello in one sentence.", model: "must-not-use", method: "command/exec" });
   assert.equal(result.status, 200);
-  assert.equal(result.body.reply, "Hello from the connected account.");
-  assert.equal(result.body.model, "test-model");
-  assert.equal(result.body.authType, "apiKey");
-  assert.equal(typeof result.body.durationMs, "number");
+  assert.equal(result.data.reply, "Hello from the connected account.");
+  assert.equal(result.data.model, "test-model");
+  assert.equal(result.data.authType, "apiKey");
+  assert.equal(typeof result.data.durationMs, "number");
   assert.doesNotMatch(JSON.stringify(result.body), /FAKE-KEY|Thinking|Wrong thread/);
-  const calls = (await readFile(join(ctx.dataDir, "codex/prompt-requests.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+  const calls = (await readFile(join(ctx.dataDir, "codex/prompt-requests.jsonl"), "utf8")).trim().split("\n")
+    .map((line): { method: string; params: Record<string, unknown> } => JSON.parse(line));
   assert.deepEqual(calls.map((call) => call.method), ["thread/start", "turn/start", "thread/unsubscribe"]);
   assert.equal(calls[0].params.ephemeral, true);
   assert.equal(calls[0].params.sandbox, "read-only");
@@ -284,8 +330,8 @@ test("prompt tests use the saved ChatGPT account and handle completion before th
   await delay(100);
   const result = await ctx.request("/api/prompt", { prompt: "Hello" });
   assert.equal(result.status, 200);
-  assert.equal(result.body.authType, "chatgpt");
-  assert.equal(result.body.reply, "Hello from the connected account.");
+  assert.equal(result.data.authType, "chatgpt");
+  assert.equal(result.data.reply, "Hello from the connected account.");
 });
 
 test("failed generations never report success or expose raw errors, even after partial text", async (t) => {
@@ -295,7 +341,7 @@ test("failed generations never report success or expose raw errors, even after p
     await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
     const result = await ctx.request("/api/prompt", { prompt: "Hello" });
     assert.equal(result.status, 502);
-    assert.equal(result.body.error.code, "prompt_unauthorized");
+    assert.equal(result.error.code, "prompt_unauthorized");
     assert.equal(result.body.reply, undefined);
     assert.doesNotMatch(JSON.stringify(result.body), /THIS-MUST-NOT-LEAK|PRIVATE-DETAILS/);
   }
@@ -308,7 +354,7 @@ test("empty or excessive model output is not accepted as a successful test", asy
     await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
     const result = await ctx.request("/api/prompt", { prompt: "Hello" });
     assert.equal(result.status, 502);
-    assert.equal(result.body.error.code, code);
+    assert.equal(result.error.code, code);
   }
 });
 
@@ -318,11 +364,11 @@ test("timed-out prompts are interrupted and cleaned up while the account remains
   await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
   const result = await ctx.request("/api/prompt", { prompt: "Hello" });
   assert.equal(result.status, 504);
-  assert.equal(result.body.error.code, "prompt_timeout");
+  assert.equal(result.error.code, "prompt_timeout");
   const calls = await readFile(join(ctx.dataDir, "codex/prompt-requests.jsonl"), "utf8");
   assert.match(calls, /turn\/interrupt/);
   assert.match(calls, /thread\/unsubscribe/);
-  assert.deepEqual((await ctx.request("/api/status")).body.account, { type: "apiKey" });
+  assert.deepEqual((await ctx.request("/api/status")).data.account, { type: "apiKey" });
 });
 
 test("closing a prompt request interrupts generation instead of leaving it running", async (t) => {
@@ -349,8 +395,8 @@ test("overlapping prompt tests are rejected and account changes wait for complet
   await delay(30);
   const second = await ctx.request("/api/prompt", { prompt: "Again" });
   assert.equal(second.status, 409);
-  assert.equal(second.body.error.code, "prompt_in_progress");
+  assert.equal(second.error.code, "prompt_in_progress");
   const logout = ctx.request("/api/auth/logout", {});
-  assert.equal((await first).body.authType, "apiKey");
-  assert.equal((await logout).body.account, null);
+  assert.equal((await first).data.authType, "apiKey");
+  assert.equal((await logout).data.account, null);
 });

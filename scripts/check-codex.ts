@@ -2,13 +2,13 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
-import { createApplication } from "../src/server.mjs";
+import { createApplication } from "../src/server.js";
 
 // Exercises the installed, pinned binary with an empty private CODEX_HOME.
 // A synthetic key tests local credential storage only. This bypasses HTTP key
 // verification and never reads personal credentials or submits a model task.
 const dataDir = await mkdtemp(join(tmpdir(), "goblin-codex-check-"));
-let app;
+let app: Awaited<ReturnType<typeof createApplication>> | undefined;
 try {
   app = await createApplication({ dataDir });
   const status = await app.authentication.status();

@@ -2,6 +2,7 @@
 .goblin-auth
 .goblin-browser-test
 node_modules
+dist
 test
 docs
 deploy
