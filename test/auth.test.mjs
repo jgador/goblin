@@ -22,6 +22,7 @@ async function start(t, options = {}) {
         STACKIFY_AZURE_OPENAI_API_KEY: "must-not-inherit", CODEX_HOME: "/must-not-use", GOBLIN_SECRET: "must-not-inherit" },
       timeoutMs: options.timeoutMs || 1000 },
     verifyApiKey: options.verifyApiKey || (async () => "accepted"),
+    promptTimeoutMs: options.promptTimeoutMs,
   });
   await new Promise((resolve) => app.server.listen(0, "127.0.0.1", resolve));
   const url = `http://127.0.0.1:${app.server.address().port}`;
@@ -187,6 +188,10 @@ test("rejected API keys are not persisted; restricted-key verification is explic
   const result = await restricted.request("/api/auth/api-key", { apiKey: exampleKey });
   assert.equal(result.body.verification, "unverified");
   assert.match(result.body.notice.message, /Model access has not been tested/);
+  assert.equal((await restricted.request("/api/prompt", { prompt: "Hello" })).status, 200);
+  const verified = (await restricted.request("/api/status")).body;
+  assert.equal(verified.verification, "accepted");
+  assert.equal(verified.notice, null);
 });
 
 test("saved authentication survives process replacement and stays isolated between workspaces", async (t) => {
@@ -243,4 +248,109 @@ test("API key verification uses a fixed endpoint, never follows redirects, and m
 
 test("non-loopback HTTP origins are rejected", async () => {
   await assert.rejects(createApplication({ publicOrigin: "http://public.example.test" }), /HTTPS origin/);
+});
+
+test("prompt tests require a connected owner and use one isolated thread", async (t) => {
+  const ctx = await start(t);
+  assert.equal((await ctx.request("/api/prompt", { prompt: "Hello" })).status, 401);
+  await ctx.unlock();
+  assert.equal((await ctx.request("/api/prompt", { prompt: "Hello" })).status, 409);
+  for (const prompt of ["", "x".repeat(501), "hello\u0000", null]) {
+    assert.equal((await ctx.request("/api/prompt", { prompt })).status, 400);
+  }
+  await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
+  const result = await ctx.request("/api/prompt", { prompt: "Say hello in one sentence.", model: "must-not-use", method: "command/exec" });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.reply, "Hello from the connected account.");
+  assert.equal(result.body.model, "test-model");
+  assert.equal(result.body.authType, "apiKey");
+  assert.equal(typeof result.body.durationMs, "number");
+  assert.doesNotMatch(JSON.stringify(result.body), /FAKE-KEY|Thinking|Wrong thread/);
+  const calls = (await readFile(join(ctx.dataDir, "codex/prompt-requests.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.deepEqual(calls.map((call) => call.method), ["thread/start", "turn/start", "thread/unsubscribe"]);
+  assert.equal(calls[0].params.ephemeral, true);
+  assert.equal(calls[0].params.sandbox, "read-only");
+  assert.equal(calls[0].params.approvalPolicy, "never");
+  assert.equal(calls[0].params.cwd, join(ctx.dataDir, "workspace"));
+  assert.equal(calls[0].params.model, undefined);
+  assert.deepEqual(calls[1].params.input, [{ type: "text", text: "Say hello in one sentence." }]);
+  assert.deepEqual(calls[1].params.sandboxPolicy, { type: "readOnly", networkAccess: false });
+});
+
+test("prompt tests use the saved ChatGPT account and handle completion before the RPC response", async (t) => {
+  const ctx = await start(t, { scenario: "auto" });
+  await ctx.unlock();
+  await ctx.request("/api/auth/chatgpt", {});
+  await delay(100);
+  const result = await ctx.request("/api/prompt", { prompt: "Hello" });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.authType, "chatgpt");
+  assert.equal(result.body.reply, "Hello from the connected account.");
+});
+
+test("failed generations never report success or expose raw errors, even after partial text", async (t) => {
+  for (const scenario of ["prompt-fail", "prompt-partial-failure"]) {
+    const ctx = await start(t, { scenario });
+    await ctx.unlock();
+    await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
+    const result = await ctx.request("/api/prompt", { prompt: "Hello" });
+    assert.equal(result.status, 502);
+    assert.equal(result.body.error.code, "prompt_unauthorized");
+    assert.equal(result.body.reply, undefined);
+    assert.doesNotMatch(JSON.stringify(result.body), /THIS-MUST-NOT-LEAK|PRIVATE-DETAILS/);
+  }
+});
+
+test("empty or excessive model output is not accepted as a successful test", async (t) => {
+  for (const [scenario, code] of [["prompt-empty", "prompt_empty_reply"], ["prompt-large", "prompt_reply_too_large"]]) {
+    const ctx = await start(t, { scenario });
+    await ctx.unlock();
+    await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
+    const result = await ctx.request("/api/prompt", { prompt: "Hello" });
+    assert.equal(result.status, 502);
+    assert.equal(result.body.error.code, code);
+  }
+});
+
+test("timed-out prompts are interrupted and cleaned up while the account remains connected", async (t) => {
+  const ctx = await start(t, { scenario: "prompt-timeout", promptTimeoutMs: 50 });
+  await ctx.unlock();
+  await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
+  const result = await ctx.request("/api/prompt", { prompt: "Hello" });
+  assert.equal(result.status, 504);
+  assert.equal(result.body.error.code, "prompt_timeout");
+  const calls = await readFile(join(ctx.dataDir, "codex/prompt-requests.jsonl"), "utf8");
+  assert.match(calls, /turn\/interrupt/);
+  assert.match(calls, /thread\/unsubscribe/);
+  assert.deepEqual((await ctx.request("/api/status")).body.account, { type: "apiKey" });
+});
+
+test("closing a prompt request interrupts generation instead of leaving it running", async (t) => {
+  const ctx = await start(t, { scenario: "prompt-timeout" });
+  await ctx.unlock();
+  await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
+  const controller = new AbortController();
+  const result = ctx.request("/api/prompt", { prompt: "Hello" }, { signal: controller.signal });
+  const rejected = assert.rejects(result, { name: "AbortError" });
+  await delay(50);
+  controller.abort();
+  await rejected;
+  await ctx.request("/api/status");
+  const calls = await readFile(join(ctx.dataDir, "codex/prompt-requests.jsonl"), "utf8");
+  assert.match(calls, /turn\/interrupt/);
+  assert.match(calls, /thread\/unsubscribe/);
+});
+
+test("overlapping prompt tests are rejected and account changes wait for completion", async (t) => {
+  const ctx = await start(t, { scenario: "prompt-delayed" });
+  await ctx.unlock();
+  await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
+  const first = ctx.request("/api/prompt", { prompt: "Hello" });
+  await delay(30);
+  const second = await ctx.request("/api/prompt", { prompt: "Again" });
+  assert.equal(second.status, 409);
+  assert.equal(second.body.error.code, "prompt_in_progress");
+  const logout = ctx.request("/api/auth/logout", {});
+  assert.equal((await first).body.authType, "apiKey");
+  assert.equal((await logout).body.account, null);
 });

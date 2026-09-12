@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { readFile, writeFile, unlink } from "node:fs/promises";
+import { readFile, writeFile, appendFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 
 const scenario = process.argv[2];
@@ -11,6 +11,8 @@ let initialized = false;
 let acknowledged = false;
 let login = null;
 let timer;
+let promptTimer;
+let threadNumber = 0;
 await writeFile(join(root, "environment.json"), JSON.stringify(process.env));
 
 async function finishLogin() {
@@ -24,6 +26,10 @@ async function finishLogin() {
 
 for await (const line of createInterface({ input: process.stdin })) {
   const { id, method, params } = JSON.parse(line);
+  if (!method) continue;
+  if (method.startsWith("thread/") || method.startsWith("turn/")) {
+    await appendFile(join(root, "prompt-requests.jsonl"), `${JSON.stringify({ method, params })}\n`);
+  }
   if (method === "initialize") {
     initialized = true;
     result(id, { userAgent: "fake-codex/0.154.0" });
@@ -68,6 +74,40 @@ for await (const line of createInterface({ input: process.stdin })) {
     await unlink(accountFile).catch(() => {});
     result(id, {});
     send({ method: "account/updated", params: { authMode: null } });
+  } else if (method === "thread/start") {
+    result(id, { thread: { id: `test-thread-${++threadNumber}`, ephemeral: params.ephemeral },
+      model: "test-model", modelProvider: "openai", sandbox: { type: "readOnly", networkAccess: false },
+      approvalPolicy: params.approvalPolicy });
+  } else if (method === "turn/start") {
+    const threadId = params.threadId;
+    const turnId = `test-turn-${threadNumber}`;
+    const started = { id: turnId, status: "inProgress", items: [] };
+    send({ method: "turn/started", params: { threadId, turn: started } });
+    function complete() {
+      const failed = scenario === "prompt-fail" || scenario === "prompt-partial-failure" || params.input[0].text === "Trigger a simulated failure.";
+      const message = { type: "agentMessage", id: "answer", phase: "final_answer",
+        text: scenario === "prompt-large" ? "x".repeat(8001) : "Hello from the connected account." };
+      send({ method: "item/completed", params: { threadId: "another-thread", turnId, item: { ...message, text: "Wrong thread" } } });
+      send({ method: "item/completed", params: { threadId, turnId, item: { ...message, id: "commentary", phase: "commentary", text: "Thinking…" } } });
+      if (scenario !== "prompt-empty" && scenario !== "prompt-fail") {
+        send({ method: "item/completed", params: { threadId, turnId, item: message } });
+      }
+      const error = failed ? { message: "Upstream secret THIS-MUST-NOT-LEAK", codexErrorInfo: "unauthorized", additionalDetails: "PRIVATE-DETAILS" } : null;
+      if (error) send({ method: "error", params: { threadId, turnId, willRetry: false, error } });
+      send({ method: "turn/completed", params: { threadId, turn: { id: turnId,
+        status: failed ? "failed" : "completed", error, items: scenario === "prompt-empty" ? [] : [message] } } });
+    }
+    if (scenario === "prompt-delayed") promptTimer = setTimeout(complete, 150);
+    else if (scenario !== "prompt-timeout") complete();
+    // Deliberately deliver immediate events before the RPC response.
+    result(id, { turn: started });
+  } else if (method === "turn/interrupt") {
+    clearTimeout(promptTimer);
+    result(id, {});
+    send({ method: "turn/completed", params: { threadId: params.threadId,
+      turn: { id: params.turnId, status: "interrupted", items: [], error: null } } });
+  } else if (method === "thread/unsubscribe") {
+    result(id, {});
   } else {
     send({ id, error: { code: -32601, message: "Unsupported method" } });
   }

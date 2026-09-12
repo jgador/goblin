@@ -1,8 +1,8 @@
 # Try the authentication preview
 
-This stage implements ChatGPT device-code login and OpenAI API-key login. It
-does not connect to GitHub or run agent tasks. Review authentication first;
-repository integration is a separate decision.
+This stage implements ChatGPT device-code login, OpenAI API-key login, and a
+short prompt test using the connected account. Review authentication first;
+GitHub and repository integration remain a separate decision.
 
 ## Run locally
 
@@ -71,12 +71,42 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
    response or establish that inference credits or a particular model are available.
 6. Try canceling ChatGPT sign-in and starting again. Refreshing the browser
    during a pending login should restore its current code.
+7. While connected, enter a short prompt under **Try a simple prompt**, then
+   select **Send test prompt**. The default is “Say hello in one sentence.”
+   Goblin should display **Response received**, the model's actual reply, the
+   sign-in method, model name, and elapsed time. A successful reply verifies
+   that the saved account can make a model request.
 
 ChatGPT access follows the connected plan/workspace. API-key usage is billed
 separately through the OpenAI Platform. Switching methods requires disconnecting
 the current account first. Keys rejected with HTTP 401 are not saved. Restricted
 keys without permission to list models, or rate-limited requests, are explicitly
-marked as unverified when saved; model execution is outside this preview.
+marked as unverified when saved. A successful prompt test clears that notice.
+
+## Test a prompt with the connected account
+
+The prompt test uses the same Codex app-server process and stored login as the
+authentication UI. It sends `thread/start` with `ephemeral: true`, followed by
+`turn/start`, and waits for a completed turn with an assistant reply. It uses
+Codex's default model and displays the model name returned by the server.
+See the [app-server protocol](https://learn.chatgpt.com/docs/app-server#turns).
+
+Each click makes a real model request and counts toward the connected ChatGPT
+plan's usage limits or OpenAI API billing. The initial API-key check against
+`/v1/models` remains a separate check that does not generate a response.
+
+Prompts are limited to 500 characters, replies to 8,000 characters, and one
+prompt test can run at a time. The response wait times out after 90 seconds;
+closing or reloading the page also requests cancellation. Each test uses a
+fresh temporary conversation; previous test prompts are not conversation
+history. The displayed reply clears on reload, locking, or disconnecting.
+
+The runtime disables shell tools, browsing, apps, plugins, image tools,
+multi-agent tools, hooks, and memory. The test also uses a read-only sandbox
+and rejects approval requests. It does not enable repository operations.
+Account changes are serialized with generation so a prompt cannot switch
+accounts halfway through. Model failures show safe messages without raw
+upstream errors, credentials, or reasoning output.
 
 ## Run in Docker
 
@@ -154,7 +184,8 @@ according to the storage class's reclaim policy.
 This preview intentionally supports one owner and one active Codex process per
 data volume. Do not mount the same credential directory into concurrent replicas.
 The container runs without root or a Kubernetes service-account token; it does
-not expose thread creation, shell execution, or an arbitrary Codex RPC endpoint.
+not expose arbitrary thread creation, shell execution, or Codex RPC methods.
+Its prompt endpoint creates only the restricted temporary conversations above.
 The cluster still needs an appropriate sandbox runtime before a later stage
 executes untrusted repository code.
 
@@ -195,7 +226,9 @@ process: login notifications, cancellation, expiry, persistence, logout,
 credential isolation, access control, and key verification errors. The Codex check
 initializes the real pinned Codex binary with a temporary home and verifies
 local storage, restart, and logout using a synthetic, unusable key. Browser
-tests cover the same UI flow with simulated
-authentication, including mobile layout and clearing API-key inputs. These
+tests cover the same UI flow with simulated authentication and model replies,
+including mobile layout, clearing API-key inputs, and prompt success/failure.
+The unit tests also cover prompt validation, event ordering, failed and empty
+replies, cancellation, timeouts, and overlapping requests. These
 checks do not use personal credentials or run a model task. A real ChatGPT
 sign-in remains a manual acceptance check.

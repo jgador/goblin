@@ -14,8 +14,9 @@ flow is awaiting live portal verification.
 
 **Current status:** the Azure deployment provisions the infrastructure foundation.
 A separate [authentication preview](docs/authentication-preview.md) lets you test
-ChatGPT and OpenAI API-key login locally or in an Agent Sandbox pod. It is not
-automatically installed by the Azure template. GitHub integration, agent tasks,
+ChatGPT and OpenAI API-key login, then send a short prompt using the connected
+account, locally or in an Agent Sandbox pod. It is not automatically installed
+by the Azure template. GitHub integration, repository tasks,
 public administrator onboarding, custom domains, and automatic HTTPS certificates
 remain future work.
 

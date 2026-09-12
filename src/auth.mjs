@@ -1,4 +1,5 @@
 import { PublicError, runtimeError } from "./errors.mjs";
+import { runPrompt } from "./prompt.mjs";
 
 export async function checkApiKey(apiKey, fetchImpl = fetch) {
   let response;
@@ -23,13 +24,15 @@ export async function checkApiKey(apiKey, fetchImpl = fetch) {
 }
 
 export class Authentication {
-  constructor(codex, { verifyApiKey = checkApiKey } = {}) {
+  constructor(codex, { verifyApiKey = checkApiKey, promptTimeoutMs = 90_000 } = {}) {
     this.codex = codex;
     this.verifyApiKey = verifyApiKey;
     this.account = null;
     this.login = null;
     this.notice = null;
     this.verification = null;
+    this.promptPending = false;
+    this.promptTimeoutMs = promptTimeoutMs;
     this.queue = Promise.resolve();
     codex.on("notification", (message) => {
       if (message.method === "account/login/completed") {
@@ -89,6 +92,26 @@ export class Authentication {
 
   status() {
     return this.serial(async () => { await this.refresh(); return this.snapshot(); });
+  }
+
+  testPrompt(value, { signal } = {}) {
+    const prompt = typeof value === "string" ? value.trim() : "";
+    if (!prompt || prompt.length > 500 || /[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(prompt)) {
+      return Promise.reject(new PublicError("invalid_prompt", "Enter a short prompt of 1–500 characters."));
+    }
+    if (this.promptPending) {
+      return Promise.reject(new PublicError("prompt_in_progress", "A prompt test is already running. Wait for it to finish.", 409));
+    }
+    this.promptPending = true;
+    return this.serial(async () => {
+      await this.refresh();
+      if (!this.account) throw new PublicError("not_connected", "Connect a ChatGPT account or API key first.", 409);
+      const authType = this.account.type;
+      const result = await runPrompt(this.codex, prompt, { signal, timeoutMs: this.promptTimeoutMs });
+      if (authType === "apiKey") this.verification = "accepted";
+      this.notice = null;
+      return { ...result, authType };
+    }).finally(() => { this.promptPending = false; });
   }
 
   async requireDisconnected() {

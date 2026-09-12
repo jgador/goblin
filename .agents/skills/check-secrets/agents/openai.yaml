@@ -1,0 +1,5 @@
+interface:
+  display_name: "Check Secrets"
+  short_description: "Review pending Git content for keys and auth leaks"
+policy:
+  allow_implicit_invocation: false

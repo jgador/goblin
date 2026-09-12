@@ -2,7 +2,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:radial-gradient(ellipse at 80% 30%,#e8eedf55,transparent 55%)}
-button,input,summary{font:inherit}
+button,input,textarea,summary{font:inherit}
 button,a,input,summary{-webkit-tap-highlight-color:transparent}
 button,a,summary{touch-action:manipulation}
 a{color:var(--green);text-underline-offset:3px}
@@ -43,8 +43,10 @@ summary span{font-size:17px;font-weight:400}
 details[open] summary{margin-bottom:18px}
 details[open] summary span{transform:rotate(45deg)}
 label{display:block;font-size:12px;font-weight:550;margin-bottom:7px}
-input{width:100%;padding:11px 12px;border:1px solid #d7decf;border-radius:7px;background:#fff;color:#243d2c;font-size:14px;outline:none;margin-bottom:13px}
-input:focus{border-color:#7d9a63;box-shadow:0 0 0 3px #e7efd9}
+input,textarea{width:100%;padding:11px 12px;border:1px solid #d7decf;border-radius:7px;background:#fff;color:#243d2c;font-size:14px;outline:none;margin-bottom:13px}
+input:focus,textarea:focus{border-color:#7d9a63;box-shadow:0 0 0 3px #e7efd9}
+textarea{resize:vertical;min-height:92px;line-height:1.6}
+textarea:disabled{opacity:.65}
 input::placeholder{color:#a0a99a}
 .below-card{font-size:11px;color:#929b8b;text-align:center;margin:18px 0 0}
 .device-code-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f2f5eb;border:1px solid #e0e7d6;padding:16px;border-radius:9px;margin:22px 0 15px}
@@ -68,6 +70,13 @@ input::placeholder{color:#a0a99a}
 .account-detail{font-size:11px;color:var(--muted);margin:3px 0 0;overflow-wrap:anywhere}
 .connected-badge{font-size:9px;font-weight:600;color:#567543;background:#edf4e6;padding:4px 7px;border-radius:5px;white-space:nowrap}
 #connected-panel .secondary{margin-top:24px}
+.prompt-test{border-top:1px solid var(--border);padding-top:20px;margin-top:22px}
+.prompt-test textarea{margin-bottom:0}
+.prompt-test .footnote{margin:8px 0 14px}
+.prompt-result{background:#f2f5eb;border:1px solid #e0e7d6;border-radius:9px;padding:16px;margin-top:18px}
+.prompt-success{font-size:11px;font-weight:600;color:#567543;margin:0 0 10px}
+#prompt-reply{font:inherit;font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;margin:0}
+#prompt-details{overflow-wrap:anywhere}
 .message{font-size:12px;line-height:1.65;background:#fff2e9;border:1px solid #eed8c5;color:#805333;padding:12px 14px;border-radius:8px;margin-top:20px;overflow-wrap:anywhere}
 .message.info{background:#f1f5eb;border-color:#dde6d2;color:#5b6f4a}
 .working,.loading{font-size:12px;color:var(--muted)}

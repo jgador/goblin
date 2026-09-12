@@ -54,7 +54,7 @@ async function readJson(request) {
 }
 
 export async function createApplication({ dataDir = resolve(".goblin-auth"),
-  publicOrigin = "http://localhost:8787", codexOptions = {}, verifyApiKey } = {}) {
+  publicOrigin = "http://localhost:8787", codexOptions = {}, verifyApiKey, promptTimeoutMs } = {}) {
   const origin = new URL(publicOrigin);
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname);
   if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash ||
@@ -79,7 +79,7 @@ export async function createApplication({ dataDir = resolve(".goblin-auth"),
   await chmod(tokenFile, 0o600);
   const ownerHash = hash(ownerToken);
   const codex = new Codex({ ...paths, ...codexOptions });
-  const authentication = new Authentication(codex, { verifyApiKey });
+  const authentication = new Authentication(codex, { verifyApiKey, promptTimeoutMs });
   const sessions = new Map();
   let failedUnlocks = [];
   const assets = new Map(await Promise.all([...staticFiles].map(async ([path, [name, type]]) =>
@@ -159,6 +159,14 @@ export async function createApplication({ dataDir = resolve(".goblin-auth"),
       }
       if (request.method === "POST") {
         const body = await readJson(request);
+        if (path === "/api/prompt") {
+          const controller = new AbortController();
+          const abort = () => { if (!response.writableFinished) controller.abort(); };
+          response.once("close", abort);
+          try {
+            return json(response, 200, await authentication.testPrompt(body.prompt, { signal: controller.signal }));
+          } finally { response.off("close", abort); }
+        }
         let state;
         if (path === "/api/auth/chatgpt") state = await authentication.loginChatGPT();
         else if (path === "/api/auth/api-key") state = await authentication.loginApiKey(body.apiKey);

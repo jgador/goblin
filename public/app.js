@@ -34,10 +34,19 @@ function lockView() {
   for (const id of ["device-code", "account-method", "account-detail", "connected-description"]) byId(id).textContent = "";
   byId("api-key").value = "";
   byId("verification-link").removeAttribute("href");
+  clearPromptResult();
+  byId("test-prompt").value = "Say hello in one sentence.";
   showPanel("locked");
 }
 
+function clearPromptResult() {
+  byId("prompt-result").hidden = true;
+  byId("prompt-reply").textContent = "";
+  byId("prompt-details").textContent = "";
+}
+
 function render(next) {
+  if (!next.account || next.account.type !== state?.account?.type || next.account.email !== state?.account?.email) clearPromptResult();
   state = next;
   if (!unlocked) { showPanel("locked"); return; }
   if (next.account) {
@@ -82,6 +91,7 @@ function setBusy(value, label = "Working…") {
   busy = value;
   byId("card").setAttribute("aria-busy", String(value));
   for (const button of document.querySelectorAll("button")) button.disabled = value;
+  byId("test-prompt").disabled = value;
   byId("working").textContent = label;
   byId("working").hidden = !value;
 }
@@ -152,6 +162,22 @@ byId("cancel-button").addEventListener("click", () => action("Canceling sign-in�
 byId("disconnect-button").addEventListener("click", () => action("Disconnecting Codex…", async () => {
   render(await api("/api/auth/logout", {}));
 }));
+
+byId("prompt-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const prompt = byId("test-prompt").value;
+  action("Waiting for Codex to reply…", async () => {
+    clearPromptResult();
+    const result = await api("/api/prompt", { prompt });
+    byId("prompt-reply").textContent = result.reply;
+    byId("prompt-details").textContent = [
+      result.authType === "chatgpt" ? "ChatGPT" : "OpenAI API key",
+      result.model,
+      `${(result.durationMs / 1000).toFixed(1)}s`,
+    ].join(" · ");
+    byId("prompt-result").hidden = false;
+  });
+});
 
 byId("lock-button").addEventListener("click", () => action("Locking preview…", async () => {
   await api("/api/session/lock", {});
