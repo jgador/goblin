@@ -1,11 +1,11 @@
 {
-  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "5370762748985119762"
+      "templateHash": "10643805645320596439"
     }
   },
   "parameters": {
@@ -22,14 +22,14 @@
       "type": "string",
       "defaultValue": "",
       "metadata": {
-        "description": "Public part of the VM access key. The guided portal form supplies it after key generation and private-key download. For CLI deployment, supply an existing public key or leave blank for setup without SSH. Never supply a private key. Set sshSourceAddressPrefix only when direct SSH access is needed."
+        "description": "Public part of the VM access key. The portal credentials control supplies the public key. The empty default permits review before Azure generates a new key; use main.bicep for CLI installation without SSH. Never supply a private key. Set sshSourceAddressPrefix only when direct SSH access is needed."
       }
     },
     "location": {
       "type": "string",
-      "defaultValue": "[deployment().location]",
+      "defaultValue": "[resourceGroup().location]",
       "metadata": {
-        "description": "Azure region for the resource group and VM. Defaults to the subscription deployment location."
+        "description": "Azure region for the VM. Defaults to the selected resource group location."
       }
     },
     "environment": {
@@ -87,14 +87,6 @@
       "defaultValue": "10.20.0.0/24",
       "metadata": {
         "description": "VM subnet address range, contained in the virtual network range."
-      }
-    },
-    "resourceGroupName": {
-      "type": "string",
-      "defaultValue": "",
-      "maxLength": 90,
-      "metadata": {
-        "description": "Optional resource group name. Blank uses the generated name (default: rg-goblin-prod). Use a dedicated resource group."
       }
     },
     "virtualMachineName": {
@@ -167,7 +159,7 @@
     "workloadPrefix": "[if(equals(variables('companyPrefix'), 'goblin'), 'goblin', format('{0}-goblin', variables('companyPrefix')))]",
     "nameBase": "[format('{0}-{1}', variables('workloadPrefix'), parameters('environment'))]",
     "names": {
-      "resourceGroup": "[if(empty(trim(parameters('resourceGroupName'))), format('rg-{0}', variables('nameBase')), trim(parameters('resourceGroupName')))]",
+      "resourceGroup": "[resourceGroup().name]",
       "virtualMachine": "[if(empty(trim(parameters('virtualMachineName'))), format('vm-{0}', variables('nameBase')), trim(parameters('virtualMachineName')))]",
       "publicIp": "[if(empty(trim(parameters('publicIpName'))), format('pip-{0}', variables('nameBase')), trim(parameters('publicIpName')))]",
       "virtualNetwork": "[if(empty(trim(parameters('virtualNetworkName'))), format('vnet-{0}', variables('nameBase')), trim(parameters('virtualNetworkName')))]",
@@ -186,17 +178,9 @@
   },
   "resources": [
     {
-      "type": "Microsoft.Resources/resourceGroups",
-      "apiVersion": "2025-04-01",
-      "name": "[variables('names').resourceGroup]",
-      "location": "[parameters('location')]",
-      "tags": "[variables('tags')]"
-    },
-    {
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2025-04-01",
       "name": "goblin-infrastructure",
-      "resourceGroup": "[variables('names').resourceGroup]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -220,6 +204,9 @@
           },
           "adminSshPublicKey": {
             "value": "[parameters('adminSshPublicKey')]"
+          },
+          "requireSshPublicKey": {
+            "value": true
           },
           "vmSize": {
             "value": "[parameters('vmSize')]"
@@ -501,10 +488,7 @@
             }
           }
         }
-      },
-      "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('names').resourceGroup)]"
-      ]
+      }
     }
   ],
   "outputs": {
@@ -520,28 +504,28 @@
       "metadata": {
         "description": "Public IPv4 address of the VM."
       },
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('names').resourceGroup), 'Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicIpAddress.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicIpAddress.value]"
     },
     "publicHostname": {
       "type": "string",
       "metadata": {
         "description": "Azure-managed public hostname. Application onboarding and HTTPS are not installed yet."
       },
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('names').resourceGroup), 'Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value]"
     },
     "virtualMachineResourceId": {
       "type": "string",
       "metadata": {
         "description": "VM resource ID for administration through the Azure portal or CLI."
       },
-      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('names').resourceGroup), 'Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.virtualMachineResourceId.value]"
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.virtualMachineResourceId.value]"
     },
     "sshCommand": {
       "type": "string",
       "metadata": {
         "description": "SSH command using the saved private key. Replace the example key path with the downloaded file. Empty when no public key was supplied."
       },
-      "value": "[if(empty(trim(parameters('adminSshPublicKey'))), '', format('ssh -i /path/to/saved-key.pem {0}@{1}', parameters('adminUsername'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('names').resourceGroup), 'Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value))]"
+      "value": "[if(empty(trim(parameters('adminSshPublicKey'))), '', format('ssh -i /path/to/saved-key.pem {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value))]"
     },
     "sshAccessNote": {
       "type": "string",
@@ -555,7 +539,7 @@
       "metadata": {
         "description": "Command for checking the installed Kubernetes node through Azure Run Command."
       },
-      "value": "[format('az vm run-command invoke --ids {0} --command-id RunShellScript --scripts \"cat /var/lib/goblin/bootstrap-status; k3s kubectl get nodes; k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller\"', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('names').resourceGroup), 'Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.virtualMachineResourceId.value)]"
+      "value": "[format('az vm run-command invoke --ids {0} --command-id RunShellScript --scripts \"cat /var/lib/goblin/bootstrap-status; k3s kubectl get nodes; k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller\"', reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.virtualMachineResourceId.value)]"
     }
   }
 }
