@@ -13,6 +13,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     DataDirectory = Environment.GetEnvironmentVariable("GOBLIN_DATA_DIR") ?? ".goblin-auth",
     PasswordHashFile = Environment.GetEnvironmentVariable("GOBLIN_PASSWORD_HASH_FILE"),
     PublicOrigin = origin,
+    AllowInsecureHttp = string.Equals(Environment.GetEnvironmentVariable("GOBLIN_ALLOW_INSECURE_HTTP"), "true", StringComparison.OrdinalIgnoreCase),
     ListenUrl = $"http://{host}:{port}",
     ConfigureCodex = options => options with { Command = Environment.GetEnvironmentVariable("GOBLIN_CODEX_COMMAND") ?? options.Command }
 });

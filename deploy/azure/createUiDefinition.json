@@ -5,7 +5,7 @@
   "parameters": {
     "config": {
       "basics": {
-        "description": "Deploy Goblin infrastructure in your Azure account. Choose a dedicated resource group; rg-goblin-prod is the suggested default. Save the access-key file when Azure prompts you during creation.",
+        "description": "Deploy Goblin in your Azure account and open it at the assigned public hostname after setup. Choose a dedicated resource group; rg-goblin-prod is the suggested default. Save the access-key file when Azure prompts you during creation.",
         "location": {
           "resourceTypes": [
             "Microsoft.Compute/virtualMachines"
@@ -74,7 +74,7 @@
         "name": "installationInfo",
         "type": "Microsoft.Common.InfoBox",
         "options": {
-          "text": "This installs the Goblin infrastructure foundation. The Goblin application and HTTPS onboarding are not available yet. Installation failures appear in Azure's deployment page.",
+          "text": "After installation, open goblinUrl in the deployment outputs and enter your Goblin password. Goblin is served over HTTP; HTTPS is configured separately. Installation failures appear in Azure's deployment page.",
           "icon": "Info"
         }
       },
@@ -329,6 +329,7 @@
       "goblinPassword": "[basics('goblinPassword')]",
       "location": "[location()]",
       "environment": "[basics('environment')]",
+      "goblinSourceRef": "master",
       "adminUsername": "[basics('adminUsername')]",
       "adminSshPublicKey": "[basics('credentials').sshPublicKey]",
       "sshSourceAddressPrefix": "[if(steps('advanced').enableSshNow, steps('advanced').sshSourceAddressPrefix, '')]",

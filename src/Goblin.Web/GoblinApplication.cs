@@ -19,6 +19,7 @@ public sealed record ApplicationOptions
     public string DataDirectory { get; init; } = ".goblin-auth";
     public string? PasswordHashFile { get; init; }
     public string PublicOrigin { get; init; } = "http://localhost:8787";
+    public bool AllowInsecureHttp { get; init; }
     public string ListenUrl { get; init; } = "http://127.0.0.1:8787";
     public string AssetDirectory { get; init; } = Path.Combine(AppContext.BaseDirectory, "wwwroot");
     public Func<CodexOptions, CodexOptions>? ConfigureCodex { get; init; }
@@ -34,7 +35,7 @@ public static class GoblinApplication
 
     public static async Task<WebApplication> CreateAsync(ApplicationOptions options)
     {
-        Workspace workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin, options.PasswordHashFile);
+        Workspace workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin, options.PasswordHashFile, options.AllowInsecureHttp);
         var runtimeOptions = new CodexOptions { CodexHome = workspace.CodexHome, Home = workspace.Home, Workspace = workspace.WorkingDirectory };
         runtimeOptions = options.ConfigureCodex?.Invoke(runtimeOptions) ?? runtimeOptions;
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(GoblinApplication).Assembly.FullName });

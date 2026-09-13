@@ -9,6 +9,7 @@ param adminSshPublicKey string
 @secure()
 @maxLength(128)
 param goblinPassword string
+param goblinSourceRef string
 @description('Fail bootstrap if the portal did not supply the expected SSH public key. CLI deployments may omit a key.')
 param requireSshPublicKey bool = false
 param vmSize string
@@ -17,7 +18,16 @@ param sshSourceAddressPrefix string
 param virtualNetworkAddressPrefix string
 param subnetAddressPrefix string
 
-var bootstrapScript = replace(loadTextContent('../bootstrap.sh'), '__GOBLIN_PASSWORD_HASHER__', loadTextContent('../hash-password.py'))
+var bootstrapScript = replace(
+  replace(loadTextContent('../bootstrap.sh'), '__GOBLIN_PASSWORD_HASHER__', loadTextContent('../hash-password.py')),
+  '__GOBLIN_APPLICATION_INSTALLER__',
+  loadTextContent('../install-app.sh')
+)
+var configuredBootstrap = replace(
+  replace(bootstrapScript, '__GOBLIN_HOSTNAME_BASE64__', base64(publicIp.properties.dnsSettings.fqdn)),
+  '__GOBLIN_SOURCE_REF_BASE64__',
+  base64(goblinSourceRef)
+)
 
 var webRules = [
   {
@@ -215,7 +225,7 @@ resource bootstrap 'Microsoft.Compute/virtualMachines/extensions@2024-11-01' = {
     protectedSettings: {
       script: base64(requireSshPublicKey && empty(trim(adminSshPublicKey))
         ? loadTextContent('../missing-ssh-key.sh')
-        : replace(bootstrapScript, '__GOBLIN_PASSWORD_BASE64__', base64(goblinPassword)))
+        : replace(configuredBootstrap, '__GOBLIN_PASSWORD_BASE64__', base64(goblinPassword)))
     }
   }
 }

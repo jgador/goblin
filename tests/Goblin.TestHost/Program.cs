@@ -16,6 +16,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     DataDirectory = config.DataDir,
     PasswordHashFile = config.PasswordHashFile,
     PublicOrigin = config.PublicOrigin,
+    AllowInsecureHttp = config.AllowInsecureHttp,
     ListenUrl = config.ListenUrl,
     AssetDirectory = Path.Combine(config.Root, "dist/public"),
     RecoverRuntime = false,
@@ -80,6 +81,7 @@ internal sealed record FixtureOptions
     public required string DataDir { get; init; }
     public string? PasswordHashFile { get; init; }
     public string PublicOrigin { get; init; } = "http://localhost:8787";
+    public bool AllowInsecureHttp { get; init; }
     public string ListenUrl { get; init; } = "http://127.0.0.1:0";
     public string Node { get; init; } = "node";
     public string Scenario { get; init; } = "manual";

@@ -54,11 +54,11 @@ Existing installations in `goblin-preview` require a
 Updating the template creates the password Secret in `goblin`; it does not move
 the old application's persistent data.
 
-For an existing Azure installation, redeploy the updated template with a Goblin
-password, rebuild/import the updated preview image, and apply the updated
-`deploy/auth/sandbox.yaml` manifest. For a password change, redeploy with
-the new password, then restart the preview pod to load the updated Secret and
-invalidate existing browser sessions:
+For an existing Azure installation, redeploy the updated template with the same
+resource names and Goblin password. Bootstrap builds/imports the application,
+configures its public route, and replaces the pod to load the image, origin, and
+password verifier. For a password change, redeploy with the new password.
+To restart the application separately:
 
 ```bash
 sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
@@ -66,8 +66,8 @@ sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
 
 The Sandbox controller recreates the pod with the same persistent data. The
 saved provider connection is preserved. Reuse your current Goblin password on
-ordinary redeployments. Provisioning still does not install the application or
-configure public HTTPS.
+ordinary redeployments. Provisioning configures public HTTP; HTTPS is a separate
+setup step.
 
 ## Naming
 
@@ -116,11 +116,15 @@ the following without opening SSH. You can also use the deployment's
 cat /var/lib/goblin/bootstrap-status
 k3s kubectl get nodes
 k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller
+k3s kubectl get sandbox,pods,svc,ingress -n goblin
+cat /var/lib/goblin/public-url
 tail -n 100 /var/log/goblin-bootstrap.log
 ```
 
 `bootstrap-status` reports `running`, `ready`, or `failed`. A healthy installation
-shows `ready`, a `Ready` node, and an available Agent Sandbox controller.
+shows `ready`, a `Ready` node, an available Agent Sandbox controller, and a ready
+Goblin Sandbox. The readiness check also retrieves the UI through Traefik using
+the assigned hostname and the node's private IP, without waiting on public DNS.
 
 If deployment fails, open the failed operation on Azure's deployment page. The
 `goblin-bootstrap` error includes the failing stage, exit code, and diagnostics.
@@ -154,11 +158,52 @@ The VM extension embeds `bootstrap.sh` and waits for:
 - K3s `v1.36.4+k3s1`, a ready Kubernetes API, node registration, and a ready node.
 - The Goblin password verifier stored in the `goblin` namespace.
 - Agent Sandbox `v1.0.2`, its core CRD, and its controller rollout.
+- The Goblin image built with Docker and imported into K3s's `k8s.io` image namespace.
+- The Goblin Sandbox ready and the UI responding through Traefik on port 80.
 
 The K3s installer and Agent Sandbox manifest use pinned release URLs and checked
 SHA-256 digests. Downloads and container pulls require outbound internet access.
 The Ubuntu 24.04 LTS image uses Azure's latest image revision at deployment time.
-Agent Sandbox extensions and workloads are not installed.
+Agent Sandbox extensions are not installed. The Goblin authentication application
+is installed as a Sandbox workload with a persistent data volume.
+
+## Application source and public access
+
+The template downloads the `goblinSourceRef` branch, tag, or commit from
+`github.com/jgador/goblin` (default `master`) over HTTPS, then builds the repository's
+Dockerfile on the VM using Docker Engine and Buildx. There is no separate image
+registry to configure. Bootstrap installs Ubuntu's `docker.io` and `docker-buildx`
+packages when needed, builds with host networking, and imports the `docker save`
+archive into K3s. Before a new Docker installation starts, it enables
+`ip-forward-no-drop` in Docker's daemon configuration, preserving existing settings
+and avoiding a default forwarding drop policy that could interrupt K3s networking.
+K3s continues to use its existing containerd runtime to run the application.
+The archive's SHA-256 is used as the local image tag and saved in
+`/var/lib/goblin/application-source-sha256`; it identifies the downloaded content,
+not an independent verification of its publisher. Use a commit SHA for
+`goblinSourceRef` in CLI deployments when the installation must be repeatable.
+The source ref must include this application installer and the Azure overlay.
+
+The public IP resource's `dnsSettings.fqdn` is passed into bootstrap; the VM's
+Linux hostname is not used to construct the URL. Bootstrap renders
+`deploy/azure/app`, which shares the PVC, password Secret mount, and application
+configuration with `deploy/auth/sandbox.yaml`. It configures:
+
+- `GOBLIN_PUBLIC_ORIGIN=http://<assigned-hostname>` and the explicit
+  `GOBLIN_ALLOW_INSECURE_HTTP=true` setting.
+- A Traefik Ingress for the same hostname, routing `/` to `goblin-auth:8787`.
+- A network policy allowing only Traefik pods in `kube-system` to reach port 8787.
+
+The rendered files remain under `/var/lib/goblin/deploy/azure/app`. The deployment
+returns `goblinUrl`, and `/var/lib/goblin/public-url` stores the same address.
+The UI uses the password selected during provisioning. HTTP traffic is
+unencrypted until HTTPS is configured. To add HTTPS later, configure Traefik's
+TLS entry point and certificate, update the app's public origin to `https://...`,
+remove the HTTP opt-in, apply the overlay, and recreate the pod. Redeploying this
+HTTP template reapplies its HTTP configuration, so preserve later TLS changes
+in the deployment source before redeploying.
+
+## Runtime and networking
 
 The cluster uses K3s's default container runtime. **Installing the Agent Sandbox
 controller does not itself provide a hardened runtime for untrusted code.**
@@ -166,13 +211,14 @@ Configuring gVisor or another suitable runtime, workload permissions, network
 policies, and task lifecycles remains necessary before running untrusted agent
 workloads. The upstream project explains [the runtime boundary](https://github.com/kubernetes-sigs/agent-sandbox#readme).
 
-The network permits public HTTP and HTTPS for future application ingress. It
+The network permits public HTTP and HTTPS. Goblin uses HTTP ingress by default. It
 does not expose the Kubernetes API to the internet. Public SSH is disabled unless
 you supply both a public key and a source address; password authentication is
 disabled. The portal flow installs the supplied public key; retain its matching
 private key for SSH access.
-K3s includes Traefik, but no Goblin ingress or trusted HTTPS certificate is
-configured. Do not interpret a Traefik response as an installed application.
+K3s includes Traefik, and bootstrap configures the Goblin ingress. A trusted HTTPS
+certificate is not configured. If the hostname returns 404, inspect the Goblin
+Ingress host rule; if it returns 503, inspect the Sandbox pod and service endpoints.
 
 Kubernetes data uses the VM's managed OS disk. This is a single-node installation
 without automatic backups or high availability. Deleting the VM detaches its disk
@@ -272,10 +318,15 @@ and `portal.bicep` aligned:
 ```bash
 bicep build deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json
 bicep build deploy/azure/portal.bicep --outfile deploy/azure/azuredeploy.portal.json
-bash -n deploy/azure/bootstrap.sh
+bash -n deploy/azure/bootstrap.sh deploy/azure/install-app.sh
 sh -n deploy/azure/missing-ssh-key.sh
 npm test
 ```
+
+Publish the application sources and regenerated templates together: the default
+installer downloads `master`, so local changes must reach that branch before they
+can be installed by the published Azure button. A CLI deployment can select a
+published commit using `goblinSourceRef`.
 
 Commit the regenerated JSON together with its sources. Verify changes with a live
 portal deployment; compilation does not check image pulls, runtime behavior, or

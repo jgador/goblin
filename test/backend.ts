@@ -7,6 +7,7 @@ export interface BackendOptions {
   dataDir: string;
   passwordHashFile?: string;
   publicOrigin?: string;
+  allowInsecureHttp?: boolean;
   listenUrl?: string;
   scenario?: string;
   timeoutMs?: number;
