@@ -33,10 +33,10 @@ public static class GoblinApplication
 
     public static async Task<WebApplication> CreateAsync(ApplicationOptions options)
     {
-        var workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin);
+        Workspace workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin);
         var runtimeOptions = new CodexOptions { CodexHome = workspace.CodexHome, Home = workspace.Home, Workspace = workspace.WorkingDirectory };
         runtimeOptions = options.ConfigureCodex?.Invoke(runtimeOptions) ?? runtimeOptions;
-        var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(GoblinApplication).Assembly.FullName });
+        WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(GoblinApplication).Assembly.FullName });
         // Request and upstream details can contain credentials. Log only explicit safe startup messages.
         builder.Logging.ClearProviders();
         builder.WebHost.UseUrls(options.ListenUrl);
@@ -54,12 +54,12 @@ public static class GoblinApplication
         builder.Services.AddSingleton(services => new Authentication(services.GetRequiredService<CodexClient>(),
             options.VerifyApiKey ?? services.GetRequiredService<ApiKeyVerifier>().VerifyAsync, options.PromptTimeout));
         if (options.RecoverRuntime) builder.Services.AddHostedService<CodexRecovery>();
-        var app = builder.Build();
+        WebApplication app = builder.Build();
         // Resolve eagerly so event subscriptions exist before the first initialization.
-        var auth = app.Services.GetRequiredService<Authentication>();
-        var codex = app.Services.GetRequiredService<CodexClient>();
+        Authentication auth = app.Services.GetRequiredService<Authentication>();
+        CodexClient codex = app.Services.GetRequiredService<CodexClient>();
         var staticFiles = new Dictionary<string, (byte[] Body, string ContentType)>();
-        foreach (var (path, file, type) in new[]
+        foreach ((string? path, string? file, string? type) in new[]
         {
             ("/", "index.html", "text/html; charset=utf-8"),
             ("/app.js", "app.js", "text/javascript; charset=utf-8"),
@@ -69,7 +69,7 @@ public static class GoblinApplication
 
         app.Use(async (context, next) =>
         {
-            var response = context.Response;
+            HttpResponse response = context.Response;
             response.Headers.CacheControl = "no-store";
             response.Headers.XContentTypeOptions = "nosniff";
             response.Headers["Referrer-Policy"] = "no-referrer";
@@ -77,7 +77,7 @@ public static class GoblinApplication
             response.Headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
             try
             {
-                var request = context.Request;
+                HttpRequest request = context.Request;
                 var path = request.Path.Value ?? "/";
                 var get = HttpMethods.IsGet(request.Method);
                 var post = HttpMethods.IsPost(request.Method);
@@ -92,7 +92,7 @@ public static class GoblinApplication
             catch (Exception error)
             {
                 if (response.HasStarted || context.RequestAborted.IsCancellationRequested) return;
-                var safe = error as PublicError ?? new PublicError("internal_error", "The request could not be completed. Please retry.", 500);
+                PublicError safe = error as PublicError ?? new PublicError("internal_error", "The request could not be completed. Please retry.", 500);
                 response.StatusCode = safe.Status;
                 await response.WriteAsJsonAsync(new ApiFailure(new(safe.Code, safe.Message)));
             }
@@ -100,7 +100,7 @@ public static class GoblinApplication
 
         app.MapGet("/healthz", () => Results.Json(new { ok = true }));
         app.MapGet("/readyz", () => Results.Json(new { ready = codex.Ready }, statusCode: codex.Ready ? 200 : 503));
-        foreach (var (path, asset) in staticFiles)
+        foreach ((string? path, (byte[] Body, string ContentType) asset) in staticFiles)
             app.MapGet(path, () => Results.Bytes(asset.Body, asset.ContentType));
         app.MapGet("/api/session", (HttpContext context) => new SessionState(workspace.SessionId(context.Request) is not null));
         app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "token"), context.Response));
@@ -118,7 +118,7 @@ public static class GoblinApplication
     private static string? StringField(HttpContext context, string name)
     {
         var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
-        return body.TryGetValue(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        return body.TryGetValue(name, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     }
 
     private static async Task<Dictionary<string, JsonElement>> ReadBodyAsync(HttpRequest request)

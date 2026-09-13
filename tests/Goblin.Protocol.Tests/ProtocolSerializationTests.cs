@@ -36,7 +36,7 @@ public sealed class ProtocolSerializationTests
     public void DeviceCodeResponseAcceptsDiscriminatorAfterData()
     {
         const string json = """{"loginId":"login-1","userCode":"ABCD-EFGH","verificationUrl":"https://auth.openai.com/codex/device","type":"chatgptDeviceCode"}""";
-        var response = Assert.IsType<ChatgptDeviceCodeLoginAccountResponse>(Read<LoginAccountResponse>(json));
+        ChatgptDeviceCodeLoginAccountResponse response = Assert.IsType<ChatgptDeviceCodeLoginAccountResponse>(Read<LoginAccountResponse>(json));
         Assert.Equal("login-1", response.LoginId);
         Assert.Equal("ABCD-EFGH", response.UserCode);
         Assert.Equal(response, Read<LoginAccountResponse>(Write<LoginAccountResponse>(response)));
@@ -46,7 +46,7 @@ public sealed class ProtocolSerializationTests
     public void RequiredNullableAccountEmailRemainsPresentOnTheWire()
     {
         const string json = """{"type":"chatgpt","email":null,"planType":"plus"}""";
-        var account = Assert.IsType<ChatgptAccount>(Read<Account>(json));
+        ChatgptAccount account = Assert.IsType<ChatgptAccount>(Read<Account>(json));
         Assert.Null(account.Email);
         Assert.Contains("\"email\":null", Write<Account>(account));
         Assert.Throws<JsonException>(() => Read<Account>("""{"type":"chatgpt","planType":"plus"}"""));
@@ -69,8 +69,8 @@ public sealed class ProtocolSerializationTests
     public void CompletedNotificationsDeserializeIntoTypedNestedItems()
     {
         const string json = """{"params":{"completedAtMs":1800000000000,"item":{"text":"done","phase":"final_answer","id":"message-1","type":"agentMessage"},"threadId":"thread-1","turnId":"turn-1"},"method":"item/completed"}""";
-        var notification = Assert.IsType<ItemCompletedServerNotification>(Read<ServerNotification>(json));
-        var item = Assert.IsType<AgentMessageThreadItem>(notification.Params.Item);
+        ItemCompletedServerNotification notification = Assert.IsType<ItemCompletedServerNotification>(Read<ServerNotification>(json));
+        AgentMessageThreadItem item = Assert.IsType<AgentMessageThreadItem>(notification.Params.Item);
         Assert.Equal("item/completed", notification.Method);
         Assert.Equal("done", item.Text);
         Assert.Equal(MessagePhase.FinalAnswer, item.Phase);
@@ -93,9 +93,9 @@ public sealed class ProtocolSerializationTests
     public void FailedTurnsUseStructuredCodexErrorDetails()
     {
         const string json = """{"threadId":"thread-1","turn":{"id":"turn-1","items":[],"status":"failed","error":{"message":"disconnected","codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":503}}}}}""";
-        var notification = Read<TurnCompletedNotification>(json);
+        TurnCompletedNotification notification = Read<TurnCompletedNotification>(json);
         Assert.Equal(TurnStatus.Failed, notification.Turn.Status);
-        var error = Assert.IsType<HttpConnectionFailedCodexErrorInfo>(notification.Turn.Error!.CodexErrorInfo);
+        HttpConnectionFailedCodexErrorInfo error = Assert.IsType<HttpConnectionFailedCodexErrorInfo>(notification.Turn.Error!.CodexErrorInfo);
         Assert.Equal((ushort)503, error.HttpConnectionFailed.HttpStatusCode);
         Assert.Equal("disconnected", notification.Turn.Error.Message);
     }
@@ -129,12 +129,12 @@ public sealed class ProtocolSerializationTests
     public void JsonRpcEnvelopeKeepsOnlyUnconstrainedPayloadAsJsonElement()
     {
         const string json = """{"id":7,"result":{"requiresOpenaiAuth":true,"account":{"type":"apiKey"}}}""";
-        var response = Read<JSONRPCResponse>(json);
-        var result = response.Result.Deserialize<GetAccountResponse>(ProtocolJson.Options)!;
+        JSONRPCResponse response = Read<JSONRPCResponse>(json);
+        GetAccountResponse result = response.Result.Deserialize<GetAccountResponse>(ProtocolJson.Options)!;
         Assert.Equal(new RequestId(7), response.Id);
         Assert.True(result.RequiresOpenaiAuth);
         Assert.IsType<ApiKeyAccount>(result.Account);
-        var message = Read<JSONRPCMessage>(json);
+        JSONRPCMessage message = Read<JSONRPCMessage>(json);
         Assert.IsType<JSONRPCResponseJSONRPCMessage>(message);
         Assert.Equal(json, Write(message));
     }
@@ -146,7 +146,7 @@ public sealed class ProtocolSerializationTests
         Assert.Equal("\"never\"", Write(primitive));
         Assert.Equal(AskForApproval.Never, Read<AskForApproval>(Write(primitive)));
         const string json = """{"granular":{"mcp_elicitations":false,"rules":true,"sandbox_approval":false}}""";
-        var granular = Assert.IsType<GranularAskForApproval>(Read<AskForApproval>(json));
+        GranularAskForApproval granular = Assert.IsType<GranularAskForApproval>(Read<AskForApproval>(json));
         Assert.True(granular.Granular.Rules);
         Assert.False(granular.Granular.SandboxApproval);
         Assert.Equal(json, Write<AskForApproval>(granular));
@@ -182,7 +182,7 @@ public sealed class ProtocolSerializationTests
     public void UnconstrainedExtensionValuesSurviveSerialization()
     {
         const string json = """{"enabled":true,"futureSetting":{"nested":[1,"two",null]}}""";
-        var config = Read<AnalyticsConfig>(json);
+        AnalyticsConfig config = Read<AnalyticsConfig>(json);
         Assert.True(config.Enabled);
         Assert.Equal(json, Write(config));
     }

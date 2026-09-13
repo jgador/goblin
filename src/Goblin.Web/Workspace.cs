@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 
@@ -14,9 +15,9 @@ public sealed partial class Workspace
 {
     public const string CookieName = "goblin_auth_session";
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly byte[] _ownerHash;
-    private readonly OrderedDictionary<string, DateTimeOffset> _sessions = new();
+    private readonly OrderedDictionary<string, DateTimeOffset> _sessions = [];
     private readonly List<DateTimeOffset> _failedUnlocks = [];
     private readonly HashSet<string> _allowedOrigins = [];
     private readonly HashSet<string> _allowedHosts = new(StringComparer.OrdinalIgnoreCase);
@@ -43,7 +44,7 @@ public sealed partial class Workspace
 
     public static Uri ValidateOrigin(string value)
     {
-        if (!Uri.TryCreate(value, UriKind.Absolute, out var origin) || origin.UserInfo.Length != 0 ||
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? origin) || origin.UserInfo.Length != 0 ||
             origin.AbsolutePath != "/" || origin.Query.Length != 0 || origin.Fragment.Length != 0 ||
             origin.Scheme is not ("http" or "https") || (!IsLoopback(origin) && origin.Scheme != "https"))
             throw new ArgumentException("GOBLIN_PUBLIC_ORIGIN must be an HTTPS origin or a loopback HTTP origin.");
@@ -97,7 +98,7 @@ public sealed partial class Workspace
         var id = Convert.ToHexString(Hash(value));
         lock (_gate)
         {
-            if (_sessions.TryGetValue(id, out var expiry) && expiry > DateTimeOffset.UtcNow) return id;
+            if (_sessions.TryGetValue(id, out DateTimeOffset expiry) && expiry > DateTimeOffset.UtcNow) return id;
             _sessions.Remove(id);
             return null;
         }
@@ -107,7 +108,7 @@ public sealed partial class Workspace
     {
         lock (_gate)
         {
-            var now = DateTimeOffset.UtcNow;
+            DateTimeOffset now = DateTimeOffset.UtcNow;
             _failedUnlocks.RemoveAll(time => time <= now - TimeSpan.FromMinutes(1));
             if (_failedUnlocks.Count >= 5)
             {
@@ -138,7 +139,11 @@ public sealed partial class Workspace
 
     private void SetCookie(HttpResponse response, string value, TimeSpan lifetime) => response.Cookies.Append(CookieName, value, new CookieOptions
     {
-        Path = "/", HttpOnly = true, SameSite = SameSiteMode.Strict, MaxAge = lifetime, Secure = _origin.Scheme == "https"
+        Path = "/",
+        HttpOnly = true,
+        SameSite = SameSiteMode.Strict,
+        MaxAge = lifetime,
+        Secure = _origin.Scheme == "https"
     });
 
     [GeneratedRegex("^[\\w-]{43}$", RegexOptions.CultureInvariant)]
