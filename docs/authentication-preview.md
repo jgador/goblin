@@ -1,7 +1,7 @@
 # Try the authentication preview
 
 This authentication implementation is a preview. It implements ChatGPT device-code
-login, OpenAI API-key login, and a short prompt test using the connected account.
+login, OpenAI API-key login, and an automatic connection check using the saved account.
 Review authentication first;
 GitHub and repository integration remain a separate decision.
 
@@ -66,7 +66,8 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
 ## What to check
 
 1. Select **Continue with ChatGPT**. Open OpenAI's sign-in page, enter the
-   displayed code, and complete sign-in. Goblin should show your connected account.
+   displayed code, and complete sign-in. Goblin should show your account and
+   **Verifying connection…**, then **Connected** after a successful background check.
 2. Stop and restart `npm start`, unlock the preview, and confirm the connection
    remains. No second ChatGPT login should be needed while the credentials remain valid.
 3. Select **Lock workspace** and unlock it again. This locks browser access without
@@ -75,39 +76,48 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
    restart. Disconnecting removes this workspace's cached credentials; it does
    not revoke an API key in the OpenAI Platform.
 5. Open **Use an OpenAI API key instead** and connect a key. The preview checks
-   `GET /v1/models` and then asks Codex to save it. This does not generate a model
-   response or establish that inference credits or a particular model are available.
+   `GET /v1/models` and then asks Codex to save it. Goblin then automatically checks
+   model access with a small request that counts toward API billing.
 6. Try canceling ChatGPT sign-in and starting again. Refreshing the browser
    during a pending login should restore its current code.
-7. While connected, enter a short prompt under **Prompt**, then
-   select **Send prompt**. The default is “Say hello in one sentence.”
-   Goblin should display **Response received**, the model's actual reply, the
-   sign-in method, model name, and elapsed time. A successful reply verifies
-   that the saved account can make a model request.
+7. Select **Check again** to verify model access again. While the check runs,
+   Goblin shows **Verifying connection…** and disables duplicate checks. A failed
+   check replaces any previous success with an explanation and **Retry check**.
+   Expired sign-ins, usage limits, access denial, and timeouts have distinct messages.
+   The account email and plan remain visible; the background prompt and reply are hidden.
 
 ChatGPT access follows the connected plan/workspace. API-key usage is billed
 separately through the OpenAI Platform. Switching methods requires disconnecting
 the current account first. Keys rejected with HTTP 401 are not saved. Restricted
 keys without permission to list models, or rate-limited requests, are explicitly
-marked as unverified when saved. A successful prompt test clears that notice.
+marked as unverified when saved. A successful connection check clears that notice.
 
-## Test a prompt with the connected account
+## Verify the connected account
 
-The prompt test uses the same Codex app-server process and stored login as the
-authentication UI. It sends `thread/start` with `ephemeral: true`, followed by
-`turn/start`, and waits for a completed turn with an assistant reply. It uses
-Codex's default model and displays the model name returned by the server.
+The connection check uses the existing `/api/prompt` endpoint with a fixed short
+prompt, “Reply with only OK.” It uses the same Codex app-server process and stored
+login as the authentication UI. It sends `thread/start` with `ephemeral: true`,
+followed by `turn/start`, and waits for a completed turn with a nonempty assistant
+reply from Codex's default model. Only then does the UI report **Connected**.
+Neither the prompt nor the response is displayed.
 See the [app-server protocol](https://learn.chatgpt.com/docs/app-server#turns).
 
-Each click makes a real model request and counts toward the connected ChatGPT
-plan's usage limits or OpenAI API billing. The initial API-key check against
+Goblin checks once when a signed-in account is loaded after sign-in, opening or
+reloading the page, or unlocking the workspace. It also checks when switching
+accounts or selecting **Check again** or **Retry check**. Routine status polling
+never repeats a successful or failed check. Results are held only in page memory;
+locking or losing the account clears them. A status refresh failure replaces any
+previous success with **Connection unavailable** until a new check succeeds.
+
+Each check makes a real model request and counts toward the connected ChatGPT
+plan's usage limits or OpenAI API billing. The initial API-key validation against
 `/v1/models` remains a separate check that does not generate a response.
 
 Prompts are limited to 500 characters, replies to 8,000 characters, and one
-prompt test can run at a time. The response wait times out after 90 seconds;
+check can run at a time. The response wait times out after 90 seconds;
 closing or reloading the page also requests cancellation. Each test uses a
 fresh temporary conversation; previous test prompts are not conversation
-history. The displayed reply clears on reload, locking, or disconnecting.
+history. Checks never add a visible conversation to the UI.
 
 The runtime disables shell tools, browsing, apps, plugins, image tools,
 multi-agent tools, hooks, and memory. The test also uses a read-only sandbox
@@ -299,7 +309,9 @@ credential isolation, access control, and key verification errors. The Codex che
 initializes the real pinned Codex binary with a temporary home and verifies
 local storage, restart, and logout using a synthetic, unusable key. Browser
 tests cover the same UI flow with simulated authentication and model replies,
-including mobile layout, clearing API-key inputs, and prompt success/failure.
+including mobile layout, clearing API-key inputs, automatic connection checks,
+retry and error states, session expiry, account changes, and avoiding repeated
+model requests during status polling.
 The unit tests also cover prompt validation, event ordering, failed and empty
 replies, cancellation, timeouts, and overlapping requests. These
 checks do not use personal credentials or run a model task. A real ChatGPT

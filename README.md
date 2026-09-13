@@ -21,8 +21,8 @@ flow is awaiting live portal verification.
 `http://<Azure-assigned-hostname>`. Open the deployment's `goblinUrl` output and
 enter the Goblin password chosen during setup. The
 [authentication preview](docs/authentication-preview.md) lets you test
-ChatGPT and OpenAI API-key login, then send a short prompt using the connected
-account, locally or in an Agent Sandbox pod. GitHub integration, repository tasks,
+ChatGPT and OpenAI API-key login, then automatically verifies model access and
+shows the connection status, locally or in an Agent Sandbox pod. GitHub integration, repository tasks,
 custom domains, and automatic HTTPS certificates remain future work.
 
 Azure setup builds the application on the VM and configures Traefik using the

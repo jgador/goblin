@@ -4,7 +4,17 @@ import { resolve } from "node:path";
 
 test("owner can use a one-character deployment password, connect ChatGPT, and switch to an API key", async ({ page }) => {
   const errors: string[] = [];
+  const checks: unknown[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/prompt")) checks.push(request.postDataJSON());
+  });
+  const checkGate = Promise.withResolvers<void>();
+  await page.route("**/api/prompt", async (route) => {
+    const response = await route.fetch();
+    await checkGate.promise;
+    await route.fulfill({ response });
+  }, { times: 1 });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open your workspace" })).toBeVisible();
   await expect(page.getByLabel("Goblin password", { exact: true })).toHaveAttribute("autocomplete", "current-password");
@@ -33,22 +43,41 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
   await writeFile(completion, "complete");
   await expect(page.getByText("owner@example.test · plus", { exact: true })).toBeVisible({ timeout: 8000 });
   await unlink(completion);
-  await page.getByLabel("Prompt").fill("Say hello in one sentence.");
-  await page.getByRole("button", { name: "Send prompt" }).click();
-  await expect(page.locator("#prompt-reply")).toHaveText("Hello from the connected account.");
-  await expect(page.locator("#prompt-details")).toContainText("ChatGPT · test-model");
-  await page.screenshot({ path: "test-results/prompt-mobile.png", fullPage: true });
-  await page.getByLabel("Prompt").fill("Trigger a simulated failure.");
-  await page.getByRole("button", { name: "Send prompt" }).click();
-  await expect(page.getByRole("alert")).toContainText("OpenAI rejected the saved login");
-  await expect(page.locator("#prompt-result")).toBeHidden();
-  await expect(page.locator("#prompt-reply")).toHaveText("");
+  await expect(page.locator("#connection-status")).toHaveText("Verifying connection…");
+  await expect(page.locator("#check-connection-button")).toBeDisabled();
+  await expect(page.getByText("Connected", { exact: true })).not.toBeVisible();
+  await expect(page.locator("textarea")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send prompt" })).toHaveCount(0);
+  checkGate.resolve();
+  await expect(page.locator("#connection-status")).toHaveText("Connected");
+  await expect(page.locator("#connection-description")).toHaveText("Your ChatGPT account is ready to use.");
+  expect(checks).toEqual([{ prompt: "Reply with only OK." }]);
+  await expect(page.locator("body")).not.toContainText("Hello from the connected account.");
+  await page.screenshot({ path: "test-results/connection-status-mobile.png", fullPage: true });
+
+  // Exercise a real failed turn, including the backend's sanitization of partial replies.
+  await page.route("**/api/prompt", async (route) => {
+    const response = await route.fetch({ postData: { prompt: "Trigger a simulated failure." } });
+    await route.fulfill({ response });
+  }, { times: 1 });
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(page.locator("#connection-status")).toHaveText("Sign-in expired");
+  await expect(page.locator("#connection-check")).toHaveAttribute("data-status", "failed");
+  await expect(page.getByText("Connected", { exact: true })).not.toBeVisible();
   await expect(page.locator("body")).not.toContainText("THIS-MUST-NOT-LEAK");
+  await expect(page.locator("body")).not.toContainText("Hello from the connected account.");
+  await page.screenshot({ path: "test-results/connection-failed-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: "Retry check" }).click();
+  await expect(page.locator("#connection-status")).toHaveText("Connected");
+  expect(checks).toHaveLength(3);
   await page.getByRole("button", { name: "Lock workspace" }).click();
   await expect(page.getByRole("heading", { name: "Open your workspace" })).toBeVisible();
+  await expect(page.locator("#account-detail")).toHaveText("");
   await page.getByLabel("Goblin password", { exact: true }).fill("a");
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(page.getByText("owner@example.test · plus", { exact: true })).toBeVisible();
+  await expect(page.locator("#connection-status")).toHaveText("Connected");
+  expect(checks).toHaveLength(4);
   await page.getByRole("button", { name: "Disconnect Codex" }).click();
   await expect(page.getByRole("heading", { name: "Choose how to sign in" })).toBeVisible();
 
@@ -60,8 +89,9 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
   await page.getByLabel("OpenAI API key", { exact: true }).fill("sk-valid-fake-browser-test-key");
   await page.getByRole("button", { name: "Connect API key" }).click();
   await expect(page.getByText("Billed to your OpenAI Platform project", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Send prompt" }).click();
-  await expect(page.locator("#prompt-details")).toContainText("OpenAI API key · test-model");
+  await expect(page.locator("#connection-status")).toHaveText("Connected");
+  await expect(page.locator("#connection-description")).toHaveText("Your OpenAI API key is ready to use.");
+  expect(checks).toHaveLength(5);
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
   await expect(page.locator("body")).not.toContainText("sk-valid-fake-browser-test-key");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
