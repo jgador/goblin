@@ -5,7 +5,10 @@
 assets
 node_modules
 dist
+**/bin
+**/obj
 test
+tests
 docs
 deploy
 *.log

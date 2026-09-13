@@ -1,0 +1,18 @@
+{
+  "schemaSha256": "a02e63d92869a0d1cacefd833448bdc6363e2b9715448e7dc213f564b17cd8ae",
+  "schemaFiles": 305,
+  "namedDefinitions": 698,
+  "generatedTypes": 1131,
+  "primitiveAliases": {
+    "AbsolutePathBuf": "string",
+    "AgentPath": "string",
+    "CollaborationModeMaskReasoningEffort": "string?",
+    "LegacyAppPathString": "string",
+    "NullableGetAccountRateLimitsParams": "GetAccountRateLimitsParams?",
+    "NullableGetAccountTokenUsageParams": "GetAccountTokenUsageParams?",
+    "PathUri": "string",
+    "ReasoningEffort": "string",
+    "ThreadId": "string",
+    "ThreadSource": "string"
+  }
+}

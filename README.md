@@ -23,6 +23,7 @@ remain future work.
 To try authentication first:
 
 ```bash
+# Requires .NET 10 SDK and Node.js 22+.
 npm ci
 npm start
 ```
@@ -31,10 +32,14 @@ Open http://localhost:8787 and enter the workspace access code stored in
 `.goblin-auth/owner-token`. See the [preview guide](docs/authentication-preview.md)
 for sign-in, persistence checks, and deployment to your VM.
 
-The backend, browser UI, tests, and support scripts are written in TypeScript.
-`npm start` builds the app into `dist/` before launching it. Use
-`npm run typecheck` to check types without producing build files, or `npm test`
-to build and run the unit tests.
+The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official
+Rust `codex app-server`; the browser UI remains TypeScript. Protocol models are
+generated from the checked-in schemas using `System.Text.Json`.
+`npm start` builds the browser assets and .NET solution, then starts the C# host.
+Use `npm run typecheck` for TypeScript checks and a .NET build, or `npm test`
+for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
+See the [App Server migration notes](docs/app-server-migration.md) for architecture,
+model regeneration, and direct .NET commands.
 
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses
