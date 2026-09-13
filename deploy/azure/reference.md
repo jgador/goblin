@@ -15,8 +15,8 @@ On **Basics**, enter **Goblin password** and **Confirm Goblin password**. Azure
 checks that they match. Even a one-character password is accepted. A non-blank
 password is required, with no character-mix requirement and a maximum of 128
 characters. Tabs, line breaks, and control characters are rejected. Spaces and
-special characters are preserved exactly. This password opens Goblin before ChatGPT
-sign-in; it is separate from VM SSH credentials and your ChatGPT password.
+special characters are preserved exactly. This password opens Goblin; it is
+separate from VM SSH and AI provider credentials.
 
 Both ARM entry points require `goblinPassword` as a secure string without a
 default. The confirmation stays in the portal form; only the password is sent
@@ -65,7 +65,7 @@ sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
 ```
 
 The Sandbox controller recreates the pod with the same persistent data. The
-connected ChatGPT account is preserved. Reuse your current Goblin password on
+saved provider connection is preserved. Reuse your current Goblin password on
 ordinary redeployments. Provisioning still does not install the application or
 configure public HTTPS.
 
@@ -126,6 +126,20 @@ If deployment fails, open the failed operation on Azure's deployment page. The
 `goblin-bootstrap` error includes the failing stage, exit code, and diagnostics.
 Resources can remain provisioned and incur charges after a failure.
 
+If an older bootstrap fails during **Checking Kubernetes readiness** with
+`error: no matching resources found`, the API became ready before the kubelet
+registered its node. The updated bootstrap waits for a node to appear before
+waiting for its `Ready` condition. Retry with the updated template in the same
+resource group, keeping the same resource names and Goblin password.
+
+If **Waiting for Kubernetes node registration** fails, or the node appears but
+**Checking Kubernetes node readiness** times out, inspect K3s on the VM:
+
+```bash
+k3s kubectl get nodes -o wide
+journalctl -u k3s --no-pager -n 100
+```
+
 After correcting an external problem such as blocked downloads, redeploy the
 current template from the portal and enter the same Goblin password again.
 Azure does not return the extension's protected script in `az vm extension show`;
@@ -137,7 +151,7 @@ installation.
 
 The VM extension embeds `bootstrap.sh` and waits for:
 
-- K3s `v1.36.4+k3s1`, a ready Kubernetes API, and a ready node.
+- K3s `v1.36.4+k3s1`, a ready Kubernetes API, node registration, and a ready node.
 - The Goblin password verifier stored in the `goblin` namespace.
 - Agent Sandbox `v1.0.2`, its core CRD, and its controller rollout.
 

@@ -14,22 +14,44 @@ const fakePassword = "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` ca
 // Exercise the real rendered bootstrap, replacing only infrastructure commands
 // and absolute system paths. Python hashing, shell quoting and secret creation
 // all run; no Azure account, Kubernetes installation, or network is needed.
-async function bootstrap(root: string, password: string) {
+async function bootstrap(root: string, password: string, nodeState: "ready" | "delayed" | "missing" | "not-ready" = "ready") {
   const bin = join(root, "bin");
   await mkdir(bin, { recursive: true });
-  for (const name of ["cloud-init", "sha256sum", "curl", "k3s"]) {
+  for (const name of ["cloud-init", "sha256sum", "curl", "k3s", "sleep"]) {
     await writeFile(join(bin, name), `#!${process.execPath}
 const fs = require('node:fs');
 const path = require('node:path');
 const name = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
 const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
+const nodeState = process.env.GOBLIN_BOOTSTRAP_NODE_STATE;
 if (name === 'curl') {
   fs.writeFileSync(args[args.indexOf('--output') + 1], '#!/bin/sh\\nexit 0\\n');
 } else if (name === 'sha256sum') {
   fs.readFileSync(0);
 } else if (name === 'k3s') {
-  if (args[1] === 'create' && args[2] === 'namespace') {
+  fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args[1] === 'get' && args[2] === 'nodes') {
+    const attemptsFile = path.join(root, 'node-registration-attempts');
+    const attempt = (fs.existsSync(attemptsFile) ? Number(fs.readFileSync(attemptsFile, 'utf8')) : 0) + 1;
+    fs.writeFileSync(attemptsFile, String(attempt));
+    if (nodeState === 'delayed' && attempt === 1) {
+      process.stderr.write('Temporary API connection failure\\n');
+      process.exit(1);
+    }
+    if (nodeState === 'missing' || (nodeState === 'delayed' && attempt < 4)) process.exit(0);
+    fs.writeFileSync(path.join(root, 'node-registered'), 'true');
+    process.stdout.write('node/goblin\\n');
+  } else if (args[1] === 'wait' && args.includes('node')) {
+    if (nodeState === 'missing' || (nodeState === 'delayed' && !fs.existsSync(path.join(root, 'node-registered')))) {
+      process.stderr.write('error: no matching resources found\\n');
+      process.exit(1);
+    }
+    if (nodeState === 'not-ready') {
+      process.stderr.write('error: timed out waiting for the condition on nodes/goblin\\n');
+      process.exit(1);
+    }
+  } else if (args[1] === 'create' && args[2] === 'namespace') {
     process.stdout.write(JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: args[3] } }));
   } else if (args[1] === 'create' && args[2] === 'secret') {
     const file = args.find(arg => arg.startsWith('--from-file=owner-password=')).slice('--from-file=owner-password='.length);
@@ -54,11 +76,53 @@ if (name === 'curl') {
   await writeFile(scriptPath, script, { mode: 0o600 });
   return execFileSync("/bin/sh", [scriptPath], {
     cwd: root,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOBLIN_BOOTSTRAP_TEST_DIR: root },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOBLIN_BOOTSTRAP_TEST_DIR: root, GOBLIN_BOOTSTRAP_NODE_STATE: nodeState },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    timeout: 30_000,
   });
 }
+
+test("bootstrap waits for node registration after API readiness, including transient list failures", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-node-delayed-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const output = await bootstrap(root, fakePassword, "delayed");
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "ready\n");
+  assert.equal(await readFile(join(root, "node-registration-attempts"), "utf8"), "4");
+  const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  const apiReady = calls.findIndex(args => args.includes("--raw=/readyz"));
+  const registration = calls.findIndex(args => args[1] === "get" && args[2] === "nodes");
+  const nodeReady = calls.findIndex(args => args[1] === "wait" && args.includes("node"));
+  const secret = calls.findIndex(args => args[1] === "create" && args[2] === "secret");
+  assert.ok(apiReady >= 0 && registration > apiReady && nodeReady > registration && secret > nodeReady);
+  assert.match(output, /Waiting for Kubernetes node registration/);
+  assert.match(output, /Checking Kubernetes node readiness/);
+});
+
+test("bootstrap fails clearly if the API is ready but no node ever registers", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-node-missing-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await assert.rejects(bootstrap(root, fakePassword, "missing"), { status: 1 });
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "failed\n");
+  const logs = await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8");
+  assert.match(logs, /Kubernetes node did not register/);
+  assert.match(logs, /Installation failed during: Waiting for Kubernetes node registration/);
+  const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.ok(!calls.some(args => args[1] === "wait" && args.includes("node")));
+  assert.ok(!calls.some(args => args[1] === "apply"));
+  await assert.rejects(access(join(root, "secret.json")));
+});
+
+test("bootstrap does not continue when a registered node fails its readiness wait", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-node-not-ready-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await assert.rejects(bootstrap(root, fakePassword, "not-ready"), { status: 1 });
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "failed\n");
+  const logs = await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8");
+  assert.match(logs, /timed out waiting for the condition/);
+  assert.match(logs, /Installation failed during: Checking Kubernetes node readiness/);
+  await assert.rejects(access(join(root, "secret.json")));
+});
 
 test("Azure password survives provisioning and unlocks Goblin without an owner token", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-password-"));

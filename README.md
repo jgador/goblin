@@ -22,7 +22,7 @@ remain future work.
 
 Azure setup now asks you to choose and confirm a Goblin password. After manually
 installing the authentication preview in that cluster, enter the chosen password
-to open Goblin and connect your ChatGPT account; no token lookup is needed.
+to open Goblin; no token lookup is needed.
 
 To try authentication first:
 

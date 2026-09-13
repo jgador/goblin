@@ -60,7 +60,7 @@
           "password": "Goblin password",
           "confirmPassword": "Confirm Goblin password"
         },
-        "toolTip": "Choose a password for opening Goblin before connecting your ChatGPT account. There is no minimum length or character-mix requirement. Save it in your password manager.",
+        "toolTip": "Choose a password for opening Goblin. There is no minimum length or character-mix requirement. Save it in your password manager.",
         "constraints": {
           "required": true,
           "regex": "^(?=.*\\S)[^\\x00-\\x1F\\x7F]{0,128}(?![\\s\\S])",
