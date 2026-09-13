@@ -1,0 +1,5 @@
+# Preserve packaged design files byte-for-byte across platforms.
+assets/branding/source/*.ai binary
+assets/branding/fonts/*.ttf binary
+assets/branding/png/*.png binary
+assets/branding/jpeg/*.jpg binary

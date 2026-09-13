@@ -10,7 +10,8 @@ button{cursor:pointer}
 button:disabled{opacity:.55;cursor:wait}
 button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #79a557;outline-offset:4px}
 .topbar{padding:26px 42px;display:flex;justify-content:space-between;align-items:center;gap:20px}
-.brand{display:flex;align-items:center;gap:10px;color:#243d2c;font-size:25px;font-weight:720;letter-spacing:-1px;text-decoration:none}
+.brand{display:flex;align-items:center;gap:14px;flex-shrink:0;text-decoration:none}
+.brand-logo{display:block;width:72px;height:auto}
 .preview{font-size:10px;letter-spacing:.08em;font-weight:600;color:var(--muted);border:1px solid #dce2d6;border-radius:5px;padding:3px 6px;margin-left:3px;text-transform:uppercase}
 main{width:100%;max-width:520px;margin:42px auto 50px;padding:0 24px;flex:1}
 .intro{margin-bottom:28px}
@@ -85,4 +86,4 @@ footer{font-size:10px;color:#929b8b;padding:0 24px 22px;text-align:center}
 footer span{padding:0 7px;color:#bdc5b7}
 @keyframes pulse{50%{opacity:.35}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-@media(max-width:520px){.topbar{padding:20px 24px}main{margin-top:27px}.card{padding:24px}#device-code{font-size:20px;letter-spacing:1px}.account-row{align-items:flex-start}.account-detail{max-width:210px}}
+@media(max-width:520px){.topbar{padding:20px 24px}.brand{gap:10px}.brand-logo{width:60px}main{margin-top:27px}.card{padding:24px}#device-code{font-size:20px;letter-spacing:1px}.account-row{align-items:flex-start}.account-detail{max-width:210px}}
