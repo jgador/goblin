@@ -7,7 +7,7 @@ Goblin password you chose during setup.
 
 ## Deploy
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.portal.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2FcreateUiDefinition.json)
+Start with the **Deploy to Azure** button in the [root README](../../README.md).
 
 1. Select your subscription, a dedicated resource group (e.g. `rg-goblin-prod`),
    and region. Keep the remaining defaults unless needed.

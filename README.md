@@ -4,8 +4,13 @@ Your self-hosted AI coworker.
 
 Goblin aims to turn everyday team conversations into completed, reviewable work.
 
-The first deployment target is a customer-owned Linux VM in Azure. The
-[Azure deployment guide](deploy/azure/README.md) includes an ARM template with
+Deploy Goblin to your own Linux VM in Azure:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.portal.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2FcreateUiDefinition.json)
+
+Deployment support for Google Cloud Platform, AWS, and other providers will follow later.
+
+The [Azure deployment guide](deploy/azure/README.md) includes an ARM template with
 customer-specific names, optional resource-name overrides, a static public IP,
 an Azure DNS hostname, single-node Kubernetes, and the Agent Sandbox controller.
 The guided installer uses Azure's native custom-template flow, with configuration
