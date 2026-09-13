@@ -6,17 +6,18 @@ GitHub and repository integration remain a separate decision.
 
 ## Run locally
 
-Install Node.js 22 or newer, then run from this checkout:
+Install the .NET 10 SDK and Node.js 22 or newer, then run from this checkout:
 
 ```bash
 npm ci
 npm start
 ```
 
-`npm start` compiles the TypeScript backend and browser code into `dist/`, copies
-the static assets, and starts the compiled server. After editing sources, restart
-it to rebuild. To build separately, run `npm run build`, then launch with
-`node dist/src/main.js`. Generated files in `dist/` are ignored by Git.
+`npm start` builds the C# backend and TypeScript browser assets, then starts
+the ASP.NET Core Minimal API host. After editing sources, restart it to rebuild.
+To build separately, run `npm run build`, then launch with
+`dotnet src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll`.
+Browser assets in `dist/` and .NET `bin/` and `obj/` output are ignored by Git.
 
 Open **http://localhost:8787**. In another terminal, read the workspace access
 code and enter it on the page:
@@ -30,8 +31,9 @@ password. It is not a ChatGPT credential, and it is never placed in a URL or
 printed by the application. The browser receives a private session cookie;
 after restarting the application, unlock it with the same workspace code.
 
-Goblin installs Codex CLI **0.154.0** through the lockfile and starts
-`codex app-server` over stdio. Its `HOME`, working directory, and `CODEX_HOME` are
+Goblin installs Codex CLI **0.154.0** through the lockfile. Its C# client starts
+the package's official Rust binary with `app-server` and communicates over stdio
+using the checked-in JSON schemas. Its `HOME`, working directory, and `CODEX_HOME` are
 private to the preview. Existing machine-level Codex configuration and provider
 credentials are not inherited. You can keep using your normal Codex installation.
 
@@ -125,9 +127,10 @@ docker run --rm --name goblin-auth-preview \
   goblin-auth-preview:0.1.0
 ```
 
-The image builds TypeScript in a separate stage. The final image contains the
-compiled server, browser assets, and production dependencies; it does not need
-the TypeScript compiler at runtime.
+The image builds browser assets and publishes .NET in separate stages. The final
+image contains the ASP.NET Core runtime, published C# host, browser assets, and
+the official Rust Codex binary with its runtime resources. Node.js and the
+TypeScript compiler are build dependencies only.
 
 In another terminal, read the workspace access code:
 
@@ -206,6 +209,7 @@ executes untrusted repository code.
 | `GOBLIN_HOST` | `127.0.0.1` locally; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |
 | `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:8787` | Exact browser origin, used for Host and Origin checks |
+| `GOBLIN_CODEX_COMMAND` | Local pinned native binary, otherwise `codex` on `PATH` | Optional path to the official Codex executable |
 
 Remote origins must use HTTPS. Loopback HTTP is supported for local access and
 SSH/kubectl forwarding. Public ingress and automatic HTTPS setup are outside
@@ -231,12 +235,13 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-The test commands build first, so unit tests and fixture processes exercise the
-compiled code. Type checking also covers tests and scripts. Playwright loads its
-TypeScript configuration and browser tests directly. The browser module uses
+The test commands build first. `npm test` requires Python 3 for the deterministic
+schema-generation check, then runs .NET serialization/transport tests and the HTTP
+integration tests against the C# host. Type checking also covers tests and scripts.
+Playwright loads its TypeScript configuration and browser tests directly. The browser module uses
 only type imports from `shared/api.ts`, so it needs no client framework or bundler.
 
-The unit tests exercise the HTTP and JSON-RPC paths with a fake Codex
+The integration tests exercise the HTTP and JSON-RPC paths with a fake Codex
 process: login notifications, cancellation, expiry, persistence, logout,
 credential isolation, access control, and key verification errors. The Codex check
 initializes the real pinned Codex binary with a temporary home and verifies
@@ -247,3 +252,6 @@ The unit tests also cover prompt validation, event ordering, failed and empty
 replies, cancellation, timeouts, and overlapping requests. These
 checks do not use personal credentials or run a model task. A real ChatGPT
 sign-in remains a manual acceptance check.
+
+See [App Server migration notes](app-server-migration.md) for the C# project layout,
+protocol regeneration, and the boundary between Goblin orchestration and Codex Core.

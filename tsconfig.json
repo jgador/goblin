@@ -11,5 +11,5 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "shared/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "playwright.config.ts"]
+  "include": ["shared/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "playwright.config.ts"]
 }

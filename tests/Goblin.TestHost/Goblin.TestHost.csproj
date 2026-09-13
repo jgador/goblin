@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="../../src/Goblin.Web/Goblin.Web.csproj" />
+  </ItemGroup>
+</Project>
