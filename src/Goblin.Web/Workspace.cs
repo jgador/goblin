@@ -16,18 +16,20 @@ public sealed partial class Workspace
     public const string CookieName = "goblin_auth_session";
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
     private readonly Lock _gate = new();
-    private readonly byte[] _ownerHash;
+    private readonly byte[]? _ownerHash;
+    private readonly OwnerPassword? _ownerPassword;
     private readonly OrderedDictionary<string, DateTimeOffset> _sessions = [];
     private readonly List<DateTimeOffset> _failedUnlocks = [];
     private readonly HashSet<string> _allowedOrigins = [];
     private readonly HashSet<string> _allowedHosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Uri _origin;
 
-    private Workspace(string dataDir, string publicOrigin, string token)
+    private Workspace(string dataDir, string publicOrigin, string? token, OwnerPassword? password = null)
     {
         DataDirectory = dataDir;
         TokenFile = Path.Combine(dataDir, "owner-token");
-        _ownerHash = Hash(token);
+        _ownerHash = token is null ? null : Hash(token);
+        _ownerPassword = password;
         _origin = ValidateOrigin(publicOrigin);
         _allowedOrigins.Add(_origin.GetLeftPart(UriPartial.Authority));
         if (IsLoopback(_origin))
@@ -38,6 +40,7 @@ public sealed partial class Workspace
 
     public string DataDirectory { get; }
     public string TokenFile { get; }
+    public bool UsesPassword => _ownerPassword is not null;
     public string CodexHome => Path.Combine(DataDirectory, "codex");
     public string Home => Path.Combine(DataDirectory, "home");
     public string WorkingDirectory => Path.Combine(DataDirectory, "workspace");
@@ -55,7 +58,7 @@ public sealed partial class Workspace
     private static byte[] Hash(string value) => SHA256.HashData(Encoding.UTF8.GetBytes(value));
     private static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    public static async Task<Workspace> OpenAsync(string directory, string publicOrigin)
+    public static async Task<Workspace> OpenAsync(string directory, string publicOrigin, string? passwordHashFile = null)
     {
         ValidateOrigin(publicOrigin);
         var data = Path.GetFullPath(directory);
@@ -68,6 +71,9 @@ public sealed partial class Workspace
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
         }
+        if (passwordHashFile is not null)
+            return new Workspace(data, publicOrigin, null, await OwnerPassword.LoadAsync(passwordHashFile));
+
         var tokenFile = Path.Combine(data, "owner-token");
         try
         {
@@ -115,10 +121,15 @@ public sealed partial class Workspace
                 response.Headers.RetryAfter = "60";
                 throw new PublicError("too_many_attempts", "Too many attempts. Wait a minute, then try again.", 429);
             }
-            if (token is null || !CryptographicOperations.FixedTimeEquals(Hash(token.Trim()), _ownerHash))
+            bool valid = token is not null && (_ownerPassword is not null
+                ? _ownerPassword.Verify(token)
+                : CryptographicOperations.FixedTimeEquals(Hash(token.Trim()), _ownerHash!));
+            if (!valid)
             {
                 _failedUnlocks.Add(now);
-                throw new PublicError("invalid_workspace_code", "The workspace access code is incorrect.", 401);
+                throw new PublicError("invalid_workspace_code", UsesPassword
+                    ? "The Goblin password is incorrect."
+                    : "The workspace access code is incorrect.", 401);
             }
             _failedUnlocks.Clear();
             foreach (var id in _sessions.Where(x => x.Value <= now).Select(x => x.Key).ToArray()) _sessions.Remove(id);
@@ -126,7 +137,7 @@ public sealed partial class Workspace
             var session = NewToken();
             _sessions.Add(Convert.ToHexString(Hash(session)), now + SessionLifetime);
             SetCookie(response, session, SessionLifetime);
-            return new(true);
+            return new(true, UsesPassword);
         }
     }
 
@@ -134,7 +145,7 @@ public sealed partial class Workspace
     {
         lock (_gate) _sessions.Remove(id);
         SetCookie(response, "", TimeSpan.Zero);
-        return new(false);
+        return new(false, UsesPassword);
     }
 
     private void SetCookie(HttpResponse response, string value, TimeSpan lifetime) => response.Cookies.Append(CookieName, value, new CookieOptions

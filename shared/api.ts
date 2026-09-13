@@ -24,6 +24,7 @@ export interface PromptResult {
 
 export interface SessionState {
   authenticated: boolean;
+  usesPassword: boolean;
 }
 
 export interface ApiFailure {

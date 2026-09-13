@@ -210,7 +210,16 @@ byId("copy-code").addEventListener("click", async () => {
 document.addEventListener("visibilitychange", () => { if (!document.hidden && unlocked && !busy) poll(); });
 
 try {
-  unlocked = (await api("/api/session")).authenticated;
+  const session = await api("/api/session");
+  unlocked = session.authenticated;
+  if (session.usesPassword) {
+    byId("workspace-code-label").textContent = "Goblin password";
+    byId("unlock-description").textContent = "Enter the password chosen when this Goblin workspace was set up.";
+    byId("unlock-footnote").textContent = "This password opens Goblin. You’ll connect your ChatGPT account or API key next.";
+    const input = byId("workspace-code", HTMLInputElement);
+    input.autocomplete = "current-password";
+    input.maxLength = 128;
+  }
   if (unlocked) { showPanel("connect"); render(await api("/api/status")); }
   else showPanel("locked");
 } catch (error) {

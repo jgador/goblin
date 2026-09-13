@@ -9,6 +9,61 @@ and, if creating a group, permission to create it in the subscription.
 Check pricing, quota, and availability in your region. Alternative VM sizes must
 support x64 Ubuntu and Trusted Launch.
 
+## Goblin password
+
+On **Basics**, enter **Goblin password** and **Confirm Goblin password**. Azure
+checks that they match. Even a one-character password is accepted. A non-blank
+password is required, with no character-mix requirement and a maximum of 128
+characters. Tabs, line breaks, and control characters are rejected. Spaces and
+special characters are preserved exactly. This password opens Goblin before ChatGPT
+sign-in; it is separate from VM SSH credentials and your ChatGPT password.
+
+Both ARM entry points require `goblinPassword` as a secure string without a
+default. The confirmation stays in the portal form; only the password is sent
+to the deployment. For CLI deployments, omit it from the parameter file and
+let Azure CLI prompt for the missing secure parameter:
+
+```bash
+az deployment sub create \
+  --name goblin \
+  --location southeastasia \
+  --template-file deploy/azure/main.bicep \
+  --parameters @deploy/azure/azuredeploy.parameters.example.json
+```
+
+Avoid putting the password in command arguments or checked-in parameter files.
+The VM extension receives it through `protectedSettings`. The bootstrap passes
+it to the hashing helper through stdin and creates the `goblin-owner-password`
+Kubernetes Secret in `goblin-preview`. Only a salted PBKDF2-SHA256 verifier
+(600,000 iterations, 16-byte random salt) is stored in that Secret. Neither the
+password nor the verifier appears in deployment outputs or bootstrap logs.
+
+Azure's Custom Script extension can retain its generated `script.sh` under
+`/var/lib/waagent/custom-script/download/<run>/`. That root-readable script
+contains the original password encoded as Base64, which is reversible. Bootstrap
+cleanup removes its temporary hash file and working directory, but does not
+remove this extension-managed copy.
+
+The preview manifest mounts the Secret read-only and configures
+`GOBLIN_PASSWORD_HASH_FILE`. If the Secret is missing, the pod cannot start; if
+its verifier is invalid, Goblin refuses to start. An old `owner-token` on the
+preview data volume no longer grants access when the password is configured.
+
+For an existing Azure installation, redeploy the updated template with a Goblin
+password, rebuild/import the updated preview image, and apply the updated
+`deploy/auth-preview/sandbox.yaml` manifest. For a password change, redeploy with
+the new password, then restart the preview pod to load the updated Secret and
+invalidate existing browser sessions:
+
+```bash
+sudo k3s kubectl delete pod -n goblin-preview -l app=goblin-auth-preview
+```
+
+The Sandbox controller recreates the pod with the same persistent data. The
+connected ChatGPT account is preserved. Reuse your current Goblin password on
+ordinary redeployments. Provisioning still does not install the application or
+configure public HTTPS.
+
 ## Naming
 
 Names use Microsoft's [resource abbreviations](https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ready/azure-best-practices/resource-abbreviations)
@@ -66,36 +121,19 @@ If deployment fails, open the failed operation on Azure's deployment page. The
 `goblin-bootstrap` error includes the failing stage, exit code, and diagnostics.
 Resources can remain provisioned and incur charges after a failure.
 
-After correcting an external problem such as blocked downloads, a failed
-deployment can be redeployed from the portal. To explicitly rerun the extension
-using Azure CLI, replace the resource names as needed:
-
-```bash
-az vm extension show \
-  --resource-group rg-goblin-prod \
-  --vm-name vm-goblin-prod \
-  --name goblin-bootstrap \
-  --query settings --output json > bootstrap-settings.json
-
-az vm extension set \
-  --resource-group rg-goblin-prod \
-  --vm-name vm-goblin-prod \
-  --name CustomScript \
-  --extension-instance-name goblin-bootstrap \
-  --publisher Microsoft.Azure.Extensions \
-  --version 2.1 \
-  --settings @bootstrap-settings.json \
-  --force-update
-```
-
-This reuses the extension's existing script. Redeploying an unchanged successful
-extension does not rerun bootstrap or upgrade the installation.
+After correcting an external problem such as blocked downloads, redeploy the
+current template from the portal and enter the same Goblin password again.
+Azure does not return the extension's protected script in `az vm extension show`;
+copying its public `settings` is no longer sufficient for a retry. Redeploying
+an unchanged successful extension does not rerun bootstrap or upgrade the
+installation.
 
 ## What deployment success means
 
 The VM extension embeds `bootstrap.sh` and waits for:
 
 - K3s `v1.36.4+k3s1`, a ready Kubernetes API, and a ready node.
+- The Goblin password verifier stored in the preview namespace.
 - Agent Sandbox `v1.0.2`, its core CRD, and its controller rollout.
 
 The K3s installer and Agent Sandbox manifest use pinned release URLs and checked
@@ -217,6 +255,7 @@ bicep build deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json
 bicep build deploy/azure/portal.bicep --outfile deploy/azure/azuredeploy.portal.json
 bash -n deploy/azure/bootstrap.sh
 sh -n deploy/azure/missing-ssh-key.sh
+npm test
 ```
 
 Commit the regenerated JSON together with its sources. Verify changes with a live
@@ -231,3 +270,7 @@ The credentials control returns an empty `sshPublicKey` while reviewing a newly
 generated key. The template must accept that review state; the extension guard
 rejects a missing key at installation time for the portal entry point. Verify
 both review validation and the final key handoff in a live portal deployment.
+Also verify password masking, matching confirmation, length validation, and
+unlocking the installed preview with the deployment password. Automated tests
+exercise the rendered bootstrap with mocked infrastructure commands, verifier
+compatibility with the C# backend, token rejection, and password persistence.

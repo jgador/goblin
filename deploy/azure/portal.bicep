@@ -7,6 +7,11 @@ targetScope = 'resourceGroup'
 @maxLength(24)
 param companyName string = 'Goblin'
 
+@secure()
+@description('Password for opening Goblin. A password is required, with no minimum length or character-mix requirement (up to 128 characters). This is separate from your Azure, SSH, and ChatGPT credentials. Use the same password when redeploying unless you intend to change it.')
+@maxLength(128)
+param goblinPassword string
+
 @description('Public part of the VM access key. The portal credentials control supplies the public key. The empty default permits review before Azure generates a new key; use main.bicep for CLI installation without SSH. Never supply a private key. Set sshSourceAddressPrefix only when direct SSH access is needed.')
 param adminSshPublicKey string = ''
 
@@ -99,6 +104,7 @@ module infrastructure './modules/vm.bicep' = {
     dnsLabel: effectiveDnsLabel
     adminUsername: adminUsername
     adminSshPublicKey: adminSshPublicKey
+    goblinPassword: goblinPassword
     requireSshPublicKey: true
     vmSize: vmSize
     osDiskSizeGB: osDiskSizeGB

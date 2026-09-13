@@ -14,6 +14,7 @@ FixtureOptions config = JsonSerializer.Deserialize<FixtureOptions>(args[0], new 
 await using WebApplication app = await GoblinApplication.CreateAsync(new()
 {
     DataDirectory = config.DataDir,
+    PasswordHashFile = config.PasswordHashFile,
     PublicOrigin = config.PublicOrigin,
     ListenUrl = config.ListenUrl,
     AssetDirectory = Path.Combine(config.Root, "dist/public"),
@@ -77,6 +78,7 @@ internal sealed record FixtureOptions
 {
     public required string Root { get; init; }
     public required string DataDir { get; init; }
+    public string? PasswordHashFile { get; init; }
     public string PublicOrigin { get; init; } = "http://localhost:8787";
     public string ListenUrl { get; init; } = "http://127.0.0.1:0";
     public string Node { get; init; } = "node";
