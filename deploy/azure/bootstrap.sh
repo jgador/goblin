@@ -80,7 +80,7 @@ fi
 INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_EXEC=server sh "$bootstrap_dir/install-k3s.sh"
 
 # Wait for the API first: a running systemd service does not imply a ready API.
-stage 'Checking Kubernetes readiness'
+stage 'Checking Kubernetes API readiness'
 api_ready=false
 for ((attempt = 0; attempt < 120; attempt++)); do
   if k3s kubectl get --raw=/readyz --request-timeout=5s >/dev/null 2>&1; then
@@ -93,6 +93,24 @@ if [[ "$api_ready" != true ]]; then
   printf 'Kubernetes API did not become ready. Inspect journalctl -u k3s.\n'
   exit 1
 fi
+
+# The API can be ready before the kubelet registers its Node. kubectl wait
+# fails immediately for an empty resource list, even with a timeout.
+stage 'Waiting for Kubernetes node registration'
+node_registered=false
+for ((attempt = 0; attempt < 60; attempt++)); do
+  if node_names=$(k3s kubectl get nodes -o name --request-timeout=5s 2>/dev/null) && [[ -n "$node_names" ]]; then
+    node_registered=true
+    break
+  fi
+  sleep 5
+done
+if [[ "$node_registered" != true ]]; then
+  printf 'Kubernetes node did not register. Inspect journalctl -u k3s.\n'
+  exit 1
+fi
+
+stage 'Checking Kubernetes node readiness'
 k3s kubectl wait --for=condition=Ready node --all --timeout=300s
 
 stage 'Configuring the Goblin password'

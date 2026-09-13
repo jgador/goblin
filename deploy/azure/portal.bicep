@@ -8,7 +8,7 @@ targetScope = 'resourceGroup'
 param companyName string = 'Goblin'
 
 @secure()
-@description('Password for opening Goblin. A password is required, with no minimum length or character-mix requirement (up to 128 characters). This is separate from your Azure, SSH, and ChatGPT credentials. Use the same password when redeploying unless you intend to change it.')
+@description('Password for opening Goblin. A password is required, with no minimum length or character-mix requirement (up to 128 characters). This is separate from your Azure, SSH, and AI provider credentials. Use the same password when redeploying unless you intend to change it.')
 @maxLength(128)
 param goblinPassword string
 

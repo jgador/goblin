@@ -12,7 +12,7 @@ not installed yet.**
    and region. Keep the remaining defaults unless needed.
 2. Enter and confirm a **Goblin password**. There is no minimum length or
    character-mix requirement. Save it in your password manager; use it to open
-   Goblin before connecting your ChatGPT account.
+   Goblin.
 3. Under VM credentials, generate a new SSH key pair or select an existing public key.
 4. Select **Review + create → Create**. For a new key, select **Download private
    key and create resource** and save the file; it can only be downloaded once.
