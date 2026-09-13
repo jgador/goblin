@@ -262,10 +262,31 @@ existing VM; changing deployment parameters is not a substitute for that step.
 
 ### Windows SSH private-key permissions
 
-If Windows OpenSSH reports `UNPROTECTED PRIVATE KEY FILE`, `bad permissions`,
-or `Permissions ... are too open`, it is refusing to use the local private key.
-The resulting `Permission denied (publickey)` does not by itself mean that the
-VM's public key is incorrect.
+Use these steps for Windows OpenSSH in PowerShell after downloading the Azure
+private key. Apply permission changes to the `.pem` file itself. These are local
+Windows file permissions, separate from the Goblin password and the VM's SSH
+public-key configuration.
+
+Start with the error immediately before `Permission denied (publickey)`:
+
+| Message | Meaning and next step |
+| --- | --- |
+| `Load key "goblin-pem.pem": Permission denied` | Windows prevented SSH from reading the local file. Check ownership and grant your account read access. |
+| `UNPROTECTED PRIVATE KEY FILE`, `bad permissions`, or `Permissions ... are too open` | OpenSSH rejected the key's permissions. Keep your own read access and remove access for unrelated accounts. |
+| Only `Permission denied (publickey)` remains after the key loads | Check the VM address, administrator username, and whether the VM has the public key matching this private key. |
+
+For example, this sequence indicates a local key-loading failure before SSH
+could authenticate with that key:
+
+```text
+Load key "goblin-pem.pem": Permission denied
+goblinadmin@YOUR_VM_HOSTNAME: Permission denied (publickey).
+```
+
+Owning the file does not by itself grant permission to read its contents. If you
+disabled inheritance and removed all permission entries, Windows denies read
+access even to the owner. Restore an explicit **Allow → Read** entry for the
+account running SSH.
 
 The downloaded `.pem` file contains your private SSH key. Someone who can read
 it could use it to authenticate as you wherever its matching public key is
@@ -274,40 +295,106 @@ unrelated accounts. An `UNKNOWN\UNKNOWN` entry is an account identifier (SID)
 that Windows cannot resolve to a name. Removing its permission entry removes
 its access to the file; it does not delete an account.
 
-To inspect the key's current permissions in PowerShell, adjust the filename to
-match your downloaded key:
+#### Inspect the key and restore read access
+
+Open PowerShell as the Windows account you normally use for SSH. Adjust the
+filename to match your downloaded key; the account name is detected automatically:
 
 ```powershell
-$keyPath = "$env:USERPROFILE\.ssh\ssh-goblin.pem"
+$keyPath = "$env:USERPROFILE\.ssh\goblin-pem.pem"
+$windowsAccount = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 icacls $keyPath
-```
-
-Common permission markers are `(F)` for full control, `(R)` for read, `(M)` for
-modify, and `(I)` for a permission inherited from the parent folder.
-
-For a more readable view, including the file owner:
-
-```powershell
 $acl = Get-Acl -LiteralPath $keyPath
-
 $acl | Select-Object Owner
-
 $acl.Access | Format-Table IdentityReference, FileSystemRights, AccessControlType, IsInherited -AutoSize
 ```
 
-These commands only display permissions. They do not change the file or reveal
-the private key's contents.
+These commands display permissions without revealing the private key's contents.
+Common markers are `(F)` for full control, `(R)` for read, `(M)` for modify, and
+`(I)` for a permission inherited from the parent folder. An empty access list
+with inheritance disabled explains the unreadable-file case above.
 
-To correct the permissions through File Explorer:
+If you own the file but lack read permission, grant your Windows account an
+explicit read entry:
+
+```powershell
+icacls $keyPath /grant:r "${windowsAccount}:(R)"
+icacls $keyPath
+```
+
+`/grant:r` replaces explicit allow permissions for the named account. It does
+not remove other accounts' access or override an explicit deny. If inheritance
+is already disabled and only your account has access, proceed to reconnect.
+If `icacls` fails, or an explicit deny still blocks your account, use the
+File Explorer steps below to check ownership and permissions before continuing.
+
+#### Remove overly broad permissions
+
+First confirm the read grant above succeeded. Then disable inheritance and
+remove inherited permission entries:
+
+```powershell
+icacls $keyPath /inheritancelevel:r
+icacls $keyPath
+```
+
+The explicit read grant survives this step. Disabling inheritance first without
+preserving or adding your own entry can leave the file unreadable. Explicit
+permissions for other accounts also survive, so inspect the remaining entries
+and remove unrelated access through File Explorer.
+
+You can also perform the entire repair through File Explorer:
 
 1. Right-click the `.pem` file and open **Properties → Security → Advanced**.
-2. Check that your Windows account owns the file and has read access. Use
-   **Change** beside the owner or **Add** to correct these if needed.
-3. If inheritance is enabled, select **Disable inheritance → Convert inherited
+2. Check **Owner**. If needed, select **Change**, enter the Windows account you
+   use for SSH, select **Check Names**, and confirm. Changing ownership may
+   require administrator approval; the owner should still be your SSH account.
+3. Add an explicit entry for your account: **Add → Select a principal**, enter
+   that account, then select **Check Names → OK**. Set **Type** to **Allow** and
+   enable **Read**, then save the entry. Resolve any unintended **Deny** entry
+   applying to your account, because a deny can override the read grant.
+4. If inheritance is enabled, select **Disable inheritance → Convert inherited
    permissions into explicit permissions on this object**.
-4. Remove access entries for unrelated accounts, including the SID identified
-   in the SSH error. Keep your own account's access.
-5. Select **Apply**, then **OK**. Inspect the permissions again and retry SSH.
+   This preserves the current entries so you can review them individually.
+   If inheritance is already disabled, leave it disabled.
+5. Remove entries for unrelated users or groups, such as **Everyone**, **Users**,
+   **Authenticated Users**, or the unknown SID identified in the SSH error.
+   Keep your own account's **Allow → Read** entry. Removing every entry causes
+   the `Load key ...: Permission denied` error.
+6. Select **Apply**, then **OK**. Run `icacls $keyPath` again to confirm your
+   account has explicit read access and unrelated accounts cannot read the key.
+
+#### Reconnect and handle the host authenticity prompt
+
+Replace `YOUR_VM_HOSTNAME` with the deployment's public hostname or IP address.
+Use the administrator username chosen during provisioning (`goblinadmin` by default):
+
+```powershell
+ssh -i $keyPath goblinadmin@YOUR_VM_HOSTNAME
+```
+
+The first-connection prompt, `The authenticity of host ... can't be established`,
+is separate from private-key file permissions. It means SSH has no saved host
+key for that address. Verify the displayed fingerprint through Azure Portal:
+open the VM's **Run command → RunShellScript** and, for an ED25519 host key, run:
+
+```bash
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Compare the `SHA256:...` value with the SSH prompt. If they match, enter the full
+word `yes`; `y` is not accepted. SSH saves the host key in `known_hosts`, so that
+prompt normally disappears on later connections to the same address.
+
+If the key-loading error disappears but `Permission denied (publickey)` remains,
+confirm that you are connecting to the intended VM with the correct administrator
+username and matching private key. The VM needs the corresponding public key for
+that user; downloading or creating an Azure SSH-key resource alone does not add
+it to an existing VM. Follow [Use the saved key or add SSH access later](#use-the-saved-key-or-add-ssh-access-later)
+if the installed public key needs to be replaced.
+
+References: Microsoft's [`icacls` command documentation](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)
+and [Windows OpenSSH file-permission guidance](https://github.com/PowerShell/Win32-OpenSSH/wiki/Security-protection-of-various-files-in-win32-openssh).
 
 ## Maintain and validate the template
 

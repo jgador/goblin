@@ -18,6 +18,10 @@ Start with the **Deploy to Azure** button in the [root README](../../README.md).
 4. Select **Review + create → Create**. For a new key, select **Download private
    key and create resource** and save the file; it can only be downloaded once.
 
+For SSH from Windows, see [Windows SSH private-key permissions](reference.md#windows-ssh-private-key-permissions)
+if the downloaded `.pem` file cannot be read or OpenSSH rejects its permissions.
+The guide includes PowerShell commands and **Properties → Security** steps.
+
 Provisioning builds the application from this repository, imports its image into
 K3s, and routes the assigned Azure hostname to Goblin through Traefik. A custom
 **Public hostname prefix** is picked up automatically. The build can take several
