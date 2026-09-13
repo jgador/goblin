@@ -16,7 +16,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     ListenUrl = $"http://{host}:{port}",
     ConfigureCodex = options => options with { Command = Environment.GetEnvironmentVariable("GOBLIN_CODEX_COMMAND") ?? options.Command }
 });
-Console.WriteLine($"Goblin authentication preview: {origin}");
+Console.WriteLine($"Goblin: {origin}");
 var workspace = app.Services.GetRequiredService<Workspace>();
 Console.WriteLine(workspace.UsesPassword
     ? "Workspace access: use your Goblin password."

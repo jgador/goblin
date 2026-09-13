@@ -45,7 +45,7 @@ function lockView() {
   byId("api-key", HTMLInputElement).value = "";
   byId("verification-link").removeAttribute("href");
   clearPromptResult();
-  byId("test-prompt", HTMLTextAreaElement).value = "Say hello in one sentence.";
+  byId("prompt", HTMLTextAreaElement).value = "Say hello in one sentence.";
   showPanel("locked");
 }
 
@@ -106,7 +106,7 @@ function setBusy(value: boolean, label = "Working…") {
   busy = value;
   byId("card").setAttribute("aria-busy", String(value));
   for (const button of document.querySelectorAll("button")) button.disabled = value;
-  byId("test-prompt", HTMLTextAreaElement).disabled = value;
+  byId("prompt", HTMLTextAreaElement).disabled = value;
   byId("working").textContent = label;
   byId("working").hidden = !value;
 }
@@ -180,7 +180,7 @@ byId("disconnect-button").addEventListener("click", () => action("Disconnecting 
 
 byId("prompt-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  const prompt = byId("test-prompt", HTMLTextAreaElement).value;
+  const prompt = byId("prompt", HTMLTextAreaElement).value;
   action("Waiting for Codex to reply…", async () => {
     clearPromptResult();
     const result = await api("/api/prompt", { prompt });
@@ -194,7 +194,7 @@ byId("prompt-form").addEventListener("submit", (event) => {
   });
 });
 
-byId("lock-button").addEventListener("click", () => action("Locking preview…", async () => {
+byId("lock-button").addEventListener("click", () => action("Locking workspace…", async () => {
   await api("/api/session/lock", {});
   lockView();
 }));

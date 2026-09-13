@@ -84,7 +84,7 @@ public sealed class Authentication : IDisposable
         await _codex.StartAsync();
         GetAccountResponse result = await _codex.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false });
         if (!result.RequiresOpenaiAuth)
-            throw new PublicError("unexpected_provider", "This preview requires Codex's OpenAI provider. Check the runtime configuration.", 503);
+            throw new PublicError("unexpected_provider", "Goblin requires Codex's OpenAI provider. Check the runtime configuration.", 503);
         lock (_gate)
         {
             _account = result.Account switch
@@ -105,13 +105,13 @@ public sealed class Authentication : IDisposable
 
     public Task<AuthenticationState> StatusAsync() => Serial(async () => { await RefreshAsync(); return Snapshot(); });
 
-    public Task<PromptResult> TestPromptAsync(string? value, CancellationToken cancellationToken = default)
+    public Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
     {
         var prompt = value?.Trim() ?? "";
         if (prompt.Length is < 1 or > 500 || prompt.Any(c => c is <= '\x08' or '\x0b' or '\x0c' or >= '\x0e' and <= '\x1f'))
             throw new PublicError("invalid_prompt", "Enter a short prompt of 1–500 characters.");
         if (Interlocked.CompareExchange(ref _promptPending, 1, 0) != 0)
-            throw new PublicError("prompt_in_progress", "A prompt test is already running. Wait for it to finish.", 409);
+            throw new PublicError("prompt_in_progress", "A prompt is already running. Wait for it to finish.", 409);
         return Run();
         async Task<PromptResult> Run()
         {

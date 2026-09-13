@@ -12,7 +12,6 @@ button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #79
 .topbar{padding:26px 42px;display:flex;justify-content:space-between;align-items:center;gap:20px}
 .brand{display:flex;align-items:center;gap:14px;flex-shrink:0;text-decoration:none}
 .brand-logo{display:block;width:72px;height:auto}
-.preview{font-size:10px;letter-spacing:.08em;font-weight:600;color:var(--muted);border:1px solid #dce2d6;border-radius:5px;padding:3px 6px;margin-left:3px;text-transform:uppercase}
 main{width:100%;max-width:520px;margin:42px auto 50px;padding:0 24px;flex:1}
 .intro{margin-bottom:28px}
 .eyebrow,.step{font-size:10px;letter-spacing:.16em;font-weight:700;color:#6b7e60;margin:0 0 17px}
@@ -71,9 +70,9 @@ input::placeholder{color:#a0a99a}
 .account-detail{font-size:11px;color:var(--muted);margin:3px 0 0;overflow-wrap:anywhere}
 .connected-badge{font-size:9px;font-weight:600;color:#567543;background:#edf4e6;padding:4px 7px;border-radius:5px;white-space:nowrap}
 #connected-panel .secondary{margin-top:24px}
-.prompt-test{border-top:1px solid var(--border);padding-top:20px;margin-top:22px}
-.prompt-test textarea{margin-bottom:0}
-.prompt-test .footnote{margin:8px 0 14px}
+.prompt-form{border-top:1px solid var(--border);padding-top:20px;margin-top:22px}
+.prompt-form textarea{margin-bottom:0}
+.prompt-form .footnote{margin:8px 0 14px}
 .prompt-result{background:#f2f5eb;border:1px solid #e0e7d6;border-radius:9px;padding:16px;margin-top:18px}
 .prompt-success{font-size:11px;font-weight:600;color:#567543;margin:0 0 10px}
 #prompt-reply{font:inherit;font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;margin:0}

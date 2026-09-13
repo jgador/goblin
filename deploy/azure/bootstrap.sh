@@ -96,9 +96,9 @@ fi
 k3s kubectl wait --for=condition=Ready node --all --timeout=300s
 
 stage 'Configuring the Goblin password'
-k3s kubectl create namespace goblin-preview --dry-run=client -o json | \
+k3s kubectl create namespace goblin --dry-run=client -o json | \
   k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
-k3s kubectl create secret generic goblin-owner-password -n goblin-preview \
+k3s kubectl create secret generic goblin-owner-password -n goblin \
   --from-file="owner-password=$bootstrap_dir/owner-password" --dry-run=client -o json | \
   k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
 rm -f "$bootstrap_dir/owner-password"

@@ -11,8 +11,8 @@
   </head>
   <body>
     <header class="topbar">
-      <a class="brand" href="/" aria-label="Goblin home"><img class="brand-logo" src="/assets/branding/icon.svg" alt="Goblin" width="650" height="602"><span class="preview">preview</span></a>
-      <button class="quiet" id="lock-button" type="button" hidden>Lock preview</button>
+      <a class="brand" href="/" aria-label="Goblin home"><img class="brand-logo" src="/assets/branding/icon.svg" alt="Goblin" width="650" height="602"></a>
+      <button class="quiet" id="lock-button" type="button" hidden>Lock workspace</button>
     </header>
 
     <main>
@@ -76,11 +76,11 @@
           <h2 id="connected-heading">You’re connected</h2>
           <div class="account-row"><div><p id="account-method" class="account-method"></p><p id="account-detail" class="account-detail"></p></div><span class="connected-badge">Connected</span></div>
           <p class="description" id="connected-description"></p>
-          <form id="prompt-form" class="prompt-test">
-            <label for="test-prompt">Try a simple prompt</label>
-            <textarea id="test-prompt" name="prompt" rows="3" maxlength="500" required>Say hello in one sentence.</textarea>
+          <form id="prompt-form" class="prompt-form">
+            <label for="prompt">Prompt</label>
+            <textarea id="prompt" name="prompt" rows="3" maxlength="500" required>Say hello in one sentence.</textarea>
             <p class="footnote">Send a small request using this account. It counts toward your ChatGPT usage limits or API billing.</p>
-            <button class="primary full" type="submit">Send test prompt</button>
+            <button class="primary full" type="submit">Send prompt</button>
           </form>
           <div id="prompt-result" class="prompt-result" role="status" aria-live="polite" hidden>
             <p class="prompt-success">Response received</p>

@@ -156,7 +156,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
                         await SendAsync(child, new JSONRPCError
                         {
                             Id = request.Id,
-                            Error = new JSONRPCErrorError { Code = -32601, Message = "Interactive tools are disabled in this preview." }
+                            Error = new JSONRPCErrorError { Code = -32601, Message = "Interactive tools are disabled." }
                         });
                     }
                     else

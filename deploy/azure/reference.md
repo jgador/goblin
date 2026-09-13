@@ -34,7 +34,7 @@ az deployment sub create \
 Avoid putting the password in command arguments or checked-in parameter files.
 The VM extension receives it through `protectedSettings`. The bootstrap passes
 it to the hashing helper through stdin and creates the `goblin-owner-password`
-Kubernetes Secret in `goblin-preview`. Only a salted PBKDF2-SHA256 verifier
+Kubernetes Secret in `goblin`. Only a salted PBKDF2-SHA256 verifier
 (600,000 iterations, 16-byte random salt) is stored in that Secret. Neither the
 password nor the verifier appears in deployment outputs or bootstrap logs.
 
@@ -49,14 +49,19 @@ The preview manifest mounts the Secret read-only and configures
 its verifier is invalid, Goblin refuses to start. An old `owner-token` on the
 preview data volume no longer grants access when the password is configured.
 
+Existing installations in `goblin-preview` require a
+[namespace migration](../../docs/authentication-preview.md#migrate-from-earlier-deployment-names).
+Updating the template creates the password Secret in `goblin`; it does not move
+the old application's persistent data.
+
 For an existing Azure installation, redeploy the updated template with a Goblin
 password, rebuild/import the updated preview image, and apply the updated
-`deploy/auth-preview/sandbox.yaml` manifest. For a password change, redeploy with
+`deploy/auth/sandbox.yaml` manifest. For a password change, redeploy with
 the new password, then restart the preview pod to load the updated Secret and
 invalidate existing browser sessions:
 
 ```bash
-sudo k3s kubectl delete pod -n goblin-preview -l app=goblin-auth-preview
+sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
 ```
 
 The Sandbox controller recreates the pod with the same persistent data. The
@@ -133,7 +138,7 @@ installation.
 The VM extension embeds `bootstrap.sh` and waits for:
 
 - K3s `v1.36.4+k3s1`, a ready Kubernetes API, and a ready node.
-- The Goblin password verifier stored in the preview namespace.
+- The Goblin password verifier stored in the `goblin` namespace.
 - Agent Sandbox `v1.0.2`, its core CRD, and its controller rollout.
 
 The K3s installer and Agent Sandbox manifest use pinned release URLs and checked

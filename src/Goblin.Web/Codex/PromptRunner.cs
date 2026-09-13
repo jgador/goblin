@@ -9,7 +9,7 @@ namespace Goblin.Web.Codex;
 
 public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
 {
-    private static PublicError Cancelled() => new("prompt_cancelled", "The prompt test was cancelled.", 408);
+    private static PublicError Cancelled() => new("prompt_cancelled", "The prompt was cancelled.", 408);
 
     public async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, CancellationToken cancellationToken = default)
     {
@@ -27,7 +27,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             messages[message.Id] = message.Text;
             if (messages.Count > 32 || string.Join("\n\n", messages.Values).Length > 8000)
                 completion.TrySetException(new PublicError("prompt_reply_too_large",
-                    "The reply was too long for a connection test. Try a shorter prompt.", 502));
+                    "The reply was too long. Try a shorter prompt.", 502));
         }
 
         void Notification(ServerNotification notification)
@@ -72,12 +72,12 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                 Ephemeral = true,
                 ApprovalPolicy = AskForApproval.Never,
                 Sandbox = SandboxMode.ReadOnly,
-                BaseInstructions = "Answer the user's connection-test prompt briefly, using only the text in this conversation. Do not call tools, inspect files, browse, or perform any actions."
+                BaseInstructions = "Answer the user's prompt briefly, using only the text in this conversation. Do not call tools, inspect files, browse, or perform any actions."
             });
             lock (gate) threadId = thread.Thread.Id;
             if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" ||
                 thread.Sandbox is not ReadOnlySandboxPolicy || thread.ApprovalPolicy != AskForApproval.Never)
-                throw new PublicError("prompt_configuration_error", "Codex could not create an isolated prompt test. Check the pinned runtime version.", 502);
+                throw new PublicError("prompt_configuration_error", "Codex could not create an isolated conversation. Check the pinned runtime version.", 502);
             if (cancellationToken.IsCancellationRequested) throw Cancelled();
             TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
@@ -95,7 +95,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             try { reply = await completion.Task.WaitAsync(timeout); }
             catch (TimeoutException)
             {
-                throw new PublicError("prompt_timeout", "The prompt test took too long and was cancelled. Please retry.", 504);
+                throw new PublicError("prompt_timeout", "The prompt took too long and was cancelled. Please retry.", 504);
             }
             return (reply, thread.Model, elapsed.ElapsedMilliseconds);
         }

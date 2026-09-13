@@ -8,5 +8,5 @@ public sealed class PublicError(string code, string message, int status = 400) :
     public int Status { get; } = status;
 
     public static PublicError RuntimeUnavailable() => new("runtime_unavailable",
-        "Codex is unavailable. Retry in a moment. If this continues, restart the preview.", 503);
+        "Codex is unavailable. Retry in a moment. If this continues, restart Goblin.", 503);
 }
