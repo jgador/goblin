@@ -45,7 +45,7 @@
             <p>Use the Codex access included with your ChatGPT plan or workspace.</p>
             <div data-device-login-help></div>
             <button id="chatgpt-button" class="primary full" type="button">Continue with ChatGPT <span aria-hidden="true">↗</span></button>
-            <p class="footnote">You’ll sign in on OpenAI’s website using a one-time code.</p>
+            <p class="footnote">You’ll sign in on OpenAI’s website using a one-time code. Goblin then checks the connection using a small amount of your usage allowance.</p>
           </div>
           <details id="api-key-option">
             <summary>Use an OpenAI API key instead <span aria-hidden="true">+</span></summary>
@@ -54,7 +54,7 @@
               <label for="api-key">OpenAI API key</label>
               <input id="api-key" name="api-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" required minlength="20" maxlength="4096">
               <button class="secondary full" type="submit">Connect API key</button>
-              <p class="footnote">Get a key from the <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>. Connecting checks the key without generating a model response.</p>
+              <p class="footnote">Get a key from the <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>. Goblin checks the connection with a small request that counts toward your API billing.</p>
             </form>
           </details>
         </section>
@@ -65,28 +65,22 @@
           <p class="description">Open the sign-in page and enter this one-time code. Keep this tab open; it will update when you’re connected.</p>
           <div class="device-code-row"><code id="device-code" aria-label="One-time sign-in code"></code><button id="copy-code" class="quiet" type="button">Copy code</button></div>
           <a id="verification-link" class="primary full button-link" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in <span aria-hidden="true">↗</span></a>
-          <p class="waiting" role="status"><span class="dot" aria-hidden="true"></span>Waiting for you to finish signing in</p>
+          <p class="waiting" role="status"><span class="dot" aria-hidden="true"></span>Connecting… Waiting for you to finish signing in.</p>
           <div data-device-login-help></div>
           <button id="cancel-button" class="quiet cancel" type="button">Cancel sign-in</button>
         </section>
 
         <section id="connected-panel" hidden aria-labelledby="connected-heading">
-          <div class="success-mark" aria-hidden="true">✓</div>
-          <p class="step">CONNECTION SAVED</p>
-          <h2 id="connected-heading">You’re connected</h2>
-          <div class="account-row"><div><p id="account-method" class="account-method"></p><p id="account-detail" class="account-detail"></p></div><span class="connected-badge">Connected</span></div>
-          <p class="description" id="connected-description"></p>
-          <form id="prompt-form" class="prompt-form">
-            <label for="prompt">Prompt</label>
-            <textarea id="prompt" name="prompt" rows="3" maxlength="500" required>Say hello in one sentence.</textarea>
-            <p class="footnote">Send a small request using this account. It counts toward your ChatGPT usage limits or API billing.</p>
-            <button class="primary full" type="submit">Send prompt</button>
-          </form>
-          <div id="prompt-result" class="prompt-result" role="status" aria-live="polite" hidden>
-            <p class="prompt-success">Response received</p>
-            <pre id="prompt-reply"></pre>
-            <p id="prompt-details" class="footnote"></p>
+          <p class="step">ACCOUNT SAVED</p>
+          <h2 id="connected-heading">Connection status</h2>
+          <div class="account-row"><div><p id="account-method" class="account-method"></p><p id="account-detail" class="account-detail"></p></div><span class="account-badge">Saved</span></div>
+          <div id="connection-check" class="connection-check" data-status="unchecked" role="status" aria-live="polite" aria-atomic="true">
+            <span id="connection-mark" class="connection-mark" aria-hidden="true"></span>
+            <div><h3 id="connection-status">Verifying connection…</h3><p id="connection-description"></p></div>
           </div>
+          <p class="description" id="connected-description"></p>
+          <button id="check-connection-button" class="primary full" type="button">Checking connection…</button>
+          <p class="footnote" id="connection-footnote"></p>
           <button id="disconnect-button" class="secondary full" type="button">Disconnect Codex</button>
         </section>
 
