@@ -54,6 +54,23 @@
         }
       },
       {
+        "name": "goblinPassword",
+        "type": "Microsoft.Common.PasswordBox",
+        "label": {
+          "password": "Goblin password",
+          "confirmPassword": "Confirm Goblin password"
+        },
+        "toolTip": "Choose a password for opening Goblin before connecting your ChatGPT account. There is no minimum length or character-mix requirement. Save it in your password manager.",
+        "constraints": {
+          "required": true,
+          "regex": "^(?=.*\\S)[^\\x00-\\x1F\\x7F]{0,128}(?![\\s\\S])",
+          "validationMessage": "Enter a password of up to 128 characters, including a non-space character, without tabs or line breaks."
+        },
+        "options": {
+          "hideConfirmation": false
+        }
+      },
+      {
         "name": "installationInfo",
         "type": "Microsoft.Common.InfoBox",
         "options": {
@@ -309,6 +326,7 @@
     ],
     "outputs": {
       "companyName": "[basics('companyName')]",
+      "goblinPassword": "[basics('goblinPassword')]",
       "location": "[location()]",
       "environment": "[basics('environment')]",
       "adminUsername": "[basics('adminUsername')]",

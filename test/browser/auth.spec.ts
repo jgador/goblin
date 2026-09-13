@@ -2,12 +2,17 @@ import { test, expect } from "@playwright/test";
 import { writeFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 
-test("owner can connect, cancel, complete ChatGPT sign-in, and switch to an API key", async ({ page }) => {
+test("owner can use a one-character deployment password, connect ChatGPT, and switch to an API key", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open your workspace" })).toBeVisible();
-  await page.getByLabel("Workspace access code", { exact: true }).fill("browser-test-access-code-never-use-in-production");
+  await expect(page.getByLabel("Goblin password", { exact: true })).toHaveAttribute("autocomplete", "current-password");
+  await page.getByLabel("Goblin password", { exact: true }).fill("incorrect-password");
+  await page.getByRole("button", { name: "Open workspace" }).click();
+  await expect(page.getByRole("alert")).toContainText("The Goblin password is incorrect.");
+  await expect(page.getByLabel("Goblin password", { exact: true })).toHaveValue("");
+  await page.getByLabel("Goblin password", { exact: true }).fill("a");
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(page.getByRole("heading", { name: "Choose how to sign in" })).toBeVisible();
   await page.screenshot({ path: "test-results/authentication-connect.png", fullPage: true });
@@ -41,7 +46,7 @@ test("owner can connect, cancel, complete ChatGPT sign-in, and switch to an API 
   await expect(page.locator("body")).not.toContainText("THIS-MUST-NOT-LEAK");
   await page.getByRole("button", { name: "Lock preview" }).click();
   await expect(page.getByRole("heading", { name: "Open your workspace" })).toBeVisible();
-  await page.getByLabel("Workspace access code", { exact: true }).fill("browser-test-access-code-never-use-in-production");
+  await page.getByLabel("Goblin password", { exact: true }).fill("a");
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(page.getByText("owner@example.test · plus", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Disconnect Codex" }).click();

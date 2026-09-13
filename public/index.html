@@ -28,13 +28,13 @@
         <section id="locked-panel" hidden aria-labelledby="locked-heading">
           <p class="step">WORKSPACE ACCESS</p>
           <h2 id="locked-heading">Open your workspace</h2>
-          <p class="description">Enter the workspace access code from your server to manage this connection.</p>
+          <p class="description" id="unlock-description">Enter the workspace access code from your server to manage this connection.</p>
           <form id="unlock-form">
-            <label for="workspace-code">Workspace access code</label>
+            <label for="workspace-code" id="workspace-code-label">Workspace access code</label>
             <input id="workspace-code" name="workspace-code" type="password" autocomplete="off" spellcheck="false" required maxlength="256">
             <button class="primary full" type="submit">Open workspace <span aria-hidden="true">↗</span></button>
           </form>
-          <p class="footnote">This code opens Goblin. You’ll connect your ChatGPT account or API key next.</p>
+          <p class="footnote" id="unlock-footnote">This code opens Goblin. You’ll connect your ChatGPT account or API key next.</p>
         </section>
 
         <section id="connect-panel" hidden aria-labelledby="connect-heading">

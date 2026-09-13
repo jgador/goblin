@@ -3,8 +3,9 @@
 if [ -z "${BASH_VERSION:-}" ]; then
   exec /bin/bash "$0" "$@"
 fi
+set +x
 set -Eeuo pipefail
-umask 027
+umask 077
 
 install -d -m 0750 /var/lib/goblin
 exec > >(tee -a /var/log/goblin-bootstrap.log) 2>&1
@@ -44,12 +45,21 @@ if [[ "$cloud_init_result" != 0 && "$cloud_init_result" != 2 ]]; then
   exit "$cloud_init_result"
 fi
 
-if ! command -v curl >/dev/null; then
+if ! command -v curl >/dev/null || ! command -v python3 >/dev/null; then
   apt-get -o DPkg::Lock::Timeout=300 update
-  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl python3
 fi
 
 bootstrap_dir=$(mktemp -d /var/lib/goblin/bootstrap.XXXXXX)
+
+stage 'Preparing the Goblin password'
+# Bicep embeds the helper and a base64-encoded password in protectedSettings.
+# The password travels on stdin, never in a subprocess argument or log message.
+cat > "$bootstrap_dir/hash-password.py" <<'PYTHON'
+__GOBLIN_PASSWORD_HASHER__
+PYTHON
+printf '%s' '__GOBLIN_PASSWORD_BASE64__' | base64 --decode | \
+  python3 "$bootstrap_dir/hash-password.py" > "$bootstrap_dir/owner-password"
 
 stage 'Downloading Kubernetes'
 curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 180 \
@@ -84,6 +94,14 @@ if [[ "$api_ready" != true ]]; then
   exit 1
 fi
 k3s kubectl wait --for=condition=Ready node --all --timeout=300s
+
+stage 'Configuring the Goblin password'
+k3s kubectl create namespace goblin-preview --dry-run=client -o json | \
+  k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
+k3s kubectl create secret generic goblin-owner-password -n goblin-preview \
+  --from-file="owner-password=$bootstrap_dir/owner-password" --dry-run=client -o json | \
+  k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
+rm -f "$bootstrap_dir/owner-password"
 
 stage 'Downloading Agent Sandbox'
 curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 180 \

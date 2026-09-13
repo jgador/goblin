@@ -11,10 +11,14 @@ var host = Environment.GetEnvironmentVariable("GOBLIN_HOST") ?? "127.0.0.1";
 await using WebApplication app = await GoblinApplication.CreateAsync(new()
 {
     DataDirectory = Environment.GetEnvironmentVariable("GOBLIN_DATA_DIR") ?? ".goblin-auth",
+    PasswordHashFile = Environment.GetEnvironmentVariable("GOBLIN_PASSWORD_HASH_FILE"),
     PublicOrigin = origin,
     ListenUrl = $"http://{host}:{port}",
     ConfigureCodex = options => options with { Command = Environment.GetEnvironmentVariable("GOBLIN_CODEX_COMMAND") ?? options.Command }
 });
 Console.WriteLine($"Goblin authentication preview: {origin}");
-Console.WriteLine($"Workspace access code file: {app.Services.GetRequiredService<Workspace>().TokenFile}");
+var workspace = app.Services.GetRequiredService<Workspace>();
+Console.WriteLine(workspace.UsesPassword
+    ? "Workspace access: use your Goblin password."
+    : $"Workspace access code file: {workspace.TokenFile}");
 await app.RunAsync();

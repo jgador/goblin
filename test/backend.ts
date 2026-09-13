@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 
 export interface BackendOptions {
   dataDir: string;
+  passwordHashFile?: string;
   publicOrigin?: string;
   listenUrl?: string;
   scenario?: string;

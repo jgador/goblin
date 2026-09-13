@@ -44,6 +44,8 @@ spec:
           env:
             - name: GOBLIN_PUBLIC_ORIGIN
               value: http://localhost:8787
+            - name: GOBLIN_PASSWORD_HASH_FILE
+              value: /etc/goblin/owner-password
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -61,6 +63,9 @@ spec:
               mountPath: /data
             - name: temporary
               mountPath: /tmp
+            - name: owner-password
+              mountPath: /etc/goblin
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /readyz
@@ -80,6 +85,13 @@ spec:
         - name: temporary
           emptyDir:
             sizeLimit: 64Mi
+        - name: owner-password
+          secret:
+            secretName: goblin-owner-password
+            defaultMode: 0440
+            items:
+              - key: owner-password
+                path: owner-password
 ---
 apiVersion: v1
 kind: Service

@@ -146,6 +146,14 @@ with the same named volume to verify persistence.
 The existing Azure bootstrap installs the core Agent Sandbox controller. The
 [preview manifest](../deploy/auth-preview/sandbox.yaml) uses that controller
 directly; extensions, warm pools, ingress, and GitHub access are not required.
+Azure setup asks you to choose and confirm a **Goblin password**. The manifest
+mounts the password verifier created during deployment. Use that password to
+open the preview; there is no access-token retrieval step.
+
+For a VM provisioned with an older template, first redeploy the updated Azure
+template and choose a password. The updated manifest requires the
+`goblin-owner-password` Secret in `goblin-preview`; see the
+[password setup reference](../deploy/azure/reference.md#goblin-password).
 
 Build the image on a Docker-enabled machine for the VM's Linux architecture
 (the default Azure VM is amd64), then export it:
@@ -163,12 +171,8 @@ sudo k3s ctr images import goblin-auth-preview.tar
 sudo k3s kubectl apply -f sandbox.yaml
 sudo k3s kubectl wait --for=condition=Ready sandbox/goblin-auth \
   -n goblin-preview --timeout=180s
-sudo k3s kubectl exec -n goblin-preview goblin-auth -- cat /data/auth/owner-token
 sudo k3s kubectl port-forward -n goblin-preview svc/goblin-auth-preview 8787:8787
 ```
-
-If your controller gives the pod a different name, use the name shown by
-`sudo k3s kubectl get pods -n goblin-preview -l app=goblin-auth-preview` for `exec`.
 
 Leave the VM's port-forward running. On your own computer, forward the same
 port through SSH, replacing the key path and hostname:
@@ -177,8 +181,8 @@ port through SSH, replacing the key path and hostname:
 ssh -i /path/to/your-key.pem -L 8787:127.0.0.1:8787 goblinadmin@YOUR_VM_HOSTNAME
 ```
 
-Open **http://localhost:8787** on your computer. No public application port needs
-to be opened. See the [Azure reference](../deploy/azure/reference.md#use-the-saved-key-or-add-ssh-access-later)
+Open **http://localhost:8787** on your computer and enter your **Goblin password**.
+No public application port needs to be opened. See the [Azure reference](../deploy/azure/reference.md#use-the-saved-key-or-add-ssh-access-later)
 if SSH access was not enabled during deployment.
 
 After connecting an account, replace just the pod to test persistence:
@@ -206,6 +210,7 @@ executes untrusted repository code.
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `GOBLIN_DATA_DIR` | `.goblin-auth` locally; `/data/auth` in the image | Persistent private application data |
+| `GOBLIN_PASSWORD_HASH_FILE` | Unset locally/in Docker; `/etc/goblin/owner-password` in the Sandbox manifest | Read-only file containing the provisioned password verifier; required when configured |
 | `GOBLIN_HOST` | `127.0.0.1` locally; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |
 | `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:8787` | Exact browser origin, used for Host and Origin checks |
@@ -214,6 +219,14 @@ executes untrusted repository code.
 Remote origins must use HTTPS. Loopback HTTP is supported for local access and
 SSH/kubectl forwarding. Public ingress and automatic HTTPS setup are outside
 this authentication preview.
+
+Local and Docker runs without `GOBLIN_PASSWORD_HASH_FILE` continue to generate
+and accept the private workspace access code. When the variable is set, Goblin
+uses only the configured password verifier and never falls back to an access
+code. The password is compared exactly, including spaces. A missing or invalid
+verifier prevents startup. Password attempts use the existing rate limit and
+private session cookies. Restart Goblin after changing the verifier to load the
+new password and invalidate current browser sessions.
 
 Codex stores credentials in `codex/auth.json` under the data directory, with
 `cli_auth_credentials_store="file"`. It owns ChatGPT refresh and logout. The file

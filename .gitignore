@@ -17,6 +17,8 @@ auth.json
 auth.json.*
 owner-token
 owner-token.*
+owner-password
+owner-password.*
 .env.*
 !.env.example
 !.env.*.example
