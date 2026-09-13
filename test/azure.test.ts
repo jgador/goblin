@@ -75,7 +75,7 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "ready\n");
   const secret = JSON.parse(await readFile(join(root, "secret.json"), "utf8"));
   assert.equal(secret.metadata.name, "goblin-owner-password");
-  assert.equal(secret.metadata.namespace, "goblin-preview");
+  assert.equal(secret.metadata.namespace, "goblin");
   const verifier = Buffer.from(secret.data["owner-password"], "base64").toString("utf8");
   const passwordHashFile = join(root, "owner-password");
   await writeFile(passwordHashFile, verifier, { mode: 0o600 });
@@ -112,9 +112,9 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   assert.ok(!(await (await request("/api/session")).text()).includes(verifier.trim()));
 
   await app.close();
-  // An old preview token may exist on an upgraded persistent volume. It must
+  // An old workspace access token may exist on an upgraded persistent volume. It must
   // not be accepted when the Azure password is configured.
-  const oldToken = "old-preview-access-code-must-no-longer-work";
+  const oldToken = "old-workspace-access-code-must-no-longer-work";
   await writeFile(join(dataDir, "owner-token"), oldToken, { mode: 0o600 });
   app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin });
   assert.equal((await request("/api/status", undefined, cookie)).status, 401);
@@ -146,7 +146,7 @@ test("a configured password file must exist and contain a supported verifier", a
   const passwordHashFile = join(root, "owner-password");
   const dataDir = join(root, "data");
   await mkdir(dataDir);
-  await writeFile(join(dataDir, "owner-token"), "old-preview-access-code-must-no-longer-work");
+  await writeFile(join(dataDir, "owner-token"), "old-workspace-access-code-must-no-longer-work");
   const valid = execFileSync("python3", [hasherPath], { input: fakePassword, encoding: "utf8" });
   for (const invalid of [null, "", "not-a-verifier", valid.replace("600000", "1"), valid.replace("600000", "999999999"), "pbkdf2-sha256$600000$bad$bad", "x".repeat(257)]) {
     if (invalid !== null) await writeFile(passwordHashFile, invalid);

@@ -1,7 +1,8 @@
 # Try the authentication preview
 
-This stage implements ChatGPT device-code login, OpenAI API-key login, and a
-short prompt test using the connected account. Review authentication first;
+This authentication implementation is a preview. It implements ChatGPT device-code
+login, OpenAI API-key login, and a short prompt test using the connected account.
+Review authentication first;
 GitHub and repository integration remain a separate decision.
 
 ## Run locally
@@ -68,7 +69,7 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
    displayed code, and complete sign-in. Goblin should show your connected account.
 2. Stop and restart `npm start`, unlock the preview, and confirm the connection
    remains. No second ChatGPT login should be needed while the credentials remain valid.
-3. Select **Lock preview** and unlock it again. This locks browser access without
+3. Select **Lock workspace** and unlock it again. This locks browser access without
    disconnecting Codex.
 4. Select **Disconnect Codex**. The account should disappear, including after a
    restart. Disconnecting removes this workspace's cached credentials; it does
@@ -78,8 +79,8 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
    response or establish that inference credits or a particular model are available.
 6. Try canceling ChatGPT sign-in and starting again. Refreshing the browser
    during a pending login should restore its current code.
-7. While connected, enter a short prompt under **Try a simple prompt**, then
-   select **Send test prompt**. The default is “Say hello in one sentence.”
+7. While connected, enter a short prompt under **Prompt**, then
+   select **Send prompt**. The default is “Say hello in one sentence.”
    Goblin should display **Response received**, the model's actual reply, the
    sign-in method, model name, and elapsed time. A successful reply verifies
    that the saved account can make a model request.
@@ -120,11 +121,11 @@ upstream errors, credentials, or reasoning output.
 Build the image and start it with persistent storage:
 
 ```bash
-docker build -t goblin-auth-preview:0.1.0 .
-docker run --rm --name goblin-auth-preview \
+docker build -t goblin-auth:0.1.0 .
+docker run --rm --name goblin-auth \
   -p 127.0.0.1:8787:8787 \
   -v goblin-auth-data:/data \
-  goblin-auth-preview:0.1.0
+  goblin-auth:0.1.0
 ```
 
 The image builds browser assets and publishes .NET in separate stages. The final
@@ -135,7 +136,7 @@ TypeScript compiler are build dependencies only.
 In another terminal, read the workspace access code:
 
 ```bash
-docker exec goblin-auth-preview cat /data/auth/owner-token
+docker exec goblin-auth cat /data/auth/owner-token
 ```
 
 Open **http://localhost:8787** and follow the same checks. Recreate the container
@@ -144,7 +145,7 @@ with the same named volume to verify persistence.
 ## Run in the provisioned Agent Sandbox cluster
 
 The existing Azure bootstrap installs the core Agent Sandbox controller. The
-[preview manifest](../deploy/auth-preview/sandbox.yaml) uses that controller
+[preview manifest](../deploy/auth/sandbox.yaml) uses that controller
 directly; extensions, warm pools, ingress, and GitHub access are not required.
 Azure setup asks you to choose and confirm a **Goblin password**. The manifest
 mounts the password verifier created during deployment. Use that password to
@@ -152,26 +153,30 @@ open the preview; there is no access-token retrieval step.
 
 For a VM provisioned with an older template, first redeploy the updated Azure
 template and choose a password. The updated manifest requires the
-`goblin-owner-password` Secret in `goblin-preview`; see the
+`goblin-owner-password` Secret in `goblin`; see the
 [password setup reference](../deploy/azure/reference.md#goblin-password).
+
+For an existing installation in `goblin-preview`, follow the
+[namespace migration guidance](#migrate-from-earlier-deployment-names) before
+applying the new manifest.
 
 Build the image on a Docker-enabled machine for the VM's Linux architecture
 (the default Azure VM is amd64), then export it:
 
 ```bash
-docker build --platform linux/amd64 -t goblin-auth-preview:0.1.0 .
-docker save -o goblin-auth-preview.tar goblin-auth-preview:0.1.0
+docker build --platform linux/amd64 -t goblin-auth:0.1.0 .
+docker save -o goblin-auth.tar goblin-auth:0.1.0
 ```
 
-Copy the image archive and `deploy/auth-preview/sandbox.yaml` to the VM using
+Copy the image archive and `deploy/auth/sandbox.yaml` to the VM using
 your existing SSH access. On the VM, import and deploy them:
 
 ```bash
-sudo k3s ctr images import goblin-auth-preview.tar
+sudo k3s ctr images import goblin-auth.tar
 sudo k3s kubectl apply -f sandbox.yaml
 sudo k3s kubectl wait --for=condition=Ready sandbox/goblin-auth \
-  -n goblin-preview --timeout=180s
-sudo k3s kubectl port-forward -n goblin-preview svc/goblin-auth-preview 8787:8787
+  -n goblin --timeout=180s
+sudo k3s kubectl port-forward -n goblin svc/goblin-auth 8787:8787
 ```
 
 Leave the VM's port-forward running. On your own computer, forward the same
@@ -188,7 +193,7 @@ if SSH access was not enabled during deployment.
 After connecting an account, replace just the pod to test persistence:
 
 ```bash
-sudo k3s kubectl delete pod -n goblin-preview -l app=goblin-auth-preview
+sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
 ```
 
 The Sandbox controller recreates it and reattaches the PVC. Restart the
@@ -204,6 +209,26 @@ not expose arbitrary thread creation, shell execution, or Codex RPC methods.
 Its prompt endpoint creates only the restricted temporary conversations above.
 The cluster still needs an appropriate sandbox runtime before a later stage
 executes untrusted repository code.
+
+### Migrate from earlier deployment names
+
+Earlier versions used `deploy/auth-preview/sandbox.yaml`, the `goblin-preview`
+namespace, and the `goblin-auth-preview` image and service. The current manifest
+is `deploy/auth/sandbox.yaml`, with namespace `goblin` and image and service
+`goblin-auth`. Kubernetes cannot rename a namespace. Applying the new manifest
+creates separate resources; it does not move the existing password Secret or PVC.
+
+Redeploy the updated Azure template to create `goblin-owner-password` in
+`goblin`. Build and import the image under its new name. For a fresh installation,
+apply the new manifest and connect your account again.
+
+To preserve a saved connection, back up the existing data volume and stop the
+old Sandbox workload before transferring its contents into the new namespace's
+`goblin-auth-data` PVC. Keep the new workload stopped until the transfer is
+complete, and preserve ownership by UID/GID 1000 and the private file permissions.
+Volume migration depends on the cluster's storage class. Keep the old namespace
+and PVC until access and persistence in `goblin` have been verified; deleting
+them can delete the original data.
 
 ## Configuration and storage
 

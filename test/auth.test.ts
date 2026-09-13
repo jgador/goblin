@@ -238,7 +238,7 @@ test("saved authentication survives process replacement and stays isolated betwe
   assert.equal((await separate.request("/api/status")).data.account, null);
 });
 
-test("locking the preview invalidates its browser session without disconnecting Codex", async (t) => {
+test("locking the workspace invalidates its browser session without disconnecting Codex", async (t) => {
   const ctx = await start(t);
   await ctx.unlock();
   await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
@@ -256,7 +256,7 @@ test("a stalled Codex request times out and doesn't leave a reusable pending pro
   assert.equal((await ctx.request("/readyz")).status, 503);
 });
 
-test("prompt tests require a connected owner and use one isolated thread", async (t) => {
+test("prompts require a connected owner and use one isolated thread", async (t) => {
   const ctx = await start(t);
   assert.equal((await ctx.request("/api/prompt", { prompt: "Hello" })).status, 401);
   await ctx.unlock();
@@ -284,7 +284,7 @@ test("prompt tests require a connected owner and use one isolated thread", async
   assert.deepEqual(calls[1].params.sandboxPolicy, { type: "readOnly", networkAccess: false });
 });
 
-test("prompt tests use the saved ChatGPT account and handle completion before the RPC response", async (t) => {
+test("prompts use the saved ChatGPT account and handle completion before the RPC response", async (t) => {
   const ctx = await start(t, { scenario: "auto" });
   await ctx.unlock();
   await ctx.request("/api/auth/chatgpt", {});
@@ -308,7 +308,7 @@ test("failed generations never report success or expose raw errors, even after p
   }
 });
 
-test("empty or excessive model output is not accepted as a successful test", async (t) => {
+test("empty or excessive model output is not accepted as a successful reply", async (t) => {
   for (const [scenario, code] of [["prompt-empty", "prompt_empty_reply"], ["prompt-large", "prompt_reply_too_large"]]) {
     const ctx = await start(t, { scenario });
     await ctx.unlock();
@@ -355,7 +355,7 @@ test("closing a prompt request interrupts generation instead of leaving it runni
   assert.match(calls, /thread\/unsubscribe/);
 });
 
-test("overlapping prompt tests are rejected and account changes wait for completion", async (t) => {
+test("overlapping prompts are rejected and account changes wait for completion", async (t) => {
   const ctx = await start(t, { scenario: "prompt-delayed" });
   await ctx.unlock();
   await ctx.request("/api/auth/api-key", { apiKey: exampleKey });

@@ -111,7 +111,7 @@ public static class GoblinApplication
         app.MapPost("/api/auth/api-key", (Delegate)(async (HttpContext context) => Results.Json(await auth.LoginApiKeyAsync(StringField(context, "apiKey")))));
         app.MapPost("/api/auth/cancel", () => auth.CancelLoginAsync());
         app.MapPost("/api/auth/logout", () => auth.LogoutAsync());
-        app.MapPost("/api/prompt", (Delegate)(async (HttpContext context) => Results.Json(await auth.TestPromptAsync(StringField(context, "prompt"), context.RequestAborted))));
+        app.MapPost("/api/prompt", (Delegate)(async (HttpContext context) => Results.Json(await auth.SendPromptAsync(StringField(context, "prompt"), context.RequestAborted))));
         app.MapFallback("/{**path}", () => Results.Json(new ApiFailure(new("not_found", "This endpoint does not exist.")), statusCode: 404));
         return app;
     }
@@ -157,7 +157,7 @@ public static class GoblinApplication
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch
                 {
-                    if (firstAttempt) Console.Error.WriteLine("Codex could not start. Install the pinned Codex CLI, then restart the preview.");
+                    if (firstAttempt) Console.Error.WriteLine("Codex could not start. Install the pinned Codex CLI, then restart Goblin.");
                 }
                 firstAttempt = false;
             } while (await timer.WaitForNextTickAsync(stoppingToken));

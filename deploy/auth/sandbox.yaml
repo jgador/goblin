@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: goblin-preview
+  name: goblin
 ---
 # Kept separate from the Sandbox so replacing the Sandbox preserves the login.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: goblin-auth-data
-  namespace: goblin-preview
+  namespace: goblin
 spec:
   accessModes: [ReadWriteOnce]
   resources:
@@ -19,12 +19,12 @@ apiVersion: agents.x-k8s.io/v1beta1
 kind: Sandbox
 metadata:
   name: goblin-auth
-  namespace: goblin-preview
+  namespace: goblin
 spec:
   podTemplate:
     metadata:
       labels:
-        app: goblin-auth-preview
+        app: goblin-auth
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -36,7 +36,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: auth
-          image: goblin-auth-preview:0.1.0
+          image: goblin-auth:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -96,26 +96,26 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: goblin-auth-preview
-  namespace: goblin-preview
+  name: goblin-auth
+  namespace: goblin
 spec:
   type: ClusterIP
   selector:
-    app: goblin-auth-preview
+    app: goblin-auth
   ports:
     - name: http
       port: 8787
       targetPort: http
 ---
-# Preview access is through kubectl port-forward, not other pods or ingress.
+# Access is through kubectl port-forward, not other pods or ingress.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: goblin-auth-preview
-  namespace: goblin-preview
+  name: goblin-auth
+  namespace: goblin
 spec:
   podSelector:
     matchLabels:
-      app: goblin-auth-preview
+      app: goblin-auth
   policyTypes: [Ingress]
   ingress: []
