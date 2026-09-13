@@ -50,7 +50,7 @@ public sealed class ProtocolStringEnumConverter<T> : JsonConverter<T> where T : 
         entry => entry.Value, entry => entry.Key, StringComparer.Ordinal);
 
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType == JsonTokenType.String && Values.TryGetValue(reader.GetString()!, out var value)
+        => reader.TokenType == JsonTokenType.String && Values.TryGetValue(reader.GetString()!, out T value)
             ? value : throw new JsonException($"Invalid {typeof(T).Name} wire value.");
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
@@ -73,8 +73,7 @@ public sealed class ProtocolValueConverter<TWrapper, TValue> : JsonConverter<TWr
 {
     public override TWrapper Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var value = JsonSerializer.Deserialize<TValue>(ref reader, options);
-        if (value is null) throw new JsonException("Expected a non-null union value.");
+        TValue value = JsonSerializer.Deserialize<TValue>(ref reader, options) ?? throw new JsonException("Expected a non-null union value.");
         return TWrapper.FromValue(value);
     }
 
@@ -91,7 +90,7 @@ internal static class ProtocolUnion
         if (reader.TokenType != JsonTokenType.StartObject)
             throw new JsonException("Expected a protocol object.");
 
-        var probe = reader;
+        Utf8JsonReader probe = reader;
         string? discriminator = null;
         while (probe.Read() && probe.TokenType != JsonTokenType.EndObject)
         {

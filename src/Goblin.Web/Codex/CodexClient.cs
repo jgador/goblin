@@ -14,7 +14,7 @@ namespace Goblin.Web.Codex;
 /// <summary>Owns a connection to the official Rust app-server; no conversation state lives here.</summary>
 public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly ConcurrentDictionary<RequestId, Pending> _pending = new();
     private Process? _process;
@@ -71,7 +71,8 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
             });
             await SendAsync(child, new JSONRPCNotification
             {
-                Method = "initialized", Params = JsonSerializer.SerializeToElement(new Dictionary<string, string>())
+                Method = "initialized",
+                Params = JsonSerializer.SerializeToElement(new Dictionary<string, string>())
             });
             lock (_gate)
             {
@@ -101,9 +102,11 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
         {
             await SendAsync(child, new JSONRPCRequest
             {
-                Id = id, Method = method, Params = JsonSerializer.SerializeToElement(parameters, ProtocolJson.Options)
+                Id = id,
+                Method = method,
+                Params = JsonSerializer.SerializeToElement(parameters, ProtocolJson.Options)
             }, linked.Token);
-            var result = await completion.Task.WaitAsync(linked.Token);
+            JsonElement result = await completion.Task.WaitAsync(linked.Token);
             return result.Deserialize<TResult>(ProtocolJson.Options) ?? throw new JsonException();
         }
         catch (OperationCanceledException)
@@ -144,12 +147,12 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
             await foreach (var line in JsonLines.ReadAsync(child.StandardOutput))
             {
                 lock (_gate) if (_process != child) return;
-                var (hasMethod, hasId, hasError) = InspectEnvelope(line);
+                (bool hasMethod, bool hasId, bool hasError) = InspectEnvelope(line);
                 if (hasMethod)
                 {
                     if (hasId)
                     {
-                        var request = Deserialize<JSONRPCRequest>(line);
+                        JSONRPCRequest request = Deserialize<JSONRPCRequest>(line);
                         await SendAsync(child, new JSONRPCError
                         {
                             Id = request.Id,
@@ -158,15 +161,15 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
                     }
                     else
                     {
-                        var envelope = Deserialize<JSONRPCNotification>(line);
+                        JSONRPCNotification envelope = Deserialize<JSONRPCNotification>(line);
                         if (ServerNotification.IsKnownMethod(envelope.Method))
                             Notification?.Invoke(Deserialize<ServerNotification>(line));
                     }
                 }
                 else if (hasError)
                 {
-                    var error = Deserialize<JSONRPCError>(line);
-                    if (_pending.TryRemove(error.Id, out var request))
+                    JSONRPCError error = Deserialize<JSONRPCError>(line);
+                    if (_pending.TryRemove(error.Id, out Pending? request))
                         request.Completion.TrySetException(new PublicError("codex_request_failed",
                             request.Method == "account/login/start"
                                 ? "Codex could not complete this request. For ChatGPT, check that device-code login is enabled, then retry."
@@ -174,8 +177,8 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
                 }
                 else if (hasId)
                 {
-                    var response = Deserialize<JSONRPCResponse>(line);
-                    if (_pending.TryRemove(response.Id, out var request)) request.Completion.TrySetResult(response.Result);
+                    JSONRPCResponse response = Deserialize<JSONRPCResponse>(line);
+                    if (_pending.TryRemove(response.Id, out Pending? request)) request.Completion.TrySetResult(response.Result);
                 }
                 else throw new JsonException();
             }
@@ -231,7 +234,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
             _process = null;
             _ready = false;
             _retiring = RetireAsync(child);
-            foreach (var (id, request) in _pending)
+            foreach ((RequestId id, Pending? request) in _pending)
                 if (_pending.TryRemove(id, out _)) request.Completion.TrySetException(PublicError.RuntimeUnavailable());
         }
         Disconnected?.Invoke();

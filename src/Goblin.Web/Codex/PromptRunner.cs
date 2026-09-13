@@ -34,7 +34,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
         {
             lock (gate)
             {
-                var (eventThreadId, eventTurnId) = notification switch
+                (string? eventThreadId, string? eventTurnId) = notification switch
                 {
                     TurnStartedServerNotification e => (e.Params.ThreadId, e.Params.Turn.Id),
                     ItemCompletedServerNotification e => (e.Params.ThreadId, e.Params.TurnId),
@@ -48,10 +48,10 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                 if (notification is TurnCompletedServerNotification ended)
                 {
                     finished = true;
-                    var turn = ended.Params.Turn;
+                    Turn turn = ended.Params.Turn;
                     if (turn.Status == TurnStatus.Failed) { completion.TrySetException(GenerationError(turn.Error)); return; }
                     if (turn.Status != TurnStatus.Completed) { completion.TrySetException(Cancelled()); return; }
-                    foreach (var value in turn.Items) Save(value);
+                    foreach (ThreadItem value in turn.Items) Save(value);
                     var reply = string.Join("\n\n", messages.Values).Trim();
                     if (reply.Length == 0)
                         completion.TrySetException(new PublicError("prompt_empty_reply", "The model finished without a text reply. Please retry.", 502));
@@ -63,10 +63,10 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
         void Disconnected() => completion.TrySetException(PublicError.RuntimeUnavailable());
         codex.Notification += Notification;
         codex.Disconnected += Disconnected;
-        using var cancellation = cancellationToken.Register(() => completion.TrySetException(Cancelled()));
+        using CancellationTokenRegistration cancellation = cancellationToken.Register(() => completion.TrySetException(Cancelled()));
         try
         {
-            var thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
+            ThreadStartResponse thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
             {
                 Cwd = codex.Options.Workspace,
                 Ephemeral = true,
@@ -79,7 +79,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                 thread.Sandbox is not ReadOnlySandboxPolicy || thread.ApprovalPolicy != AskForApproval.Never)
                 throw new PublicError("prompt_configuration_error", "Codex could not create an isolated prompt test. Check the pinned runtime version.", 502);
             if (cancellationToken.IsCancellationRequested) throw Cancelled();
-            var started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
+            TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
                 ThreadId = threadId,
                 Input = [new TextUserInput { Text = prompt }],
@@ -119,7 +119,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
 
     private static PublicError GenerationError(TurnError? error)
     {
-        var info = error?.CodexErrorInfo;
+        CodexErrorInfo? info = error?.CodexErrorInfo;
         var status = info switch
         {
             HttpConnectionFailedCodexErrorInfo value => value.HttpConnectionFailed.HttpStatusCode,

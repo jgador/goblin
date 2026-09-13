@@ -12,7 +12,7 @@ public sealed class Authentication : IDisposable
     private readonly CodexClient _codex;
     private readonly Func<string, Task<string>> _verifyApiKey;
     private readonly PromptRunner _prompts;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private Task _queue = Task.CompletedTask;
     private AccountView? _account;
     private DeviceLogin? _login;
@@ -64,14 +64,14 @@ public sealed class Authentication : IDisposable
     {
         lock (_gate)
         {
-            var previous = _queue;
+            Task previous = _queue;
             async Task<T> Run()
             {
                 await Task.Yield();
                 await previous;
                 return await operation();
             }
-            var result = Run();
+            Task<T> result = Run();
             _queue = ObserveAsync(result);
             return result;
         }
@@ -82,7 +82,7 @@ public sealed class Authentication : IDisposable
     private async Task RefreshAsync()
     {
         await _codex.StartAsync();
-        var result = await _codex.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false });
+        GetAccountResponse result = await _codex.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false });
         if (!result.RequiresOpenaiAuth)
             throw new PublicError("unexpected_provider", "This preview requires Codex's OpenAI provider. Check the runtime configuration.", 503);
         lock (_gate)
@@ -127,7 +127,7 @@ public sealed class Authentication : IDisposable
                         ChatgptAccountView => "chatgpt",
                         _ => throw new PublicError("not_connected", "Connect a ChatGPT account or API key first.", 409)
                     };
-                    var result = await _prompts.RunAsync(prompt, cancellationToken);
+                    (string Reply, string Model, long DurationMs) result = await _prompts.RunAsync(prompt, cancellationToken);
                     lock (_gate)
                     {
                         if (authType == "apiKey") _verification = "accepted";
@@ -154,10 +154,10 @@ public sealed class Authentication : IDisposable
     {
         await RequireDisconnectedAsync();
         lock (_gate) _notice = null;
-        var result = await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ChatgptDeviceCodeLoginAccountParams());
+        LoginAccountResponse result = await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ChatgptDeviceCodeLoginAccountParams());
         if (result is not ChatgptDeviceCodeLoginAccountResponse device ||
             string.IsNullOrEmpty(device.UserCode) || device.UserCode.Length > 64 ||
-            !Uri.TryCreate(device.VerificationUrl, UriKind.Absolute, out var url) ||
+            !Uri.TryCreate(device.VerificationUrl, UriKind.Absolute, out Uri? url) ||
             url.Scheme != "https" || url.Host != "auth.openai.com" || !url.IsDefaultPort ||
             url.AbsolutePath != "/codex/device" || url.UserInfo.Length != 0)
         {

@@ -6,11 +6,12 @@ using System.Text.Json;
 using Goblin.Protocol;
 using Goblin.Web;
 using Goblin.Web.Codex;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 // Test-only executable; never included in the production publish/image.
-var config = JsonSerializer.Deserialize<FixtureOptions>(args[0], new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
-await using var app = await GoblinApplication.CreateAsync(new()
+FixtureOptions config = JsonSerializer.Deserialize<FixtureOptions>(args[0], new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+await using WebApplication app = await GoblinApplication.CreateAsync(new()
 {
     DataDirectory = config.DataDir,
     PublicOrigin = config.PublicOrigin,
@@ -26,8 +27,11 @@ await using var app = await GoblinApplication.CreateAsync(new()
         Environment = new Dictionary<string, string?>
         {
             ["PATH"] = Environment.GetEnvironmentVariable("PATH"),
-            ["OPENAI_API_KEY"] = "must-not-inherit", ["CODEX_API_KEY"] = "must-not-inherit",
-            ["STACKIFY_AZURE_OPENAI_API_KEY"] = "must-not-inherit", ["CODEX_HOME"] = "/must-not-use", ["GOBLIN_SECRET"] = "must-not-inherit"
+            ["OPENAI_API_KEY"] = "must-not-inherit",
+            ["CODEX_API_KEY"] = "must-not-inherit",
+            ["STACKIFY_AZURE_OPENAI_API_KEY"] = "must-not-inherit",
+            ["CODEX_HOME"] = "/must-not-use",
+            ["GOBLIN_SECRET"] = "must-not-inherit"
         }
     },
     VerifyApiKey = async key =>
@@ -40,9 +44,9 @@ await using var app = await GoblinApplication.CreateAsync(new()
 });
 if (config.RealCodex)
 {
-    var codex = app.Services.GetRequiredService<CodexClient>();
-    var auth = app.Services.GetRequiredService<Authentication>();
-    var before = await auth.StatusAsync();
+    CodexClient codex = app.Services.GetRequiredService<CodexClient>();
+    Authentication auth = app.Services.GetRequiredService<Authentication>();
+    AuthenticationState before = await auth.StatusAsync();
     if (!before.RuntimeReady) throw new Exception("Runtime is not ready.");
     if (config.Scenario == "storage")
     {
