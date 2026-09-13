@@ -17,6 +17,10 @@ The guided installer uses Azure's native custom-template flow, with configuratio
 and the intended SSH-key download inside Azure Portal. The new key-generation
 flow is awaiting live portal verification.
 
+If a downloaded SSH key fails on Windows with `Load key ...: Permission denied`
+or a warning that permissions are too open, see
+[Windows SSH private-key permissions](deploy/azure/reference.md#windows-ssh-private-key-permissions).
+
 **Current status:** the Azure deployment installs Goblin and serves its UI at
 `http://<Azure-assigned-hostname>`. Open the deployment's `goblinUrl` output and
 enter the Goblin password chosen during setup. The
