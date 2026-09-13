@@ -1,8 +1,9 @@
-# Deploy Goblin infrastructure to Azure
+# Deploy Goblin to Azure
 
 Deploy an Ubuntu VM, a static public IP with an Azure-managed hostname,
-single-node K3s, and the Agent Sandbox controller. **The Goblin application is
-not installed yet.**
+single-node K3s, the Agent Sandbox controller, and the Goblin application.
+After provisioning, open **`goblinUrl`** in the deployment outputs and enter the
+Goblin password you chose during setup.
 
 ## Deploy
 
@@ -17,10 +18,14 @@ not installed yet.**
 4. Select **Review + create → Create**. For a new key, select **Download private
    key and create resource** and save the file; it can only be downloaded once.
 
-Provisioning saves a password hash for the [authentication preview](../../docs/authentication-preview.md#run-in-the-provisioned-agent-sandbox-cluster).
-After installing that preview, use the password you chose here. You do not need
-to retrieve a workspace access token from the VM. Application installation and
-public HTTPS setup remain separate steps.
+Provisioning builds the application from this repository, imports its image into
+K3s, and routes the assigned Azure hostname to Goblin through Traefik. A custom
+**Public hostname prefix** is picked up automatically. The build can take several
+minutes; deployment waits until the application responds through that route.
+
+For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
+There is no port number or workspace-token lookup. HTTPS and certificates remain
+a separate setup step; HTTP traffic, including passwords and sessions, is unencrypted.
 
 ## Verify
 
@@ -32,8 +37,13 @@ RunShellScript** and run:
 cat /var/lib/goblin/bootstrap-status
 ```
 
-Expect `ready`. For failures, check `/var/log/goblin-bootstrap.log`. See the
+Expect `ready`. The URL is also saved in `/var/lib/goblin/public-url`.
+For failures, check `/var/log/goblin-bootstrap.log`. See the
 [reference](reference.md) for troubleshooting, naming, SSH access, and maintenance.
+
+For an existing VM provisioned by the infrastructure-only template, redeploy the
+updated template with the same resource names and Goblin password. It installs
+the application and route while retaining the application's PVC, if present.
 
 ## Cost and removal
 

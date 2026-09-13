@@ -12,17 +12,17 @@ The guided installer uses Azure's native custom-template flow, with configuratio
 and the intended SSH-key download inside Azure Portal. The new key-generation
 flow is awaiting live portal verification.
 
-**Current status:** the Azure deployment provisions the infrastructure foundation.
-A separate [authentication preview](docs/authentication-preview.md) lets you test
+**Current status:** the Azure deployment installs Goblin and serves its UI at
+`http://<Azure-assigned-hostname>`. Open the deployment's `goblinUrl` output and
+enter the Goblin password chosen during setup. The
+[authentication preview](docs/authentication-preview.md) lets you test
 ChatGPT and OpenAI API-key login, then send a short prompt using the connected
-account, locally or in an Agent Sandbox pod. It is not automatically installed
-by the Azure template. GitHub integration, repository tasks,
-public administrator onboarding, custom domains, and automatic HTTPS certificates
-remain future work.
+account, locally or in an Agent Sandbox pod. GitHub integration, repository tasks,
+custom domains, and automatic HTTPS certificates remain future work.
 
-Azure setup now asks you to choose and confirm a Goblin password. After manually
-installing the authentication preview in that cluster, enter the chosen password
-to open Goblin; no token lookup is needed.
+Azure setup builds the application on the VM and configures Traefik using the
+public IP resource's actual DNS hostname, including a custom prefix. HTTP is
+enabled explicitly for this deployment; traffic is unencrypted until you add HTTPS.
 
 To try authentication first:
 

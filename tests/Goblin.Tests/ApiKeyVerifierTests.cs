@@ -56,6 +56,23 @@ public sealed class ApiKeyVerifierTests
     [InlineData("https://example.test?query=secret")]
     public void RejectsInvalidPublicOrigins(string origin) => Assert.Throws<ArgumentException>(() => Workspace.ValidateOrigin(origin));
 
+    [Fact]
+    public void PublicHttpRequiresExplicitOptIn()
+    {
+        const string origin = "http://custom-name.southeastasia.cloudapp.azure.com";
+        Assert.Throws<ArgumentException>(() => Workspace.ValidateOrigin(origin));
+        Assert.Equal(origin + "/", Workspace.ValidateOrigin(origin, allowInsecureHttp: true).AbsoluteUri);
+    }
+
+    [Theory]
+    [InlineData("ftp://example.test")]
+    [InlineData("http://user:password@example.test")]
+    [InlineData("http://example.test/path")]
+    [InlineData("http://example.test?query=secret")]
+    [InlineData("http://example.test#fragment")]
+    public void HttpOptInStillRequiresAnExactOrigin(string origin) =>
+        Assert.Throws<ArgumentException>(() => Workspace.ValidateOrigin(origin, allowInsecureHttp: true));
+
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(respond(request));

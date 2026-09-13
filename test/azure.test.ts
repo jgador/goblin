@@ -1,23 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { request as httpRequest } from "node:http";
 import { join, resolve } from "node:path";
 import { startBackend } from "./backend.js";
 
-const origin = "http://localhost:8787";
+const publicHostname = "goblin-prod.southeastasia.cloudapp.azure.com";
+const origin = `http://${publicHostname}`;
 const hasherPath = resolve("deploy/azure/hash-password.py");
 const fakePassword = "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` café 🧌  ";
 
 // Exercise the real rendered bootstrap, replacing only infrastructure commands
 // and absolute system paths. Python hashing, shell quoting and secret creation
 // all run; no Azure account, Kubernetes installation, or network is needed.
-async function bootstrap(root: string, password: string, nodeState: "ready" | "delayed" | "missing" | "not-ready" = "ready") {
+async function bootstrap(root: string, password: string, nodeState: "ready" | "delayed" | "missing" | "not-ready" = "ready",
+  application: { hostname?: string; sourceRef?: string; dockerInstalled?: boolean;
+    state?: "ready" | "docker-failed" | "build-failed" | "not-ready" | "ingress-failed" } = {}) {
   const bin = join(root, "bin");
   await mkdir(bin, { recursive: true });
-  for (const name of ["cloud-init", "sha256sum", "curl", "k3s", "sleep"]) {
+  const source = join(root, "archive/goblin");
+  await mkdir(join(source, "deploy/azure"), { recursive: true });
+  await cp("deploy/auth", join(source, "deploy/auth"), { recursive: true });
+  await cp("deploy/azure/app", join(source, "deploy/azure/app"), { recursive: true });
+  await cp("Dockerfile", join(source, "Dockerfile"));
+  await cp("public", join(source, "public"), { recursive: true });
+  await cp("public/index.html", join(root, "page.html"));
+  execFileSync("tar", ["-czf", join(root, "source.tar.gz"), "-C", join(root, "archive"), "goblin"]);
+  for (const name of ["cloud-init", "sha256sum", "curl", "k3s", "sleep", "docker", "dockerd", "apt-get", "systemctl"]) {
     await writeFile(join(bin, name), `#!${process.execPath}
 const fs = require('node:fs');
 const path = require('node:path');
@@ -25,13 +36,48 @@ const name = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
 const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
 const nodeState = process.env.GOBLIN_BOOTSTRAP_NODE_STATE;
+const appState = process.env.GOBLIN_BOOTSTRAP_APP_STATE;
 if (name === 'curl') {
-  fs.writeFileSync(args[args.indexOf('--output') + 1], '#!/bin/sh\\nexit 0\\n');
+  fs.appendFileSync(path.join(root, 'curl-requests.jsonl'), JSON.stringify(args) + '\\n');
+  const output = args[args.indexOf('--output') + 1];
+  if (args.some(arg => arg.startsWith('https://codeload.github.com/'))) {
+    fs.copyFileSync(path.join(root, 'source.tar.gz'), output);
+  } else if (args.includes('--resolve')) {
+    if (appState === 'ingress-failed') process.exit(22);
+    fs.copyFileSync(path.join(root, 'page.html'), output);
+  } else {
+    fs.writeFileSync(output, '#!/bin/sh\\nexit 0\\n');
+  }
 } else if (name === 'sha256sum') {
-  fs.readFileSync(0);
+  if (args.includes('--check')) fs.readFileSync(0);
+  else process.stdout.write(require('node:crypto').createHash('sha256').update(fs.readFileSync(args[0])).digest('hex') + '  ' + args[0]);
+} else if (name === 'docker' || name === 'dockerd') {
+  fs.appendFileSync(path.join(root, 'docker-requests.jsonl'), JSON.stringify([name, ...args]) + '\\n');
+  if (process.env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED === 'false' && !fs.existsSync(path.join(root, 'docker-installed')))
+    process.exit(127);
+  if (args[0] === 'info' && appState === 'docker-failed') process.exit(1);
+  if (args[0] === 'build') {
+    if (appState === 'build-failed') process.exit(1);
+    fs.accessSync(path.join(args.at(-1), 'Dockerfile'));
+    if ((fs.statSync(path.join(args.at(-1), 'public/index.html')).mode & 0o044) !== 0o044)
+      throw new Error('Source assets must remain readable in the non-root image');
+  } else if (args[0] === 'save') fs.writeFileSync(args[args.indexOf('--output') + 1], 'test image archive');
+} else if (name === 'apt-get') {
+  fs.appendFileSync(path.join(root, 'apt-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args.includes('install') && args.includes('docker.io')) {
+    const config = JSON.parse(fs.readFileSync(path.join(root, 'etc/docker/daemon.json'), 'utf8'));
+    if (config['ip-forward-no-drop'] !== true) throw new Error('Docker must preserve forwarding before its service starts');
+    fs.writeFileSync(path.join(root, 'docker-installed'), 'true');
+  }
+} else if (name === 'systemctl') {
+  fs.appendFileSync(path.join(root, 'systemctl-requests.jsonl'), JSON.stringify(args) + '\\n');
 } else if (name === 'k3s') {
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
   if (args[1] === 'get' && args[2] === 'nodes') {
+    if (args.some(arg => arg.startsWith('jsonpath='))) {
+      process.stdout.write('10.20.0.4');
+      process.exit(0);
+    }
     const attemptsFile = path.join(root, 'node-registration-attempts');
     const attempt = (fs.existsSync(attemptsFile) ? Number(fs.readFileSync(attemptsFile, 'utf8')) : 0) + 1;
     fs.writeFileSync(attemptsFile, String(attempt));
@@ -51,6 +97,8 @@ if (name === 'curl') {
       process.stderr.write('error: timed out waiting for the condition on nodes/goblin\\n');
       process.exit(1);
     }
+  } else if (args[1] === 'wait' && args.includes('sandbox/goblin-auth') && appState === 'not-ready') {
+    process.exit(1);
   } else if (args[1] === 'create' && args[2] === 'namespace') {
     process.stdout.write(JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: args[3] } }));
   } else if (args[1] === 'create' && args[2] === 'secret') {
@@ -65,10 +113,14 @@ if (name === 'curl') {
 `, { mode: 0o700 });
   }
   const hasher = await readFile(hasherPath, "utf8");
+  const installer = await readFile("deploy/azure/install-app.sh", "utf8");
   let script = (await readFile("deploy/azure/bootstrap.sh", "utf8"))
+    .replace("__GOBLIN_APPLICATION_INSTALLER__", () => installer)
     .replace("__GOBLIN_PASSWORD_HASHER__", () => hasher)
+    .replace("__GOBLIN_HOSTNAME_BASE64__", Buffer.from(application.hostname ?? "goblin-prod.southeastasia.cloudapp.azure.com").toString("base64"))
+    .replace("__GOBLIN_SOURCE_REF_BASE64__", Buffer.from(application.sourceRef ?? "master").toString("base64"))
     .replace("__GOBLIN_PASSWORD_BASE64__", Buffer.from(password).toString("base64"));
-  for (const path of ["/var/lib/goblin", "/var/log/goblin-bootstrap.log", "/etc/rancher/k3s"]) {
+  for (const path of ["/var/lib/goblin", "/var/log/goblin-bootstrap.log", "/etc/rancher/k3s", "/etc/docker"]) {
     script = script.replaceAll(path, join(root, path.slice(1)));
   }
   await mkdir(join(root, "var/log"), { recursive: true });
@@ -76,7 +128,9 @@ if (name === 'curl') {
   await writeFile(scriptPath, script, { mode: 0o600 });
   return execFileSync("/bin/sh", [scriptPath], {
     cwd: root,
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOBLIN_BOOTSTRAP_TEST_DIR: root, GOBLIN_BOOTSTRAP_NODE_STATE: nodeState },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOBLIN_BOOTSTRAP_TEST_DIR: root,
+      GOBLIN_BOOTSTRAP_NODE_STATE: nodeState, GOBLIN_BOOTSTRAP_APP_STATE: application.state ?? "ready",
+      GOBLIN_BOOTSTRAP_DOCKER_INSTALLED: String(application.dockerInstalled ?? true) },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 30_000,
@@ -97,6 +151,74 @@ test("bootstrap waits for node registration after API readiness, including trans
   assert.ok(apiReady >= 0 && registration > apiReady && nodeReady > registration && secret > nodeReady);
   assert.match(output, /Waiting for Kubernetes node registration/);
   assert.match(output, /Checking Kubernetes node readiness/);
+});
+
+test("bootstrap installs the application and uses Azure's hostname for both routing and origin", async (t) => {
+  for (const hostname of ["goblin-prod.southeastasia.cloudapp.azure.com", "custom-name.westeurope.cloudapp.azure.com"]) {
+    const root = await mkdtemp(join(tmpdir(), "goblin-hostname-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const output = await bootstrap(root, fakePassword, "ready", { hostname, sourceRef: "refs/heads/master" });
+    const config = await readFile(join(root, "var/lib/goblin/deploy/azure/app/kustomization.yaml"), "utf8");
+    const ingress = await readFile(join(root, "var/lib/goblin/deploy/azure/app/ingress.yaml"), "utf8");
+    assert.ok(config.includes(`value: http://${hostname}`));
+    assert.ok(ingress.includes(`host: ${hostname}`));
+    assert.ok(!config.includes("__GOBLIN_"));
+    assert.ok(!ingress.includes("__GOBLIN_"));
+    const digest = (await readFile(join(root, "var/lib/goblin/application-source-sha256"), "utf8")).trim();
+    assert.match(digest, /^[0-9a-f]{64}$/);
+    assert.ok(config.includes(`localhost/goblin-auth:${digest}`));
+    const dockerCalls: string[][] = (await readFile(join(root, "docker-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+    assert.ok(dockerCalls.some(args => args[1] === "build" && args.includes("--load") && args.includes(`localhost/goblin-auth:${digest}`)));
+    assert.ok(dockerCalls.some(args => args[1] === "save" && args.includes(`localhost/goblin-auth:${digest}`) && !args.includes("--format")));
+    await assert.rejects(access(join(root, "apt-requests.jsonl")), "an existing Docker installation should be reused");
+    assert.equal(await readFile(join(root, "var/lib/goblin/public-url"), "utf8"), `http://${hostname}\n`);
+    assert.ok(output.includes(`Goblin ready: http://${hostname}`));
+    const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+    const imported = calls.findIndex(args => args[0] === "ctr" && args.includes("import"));
+    const applied = calls.findIndex(args => args[1] === "apply" && args.includes("-k"));
+    const restarted = calls.findIndex(args => args[1] === "delete" && args[2] === "pod");
+    const ready = calls.findIndex(args => args[1] === "wait" && args.includes("sandbox/goblin-auth"));
+    assert.ok(imported >= 0 && applied > imported && restarted > applied && ready > restarted);
+    assert.ok(!calls.some(args => args[1] === "delete" && ["pvc", "namespace", "sandbox"].includes(args[2])));
+    const downloads: string[][] = (await readFile(join(root, "curl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+    assert.ok(downloads.some(args => args.includes("https://codeload.github.com/jgador/goblin/tar.gz/refs/heads/master")));
+    assert.ok(downloads.some(args => args.includes(`${hostname}:80:10.20.0.4`) && args.includes(`http://${hostname}/`)));
+  }
+});
+
+test("bootstrap installs Docker without dropping K3s forwarding or replacing existing daemon settings", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-docker-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, "etc/docker"), { recursive: true });
+  await writeFile(join(root, "etc/docker/daemon.json"), JSON.stringify({ "log-driver": "local" }));
+  await bootstrap(root, fakePassword, "ready", { dockerInstalled: false });
+  assert.deepEqual(JSON.parse(await readFile(join(root, "etc/docker/daemon.json"), "utf8")), {
+    "log-driver": "local", "ip-forward-no-drop": true,
+  });
+  const installs: string[][] = (await readFile(join(root, "apt-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.ok(installs.some(args => args.includes("install") && args.includes("docker.io") && args.includes("docker-buildx")));
+  const services: string[][] = (await readFile(join(root, "systemctl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.deepEqual(services, [["enable", "--now", "docker"]]);
+});
+
+test("bootstrap cannot report ready when Docker, the application build, pod, or ingress fails", async (t) => {
+  for (const state of ["docker-failed", "build-failed", "not-ready", "ingress-failed"] as const) {
+    const root = await mkdtemp(join(tmpdir(), "goblin-app-failed-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await assert.rejects(bootstrap(root, fakePassword, "ready", { state }), { status: 1 });
+    assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "failed\n");
+    await assert.rejects(access(join(root, "var/lib/goblin/public-url")));
+  }
+});
+
+test("bootstrap rejects invalid hostname/ref input before invoking the application builder", async (t) => {
+  for (const config of [{ hostname: "$(touch PWNED).example.com" }, { sourceRef: "master;touch PWNED" }]) {
+    const root = await mkdtemp(join(tmpdir(), "goblin-app-input-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await assert.rejects(bootstrap(root, fakePassword, "ready", config), { status: 1 });
+    await assert.rejects(access(join(root, "PWNED")));
+    await assert.rejects(access(join(root, "docker-requests.jsonl")));
+  }
 });
 
 test("bootstrap fails clearly if the API is ready but no node ever registers", async (t) => {
@@ -144,12 +266,12 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   const passwordHashFile = join(root, "owner-password");
   await writeFile(passwordHashFile, verifier, { mode: 0o600 });
   const dataDir = join(root, "workspace-data");
-  let app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin });
+  let app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin, allowInsecureHttp: true });
   close = () => app.close();
   const request = (path: string, token?: string, cookie = "") => new Promise<Response>((resolve, reject) => {
     const req = httpRequest(`${app.url}${path}`, {
       method: token === undefined ? "GET" : "POST",
-      headers: { Host: "localhost:8787", Origin: origin, Cookie: cookie, "Content-Type": "application/json" },
+      headers: { Host: publicHostname, Origin: origin, Cookie: cookie, "Content-Type": "application/json" },
     }, (res) => {
       let body = "";
       res.setEncoding("utf8").on("data", (chunk) => { body += chunk; });
@@ -171,6 +293,7 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   assert.equal(session.status, 200);
   const cookie = session.headers.get("set-cookie")!.split(";")[0];
   assert.match(session.headers.get("set-cookie")!, /HttpOnly/i);
+  assert.doesNotMatch(session.headers.get("set-cookie")!, /;\s*Secure/i);
   assert.equal((await request("/api/status", undefined, cookie)).status, 200);
   assert.equal((await request("/owner-password", undefined, cookie)).status, 404);
   assert.ok(!(await (await request("/api/session")).text()).includes(verifier.trim()));
@@ -180,7 +303,7 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   // not be accepted when the Azure password is configured.
   const oldToken = "old-workspace-access-code-must-no-longer-work";
   await writeFile(join(dataDir, "owner-token"), oldToken, { mode: 0o600 });
-  app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin });
+  app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin, allowInsecureHttp: true });
   assert.equal((await request("/api/status", undefined, cookie)).status, 401);
   assert.equal((await request("/api/session", oldToken)).status, 401);
   session = await request("/api/session", fakePassword);
@@ -199,7 +322,7 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   await bootstrap(root, newPassword);
   const updated = JSON.parse(await readFile(join(root, "secret.json"), "utf8"));
   await writeFile(passwordHashFile, Buffer.from(updated.data["owner-password"], "base64"));
-  app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin });
+  app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin, allowInsecureHttp: true });
   assert.equal((await request("/api/session", fakePassword)).status, 401);
   assert.equal((await request("/api/session", newPassword)).status, 200);
 });
@@ -266,6 +389,10 @@ test("Azure templates keep the password protected and the portal requires confir
     assert.match(extension.properties.protectedSettings.script, /parameters\('goblinPassword'\)/);
     assert.ok(!JSON.stringify(template.outputs).includes("goblinPassword"));
     assert.ok(!JSON.stringify(nested.outputs).includes("goblinPassword"));
+    assert.equal(template.parameters.goblinSourceRef.defaultValue, "master");
+    assert.ok(template.outputs.goblinUrl.value.includes("http://"));
+    assert.match(extension.properties.protectedSettings.script, /dnsSettings\.fqdn/);
+    assert.match(extension.properties.protectedSettings.script, /parameters\('goblinSourceRef'\)/);
     if (name.includes("portal")) assert.deepEqual(Object.keys(ui.parameters.outputs).sort(), Object.keys(template.parameters).sort());
   }
 });

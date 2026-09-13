@@ -20,6 +20,11 @@ param location string = deployment().location
 @allowed(['dev', 'test', 'staging', 'prod'])
 param environment string = 'prod'
 
+@description('Goblin branch, tag, or commit to build from github.com/jgador/goblin. Use a commit SHA for repeatable installations; master follows the current application.')
+@minLength(1)
+@maxLength(128)
+param goblinSourceRef string = 'master'
+
 @description('Linux administrator username.')
 param adminUsername string = 'goblinadmin'
 
@@ -114,6 +119,7 @@ module infrastructure './modules/vm.bicep' = {
     adminUsername: adminUsername
     adminSshPublicKey: adminSshPublicKey
     goblinPassword: goblinPassword
+    goblinSourceRef: goblinSourceRef
     vmSize: vmSize
     osDiskSizeGB: osDiskSizeGB
     sshSourceAddressPrefix: trim(sshSourceAddressPrefix)
@@ -128,8 +134,11 @@ output resourceNames object = names
 @description('Public IPv4 address of the VM.')
 output publicIpAddress string = infrastructure.outputs.publicIpAddress
 
-@description('Azure-managed public hostname. Application onboarding and HTTPS are not installed yet.')
+@description('Azure-managed public hostname serving the Goblin UI over HTTP.')
 output publicHostname string = infrastructure.outputs.publicHostname
+
+@description('Open Goblin at this URL and enter the password chosen during setup. HTTPS is configured separately.')
+output goblinUrl string = 'http://${infrastructure.outputs.publicHostname}'
 
 @description('VM resource ID for administration through the Azure portal or CLI.')
 output virtualMachineResourceId string = infrastructure.outputs.virtualMachineResourceId

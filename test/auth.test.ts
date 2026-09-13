@@ -14,6 +14,8 @@ const exampleKey = "sk-test-ONLY-A-FAKE-KEY-1234567890";
 
 interface TestOptions {
   dataDir?: string;
+  publicOrigin?: string;
+  allowInsecureHttp?: boolean;
   scenario?: string;
   timeoutMs?: number;
   promptTimeoutMs?: number;
@@ -32,7 +34,8 @@ interface TestResponse<Path extends string> {
 
 async function start(t: TestContext, options: TestOptions = {}) {
   const dataDir = options.dataDir || await mkdtemp(join(tmpdir(), "goblin-test-"));
-  const app = await startBackend({ dataDir, publicOrigin: origin,
+  const publicOrigin = options.publicOrigin ?? origin;
+  const app = await startBackend({ dataDir, publicOrigin, allowInsecureHttp: options.allowInsecureHttp,
     scenario: options.scenario, timeoutMs: options.timeoutMs || 2000,
     verification: options.verification, promptTimeoutMs: options.promptTimeoutMs });
   const url = app.url;
@@ -45,7 +48,7 @@ async function start(t: TestContext, options: TestOptions = {}) {
       const request = httpRequest(`${url}${path}`, {
         method: body === undefined ? "GET" : "POST",
         ...overrides,
-        headers: { Host: "localhost:8787", Origin: origin, Cookie: cookie,
+        headers: { Host: new URL(publicOrigin).host, Origin: publicOrigin, Cookie: cookie,
           ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...overrides.headers },
       }, (response) => {
         let raw = "";
@@ -113,6 +116,26 @@ test("mutations reject foreign origins and unexpected hosts", async (t) => {
   assert.equal(foreign.error.code, "invalid_origin");
   assert.equal((await ctx.request("/api/status", undefined, { headers: { Host: "attacker.example" } })).status, 403);
   assert.equal((await ctx.request("/api/auth/chatgpt", {}, { headers: { Origin: "null" } })).status, 403);
+});
+
+test("public HTTP opt-in preserves host/origin checks and HTTPS keeps Secure cookies", async (t) => {
+  for (const scheme of ["http", "https"]) {
+    const ctx = await start(t, { publicOrigin: `${scheme}://custom-name.westeurope.cloudapp.azure.com`, allowInsecureHttp: scheme === "http" });
+    assert.equal((await ctx.request("/api/status")).status, 401);
+    const session = await ctx.unlock();
+    assert.equal(/;\s*Secure/i.test(session.headers.get("set-cookie") ?? ""), scheme === "https");
+    assert.match(session.headers.get("set-cookie")!, /HttpOnly/i);
+    assert.match(session.headers.get("set-cookie")!, /SameSite=Strict/i);
+    assert.equal((await ctx.request("/api/status")).status, 200);
+    for (const host of ["attacker.example", "localhost:8787"]) {
+      const rejected = await ctx.request("/api/session", undefined, { headers: { Host: host } });
+      assert.equal(rejected.status, 403);
+      assert.equal(rejected.error.code, "invalid_host");
+    }
+    const rejected = await ctx.request("/api/session", {}, { headers: { Origin: "https://attacker.example" } });
+    assert.equal(rejected.status, 403);
+    assert.equal(rejected.error.code, "invalid_origin");
+  }
 });
 
 test("workspace unlock attempts are rate limited", async (t) => {

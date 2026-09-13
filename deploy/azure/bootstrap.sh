@@ -133,6 +133,8 @@ stage 'Checking Agent Sandbox readiness'
 k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
 k3s kubectl rollout status deployment/agent-sandbox-controller -n agent-sandbox-system --timeout=300s
 
+__GOBLIN_APPLICATION_INSTALLER__
+
 printf 'ready\n' > /var/lib/goblin/bootstrap-status
-printf 'Infrastructure ready: K3s %s and Agent Sandbox %s.\n' "$K3S_VERSION" "$SANDBOX_VERSION"
-printf 'Goblin application, HTTPS onboarding and hardened sandbox runtime are not installed.\n'
+printf 'Goblin ready: http://%s\n' "$goblin_hostname"
+printf 'Use the Goblin password chosen during Azure setup. HTTPS is not configured.\n'

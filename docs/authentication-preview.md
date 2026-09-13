@@ -144,17 +144,27 @@ with the same named volume to verify persistence.
 
 ## Run in the provisioned Agent Sandbox cluster
 
-The existing Azure bootstrap installs the core Agent Sandbox controller. The
+The Azure template now installs this application automatically and serves it at
+the deployment's `goblinUrl` (`http://<Azure-assigned-hostname>`). Open that URL
+and enter the **Goblin password** chosen during provisioning. See the
+[Azure guide](../deploy/azure/README.md) for installation and upgrades.
+
+The steps below are for a **manual installation using SSH forwarding**. Do not
+apply this local-access manifest over the automatic Azure installation: it
+restores the localhost origin and blocks Traefik. Azure's rendered configuration
+is saved at `/var/lib/goblin/deploy/azure/app` for subsequent changes.
+
+The Azure bootstrap installs the core Agent Sandbox controller. The
 [preview manifest](../deploy/auth/sandbox.yaml) uses that controller
 directly; extensions, warm pools, ingress, and GitHub access are not required.
 Azure setup asks you to choose and confirm a **Goblin password**. The manifest
 mounts the password verifier created during deployment. Use that password to
 open the preview; there is no access-token retrieval step.
 
-For a VM provisioned with an older template, first redeploy the updated Azure
-template and choose a password. The updated manifest requires the
-`goblin-owner-password` Secret in `goblin`; see the
-[password setup reference](../deploy/azure/reference.md#goblin-password).
+The manifest requires the `goblin-owner-password` Secret in `goblin`; see the
+[password setup reference](../deploy/azure/reference.md#goblin-password). For a VM
+provisioned with an older template, redeploy the updated template to install both
+the password and application automatically instead of following these manual steps.
 
 For an existing installation in `goblin-preview`, follow the
 [namespace migration guidance](#migrate-from-earlier-deployment-names) before
@@ -239,11 +249,15 @@ them can delete the original data.
 | `GOBLIN_HOST` | `127.0.0.1` locally; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |
 | `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:8787` | Exact browser origin, used for Host and Origin checks |
+| `GOBLIN_ALLOW_INSECURE_HTTP` | `false`; explicitly `true` in the Azure overlay | Allows a public HTTP origin before HTTPS is configured; traffic is unencrypted |
 | `GOBLIN_CODEX_COMMAND` | Local pinned native binary, otherwise `codex` on `PATH` | Optional path to the official Codex executable |
 
-Remote origins must use HTTPS. Loopback HTTP is supported for local access and
-SSH/kubectl forwarding. Public ingress and automatic HTTPS setup are outside
-this authentication preview.
+Remote origins require HTTPS by default. The Azure overlay explicitly enables
+public HTTP with `GOBLIN_ALLOW_INSECURE_HTTP=true`, retaining exact Host/Origin
+checks and password authentication. Loopback HTTP is supported for local access
+and SSH/kubectl forwarding without that setting. After configuring TLS on the
+ingress, set `GOBLIN_PUBLIC_ORIGIN` to the HTTPS address, remove the HTTP opt-in,
+and recreate the application pod. HTTPS origins use Secure session cookies.
 
 Local and Docker runs without `GOBLIN_PASSWORD_HASH_FILE` continue to generate
 and accept the private workspace access code. When the variable is set, Goblin
