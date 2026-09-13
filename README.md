@@ -41,6 +41,12 @@ for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for architecture,
 model regeneration, and direct .NET commands.
 
+To check for API keys and other secrets before committing, install the free local
+Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
+`npm run secrets:scan` for a manual check of the index and working tree, or
+`npm run secrets:history` to check existing commits before a push. See the
+[secret-scanning guide](docs/secret-scanning.md) for installation and scan scope.
+
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses
 `public/assets/branding/icon.svg`, copied from the light-background, icon-only

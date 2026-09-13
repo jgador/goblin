@@ -3,3 +3,6 @@ assets/branding/source/*.ai binary
 assets/branding/fonts/*.ttf binary
 assets/branding/png/*.png binary
 assets/branding/jpeg/*.jpg binary
+
+# Git runs these with a POSIX shell, including in Git for Windows.
+.githooks/* text eol=lf
