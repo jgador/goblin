@@ -14,7 +14,7 @@ const staticFiles = new Map<string, [name: string, type: string]>([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/styles.css", ["styles.css", "text/css; charset=utf-8"]],
-  ["/icon.svg", ["icon.svg", "image/svg+xml"]],
+  ["/assets/branding/icon.svg", ["assets/branding/icon.svg", "image/svg+xml"]],
 ]);
 const hash = (text: string) => createHash("sha256").update(text).digest();
 
