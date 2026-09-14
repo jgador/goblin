@@ -66,6 +66,9 @@ public static class GoblinApplication
             ("/", "index.html", "text/html; charset=utf-8"),
             ("/app.js", "app.js", "text/javascript; charset=utf-8"),
             ("/styles.css", "styles.css", "text/css; charset=utf-8"),
+            ("/work", "work/index.html", "text/html; charset=utf-8"),
+            ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
+            ("/work/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/assets/branding/icon.svg", "assets/branding/icon.svg", "image/svg+xml")
         }) staticFiles.Add(path, (await File.ReadAllBytesAsync(Path.Combine(options.AssetDirectory, file)), type));
 
@@ -81,6 +84,8 @@ public static class GoblinApplication
             {
                 HttpRequest request = context.Request;
                 var path = request.Path.Value ?? "/";
+                // Endpoint routing treats /work and /work/ as the same route.
+                if (path == "/work/") path = "/work";
                 var get = HttpMethods.IsGet(request.Method);
                 var post = HttpMethods.IsPost(request.Method);
                 if (get && path is "/healthz" or "/readyz") { await next(context); return; }
