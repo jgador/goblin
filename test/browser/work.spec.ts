@@ -13,7 +13,7 @@ test("work can move from a decision through revision and approval without callin
   const response = await page.goto("/work");
   expect(response?.status()).toBe(200);
   expect(response?.headers()["content-security-policy"]).toContain("style-src 'self'");
-  await expect(page.getByRole("heading", { name: "Make Goblin easier to set up", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Work details" }).getByRole("heading", { name: "Make Goblin easier to set up", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Keep it in the terminal" }).click();
   await page.getByRole("button", { name: "Continue with this" }).click();
   await expect(page.getByText("Goblin is working on it", { exact: true })).toBeVisible();
