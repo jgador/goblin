@@ -34,6 +34,8 @@ h3{font-size:16px;font-weight:650;margin:0}
 .button-link{text-decoration:none}
 .quiet{padding:6px 0;background:transparent;border:0;color:#617159;font-size:12px;font-weight:550;white-space:nowrap}
 .quiet:hover{text-decoration:underline;text-underline-offset:3px}
+.topbar-nav{display:flex;align-items:center;justify-content:flex-end;gap:18px;flex-wrap:wrap}
+.topbar-nav a{text-decoration:none}
 .footnote{font-size:11px;color:#7b837a;line-height:1.65;margin:13px 0 0}
 .option .footnote{font-size:11px;margin:11px 0 0;color:#7b837a}
 details{border-top:1px solid var(--border);margin-top:24px;padding-top:19px}
