@@ -1,9 +1,14 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Goblin.Persistence/Goblin.Persistence.csproj" />
     <Project Path="src/Goblin.Protocol/Goblin.Protocol.csproj" />
     <Project Path="src/Goblin.Web/Goblin.Web.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Goblin.Database/Goblin.Database.csproj" />
+  </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Goblin.Persistence.Tests/Goblin.Persistence.Tests.csproj" />
     <Project Path="tests/Goblin.Protocol.Tests/Goblin.Protocol.Tests.csproj" />
     <Project Path="tests/Goblin.TestHost/Goblin.TestHost.csproj" />
     <Project Path="tests/Goblin.Tests/Goblin.Tests.csproj" />

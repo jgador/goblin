@@ -66,6 +66,11 @@ the connection page. Try conversations, optional work tracking, decisions,
 activity, and result approval. This is a UI prototype with simulated replies and
 sample work that resets on refresh; it does not run agents or persist work yet.
 
+The [database guide](docs/database.md) covers the PostgreSQL persistence foundation:
+k3s setup, versioned SQL, database-first EF Core mappings, and the `dotnet ef`
+command to regenerate C# models when you add tables. The Work preview is not yet
+connected to this database.
+
 To check for API keys and other secrets before committing, install the free local
 Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 `npm run secrets:scan` for a manual check of the index and working tree, or

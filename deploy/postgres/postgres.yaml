@@ -1,0 +1,153 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: goblin-postgres-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblin-postgres
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: goblin-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: goblin-postgres
+spec:
+  serviceName: goblin-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goblin-postgres
+  template:
+    metadata:
+      labels:
+        app: goblin-postgres
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: postgres:16.15-bookworm
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: goblin
+            - name: POSTGRES_USER
+              value: goblin_admin
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/goblin-admin/password
+            - name: GOBLIN_APP_PASSWORD_FILE
+              value: /run/secrets/goblin-app/password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_INITDB_ARGS
+              value: --auth-host=scram-sha-256
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, goblin_admin, -d, goblin]
+            periodSeconds: 2
+            failureThreshold: 90
+          readinessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, goblin_admin, -d, goblin]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: [pg_isready, -h, 127.0.0.1, -U, goblin_admin, -d, goblin]
+            periodSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: socket
+              mountPath: /var/run/postgresql
+            - name: temporary
+              mountPath: /tmp
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: admin-password
+              mountPath: /run/secrets/goblin-admin
+              readOnly: true
+            - name: app-password
+              mountPath: /run/secrets/goblin-app
+              readOnly: true
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: goblin-postgres-data
+        - name: socket
+          emptyDir: {}
+        - name: temporary
+          emptyDir: {}
+        - name: init
+          configMap:
+            name: goblin-postgres-init
+            defaultMode: 0444
+        - name: admin-password
+          secret:
+            secretName: goblin-postgres-admin
+            defaultMode: 0440
+        - name: app-password
+          secret:
+            secretName: goblin-postgres-app
+            defaultMode: 0440
+            items:
+              - key: password
+                path: password
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goblin-postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: goblin-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: goblin-auth
+        - podSelector:
+            matchLabels:
+              goblin-database-access: "true"
+      ports:
+        - protocol: TCP
+          port: 5432

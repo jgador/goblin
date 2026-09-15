@@ -49,6 +49,62 @@ function detected(result, secret, label, rule = "goblin-openai-key") {
   assert.equal(result.output.includes(secret), false, "Secret must never appear in output");
 }
 
+const webSettingsPath = "backend/src/Goblin.Web/appsettings.json";
+const databaseConnection = password =>
+  `Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;Password=${password}`;
+
+test("the intentionally tracked database connection passes worktree, staged, and history scans", (t) => {
+  const repo = fixture(t);
+  const password = randomBytes(32).toString("hex");
+  for (const value of [password, `"${password}"`]) {
+    repo.write(webSettingsPath, JSON.stringify({ ConnectionStrings: {
+      Goblin: databaseConnection(value),
+    } }, null, 2) + "\n");
+    assert.equal(repo.scan().status, 0);
+    repo.git("add", webSettingsPath);
+    assert.equal(repo.scan("staged").status, 0);
+    assert.equal(repo.scan().status, 0);
+    repo.git("commit", "--quiet", "-m", "Intentional database configuration");
+  }
+  assert.equal(repo.scan("history").status, 0);
+});
+
+test("the database exception requires both the designated path and connection entry", (t) => {
+  const password = randomBytes(32).toString("hex");
+  const connection = databaseConnection(password);
+  for (const [path, values] of [
+    ["backend/tools/Goblin.Database/appsettings.json", { Goblin: connection }],
+    ["backend/src/AnotherApp/appsettings.json", { Goblin: connection }],
+    [webSettingsPath, { GoblinAdmin: connection.replace("Username=goblin_app", "Username=goblin_admin") }],
+    [webSettingsPath, { Goblin: connection.replace("Host=goblin-postgres", "Host=another-database") }],
+  ]) {
+    const repo = fixture(t);
+    repo.write(path, JSON.stringify({ ConnectionStrings: values }, null, 2) + "\n");
+    detected(repo.scan(), password, "worktree", "generic-api-key");
+    repo.git("add", path);
+    detected(repo.scan("staged"), password, "staged", "generic-api-key");
+  }
+});
+
+test("other generic credentials and OpenAI keys in the web configuration remain blocked", (t) => {
+  const repo = fixture(t);
+  const password = randomBytes(32).toString("hex");
+  const apiKey = randomBytes(32).toString("hex");
+  const openaiKey = syntheticKey();
+  for (const indentation of [2, undefined]) {
+    repo.write(webSettingsPath, JSON.stringify({
+      ConnectionStrings: { Goblin: databaseConnection(password) },
+      ApiKey: apiKey,
+      OpenAI: { ApiKey: openaiKey },
+    }, null, indentation) + "\n");
+    const result = repo.scan();
+    detected(result, apiKey, "worktree", "generic-api-key");
+    detected(result, openaiKey, "worktree");
+    repo.git("add", webSettingsPath);
+    detected(repo.scan("staged"), openaiKey, "staged");
+  }
+});
+
 test("clean scans do not read ignored runtime credentials", (t) => {
   const repo = fixture(t);
   repo.write(".env", syntheticKey());
