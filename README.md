@@ -41,8 +41,8 @@ npm ci
 npm start
 ```
 
-Open http://localhost:8787 and enter the workspace access code stored in
-`.goblin-auth/owner-token`. See the [preview guide](docs/authentication-preview.md)
+Open http://localhost:8787 and click **Open workspace**. The local password is
+prefilled; opening the page does not sign you in. See the [preview guide](docs/authentication-preview.md)
 for sign-in, persistence checks, and deployment to your VM.
 
 The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official

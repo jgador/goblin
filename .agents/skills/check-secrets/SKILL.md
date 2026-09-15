@@ -63,13 +63,13 @@ Cover these content signals without depending on exact token lengths:
 | --- | --- |
 | OpenAI credentials | `sk-proj`, `sk-svcacct`, and other `sk-` key forms, including inside strings, JSON, URLs, logs, docs, and examples. |
 | Other provider tokens | GitHub `github_pat_` and `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`, Anthropic `sk-ant-`, Slack `xox...`, AWS access-key IDs and associated secrets, Google API keys and service-account private keys. |
-| Auth material | Bearer and Basic authorization values, JWTs, access/refresh/ID tokens, session cookies, client secrets, device codes, owner tokens, and exported login state. |
+| Auth material | Bearer and Basic authorization values, JWTs, access/refresh/ID tokens, session cookies, client secrets, device codes, password verifiers, and exported login state. |
 | Unprefixed secrets | Literal assignments to API-key, token, secret, password, or credential fields; Azure/OpenAI resource keys, connection strings, SAS signatures, database passwords, and URLs containing credentials. |
 | Key material | PEM/OpenSSH private-key blocks, signing keys, private certificates/keystores, and embedded private-key JSON. Public certificates and public keys need different classification. |
 | Unusual values | High-entropy strings, long hex/base64 values, encoded credential payloads, and credentials assembled from literal fragments. Entropy is a candidate signal, not proof. |
 
 Use filename patterns as an additional check: environment files, `auth.json`,
-`owner-token`, credentials/config exports, private keys, logs, caches, backups,
+`owner-password`, credentials/config exports, private keys, logs, caches, backups,
 archives, screenshots, and generated artifacts. Do not exclude a changed file
 because it is a test, fixture, documentation, lockfile, or binary. Inspect relevant
 binary/artifact contents safely when feasible; otherwise identify the unreviewed
@@ -98,8 +98,8 @@ artifact. Do not open ignored credential stores just to verify their exclusion;
 use Git inventory, ignore rules, paths, and metadata.
 
 For Goblin, specifically check `.goblin-auth/`, `.goblin-browser-test/`, Codex
-`auth.json`, Goblin `owner-token`, environment files, and `.dockerignore`.
-The saved ChatGPT login and owner token are private runtime data. Do not print
+`auth.json`, Goblin `owner-password`, environment files, and `.dockerignore`.
+The saved ChatGPT login and password verifier are private runtime data. Do not print
 or copy them. Keep this a secrets review; do not connect GitHub repositories,
 change the user's login, or add authentication features as part of it.
 

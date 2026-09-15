@@ -35,7 +35,12 @@ public static class GoblinApplication
 
     public static async Task<WebApplication> CreateAsync(ApplicationOptions options)
     {
-        Workspace workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin, options.PasswordHashFile, options.AllowInsecureHttp);
+        // Never enable the public local password on a wildcard or network listener,
+        // even if the configured browser origin happens to be localhost.
+        bool localListener = Uri.TryCreate(options.ListenUrl, UriKind.Absolute, out Uri? listenOrigin)
+            && listenOrigin.Scheme is "http" or "https" && Workspace.IsLoopback(listenOrigin);
+        Workspace workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin, options.PasswordHashFile,
+            options.AllowInsecureHttp, useLocalDefaultPassword: localListener);
         var runtimeOptions = new CodexOptions { CodexHome = workspace.CodexHome, Home = workspace.Home, Workspace = workspace.WorkingDirectory };
         runtimeOptions = options.ConfigureCodex?.Invoke(runtimeOptions) ?? runtimeOptions;
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(GoblinApplication).Assembly.FullName });
@@ -109,8 +114,8 @@ public static class GoblinApplication
         app.MapGet("/readyz", () => Results.Json(new { ready = codex.Ready }, statusCode: codex.Ready ? 200 : 503));
         foreach ((string? path, (byte[] Body, string ContentType) asset) in staticFiles)
             app.MapGet(path, () => Results.Bytes(asset.Body, asset.ContentType));
-        app.MapGet("/api/session", (HttpContext context) => new SessionState(workspace.SessionId(context.Request) is not null, workspace.UsesPassword));
-        app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "token"), context.Response));
+        app.MapGet("/api/session", (HttpContext context) => workspace.Session(workspace.SessionId(context.Request) is not null));
+        app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "password"), context.Response));
         app.MapPost("/api/session/lock", (HttpContext context) => workspace.Lock((string)context.Items[SessionKey]!, context.Response));
         app.MapGet("/api/status", () => auth.StatusAsync());
         app.MapPost("/api/auth/chatgpt", () => auth.LoginChatGptAsync());

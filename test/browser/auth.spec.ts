@@ -18,6 +18,7 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Open your workspace" })).toBeVisible();
   await expect(page.getByLabel("Goblin password", { exact: true })).toHaveAttribute("autocomplete", "current-password");
+  await expect(page.getByLabel("Goblin password", { exact: true })).toHaveValue("");
   await page.getByLabel("Goblin password", { exact: true }).fill("incorrect-password");
   await page.getByRole("button", { name: "Open workspace" }).click();
   await expect(page.getByRole("alert")).toContainText("The Goblin password is incorrect.");

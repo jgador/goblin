@@ -1,4 +1,4 @@
-// Shared HTTP contracts. API keys and stored tokens have no response fields.
+// Shared HTTP contracts. API keys and configured passwords have no response fields.
 export type Account =
   | { type: "chatgpt"; email: string | null; planType: string | null }
   | { type: "apiKey" };
@@ -24,7 +24,8 @@ export interface PromptResult {
 
 export interface SessionState {
   authenticated: boolean;
-  usesPassword: boolean;
+  /** Public convenience password for a server bound exclusively to loopback. */
+  localDefaultPassword?: string;
 }
 
 export interface ApiFailure {
@@ -43,7 +44,7 @@ export interface ApiResponses {
 }
 
 export interface ApiRequestBodies {
-  "/api/session": { token: string };
+  "/api/session": { password: string };
   "/api/session/lock": Record<string, never>;
   "/api/status": undefined;
   "/api/auth/chatgpt": Record<string, never>;

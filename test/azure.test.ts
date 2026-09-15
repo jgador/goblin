@@ -246,7 +246,7 @@ test("bootstrap does not continue when a registered node fails its readiness wai
   await assert.rejects(access(join(root, "secret.json")));
 });
 
-test("Azure password survives provisioning and unlocks Goblin without an owner token", async (t) => {
+test("Azure password survives provisioning and unlocks Goblin", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-password-"));
   let close = async () => {};
   t.after(async () => { await close(); await rm(root, { recursive: true, force: true }); });
@@ -268,9 +268,9 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   const dataDir = join(root, "workspace-data");
   let app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin, allowInsecureHttp: true });
   close = () => app.close();
-  const request = (path: string, token?: string, cookie = "") => new Promise<Response>((resolve, reject) => {
+  const request = (path: string, password?: string, cookie = "") => new Promise<Response>((resolve, reject) => {
     const req = httpRequest(`${app.url}${path}`, {
-      method: token === undefined ? "GET" : "POST",
+      method: password === undefined ? "GET" : "POST",
       headers: { Host: publicHostname, Origin: origin, Cookie: cookie, "Content-Type": "application/json" },
     }, (res) => {
       let body = "";
@@ -282,10 +282,9 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
       ) })));
     });
     req.on("error", reject);
-    req.end(token === undefined ? undefined : JSON.stringify({ token }));
+    req.end(password === undefined ? undefined : JSON.stringify({ password }));
   });
-  assert.deepEqual(await (await request("/api/session")).json(), { authenticated: false, usesPassword: true });
-  await assert.rejects(access(app.tokenFile));
+  assert.deepEqual(await (await request("/api/session")).json(), { authenticated: false });
   assert.equal((await request("/api/status")).status, 401);
   // Whitespace, Unicode, quotes and shell metacharacters must survive exactly.
   assert.equal((await request("/api/session", fakePassword.trim())).status, 401);
@@ -299,13 +298,10 @@ test("Azure password survives provisioning and unlocks Goblin without an owner t
   assert.ok(!(await (await request("/api/session")).text()).includes(verifier.trim()));
 
   await app.close();
-  // An old workspace access token may exist on an upgraded persistent volume. It must
-  // not be accepted when the Azure password is configured.
-  const oldToken = "old-workspace-access-code-must-no-longer-work";
-  await writeFile(join(dataDir, "owner-token"), oldToken, { mode: 0o600 });
+  // Restarting keeps the configured password and invalidates browser sessions.
   app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin, allowInsecureHttp: true });
   assert.equal((await request("/api/status", undefined, cookie)).status, 401);
-  assert.equal((await request("/api/session", oldToken)).status, 401);
+  assert.equal((await request("/api/session", "goblin")).status, 401);
   session = await request("/api/session", fakePassword);
   assert.equal(session.status, 200);
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -333,7 +329,6 @@ test("a configured password file must exist and contain a supported verifier", a
   const passwordHashFile = join(root, "owner-password");
   const dataDir = join(root, "data");
   await mkdir(dataDir);
-  await writeFile(join(dataDir, "owner-token"), "old-workspace-access-code-must-no-longer-work");
   const valid = execFileSync("python3", [hasherPath], { input: fakePassword, encoding: "utf8" });
   for (const invalid of [null, "", "not-a-verifier", valid.replace("600000", "1"), valid.replace("600000", "999999999"), "pbkdf2-sha256$600000$bad$bad", "x".repeat(257)]) {
     if (invalid !== null) await writeFile(passwordHashFile, invalid);

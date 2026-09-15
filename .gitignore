@@ -15,8 +15,6 @@ goblin-auth*.tar
 # Secrets, including copies outside the default data directory
 auth.json
 auth.json.*
-owner-token
-owner-token.*
 owner-password
 owner-password.*
 .env.*

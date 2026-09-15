@@ -20,23 +20,38 @@ To build separately, run `npm run build`, then launch with
 `dotnet src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll`.
 Browser assets in `dist/` and .NET `bin/` and `obj/` output are ignored by Git.
 
-Open **http://localhost:8787**. In another terminal, read the workspace access
-code and enter it on the page:
+Open **http://localhost:8787** and click **Open workspace**. When both the listener
+and browser origin use loopback addresses, Goblin prefills the local default
+password, `goblin`. The page stays locked until you click the button. After locking
+the workspace or restarting Goblin, click **Open workspace** again.
 
-```bash
-cat .goblin-auth/owner-token
-```
-
-The workspace code protects the preview's account settings. Treat it as a
-password. It is not a ChatGPT credential, and it is never placed in a URL or
-printed by the application. The browser receives a private session cookie;
-after restarting the application, unlock it with the same workspace code.
+Set `GOBLIN_PASSWORD_HASH_FILE` to use a chosen password locally. A configured
+password always takes precedence and is never prefilled. Wildcard/network listeners
+(including the Docker image) and public origins require a configured password.
+Goblin refuses to start if that password is missing. Password login creates a
+private session cookie; restarting the application invalidates browser sessions.
 
 Goblin installs Codex CLI **0.154.0** through the lockfile. Its C# client starts
 the package's official Rust binary with `app-server` and communicates over stdio
 using the checked-in JSON schemas. Its `HOME`, working directory, and `CODEX_HOME` are
 private to the preview. Existing machine-level Codex configuration and provider
 credentials are not inherited. You can keep using your normal Codex installation.
+
+### Use your own password
+
+With Python 3 installed, create a private password verifier. The prompt hides your
+input, and only the salted verifier is written to disk:
+
+```bash
+umask 077
+mkdir -p .goblin-auth
+python3 -c 'import getpass, sys; sys.stdout.write(getpass.getpass("Goblin password: "))' \
+  | python3 deploy/azure/hash-password.py > .goblin-auth/owner-password
+GOBLIN_PASSWORD_HASH_FILE=.goblin-auth/owner-password npm start
+```
+
+Enter that password on the page and click **Open workspace**. The same verifier
+can be mounted into Docker. Azure creates its verifier during provisioning.
 
 ## Enable ChatGPT device authentication
 
@@ -128,13 +143,27 @@ upstream errors, credentials, or reasoning output.
 
 ## Run in Docker
 
-Build the image and start it with persistent storage:
+Create a verifier using [Use your own password](#use-your-own-password), then build
+the image and copy the verifier into a private Docker volume. The setup command
+sets file ownership for the application's UID 1000:
 
 ```bash
 docker build -t goblin-auth:0.1.0 .
+docker run --rm -i --user 0:0 --entrypoint sh \
+  -v goblin-auth-password:/password goblin-auth:0.1.0 \
+  -c 'umask 077; cat > /password/owner-password; chown 1000:1000 /password/owner-password' \
+  < .goblin-auth/owner-password
+```
+
+Start Goblin with persistent application storage and the password volume mounted
+read-only:
+
+```bash
 docker run --rm --name goblin-auth \
   -p 127.0.0.1:8787:8787 \
   -v goblin-auth-data:/data \
+  -v goblin-auth-password:/etc/goblin:ro \
+  -e GOBLIN_PASSWORD_HASH_FILE=/etc/goblin/owner-password \
   goblin-auth:0.1.0
 ```
 
@@ -143,14 +172,8 @@ image contains the ASP.NET Core runtime, published C# host, browser assets, and
 the official Rust Codex binary with its runtime resources. Node.js and the
 TypeScript compiler are build dependencies only.
 
-In another terminal, read the workspace access code:
-
-```bash
-docker exec goblin-auth cat /data/auth/owner-token
-```
-
-Open **http://localhost:8787** and follow the same checks. Recreate the container
-with the same named volume to verify persistence.
+Open **http://localhost:8787**, enter your password, and follow the same checks.
+Recreate the container with the same named volumes to verify persistence.
 
 ## Run in the provisioned Agent Sandbox cluster
 
@@ -169,7 +192,7 @@ The Azure bootstrap installs the core Agent Sandbox controller. The
 directly; extensions, warm pools, ingress, and GitHub access are not required.
 Azure setup asks you to choose and confirm a **Goblin password**. The manifest
 mounts the password verifier created during deployment. Use that password to
-open the preview; there is no access-token retrieval step.
+open the preview.
 
 The manifest requires the `goblin-owner-password` Secret in `goblin`; see the
 [password setup reference](../deploy/azure/reference.md#goblin-password). For a VM
@@ -255,7 +278,7 @@ them can delete the original data.
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `GOBLIN_DATA_DIR` | `.goblin-auth` locally; `/data/auth` in the image | Persistent private application data |
-| `GOBLIN_PASSWORD_HASH_FILE` | Unset locally/in Docker; `/etc/goblin/owner-password` in the Sandbox manifest | Read-only file containing the provisioned password verifier; required when configured |
+| `GOBLIN_PASSWORD_HASH_FILE` | Unset locally; `/etc/goblin/owner-password` in the Sandbox manifest | Password verifier file; required for Docker/network hosting, optional to replace the prefilled localhost password |
 | `GOBLIN_HOST` | `127.0.0.1` locally; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |
 | `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:8787` | Exact browser origin, used for Host and Origin checks |
@@ -269,10 +292,12 @@ and SSH/kubectl forwarding without that setting. After configuring TLS on the
 ingress, set `GOBLIN_PUBLIC_ORIGIN` to the HTTPS address, remove the HTTP opt-in,
 and recreate the application pod. HTTPS origins use Secure session cookies.
 
-Local and Docker runs without `GOBLIN_PASSWORD_HASH_FILE` continue to generate
-and accept the private workspace access code. When the variable is set, Goblin
-uses only the configured password verifier and never falls back to an access
-code. The password is compared exactly, including spaces. A missing or invalid
+Local runs without `GOBLIN_PASSWORD_HASH_FILE` use the prefilled default password
+when both the listener and public origin are loopback. Other runs, including
+Docker's wildcard listener, require `GOBLIN_PASSWORD_HASH_FILE` to be set.
+When `GOBLIN_PASSWORD_HASH_FILE` is set, Goblin uses only the configured password
+verifier and never falls back to the local default.
+The password is compared exactly, including spaces. A missing or invalid
 verifier prevents startup. Password attempts use the existing rate limit and
 private session cookies. Restart Goblin after changing the verifier to load the
 new password and invalidate current browser sessions.
@@ -284,7 +309,7 @@ and backups must be protected accordingly. The HTTP server never serves it.
 Don't copy it into images, source control, chat messages, or shared volumes.
 
 The backend doesn't log RPC payloads, API keys, device codes, upstream error
-bodies, or the workspace access code. It discards raw Codex stderr because it may
+bodies, or configured passwords. It discards raw Codex stderr because it may
 contain authentication details. Error messages give safe retry guidance.
 
 ## Automated checks

@@ -8,9 +8,16 @@ namespace Goblin.Web;
 
 internal sealed class OwnerPassword(byte[] salt, byte[] digest)
 {
+    public static OwnerPassword Create(string value)
+    {
+        byte[] salt = RandomNumberGenerator.GetBytes(16);
+        return new(salt, Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(value), salt,
+            600_000, HashAlgorithmName.SHA256, 32));
+    }
+
     public static async Task<OwnerPassword> LoadAsync(string path)
     {
-        // An explicitly configured file is mandatory. Never fall back to a token
+        // An explicitly configured file is mandatory. Never use the local default
         // when a password secret is missing, unreadable, or malformed.
         if (new FileInfo(path).Length > 256) throw InvalidHash();
         string[] fields = (await File.ReadAllTextAsync(path)).Trim().Split('$');

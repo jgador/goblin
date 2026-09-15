@@ -28,7 +28,7 @@ K3s, and routes the assigned Azure hostname to Goblin through Traefik. A custom
 minutes; deployment waits until the application responds through that route.
 
 For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
-There is no port number or workspace-token lookup. HTTPS and certificates remain
+Enter your Goblin password to open the workspace. HTTPS and certificates remain
 a separate setup step; HTTP traffic, including passwords and sessions, is unencrypted.
 
 ## Verify

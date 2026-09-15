@@ -11,7 +11,8 @@ const passwordHashFile = resolve(dataDir, "owner-password");
 await writeFile(passwordHashFile, execFileSync("python3", ["deploy/azure/hash-password.py"], {
   input: "a", // Test-only password: confirm there is no minimum length.
 }), { mode: 0o600 });
-const app = await startBackend({ dataDir, passwordHashFile, publicOrigin: "http://127.0.0.1:8798", listenUrl: "http://127.0.0.1:8798" });
+const app = await startBackend({ dataDir, passwordHashFile,
+  publicOrigin: "http://127.0.0.1:8798", listenUrl: "http://127.0.0.1:8798" });
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, async () => {
   await app.close();
   await rm(dataDir, { recursive: true, force: true });

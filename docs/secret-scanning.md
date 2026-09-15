@@ -66,7 +66,7 @@ removed when the scan finishes. Exit status is `0` for no findings, `1` for
 candidates needing review, and `2` for an incomplete scan or tool error.
 
 Ignored, untracked runtime files such as `.goblin-auth/`, `.goblin-browser-test/`,
-`auth.json`, `owner-token`, `owner-password`, and `.env` are not opened. Tracked files are checked
+`auth.json`, `owner-password`, and `.env` are not opened. Tracked files are checked
 even when an ignore rule matches them. Symlinks are scanned as their link text,
 without following the target. Unmerged entries and submodules require separate
 review and cause the scan to fail.

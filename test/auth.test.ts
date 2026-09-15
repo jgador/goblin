@@ -5,12 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { request as httpRequest, type RequestOptions } from "node:http";
-import { startBackend } from "./backend.js";
+import { startBackend, writePasswordHash } from "./backend.js";
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 import type { ApiFailure, ApiResponses } from "../shared/api.js";
 
 const origin = "http://localhost:8787";
 const exampleKey = "sk-test-ONLY-A-FAKE-KEY-1234567890";
+const workspacePassword = "test-workspace-password";
 
 interface TestOptions {
   dataDir?: string;
@@ -35,7 +36,9 @@ interface TestResponse<Path extends string> {
 async function start(t: TestContext, options: TestOptions = {}) {
   const dataDir = options.dataDir || await mkdtemp(join(tmpdir(), "goblin-test-"));
   const publicOrigin = options.publicOrigin ?? origin;
-  const app = await startBackend({ dataDir, publicOrigin, allowInsecureHttp: options.allowInsecureHttp,
+  const passwordHashFile = join(dataDir, "owner-password");
+  await writePasswordHash(passwordHashFile, workspacePassword);
+  const app = await startBackend({ dataDir, passwordHashFile, publicOrigin, allowInsecureHttp: options.allowInsecureHttp,
     scenario: options.scenario, timeoutMs: options.timeoutMs || 2000,
     verification: options.verification, promptTimeoutMs: options.promptTimeoutMs });
   const url = app.url;
@@ -83,28 +86,30 @@ async function start(t: TestContext, options: TestOptions = {}) {
     });
   }
   async function unlock() {
-    const response = await request("/api/session", { token: (await readFile(app.tokenFile, "utf8")).trim() });
+    const response = await request("/api/session", { password: workspacePassword });
     assert.equal(response.status, 200);
     const setCookie = response.headers.get("set-cookie");
     assert.ok(setCookie);
     cookie = setCookie.split(";")[0];
     return response;
   }
-  return { app, dataDir, request, unlock, close, url };
+  return { app, dataDir, passwordHashFile, request, unlock, close, url };
 }
 
 test("workspace access is required, cookies are private, and credential files aren't served", async (t) => {
   const ctx = await start(t);
   assert.equal((await ctx.request("/api/status")).status, 401);
   assert.equal((await ctx.request("/api/auth/chatgpt", {})).status, 401);
-  assert.equal((await ctx.request("/api/session", { token: "wrong" })).status, 401);
+  const incorrect = await ctx.request("/api/session", { password: "wrong" });
+  assert.equal(incorrect.status, 401);
+  assert.equal(incorrect.error.code, "invalid_password");
   const session = await ctx.unlock();
   assert.match(session.headers.get("set-cookie") ?? "", /HttpOnly/i);
   assert.match(session.headers.get("set-cookie") ?? "", /SameSite=Strict/i);
   assert.equal((await ctx.request("/codex/auth.json")).status, 404);
-  assert.equal((await ctx.request("/owner-token")).status, 404);
+  assert.equal((await ctx.request("/owner-password")).status, 404);
   assert.equal((await ctx.request("/api/rpc", { method: "turn/start" })).status, 404);
-  assert.equal((await stat(ctx.app.tokenFile)).mode & 0o777, 0o600);
+  assert.equal((await stat(ctx.passwordHashFile)).mode & 0o777, 0o600);
   assert.equal((await stat(join(ctx.dataDir, "codex"))).mode & 0o777, 0o700);
 });
 
@@ -140,8 +145,8 @@ test("public HTTP opt-in preserves host/origin checks and HTTPS keeps Secure coo
 
 test("workspace unlock attempts are rate limited", async (t) => {
   const ctx = await start(t);
-  for (let attempt = 0; attempt < 5; attempt++) assert.equal((await ctx.request("/api/session", { token: "wrong" })).status, 401);
-  const blocked = await ctx.request("/api/session", { token: "wrong" });
+  for (let attempt = 0; attempt < 5; attempt++) assert.equal((await ctx.request("/api/session", { password: "wrong" })).status, 401);
+  const blocked = await ctx.request("/api/session", { password: "wrong" });
   assert.equal(blocked.status, 429);
   assert.equal(blocked.headers.get("retry-after"), "60");
 });

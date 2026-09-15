@@ -17,4 +17,4 @@ keywords = ["sk-proj-", "sk-svcacct-", "sk-admin-"]
 [[rules]]
 id = "goblin-private-auth-file"
 description = "Private Goblin or Codex authentication file"
-path = '''(?:^|/)(?:\.goblin-auth|\.goblin-browser-test)/|(?:^|/)(?:auth\.json(?:\.[^/]*)?|owner-(?:token|password)(?:\.[^/]*)?)$'''
+path = '''(?:^|/)(?:\.goblin-auth|\.goblin-browser-test)/|(?:^|/)(?:auth\.json(?:\.[^/]*)?|owner-password(?:\.[^/]*)?)$'''
