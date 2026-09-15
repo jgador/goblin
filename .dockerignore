@@ -4,11 +4,13 @@
 .artifacts
 assets
 node_modules
+**/node_modules
 dist
+**/dist
 **/bin
 **/obj
-test
 tests
+backend/tests
 docs
 deploy
 *.log

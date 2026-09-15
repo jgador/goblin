@@ -26,14 +26,15 @@ are `inter-18pt-medium.ttf`, `inter-18pt-semibold.ttf`, and
 `inter-18pt-extrabold.ttf`. The source document and report retain their original
 designer metadata.
 
-The active UI asset is `../../public/assets/branding/icon.svg`, an unchanged copy
+The active UI asset is `../../frontend/public/assets/branding/icon.svg`, an unchanged copy
 of `svg/icon-light.svg`. It supplies both the header and favicon.
 The header uses CSS sizing with automatic height to preserve the SVG's proportions
 and sharpness. The UI currently uses the light-background artwork only.
 
 Keep original design resources here. Put assets used by the website under
-`public/assets/`, and register them in `scripts/copy-assets.ts` and the static-file
-map in `src/server.ts`. The build copies those runtime files into `dist/public/`.
+`frontend/public/assets/`, and register their browser URLs in the static-file
+map in `backend/src/Goblin.Web/GoblinApplication.cs`. The frontend build copies
+those runtime files into `frontend/dist/assets/` automatically.
 This design library is excluded from the Docker build context.
 
 macOS packaging metadata (`.DS_Store` and `__MACOSX`) from the import is preserved
