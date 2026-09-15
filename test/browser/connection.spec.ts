@@ -6,7 +6,7 @@ const reply = { reply: "Hidden test reply", model: "test-model", durationMs: 10,
 
 async function savedAccount(page: Page, account: Account = chatgpt) {
   const state: AuthenticationState = { account, login: null, notice: null, verification: null, runtimeReady: true };
-  await page.route("**/api/session", (route) => route.fulfill({ json: { authenticated: true, usesPassword: true } }));
+  await page.route("**/api/session", (route) => route.fulfill({ json: { authenticated: true } }));
   await page.route("**/api/status", (route) => route.fulfill({ json: state }));
   return state;
 }

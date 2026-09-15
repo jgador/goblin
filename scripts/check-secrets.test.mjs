@@ -111,8 +111,8 @@ test("force-added ignored files remain in scope", (t) => {
 
 test("private auth filenames block even unfamiliar credential formats", (t) => {
   const repo = fixture(t);
-  repo.write(".goblin-auth/owner-token", "synthetic-short-value");
-  repo.git("add", "--force", ".goblin-auth/owner-token");
+  repo.write(".goblin-auth/owner-password", "synthetic-short-value");
+  repo.git("add", "--force", ".goblin-auth/owner-password");
   detected(repo.scan("staged"), "synthetic-short-value", "staged", "goblin-private-auth-file");
 });
 

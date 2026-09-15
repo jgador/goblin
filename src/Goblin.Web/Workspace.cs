@@ -14,22 +14,23 @@ namespace Goblin.Web;
 public sealed partial class Workspace
 {
     public const string CookieName = "goblin_auth_session";
+    // Public convenience password, enabled only for a loopback listener and origin.
+    private const string DefaultLocalPassword = "goblin";
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
     private readonly Lock _gate = new();
-    private readonly byte[]? _ownerHash;
-    private readonly OwnerPassword? _ownerPassword;
+    private readonly OwnerPassword _ownerPassword;
     private readonly OrderedDictionary<string, DateTimeOffset> _sessions = [];
     private readonly List<DateTimeOffset> _failedUnlocks = [];
     private readonly HashSet<string> _allowedOrigins = [];
     private readonly HashSet<string> _allowedHosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Uri _origin;
 
-    private Workspace(string dataDir, string publicOrigin, string? token, OwnerPassword? password = null, bool allowInsecureHttp = false)
+    private Workspace(string dataDir, string publicOrigin, OwnerPassword password, bool allowInsecureHttp = false,
+        bool usesLocalDefaultPassword = false)
     {
         DataDirectory = dataDir;
-        TokenFile = Path.Combine(dataDir, "owner-token");
-        _ownerHash = token is null ? null : Hash(token);
         _ownerPassword = password;
+        LocalDefaultPassword = usesLocalDefaultPassword ? DefaultLocalPassword : null;
         _origin = ValidateOrigin(publicOrigin, allowInsecureHttp);
         _allowedOrigins.Add(_origin.GetLeftPart(UriPartial.Authority));
         if (IsLoopback(_origin))
@@ -39,8 +40,8 @@ public sealed partial class Workspace
     }
 
     public string DataDirectory { get; }
-    public string TokenFile { get; }
-    public bool UsesPassword => _ownerPassword is not null;
+    public string? LocalDefaultPassword { get; }
+    public SessionState Session(bool authenticated) => new(authenticated, LocalDefaultPassword);
     public string CodexHome => Path.Combine(DataDirectory, "codex");
     public string Home => Path.Combine(DataDirectory, "home");
     public string WorkingDirectory => Path.Combine(DataDirectory, "workspace");
@@ -54,13 +55,16 @@ public sealed partial class Workspace
         return origin;
     }
 
-    private static bool IsLoopback(Uri uri) => uri.Host is "localhost" or "127.0.0.1" or "[::1]";
+    internal static bool IsLoopback(Uri uri) => uri.Host is "localhost" or "127.0.0.1" or "[::1]";
     private static byte[] Hash(string value) => SHA256.HashData(Encoding.UTF8.GetBytes(value));
-    private static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    private static string NewSessionToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    public static async Task<Workspace> OpenAsync(string directory, string publicOrigin, string? passwordHashFile = null, bool allowInsecureHttp = false)
+    public static async Task<Workspace> OpenAsync(string directory, string publicOrigin, string? passwordHashFile = null, bool allowInsecureHttp = false,
+        bool useLocalDefaultPassword = false)
     {
-        ValidateOrigin(publicOrigin, allowInsecureHttp);
+        Uri origin = ValidateOrigin(publicOrigin, allowInsecureHttp);
+        if (passwordHashFile is null && !(useLocalDefaultPassword && IsLoopback(origin)))
+            throw new InvalidOperationException("A Goblin password is required outside localhost. Set GOBLIN_PASSWORD_HASH_FILE to a password verifier file.");
         var data = Path.GetFullPath(directory);
         foreach (var path in new[] { data, Path.Combine(data, "codex"), Path.Combine(data, "home"), Path.Combine(data, "workspace") })
         {
@@ -72,21 +76,9 @@ public sealed partial class Workspace
             }
         }
         if (passwordHashFile is not null)
-            return new Workspace(data, publicOrigin, null, await OwnerPassword.LoadAsync(passwordHashFile), allowInsecureHttp);
-
-        var tokenFile = Path.Combine(data, "owner-token");
-        try
-        {
-            var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
-            if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            await using var stream = new FileStream(tokenFile, options);
-            await stream.WriteAsync(Encoding.UTF8.GetBytes(NewToken() + "\n"));
-        }
-        catch (IOException) when (File.Exists(tokenFile)) { }
-        var token = (await File.ReadAllTextAsync(tokenFile)).Trim();
-        if (token.Length is < 32 or > 256) throw new InvalidOperationException("The owner-token file is invalid.");
-        if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(tokenFile, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        return new Workspace(data, publicOrigin, token, allowInsecureHttp: allowInsecureHttp);
+            return new Workspace(data, publicOrigin, await OwnerPassword.LoadAsync(passwordHashFile), allowInsecureHttp);
+        return new Workspace(data, publicOrigin, OwnerPassword.Create(DefaultLocalPassword), allowInsecureHttp,
+            usesLocalDefaultPassword: true);
     }
 
     public void ValidateRequest(HttpRequest request)
@@ -110,7 +102,7 @@ public sealed partial class Workspace
         }
     }
 
-    public SessionState Unlock(string? token, HttpResponse response)
+    public SessionState Unlock(string? password, HttpResponse response)
     {
         lock (_gate)
         {
@@ -121,23 +113,19 @@ public sealed partial class Workspace
                 response.Headers.RetryAfter = "60";
                 throw new PublicError("too_many_attempts", "Too many attempts. Wait a minute, then try again.", 429);
             }
-            bool valid = token is not null && (_ownerPassword is not null
-                ? _ownerPassword.Verify(token)
-                : CryptographicOperations.FixedTimeEquals(Hash(token.Trim()), _ownerHash!));
+            bool valid = password is not null && _ownerPassword.Verify(password);
             if (!valid)
             {
                 _failedUnlocks.Add(now);
-                throw new PublicError("invalid_workspace_code", UsesPassword
-                    ? "The Goblin password is incorrect."
-                    : "The workspace access code is incorrect.", 401);
+                throw new PublicError("invalid_password", "The Goblin password is incorrect.", 401);
             }
             _failedUnlocks.Clear();
             foreach (var id in _sessions.Where(x => x.Value <= now).Select(x => x.Key).ToArray()) _sessions.Remove(id);
             if (_sessions.Count >= 32) _sessions.RemoveAt(0);
-            var session = NewToken();
+            var session = NewSessionToken();
             _sessions.Add(Convert.ToHexString(Hash(session)), now + SessionLifetime);
             SetCookie(response, session, SessionLifetime);
-            return new(true, UsesPassword);
+            return Session(true);
         }
     }
 
@@ -145,7 +133,7 @@ public sealed partial class Workspace
     {
         lock (_gate) _sessions.Remove(id);
         SetCookie(response, "", TimeSpan.Zero);
-        return new(false, UsesPassword);
+        return Session(false);
     }
 
     private void SetCookie(HttpResponse response, string value, TimeSpan lifetime) => response.Cookies.Append(CookieName, value, new CookieOptions

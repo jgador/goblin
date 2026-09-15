@@ -19,7 +19,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
 });
 Console.WriteLine($"Goblin: {origin}");
 var workspace = app.Services.GetRequiredService<Workspace>();
-Console.WriteLine(workspace.UsesPassword
-    ? "Workspace access: use your Goblin password."
-    : $"Workspace access code file: {workspace.TokenFile}");
+Console.WriteLine(workspace.LocalDefaultPassword is not null
+    ? "Workspace access: select Open workspace to use the prefilled local password."
+    : "Workspace access: use your Goblin password.");
 await app.RunAsync();

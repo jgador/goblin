@@ -153,7 +153,8 @@ public sealed class CodexClientTests
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "schemas/codex"))) root = root.Parent;
-            Workspace workspace = await Workspace.OpenAsync(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}"), "http://localhost:8787");
+            Workspace workspace = await Workspace.OpenAsync(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}"),
+                "http://localhost:8787", useLocalDefaultPassword: true);
             return new(workspace, new(new()
             {
                 CodexHome = workspace.CodexHome,

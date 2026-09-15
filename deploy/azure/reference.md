@@ -46,8 +46,8 @@ remove this extension-managed copy.
 
 The preview manifest mounts the Secret read-only and configures
 `GOBLIN_PASSWORD_HASH_FILE`. If the Secret is missing, the pod cannot start; if
-its verifier is invalid, Goblin refuses to start. An old `owner-token` on the
-preview data volume no longer grants access when the password is configured.
+its verifier is invalid, Goblin refuses to start. Workspace login uses only the
+configured password.
 
 Existing installations in `goblin-preview` require a
 [namespace migration](../../docs/authentication-preview.md#migrate-from-earlier-deployment-names).
@@ -430,4 +430,4 @@ both review validation and the final key handoff in a live portal deployment.
 Also verify password masking, matching confirmation, length validation, and
 unlocking the installed preview with the deployment password. Automated tests
 exercise the rendered bootstrap with mocked infrastructure commands, verifier
-compatibility with the C# backend, token rejection, and password persistence.
+compatibility with the C# backend, incorrect-password rejection, and password persistence.

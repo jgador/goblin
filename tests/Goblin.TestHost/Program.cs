@@ -69,7 +69,7 @@ if (config.RealCodex)
     return;
 }
 await app.StartAsync();
-Console.WriteLine(JsonSerializer.Serialize(new { url = app.Urls.Single(), tokenFile = app.Services.GetRequiredService<Workspace>().TokenFile }));
+Console.WriteLine(JsonSerializer.Serialize(new { url = app.Urls.Single() }));
 // EOF or a newline from the test harness gracefully stops both server and child process.
 await Console.In.ReadLineAsync();
 await app.Services.GetRequiredService<CodexClient>().DisposeAsync();

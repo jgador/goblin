@@ -12,6 +12,7 @@ for (const container of document.querySelectorAll("[data-device-login-help]")) {
   container.append(byId("device-login-help-template", HTMLTemplateElement).content.cloneNode(true));
 }
 let unlocked = false;
+let localDefaultPassword: string | undefined;
 let busy = false;
 let state: AuthenticationState | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -40,7 +41,10 @@ function showPanel(name: Panel) {
   byId("lock-button").hidden = !unlocked;
   if (visiblePanel !== name) {
     visiblePanel = name;
-    if (name === "locked") byId("workspace-code").focus();
+    if (name === "locked") {
+      byId("workspace-password", HTMLInputElement).value = localDefaultPassword ?? "";
+      byId("workspace-password").focus();
+    }
     if (name === "pending") byId("verification-link").focus();
   }
 }
@@ -235,10 +239,10 @@ async function poll() {
 
 byId("unlock-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  const token = byId("workspace-code", HTMLInputElement).value;
-  byId("workspace-code", HTMLInputElement).value = "";
+  const password = byId("workspace-password", HTMLInputElement).value;
+  byId("workspace-password", HTMLInputElement).value = "";
   action("Opening workspace…", async () => {
-    await api("/api/session", { token });
+    await api("/api/session", { password });
     unlocked = true;
     showPanel("connect");
     render(await api("/api/status"));
@@ -286,13 +290,10 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && un
 try {
   const session = await api("/api/session");
   unlocked = session.authenticated;
-  if (session.usesPassword) {
-    byId("workspace-code-label").textContent = "Goblin password";
-    byId("unlock-description").textContent = "Enter the password chosen when this Goblin workspace was set up.";
-    byId("unlock-footnote").textContent = "This password opens Goblin. You’ll connect your ChatGPT account or API key next.";
-    const input = byId("workspace-code", HTMLInputElement);
-    input.autocomplete = "current-password";
-    input.maxLength = 128;
+  localDefaultPassword = session.localDefaultPassword;
+  if (localDefaultPassword !== undefined) {
+    byId("unlock-description").textContent = "The local password is filled in. Select Open workspace to continue.";
+    byId("workspace-password", HTMLInputElement).autocomplete = "off";
   }
   if (unlocked) { showPanel("connect"); render(await api("/api/status")); }
   else showPanel("locked");

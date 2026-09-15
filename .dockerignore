@@ -20,8 +20,8 @@ test-results
 **/.env.*
 **/auth.json
 **/auth.json.*
-**/owner-token
-**/owner-token.*
+**/owner-password
+**/owner-password.*
 **/*.pem
 **/*.key
 **/*.p12
