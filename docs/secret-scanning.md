@@ -80,6 +80,16 @@ review, including these gaps and credentials with unfamiliar formats.
 
 ## Handling a finding
 
+The PostgreSQL application password in `backend/src/Goblin.Web/appsettings.json`
+is intentionally tracked for Goblin's deployment configuration. `.gitleaks.toml`
+allows the `Goblin` connection entry with the `goblin-postgres:5432` endpoint,
+`goblin` database, `goblin_app` user, and a 64-character lowercase hexadecimal
+password. It accepts both the plain value and the quoted value written by setup.
+Both the path and the complete connection line must match. This exception applies
+only to `generic-api-key`; other configuration fields, administrator connections,
+and provider-specific detections remain checked. This is an intentional credential
+exception, not a false-positive classification.
+
 Review the reported location locally. Replace real credentials with runtime
 configuration, remove private files from the index, and restage corrected files
 before rescanning. If a real key entered Git history, revoke or rotate it;

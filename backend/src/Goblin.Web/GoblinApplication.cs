@@ -4,10 +4,12 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Persistence;
 using Goblin.Web.Codex;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -43,9 +45,16 @@ public static class GoblinApplication
             options.AllowInsecureHttp, useLocalDefaultPassword: localListener);
         var runtimeOptions = new CodexOptions { CodexHome = workspace.CodexHome, Home = workspace.Home, Workspace = workspace.WorkingDirectory };
         runtimeOptions = options.ConfigureCodex?.Invoke(runtimeOptions) ?? runtimeOptions;
-        WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions { Args = [], ApplicationName = typeof(GoblinApplication).Assembly.FullName });
+        WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions
+        {
+            Args = [],
+            ApplicationName = typeof(GoblinApplication).Assembly.FullName,
+            ContentRootPath = AppContext.BaseDirectory
+        });
         // Request and upstream details can contain credentials. Log only explicit safe startup messages.
         builder.Logging.ClearProviders();
+        string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
+        if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
         builder.WebHost.UseUrls(options.ListenUrl);
         builder.WebHost.ConfigureKestrel(server =>
         {

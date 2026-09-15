@@ -21,6 +21,8 @@ test-results
 **/*.env
 **/.env.*
 **/auth.json
+**/appsettings.json
+!backend/src/Goblin.Web/appsettings.json
 **/auth.json.*
 **/owner-password
 **/owner-password.*

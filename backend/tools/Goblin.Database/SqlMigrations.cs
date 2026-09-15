@@ -1,0 +1,81 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Threading.Tasks;
+using Npgsql;
+
+namespace Goblin.Database;
+
+public static class SqlMigrations
+{
+    public static async Task ApplyAsync(string connectionString, string directory, TextWriter output)
+    {
+        string[] files = Directory.GetFiles(directory, "*.sql").Order(StringComparer.Ordinal).ToArray();
+        if (files.Length == 0) throw new InvalidOperationException("No SQL migrations found.");
+
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        // Serialize schema updates. Closing this dedicated connection releases
+        // the session lock even if a migration or the process fails.
+        await using var advisoryLock = new NpgsqlCommand("SELECT pg_advisory_lock(716352018);", connection);
+        await advisoryLock.ExecuteNonQueryAsync();
+        try
+        {
+            await using var journal = new NpgsqlCommand("""
+                CREATE SCHEMA IF NOT EXISTS goblin_meta;
+                CREATE TABLE IF NOT EXISTS goblin_meta.schema_migrations (
+                    name text PRIMARY KEY,
+                    sha256 text NOT NULL,
+                    applied_at timestamp with time zone NOT NULL DEFAULT now()
+                );
+                """, connection);
+            await journal.ExecuteNonQueryAsync();
+
+            var applied = new Dictionary<string, string>(StringComparer.Ordinal);
+            await using (var query = new NpgsqlCommand("SELECT name, sha256 FROM goblin_meta.schema_migrations ORDER BY name;", connection))
+            await using (NpgsqlDataReader reader = await query.ExecuteReaderAsync())
+                while (await reader.ReadAsync()) applied.Add(reader.GetString(0), reader.GetString(1));
+
+            var scripts = new Dictionary<string, (string Sql, string Hash)>(StringComparer.Ordinal);
+            foreach (string file in files)
+            {
+                byte[] bytes = await File.ReadAllBytesAsync(file);
+                scripts.Add(Path.GetFileName(file), (System.Text.Encoding.UTF8.GetString(bytes), Convert.ToHexString(SHA256.HashData(bytes))));
+            }
+            foreach ((string name, string hash) in applied)
+            {
+                if (!scripts.TryGetValue(name, out var script) || script.Hash != hash)
+                {
+                    await output.WriteLineAsync($"Applied migration was removed or changed: {name}. Restore it and add a new migration.");
+                    throw new InvalidOperationException("Migration history differs from source.");
+                }
+            }
+
+            string? lastApplied = applied.Keys.Order(StringComparer.Ordinal).LastOrDefault();
+            foreach ((string name, (string sql, string hash)) in scripts.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            {
+                if (applied.ContainsKey(name)) continue;
+                if (lastApplied is not null && StringComparer.Ordinal.Compare(name, lastApplied) <= 0)
+                    throw new InvalidOperationException("New migrations must follow existing migrations.");
+
+                await output.WriteLineAsync($"Applying {name}");
+                await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync();
+                await using var command = new NpgsqlCommand(sql, connection, transaction);
+                await command.ExecuteNonQueryAsync();
+                await using var record = new NpgsqlCommand("INSERT INTO goblin_meta.schema_migrations (name, sha256) VALUES (@name, @hash);", connection, transaction);
+                record.Parameters.AddWithValue("name", name);
+                record.Parameters.AddWithValue("hash", hash);
+                await record.ExecuteNonQueryAsync();
+                await transaction.CommitAsync();
+            }
+            await output.WriteLineAsync("Database schema is up to date.");
+        }
+        finally
+        {
+            await using var unlock = new NpgsqlCommand("SELECT pg_advisory_unlock(716352018);", connection);
+            await unlock.ExecuteNonQueryAsync();
+        }
+    }
+}

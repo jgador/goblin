@@ -11,6 +11,9 @@ backend/
     Http/                 HTTP contracts and public errors
     Codex/                Child process, JSONL transport, and prompt execution
   src/Goblin.Protocol/     Generated Codex protocol models and serialization
+  src/Goblin.Persistence/  Database-first EF Core context, entities, and registration
+  database/migrations/    Ordered SQL schema changes
+  tools/Goblin.Database/  SQL migration runner and EF tooling host
   tests/                  .NET tests and the test-only application host
   schemas/codex/           Checked-in inputs to protocol generation
   scripts/                Protocol generator
@@ -85,3 +88,6 @@ Keep original artwork in `assets/branding/` and copy only the assets used by the
 browser into `frontend/public/assets/`. Codex schemas belong under
 `backend/schemas/codex/`; Goblin HTTP contracts belong to the backend's `Http/`
 folder and `frontend/src/api/contracts.ts`. They describe different APIs.
+
+For PostgreSQL setup, SQL changes, and regenerating the EF Core classes after
+adding tables, see the [database guide](database.md).

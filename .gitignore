@@ -13,6 +13,8 @@ test-results/
 goblin-auth*.tar
 
 # Secrets, including copies outside the default data directory
+appsettings.json
+!/backend/src/Goblin.Web/appsettings.json
 auth.json
 auth.json.*
 owner-password
