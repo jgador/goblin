@@ -54,6 +54,12 @@ for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for architecture,
 model regeneration, and direct .NET commands.
 
+An interactive [work experience preview](docs/work-experience-preview.md) is
+available at http://localhost:8787/work, or through **Explore work preview** on
+the connection page. Try conversations, optional work tracking, decisions,
+activity, and result approval. This is a UI prototype with simulated replies and
+sample work that resets on refresh; it does not run agents or persist work yet.
+
 To check for API keys and other secrets before committing, install the free local
 Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 `npm run secrets:scan` for a manual check of the index and working tree, or
