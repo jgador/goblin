@@ -9,9 +9,9 @@ a{color:var(--green);text-underline-offset:3px}
 button{cursor:pointer}
 button:disabled{opacity:.55;cursor:wait}
 button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #79a557;outline-offset:4px}
-.topbar{padding:26px 42px;display:flex;justify-content:space-between;align-items:center;gap:20px}
-.brand{display:flex;align-items:center;gap:14px;flex-shrink:0;text-decoration:none}
-.brand-logo{display:block;width:72px;height:auto}
+.topbar{padding:26px 42px;display:flex;justify-content:flex-end;align-items:center}
+.brand{display:inline-flex;align-items:center;gap:7px;flex-shrink:0;color:inherit;text-decoration:none}
+.brand-logo{display:block;width:24px;height:auto}
 main{width:100%;max-width:520px;margin:42px auto 50px;padding:0 24px;flex:1}
 .intro{margin-bottom:28px}
 .eyebrow,.step{font-size:10px;letter-spacing:.16em;font-weight:700;color:#6b7e60;margin:0 0 17px}
@@ -84,9 +84,9 @@ input::placeholder{color:#a0a99a}
 .message.info{background:#f1f5eb;border-color:#dde6d2;color:#5b6f4a}
 .working,.loading{font-size:12px;color:var(--muted)}
 .working{margin:18px 0 0}
-footer{font-size:10px;color:#929b8b;padding:0 24px 22px;text-align:center}
-footer span{padding:0 7px;color:#bdc5b7}
+footer{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;font-size:10px;color:#929b8b;padding:0 24px 22px;text-align:center}
+.footer-divider{color:#bdc5b7}
 @keyframes pulse{50%{opacity:.35}}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
-@media(max-width:520px){.topbar{padding:20px 24px}.brand{gap:10px}.brand-logo{width:60px}main{margin-top:27px}.card{padding:24px}#device-code{font-size:20px;letter-spacing:1px}.account-row{align-items:flex-start}.account-detail{max-width:210px}}
+@media(max-width:520px){.topbar{padding:20px 24px}main{margin-top:27px}.card{padding:24px}#device-code{font-size:20px;letter-spacing:1px}.account-row{align-items:flex-start}.account-detail{max-width:210px}}
