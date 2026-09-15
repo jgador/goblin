@@ -75,6 +75,6 @@ Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses
 `frontend/public/assets/branding/icon.svg`, copied from the light-background, icon-only
-SVG, for both the favicon and header. Keep this asset as a vector and size the
-header logo with CSS to preserve its proportions and sharpness on high-density
+SVG, for both the favicon and interface branding. Keep this asset as a vector and size
+logos with CSS to preserve their proportions and sharpness on high-density
 screens.
