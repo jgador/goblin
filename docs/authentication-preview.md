@@ -17,8 +17,9 @@ npm start
 `npm start` builds the C# backend and TypeScript browser assets, then starts
 the ASP.NET Core Minimal API host. After editing sources, restart it to rebuild.
 To build separately, run `npm run build`, then launch with
-`dotnet src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll`.
-Browser assets in `dist/` and .NET `bin/` and `obj/` output are ignored by Git.
+`dotnet backend/src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll`.
+Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
+`obj/` output are ignored by Git.
 
 Open **http://localhost:8787** and click **Open workspace**. When both the listener
 and browser origin use loopback addresses, Goblin prefills the local default
@@ -326,7 +327,7 @@ The test commands build first. `npm test` requires Python 3 for the deterministi
 schema-generation check, then runs .NET serialization/transport tests and the HTTP
 integration tests against the C# host. Type checking also covers tests and scripts.
 Playwright loads its TypeScript configuration and browser tests directly. The browser module uses
-only type imports from `shared/api.ts`, so it needs no client framework or bundler.
+only type imports from `frontend/src/api/contracts.ts`, so it needs no client framework or bundler.
 
 The integration tests exercise the HTTP and JSON-RPC paths with a fake Codex
 process: login notifications, cancellation, expiry, persistence, logout,

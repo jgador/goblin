@@ -36,8 +36,8 @@ account or workspace data and needs no provider connection. Existing session
 checks and authenticated APIs are unchanged. Future integration of real work
 must use authenticated APIs and durable server-side state.
 
-The browser code lives in `public/work/app.ts`. The existing TypeScript build
-emits its JavaScript; `scripts/copy-assets.ts` copies the HTML and CSS.
+The browser code lives in `frontend/src/work/app.ts`. The existing TypeScript build
+emits its JavaScript; `frontend/scripts/copy-assets.mjs` copies the HTML and CSS.
 `GoblinApplication` serves the explicit `/work`, `/work/`,
 `/work/app.js`, and `/work/styles.css` routes.
 
@@ -49,7 +49,7 @@ remains unchanged.
 
 `npm run typecheck` checks TypeScript and the .NET build. After a successful
 `npm run build`, run
-`npx playwright test test/browser/work.spec.ts` for the preview journeys,
+`npx playwright test tests/e2e/work.spec.ts` for the preview journeys,
 mobile navigation, content-security-policy checks, and escaped user input.
 The browser fixture uses the existing simulated backend and never contacts
 OpenAI.

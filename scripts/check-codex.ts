@@ -10,7 +10,7 @@ import { once } from "node:events";
 const dataDir = await mkdtemp(join(tmpdir(), "goblin-codex-check-"));
 try {
   for (const scenario of ["storage", "restore"]) {
-    const child = spawn("dotnet", [resolve("tests/Goblin.TestHost/bin/Debug/net10.0/Goblin.TestHost.dll"),
+    const child = spawn("dotnet", [resolve("backend/tests/Goblin.TestHost/bin/Debug/net10.0/Goblin.TestHost.dll"),
       JSON.stringify({ root: process.cwd(), dataDir, scenario, realCodex: true, timeoutMs: 20000 })], { stdio: "inherit" });
     const [code] = await once(child, "exit");
     if (code !== 0) throw new Error("The pinned Codex storage check failed.");

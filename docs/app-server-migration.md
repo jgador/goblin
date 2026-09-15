@@ -9,11 +9,11 @@ limits remain in place.
 
 | Layer | Owns |
 | --- | --- |
-| `src/Goblin.Protocol` | Generated POCO records, typed unions/enums, request IDs, and `System.Text.Json` converters |
-| `src/Goblin.Web/Codex/CodexClient.cs` | Child process, isolated environment, JSONL framing, initialization, request correlation, typed notifications, timeouts, restart and shutdown |
-| `src/Goblin.Web/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
-| `src/Goblin.Web/Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |
-| `src/Goblin.Web/Workspace.cs` and `GoblinApplication.cs` | Private workspace paths, owner access, browser sessions, HTTP validation, static assets, and Minimal API routes |
+| `backend/src/Goblin.Protocol` | Generated POCO records, typed unions/enums, request IDs, and `System.Text.Json` converters |
+| `backend/src/Goblin.Web/Codex/CodexClient.cs` | Child process, isolated environment, JSONL framing, initialization, request correlation, typed notifications, timeouts, restart and shutdown |
+| `backend/src/Goblin.Web/Auth/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
+| `backend/src/Goblin.Web/Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |
+| `backend/src/Goblin.Web/Access/Workspace.cs` and `GoblinApplication.cs` | Private workspace paths, owner access, browser sessions, HTTP validation, static assets, and Minimal API routes |
 | Rust Codex App Server/Core | Credential storage/refresh, conversation history, turns, context windows, tokens, auto-compaction, model metadata, and runtime behavior |
 
 The preview has one owner and one Codex process per data directory. Each prompt
@@ -41,14 +41,14 @@ period expires. HTTP prompt cancellation requests `turn/interrupt` and then
 
 The 305 checked-in schema files are authoritative. A separate coding agent
 generated models for all 698 named definitions plus their inline variants.
-`scripts/generate-protocol.py` is deterministic, verifies the aggregate and
+`backend/scripts/generate-protocol.py` is deterministic, verifies the aggregate and
 individual schemas agree, and records input hashes. Generated models are checked
 in, so an ordinary .NET build does not require Python or a Codex installation.
 
 ```bash
-python3 scripts/generate-protocol.py --check
-python3 scripts/generate-protocol.py
-dotnet test tests/Goblin.Protocol.Tests
+python3 backend/scripts/generate-protocol.py --check
+python3 backend/scripts/generate-protocol.py
+dotnet test backend/tests/Goblin.Protocol.Tests
 ```
 
 When upgrading Codex, regenerate the schemas with the chosen official binary,
@@ -57,18 +57,18 @@ runtime pin. Models use explicit JSON property names, required fields, enum wire
 names, and converters for discriminated/mixed unions. `JsonElement` is confined
 to fields the schema leaves unconstrained, including envelope payloads; protocol
 operations and notifications use the generated typed models. See the
-[model project documentation](../src/Goblin.Protocol/README.md).
+[model project documentation](../backend/src/Goblin.Protocol/README.md).
 
 ## Build and verification
 
 ```bash
 npm ci
 npm run build                    # browser assets and .NET solution
-dotnet run --no-build --project src/Goblin.Web
+dotnet run --no-build --project backend/src/Goblin.Web
 npm test                         # schema drift, .NET tests, HTTP tests
 npm run test:codex                # official pinned Rust binary, synthetic key only
 npm run test:browser              # unchanged UI against the C# test host
-dotnet publish src/Goblin.Web -c Release -o .artifacts/publish
+dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 ```
 
 Node.js is used for browser compilation, npm's pinned Codex distribution, and test
@@ -77,7 +77,7 @@ installed official Codex executable through `GOBLIN_CODEX_COMMAND`. The Docker
 image includes the native binary and its adjacent resources, without Node.js.
 
 Migration validation first ran the original 22 TypeScript tests as a baseline.
-The HTTP scenarios were redirected to `tests/Goblin.TestHost`; API-key verifier
+The HTTP scenarios were redirected to `backend/tests/Goblin.TestHost`; API-key verifier
 and origin-validation checks moved to .NET. The fake JSONL peer now includes fields
 required by the actual schemas, rather than relying on the old partial TypeScript
 types. Additional .NET tests cover serialization, concurrent initialization,

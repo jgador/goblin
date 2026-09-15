@@ -4,6 +4,12 @@ Your self-hosted AI coworker.
 
 Goblin aims to turn everyday team conversations into completed, reviewable work.
 
+The repository separates application source into [`backend/`](backend/) (C# and
+Codex integration) and [`frontend/`](frontend/) (browser UI). Application-wide
+tests live in [`tests/`](tests/), deployment files in [`deploy/`](deploy/), and
+original artwork in [`assets/`](assets/). See the
+[repository layout](docs/repository-layout.md) for ownership and build commands.
+
 Deploy Goblin to your own Linux VM in Azure:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.portal.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2FcreateUiDefinition.json)
@@ -68,7 +74,7 @@ Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses
-`public/assets/branding/icon.svg`, copied from the light-background, icon-only
+`frontend/public/assets/branding/icon.svg`, copied from the light-background, icon-only
 SVG, for both the favicon and header. Keep this asset as a vector and size the
 header logo with CSS to preserve its proportions and sharpness on high-density
 screens.
