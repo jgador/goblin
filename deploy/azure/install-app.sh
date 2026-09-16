@@ -1,13 +1,8 @@
-# Sourced by bootstrap.sh after Kubernetes and Agent Sandbox are ready.
-# Values from ARM are encoded before embedding to avoid shell interpolation.
-goblin_hostname=$(printf '%s' '__GOBLIN_HOSTNAME_BASE64__' | base64 --decode)
-goblin_source_ref=$(printf '%s' '__GOBLIN_SOURCE_REF_BASE64__' | base64 --decode)
-if [[ ! "$goblin_hostname" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || \
-   [[ ! "$goblin_source_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]]; then
-  printf 'Invalid public hostname or Goblin source ref.\n' >&2
-  exit 1
-fi
-
+# Sourced by the background installer after Kubernetes and cluster add-ons.
+# shellcheck shell=bash
+# The worker supplies configuration and the private working directory.
+# shellcheck disable=SC2154
+step image
 stage 'Installing Docker'
 if ! docker --version >/dev/null 2>&1 || ! dockerd --version >/dev/null 2>&1; then
   # Configure this before package installation can start Docker. Preserve any
@@ -36,9 +31,12 @@ docker info >/dev/null
 stage 'Downloading Goblin'
 goblin_source_dir="$bootstrap_dir/source"
 mkdir -p "$goblin_source_dir"
-curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 300 \
-  "https://codeload.github.com/jgador/goblin/tar.gz/${goblin_source_ref}" \
-  --output "$bootstrap_dir/goblin-source.tar.gz"
+# Keep the first complete archive for this attempt across retries, even when
+# the selected branch moves. Explicit reprovisioning starts a new download.
+if [[ ! -f "$bootstrap_dir/goblin-source.tar.gz" ]]; then
+  download "https://codeload.github.com/jgador/goblin/tar.gz/${goblin_source_ref}" "$bootstrap_dir/goblin-source.tar.gz.part"
+  mv "$bootstrap_dir/goblin-source.tar.gz.part" "$bootstrap_dir/goblin-source.tar.gz"
+fi
 goblin_source_sha=$(sha256sum "$bootstrap_dir/goblin-source.tar.gz" | cut -d ' ' -f 1)
 goblin_image="localhost/goblin-auth:${goblin_source_sha}"
 # Public source files need their normal read/execute permissions when copied into
@@ -55,42 +53,60 @@ stage 'Importing Goblin into Kubernetes'
 docker save --output "$bootstrap_dir/goblin-image.tar" "$goblin_image"
 k3s ctr --namespace k8s.io images import "$bootstrap_dir/goblin-image.tar"
 
+done_step
+step deploy
 stage 'Configuring the Goblin hostname'
 # Keep a rendered overlay on the VM for inspection and later HTTPS setup.
 install -d -m 0750 /var/lib/goblin/deploy/auth /var/lib/goblin/deploy/azure/app
 cp "$goblin_source_dir/deploy/auth/"{sandbox,kustomization}.yaml /var/lib/goblin/deploy/auth/
 cp "$goblin_source_dir/deploy/azure/app/"{ingress,kustomization}.yaml /var/lib/goblin/deploy/azure/app/
-python3 - "$goblin_hostname" "$goblin_image" <<'PYTHON'
+python3 - "$goblin_hostname" "$goblin_image" "$goblin_origin" <<'PYTHON'
 from pathlib import Path
 import sys
 
 for path in Path('/var/lib/goblin/deploy/azure/app').glob('*.yaml'):
-    path.write_text(path.read_text().replace('__GOBLIN_PUBLIC_HOSTNAME__', sys.argv[1]).replace('__GOBLIN_IMAGE__', sys.argv[2]))
+    path.write_text(path.read_text().replace('__GOBLIN_PUBLIC_HOSTNAME__', sys.argv[1])
+                    .replace('__GOBLIN_IMAGE__', sys.argv[2]).replace('http://' + sys.argv[1], sys.argv[3]))
 PYTHON
 k3s kubectl apply -k /var/lib/goblin/deploy/azure/app
 # Sandbox recreates the pod from its template; replace it to load image/origin
 # changes and a new password verifier on reprovisioning. The PVC is retained.
 k3s kubectl delete pod -n goblin -l app=goblin-auth --ignore-not-found=true --wait=true
 
+done_step
+step verify
 stage 'Checking Goblin readiness'
 k3s kubectl wait --for=condition=Ready sandbox/goblin-auth -n goblin --timeout=300s
-goblin_node_ip=$(k3s kubectl get nodes -o 'jsonpath={.items[0].status.addresses[?(@.type=="InternalIP")].address}')
-# Traefik is installed asynchronously by K3s. Verify the complete local ingress
-# path with the assigned Host header, without depending on public DNS propagation.
-goblin_ready=false
-for ((attempt = 0; attempt < 60; attempt++)); do
-  if curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 10 \
-      --resolve "${goblin_hostname}:80:${goblin_node_ip}" "http://${goblin_hostname}/" \
-      --output "$bootstrap_dir/goblin-page.html" && \
-     grep -q '<title>.*Goblin</title>' "$bootstrap_dir/goblin-page.html"; then
-    goblin_ready=true
-    break
+k3s kubectl rollout status deployment/traefik -n kube-system --timeout=300s
+check_app() {
+  local address=$1 attempt url="$goblin_origin"
+  local -a route=(--header "Host: ${goblin_authority}")
+  if [[ -n "$address" ]]; then
+    route+=(--resolve "${goblin_hostname}:80:${address}")
+    url="http://${goblin_hostname}"
   fi
-  sleep 5
-done
-if [[ "$goblin_ready" != true ]]; then
-  printf 'Goblin did not become available through Traefik. Inspect the goblin pod, ingress, and kube-system Traefik pods.\n' >&2
-  exit 1
-fi
+  for ((attempt=0; attempt<60; attempt++)); do
+    if curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 10 \
+        "${route[@]}" "${url}/readyz" --output "$bootstrap_dir/goblin-ready.json" && \
+       python3 - "$bootstrap_dir/goblin-ready.json" <<'PYTHON'
+import json, sys
+try:
+    sys.exit(0 if json.load(open(sys.argv[1])).get('ready') is True else 1)
+except (ValueError, AttributeError):
+    sys.exit(1)
+PYTHON
+    then
+      if curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 10 \
+          "${route[@]}" "${url}/" --output "$bootstrap_dir/goblin-page.html" && \
+          grep -q '<title>.*Goblin</title>' "$bootstrap_dir/goblin-page.html"; then return 0; fi
+    fi
+    sleep 5
+  done
+  printf 'Goblin did not become available through Traefik. Inspect the pod, ingress, DNS and Traefik service.\n' >&2
+  return 1
+}
+# Verify through the internal Traefik service while setup still owns port 80.
+goblin_ingress_ip=$(k3s kubectl get service traefik -n kube-system -o jsonpath='{.spec.clusterIP}')
+check_app "$goblin_ingress_ip"
 printf '%s\n' "$goblin_source_sha" > /var/lib/goblin/application-source-sha256
-printf 'http://%s\n' "$goblin_hostname" > /var/lib/goblin/public-url
+done_step

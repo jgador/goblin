@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { access, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync, spawn } from "node:child_process";
+import { once } from "node:events";
+import { access, appendFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { request as httpRequest } from "node:http";
 import { join, resolve } from "node:path";
@@ -16,8 +17,8 @@ const fakePassword = "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` ca
 // and absolute system paths. Python hashing, shell quoting and secret creation
 // all run; no Azure account, Kubernetes installation, or network is needed.
 async function bootstrap(root: string, password: string, nodeState: "ready" | "delayed" | "missing" | "not-ready" = "ready",
-  application: { hostname?: string; sourceRef?: string; dockerInstalled?: boolean;
-    state?: "ready" | "docker-failed" | "build-failed" | "not-ready" | "ingress-failed" } = {}) {
+  application: { publicOrigin?: string; hostname?: string; sourceRef?: string; dockerInstalled?: boolean; bootstrapOnly?: boolean; resume?: boolean; recovery?: boolean;
+    state?: "ready" | "docker-failed" | "build-failed" | "not-ready" | "ingress-failed" | "public-failed" | "cert-failed" | "webhook-failed" } = {}) {
   const bin = join(root, "bin");
   await mkdir(bin, { recursive: true });
   const source = join(root, "archive/goblin");
@@ -42,9 +43,12 @@ if (name === 'curl') {
   const output = args[args.indexOf('--output') + 1];
   if (args.some(arg => arg.startsWith('https://codeload.github.com/'))) {
     fs.copyFileSync(path.join(root, 'source.tar.gz'), output);
-  } else if (args.includes('--resolve')) {
-    if (appState === 'ingress-failed') process.exit(22);
-    fs.copyFileSync(path.join(root, 'page.html'), output);
+  } else if (args.includes('http://127.0.0.1/setup/healthz')) {
+    fs.writeFileSync(output, JSON.stringify({ setup: true }));
+  } else if (args.some(arg => arg.startsWith('http://'))) {
+    if (appState === 'ingress-failed' || (appState === 'public-failed' && !args.some(arg => arg.endsWith(':10.43.0.80')))) process.exit(22);
+    if (args.some(arg => arg.endsWith('/readyz'))) fs.writeFileSync(output, JSON.stringify({ ready: true }));
+    else fs.copyFileSync(path.join(root, 'page.html'), output);
   } else {
     fs.writeFileSync(output, '#!/bin/sh\\nexit 0\\n');
   }
@@ -71,9 +75,28 @@ if (name === 'curl') {
   }
 } else if (name === 'systemctl') {
   fs.appendFileSync(path.join(root, 'systemctl-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args[0] === 'cat' && !fs.existsSync(path.join(root, 'etc/systemd/system', args[1]))) process.exit(1);
 } else if (name === 'k3s') {
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
-  if (args[1] === 'get' && args[2] === 'nodes') {
+  if (args[1] === 'get' && args[2] === 'service') {
+    // Model K3s reconciling its watched HelmChartConfig, including chart v40's
+    // service.spec.type setting. An ignored legacy value retains LoadBalancer.
+    const yaml = fs.readFileSync(path.join(root, 'var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml'), 'utf8');
+    fs.writeFileSync(path.join(root, 'ingress-mode'), yaml.includes('service:\\n      spec:\\n        type: ClusterIP') ? 'ClusterIP' : 'LoadBalancer');
+    process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : fs.readFileSync(path.join(root, 'ingress-mode'), 'utf8'));
+  } else if (args[1] === 'rollout' && args.includes('deployment/cert-manager-webhook') && appState === 'cert-failed') {
+    process.exit(1);
+  } else if (args[1] === 'create' && args.includes('--dry-run=server') && appState === 'webhook-failed') {
+    process.exit(1);
+  } else if (args[1] === 'get' && args[2] === 'nodes') {
+    if (args.includes('json')) {
+      process.stdout.write(JSON.stringify({ items: [{ status: { addresses: [
+        { type: 'Hostname', address: 'goblin' },
+        { type: 'InternalIP', address: 'fd00::4' },
+        { type: 'InternalIP', address: '10.20.0.4' }
+      ] } }] }));
+      process.exit(0);
+    }
     if (args.some(arg => arg.startsWith('jsonpath='))) {
       process.stdout.write('10.20.0.4');
       process.exit(0);
@@ -113,35 +136,65 @@ if (name === 'curl') {
 `, { mode: 0o700 });
   }
   const hasher = await readFile(hasherPath, "utf8");
-  const installer = await readFile("deploy/azure/install-app.sh", "utf8");
+  const paths = ["/var/lib/goblin", "/var/log/goblin-bootstrap.log", "/var/log/goblin-installer.log", "/etc/rancher/k3s", "/etc/docker", "/opt/goblin/setup", "/etc/systemd/system", "/var/lib/rancher/k3s"];
+  const remap = (script: string) => paths.reduce((text, path) => text.replaceAll(path, join(root, path.slice(1))), script);
+  const bundle = execFileSync("python3", ["-c", `
+import io, json, sys, zipfile
+source = zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()))
+output = io.BytesIO()
+with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as target:
+    for name in source.namelist():
+        text = source.read(name).decode()
+        for path in json.loads(sys.argv[2]):
+            text = text.replace(path, sys.argv[1] + path)
+        target.writestr(name, text)
+sys.stdout.buffer.write(output.getvalue())
+`, root, JSON.stringify(paths)], { input: Buffer.from(await readFile("deploy/azure/setup-bundle.b64", "utf8"), "base64") });
   let script = (await readFile("deploy/azure/bootstrap.sh", "utf8"))
-    .replace("__GOBLIN_APPLICATION_INSTALLER__", () => installer)
     .replace("__GOBLIN_PASSWORD_HASHER__", () => hasher)
     .replace("__GOBLIN_HOSTNAME_BASE64__", Buffer.from(application.hostname ?? "goblin-prod.southeastasia.cloudapp.azure.com").toString("base64"))
     .replace("__GOBLIN_SOURCE_REF_BASE64__", Buffer.from(application.sourceRef ?? "master").toString("base64"))
-    .replace("__GOBLIN_PASSWORD_BASE64__", Buffer.from(password).toString("base64"));
-  for (const path of ["/var/lib/goblin", "/var/log/goblin-bootstrap.log", "/etc/rancher/k3s", "/etc/docker"]) {
-    script = script.replaceAll(path, join(root, path.slice(1)));
-  }
+    .replace("__GOBLIN_PASSWORD_BASE64__", Buffer.from(password).toString("base64"))
+    .replace("__GOBLIN_SETUP_BUNDLE_BASE64__", bundle.toString("base64"))
+    .replace("__GOBLIN_SETUP_BUNDLE_SHA256__", "test-checksum");
+  script = remap(script);
   await mkdir(join(root, "var/log"), { recursive: true });
+  await mkdir(join(root, "etc/systemd/system"), { recursive: true });
   const scriptPath = join(root, "bootstrap.sh");
   await writeFile(scriptPath, script, { mode: 0o600 });
-  return execFileSync("/bin/sh", [scriptPath], {
+  const options = {
     cwd: root,
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOBLIN_BOOTSTRAP_TEST_DIR: root,
+      SERVICE_RESULT: application.recovery ? "signal" : "success",
+      GOBLIN_PUBLIC_ORIGIN: application.publicOrigin ?? "",
       GOBLIN_BOOTSTRAP_NODE_STATE: nodeState, GOBLIN_BOOTSTRAP_APP_STATE: application.state ?? "ready",
       GOBLIN_BOOTSTRAP_DOCKER_INSTALLED: String(application.dockerInstalled ?? true) },
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: 30_000,
-  });
+    encoding: "utf8" as const,
+    stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+    timeout: 60_000,
+  };
+  let output = application.resume ? "" : execFileSync("/bin/sh", [scriptPath], options);
+  if (!application.bootstrapOnly) {
+    // systemctl launches independently in production. Exercise the worker here
+    // separately, after verifying that the Azure extension has already returned.
+    try {
+      const workerOutput = execFileSync("bash", [join(root, "opt/goblin/setup/installer.sh"), ...(application.recovery ? ["recover"] : [])], options);
+      await appendFile(join(root, "var/log/goblin-installer.log"), workerOutput);
+      output += workerOutput;
+    } catch (error) {
+      const failure = error as { stdout: string; stderr: string };
+      await appendFile(join(root, "var/log/goblin-installer.log"), failure.stdout + failure.stderr);
+      throw error;
+    }
+  }
+  return output;
 }
 
-test("bootstrap waits for node registration after API readiness, including transient list failures", async (t) => {
+test("installer waits for node registration after API readiness, including transient list failures", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-node-delayed-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const output = await bootstrap(root, fakePassword, "delayed");
-  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "ready\n");
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "setup-ready\n");
   assert.equal(await readFile(join(root, "node-registration-attempts"), "utf8"), "4");
   const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
   const apiReady = calls.findIndex(args => args.includes("--raw=/readyz"));
@@ -153,7 +206,7 @@ test("bootstrap waits for node registration after API readiness, including trans
   assert.match(output, /Checking Kubernetes node readiness/);
 });
 
-test("bootstrap installs the application and uses Azure's hostname for both routing and origin", async (t) => {
+test("installer installs the application and uses Azure's hostname for both routing and origin", async (t) => {
   for (const hostname of ["goblin-prod.southeastasia.cloudapp.azure.com", "custom-name.westeurope.cloudapp.azure.com"]) {
     const root = await mkdtemp(join(tmpdir(), "goblin-hostname-"));
     t.after(() => rm(root, { recursive: true, force: true }));
@@ -182,11 +235,12 @@ test("bootstrap installs the application and uses Azure's hostname for both rout
     assert.ok(!calls.some(args => args[1] === "delete" && ["pvc", "namespace", "sandbox"].includes(args[2])));
     const downloads: string[][] = (await readFile(join(root, "curl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
     assert.ok(downloads.some(args => args.includes("https://codeload.github.com/jgador/goblin/tar.gz/refs/heads/master")));
-    assert.ok(downloads.some(args => args.includes(`${hostname}:80:10.20.0.4`) && args.includes(`http://${hostname}/`)));
+    assert.ok(downloads.some(args => args.includes(`${hostname}:80:10.43.0.80`) && args.includes(`http://${hostname}/`)));
+    assert.ok(downloads.some(args => args.includes(`${hostname}:80:10.20.0.4`)), "the public probe selects a single IPv4 node address");
   }
 });
 
-test("bootstrap installs Docker without dropping K3s forwarding or replacing existing daemon settings", async (t) => {
+test("installer installs Docker without dropping K3s forwarding or replacing existing daemon settings", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-docker-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, "etc/docker"), { recursive: true });
@@ -198,16 +252,16 @@ test("bootstrap installs Docker without dropping K3s forwarding or replacing exi
   const installs: string[][] = (await readFile(join(root, "apt-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
   assert.ok(installs.some(args => args.includes("install") && args.includes("docker.io") && args.includes("docker-buildx")));
   const services: string[][] = (await readFile(join(root, "systemctl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
-  assert.deepEqual(services, [["enable", "--now", "docker"]]);
+  assert.ok(services.some(args => args.join(" ") === "enable --now docker"));
 });
 
-test("bootstrap cannot report ready when Docker, the application build, pod, or ingress fails", async (t) => {
+test("installer cannot report ready when Docker, the application build, pod, or ingress fails", async (t) => {
   for (const state of ["docker-failed", "build-failed", "not-ready", "ingress-failed"] as const) {
     const root = await mkdtemp(join(tmpdir(), "goblin-app-failed-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     await assert.rejects(bootstrap(root, fakePassword, "ready", { state }), { status: 1 });
-    assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "failed\n");
-    await assert.rejects(access(join(root, "var/lib/goblin/public-url")));
+    assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "setup-ready\n");
+    assert.equal(JSON.parse(await readFile(join(root, "var/lib/goblin/install/status.json"), "utf8")).status, "failed");
   }
 });
 
@@ -221,28 +275,28 @@ test("bootstrap rejects invalid hostname/ref input before invoking the applicati
   }
 });
 
-test("bootstrap fails clearly if the API is ready but no node ever registers", async (t) => {
+test("installer fails clearly if the API is ready but no node ever registers", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-node-missing-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await assert.rejects(bootstrap(root, fakePassword, "missing"), { status: 1 });
-  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "failed\n");
-  const logs = await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8");
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "setup-ready\n");
+  const logs = await readFile(join(root, "var/log/goblin-installer.log"), "utf8");
   assert.match(logs, /Kubernetes node did not register/);
-  assert.match(logs, /Installation failed during: Waiting for Kubernetes node registration/);
+  assert.match(logs, /Installation failed/);
   const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
   assert.ok(!calls.some(args => args[1] === "wait" && args.includes("node")));
   assert.ok(!calls.some(args => args[1] === "apply"));
   await assert.rejects(access(join(root, "secret.json")));
 });
 
-test("bootstrap does not continue when a registered node fails its readiness wait", async (t) => {
+test("installer does not continue when a registered node fails its readiness wait", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-node-not-ready-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   await assert.rejects(bootstrap(root, fakePassword, "not-ready"), { status: 1 });
-  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "failed\n");
-  const logs = await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8");
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "setup-ready\n");
+  const logs = await readFile(join(root, "var/log/goblin-installer.log"), "utf8");
   assert.match(logs, /timed out waiting for the condition/);
-  assert.match(logs, /Installation failed during: Checking Kubernetes node readiness/);
+  assert.match(logs, /Installation failed/);
   await assert.rejects(access(join(root, "secret.json")));
 });
 
@@ -258,7 +312,7 @@ test("Azure password survives provisioning and unlocks Goblin", async (t) => {
     assert.ok(!text.includes("pbkdf2-sha256$"));
   }
   await assert.rejects(access(join(root, "PWNED")));
-  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "ready\n");
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "setup-ready\n");
   const secret = JSON.parse(await readFile(join(root, "secret.json"), "utf8"));
   assert.equal(secret.metadata.name, "goblin-owner-password");
   assert.equal(secret.metadata.namespace, "goblin");
@@ -370,6 +424,8 @@ test("Azure templates keep the password protected and the portal requires confir
   for (const invalid of ["", "   ", "a".repeat(129), "a\n", "test-password\nline-break"]) assert.ok(!policy.test(invalid));
   for (const name of ["azuredeploy.json", "azuredeploy.portal.json"]) {
     const template = JSON.parse(await readFile(`deploy/azure/${name}`, "utf8"));
+    assert.ok(JSON.stringify(template).includes((await readFile("deploy/azure/setup-bundle.b64", "utf8")).trim()), "ARM template must embed the current setup bundle");
+    assert.ok(JSON.stringify(template).includes((await readFile("deploy/azure/setup-bundle.sha256", "utf8")).trim()), "ARM template must pin the current bundle checksum");
     assert.equal(template.parameters.goblinPassword.type.toLowerCase(), "securestring");
     assert.ok(!("minLength" in template.parameters.goblinPassword));
     assert.equal(template.parameters.goblinPassword.maxLength, 128);
@@ -389,5 +445,146 @@ test("Azure templates keep the password protected and the portal requires confir
     assert.match(extension.properties.protectedSettings.script, /dnsSettings\.fqdn/);
     assert.match(extension.properties.protectedSettings.script, /parameters\('goblinSourceRef'\)/);
     if (name.includes("portal")) assert.deepEqual(Object.keys(ui.parameters.outputs).sort(), Object.keys(template.parameters).sort());
+  }
+});
+
+test("Azure provisioning returns with a status page before any cluster or application work", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-early-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await bootstrap(root, fakePassword, "missing", { bootstrapOnly: true });
+  assert.equal(await readFile(join(root, "var/lib/goblin/bootstrap-status"), "utf8"), "setup-ready\n");
+  const status = JSON.parse(await readFile(join(root, "var/lib/goblin/install/status.json"), "utf8"));
+  assert.equal(status.status, "waiting");
+  assert.ok(status.steps.every((step: { status: string }) => step.status === "waiting"));
+  for (const file of ["k3s-requests.jsonl", "docker-requests.jsonl", "apt-requests.jsonl"])
+    await assert.rejects(access(join(root, file)));
+  const services: string[][] = (await readFile(join(root, "systemctl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.ok(services.some(args => args.join(" ") === "enable --now goblin-setup.service"));
+  assert.ok(services.some(args => args.join(" ") === "enable --now goblin-installer.service"));
+});
+
+test("cert-manager readiness gates installation and never changes database authentication", async (t) => {
+  const databaseFiles = ["backend/src/Goblin.Web/appsettings.json", "deploy/postgres/postgres.yaml", "deploy/postgres/setup.sh"];
+  const before = await Promise.all(databaseFiles.map(path => readFile(path)));
+  for (const state of ["ready", "cert-failed", "webhook-failed"] as const) {
+    const root = await mkdtemp(join(tmpdir(), "goblin-certs-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    if (state === "ready") await bootstrap(root, fakePassword);
+    else await assert.rejects(bootstrap(root, fakePassword, "ready", { state }), { status: 1 });
+    const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+    assert.ok(calls.some(args => args.includes("deployment/cert-manager-webhook")));
+    if (state !== "cert-failed") assert.ok(calls.some(args => args.includes("--dry-run=server")));
+    assert.ok(!JSON.stringify(calls).includes("postgres"));
+    const status = JSON.parse(await readFile(join(root, "var/lib/goblin/install/status.json"), "utf8"));
+    assert.equal(status.status, state === "ready" ? "ready" : "failed");
+    if (state !== "ready") {
+      assert.equal(status.currentStep, "cert-manager");
+      assert.ok(!calls.some(args => args[1] === "create" && args[2] === "secret"));
+    }
+  }
+  for (let i = 0; i < databaseFiles.length; i++) assert.ok(before[i].equals(await readFile(databaseFiles[i])), "database configuration is unchanged");
+});
+
+test("a failed handoff restores private ingress and UI, then retry preserves credentials and completes", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-retry-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await assert.rejects(bootstrap(root, fakePassword, "ready", { state: "public-failed" }), { status: 1 });
+  const statePath = join(root, "var/lib/goblin/install/status.json");
+  let state = JSON.parse(await readFile(statePath, "utf8"));
+  assert.equal(state.status, "failed");
+  assert.equal(state.currentStep, "activate");
+  assert.equal(await readFile(join(root, "ingress-mode"), "utf8"), "ClusterIP");
+  const before = await readFile(join(root, "secret.json"), "utf8");
+  let services: string[][] = (await readFile(join(root, "systemctl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.deepEqual(services.at(-1), ["enable", "--now", "goblin-setup.service"]);
+  assert.ok(!services.some(args => args[0] === "disable"));
+  await bootstrap(root, fakePassword, "ready", { resume: true });
+  state = JSON.parse(await readFile(statePath, "utf8"));
+  assert.equal(state.status, "ready");
+  assert.equal(state.attempt, 2);
+  assert.ok(state.steps.every((step: { status: string; attempt: number }) => step.status === "complete" && step.attempt === 2));
+  assert.equal(await readFile(join(root, "secret.json"), "utf8"), before);
+  assert.equal(await readFile(join(root, "ingress-mode"), "utf8"), "LoadBalancer");
+  services = (await readFile(join(root, "systemctl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.deepEqual(services.at(-1), ["disable", "goblin-setup.service", "goblin-installer.service"]);
+  await assert.rejects(access(join(root, "var/lib/goblin/install/private/work")));
+  await access(join(root, "opt/goblin/setup/goblin-setup.pyz"));
+  await access(join(root, "var/log/goblin-installer.log"));
+  const requests: string[][] = (await readFile(join(root, "curl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(requests.filter(args => args.some(arg => arg.includes("codeload.github.com"))).length, 1);
+});
+
+test("the embedded setup bundle is reproducible and fits Azure Custom Script limits", async () => {
+  execFileSync("python3", ["deploy/azure/build-setup-bundle.py", "--check"]);
+  const bundle = Buffer.from(await readFile("deploy/azure/setup-bundle.b64", "utf8"), "base64");
+  const { createHash } = await import("node:crypto");
+  assert.equal(createHash("sha256").update(bundle).digest("hex"), (await readFile("deploy/azure/setup-bundle.sha256", "utf8")).trim());
+  const script = (await readFile("deploy/azure/bootstrap.sh", "utf8"))
+    .replace("__GOBLIN_SETUP_BUNDLE_BASE64__", bundle.toString("base64"))
+    .replace("__GOBLIN_PASSWORD_HASHER__", await readFile(hasherPath, "utf8"));
+  assert.ok(Buffer.byteLength(script) < 64 * 1024, "Custom Script decoded script must fit in 64 KiB");
+});
+
+test("a killed worker's recovery restores the UI from its persisted handoff marker", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-killed-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await bootstrap(root, fakePassword, "ready", { bootstrapOnly: true });
+  const bundle = join(root, "opt/goblin/setup/goblin-setup.pyz");
+  for (const transition of [["begin"], ["start", "activate"], ["handoff"]])
+    execFileSync("python3", [bundle, "state", ...transition]);
+  await writeFile(join(root, "var/lib/goblin/install/private/handoff"), "");
+  await writeFile(join(root, "ingress-mode"), "LoadBalancer");
+  await bootstrap(root, fakePassword, "ready", { resume: true, recovery: true });
+  const status = JSON.parse(await readFile(join(root, "var/lib/goblin/install/status.json"), "utf8"));
+  assert.equal(status.status, "failed");
+  assert.equal(status.currentStep, "activate");
+  assert.equal(await readFile(join(root, "ingress-mode"), "utf8"), "ClusterIP");
+  await assert.rejects(access(join(root, "var/lib/goblin/install/private/handoff")));
+  const services: string[][] = (await readFile(join(root, "systemctl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+  assert.deepEqual(services.at(-1), ["enable", "--now", "goblin-setup.service"]);
+});
+
+test("a concurrent installer cannot mutate state while the installation lock is held", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-locked-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await bootstrap(root, fakePassword, "ready", { bootstrapOnly: true });
+  const statePath = join(root, "var/lib/goblin/install/status.json");
+  const before = await readFile(statePath, "utf8");
+  const locker = spawn("flock", [join(root, "var/lib/goblin/install/installer.lock"), "sh", "-c", "printf locked; cat"], { stdio: ["pipe", "pipe", "pipe"] });
+  const exited = once(locker, "exit");
+  try {
+    await once(locker.stdout, "data");
+    await bootstrap(root, fakePassword, "ready", { resume: true });
+    assert.equal(await readFile(statePath, "utf8"), before);
+    await assert.rejects(access(join(root, "k3s-requests.jsonl")));
+  } finally {
+    locker.stdin.end();
+    await exited;
+  }
+});
+
+
+test("a forwarded public origin is used by the application and readiness probes", async (t) => {
+  for (const hostname of ["goblin.local.test", "localhost"]) {
+    const root = await mkdtemp(join(tmpdir(), "goblin-forwarded-origin-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const publicOrigin = `http://${hostname}:8788`;
+    await bootstrap(root, fakePassword, "ready", { hostname, publicOrigin });
+    assert.equal(await readFile(join(root, "var/lib/goblin/public-url"), "utf8"), publicOrigin + "\n");
+    assert.equal(JSON.parse(await readFile(join(root, "var/lib/goblin/install/status.json"), "utf8")).publicUrl, publicOrigin);
+    assert.ok((await readFile(join(root, "var/lib/goblin/deploy/azure/app/kustomization.yaml"), "utf8")).includes(`value: ${publicOrigin}`));
+    const requests: string[][] = (await readFile(join(root, "curl-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
+    assert.ok(requests.some(args => args.includes(`Host: ${hostname}:8788`) && args.includes(`http://${hostname}/readyz`)));
+    assert.ok(requests.some(args => args.includes(`Host: ${hostname}:8788`) && args.includes(`${publicOrigin}/readyz`)), "public readiness uses the actual browser port");
+    assert.ok((await readFile(join(root, "var/lib/goblin/deploy/azure/app/ingress.yaml"), "utf8")).includes(`host: ${hostname}`));
+  }
+});
+
+test("invalid forwarded origins fail before installing cluster components", async (t) => {
+  for (const publicOrigin of ["http://other.example:8788", "http://goblin.local.test:0", "http://goblin.local.test:65536", "http://goblin.local.test/path", "http://user@goblin.local.test", "http://goblin.local.test\n"]) {
+    const root = await mkdtemp(join(tmpdir(), "goblin-invalid-origin-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await assert.rejects(bootstrap(root, fakePassword, "ready", { hostname: "goblin.local.test", publicOrigin }), { status: 1 });
+    await assert.rejects(access(join(root, "k3s-requests.jsonl")));
   }
 });

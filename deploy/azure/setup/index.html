@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Setting up Goblin</title>
+  <link rel="stylesheet" href="/setup/styles.css">
+  <script src="/setup/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <div class="brand"><span class="mark" aria-hidden="true">g</span> goblin</div>
+    <p class="eyebrow">YOUR WORKSPACE</p>
+    <h1>Getting things ready.</h1>
+    <p class="intro">Goblin is being installed on your server. You can close this page and return anytime.</p>
+    <div class="summary" role="status" aria-live="polite">
+      <span id="message">Connecting to installation progress…</span>
+      <span id="elapsed"></span>
+    </div>
+    <ol id="steps" aria-label="Installation steps"></ol>
+    <p id="connection" class="connection" role="status"></p>
+    <p id="recovery" hidden>Installation progress has been saved. Your administrator can review the installation log and retry using Azure Run Command or SSH.</p>
+    <noscript>Enable JavaScript to see live installation progress.</noscript>
+    <footer>This page will open Goblin automatically when installation finishes.</footer>
+  </main>
+</body>
+</html>

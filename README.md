@@ -18,7 +18,7 @@ Deployment support for Google Cloud Platform, AWS, and other providers will foll
 
 The [Azure deployment guide](deploy/azure/README.md) includes an ARM template with
 customer-specific names, optional resource-name overrides, a static public IP,
-an Azure DNS hostname, single-node Kubernetes, and the Agent Sandbox controller.
+an Azure DNS hostname, single-node Kubernetes, cert-manager, and the Agent Sandbox controller.
 The guided installer uses Azure's native custom-template flow, with configuration
 and the intended SSH-key download inside Azure Portal. The new key-generation
 flow is awaiting live portal verification.
@@ -27,17 +27,27 @@ If a downloaded SSH key fails on Windows with `Load key ...: Permission denied`
 or a warning that permissions are too open, see
 [Windows SSH private-key permissions](deploy/azure/reference.md#windows-ssh-private-key-permissions).
 
-**Current status:** the Azure deployment installs Goblin and serves its UI at
-`http://<Azure-assigned-hostname>`. Open the deployment's `goblinUrl` output and
-enter the Goblin password chosen during setup. The
+**Current status:** Azure provisioning starts a lightweight setup page at
+`http://<Azure-assigned-hostname>` while installation continues in the background.
+Open the deployment's `goblinUrl` output to follow progress. The same URL opens
+Goblin when ready; enter the password chosen during setup. The
 [authentication preview](docs/authentication-preview.md) lets you test
 ChatGPT and OpenAI API-key login, then automatically verifies model access and
 shows the connection status, locally or in an Agent Sandbox pod. GitHub integration, repository tasks,
 custom domains, and automatic HTTPS certificates remain future work.
 
-Azure setup builds the application on the VM and configures Traefik using the
+The background installer builds the application on the VM and configures Traefik using the
 public IP resource's actual DNS hostname, including a custom prefix. HTTP is
 enabled explicitly for this deployment; traffic is unencrypted until you add HTTPS.
+
+To test the full installation directly in WSL/Ubuntu, use the [local installer](deploy/local/README.md):
+
+```bash
+npm run install:local -- start
+```
+
+Open **http://localhost:8788** in Windows to follow installation and enter Goblin
+at the same address when ready. A new local test uses the password `goblin`.
 
 To try authentication first:
 

@@ -1,0 +1,30 @@
+[Unit]
+Description=Goblin installation status
+After=network.target
+
+[Service]
+Type=exec
+DynamicUser=yes
+RuntimeDirectory=goblin-setup
+ExecStart=/usr/bin/python3 /opt/goblin/setup/goblin-setup.pyz serve --health-socket /run/goblin-setup/health.sock
+Restart=on-failure
+RestartSec=3
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+InaccessiblePaths=/var/lib/goblin/install/private
+MemoryMax=96M
+TasksMax=64
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

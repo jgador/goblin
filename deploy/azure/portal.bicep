@@ -129,7 +129,7 @@ output publicIpAddress string = infrastructure.outputs.publicIpAddress
 @description('Azure-managed public hostname serving the Goblin UI over HTTP.')
 output publicHostname string = infrastructure.outputs.publicHostname
 
-@description('Open Goblin at this URL and enter the password chosen during setup. HTTPS is configured separately.')
+@description('Open this URL to follow installation progress. It opens Goblin when ready. HTTPS is configured separately.')
 output goblinUrl string = 'http://${infrastructure.outputs.publicHostname}'
 
 @description('VM resource ID for administration through the Azure portal or CLI.')
@@ -143,5 +143,5 @@ output sshAccessNote string = empty(trim(adminSshPublicKey))
   ? 'No SSH key was supplied. An authorized Azure administrator can add a new public key later.'
   : 'Keep your matching private key for later VM access. ${empty(trim(sshSourceAddressPrefix)) ? 'Public SSH is closed; an administrator must allow port 22 from your IP before connecting.' : 'Public SSH is restricted to the configured source IP or CIDR.'}'
 
-@description('Command for checking the installed Kubernetes node through Azure Run Command.')
-output readinessCommand string = 'az vm run-command invoke --ids ${infrastructure.outputs.virtualMachineResourceId} --command-id RunShellScript --scripts "cat /var/lib/goblin/bootstrap-status; k3s kubectl get nodes; k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller"'
+@description('Command for checking installation progress through Azure Run Command, including before Kubernetes exists.')
+output readinessCommand string = 'az vm run-command invoke --ids ${infrastructure.outputs.virtualMachineResourceId} --command-id RunShellScript --scripts "cat /var/lib/goblin/bootstrap-status /var/lib/goblin/install/status.json"'
