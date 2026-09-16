@@ -6,6 +6,7 @@
 # Local credentials and generated files
 .goblin-auth/
 .goblin-browser-test/
+.goblin-local/
 node_modules/
 dist/
 playwright-report/

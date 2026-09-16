@@ -33,10 +33,12 @@ az deployment sub create \
 
 Avoid putting the password in command arguments or checked-in parameter files.
 The VM extension receives it through `protectedSettings`. The bootstrap passes
-it to the hashing helper through stdin and creates the `goblin-owner-password`
-Kubernetes Secret in `goblin`. Only a salted PBKDF2-SHA256 verifier
+it to the hashing helper through stdin. The background worker later creates the
+`goblin-owner-password` Kubernetes Secret in `goblin`. Only a salted PBKDF2-SHA256 verifier
 (600,000 iterations, 16-byte random salt) is stored in that Secret. Neither the
-password nor the verifier appears in deployment outputs or bootstrap logs.
+password nor the verifier appears in deployment outputs, public status, or logs.
+The root-only verifier stays in `/var/lib/goblin/install/private/owner-password`
+so retries can reuse it without asking for the password again.
 
 Azure's Custom Script extension can retain its generated `script.sh` under
 `/var/lib/waagent/custom-script/download/<run>/`. That root-readable script
@@ -55,7 +57,7 @@ Updating the template creates the password Secret in `goblin`; it does not move
 the old application's persistent data.
 
 For an existing Azure installation, redeploy the updated template with the same
-resource names and Goblin password. Bootstrap builds/imports the application,
+resource names and Goblin password. The background worker builds/imports the application,
 configures its public route, and replaces the pod to load the image, origin, and
 password verifier. For a password change, redeploy with the new password.
 To restart the application separately:
@@ -106,73 +108,123 @@ in the region; change **Public hostname prefix** if it is taken. For example,
 the default hostname in Southeast Asia is
 `goblin-prod.southeastasia.cloudapp.azure.com`.
 
-## Check readiness or diagnose a failed bootstrap
+## Check readiness or diagnose installation
 
-Open the VM in Azure Portal, select **Run command → RunShellScript**, and execute
-the following without opening SSH. You can also use the deployment's
-`readinessCommand` output from Azure CLI.
+Open the VM in Azure Portal, select **Run command → RunShellScript**, and run:
 
 ```bash
 cat /var/lib/goblin/bootstrap-status
-k3s kubectl get nodes
-k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller
-k3s kubectl get sandbox,pods,svc,ingress -n goblin
-cat /var/lib/goblin/public-url
-tail -n 100 /var/log/goblin-bootstrap.log
+cat /var/lib/goblin/install/status.json
+systemctl status goblin-installer.service --no-pager
+tail -n 100 /var/log/goblin-installer.log
 ```
 
-`bootstrap-status` reports `running`, `ready`, or `failed`. A healthy installation
-shows `ready`, a `Ready` node, an available Agent Sandbox controller, and a ready
-Goblin Sandbox. The readiness check also retrieves the UI through Traefik using
-the assigned hostname and the node's private IP, without waiting on public DNS.
+`bootstrap-status` reports `running`, `setup-ready`, or `failed` for the Azure
+extension only. `setup-ready` means the status UI responded and the background
+worker was launched. The status JSON reports `waiting`, `running`, `failed`, or
+`ready` for the full installation, with per-step timestamps and attempt counts.
+Detailed logs stay on the VM; only safe progress messages are publicly readable.
+The UI has no install/retry controls and does not expose configuration or logs.
 
-If deployment fails, open the failed operation on Azure's deployment page. The
-`goblin-bootstrap` error includes the failing stage, exit code, and diagnostics.
-Resources can remain provisioned and incur charges after a failure.
+If the Azure extension fails, inspect `/var/log/goblin-bootstrap.log`. If a
+background step fails, the status page identifies it and the Azure deployment
+can still show success. After fixing an external issue such as blocked downloads,
+retry through SSH or Azure Run Command:
 
-If an older bootstrap fails during **Checking Kubernetes readiness** with
-`error: no matching resources found`, the API became ready before the kubelet
-registered its node. The updated bootstrap waits for a node to appear before
-waiting for its `Ready` condition. Retry with the updated template in the same
-resource group, keeping the same resource names and Goblin password.
+```bash
+sudo systemctl start goblin-installer.service
+```
 
-If **Waiting for Kubernetes node registration** fails, or the node appears but
-**Checking Kubernetes node readiness** times out, inspect K3s on the VM:
+The worker resumes after reboot while installation is incomplete. It rechecks
+cluster readiness and reapplies manifests; it does not trust old completed-step
+markers, recreate PVCs, or regenerate passwords. A completed source download is
+reused across retries, including when a branch has moved. An explicit template
+redeployment starts a fresh source download and can change the owner password.
+Azure does not rerun an unchanged successful extension automatically.
+
+Once Kubernetes exists, additional diagnostics are available:
 
 ```bash
 k3s kubectl get nodes -o wide
+k3s kubectl get deployments -n cert-manager
+k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller
+k3s kubectl get sandbox,pods,svc,ingress -n goblin
 journalctl -u k3s --no-pager -n 100
 ```
 
-After correcting an external problem such as blocked downloads, redeploy the
-current template from the portal and enter the same Goblin password again.
-Azure does not return the extension's protected script in `az vm extension show`;
-copying its public `settings` is no longer sufficient for a retry. Redeploying
-an unchanged successful extension does not rerun bootstrap or upgrade the
-installation.
-
 ## What deployment success means
 
-The VM extension embeds `bootstrap.sh` and waits for:
+The VM extension embeds a deterministic Python zipapp and its checksum. It waits
+only for base OS preparation, password hashing, the status service, and the
+background worker launch. Ubuntu's Python standard library runs the bundle; no
+SDK, cluster, Docker, application build, or external bundle release is needed
+before Azure returns. Per-VM settings and the password verifier are written
+locally and are never included in the reusable bundle.
 
-- K3s `v1.36.4+k3s1`, a ready Kubernetes API, node registration, and a ready node.
-- The Goblin password verifier stored in the `goblin` namespace.
-- Agent Sandbox `v1.0.2`, its core CRD, and its controller rollout.
-- The Goblin image built with Docker and imported into K3s's `k8s.io` image namespace.
-- The Goblin Sandbox ready and the UI responding through Traefik on port 80.
+The independent systemd worker installs and checks:
 
-The K3s installer and Agent Sandbox manifest use pinned release URLs and checked
-SHA-256 digests. Downloads and container pulls require outbound internet access.
-The Ubuntu 24.04 LTS image uses Azure's latest image revision at deployment time.
-Agent Sandbox extensions are not installed. The Goblin authentication application
-is installed as a Sandbox workload with a persistent data volume.
+1. K3s `v1.36.4+k3s1`: ready API, registered node, and ready node.
+2. Cert-manager `v1.21.2`: all CRDs, controllers, and admission webhook.
+3. The Goblin owner password Secret and Agent Sandbox `v1.0.2`.
+4. The Goblin image, built with Docker and imported into K3s.
+5. The Goblin workload and its internal Traefik route.
+6. Public ingress and application readiness at the assigned hostname.
+
+Cert-manager 1.21 supports Kubernetes 1.33–1.36. Its readiness probe submits a
+Certificate with `--dry-run=server`, so no Certificate, Issuer, CA, or Secret is
+created. Installing cert-manager does not modify PostgreSQL configuration,
+connection strings, database credentials, or authentication. PostgreSQL remains
+an explicit separate setup step; HTTPS and database client certificates can be
+configured later, independently.
+
+Upstream installer/manifests use pinned versions and verified SHA-256 digests.
+Outbound internet access is required for downloads and image pulls. The Ubuntu
+24.04 LTS image uses Azure's latest revision. Agent Sandbox extensions are not
+installed. Existing K3s services are reused rather than automatically upgraded.
+
+## Status UI and public URL handoff
+
+`goblin-setup.service` runs as an unprivileged dynamic user. It reads only the
+public status file and bundled assets. `goblin-installer.service` runs as root;
+only this worker can change cluster resources. A file lock serializes attempts,
+and status writes use atomic replacement with fsync.
+
+The setup page initially owns port 80. A HelmChartConfig keeps Traefik's Service
+as `ClusterIP`; the worker checks `/readyz` and the application page through
+that internal route. It then records the handoff, stops the setup listener,
+switches Traefik to `LoadBalancer`, and verifies both the node ingress path and
+the public hostname. The browser reconnects and opens Goblin at the same URL.
+Provisioning checks setup over a local Unix socket so existing ServiceLB rules
+cannot send its health check to an older Goblin deployment.
+
+If activation fails, the worker restores `ClusterIP`, waits for ServiceLB pods
+to release the host ports, and restarts the status UI. A persistent marker also
+allows recovery after a killed worker or reboot during activation. If Kubernetes
+itself cannot respond, automatic network rollback may also fail; use SSH or Azure
+Run Command to inspect Traefik/ServiceLB. The next attempt retries recovery.
+
+After success both setup units are disabled. The UI stays stopped across reboot,
+and the worker exits. Temporary downloads are removed; the small bundle, status,
+verifier, and local logs remain. To repeat readiness checks and repair a completed
+installation, use these root commands (this briefly takes Goblin offline):
+
+```bash
+sudo systemctl stop goblin-installer.service
+sudo flock /var/lib/goblin/install/installer.lock python3 /opt/goblin/setup/goblin-setup.pyz state init
+sudo systemctl enable --now goblin-installer.service
+```
+
+The installer manages the `traefik` HelmChartConfig and HTTP application overlay.
+Preserve any later custom ingress/TLS configuration in the installation source
+before re-running it. Reprovisioning an older deployment switches public routing
+to the setup page once the background worker has made Traefik internal.
 
 ## Application source and public access
 
-The template downloads the `goblinSourceRef` branch, tag, or commit from
+The background installer downloads the `goblinSourceRef` branch, tag, or commit from
 `github.com/jgador/goblin` (default `master`) over HTTPS, then builds the repository's
 Dockerfile on the VM using Docker Engine and Buildx. There is no separate image
-registry to configure. Bootstrap installs Ubuntu's `docker.io` and `docker-buildx`
+registry to configure. The worker installs Ubuntu's `docker.io` and `docker-buildx`
 packages when needed, builds with host networking, and imports the `docker save`
 archive into K3s. Before a new Docker installation starts, it enables
 `ip-forward-no-drop` in Docker's daemon configuration, preserving existing settings
@@ -182,10 +234,11 @@ The archive's SHA-256 is used as the local image tag and saved in
 `/var/lib/goblin/application-source-sha256`; it identifies the downloaded content,
 not an independent verification of its publisher. Use a commit SHA for
 `goblinSourceRef` in CLI deployments when the installation must be repeatable.
-The source ref must include this application installer and the Azure overlay.
+The selected source must include the Dockerfile and deployment overlays. The
+setup worker itself comes from the bundle embedded in the Azure template.
 
 The public IP resource's `dnsSettings.fqdn` is passed into bootstrap; the VM's
-Linux hostname is not used to construct the URL. Bootstrap renders
+Linux hostname is not used to construct the URL. The worker renders
 `deploy/azure/app`, which shares the PVC, password Secret mount, and application
 configuration with `deploy/auth/sandbox.yaml`. It configures:
 
@@ -216,7 +269,7 @@ does not expose the Kubernetes API to the internet. Public SSH is disabled unles
 you supply both a public key and a source address; password authentication is
 disabled. The portal flow installs the supplied public key; retain its matching
 private key for SSH access.
-K3s includes Traefik, and bootstrap configures the Goblin ingress. A trusted HTTPS
+K3s includes Traefik, and the background worker configures the Goblin ingress. A trusted HTTPS
 certificate is not configured. If the hostname returns 404, inspect the Goblin
 Ingress host rule; if it returns 503, inspect the Sandbox pod and service endpoints.
 
@@ -403,19 +456,23 @@ artifacts. Keep the shared parameter defaults and naming rules in `main.bicep`
 and `portal.bicep` aligned:
 
 ```bash
+python3 deploy/azure/build-setup-bundle.py
 bicep build deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json
 bicep build deploy/azure/portal.bicep --outfile deploy/azure/azuredeploy.portal.json
-bash -n deploy/azure/bootstrap.sh deploy/azure/install-app.sh
+bash -n deploy/azure/bootstrap.sh deploy/azure/install-app.sh deploy/azure/setup/installer.sh
 sh -n deploy/azure/missing-ssh-key.sh
 npm test
 ```
 
-Publish the application sources and regenerated templates together: the default
-installer downloads `master`, so local changes must reach that branch before they
-can be installed by the published Azure button. A CLI deployment can select a
-published commit using `goblinSourceRef`.
+Setup changes are embedded in the regenerated templates; they need no separate
+bundle download or release. Application builds still download `master` by default,
+so application changes must reach the selected source ref before deployment. A
+CLI deployment can select a published commit using `goblinSourceRef`.
 
-Commit the regenerated JSON together with its sources. Verify changes with a live
+Commit the generated `setup-bundle.b64`, `setup-bundle.sha256`, and ARM JSON together
+with their sources. `python3 deploy/azure/build-setup-bundle.py --check` verifies
+bundle freshness. The bundle is about 13 KiB, well within the Custom Script 64 KiB
+script limit after embedding; tests enforce this limit. Verify changes with a live
 portal deployment; compilation does not check image pulls, runtime behavior, or
 regional capacity. Update pinned versions and their digests together.
 
@@ -429,5 +486,8 @@ rejects a missing key at installation time for the portal entry point. Verify
 both review validation and the final key handoff in a live portal deployment.
 Also verify password masking, matching confirmation, length validation, and
 unlocking the installed preview with the deployment password. Automated tests
-exercise the rendered bootstrap with mocked infrastructure commands, verifier
-compatibility with the C# backend, incorrect-password rejection, and password persistence.
+exercise early Azure completion, the real worker with mocked infrastructure commands,
+cert-manager isolation, handoff failure/retry, verifier compatibility, and password
+persistence. Browser tests cover live progress, failure, refresh and handoff reconnect.
+Use a disposable Ubuntu VM for systemd/reboot and real ServiceLB handoff checks;
+mocks cannot establish those behaviors.

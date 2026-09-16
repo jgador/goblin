@@ -7,134 +7,96 @@ set +x
 set -Eeuo pipefail
 umask 077
 
-install -d -m 0750 /var/lib/goblin
+# Public status is readable by the unprivileged UI; configuration is root-only.
+install -d -m 0751 /var/lib/goblin
+install -d -m 0755 /var/lib/goblin/install
+install -d -m 0700 /var/lib/goblin/install/private
 exec > >(tee -a /var/log/goblin-bootstrap.log) 2>&1
 printf 'running\n' > /var/lib/goblin/bootstrap-status
 bootstrap_dir=''
-current_stage='Preparing installation'
-stage() {
-  current_stage=$1
-  printf '[Goblin] %s\n' "$current_stage"
-}
+current_stage='Preparing the server'
+stage() { current_stage=$1; printf '[Goblin] %s\n' "$current_stage"; }
 finish() {
   local result=$?
   if [[ "$result" != 0 ]]; then
     printf 'failed\n' > /var/lib/goblin/bootstrap-status
-    printf '[Goblin] Installation failed during: %s (exit code %s).\n' "$current_stage" "$result" >&2
-    printf '[Goblin] Review the error above in the goblin-bootstrap deployment step.\n' >&2
+    printf '[Goblin] Setup failed during: %s (exit code %s).\n' "$current_stage" "$result" >&2
   fi
-  if [[ -n "$bootstrap_dir" ]]; then
-    rm -rf "$bootstrap_dir"
-  fi
+  if [[ -n "$bootstrap_dir" ]]; then rm -rf "$bootstrap_dir"; fi
   exit "$result"
 }
 trap finish EXIT
 
-K3S_VERSION='v1.36.4+k3s1'
-K3S_INSTALL_SHA256='46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad'
-SANDBOX_VERSION='v1.0.2'
-SANDBOX_MANIFEST_SHA256='5daf76bba85ba656a8877c9bcce1c9598bd124a61875b59b4256095fdbf1fcdb'
-
-# The extension can run while cloud-init is finishing the base image setup.
-# cloud-init exit code 2 reports recoverable warnings, rather than failure.
-stage 'Preparing the server'
-cloud_init_result=0
-cloud-init status --wait || cloud_init_result=$?
-if [[ "$cloud_init_result" != 0 && "$cloud_init_result" != 2 ]]; then
-  printf 'cloud-init failed with status %s\n' "$cloud_init_result"
-  exit "$cloud_init_result"
+if command -v cloud-init >/dev/null; then
+  cloud_init_result=0
+  cloud-init status --wait || cloud_init_result=$?
+  if [[ "$cloud_init_result" != 0 && "$cloud_init_result" != 2 ]]; then exit "$cloud_init_result"; fi
 fi
-
 if ! command -v curl >/dev/null || ! command -v python3 >/dev/null; then
   apt-get -o DPkg::Lock::Timeout=300 update
   DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl python3
 fi
-
 bootstrap_dir=$(mktemp -d /var/lib/goblin/bootstrap.XXXXXX)
 
+# ARM encodes all user-supplied values before embedding them in shell source.
+goblin_hostname=$(printf '%s' '__GOBLIN_HOSTNAME_BASE64__' | base64 --decode)
+goblin_source_ref=$(printf '%s' '__GOBLIN_SOURCE_REF_BASE64__' | base64 --decode)
+if [[ "$goblin_hostname" != localhost && ! "$goblin_hostname" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || \
+   [[ ! "$goblin_source_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]]; then
+  printf 'Invalid public hostname or Goblin source ref.\n' >&2
+  exit 1
+fi
 stage 'Preparing the Goblin password'
-# Bicep embeds the helper and a base64-encoded password in protectedSettings.
-# The password travels on stdin, never in a subprocess argument or log message.
 cat > "$bootstrap_dir/hash-password.py" <<'PYTHON'
 __GOBLIN_PASSWORD_HASHER__
 PYTHON
 printf '%s' '__GOBLIN_PASSWORD_BASE64__' | base64 --decode | \
   python3 "$bootstrap_dir/hash-password.py" > "$bootstrap_dir/owner-password"
 
-stage 'Downloading Kubernetes'
-curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 180 \
-  "https://raw.githubusercontent.com/k3s-io/k3s/${K3S_VERSION}/install.sh" \
-  --output "$bootstrap_dir/install-k3s.sh"
-stage 'Verifying the Kubernetes download'
-printf '%s  %s\n' "$K3S_INSTALL_SHA256" "$bootstrap_dir/install-k3s.sh" | sha256sum --check
+stage 'Preparing the setup bundle'
+# The deterministic, prebuilt zipapp is included in this version of the template.
+# No SDK, application build, cluster or external bundle release is needed here.
+base64 --decode > "$bootstrap_dir/goblin-setup.pyz" <<'BUNDLE'
+__GOBLIN_SETUP_BUNDLE_BASE64__
+BUNDLE
+printf '%s  %s\n' '__GOBLIN_SETUP_BUNDLE_SHA256__' "$bootstrap_dir/goblin-setup.pyz" | sha256sum --check
 
-stage 'Installing Kubernetes'
-install -d -m 0750 /etc/rancher/k3s
-if [[ ! -e /etc/rancher/k3s/config.yaml ]]; then
-  cat > /etc/rancher/k3s/config.yaml <<'CONFIG'
-write-kubeconfig-mode: "0600"
-secrets-encryption: true
-CONFIG
-fi
+# Reprovisioning explicitly starts a new attempt and can update the owner password.
+# Stop the old worker (including recovery) before replacing its executable/config.
+if systemctl cat goblin-installer.service >/dev/null 2>&1; then systemctl stop goblin-installer.service; fi
+exec 9>/var/lib/goblin/install/installer.lock
+flock -w 420 9
+if systemctl cat goblin-setup.service >/dev/null 2>&1; then systemctl stop goblin-setup.service; fi
+install -d -m 0755 /opt/goblin/setup
+install -m 0755 "$bootstrap_dir/goblin-setup.pyz" /opt/goblin/setup/goblin-setup.pyz
+python3 /opt/goblin/setup/goblin-setup.pyz unpack /opt/goblin/setup
+install -m 0644 /opt/goblin/setup/goblin-setup.service /etc/systemd/system/goblin-setup.service
+install -m 0644 /opt/goblin/setup/goblin-installer.service /etc/systemd/system/goblin-installer.service
+install -m 0600 "$bootstrap_dir/owner-password" /var/lib/goblin/install/private/owner-password
+printf '%s\n' "$goblin_hostname" > /var/lib/goblin/install/private/hostname
+printf '%s\n' "$goblin_source_ref" > /var/lib/goblin/install/private/source-ref
+printf 'http://%s\n' "$goblin_hostname" > /var/lib/goblin/public-url
+rm -rf /var/lib/goblin/install/private/work
+python3 /opt/goblin/setup/goblin-setup.pyz state init
+exec 9>&-
 
-INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_EXEC=server sh "$bootstrap_dir/install-k3s.sh"
-
-# Wait for the API first: a running systemd service does not imply a ready API.
-stage 'Checking Kubernetes API readiness'
-api_ready=false
-for ((attempt = 0; attempt < 120; attempt++)); do
-  if k3s kubectl get --raw=/readyz --request-timeout=5s >/dev/null 2>&1; then
-    api_ready=true
-    break
-  fi
-  sleep 5
+stage 'Starting the installation status page'
+systemctl daemon-reload
+systemctl enable --now goblin-setup.service
+setup_ready=false
+for ((attempt=0; attempt<30; attempt++)); do
+  if curl --fail --silent --show-error --noproxy '*' --connect-timeout 2 --max-time 3 \
+      --unix-socket /run/goblin-setup/health.sock http://127.0.0.1/setup/healthz --output "$bootstrap_dir/setup-health.json" && \
+      python3 - "$bootstrap_dir/setup-health.json" <<'PYTHON'
+import json, sys
+sys.exit(0 if json.load(open(sys.argv[1])).get('setup') is True else 1)
+PYTHON
+  then setup_ready=true; break; fi
+  sleep 1
 done
-if [[ "$api_ready" != true ]]; then
-  printf 'Kubernetes API did not become ready. Inspect journalctl -u k3s.\n'
-  exit 1
-fi
-
-# The API can be ready before the kubelet registers its Node. kubectl wait
-# fails immediately for an empty resource list, even with a timeout.
-stage 'Waiting for Kubernetes node registration'
-node_registered=false
-for ((attempt = 0; attempt < 60; attempt++)); do
-  if node_names=$(k3s kubectl get nodes -o name --request-timeout=5s 2>/dev/null) && [[ -n "$node_names" ]]; then
-    node_registered=true
-    break
-  fi
-  sleep 5
-done
-if [[ "$node_registered" != true ]]; then
-  printf 'Kubernetes node did not register. Inspect journalctl -u k3s.\n'
-  exit 1
-fi
-
-stage 'Checking Kubernetes node readiness'
-k3s kubectl wait --for=condition=Ready node --all --timeout=300s
-
-stage 'Configuring the Goblin password'
-k3s kubectl create namespace goblin --dry-run=client -o json | \
-  k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
-k3s kubectl create secret generic goblin-owner-password -n goblin \
-  --from-file="owner-password=$bootstrap_dir/owner-password" --dry-run=client -o json | \
-  k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
-rm -f "$bootstrap_dir/owner-password"
-
-stage 'Downloading Agent Sandbox'
-curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 180 \
-  "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${SANDBOX_VERSION}/sandbox.yaml" \
-  --output "$bootstrap_dir/sandbox.yaml"
-stage 'Verifying the Agent Sandbox download'
-printf '%s  %s\n' "$SANDBOX_MANIFEST_SHA256" "$bootstrap_dir/sandbox.yaml" | sha256sum --check
-stage 'Installing Agent Sandbox'
-k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f "$bootstrap_dir/sandbox.yaml"
-stage 'Checking Agent Sandbox readiness'
-k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
-k3s kubectl rollout status deployment/agent-sandbox-controller -n agent-sandbox-system --timeout=300s
-
-__GOBLIN_APPLICATION_INSTALLER__
-
-printf 'ready\n' > /var/lib/goblin/bootstrap-status
-printf 'Goblin ready: http://%s\n' "$goblin_hostname"
-printf 'Use the Goblin password chosen during Azure setup. HTTPS is not configured.\n'
+if [[ "$setup_ready" != true ]]; then printf 'The installation status page did not start.\n' >&2; exit 1; fi
+stage 'Starting background installation'
+# Type=exec returns once the worker is launched, independent of cluster readiness.
+systemctl enable --now goblin-installer.service
+printf 'setup-ready\n' > /var/lib/goblin/bootstrap-status
+printf 'Follow installation progress: http://%s\n' "$goblin_hostname"

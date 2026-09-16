@@ -74,7 +74,7 @@
         "name": "installationInfo",
         "type": "Microsoft.Common.InfoBox",
         "options": {
-          "text": "After installation, open goblinUrl in the deployment outputs and enter your Goblin password. Goblin is served over HTTP; HTTPS is configured separately. Installation failures appear in Azure's deployment page.",
+          "text": "Open goblinUrl in the deployment outputs to follow installation progress. The page opens Goblin when ready; enter your Goblin password then. Installation continues after Azure provisioning succeeds. Goblin uses HTTP; HTTPS is configured separately.",
           "icon": "Info"
         }
       },

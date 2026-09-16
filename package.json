@@ -8,6 +8,7 @@
   },
   "workspaces": ["frontend"],
   "scripts": {
+    "install:local": "python3 deploy/local/install.py",
     "build:assets": "npm run build --workspace frontend",
     "build:tools": "node scripts/clean-output.mjs && tsc -p tsconfig.json",
     "build:backend": "dotnet build backend/Goblin.slnx --nologo",

@@ -19,9 +19,11 @@ param virtualNetworkAddressPrefix string
 param subnetAddressPrefix string
 
 var bootstrapScript = replace(
-  replace(loadTextContent('../bootstrap.sh'), '__GOBLIN_PASSWORD_HASHER__', loadTextContent('../hash-password.py')),
-  '__GOBLIN_APPLICATION_INSTALLER__',
-  loadTextContent('../install-app.sh')
+  replace(
+    replace(loadTextContent('../bootstrap.sh'), '__GOBLIN_PASSWORD_HASHER__', loadTextContent('../hash-password.py')),
+    '__GOBLIN_SETUP_BUNDLE_BASE64__', trim(loadTextContent('../setup-bundle.b64'))
+  ),
+  '__GOBLIN_SETUP_BUNDLE_SHA256__', trim(loadTextContent('../setup-bundle.sha256'))
 )
 var configuredBootstrap = replace(
   replace(bootstrapScript, '__GOBLIN_HOSTNAME_BASE64__', base64(publicIp.properties.dnsSettings.fqdn)),
