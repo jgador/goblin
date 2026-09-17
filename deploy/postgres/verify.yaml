@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: goblin-postgres-verify-
+  namespace: goblin
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        goblin-database-access: "true"
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verify
+          image: postgres:16.15-bookworm
+          command: [bash, -euc]
+          args:
+            - |
+              result=$(psql --no-psqlrc --no-password -Atc "SELECT current_user, ssl, client_dn FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
+              test "$result" = 'goblin_app|t|/CN=goblin_app'
+              echo 'Verified PostgreSQL TLS and application certificate authentication.'
+          env:
+            - name: PGHOST
+              value: goblin-postgres
+            - name: PGDATABASE
+              value: goblin
+            - name: PGUSER
+              value: goblin_app
+            - name: PGSSLMODE
+              value: verify-full
+            - name: PGSSLROOTCERT
+              value: /etc/goblin-postgres/ca.crt
+            - name: PGSSLCERT
+              value: /etc/goblin-postgres/tls.crt
+            - name: PGSSLKEY
+              value: /etc/goblin-postgres/tls.key
+            - name: PGCONNECT_TIMEOUT
+              value: "10"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: client
+              mountPath: /etc/goblin-postgres
+              readOnly: true
+      volumes:
+        - name: client
+          secret:
+            secretName: goblin-postgres-app-tls
+            defaultMode: 0440

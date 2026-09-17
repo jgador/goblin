@@ -19,8 +19,7 @@ RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publi
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble
 WORKDIR /app
-# Private appsettings.json is packaged with the app when supplied at build time.
-# Preserve restrictive file modes while allowing the runtime user to read it.
+# appsettings.json contains certificate paths; private keys are mounted at runtime.
 COPY --from=build --chown=1000:1000 /publish ./
 COPY --from=assets /codex /opt/codex
 RUN mkdir -p /data && chown 1000:1000 /data

@@ -1,0 +1,71 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: goblin-postgres
+  namespace: goblin
+spec:
+  ca:
+    secretName: goblin-postgres-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: goblin-postgres-server
+  namespace: goblin
+spec:
+  secretName: goblin-postgres-tls
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  usages: [server auth, digital signature, key encipherment]
+  dnsNames:
+    - goblin-postgres
+    - goblin-postgres.goblin
+    - goblin-postgres.goblin.svc
+    - goblin-postgres.goblin.svc.cluster.local
+    - localhost
+  ipAddresses: [127.0.0.1, "::1"]
+  issuerRef:
+    name: goblin-postgres
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: goblin-postgres-app
+  namespace: goblin
+spec:
+  secretName: goblin-postgres-app-tls
+  commonName: goblin_app
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  usages: [client auth, digital signature]
+  issuerRef:
+    name: goblin-postgres
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: goblin-postgres-admin
+  namespace: goblin
+spec:
+  secretName: goblin-postgres-admin-tls
+  commonName: goblin_admin
+  duration: 2160h
+  renewBefore: 720h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  usages: [client auth, digital signature]
+  issuerRef:
+    name: goblin-postgres
+    kind: Issuer

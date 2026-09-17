@@ -73,7 +73,24 @@ Logs are stored directly in WSL:
 
 Kubernetes diagnostics are available through `sudo k3s kubectl` and
 `sudo journalctl -u k3s`. PostgreSQL configuration and connection strings remain
-separate from this installation and cert-manager setup.
+separate from this installation and cert-manager setup. After the bundle is ready,
+run `bash deploy/postgres/setup.sh` to enable
+[PostgreSQL certificate authentication](../../docs/database.md). For this runner,
+setup also enables persistent local database access at `localhost:55432` and
+configures tooling for that port. Use `--port` to choose a different local port.
+
+To enable or repair local access for an already configured database:
+
+```bash
+npm run install:local -- database
+```
+
+The endpoint runs as `goblin-local-postgres.socket`/`.service` under systemd and
+binds only to loopback. It forwards raw TCP to an internal Kubernetes Service;
+individual client resets do not stop other connections, and Kubernetes follows
+replacement database pods. No terminal or `kubectl port-forward` is required.
+Certificate authentication and server verification still apply. Inspect it with
+`sudo journalctl -u goblin-local-postgres.service`.
 
 ## Stop, resume, or start clean
 
@@ -82,7 +99,7 @@ npm run install:local -- stop
 npm run install:local -- start
 ```
 
-`stop` shuts down this runner's installer, browser forwarder, and Kubernetes
+`stop` shuts down this runner's installer, browser/database forwarders, and Kubernetes
 containers while retaining data. `start` resumes them.
 
 For another installation test with your latest source changes:

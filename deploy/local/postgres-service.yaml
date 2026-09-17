@@ -1,0 +1,18 @@
+# Stable cluster address for the WSL host's loopback TCP proxy. The database's
+# headless service remains unchanged; Kubernetes tracks replacement pod IPs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblin-postgres-local
+  namespace: goblin
+  labels:
+    app.kubernetes.io/managed-by: goblin-local
+spec:
+  type: ClusterIP
+  ipFamilies: [IPv4]
+  selector:
+    app: goblin-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

@@ -2,6 +2,7 @@
 .goblin-auth
 .goblin-browser-test
 .goblin-local
+.goblin-postgres
 .artifacts
 assets
 node_modules

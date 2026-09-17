@@ -2,161 +2,186 @@
 
 SQL files define Goblin's database. EF Core reverse engineers that database into
 checked-in C# classes. PostgreSQL uses unquoted `snake_case` names; C# uses
-`PascalCase`, with `[Table]` and `[Column]` attributes preserving the mapping.
+`PascalCase`, with attributes preserving the mapping. The initial
+`goblin.work_items` table establishes persistence; the Work UI still uses preview data.
 
-The initial table is deliberately small: `goblin.work_items` has a UUID `id` and
-required text `objective`. Callers assign the UUID. This establishes persistence;
-the Work UI still uses its existing preview data.
+## Set up certificate authentication in k3s
 
-## Files and tools
-
-| Location | Purpose |
-| --- | --- |
-| `deploy/postgres/` | PostgreSQL 16.15, persistent volume, internal Service, initialization, and setup script |
-| `backend/database/migrations/` | Ordered, immutable SQL schema changes |
-| `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
-| `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime `DbContext` registration |
-| `backend/tools/Goblin.Database/` | SQL migration runner and isolated startup host for `dotnet ef` |
-| `backend/src/Goblin.Web/appsettings.json` | Actual backend configuration, using the Kubernetes Service address |
-| `backend/tools/Goblin.Database/appsettings.json` | Actual tooling configuration, including administrator access through a port-forward |
-| `deploy/postgres/write-appsettings.py` | Writes matching connection strings from the database initialization credentials |
-| `backend/scripts/scaffold-database.sh` | Repeatable reverse-engineering command |
-| `.config/dotnet-tools.json` | Repository-local `dotnet-ef` version |
-
-Use the repository's .NET 10 SDK, Bash, Python 3, and a configured `kubectl` (or
-`k3s kubectl`). EF Core and `dotnet-ef` are pinned to 10.0.12; the Npgsql EF provider
-is pinned to 10.0.3. Run the commands below from the repository root.
-
-## Set up PostgreSQL in k3s
+After the Goblin bundle has installed k3s and cert-manager, run from this checkout:
 
 ```bash
 bash deploy/postgres/setup.sh
 ```
 
-On a VM whose kubeconfig requires root access, use `sudo bash` instead. The script
-uses the selected kubectl context, falling back to `k3s kubectl` when needed. It
-creates the `goblin` namespace and two Secrets, then applies the PostgreSQL
-resources and waits for readiness:
+Use `sudo bash` if the kubeconfig requires root. The script uses the selected
+`kubectl` context, falling back to `k3s kubectl`. It issues certificates,
+configures PostgreSQL, verifies a real TLS client login, and connects an existing
+Goblin Sandbox. If the Sandbox
+configuration changes, setup recreates its pod to load the certificate mount and
+connection string; its image, public origin, login, and storage are preserved.
+Rerunning setup preserves the database volume, CA, and existing certificate identities.
 
-- `goblin-postgres-admin`: initialization and schema administrator password.
-- `goblin-postgres-app`: application role's initialization password.
+This remains a separate step from VM provisioning and the initial bundle
+installation. Installing cert-manager alone does not enable PostgreSQL or change
+database authentication. The same setup works in the local WSL k3s cluster and Azure.
+It does not configure a PostgreSQL instance installed directly on the host.
 
-For a new database, setup uses the application password already present in
-`backend/src/Goblin.Web/appsettings.json` and generates a separate administrator
-password. Both are sent directly to Kubernetes. Setup then creates or updates
-the two real `appsettings.json` files with those passwords. It writes
-the web connection using `goblin-postgres:5432` and the tooling connections using
-`localhost:5432` for port-forwarding. Other JSON settings are preserved. No
-example files or manual placeholder replacement are needed.
+Setup creates the following namespaced resources:
 
-Rerunning setup preserves both Secrets and the PVC and refreshes the connection
-strings from the existing credentials. If a Secret is missing while the PVC
-exists, setup stops so that an unrelated replacement password cannot hide the
-problem. These Secrets initialize PostgreSQL. The backend's database configuration
-is packaged in its own `appsettings.json`.
+| Resource | Purpose |
+| --- | --- |
+| `goblin-postgres-ca` Certificate/Secret | Private CA for this database; its key stays in Kubernetes |
+| `goblin-postgres-server` Certificate | Server identity, stored in `goblin-postgres-tls` |
+| `goblin-postgres-app` Certificate | Client identity `goblin_app`, stored in `goblin-postgres-app-tls` |
+| `goblin-postgres-admin` Certificate | Client identity `goblin_admin`, stored in `goblin-postgres-admin-tls` |
+| `goblin-postgres-admin` Opaque Secret | Initialization-only password required by the official image; never used in client connection strings |
+| `goblin-postgres-data` PVC | Independently declared 5 GiB database storage |
 
-The first initialization creates database `goblin`, schema `goblin`, and two
-roles. `goblin_admin` owns the database and applies schema changes. `goblin_app`
-can connect and read/write application tables, but cannot create or drop tables.
-Default privileges give it access to future tables and sequences created by
-`goblin_admin` in the `goblin` schema. Apply migrations using that administrator
-so the ownership and default privileges remain consistent.
+The official image requires an initialization password before running its init
+scripts. Setup generates this privately once; initialization clears the database
+role's password and creates the application role without one. Neither the app nor
+the operator needs to know or supply this bootstrap value.
 
-PostgreSQL has an internal headless Service and an independently declared 5 GiB
-PVC, `goblin-postgres-data`. A network policy permits the Goblin application and
-same-namespace pods labeled `goblin-database-access: "true"` to connect. There is
-no public database listener. Namespace/PVC deletion still deletes storage; keep
-backups for VM or disk loss.
+The PostgreSQL configuration requires TLS and a trusted client certificate for
+every network connection. The certificate's common name must match the requested
+database role. Password-only and unencrypted connections are rejected. Local Unix
+socket administration is restricted to the `postgres` OS user inside the database
+container through peer authentication.
 
-The image's initialization script runs only for an empty data directory. Changing
-a Secret or the initialization script does **not** update existing PostgreSQL
-passwords or roles. Coordinate password rotation with `ALTER ROLE` and update
-the initialization Secret's `password` and the connection string in your private
-`appsettings.json`. Rebuild and redeploy the backend image to use the new password.
-Keep the administrator and application credentials in backups alongside the
-database recovery procedure.
+`goblin_admin` owns the database/schema and applies schema changes.
+`goblin_app` can read/write application tables, but cannot create or drop them.
+Default privileges cover future tables and sequences created by `goblin_admin`.
+The internal Service and network policy permit Goblin and same-namespace pods
+labeled `goblin-database-access: "true"`; no public database listener is created.
 
-This is an explicit setup step for existing or new Goblin installations; the
-Azure installer does not automatically provision PostgreSQL yet.
+### Existing password-based installations
 
-## Configure appsettings.json
+Setup retains the existing PVC and initialization Secret, installs certificate
+authentication, then restarts PostgreSQL with the new configuration. Existing
+data and role privileges are preserved. Network password authentication is
+disabled even if old password hashes and Secrets still exist. Update any other
+database clients to certificates before this restart.
 
-There is one `appsettings.json` format, without environment-specific variants.
-The web app reads `ConnectionStrings:Goblin`; the database tooling also reads
-`ConnectionStrings:GoblinAdmin` when applying SQL. The administrator connection
-belongs only in the tooling configuration.
+Setup refuses to replace a missing CA when issued TLS Secrets exist, or a missing
+initialization Secret when the PVC exists. Restore those Secrets from backup.
+Keep the CA and database recovery material backed up; deleting the namespace/PVC
+or losing the VM can delete the database.
 
-The backend file is `backend/src/Goblin.Web/appsettings.json`. Its complete
-connection string includes `Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app`
-and a concrete initialization password. Setup uses that password when creating
-the application role's Secret for a new database. For an existing installation,
-the existing database credentials take precedence and setup refreshes the file
-from `goblin-postgres-app`; it does not rotate a running database's password.
+## Password-free connection strings
 
-The build copies this file into the backend image at `/app/appsettings.json`.
-The backend reads it through standard .NET configuration; it needs no database
-Secret mount. The web file is eligible for Git and includes the application
-password. The database tooling's file, including administrator credentials,
-remains ignored and is populated by setup. Repository and image access therefore
-also grants access to the recorded application credential.
+The checked-in `backend/src/Goblin.Web/appsettings.json` contains this Npgsql
+connection string (shown on separate lines for readability):
 
-The [secret scanner](secret-scanning.md#handling-a-finding) allows this specific
-connection entry. It continues checking other values in the file and all
-administrator and provider credentials.
+```text
+Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;
+SSL Mode=VerifyFull;
+GSS Encryption Mode=Disable;
+Root Certificate=/etc/goblin-postgres/ca.crt;
+SSL Certificate=/etc/goblin-postgres/tls.crt;
+SSL Key=/etc/goblin-postgres/tls.key
+```
 
-`localhost` refers to the pod making the connection, even when both pods run on
-one VM. Use the Service name `goblin-postgres` from the same namespace, or
-`goblin-postgres.goblin.svc.cluster.local` from another namespace. A client in
-another namespace also needs an explicit network-policy allowance. The Service
-name remains stable when PostgreSQL's pod IP changes.
+`VerifyFull` checks both the server's CA and its hostname. GSS encryption is
+disabled so this connection uses TLS without requiring Kerberos libraries.
+Kubernetes mounts only
+the application certificate/key into Goblin at those stable paths, using a
+read-only Secret volume accessible to the application's group. The administrator
+and CA private keys are never mounted into the application.
 
-For commands run on your machine or on the VM host, `localhost` works through a
-port-forward to that same deployed database. This does not require a second
-environment or a second PostgreSQL instance.
+The connection string has no password, and no private key is copied into the
+image. Npgsql supports these settings directly; no custom certificate validation
+or authentication callback is used by the application. An optional Secret mount
+lets the authentication preview start before the separate PostgreSQL setup step.
 
-### Connect from outside the cluster
+For an existing image, setup sets the same certificate connection through
+`ConnectionStrings__Goblin` in the Sandbox so it takes effect without rebuilding.
+New images carry the certificate configuration in `appsettings.json`. If you
+change that file later, rerun setup to refresh the deployed override.
 
-Keep this running in a separate terminal with access to the cluster:
+## Database tooling outside Kubernetes
+
+Setup exports only the two client certificates and their public CA to
+`.goblin-postgres/app/` and `.goblin-postgres/admin/`. Directories are mode 0700
+and files mode 0600, excluded from Git and Docker. These private keys are login
+credentials. The CA signing key is not exported.
+
+It writes `backend/tools/Goblin.Database/appsettings.json` with the local
+certificate paths and `Host=localhost`. The server certificate includes
+`localhost` and loopback IPs for verified local connections.
+
+For the [local WSL runner](../deploy/local/README.md), setup automatically provides
+`localhost:55432` through a persistent loopback TCP proxy. It does not require a
+terminal or `kubectl port-forward`, and it resumes with the local installation.
+For an existing database, enable or repair it with:
+
+```bash
+npm run install:local -- database
+```
+
+In VS Code's WSL window, use:
+
+```text
+postgresql://goblin_app@localhost:55432/goblin?sslmode=verify-full&sslrootcert=/root/repos/goblin/.goblin-postgres/app/ca.crt&sslcert=/root/repos/goblin/.goblin-postgres/app/tls.crt&sslkey=/root/repos/goblin/.goblin-postgres/app/tls.key
+```
+
+Adjust the certificate paths if your checkout is elsewhere. Use `goblin_admin`
+and the `admin` certificate directory for schema administration.
+
+For other clusters, establish a tunnel from your machine. A temporary connection
+can use this command in a separate terminal:
 
 ```bash
 kubectl -n goblin port-forward service/goblin-postgres 5432:5432
 ```
 
-Setup already configured the tooling file for this port-forward. To refresh
-only the configuration files from an existing cluster:
+For another local port, use matching setup/tunnel ports:
 
 ```bash
-kubectl -n goblin get secret goblin-postgres-app goblin-postgres-admin -o json | \
-  python3 deploy/postgres/write-appsettings.py
+bash deploy/postgres/setup.sh --port 55432
+kubectl -n goblin port-forward service/goblin-postgres 55432:5432
 ```
 
-The web file is included in publish output and Docker builds; the tooling file
-containing administrator credentials stays outside the backend image and is
-excluded from its own publish output. Keep the configured image and image archive
-private, since they contain the application password.
+To refresh local certificates/configuration without restarting any workloads:
 
-Local builds copy each file beside its executable so `dotnet run`, direct DLL
-execution, and `dotnet ef` resolve them independently of the shell's working
-directory. If running the web app outside Kubernetes, change its host to
-`localhost` while the port-forward is active. Use `goblin-postgres` when building
-the image for k3s. Rebuild after editing a file.
+```bash
+kubectl -n goblin get secret goblin-postgres-app-tls goblin-postgres-admin-tls -o json | \
+  python3 deploy/postgres/write-appsettings.py --port 55432
+```
 
-No connection-string environment variables are needed. If you previously set
-`ConnectionStrings__Goblin` or `ConnectionStrings__GoblinAdmin`, unset them so
-.NET's environment-variable provider does not override your local JSON values.
+Local builds copy settings beside the executable. For a web process outside
+Kubernetes, use the tooling's `Goblin` connection (local host/port and absolute
+client certificate paths); `goblin-postgres` resolves inside Kubernetes.
+Remove stale connection environment overrides before running tooling, since
+.NET environment configuration takes precedence over JSON.
 
-### Deploy the configured backend
+## Certificate renewal
 
-Build from the checkout containing your web `appsettings.json`, then import and
-deploy that image using the [Agent Sandbox deployment steps](authentication-preview.md#run-in-the-provisioned-agent-sandbox-cluster).
-Use a new image tag for each build and update the Sandbox's container image to
-that tag before replacing its pod. The file is part of the image, so changing
-the connection string requires another build and deployment.
+Leaf certificates last 90 days and cert-manager renews them 30 days before expiry,
+rotating their keys. Full Secret directory mounts receive the renewed files.
+PostgreSQL watches the projected Secret and reloads TLS configuration; new Npgsql
+connections load the current client files. Existing pooled connections remain
+usable. No connection-string change or application rebuild is required.
 
-The Azure installer includes the web `appsettings.json` from its selected source
-revision. PostgreSQL setup is still a separate step. If setup refreshes the web
-file to match an existing installation's credentials, rebuild and deploy from
-that updated checkout before using the database.
+Exported host-side files are snapshots: refresh them with the command above
+after renewal. Monitor Certificate readiness and expiry. The CA has a ten-year
+lifetime and retains its key during routine renewal. A CA issuer does not manage
+a complete trust rollover or certificate revocation workflow; plan CA replacement
+and distribution of overlapping trust before expiry, and protect permissions
+to issue certificates and read Secrets in the `goblin` namespace.
+
+## Files and tools
+
+| Location | Purpose |
+| --- | --- |
+| `deploy/postgres/` | PostgreSQL 16.15, certificate resources, TLS/auth configuration, setup/export scripts |
+| `backend/database/migrations/` | Ordered, immutable SQL schema changes |
+| `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
+| `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime DbContext registration |
+| `backend/tools/Goblin.Database/` | SQL migration runner and isolated host for dotnet ef |
+| `backend/scripts/scaffold-database.sh` | Repeatable reverse-engineering command |
+
+Use .NET 10, Bash, Python 3, and a configured kubectl. EF Core and dotnet-ef are
+pinned to 10.0.12; the Npgsql EF provider is pinned to 10.0.3.
 
 ## Apply the SQL schema
 
@@ -212,7 +237,7 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
 ```
 
 `Name=ConnectionStrings:Goblin` resolves the JSON configuration in the tooling
-host, keeping the password out of command-line arguments.
+host, keeping connection configuration out of command-line arguments.
 `--data-annotations` requests mapping attributes. Leave `--use-database-names`
 unset so that `work_items` becomes `WorkItem` and `objective` becomes `Objective`.
 `--no-onconfiguring` keeps the connection string out of generated source.
@@ -308,6 +333,12 @@ PY
 The tests create and drop uniquely named databases. They cover EF insert/read/
 update/delete across contexts, application permission boundaries, repeatable
 schema application, edited-script rejection, and rollback after failed DDL.
+With a certificate connection, they also verify the authenticated identity and
+reject missing client certificates, administrator impersonation, unencrypted
+connections, an untrusted server CA, and an incorrect server hostname.
+Some client resets can cause this k3s version's `kubectl port-forward` to exit.
+The local runner's persistent endpoint avoids that path; use it for VS Code and
+these tests, or use a stable tunnel to another cluster.
 Without these explicit test variables, database integration tests are skipped
 and the normal solution tests need no PostgreSQL server.
 

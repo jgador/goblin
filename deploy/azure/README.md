@@ -39,7 +39,9 @@ logs remain on the VM for repair.
 
 Cert-manager is installed as an independent cluster add-on. It does not create
 certificates, install PostgreSQL, or change database connection strings,
-passwords, or authentication. Those remain separate configuration steps.
+passwords, or authentication. After installation, run
+`bash deploy/postgres/setup.sh` from the checkout to enable
+[PostgreSQL certificate authentication](../../docs/database.md).
 
 For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
 Enter your Goblin password to open the workspace. HTTPS and certificates remain

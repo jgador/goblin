@@ -1,0 +1,27 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: goblin-postgres-selfsigned
+  namespace: goblin
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: goblin-postgres-ca
+  namespace: goblin
+spec:
+  secretName: goblin-postgres-ca
+  commonName: Goblin PostgreSQL CA
+  isCA: true
+  duration: 87600h
+  renewBefore: 8760h
+  privateKey:
+    algorithm: RSA
+    size: 3072
+    rotationPolicy: Never
+  usages: [cert sign, crl sign]
+  issuerRef:
+    name: goblin-postgres-selfsigned
+    kind: Issuer

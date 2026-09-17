@@ -14,7 +14,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 `;
 
-test("local reset refuses an installation owned by another checkout or runner before invoking services", async (t) => {
+test("local reset and database access refuse another checkout or runner before invoking services", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-local-owner-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   execFileSync("python3", ["-c", loadRunner + `
@@ -27,15 +27,16 @@ module.CONTROL_LOCK = root / 'control.lock'
 def unexpected(*args, **kwargs):
     raise AssertionError('Refused reset must not invoke system commands')
 module.run = unexpected
-for config in ({'mode': 'direct', 'repo': '/another-checkout'}, {'mode': 'vm', 'repo': str(module.REPO)}):
-    module.OWNER.write_text(json.dumps(config))
-    with patch('sys.argv', [sys.argv[1], 'reset', '--yes']), patch('os.geteuid', return_value=0):
-        try:
-            module.main()
-            raise AssertionError('Reset must refuse an unowned installation')
-        except RuntimeError as error:
-            assert 'another runner or checkout' in str(error)
-    assert json.loads(module.OWNER.read_text()) == config
+for command in (['reset', '--yes'], ['database']):
+    for config in ({'mode': 'direct', 'repo': '/another-checkout'}, {'mode': 'vm', 'repo': str(module.REPO)}):
+        module.OWNER.write_text(json.dumps(config))
+        with patch('sys.argv', [sys.argv[1], *command]), patch('os.geteuid', return_value=0):
+            try:
+                module.main()
+                raise AssertionError('Must refuse an unowned installation')
+            except RuntimeError as error:
+                assert 'another runner or checkout' in str(error)
+        assert json.loads(module.OWNER.read_text()) == config
 module.OWNER.unlink()
 try:
     module.owned_config()
@@ -44,6 +45,58 @@ except RuntimeError:
     pass
 module.OWNER.write_text(json.dumps({'mode': 'direct', 'repo': str(module.REPO), 'http_port': 8788}))
 assert module.origin(module.owned_config()) == 'http://localhost:8788'
+`, runner, root]);
+});
+
+test("local database access refuses occupied ports, persists a loopback endpoint, and preserves live connections on rerun", async t => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-local-database-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  execFileSync("python3", ["-c", loadRunner + `
+import json, socket
+from types import SimpleNamespace
+root = Path(sys.argv[2])
+module.SYSTEMD = root / 'systemd'
+module.SYSTEMD.mkdir()
+module.OWNER = root / 'owner.json'
+config = {'mode': 'direct', 'repo': str(module.REPO), 'http_port': 8788}
+module.OWNER.write_text(json.dumps(config))
+module.active = lambda unit: unit == 'k3s.service'
+calls = []
+def run(args, **kwargs):
+    args = [str(arg) for arg in args]
+    calls.append(args)
+    return SimpleNamespace(stdout='10.43.23.45' if 'service' in args and 'get' in args else '')
+module.run = run
+with socket.socket() as occupied:
+    occupied.bind(('127.0.0.1', 0))
+    occupied.listen()
+    port = occupied.getsockname()[1]
+    try:
+        module.configure_database(config, port)
+        raise AssertionError('Must not replace an occupied listener')
+    except RuntimeError as error:
+        assert 'occupied' in str(error)
+    assert calls == []
+    assert json.loads(module.OWNER.read_text()) == config
+module.configure_database(config, port)
+unit = (module.SYSTEMD / module.DATABASE_SOCKET).read_text()
+assert f'ListenStream=127.0.0.1:{port}' in unit and f'ListenStream=[::1]:{port}' in unit
+assert '0.0.0.0' not in unit
+service = (module.SYSTEMD / module.DATABASE_SERVICE).read_text()
+assert 'systemd-socket-proxyd 10.43.23.45:5432' in service
+assert 'DynamicUser=yes' in service and 'port-forward' not in service
+assert json.loads(module.OWNER.read_text())['postgres_port'] == port
+assert (module.SYSTEMD / module.DATABASE_SOCKET).stat().st_mode & 0o777 == 0o644
+assert any('--kubeconfig=/etc/rancher/k3s/k3s.yaml' in args for args in calls)
+calls.clear()
+module.active = lambda unit: unit in ('k3s.service', module.DATABASE_SOCKET)
+module.configure_database(config, None)
+assert not any(args[:2] == ['systemctl', 'stop'] for args in calls)
+assert ['systemctl', 'enable', '--now', module.DATABASE_SOCKET] in calls
+module.stop()
+assert ['systemctl', 'disable', '--now', module.DATABASE_SOCKET] in calls
+assert ['systemctl', 'stop', module.DATABASE_SERVICE] in calls
+assert (root / 'paused').exists()
 `, runner, root]);
 });
 

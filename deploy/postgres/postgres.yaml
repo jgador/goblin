@@ -49,6 +49,7 @@ spec:
       containers:
         - name: postgres
           image: postgres:16.15-bookworm
+          command: [bash, /etc/goblin-postgres/start-postgres.sh]
           ports:
             - name: postgres
               containerPort: 5432
@@ -59,8 +60,6 @@ spec:
               value: goblin_admin
             - name: POSTGRES_PASSWORD_FILE
               value: /run/secrets/goblin-admin/password
-            - name: GOBLIN_APP_PASSWORD_FILE
-              value: /run/secrets/goblin-app/password
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
             - name: POSTGRES_INITDB_ARGS
@@ -79,16 +78,16 @@ spec:
               memory: 1Gi
           startupProbe:
             exec:
-              command: [pg_isready, -h, 127.0.0.1, -U, goblin_admin, -d, goblin]
+              command: [pg_isready, -h, /var/run/postgresql, -U, goblin_admin, -d, goblin]
             periodSeconds: 2
             failureThreshold: 90
           readinessProbe:
             exec:
-              command: [pg_isready, -h, 127.0.0.1, -U, goblin_admin, -d, goblin]
+              command: [pg_isready, -h, /var/run/postgresql, -U, goblin_admin, -d, goblin]
             periodSeconds: 5
           livenessProbe:
             exec:
-              command: [pg_isready, -h, 127.0.0.1, -U, goblin_admin, -d, goblin]
+              command: [pg_isready, -h, /var/run/postgresql, -U, goblin_admin, -d, goblin]
             periodSeconds: 10
             failureThreshold: 6
           volumeMounts:
@@ -101,11 +100,14 @@ spec:
             - name: init
               mountPath: /docker-entrypoint-initdb.d
               readOnly: true
+            - name: config
+              mountPath: /etc/goblin-postgres
+              readOnly: true
             - name: admin-password
               mountPath: /run/secrets/goblin-admin
               readOnly: true
-            - name: app-password
-              mountPath: /run/secrets/goblin-app
+            - name: tls
+              mountPath: /run/secrets/goblin-postgres-tls
               readOnly: true
       volumes:
         - name: data
@@ -119,17 +121,18 @@ spec:
           configMap:
             name: goblin-postgres-init
             defaultMode: 0444
+        - name: config
+          configMap:
+            name: goblin-postgres-config
+            defaultMode: 0444
         - name: admin-password
           secret:
             secretName: goblin-postgres-admin
             defaultMode: 0440
-        - name: app-password
+        - name: tls
           secret:
-            secretName: goblin-postgres-app
+            secretName: goblin-postgres-tls
             defaultMode: 0440
-            items:
-              - key: password
-                path: password
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

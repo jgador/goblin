@@ -4,13 +4,12 @@
 (
 set +x
 set -euo pipefail
-export GOBLIN_APP_PASSWORD
-GOBLIN_APP_PASSWORD=$(cat "${GOBLIN_APP_PASSWORD_FILE:?}")
 psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "${POSTGRES_USER:?}" --dbname "${POSTGRES_DB:?}" <<'SQL'
-\getenv app_password GOBLIN_APP_PASSWORD
 BEGIN;
-CREATE ROLE goblin_app LOGIN PASSWORD :'app_password'
+CREATE ROLE goblin_app LOGIN PASSWORD NULL
     NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+-- The image requires an initialization password, but clients use certificates.
+ALTER ROLE goblin_admin PASSWORD NULL;
 REVOKE ALL ON DATABASE goblin FROM PUBLIC;
 GRANT CONNECT ON DATABASE goblin TO goblin_app;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
@@ -22,5 +21,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE goblin_admin IN SCHEMA goblin
     GRANT USAGE, SELECT ON SEQUENCES TO goblin_app;
 COMMIT;
 SQL
-unset GOBLIN_APP_PASSWORD
 )
