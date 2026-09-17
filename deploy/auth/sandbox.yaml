@@ -66,6 +66,9 @@ spec:
             - name: owner-password
               mountPath: /etc/goblin
               readOnly: true
+            - name: postgres-client
+              mountPath: /etc/goblin-postgres
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /readyz
@@ -92,6 +95,12 @@ spec:
             items:
               - key: owner-password
                 path: owner-password
+        - name: postgres-client
+          secret:
+            secretName: goblin-postgres-app-tls
+            defaultMode: 0440
+            # PostgreSQL can be configured after the initial bundle installation.
+            optional: true
 ---
 apiVersion: v1
 kind: Service

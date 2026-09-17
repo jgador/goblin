@@ -174,8 +174,10 @@ Cert-manager 1.21 supports Kubernetes 1.33–1.36. Its readiness probe submits a
 Certificate with `--dry-run=server`, so no Certificate, Issuer, CA, or Secret is
 created. Installing cert-manager does not modify PostgreSQL configuration,
 connection strings, database credentials, or authentication. PostgreSQL remains
-an explicit separate setup step; HTTPS and database client certificates can be
-configured later, independently.
+an explicit separate setup step. Run `bash deploy/postgres/setup.sh` from the
+checkout to issue database certificates and configure password-free Npgsql
+connections; see the [database guide](../../docs/database.md). HTTPS remains
+independent.
 
 Upstream installer/manifests use pinned versions and verified SHA-256 digests.
 Outbound internet access is required for downloads and image pulls. The Ubuntu

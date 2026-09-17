@@ -53,26 +53,24 @@ const webSettingsPath = "backend/src/Goblin.Web/appsettings.json";
 const databaseConnection = password =>
   `Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;Password=${password}`;
 
-test("the intentionally tracked database connection passes worktree, staged, and history scans", (t) => {
+test("the certificate database connection passes worktree, staged, and history scans", (t) => {
   const repo = fixture(t);
-  const password = randomBytes(32).toString("hex");
-  for (const value of [password, `"${password}"`]) {
-    repo.write(webSettingsPath, JSON.stringify({ ConnectionStrings: {
-      Goblin: databaseConnection(value),
-    } }, null, 2) + "\n");
-    assert.equal(repo.scan().status, 0);
-    repo.git("add", webSettingsPath);
-    assert.equal(repo.scan("staged").status, 0);
-    assert.equal(repo.scan().status, 0);
-    repo.git("commit", "--quiet", "-m", "Intentional database configuration");
-  }
+  repo.write(webSettingsPath, JSON.stringify({ ConnectionStrings: {
+    Goblin: "Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;SSL Mode=VerifyFull;Root Certificate=/etc/goblin-postgres/ca.crt;SSL Certificate=/etc/goblin-postgres/tls.crt;SSL Key=/etc/goblin-postgres/tls.key",
+  } }, null, 2) + "\n");
+  assert.equal(repo.scan().status, 0);
+  repo.git("add", webSettingsPath);
+  assert.equal(repo.scan("staged").status, 0);
+  assert.equal(repo.scan().status, 0);
+  repo.git("commit", "--quiet", "-m", "Certificate database configuration");
   assert.equal(repo.scan("history").status, 0);
 });
 
-test("the database exception requires both the designated path and connection entry", (t) => {
+test("database passwords are rejected, including the former web configuration exception", (t) => {
   const password = randomBytes(32).toString("hex");
   const connection = databaseConnection(password);
   for (const [path, values] of [
+    [webSettingsPath, { Goblin: connection }],
     ["backend/tools/Goblin.Database/appsettings.json", { Goblin: connection }],
     ["backend/src/AnotherApp/appsettings.json", { Goblin: connection }],
     [webSettingsPath, { GoblinAdmin: connection.replace("Username=goblin_app", "Username=goblin_admin") }],

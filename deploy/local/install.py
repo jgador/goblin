@@ -5,6 +5,7 @@ import argparse
 import base64
 import fcntl
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,8 @@ SYSTEMD = Path('/etc/systemd/system')
 SETUP = Path('/opt/goblin/setup')
 PROXY = Path('/opt/goblin/local/forward.py')
 CONTROL_LOCK = Path('/run/goblin-local.lock')
+DATABASE_SOCKET = 'goblin-local-postgres.socket'
+DATABASE_SERVICE = 'goblin-local-postgres.service'
 
 
 def run(args, **kwargs):
@@ -121,7 +124,7 @@ def preflight(port):
                  Path('/etc/kubernetes'), Path('/var/lib/kubelet'), Path('/var/lib/cni'),
                  SYSTEMD / 'k3s.service', SYSTEMD / 'goblin-setup.service',
                  SYSTEMD / 'goblin-installer.service', SYSTEMD / 'goblin-local.socket',
-                 SYSTEMD / 'goblin-local.service'):
+                 SYSTEMD / 'goblin-local.service', SYSTEMD / DATABASE_SOCKET, SYSTEMD / DATABASE_SERVICE):
         if path.exists():
             raise RuntimeError(f'{path} already exists outside this runner. Use a clean WSL distribution for this test.')
     if shutil.which('k3s'):
@@ -173,6 +176,73 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
     run(['systemctl', 'enable', '--now', 'goblin-local.socket'])
 
 
+def configure_database(config, requested_port):
+    """Expose the owned local cluster over raw TCP, independent of kubectl tunnels."""
+    port = requested_port or config.get('postgres_port', 55432)
+    if not isinstance(port, int) or not 1024 <= port <= 65535 or port == config['http_port']:
+        raise RuntimeError('Choose a database port between 1024 and 65535, different from the browser port.')
+    if not active('k3s.service'):
+        raise RuntimeError('Start the local cluster first: npm run install:local -- start.')
+    if 'postgres_port' not in config and any((SYSTEMD / unit).exists() for unit in (DATABASE_SOCKET, DATABASE_SERVICE)):
+        raise RuntimeError('Database forwarding units already exist outside this runner; refusing to replace them.')
+    if config.get('postgres_port') != port or not active(DATABASE_SOCKET):
+        for family, address in ((socket.AF_INET, '127.0.0.1'), (socket.AF_INET6, '::1')):
+            with socket.socket(family) as listener:
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                if family == socket.AF_INET6:
+                    listener.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+                try:
+                    listener.bind((address, port))
+                except OSError as error:
+                    raise RuntimeError(f'Local port {port} is occupied. Stop its existing port-forward or choose another port.') from error
+    kubectl = ['k3s', 'kubectl', '--kubeconfig=/etc/rancher/k3s/k3s.yaml']
+    run([*kubectl, 'get', 'statefulset', 'goblin-postgres', '-n', 'goblin'], stdout=subprocess.DEVNULL)
+    run([*kubectl, 'apply', '-f', REPO / 'deploy/local/postgres-service.yaml'])
+    address = run([*kubectl, 'get', 'service', 'goblin-postgres-local', '-n', 'goblin',
+                   '-o', 'jsonpath={.spec.clusterIP}'], capture_output=True, text=True).stdout.strip()
+    try:
+        address = str(ipaddress.IPv4Address(address))
+    except ipaddress.AddressValueError as error:
+        raise RuntimeError('The local PostgreSQL service has no usable IPv4 cluster address.') from error
+    units = {
+        DATABASE_SOCKET: f'''[Unit]
+Description=Goblin local PostgreSQL port
+[Socket]
+ListenStream=127.0.0.1:{port}
+ListenStream=[::1]:{port}
+BindIPv6Only=ipv6-only
+[Install]
+WantedBy=sockets.target
+''',
+        DATABASE_SERVICE: f'''[Unit]
+Description=Forward local PostgreSQL clients to the Kubernetes service
+Requires={DATABASE_SOCKET} k3s.service
+After=network.target k3s.service
+[Service]
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd {address}:5432
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+''',
+    }
+    changed = any(not (SYSTEMD / name).exists() or (SYSTEMD / name).read_text() != text for name, text in units.items())
+    if changed:
+        for name in units:
+            if (SYSTEMD / name).exists():
+                run(['systemctl', 'stop', name])
+        for name, text in units.items():
+            (SYSTEMD / name).write_text(text)
+            (SYSTEMD / name).chmod(0o644)
+    config['postgres_port'] = port
+    private_write(OWNER, json.dumps(config, indent=2) + '\n')
+    run(['systemctl', 'daemon-reload'])
+    run(['systemctl', 'enable', '--now', DATABASE_SOCKET])
+    print(f'PostgreSQL is available at localhost:{port}; local access runs in the background. No kubectl port-forward is needed.')
+
+
 def prepare(config):
     print('Preparing the installation page and current source checkout…', flush=True)
     bundle = STATE / 'goblin-setup.pyz'
@@ -213,6 +283,8 @@ def start(args):
         state = read_status()
         if (SYSTEMD / 'k3s.service').exists():
             run(['systemctl', 'enable', '--now', 'k3s'])
+        if config.get('postgres_port'):
+            run(['systemctl', 'enable', '--now', DATABASE_SOCKET])
         if state and state['status'] != 'ready':
             run(['systemctl', 'enable', '--now', 'goblin-setup.service'])
             if state['status'] != 'failed' or (OWNER.parent / 'paused').exists():
@@ -253,15 +325,18 @@ def status(config):
         print(f'  {step["status"]:8} {step["label"]}')
     if not active('goblin-local.socket'):
         print('Local browser access is stopped. Run start to resume.')
+    if config.get('postgres_port'):
+        print(f'PostgreSQL: localhost:{config["postgres_port"]} ({"listening" if active(DATABASE_SOCKET) else "stopped"})')
 
 
 def stop():
     # Stop the worker first so its recovery handler cannot restart setup later.
-    for unit in ('goblin-installer.service', 'goblin-setup.service', 'goblin-local.socket'):
+    for unit in ('goblin-installer.service', 'goblin-setup.service', 'goblin-local.socket', DATABASE_SOCKET):
         if (SYSTEMD / unit).exists():
             run(['systemctl', 'disable', '--now', unit], stdout=subprocess.DEVNULL)
-    if (SYSTEMD / 'goblin-local.service').exists():
-        run(['systemctl', 'stop', 'goblin-local.service'])
+    for unit in ('goblin-local.service', DATABASE_SERVICE):
+        if (SYSTEMD / unit).exists():
+            run(['systemctl', 'stop', unit])
     if (SYSTEMD / 'k3s.service').exists():
         run(['systemctl', 'disable', '--now', 'k3s'])
         # Stopping k3s alone intentionally leaves its containers running.
@@ -290,7 +365,7 @@ def reset():
         if subprocess.run(['mountpoint', '--quiet', str(kubelet)]).returncode == 0:
             run(['umount', '--', kubelet])
         kubelet.rmdir()
-    for name in ('goblin-local.socket', 'goblin-local.service', 'goblin-setup.service', 'goblin-installer.service'):
+    for name in ('goblin-local.socket', 'goblin-local.service', 'goblin-setup.service', 'goblin-installer.service', DATABASE_SOCKET, DATABASE_SERVICE):
         subprocess.run(['systemctl', 'reset-failed', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         (SYSTEMD / name).unlink(missing_ok=True)
     override = SYSTEMD / 'goblin-installer.service.d'
@@ -316,6 +391,8 @@ def main():
     commands = parser.add_subparsers(dest='command', required=True)
     create = commands.add_parser('start', help='Show setup and install directly in WSL/Linux, or resume')
     create.add_argument('--http-port', type=int, choices=range(1024, 65536), metavar='PORT')
+    database = commands.add_parser('database', help='Enable persistent local PostgreSQL access after database setup')
+    database.add_argument('--port', type=int, choices=range(1024, 65536), metavar='PORT')
     for name in ('status', 'retry', 'stop', 'password'):
         commands.add_parser(name)
     logs = commands.add_parser('logs')
@@ -350,7 +427,9 @@ def main():
             start(args)
         else:
             config = owned_config()
-            if args.command == 'retry':
+            if args.command == 'database':
+                configure_database(config, args.port)
+            elif args.command == 'retry':
                 current = read_status()
                 if not current:
                     raise RuntimeError('Bootstrap is incomplete. Run start again.')
