@@ -13,6 +13,14 @@ The preview explores the smallest native work surface for Goblin:
 - Keep the request, conversation, decisions, activity, and outputs together.
 - Let Goblin ask for input, then bring back a result to approve or revise.
 
+The [architecture plan](architecture-refactoring-plan.md) treats Work as durable
+and independent of a conversation; **Track this work** is one proposed way to
+create it. Codex is the current primary agent integration, with Claude and
+GitHub Copilot as future targets. The assignment experience above explores a
+stable Goblin identity across runtime choices. How users choose a runtime or
+hand Work to another agent remains open, and this preview does not implement
+those behaviors.
+
 ## Try the experience
 
 1. Open **Make Goblin easier to set up**, choose an approach, and select
@@ -29,7 +37,7 @@ return to the list.
 
 All work, replies, timestamps, and outputs are examples. State lives only in the
 current page and resets on refresh or **Reset preview**. The preview does not
-call Codex, create GitHub issues, or store user input on the server.
+call any agent runtime, create GitHub issues, or store user input on the server.
 
 The preview is a public static route, like the connection page. It contains no
 account or workspace data and needs no provider connection. Existing session

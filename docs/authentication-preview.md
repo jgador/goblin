@@ -1,9 +1,15 @@
 # Try the authentication preview
 
 This authentication implementation is a preview. It implements ChatGPT device-code
-login, OpenAI API-key login, and an automatic connection check using the saved account.
+login, OpenAI API-key login, and an automatic connection check using the saved account
+through Codex, the current primary and only implemented agent integration.
 Review authentication first;
 GitHub and repository integration remain a separate decision.
+
+The [architecture plan](architecture-refactoring-plan.md) prepares for other
+agents, including Claude and GitHub Copilot. Their authentication flows and
+runtime capabilities are not implemented by this preview; OpenAI sign-in only
+configures the Codex connection.
 
 ## Run locally
 
