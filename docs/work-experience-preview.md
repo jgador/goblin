@@ -1,63 +1,44 @@
-# Work experience preview
+# Work experience
 
-Run Goblin with `npm ci` followed by `npm start`, then open
-http://localhost:8787/work. The connection page also links to the preview, and
-**Connection settings** returns to the existing account setup.
+Open `/work` or **Open work** from the connection page, then unlock Goblin.
+The screen uses authenticated APIs and PostgreSQL. Sample fixtures remain in
+`frontend/src/work/sample-fixtures.ts` for design reference and are not loaded
+by the application.
 
-The preview explores the smallest native work surface for Goblin:
+Create Work by describing its intended outcome, assign the Goblin agent, and
+choose **Start work** for a text question. **Repository changes** requires a known
+GitHub repository, an agent Git author identity, GitHub sign-in, and a configured
+sandbox host. See [execution hosting](execution-hosting.md) for setup and limits.
 
-- Start with a conversation and choose **Track this work** when it should become
-  a work item.
-- Assign work to Goblin, keeping the underlying executor out of the assignment
-  experience.
-- Keep the request, conversation, decisions, activity, and outputs together.
-- Let Goblin ask for input, then bring back a result to approve or revise.
+An agent can return a question or an outcome for review. Answering a question or
+requesting changes records the context and makes Work ready for another attempt.
+**Approve & complete** approves the specific saved outcome. Decisions, attempts,
+progress, outputs, and approvals survive refresh and appear in another browser.
+Codex completing a turn does not approve or complete Work automatically.
 
-The [architecture plan](architecture-refactoring-plan.md) treats Work as durable
-and independent of a conversation; **Track this work** is one proposed way to
-create it. Codex is the current primary agent integration, with Claude and
-GitHub Copilot as future targets. The assignment experience above explores a
-stable Goblin identity across runtime choices. How users choose a runtime or
-hand Work to another agent remains open, and this preview does not implement
-those behaviors.
+Every observed failure requires attention. Retry creates a new attempt only after
+an uncertain execution has been reconciled. Cancellation waits for stopping
+confirmation. Cleanup failures also require reconciliation before continuation.
+The activity view records the runtime and model reported for each attempt.
 
-## Try the experience
+The browser distinguishes saving from a confirmed transition. If a response is
+lost, it retains the original command in session storage and offers **Resend
+command**. The server deduplicates it by command ID and payload; it does not
+execute the action twice. **Keep saved state** dismisses that pending submission.
+Polling, reconnect, and refresh retrieve authoritative state. Local navigation,
+filters, selection, and unsent drafts do not change Work lifecycle.
 
-1. Open **Make Goblin easier to set up**, choose an approach, and select
-   **Continue with this**.
-2. Select **Preview a finished result**, open **Outputs**, and read the proposal.
-3. Choose **Ask for changes** and send feedback, or **Approve & complete**.
-4. Open **Activity** to see the decisions and handoffs.
-5. Start a **New conversation**, send a request, and select **Track this work**.
+Conversations store user context. **Track this work** creates and links a Work
+item; the user can assign and execute it. Untracked conversations do not invent
+assistant replies or start execution. Their classification as research,
+investigation, or another product concept remains open.
 
-On narrow screens, select a work item to open its details and use **Work** to
-return to the list.
+The existing TypeScript, CSS, Goblin branding, responsive layout, keyboard tabs,
+password access, same-origin checks, and content security policy remain in use.
+User and runtime text is escaped before rendering.
 
-## Scope
-
-All work, replies, timestamps, and outputs are examples. State lives only in the
-current page and resets on refresh or **Reset preview**. The preview does not
-call any agent runtime, create GitHub issues, or store user input on the server.
-
-The preview is a public static route, like the connection page. It contains no
-account or workspace data and needs no provider connection. Existing session
-checks and authenticated APIs are unchanged. Future integration of real work
-must use authenticated APIs and durable server-side state.
-
-The browser code lives in `frontend/src/work/app.ts`. The existing TypeScript build
-emits its JavaScript; `frontend/scripts/copy-assets.mts` copies the HTML and CSS.
-`GoblinApplication` serves the explicit `/work`, `/work/`,
-`/work/app.js`, and `/work/styles.css` routes.
-
-It reuses the existing vector logo and local font stack, with no external font
-requests, inline scripts, or inline styles. The existing content-security policy
-remains unchanged.
-
-## Verification
-
-`npm run typecheck` checks TypeScript and the .NET build. After a successful
-`npm run build`, run
-`npx playwright test tests/e2e/work.spec.ts` for the preview journeys,
-mobile navigation, content-security-policy checks, and escaped user input.
-The browser fixture uses the existing simulated backend and never contacts
-OpenAI.
+Run `npm run build` and `npx playwright test tests/e2e/work.spec.ts` with
+`GOBLIN_TEST_POSTGRES_ADMIN` and `GOBLIN_TEST_POSTGRES_APP` configured for a
+**disposable migrated test database**. Browser tests use real APIs and PostgreSQL
+with a deterministic execution fixture; they do not authenticate a real model
+or push to GitHub. Without the database setting, durable browser journeys skip.

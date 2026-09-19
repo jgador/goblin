@@ -26,7 +26,8 @@ spec:
       labels:
         app: goblin-auth
     spec:
-      automountServiceAccountToken: false
+      serviceAccountName: goblin-execution-controller
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -46,6 +47,10 @@ spec:
               value: http://localhost:8787
             - name: GOBLIN_PASSWORD_HASH_FILE
               value: /etc/goblin/owner-password
+            - name: GOBLIN_EXECUTION_NAMESPACE
+              value: goblin-executions
+            - name: GOBLIN_EXECUTION_IMAGE
+              value: goblin-auth:0.1.0
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -99,8 +104,6 @@ spec:
           secret:
             secretName: goblin-postgres-app-tls
             defaultMode: 0440
-            # PostgreSQL can be configured after the initial bundle installation.
-            optional: true
 ---
 apiVersion: v1
 kind: Service

@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 
-namespace Goblin.Web.Codex;
+namespace Goblin.Integrations.Codex;
 
 internal static class JsonLines
 {
@@ -33,12 +33,12 @@ internal static class JsonLines
                 }
                 else
                 {
-                    if (line.Length >= MaximumLength) throw PublicError.RuntimeUnavailable();
+                    if (line.Length >= MaximumLength) throw IntegrationFailure.RuntimeUnavailable();
                     line.Append(buffer[i]);
                 }
             }
         }
         // A partial last frame is a failed transport, never a successful response.
-        if (line.Length > 0) throw PublicError.RuntimeUnavailable();
+        if (line.Length > 0) throw IntegrationFailure.RuntimeUnavailable();
     }
 }

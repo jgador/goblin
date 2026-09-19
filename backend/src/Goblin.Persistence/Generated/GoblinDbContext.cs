@@ -12,15 +12,110 @@ public partial class GoblinDbContext : DbContext
     {
     }
 
+    public virtual DbSet<Agent> Agents { get; set; }
+
+    public virtual DbSet<Connection> Connections { get; set; }
+
+    public virtual DbSet<Conversation> Conversations { get; set; }
+
+    public virtual DbSet<ConversationMessage> ConversationMessages { get; set; }
+
+    public virtual DbSet<ExecutionAttempt> ExecutionAttempts { get; set; }
+
+    public virtual DbSet<WorkCommand> WorkCommands { get; set; }
+
     public virtual DbSet<WorkItem> WorkItems { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Agent>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("agents_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+
+            entity.HasOne(d => d.Connection).WithMany(p => p.Agents)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("agents_connection_id_fkey");
+        });
+
+        modelBuilder.Entity<Connection>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("connections_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Availability).HasDefaultValueSql("'Disconnected'::text");
+            entity.Property(e => e.ChangedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<Conversation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("conversations_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.Conversations).HasConstraintName("conversations_work_id_fkey");
+        });
+
+        modelBuilder.Entity<ConversationMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("conversation_messages_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.ConversationMessages)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("conversation_messages_conversation_id_fkey");
+        });
+
+        modelBuilder.Entity<ExecutionAttempt>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("execution_attempts_pkey");
+
+            entity.HasIndex(e => e.ConnectionId, "one_execution_per_connection")
+                .IsUnique()
+                .HasFilter("((status = ANY (ARRAY['Starting'::text, 'Running'::text, 'CancellationRequested'::text, 'Uncertain'::text])) OR cleanup_pending)");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+
+            entity.HasOne(d => d.Agent).WithMany(p => p.ExecutionAttempts)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("execution_attempts_agent_id_fkey");
+
+            entity.HasOne(d => d.Connection).WithOne(p => p.ExecutionAttempt)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("execution_attempts_connection_id_fkey");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.ExecutionAttempts)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("execution_attempts_work_id_fkey");
+        });
+
+        modelBuilder.Entity<WorkCommand>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("work_commands_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.WorkCommands)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("work_commands_work_id_fkey");
+        });
+
         modelBuilder.Entity<WorkItem>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("work_items_pkey");
 
             entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.Status).HasDefaultValueSql("'Ready'::text");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.Version).HasDefaultValue(1L);
+
+            entity.HasOne(d => d.Agent).WithMany(p => p.WorkItems).HasConstraintName("work_items_agent_id_fkey");
         });
 
         OnModelCreatingPartial(modelBuilder);

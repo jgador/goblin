@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Integrations.Codex;
 using Goblin.Web;
 using Xunit;
 
@@ -34,7 +35,7 @@ public sealed class ApiKeyVerifierTests
         if (status is 200 or 403 or 429) Assert.Equal(expected, await verifier.VerifyAsync(Key));
         else
         {
-            PublicError error = await Assert.ThrowsAsync<PublicError>(() => verifier.VerifyAsync(Key));
+            IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => verifier.VerifyAsync(Key));
             Assert.Equal(expected, error.Code);
             Assert.DoesNotContain("PRIVATE", error.Message);
         }
@@ -44,7 +45,7 @@ public sealed class ApiKeyVerifierTests
     public async Task NetworkErrorsNeverExposeCredentials()
     {
         using var client = new HttpClient(new Handler(_ => throw new HttpRequestException(Key)));
-        PublicError error = await Assert.ThrowsAsync<PublicError>(() => new ApiKeyVerifier(client).VerifyAsync(Key));
+        IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => new ApiKeyVerifier(client).VerifyAsync(Key));
         Assert.Equal("verification_unavailable", error.Code);
         Assert.DoesNotContain(Key, error.Message);
     }

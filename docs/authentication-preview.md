@@ -13,6 +13,10 @@ configures the Codex connection.
 
 ## Run locally
 
+Durable Work is enabled by default and requires the migrated PostgreSQL connection
+in the [database guide](database.md). For an authentication-only development check,
+set `GOBLIN_WORK_ENABLED=false` before starting Goblin.
+
 Install the .NET 10 SDK, Node.js 24 or newer, and Python 3, then run from this checkout:
 
 ```bash
@@ -168,8 +172,9 @@ docker run --rm -i --user 0:0 --entrypoint sh \
   < .goblin-secrets/owner-password
 ```
 
-Start Goblin with persistent application storage and the password volume mounted
-read-only:
+For a connection-only check without PostgreSQL, start with persistent application
+storage and the password volume mounted read-only. Durable Work additionally
+requires the database and execution configuration in [execution hosting](execution-hosting.md):
 
 ```bash
 docker run --rm --name goblin-auth \
@@ -177,6 +182,7 @@ docker run --rm --name goblin-auth \
   -v goblin-auth-data:/data \
   -v goblin-auth-password:/etc/goblin:ro \
   -e GOBLIN_PASSWORD_HASH_FILE=/etc/goblin/owner-password \
+  -e GOBLIN_WORK_ENABLED=false \
   goblin-auth:0.1.0
 ```
 
@@ -258,13 +264,13 @@ declared separately from the Sandbox so replacing the Sandbox can retain it.
 Deleting the PVC, namespace, or full manifest also deletes the preview data
 according to the storage class's reclaim policy.
 
-This preview intentionally supports one owner and one active Codex process per
-data volume. Do not mount the same credential directory into concurrent replicas.
-The container runs without root or a Kubernetes service-account token; it does
-not expose arbitrary thread creation, shell execution, or Codex RPC methods.
-Its prompt endpoint creates only the restricted temporary conversations above.
-The cluster still needs an appropriate sandbox runtime before a later stage
-executes untrusted repository code.
+Goblin supports one owner and one controller per data volume. Do not mount the
+same credential directory into concurrent application replicas. The application
+now receives namespace-scoped Kubernetes control-plane credentials to manage
+repository sandboxes; the execution pods never receive that service-account
+token or the application database certificate. The verification endpoint remains
+restricted. See [execution hosting](execution-hosting.md) for durable Work,
+connection reservations, sandbox isolation, and deployment configuration.
 
 ### Migrate from earlier deployment names
 

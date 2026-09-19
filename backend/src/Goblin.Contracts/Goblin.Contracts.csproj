@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Goblin.Core/Goblin.Core.csproj" />
+  </ItemGroup>
+</Project>

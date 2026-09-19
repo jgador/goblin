@@ -1,11 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Persistence;
-using Goblin.Web.Codex;
+using Goblin.Integrations.Codex;
+using Goblin.Contracts;
+using Goblin.Contracts.Runtime;
+using Goblin.Application;
+using Goblin.Application.Work;
+using Goblin.Execution;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json.Serialization;
+using Wolverine;
+using Goblin.Integrations.GitHub;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -28,6 +38,8 @@ public sealed record ApplicationOptions
     public Func<string, Task<string>>? VerifyApiKey { get; init; }
     public TimeSpan PromptTimeout { get; init; } = TimeSpan.FromSeconds(90);
     public bool RecoverRuntime { get; init; } = true;
+    public bool EnableWork { get; init; }
+    public IExecutionHost? ExecutionHost { get; init; }
 }
 
 public static class GoblinApplication
@@ -51,6 +63,30 @@ public static class GoblinApplication
         builder.Logging.ClearProviders();
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
+        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        if (options.EnableWork)
+        {
+            if (string.IsNullOrWhiteSpace(databaseConnection)) throw new InvalidOperationException("Durable Work requires PostgreSQL.");
+            builder.Host.UseWolverine(messaging => ApplicationServices.ConfigureMessaging(messaging, databaseConnection));
+            builder.Services.AddWorkApplication();
+            IExecutionHost executionHost = new LocalTextHost(new(
+                Path.Combine(workspace.DataDirectory, "executions"), workspace.CodexHome, runtimeOptions.Command,
+                typeof(GoblinApplication).Assembly.Location));
+            string? executionNamespace = builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"];
+            if (!string.IsNullOrWhiteSpace(executionNamespace))
+            {
+                var kubernetes = new KubernetesApi(builder.Configuration["GOBLIN_KUBERNETES_URL"],
+                    builder.Configuration["GOBLIN_KUBERNETES_TOKEN_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token",
+                    builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
+                builder.Services.AddSingleton(kubernetes);
+                executionHost = new SandboxHost(kubernetes, new(executionNamespace,
+                    builder.Configuration["GOBLIN_EXECUTION_IMAGE"] ?? "goblin-auth:0.1.0", workspace.CodexHome,
+                    Path.Combine(workspace.DataDirectory, "github.json")), executionHost);
+            }
+            builder.Services.AddSingleton(options.ExecutionHost ?? executionHost);
+            builder.Services.AddSingleton(new GitHubConnection(builder.Configuration["GOBLIN_GITHUB_CLIENT_ID"], Path.Combine(workspace.DataDirectory, "github.json")));
+            builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(Path.Combine(workspace.DataDirectory, "dispatch-failures")));
+        }
         builder.WebHost.UseUrls(options.ListenUrl);
         builder.WebHost.ConfigureKestrel(server =>
         {
@@ -78,6 +114,7 @@ public static class GoblinApplication
             ("/styles.css", "connection/styles.css", "text/css; charset=utf-8"),
             ("/work", "work/index.html", "text/html; charset=utf-8"),
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
+            ("/work/presentation.js", "work/presentation.js", "text/javascript; charset=utf-8"),
             ("/work/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/assets/branding/icon.svg", "assets/branding/icon.svg", "image/svg+xml")
         }) staticFiles.Add(path, (await File.ReadAllBytesAsync(Path.Combine(options.AssetDirectory, file)), type));
@@ -109,27 +146,108 @@ public static class GoblinApplication
             catch (Exception error)
             {
                 if (response.HasStarted || context.RequestAborted.IsCancellationRequested) return;
-                PublicError safe = error as PublicError ?? new PublicError("internal_error", "The request could not be completed. Please retry.", 500);
+                PublicError safe = PublicError.Translate(error);
                 response.StatusCode = safe.Status;
                 await response.WriteAsJsonAsync(new ApiFailure(new(safe.Code, safe.Message)));
             }
         });
 
         app.MapGet("/healthz", () => Results.Json(new { ok = true }));
-        app.MapGet("/readyz", () => Results.Json(new { ready = codex.Ready }, statusCode: codex.Ready ? 200 : 503));
+        app.MapGet("/readyz", async (HttpContext context) =>
+        {
+            bool ready = true;
+            if (options.EnableWork)
+            {
+                try
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    var db = context.RequestServices.GetRequiredService<GoblinDbContext>();
+                    await db.WorkItems.AsNoTracking().Select(x => x.Id).Take(1).ToArrayAsync(timeout.Token);
+                }
+                catch { ready = false; }
+            }
+            return Results.Json(new { ready }, statusCode: ready ? 200 : 503);
+        });
         foreach ((string? path, (byte[] Body, string ContentType) asset) in staticFiles)
             app.MapGet(path, () => Results.Bytes(asset.Body, asset.ContentType));
         app.MapGet("/api/session", (HttpContext context) => workspace.Session(workspace.SessionId(context.Request) is not null));
         app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "password"), context.Response));
         app.MapPost("/api/session/lock", (HttpContext context) => workspace.Lock((string)context.Items[SessionKey]!, context.Response));
-        app.MapGet("/api/status", () => auth.StatusAsync());
-        app.MapPost("/api/auth/chatgpt", () => auth.LoginChatGptAsync());
-        app.MapPost("/api/auth/api-key", (Delegate)(async (HttpContext context) => Results.Json(await auth.LoginApiKeyAsync(StringField(context, "apiKey")))));
-        app.MapPost("/api/auth/cancel", () => auth.CancelLoginAsync());
-        app.MapPost("/api/auth/logout", () => auth.LogoutAsync());
-        app.MapPost("/api/prompt", (Delegate)(async (HttpContext context) => Results.Json(await auth.SendPromptAsync(StringField(context, "prompt"), context.RequestAborted))));
+        app.MapGet("/api/status", (Delegate)((HttpContext context) => ConnectionAsync(context, false, auth.StatusAsync)));
+        app.MapPost("/api/auth/chatgpt", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.LoginChatGptAsync)));
+        app.MapPost("/api/auth/api-key", (Delegate)((HttpContext context) => ConnectionAsync(context, true, () => auth.LoginApiKeyAsync(StringField(context, "apiKey")))));
+        app.MapPost("/api/auth/cancel", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.CancelLoginAsync)));
+        app.MapPost("/api/auth/logout", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.LogoutAsync)));
+        app.MapPost("/api/prompt", (Delegate)(async (HttpContext context) =>
+        {
+            WorkStore? store = options.EnableWork ? context.RequestServices.GetRequiredService<WorkStore>() : null;
+            if (store is not null) await store.BeginVerificationAsync(WorkStore.DefaultAgentId, context.RequestAborted);
+            bool available = false;
+            try
+            {
+                var result = await auth.SendPromptAsync(StringField(context, "prompt"), context.RequestAborted);
+                available = true;
+                return Results.Json(result);
+            }
+            finally { if (store is not null) await store.EndVerificationAsync(WorkStore.DefaultAgentId, available); }
+        }));
+        if (options.EnableWork)
+        {
+            app.MapGet("/api/github", (GitHubConnection github) => github.StatusAsync());
+            app.MapPost("/api/github/connect", (GitHubConnection github) => github.StartAsync());
+            app.MapPost("/api/github/disconnect", async (GitHubConnection github, WorkStore store) =>
+            {
+                await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", requireIdle: true);
+                try { return await github.DisconnectAsync(); }
+                finally { await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Disconnected", requireIdle: false, completeChange: true); }
+            });
+            app.MapGet("/api/conversations", (ConversationStore store, CancellationToken token) => store.ListAsync(token));
+            app.MapPost("/api/conversations/commands", async (HttpContext context, ConversationStore store) =>
+            {
+                var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
+                var command = JsonSerializer.Deserialize<ConversationCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
+                    ?? throw new PublicError("invalid_command", "Send a conversation command.");
+                return await store.ApplyAsync(command);
+            });
+            app.MapGet("/api/work", (WorkStore store, CancellationToken token) => store.ListAsync(token));
+            app.MapGet("/api/work/{id:guid}", (Guid id, WorkStore store, CancellationToken token) => store.GetAsync(id, token));
+            app.MapGet("/api/agents", (WorkStore store, CancellationToken token) => store.AgentsAsync(token));
+            app.MapGet("/api/connections", async (HttpContext context, WorkStore store, CancellationToken token) =>
+            {
+                try { await ConnectionAsync(context, false, auth.StatusAsync); } catch (IntegrationFailure) { }
+                return await store.ConnectionsAsync(token);
+            });
+            app.MapGet("/api/runtimes", (IExecutionHost host) => host.Capabilities);
+            app.MapPost("/api/work/commands", async (HttpContext context, WorkStore store) =>
+            {
+                var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
+                var command = JsonSerializer.Deserialize<WorkCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
+                    ?? throw new PublicError("invalid_command", "Send a work command.");
+                // Once accepted, the command has an independent transaction and
+                // execution lifecycle. RequestAborted is deliberately not passed.
+                return await store.ApplyAsync(command);
+            });
+        }
         app.MapFallback("/{**path}", () => Results.Json(new ApiFailure(new("not_found", "This endpoint does not exist.")), statusCode: 404));
         return app;
+
+        async Task<AuthenticationState> ConnectionAsync(HttpContext context, bool changing, Func<Task<AuthenticationState>> action)
+        {
+            WorkStore? store = options.EnableWork ? context.RequestServices.GetRequiredService<WorkStore>() : null;
+            if (changing && store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", requireIdle: true);
+            try
+            {
+                AuthenticationState state = await action();
+                if (store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId,
+                    state.Account is not null && state.RuntimeReady ? "Available" : "Disconnected", requireIdle: false, completeChange: changing);
+                return state;
+            }
+            catch
+            {
+                if (store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Unavailable", requireIdle: false, completeChange: changing);
+                throw;
+            }
+        }
     }
 
     private static string? StringField(HttpContext context, string name)

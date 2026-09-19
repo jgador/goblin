@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
 
-namespace Goblin.Web.Codex;
+namespace Goblin.Integrations.Codex;
 
 /// <summary>Owns a connection to the official Rust app-server; no conversation state lives here.</summary>
 public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
@@ -36,7 +36,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
         Task start;
         lock (_gate)
         {
-            if (_closed) throw PublicError.RuntimeUnavailable();
+            if (_closed) throw IntegrationFailure.RuntimeUnavailable();
             if (_ready) return Task.CompletedTask;
             if (_starting is null || _starting.IsCompleted) _starting = StartCoreAsync();
             start = _starting;
@@ -52,14 +52,14 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
         Process child;
         lock (_gate)
         {
-            if (_closed) throw PublicError.RuntimeUnavailable();
+            if (_closed) throw IntegrationFailure.RuntimeUnavailable();
             child = new Process { StartInfo = Options.CreateStartInfo() };
             try
             {
-                if (!child.Start()) throw PublicError.RuntimeUnavailable();
+                if (!child.Start()) throw IntegrationFailure.RuntimeUnavailable();
                 _process = child;
             }
-            catch { child.Dispose(); throw PublicError.RuntimeUnavailable(); }
+            catch { child.Dispose(); throw IntegrationFailure.RuntimeUnavailable(); }
         }
         _ = ReadAsync(child);
         _ = DrainErrorsAsync(child);
@@ -76,7 +76,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
             });
             lock (_gate)
             {
-                if (_process != child || _closed || child.HasExited) throw PublicError.RuntimeUnavailable();
+                if (_process != child || _closed || child.HasExited) throw IntegrationFailure.RuntimeUnavailable();
                 _ready = true;
             }
         }
@@ -92,8 +92,8 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
         Process child;
         lock (_gate)
         {
-            child = _process ?? throw PublicError.RuntimeUnavailable();
-            if (_closed) throw PublicError.RuntimeUnavailable();
+            child = _process ?? throw IntegrationFailure.RuntimeUnavailable();
+            if (_closed) throw IntegrationFailure.RuntimeUnavailable();
             _pending[id] = new Pending(method, completion);
         }
         using var timeout = new CancellationTokenSource(Options.RequestTimeout);
@@ -115,11 +115,11 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
             _pending.TryRemove(id, out _);
             Fail(child);
             if (cancellationToken.IsCancellationRequested) throw;
-            throw new PublicError("runtime_timeout", "Codex took too long to respond. Please retry.", 504);
+            throw new IntegrationFailure("runtime_timeout", "Codex took too long to respond. Please retry.");
         }
-        catch (JsonException) { Fail(child); throw PublicError.RuntimeUnavailable(); }
-        catch (PublicError) { throw; }
-        catch { Fail(child); throw PublicError.RuntimeUnavailable(); }
+        catch (JsonException) { Fail(child); throw IntegrationFailure.RuntimeUnavailable(); }
+        catch (IntegrationFailure) { throw; }
+        catch { Fail(child); throw IntegrationFailure.RuntimeUnavailable(); }
         finally { _pending.TryRemove(id, out _); }
     }
 
@@ -133,7 +133,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
         try
         {
             lock (_gate)
-                if (_process != child || _closed) throw PublicError.RuntimeUnavailable();
+                if (_process != child || _closed) throw IntegrationFailure.RuntimeUnavailable();
             await child.StandardInput.WriteLineAsync(line.AsMemory(), cancellationToken);
             await child.StandardInput.FlushAsync(cancellationToken);
         }
@@ -170,10 +170,10 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
                 {
                     JSONRPCError error = Deserialize<JSONRPCError>(line);
                     if (_pending.TryRemove(error.Id, out Pending? request))
-                        request.Completion.TrySetException(new PublicError("codex_request_failed",
+                        request.Completion.TrySetException(new IntegrationFailure("codex_request_failed",
                             request.Method == "account/login/start"
                                 ? "Codex could not complete this request. For ChatGPT, check that device-code login is enabled, then retry."
-                                : "Codex could not complete this request. Please retry.", 502));
+                                : "Codex could not complete this request. Please retry."));
                 }
                 else if (hasId)
                 {
@@ -235,7 +235,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
             _ready = false;
             _retiring = RetireAsync(child);
             foreach ((RequestId id, Pending? request) in _pending)
-                if (_pending.TryRemove(id, out _)) request.Completion.TrySetException(PublicError.RuntimeUnavailable());
+                if (_pending.TryRemove(id, out _)) request.Completion.TrySetException(IntegrationFailure.RuntimeUnavailable());
         }
         Disconnected?.Invoke();
     }

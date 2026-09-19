@@ -5,11 +5,15 @@ Core application. Run the commands below from the repository root.
 
 ```text
 backend/
-  src/Goblin.Web/          ASP.NET Core host and Codex integration
-    Auth/                 Account authentication and API-key verification
+  src/Goblin.Core/         Work lifecycle rules and Goblin-owned execution types
+  src/Goblin.Contracts/   Public account and runtime capability contracts
+  src/Goblin.Application/ Durable commands, conversations, dispatch, and recovery
+  src/Goblin.Execution/   Text workers and isolated repository sandboxes
+  src/Goblin.Integrations.Codex/   Codex account, transport, and Work adapter
+  src/Goblin.Integrations.GitHub/  GitHub device sign-in and private credentials
+  src/Goblin.Web/          ASP.NET Core composition and HTTP adapters
     Access/               Workspace access, passwords, and browser sessions
     Http/                 HTTP contracts and public errors
-    Codex/                Child process, JSONL transport, and prompt execution
   src/Goblin.Protocol/     Generated Codex protocol models and serialization
   src/Goblin.Persistence/  Database-first EF Core context, entities, and registration
   database/migrations/    Ordered SQL schema changes
@@ -21,7 +25,7 @@ backend/
   Directory.Build.props   Shared .NET build settings
 frontend/
   src/connection/          Connection screen: HTML, TypeScript, and CSS
-  src/work/                Work preview: HTML, TypeScript, and CSS
+  src/work/                Persisted Work UI: HTML, TypeScript, and CSS
   src/api/contracts.ts     Goblin HTTP types used by the UI and application tests
   public/assets/           Static assets copied into the browser build
   scripts/                 Browser build helpers
@@ -101,8 +105,15 @@ the repository root as its build context.
 
 Keep original artwork in `assets/branding/` and copy only the assets used by the
 browser into `frontend/public/assets/`. Codex schemas belong under
-`backend/schemas/codex/`; Goblin HTTP contracts belong to the backend's `Http/`
-folder and `frontend/src/api/contracts.ts`. They describe different APIs.
+`backend/schemas/codex/`; Goblin account/runtime contracts belong to `Goblin.Contracts`; Work command/view
+contracts belong to `Goblin.Application/Work`. Browser types describe these public
+Goblin APIs, including `frontend/src/api/contracts.ts` for connection setup. They describe different APIs.
 
 For PostgreSQL setup, SQL changes, and regenerating the EF Core classes after
 adding tables, see the [database guide](database.md).
+
+The [Work lifecycle](work-lifecycle.md) is used by the live application. Core and
+public contracts are independent of runtime protocols and HTTP. Orchestration
+depends on the shared execution host contract; composition selects the concrete
+Codex/text/sandbox adapters. [Execution hosting](execution-hosting.md) documents
+configuration, reservations, recovery, and validation limits.

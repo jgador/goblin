@@ -81,16 +81,18 @@ for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for the current
 Codex integration, model regeneration, and direct .NET commands.
 
-An interactive [work experience preview](docs/work-experience-preview.md) is
-available at http://localhost:8787/work, or through **Explore work preview** on
-the connection page. Try conversations, optional work tracking, decisions,
-activity, and result approval. This is a UI prototype with simulated replies and
-sample work that resets on refresh; it does not run agents or persist work yet.
+The [Work screen](docs/work-experience-preview.md) is available at
+http://localhost:8787/work or through **Open work** on the connection page.
+Create and assign Work, execute with Codex, answer decisions, review outcomes,
+and approve completion. History and approvals are stored in PostgreSQL; failures
+require attention and explicit recovery.
 
-The [database guide](docs/database.md) covers the PostgreSQL persistence foundation:
-k3s setup, versioned SQL, database-first EF Core mappings, and the `dotnet ef`
-command to regenerate C# models when you add tables. The Work preview is not yet
-connected to this database.
+Durable Work requires a configured, migrated PostgreSQL database. The installer
+sets this up before starting Goblin. For direct local development, follow the
+[database guide](docs/database.md) first, then run `npm start`. Set
+`GOBLIN_WORK_ENABLED=false` to run only the connection screen without PostgreSQL.
+[Execution hosting](docs/execution-hosting.md) covers repository sandboxes,
+GitHub sign-in, credentials, recovery, and current validation limits.
 
 To check for API keys and other secrets before committing, install the free local
 Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
