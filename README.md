@@ -8,8 +8,8 @@ Codex is the current primary coding agent integration. Goblin's architecture is
 being prepared for other agents, including Claude and GitHub Copilot, with
 Goblin owning durable Work, history, and decisions across executions. Those
 additional integrations are future work. See the
-[architecture and refactoring plan](docs/architecture-refactoring-plan.md) for
-the proposed boundaries and first durable Work flow.
+[architecture and rewrite plan](docs/architecture-refactoring-plan.md) for the
+four agreed rewrite areas and the first durable Work milestone.
 
 The repository separates application source into [`backend/`](backend/) (C# and
 Codex integration) and [`frontend/`](frontend/) (browser UI). Application-wide
