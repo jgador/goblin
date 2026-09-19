@@ -8,11 +8,15 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FeedbackUploadResponse
+public sealed record ThreadAttachmentListParams
 {
-    [JsonPropertyName("promptHash")]
+    [JsonPropertyName("cursor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? PromptHash { get; init; }
+    public string? Cursor { get; init; }
+
+    [JsonPropertyName("limit")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public uint? Limit { get; init; }
 
     [JsonPropertyName("threadId")]
     [JsonRequired]

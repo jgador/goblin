@@ -27,6 +27,9 @@ public abstract record ClientRequest
         "thread/goal/get" or
         "thread/goal/clear" or
         "thread/metadata/update" or
+        "thread/attachment/add" or
+        "thread/attachment/list" or
+        "thread/attachment/remove" or
         "thread/section/move" or
         "thread/unarchive" or
         "thread/compact/start" or
@@ -135,6 +138,9 @@ public sealed class ClientRequestJsonConverter : JsonConverter<ClientRequest>
             "thread/goal/get" => JsonSerializer.Deserialize<ThreadGoalGetClientRequest>(ref reader, options)!,
             "thread/goal/clear" => JsonSerializer.Deserialize<ThreadGoalClearClientRequest>(ref reader, options)!,
             "thread/metadata/update" => JsonSerializer.Deserialize<ThreadMetadataUpdateClientRequest>(ref reader, options)!,
+            "thread/attachment/add" => JsonSerializer.Deserialize<ThreadAttachmentAddClientRequest>(ref reader, options)!,
+            "thread/attachment/list" => JsonSerializer.Deserialize<ThreadAttachmentListClientRequest>(ref reader, options)!,
+            "thread/attachment/remove" => JsonSerializer.Deserialize<ThreadAttachmentRemoveClientRequest>(ref reader, options)!,
             "thread/section/move" => JsonSerializer.Deserialize<ThreadSectionMoveClientRequest>(ref reader, options)!,
             "thread/unarchive" => JsonSerializer.Deserialize<ThreadUnarchiveClientRequest>(ref reader, options)!,
             "thread/compact/start" => JsonSerializer.Deserialize<ThreadCompactStartClientRequest>(ref reader, options)!,
@@ -264,6 +270,15 @@ public sealed class ClientRequestJsonConverter : JsonConverter<ClientRequest>
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             case ThreadMetadataUpdateClientRequest typed:
+                JsonSerializer.Serialize(writer, typed, options);
+                break;
+            case ThreadAttachmentAddClientRequest typed:
+                JsonSerializer.Serialize(writer, typed, options);
+                break;
+            case ThreadAttachmentListClientRequest typed:
+                JsonSerializer.Serialize(writer, typed, options);
+                break;
+            case ThreadAttachmentRemoveClientRequest typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             case ThreadSectionMoveClientRequest typed:

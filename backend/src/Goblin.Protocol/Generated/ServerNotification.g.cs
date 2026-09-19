@@ -25,6 +25,7 @@ public abstract record ServerNotification
         "thread/reverted" or
         "skills/changed" or
         "thread/name/updated" or
+        "thread/attachment/updated" or
         "thread/goal/updated" or
         "thread/goal/cleared" or
         "thread/queue/changed" or
@@ -119,6 +120,7 @@ public sealed class ServerNotificationJsonConverter : JsonConverter<ServerNotifi
             "thread/reverted" => JsonSerializer.Deserialize<ThreadRevertedServerNotification>(ref reader, options)!,
             "skills/changed" => JsonSerializer.Deserialize<SkillsChangedServerNotification>(ref reader, options)!,
             "thread/name/updated" => JsonSerializer.Deserialize<ThreadNameUpdatedServerNotification>(ref reader, options)!,
+            "thread/attachment/updated" => JsonSerializer.Deserialize<ThreadAttachmentUpdatedServerNotification>(ref reader, options)!,
             "thread/goal/updated" => JsonSerializer.Deserialize<ThreadGoalUpdatedServerNotification>(ref reader, options)!,
             "thread/goal/cleared" => JsonSerializer.Deserialize<ThreadGoalClearedServerNotification>(ref reader, options)!,
             "thread/queue/changed" => JsonSerializer.Deserialize<ThreadQueueChangedServerNotification>(ref reader, options)!,
@@ -226,6 +228,9 @@ public sealed class ServerNotificationJsonConverter : JsonConverter<ServerNotifi
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             case ThreadNameUpdatedServerNotification typed:
+                JsonSerializer.Serialize(writer, typed, options);
+                break;
+            case ThreadAttachmentUpdatedServerNotification typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             case ThreadGoalUpdatedServerNotification typed:

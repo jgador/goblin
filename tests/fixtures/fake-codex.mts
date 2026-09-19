@@ -57,7 +57,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     if (method === "initialize") {
         if (scenario === "hang-initialize") continue;
         initialized = true;
-        result(id, { userAgent: "fake-codex/0.154.0", codexHome: root, platformFamily: "unix", platformOs: "linux" });
+        result(id, { userAgent: "fake-codex/0.155.1", codexHome: root, platformFamily: "unix", platformOs: "linux" });
     }
     else if (method === "initialized") {
         acknowledged = initialized;
@@ -134,7 +134,7 @@ for await (const line of createInterface({ input: process.stdin })) {
     }
     else if (method === "thread/start") {
         result(id, { thread: { id: `test-thread-${++threadNumber}`, ephemeral: params.ephemeral,
-                cliVersion: "0.154.0", createdAt: 1, updatedAt: 1, cwd: process.cwd(),
+                cliVersion: "0.155.1", createdAt: 1, updatedAt: 1, cwd: process.cwd(),
                 modelProvider: "openai", preview: "", projectId: null, sessionId: "fixture", source: "exec",
                 status: { type: "idle" }, turns: [] },
             model: "test-model", modelProvider: "openai", sandbox: { type: "readOnly", networkAccess: false },

@@ -38,7 +38,7 @@ another verifier path. A missing or invalid configured file prevents startup.
 Password login creates a private session cookie; restarting the application
 invalidates browser sessions.
 
-Goblin installs Codex CLI **0.154.0** through the lockfile. Its C# client starts
+Goblin installs Codex CLI **0.155.1** through the lockfile. Its C# client starts
 the package's official Rust binary with `app-server` and communicates over stdio
 using the checked-in JSON schemas. Its `HOME`, working directory, and `CODEX_HOME` are
 private to the preview. Existing machine-level Codex configuration and provider
