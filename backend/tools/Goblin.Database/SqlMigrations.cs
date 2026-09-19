@@ -24,17 +24,17 @@ public static class SqlMigrations
         try
         {
             await using var journal = new NpgsqlCommand("""
-                CREATE SCHEMA IF NOT EXISTS goblin_meta;
-                CREATE TABLE IF NOT EXISTS goblin_meta.schema_migrations (
+                CREATE TABLE IF NOT EXISTS public.schema_migrations (
                     name text PRIMARY KEY,
                     sha256 text NOT NULL,
                     applied_at timestamp with time zone NOT NULL DEFAULT now()
                 );
+                REVOKE ALL ON public.schema_migrations FROM PUBLIC, goblin_app;
                 """, connection);
             await journal.ExecuteNonQueryAsync();
 
             var applied = new Dictionary<string, string>(StringComparer.Ordinal);
-            await using (var query = new NpgsqlCommand("SELECT name, sha256 FROM goblin_meta.schema_migrations ORDER BY name;", connection))
+            await using (var query = new NpgsqlCommand("SELECT name, sha256 FROM public.schema_migrations ORDER BY name;", connection))
             await using (NpgsqlDataReader reader = await query.ExecuteReaderAsync())
                 while (await reader.ReadAsync()) applied.Add(reader.GetString(0), reader.GetString(1));
 
@@ -64,7 +64,7 @@ public static class SqlMigrations
                 await using NpgsqlTransaction transaction = await connection.BeginTransactionAsync();
                 await using var command = new NpgsqlCommand(sql, connection, transaction);
                 await command.ExecuteNonQueryAsync();
-                await using var record = new NpgsqlCommand("INSERT INTO goblin_meta.schema_migrations (name, sha256) VALUES (@name, @hash);", connection, transaction);
+                await using var record = new NpgsqlCommand("INSERT INTO public.schema_migrations (name, sha256) VALUES (@name, @hash);", connection, transaction);
                 record.Parameters.AddWithValue("name", name);
                 record.Parameters.AddWithValue("hash", hash);
                 await record.ExecuteNonQueryAsync();

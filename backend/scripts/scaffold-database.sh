@@ -3,6 +3,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 dotnet tool restore
+# Select product tables explicitly: public also holds Wolverine's tables and
+# the administrator-only migration journal, which are not part of this model.
 dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFrameworkCore.PostgreSQL \
   --project backend/src/Goblin.Persistence \
   --startup-project backend/tools/Goblin.Database \
@@ -11,7 +13,13 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --output-dir Generated/Entities \
   --context-namespace Goblin.Persistence \
   --namespace Goblin.Persistence.Entities \
-  --schema goblin \
+  --table public.agents \
+  --table public.connections \
+  --table public.conversation_messages \
+  --table public.conversations \
+  --table public.execution_attempts \
+  --table public.work_commands \
+  --table public.work_items \
   --data-annotations \
   --no-onconfiguring \
   --force

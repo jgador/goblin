@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("work_commands", Schema = "goblin")]
+[Table("work_commands")]
 public partial class WorkCommand
 {
     [Key]

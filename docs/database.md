@@ -3,7 +3,9 @@
 SQL files define Goblin's database. EF Core reverse engineers that database into
 checked-in C# classes. PostgreSQL uses unquoted `snake_case` names; C# uses
 `PascalCase`, with attributes preserving the mapping. Work, conversations, connections, attempts, and command receipts are durable.
-Wolverine uses its own migrated message schema for inbox/outbox delivery.
+All tables use PostgreSQL's default `public` schema. Wolverine's inbox/outbox
+tables keep their `wolverine_` prefix, and `public.schema_migrations` records
+schema history. EF scaffolding selects application tables explicitly.
 
 ## Set up certificate authentication in k3s
 
@@ -185,6 +187,11 @@ pinned to 10.0.12; the Npgsql EF provider is pinned to 10.0.3.
 
 ## Apply the SQL schema
 
+The baseline `0001_initial.sql` creates application and Wolverine tables directly
+in `public` on an empty database. Database initialization configures application
+permissions and default privileges; the runner creates the protected migration
+journal in `public` before applying the baseline.
+
 ```bash
 dotnet run --project backend/tools/Goblin.Database -- apply backend/database/migrations
 ```
@@ -193,8 +200,8 @@ The runner applies `.sql` files in ordinal filename order, once each. Every file
 and its journal entry commit in one transaction. Failed files roll back and can
 be retried. A PostgreSQL advisory lock serializes concurrent runners.
 
-The journal lives in `goblin_meta.schema_migrations`, outside the application
-schema, so it is not included in reverse engineering. Recorded SHA-256 checksums
+The journal lives in `public.schema_migrations`. Only the schema administrator
+can access it, and it is excluded from reverse engineering. Recorded SHA-256 checksums
 reject changes to previously applied scripts. Keep their filenames and contents
 unchanged; add a new, higher-numbered file for every change. SQL files use LF line
 endings so checksums remain consistent across operating systems.
@@ -212,7 +219,7 @@ The recommended command is:
 bash backend/scripts/scaffold-database.sh
 ```
 
-It restores the local tool, regenerates the whole `goblin` schema, and normalizes
+It restores the local tool, regenerates the selected application tables, and normalizes
 generated C# files to UTF-8 without a BOM and LF line endings. It reads
 `ConnectionStrings:Goblin` from `backend/tools/Goblin.Database/appsettings.json`;
 ordinary application access is enough to inspect the mapped schema. It starts
@@ -230,7 +237,13 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --output-dir Generated/Entities \
   --context-namespace Goblin.Persistence \
   --namespace Goblin.Persistence.Entities \
-  --schema goblin \
+  --table public.agents \
+  --table public.connections \
+  --table public.conversation_messages \
+  --table public.conversations \
+  --table public.execution_attempts \
+  --table public.work_commands \
+  --table public.work_items \
   --data-annotations \
   --no-onconfiguring \
   --force
@@ -241,11 +254,13 @@ host, keeping connection configuration out of command-line arguments.
 `--data-annotations` requests mapping attributes. Leave `--use-database-names`
 unset so that `work_items` becomes `WorkItem` and `objective` becomes `Objective`.
 `--no-onconfiguring` keeps the connection string out of generated source.
+The table list excludes Wolverine and the migration journal. Do not combine it
+with `--schema public`: EF includes every table in any selected schema.
 
 For example, the generated entity contains:
 
 ```csharp
-[Table("work_items", Schema = "goblin")]
+[Table("work_items")]
 public partial class WorkItem
 {
     [Key]
@@ -257,7 +272,8 @@ public partial class WorkItem
 }
 ```
 
-EF retains Fluent API configuration for features attributes cannot fully express,
+Npgsql treats `public` as the default schema, so generated attributes omit the
+schema name. EF retains Fluent API configuration for features attributes cannot fully express,
 including database key constraint names and value-generation behavior. Both the
 context and entities are generated. Put custom behavior in partial classes
 **outside** `Generated/`; do not add it to files overwritten by `--force`.
@@ -265,17 +281,18 @@ context and entities are generated. Put custom behavior in partial classes
 ## Add another table later
 
 1. Add the next SQL file, for example
-   `backend/database/migrations/0005_work_notes.sql`:
+   `backend/database/migrations/0002_work_notes.sql`:
 
    ```sql
-   CREATE TABLE goblin.work_notes (
+   CREATE TABLE public.work_notes (
        id uuid PRIMARY KEY,
-       work_item_id uuid NOT NULL REFERENCES goblin.work_items (id),
+       work_item_id uuid NOT NULL REFERENCES public.work_items (id),
        body text NOT NULL
    );
    ```
 
-2. Apply the SQL and reverse engineer again:
+2. Add `--table public.work_notes` to `backend/scripts/scaffold-database.sh`, then
+   apply the SQL and reverse engineer again:
 
    ```bash
    dotnet run --project backend/tools/Goblin.Database -- apply backend/database/migrations
@@ -284,8 +301,7 @@ context and entities are generated. Put custom behavior in partial classes
    ```
 
 3. Review the new `WorkNote` entity, the context, and relationship changes to
-   `WorkItem`. Commit the SQL and generated C# together. The command selects the
-   entire `goblin` schema, so adding a table needs no scaffolding-script change.
+   `WorkItem`. Commit the SQL, scaffolding table list, and generated C# together.
 
 With one deployed database, applying SQL through the port-forward changes that
 database immediately; scaffolding only reads its schema. Review SQL before
@@ -304,7 +320,7 @@ second pass should produce no additional diff in `Generated/`.
 `Goblin.Web` uses the application connection from its published configuration or
 `ConnectionStrings__Goblin`. Only application credentials belong there. Durable
 Work requires PostgreSQL and the committed migrations, including Wolverine's
-`goblin_messages` schema. Automatic schema creation is disabled.
+tables in `public`. Automatic schema creation is disabled.
 
 The installer runs `bash deploy/postgres/migrate.sh IMAGE` before deploying a new
 application image. That job mounts only the schema administrator's client
@@ -338,6 +354,8 @@ PY
 The tests create and drop uniquely named databases. They cover EF insert/read/
 update/delete across contexts, application permission boundaries, repeatable
 schema application, edited-script rejection, and rollback after failed DDL.
+The initial-schema checks cover messaging storage and sequences, foreign keys,
+and the connection reservation held by an attempt awaiting cleanup.
 With a certificate connection, they also verify the authenticated identity and
 reject missing client certificates, administrator impersonation, unencrypted
 connections, an untrusted server CA, and an incorrect server hostname.

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("agents", Schema = "goblin")]
+[Table("agents")]
 public partial class Agent
 {
     [Key]

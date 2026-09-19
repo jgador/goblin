@@ -1,0 +1,164 @@
+-- Initial schema for an empty database. Apply with the schema administrator;
+-- the application cannot run DDL. All tables live directly in public.
+
+-- Goblin owns identities and history. Runtime sessions are opaque references.
+CREATE TABLE public.connections (
+    id uuid PRIMARY KEY,
+    runtime text NOT NULL,
+    name text NOT NULL,
+    availability text NOT NULL DEFAULT 'Disconnected',
+    changed_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.agents (
+    id uuid PRIMARY KEY,
+    name text NOT NULL,
+    connection_id uuid NOT NULL REFERENCES public.connections(id),
+    model text
+);
+INSERT INTO public.connections (id, runtime, name)
+VALUES ('00000000-0000-0000-0000-000000000001', 'codex', 'Codex');
+INSERT INTO public.agents (id, name, connection_id)
+VALUES ('00000000-0000-0000-0000-000000000001', 'Goblin', '00000000-0000-0000-0000-000000000001');
+
+CREATE TABLE public.work_items (
+    id uuid PRIMARY KEY,
+    objective text NOT NULL,
+    state jsonb,
+    version bigint NOT NULL DEFAULT 1 CHECK (version > 0),
+    status text NOT NULL DEFAULT 'Ready',
+    agent_id uuid REFERENCES public.agents(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX work_items_updated ON public.work_items(updated_at DESC, id);
+
+-- Projection used for capacity, ownership, and recovery queries. The immutable
+-- attempt data and ordered product history also live in the Work snapshot.
+CREATE TABLE public.execution_attempts (
+    id uuid PRIMARY KEY,
+    work_id uuid NOT NULL REFERENCES public.work_items(id),
+    agent_id uuid NOT NULL REFERENCES public.agents(id),
+    connection_id uuid NOT NULL REFERENCES public.connections(id),
+    runtime text NOT NULL,
+    status text NOT NULL,
+    owner_id uuid,
+    environment_reference text,
+    queued_at timestamptz NOT NULL,
+    updated_at timestamptz NOT NULL,
+    -- Cleanup is durable work for the host, never permission to execute again.
+    cleanup_pending boolean NOT NULL DEFAULT false,
+    cleanup_failed boolean NOT NULL DEFAULT false
+);
+CREATE INDEX attempts_recovery ON public.execution_attempts(status, updated_at);
+-- A connection's mutable credentials may serve only one active or
+-- cleanup-pending attempt.
+CREATE UNIQUE INDEX one_execution_per_connection ON public.execution_attempts(connection_id)
+WHERE status IN ('Starting', 'Running', 'CancellationRequested', 'Uncertain') OR cleanup_pending;
+
+-- Retain receipts so browser reconnects/repeated POSTs cannot repeat commands.
+CREATE TABLE public.work_commands (
+    id uuid PRIMARY KEY,
+    work_id uuid NOT NULL REFERENCES public.work_items(id),
+    fingerprint text NOT NULL,
+    response jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.conversations (
+    id uuid PRIMARY KEY,
+    title text NOT NULL,
+    work_id uuid REFERENCES public.work_items(id),
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.conversation_messages (
+    id uuid PRIMARY KEY,
+    conversation_id uuid NOT NULL REFERENCES public.conversations(id),
+    body text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX conversation_history ON public.conversation_messages(conversation_id, created_at, id);
+
+-- Wolverine 6.39.1 message storage. Preserve its table, index, and constraint
+-- names while sharing the application's public schema.
+CREATE TABLE public.wolverine_agent_restrictions (
+    id uuid CONSTRAINT pkey_wolverine_agent_restrictions_id PRIMARY KEY,
+    uri character varying NOT NULL,
+    type character varying NOT NULL,
+    node integer DEFAULT 0 NOT NULL
+);
+CREATE TABLE public.wolverine_control_queue (
+    id uuid CONSTRAINT pkey_wolverine_control_queue_id PRIMARY KEY,
+    message_type character varying NOT NULL,
+    node_id uuid NOT NULL,
+    body bytea NOT NULL,
+    posted timestamp with time zone DEFAULT now() NOT NULL,
+    expires timestamp with time zone
+);
+CREATE TABLE public.wolverine_dead_letters (
+    id uuid CONSTRAINT pkey_wolverine_dead_letters_id PRIMARY KEY,
+    execution_time timestamp with time zone,
+    body bytea NOT NULL,
+    message_type character varying NOT NULL,
+    received_at character varying,
+    source character varying,
+    exception_type character varying,
+    exception_message character varying,
+    sent_at timestamp with time zone,
+    replayable boolean
+);
+CREATE TABLE public.wolverine_incoming_envelopes (
+    id uuid CONSTRAINT pkey_wolverine_incoming_envelopes_id PRIMARY KEY,
+    status character varying NOT NULL,
+    owner_id integer NOT NULL,
+    execution_time timestamp with time zone,
+    attempts integer DEFAULT 0,
+    body bytea NOT NULL,
+    message_type character varying NOT NULL,
+    received_at character varying,
+    keep_until timestamp with time zone
+);
+
+CREATE SEQUENCE public.wolverine_node_records_id_seq AS integer;
+CREATE TABLE public.wolverine_node_records (
+    id integer DEFAULT nextval('public.wolverine_node_records_id_seq'::regclass)
+        CONSTRAINT pkey_wolverine_node_records_id PRIMARY KEY,
+    node_number integer NOT NULL,
+    event_name character varying NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    description character varying
+);
+ALTER SEQUENCE public.wolverine_node_records_id_seq OWNED BY public.wolverine_node_records.id;
+
+CREATE SEQUENCE public.wolverine_nodes_node_number_seq AS integer;
+CREATE TABLE public.wolverine_nodes (
+    id uuid CONSTRAINT pkey_wolverine_nodes_id PRIMARY KEY,
+    node_number integer DEFAULT nextval('public.wolverine_nodes_node_number_seq'::regclass) NOT NULL,
+    description character varying NOT NULL,
+    uri character varying NOT NULL,
+    started timestamp with time zone DEFAULT now() NOT NULL,
+    health_check timestamp with time zone DEFAULT now() NOT NULL,
+    version character varying,
+    capabilities text[]
+);
+ALTER SEQUENCE public.wolverine_nodes_node_number_seq OWNED BY public.wolverine_nodes.node_number;
+
+CREATE TABLE public.wolverine_node_assignments (
+    id character varying CONSTRAINT pkey_wolverine_node_assignments_id PRIMARY KEY,
+    node_id uuid CONSTRAINT fkey_wolverine_node_assignments_node_id REFERENCES public.wolverine_nodes(id) ON DELETE CASCADE,
+    started timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE public.wolverine_outgoing_envelopes (
+    id uuid CONSTRAINT pkey_wolverine_outgoing_envelopes_id PRIMARY KEY,
+    owner_id integer NOT NULL,
+    destination character varying NOT NULL,
+    deliver_by timestamp with time zone,
+    body bytea NOT NULL,
+    attempts integer DEFAULT 0,
+    message_type character varying NOT NULL
+);
+
+CREATE INDEX idx_wolverine_dead_letters_replayable ON public.wolverine_dead_letters (replayable) WHERE replayable = true;
+CREATE INDEX idx_wolverine_incoming_envelopes_keep_until ON public.wolverine_incoming_envelopes (keep_until) WHERE status = 'Handled';
+CREATE INDEX idx_wolverine_incoming_envelopes_owner ON public.wolverine_incoming_envelopes (owner_id) WHERE owner_id <> 0;
+CREATE INDEX idx_wolverine_incoming_envelopes_recover ON public.wolverine_incoming_envelopes (received_at) WHERE status = 'Incoming' AND owner_id = 0;
+CREATE INDEX idx_wolverine_outgoing_envelopes_owner ON public.wolverine_outgoing_envelopes (owner_id) WHERE owner_id <> 0;
+CREATE INDEX idx_wolverine_outgoing_envelopes_recover ON public.wolverine_outgoing_envelopes (destination) WHERE owner_id = 0;
