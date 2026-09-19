@@ -14,8 +14,6 @@ namespace Goblin.Web;
 public sealed partial class Workspace
 {
     public const string CookieName = "goblin_auth_session";
-    // Public convenience password, enabled only for a loopback listener and origin.
-    private const string DefaultLocalPassword = "goblin";
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(12);
     private readonly Lock _gate = new();
     private readonly OwnerPassword _ownerPassword;
@@ -25,12 +23,10 @@ public sealed partial class Workspace
     private readonly HashSet<string> _allowedHosts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Uri _origin;
 
-    private Workspace(string dataDir, string publicOrigin, OwnerPassword password, bool allowInsecureHttp = false,
-        bool usesLocalDefaultPassword = false)
+    private Workspace(string dataDir, string publicOrigin, OwnerPassword password, bool allowInsecureHttp = false)
     {
         DataDirectory = dataDir;
         _ownerPassword = password;
-        LocalDefaultPassword = usesLocalDefaultPassword ? DefaultLocalPassword : null;
         _origin = ValidateOrigin(publicOrigin, allowInsecureHttp);
         _allowedOrigins.Add(_origin.GetLeftPart(UriPartial.Authority));
         if (IsLoopback(_origin))
@@ -40,8 +36,7 @@ public sealed partial class Workspace
     }
 
     public string DataDirectory { get; }
-    public string? LocalDefaultPassword { get; }
-    public SessionState Session(bool authenticated) => new(authenticated, LocalDefaultPassword);
+    public SessionState Session(bool authenticated) => new(authenticated);
     public string CodexHome => Path.Combine(DataDirectory, "codex");
     public string Home => Path.Combine(DataDirectory, "home");
     public string WorkingDirectory => Path.Combine(DataDirectory, "workspace");
@@ -59,12 +54,11 @@ public sealed partial class Workspace
     private static byte[] Hash(string value) => SHA256.HashData(Encoding.UTF8.GetBytes(value));
     private static string NewSessionToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    public static async Task<Workspace> OpenAsync(string directory, string publicOrigin, string? passwordHashFile = null, bool allowInsecureHttp = false,
-        bool useLocalDefaultPassword = false)
+    public static async Task<Workspace> OpenAsync(string directory, string publicOrigin, string? passwordHashFile = null, bool allowInsecureHttp = false)
     {
-        Uri origin = ValidateOrigin(publicOrigin, allowInsecureHttp);
-        if (passwordHashFile is null && !(useLocalDefaultPassword && IsLoopback(origin)))
-            throw new InvalidOperationException("A Goblin password is required outside localhost. Set GOBLIN_PASSWORD_HASH_FILE to a password verifier file.");
+        ValidateOrigin(publicOrigin, allowInsecureHttp);
+        if (string.IsNullOrWhiteSpace(passwordHashFile))
+            throw new InvalidOperationException("A Goblin password is required. Set GOBLIN_PASSWORD_HASH_FILE to a password verifier file.");
         var data = Path.GetFullPath(directory);
         foreach (var path in new[] { data, Path.Combine(data, "codex"), Path.Combine(data, "home"), Path.Combine(data, "workspace") })
         {
@@ -75,10 +69,7 @@ public sealed partial class Workspace
                 File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
         }
-        if (passwordHashFile is not null)
-            return new Workspace(data, publicOrigin, await OwnerPassword.LoadAsync(passwordHashFile), allowInsecureHttp);
-        return new Workspace(data, publicOrigin, OwnerPassword.Create(DefaultLocalPassword), allowInsecureHttp,
-            usesLocalDefaultPassword: true);
+        return new Workspace(data, publicOrigin, await OwnerPassword.LoadAsync(passwordHashFile), allowInsecureHttp);
     }
 
     public void ValidateRequest(HttpRequest request)

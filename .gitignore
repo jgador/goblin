@@ -4,6 +4,8 @@
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
 # Local credentials and generated files
+.goblin-secrets/*
+!.goblin-secrets/.gitkeep
 .goblin-auth/
 .goblin-browser-test/
 .goblin-local/

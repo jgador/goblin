@@ -9,6 +9,7 @@ const runner = resolve("deploy/local/install.py");
 const loadRunner = `
 import importlib.util, sys
 from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
 spec = importlib.util.spec_from_file_location('local_install', sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -106,7 +107,11 @@ test("local source snapshots include edits and exclude ignored local installatio
   const repo = join(root, "repo");
   await mkdir(repo);
   execFileSync("git", ["init", "-q", repo]);
-  await writeFile(join(repo, ".gitignore"), ".goblin-local/\n.env\n");
+  const ignore = await readFile(".gitignore", "utf8");
+  await writeFile(join(repo, ".gitignore"), ignore);
+  await mkdir(join(repo, ".goblin-secrets"));
+  await writeFile(join(repo, ".goblin-secrets/.gitkeep"), "");
+  await writeFile(join(repo, ".goblin-secrets/owner-password"), "test-only ignored verifier");
   await writeFile(join(repo, "tracked.cs"), "old contents");
   await writeFile(join(repo, "deleted.cs"), "removed");
   execFileSync("git", ["-C", repo, "add", "."]);
@@ -124,7 +129,8 @@ with tarfile.open(sys.argv[3]) as archive:
     print(json.dumps({item.name: archive.extractfile(item).read().decode() for item in archive.getmembers()}))
 `, runner, repo, archive], { encoding: "utf8" });
   assert.deepEqual(JSON.parse(output), {
-    "goblin/.gitignore": ".goblin-local/\n.env\n",
+    "goblin/.gitignore": ignore,
+    "goblin/.goblin-secrets/.gitkeep": "",
     "goblin/new.cs": "new source",
     "goblin/tracked.cs": "current contents",
   });
@@ -173,14 +179,12 @@ test("building a local bundle does not overwrite generated Azure template inputs
   assert.ok((await readFile(join(root, "local.pyz"))).length > 0);
 });
 
-test("local bootstrap rendering embeds credentials as data and uses the real bundle", async () => {
+test("local bootstrap rendering uses the real Azure script and bundle with a verifier supplied separately", async () => {
   const output = execFileSync("python3", ["-c", loadRunner + `
 import base64, hashlib
-password = "local-test-'quoted'-$HOME-$(touch PWNED)"
 bundle = b'local-test-bundle'
-script = module.render_bootstrap(Path(sys.argv[2]), bundle, 'goblin.local.test', 'test-source', password)
-assert password not in script
-assert base64.b64encode(password.encode()).decode() in script
+script = module.render_bootstrap(Path(sys.argv[2]), bundle, 'goblin.local.test', 'test-source')
+assert 'GOBLIN_PASSWORD_HASH_FILE' in script
 assert base64.b64encode(bundle).decode() in script
 assert hashlib.sha256(bundle).hexdigest() in script
 assert '__GOBLIN_' not in script

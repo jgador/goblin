@@ -4,12 +4,14 @@ import { request as httpRequest } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { startBackend } from "../support/backend.js";
+import { startBackend, writePasswordHash } from "../support/backend.js";
 
 test("the work preview and its assets are public while workspace APIs remain protected", async (t) => {
   const dataDir = await mkdtemp(join(tmpdir(), "goblin-work-"));
   t.after(() => rm(dataDir, { recursive: true, force: true }));
-  const app = await startBackend({ dataDir });
+  const passwordHashFile = join(dataDir, "owner-password");
+  await writePasswordHash(passwordHashFile, "work-preview-test");
+  const app = await startBackend({ dataDir, passwordHashFile });
   t.after(() => app.close());
   const paths = new Map([
     ["/", "text/html"],
