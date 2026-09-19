@@ -46,6 +46,19 @@ Codex runtime distribution. npm workspaces use one root `package-lock.json`;
 compiles browser source independently. `global.json` stays at the root so the
 pinned .NET SDK applies to commands run from either the root or `backend/`.
 
+Node.js 24 or newer runs the `.mts` build helpers, secret-scanning scripts, and
+fake Codex fixture directly. `.mts` is TypeScript with explicit ES module
+semantics, including when a test copies a script outside the repository. These
+scripts do not depend on compiled output or an installed TypeScript runner.
+`tsconfig.scripts.json` checks them without emitting files and permits only
+erasable TypeScript syntax. Native Node execution strips types without checking
+them; `npm run typecheck:scripts` performs that check as part of the full build
+and `npm run typecheck`.
+
+The installer page in `deploy/azure/setup/app.js` remains JavaScript because the
+Python-only setup bundler packages it directly for the browser. Moving its source
+to TypeScript would require generating and checking the packaged JavaScript.
+
 ## Build and test
 
 | Command | Purpose |
@@ -57,7 +70,8 @@ pinned .NET SDK applies to commands run from either the root or `backend/`.
 | `npm run build:assets` | Build only the frontend |
 | `npm run build --workspace frontend` | Run the frontend workspace build directly |
 | `npm run build:backend` | Build the .NET solution using any existing frontend output |
-| `npm run typecheck` | Check both TypeScript configurations and build .NET |
+| `npm run typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
+| `npm run typecheck:scripts` | Check directly executed TypeScript scripts without building |
 | `npm test` | Build, check protocol generation, and run .NET, HTTP, and deployment tests |
 | `npm run test:browser` | Build and run Playwright journeys |
 | `npm run test:codex` | Build and check the pinned Codex binary with isolated test credentials |

@@ -1,6 +1,24 @@
 import { test, expect } from "@playwright/test";
 import { startSetup } from "../support/setup.js";
 
+test("setup displays its bundled brand icon at desktop and mobile sizes", async ({ page }) => {
+  const setup = await startSetup();
+  try {
+    await page.goto(setup.url);
+    const logo = page.locator(".brand-logo");
+    await expect(logo).toBeVisible();
+    await expect(logo).toHaveAttribute("src", "/setup/icon.svg");
+    await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 800 });
+      const bounds = await logo.boundingBox();
+      expect(bounds!.width).toBe(34);
+      expect(bounds!.height).toBeCloseTo(34 * 602.02 / 650, 1);
+      expect(await page.locator("body").evaluate(element => element.scrollWidth <= innerWidth)).toBe(true);
+    }
+  } finally { await setup.close(); }
+});
+
 test("setup shows live progress, failure and a successful retry across refreshes", async ({ page }) => {
   const setup = await startSetup();
   try {

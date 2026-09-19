@@ -7,7 +7,7 @@ GitHub and repository integration remain a separate decision.
 
 ## Run locally
 
-Install the .NET 10 SDK, Node.js 22 or newer, and Python 3, then run from this checkout:
+Install the .NET 10 SDK, Node.js 24 or newer, and Python 3, then run from this checkout:
 
 ```bash
 npm ci

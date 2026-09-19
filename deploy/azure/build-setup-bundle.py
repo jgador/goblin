@@ -23,9 +23,11 @@ if args.output_only and not args.output:
 buffer = io.BytesIO(b"#!/usr/bin/env python3\n")
 buffer.seek(0, 2)
 names = ["__main__.py", "index.html", "app.js", "styles.css", "goblin-setup.service", "goblin-installer.service", "installer.sh", "install-app.sh"]
+sources = {name: root / name if name == "install-app.sh" else root / "setup" / name for name in names}
+# Embed the original artwork so setup needs neither the app build nor an external asset server.
+sources["icon.svg"] = root.parents[1] / "assets/branding/svg/icon-light.svg"
 with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as bundle:
-    for name in names:
-        source = root / name if name == "install-app.sh" else root / "setup" / name
+    for name, source in sources.items():
         info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
         info.compress_type = zipfile.ZIP_DEFLATED
         info.external_attr = 0o100644 << 16

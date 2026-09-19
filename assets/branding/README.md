@@ -26,10 +26,16 @@ are `inter-18pt-medium.ttf`, `inter-18pt-semibold.ttf`, and
 `inter-18pt-extrabold.ttf`. The source document and report retain their original
 designer metadata.
 
-The active UI asset is `../../frontend/public/assets/branding/icon.svg`, an unchanged copy
+The application UI asset is `../../frontend/public/assets/branding/icon.svg`, an unchanged copy
 of `svg/icon-light.svg`. It supplies both the header and favicon.
 The header uses CSS sizing with automatic height to preserve the SVG's proportions
 and sharpness. The UI currently uses the light-background artwork only.
+
+The installation page uses the same official `svg/icon-light.svg` artwork for its
+header and favicon. `deploy/azure/build-setup-bundle.py` embeds the original file
+directly in the standalone setup bundle, served at `/setup/icon.svg`, so branding
+is available before the application is built. Regenerate the setup bundle and
+Azure templates after changing its sources (see `deploy/azure/reference.md`).
 
 Keep original design resources here. Put assets used by the website under
 `frontend/public/assets/`, and register their browser URLs in the static-file

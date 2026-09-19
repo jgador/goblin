@@ -5,6 +5,19 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { startSetup } from "../support/setup.js";
 
+test("setup serves the official Goblin icon from its standalone bundle", async (t) => {
+  const setup = await startSetup();
+  t.after(() => setup.close());
+  const html = await (await fetch(setup.url)).text();
+  assert.match(html, /<img\b[^>]*class="brand-logo"[^>]*src="\/setup\/icon\.svg"/);
+  assert.match(html, /<link\b[^>]*rel="icon"[^>]*href="\/setup\/icon\.svg"/);
+  const response = await fetch(setup.url + "/setup/icon.svg");
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/svg+xml");
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), await readFile("assets/branding/svg/icon-light.svg"));
+});
+
 test("the standalone UI serves only status and assets, with no mutation or file access", async (t) => {
   const setup = await startSetup();
   t.after(() => setup.close());

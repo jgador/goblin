@@ -53,7 +53,7 @@ in the terminal. Local runs share the verifier in `.goblin-secrets/owner-passwor
 To try authentication first:
 
 ```bash
-# Requires .NET 10 SDK, Node.js 22+, and Python 3.
+# Requires .NET 10 SDK, Node.js 24+, and Python 3.
 npm ci
 npm start
 ```

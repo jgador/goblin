@@ -167,7 +167,7 @@ public sealed class CodexClientTests
                 Home = workspace.Home,
                 Workspace = workspace.WorkingDirectory,
                 Command = "node",
-                Arguments = [Path.Combine(root!.FullName, "tests/fixtures/fake-codex.mjs"), scenario],
+                Arguments = [Path.Combine(root!.FullName, "tests/fixtures/fake-codex.mts"), scenario],
                 RequestTimeout = timeout ?? TimeSpan.FromSeconds(3),
                 ShutdownTimeout = TimeSpan.FromMilliseconds(150),
                 Environment = new Dictionary<string, string?>

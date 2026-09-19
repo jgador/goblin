@@ -24,7 +24,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     ConfigureCodex = options => options with
     {
         Command = config.RealCodex ? config.Command ?? options.Command : config.Node,
-        Arguments = config.RealCodex ? [] : [Path.Combine(config.Root, "tests/fixtures/fake-codex.mjs"), config.Scenario],
+        Arguments = config.RealCodex ? [] : [Path.Combine(config.Root, "tests/fixtures/fake-codex.mts"), config.Scenario],
         RequestTimeout = TimeSpan.FromMilliseconds(config.TimeoutMs),
         Environment = new Dictionary<string, string?>
         {
