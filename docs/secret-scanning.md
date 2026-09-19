@@ -29,7 +29,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 Keep `~/.local/bin` on your shell's `PATH` for later sessions. Then, from this
-repository, using its existing Node.js 22+ requirement:
+repository, using Node.js 24 or newer:
 
 ```bash
 gitleaks version
@@ -39,10 +39,13 @@ npm run secrets:scan
 
 Setup enables the checked-in `.githooks/pre-commit` through this checkout's local
 `core.hooksPath`. It refuses to replace an existing hook configuration. If you
-already manage hooks, add `node scripts/check-secrets.mjs staged` to your existing
+already manage hooks, add `node scripts/check-secrets.mts staged` to your existing
 pre-commit hook and propagate its exit status. Git for Windows includes the shell
 needed to run the hook. Gitleaks and Node must also be on the `PATH` used by your
 Git client.
+
+The hook and setup scripts run directly as TypeScript through Node's built-in
+type stripping; they do not require `npm ci` or compiled build output.
 
 ## Scan commands
 

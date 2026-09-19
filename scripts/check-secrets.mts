@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import type { ExecFileSyncOptionsWithBufferEncoding } from "node:child_process";
 import {
   lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, realpathSync,
   rmSync, writeFileSync,
@@ -6,34 +7,46 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 
+interface IndexEntry {
+  object: string;
+  path: string;
+}
+
+interface Finding {
+  File: string;
+  StartLine: number;
+  RuleID: string;
+  Commit?: string;
+}
+
 // Scan Git's inventory, rather than recursively reading ignored auth stores,
 // node_modules, or build output. Never print raw scanner output or file contents.
 const mode = process.argv[2] ?? "scan";
 if (!["scan", "staged", "history"].includes(mode) || process.argv.length > 3) {
-  console.error("Usage: node scripts/check-secrets.mjs [scan|staged|history]");
+  console.error("Usage: node scripts/check-secrets.mts [scan|staged|history]");
   process.exit(2);
 }
 
-let temporary;
-let root;
+let temporary: string | undefined;
+let root = process.cwd();
 
-function git(args, options = {}) {
+function git(args: string[], options: ExecFileSyncOptionsWithBufferEncoding = {}) {
   return execFileSync("git", args, {
     cwd: root, maxBuffer: 256 * 1024 * 1024, stdio: ["pipe", "pipe", "pipe"], ...options,
   });
 }
 
-function paths(args) {
+function paths(args: string[]) {
   return git(args).toString("utf8").split("\0").filter(Boolean);
 }
 
-function writeSnapshot(directory, path, content) {
+function writeSnapshot(directory: string, path: string, content: string | Uint8Array) {
   const destination = join(directory, path);
   mkdirSync(dirname(destination), { recursive: true });
   writeFileSync(destination, content, { mode: 0o600 });
 }
 
-function indexEntries() {
+function indexEntries(): IndexEntry[] {
   return paths(["ls-files", "--stage", "-z"]).map((entry) => {
     const separator = entry.indexOf("\t");
     const [fileMode, object, stage] = entry.slice(0, separator).split(" ");
@@ -46,7 +59,7 @@ function indexEntries() {
   });
 }
 
-function snapshotIndex(entries, directory) {
+function snapshotIndex(entries: IndexEntry[], directory: string) {
   if (entries.length === 0) return;
   // Read exact index blobs, including partial staging, without changing the
   // index or running checkout filters. NUL-delimited inventory preserves paths.
@@ -68,7 +81,7 @@ function snapshotIndex(entries, directory) {
   }
 }
 
-function snapshotWorktree(directory) {
+function snapshotWorktree(directory: string) {
   const inventory = new Set(paths(["ls-files", "--cached", "--others", "--exclude-standard", "-z"]));
   let count = 0;
   for (const path of inventory) {
@@ -77,7 +90,7 @@ function snapshotWorktree(directory) {
     try {
       stat = lstatSync(source);
     } catch (error) {
-      if (error.code === "ENOENT") continue; // Tracked working-tree deletion.
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") continue; // Tracked working-tree deletion.
       throw error;
     }
     if (realpathSync(dirname(source)) !== dirname(source)) {
@@ -96,7 +109,7 @@ function snapshotWorktree(directory) {
   return count;
 }
 
-function scan(label, directory, count) {
+function scan(label: string, directory: string, temporary: string, count?: number) {
   const report = join(temporary, `${label}.json`);
   const args = mode === "history"
     ? ["git", root, "--log-opts=--all --full-history"]
@@ -107,10 +120,10 @@ function scan(label, directory, count) {
     "--ignore-gitleaks-allow", "--gitleaks-ignore-path", temporary,
     "--max-archive-depth=2", "--report-format=json", "--report-path", report,
   ], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-  if (result.error || result.signal || ![0, 1].includes(result.status)) {
+  if (result.error || result.signal || (result.status !== 0 && result.status !== 1)) {
     throw new Error("Gitleaks failed; scan incomplete. Check the installed version and .gitleaks.toml. Raw output is withheld to protect secrets.");
   }
-  const findings = JSON.parse(readFileSync(report, "utf8"));
+  const findings = JSON.parse(readFileSync(report, "utf8")) as Finding[];
   for (const finding of findings) {
     const path = mode === "history" ? finding.File : relative(directory, finding.File);
     const commit = finding.Commit ? ` @ ${finding.Commit.slice(0, 12)}` : "";
@@ -134,7 +147,7 @@ try {
   temporary = mkdtempSync(join(tmpdir(), "goblin-secrets-"));
   let found = false;
   if (mode === "history") {
-    found = scan("history", root);
+    found = scan("history", root, temporary);
   } else {
     let entries = indexEntries();
     if (mode === "staged") {
@@ -144,12 +157,12 @@ try {
     const index = join(temporary, "index");
     mkdirSync(index);
     snapshotIndex(entries, index);
-    found = scan(mode === "staged" ? "staged" : "index", index, entries.length);
+    found = scan(mode === "staged" ? "staged" : "index", index, temporary, entries.length);
     if (mode === "scan") {
       const worktree = join(temporary, "worktree");
       mkdirSync(worktree);
       const count = snapshotWorktree(worktree);
-      found = scan("worktree", worktree, count) || found;
+      found = scan("worktree", worktree, temporary, count) || found;
     }
   }
   if (found) {

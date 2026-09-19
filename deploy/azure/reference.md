@@ -473,7 +473,7 @@ CLI deployment can select a published commit using `goblinSourceRef`.
 
 Commit the generated `setup-bundle.b64`, `setup-bundle.sha256`, and ARM JSON together
 with their sources. `python3 deploy/azure/build-setup-bundle.py --check` verifies
-bundle freshness. The bundle is about 13 KiB, well within the Custom Script 64 KiB
+bundle freshness. The bundle is about 14 KiB, well within the Custom Script 64 KiB
 script limit after embedding; tests enforce this limit. Verify changes with a live
 portal deployment; compilation does not check image pulls, runtime behavior, or
 regional capacity. Update pinned versions and their digests together.

@@ -95,7 +95,8 @@ def serve(state_path, host, port, health_socket=None):
     with zipfile.ZipFile(Path(__file__).parent) as bundle:
         assets = {"/": ("text/html; charset=utf-8", bundle.read("index.html")),
                   "/setup/app.js": ("text/javascript; charset=utf-8", bundle.read("app.js")),
-                  "/setup/styles.css": ("text/css; charset=utf-8", bundle.read("styles.css"))}
+                  "/setup/styles.css": ("text/css; charset=utf-8", bundle.read("styles.css")),
+                  "/setup/icon.svg": ("image/svg+xml", bundle.read("icon.svg"))}
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "GoblinSetup"

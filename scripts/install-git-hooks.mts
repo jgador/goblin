@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
+const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const root = git("rev-parse", "--show-toplevel");
 process.chdir(root);
 

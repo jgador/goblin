@@ -6,9 +6,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import type { TestContext } from "node:test";
 
-const scanner = fileURLToPath(new URL("./check-secrets.mjs", import.meta.url));
-const installer = fileURLToPath(new URL("./install-git-hooks.mjs", import.meta.url));
+const scanner = fileURLToPath(new URL("./check-secrets.mts", import.meta.url));
+const installer = fileURLToPath(new URL("./install-git-hooks.mts", import.meta.url));
 const config = fileURLToPath(new URL("../.gitleaks.toml", import.meta.url));
 const hook = fileURLToPath(new URL("../.githooks/pre-commit", import.meta.url));
 
@@ -16,11 +17,11 @@ const hook = fileURLToPath(new URL("../.githooks/pre-commit", import.meta.url));
 // in the test source. The variable length exercises our additional OpenAI rule.
 const syntheticKey = () => ["sk", "proj", randomBytes(32).toString("hex")].join("-");
 
-function fixture(t) {
+function fixture(t: TestContext) {
   const directory = mkdtempSync(join(tmpdir(), "goblin-secrets-test-"));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const git = (...args) => execFileSync("git", args, { cwd: directory, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
-  const write = (path, content) => {
+  const git = (...args: string[]) => execFileSync("git", args, { cwd: directory, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] });
+  const write = (path: string, content: string) => {
     mkdirSync(dirname(join(directory, path)), { recursive: true });
     writeFileSync(join(directory, path), content);
   };
@@ -42,7 +43,7 @@ function fixture(t) {
   return { directory, git, write, scan };
 }
 
-function detected(result, secret, label, rule = "goblin-openai-key") {
+function detected(result: { status: number | null; output: string }, secret: string, label: string, rule = "goblin-openai-key") {
   assert.equal(result.status, 1);
   assert.ok(result.output.includes(`[${label}`));
   assert.ok(result.output.includes(rule));
@@ -50,7 +51,7 @@ function detected(result, secret, label, rule = "goblin-openai-key") {
 }
 
 const webSettingsPath = "backend/src/Goblin.Web/appsettings.json";
-const databaseConnection = password =>
+const databaseConnection = (password: string) =>
   `Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;Password=${password}`;
 
 test("the certificate database connection passes worktree, staged, and history scans", (t) => {
@@ -75,7 +76,7 @@ test("database passwords are rejected, including the former web configuration ex
     ["backend/src/AnotherApp/appsettings.json", { Goblin: connection }],
     [webSettingsPath, { GoblinAdmin: connection.replace("Username=goblin_app", "Username=goblin_admin") }],
     [webSettingsPath, { Goblin: connection.replace("Host=goblin-postgres", "Host=another-database") }],
-  ]) {
+  ] as const) {
     const repo = fixture(t);
     repo.write(path, JSON.stringify({ ConnectionStrings: values }, null, 2) + "\n");
     detected(repo.scan(), password, "worktree", "generic-api-key");
@@ -239,7 +240,7 @@ test("installed Git hook rejects a secret and allows a corrected commit", (t) =>
   repo.git("config", "--unset", "core.hooksPath");
   mkdirSync(join(repo.directory, "scripts"));
   mkdirSync(join(repo.directory, ".githooks"));
-  copyFileSync(scanner, join(repo.directory, "scripts/check-secrets.mjs"));
+  copyFileSync(scanner, join(repo.directory, "scripts/check-secrets.mts"));
   copyFileSync(hook, join(repo.directory, ".githooks/pre-commit"));
   const setup = spawnSync(process.execPath, [installer], { cwd: repo.directory, encoding: "utf8" });
   assert.equal(setup.status, 0);

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2024"],
+    "noEmit": true,
+    "erasableSyntaxOnly": true
+  },
+  "include": ["scripts/**/*.mts", "frontend/scripts/**/*.mts", "tests/fixtures/**/*.mts"]
+}

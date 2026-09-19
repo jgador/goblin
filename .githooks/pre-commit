@@ -1,2 +1,2 @@
 #!/bin/sh
-exec node scripts/check-secrets.mjs staged
+exec node scripts/check-secrets.mts staged

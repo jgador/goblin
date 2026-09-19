@@ -169,13 +169,18 @@ except RuntimeError:
 test("building a local bundle does not overwrite generated Azure template inputs", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "goblin-local-bundle-"));
   t.after(() => rm(root, { recursive: true, force: true }));
-  await cp("deploy/azure/build-setup-bundle.py", join(root, "build-setup-bundle.py"));
-  await cp("deploy/azure/setup", join(root, "setup"), { recursive: true });
-  await cp("deploy/azure/install-app.sh", join(root, "install-app.sh"));
-  for (const name of ["setup-bundle.b64", "setup-bundle.sha256"]) await writeFile(join(root, name), "existing generated input\n");
-  execFileSync("python3", [join(root, "build-setup-bundle.py"), "--output-only", "--output", join(root, "local.pyz")]);
+  const azure = join(root, "deploy/azure");
+  const branding = join(root, "assets/branding/svg");
+  await mkdir(azure, { recursive: true });
+  await mkdir(branding, { recursive: true });
+  await cp("assets/branding/svg/icon-light.svg", join(branding, "icon-light.svg"));
+  await cp("deploy/azure/build-setup-bundle.py", join(azure, "build-setup-bundle.py"));
+  await cp("deploy/azure/setup", join(azure, "setup"), { recursive: true });
+  await cp("deploy/azure/install-app.sh", join(azure, "install-app.sh"));
+  for (const name of ["setup-bundle.b64", "setup-bundle.sha256"]) await writeFile(join(azure, name), "existing generated input\n");
+  execFileSync("python3", [join(azure, "build-setup-bundle.py"), "--output-only", "--output", join(root, "local.pyz")]);
   for (const name of ["setup-bundle.b64", "setup-bundle.sha256"])
-    assert.equal(await readFile(join(root, name), "utf8"), "existing generated input\n");
+    assert.equal(await readFile(join(azure, name), "utf8"), "existing generated input\n");
   assert.ok((await readFile(join(root, "local.pyz"))).length > 0);
 });
 

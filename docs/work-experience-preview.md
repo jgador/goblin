@@ -37,7 +37,7 @@ checks and authenticated APIs are unchanged. Future integration of real work
 must use authenticated APIs and durable server-side state.
 
 The browser code lives in `frontend/src/work/app.ts`. The existing TypeScript build
-emits its JavaScript; `frontend/scripts/copy-assets.mjs` copies the HTML and CSS.
+emits its JavaScript; `frontend/scripts/copy-assets.mts` copies the HTML and CSS.
 `GoblinApplication` serves the explicit `/work`, `/work/`,
 `/work/app.js`, and `/work/styles.css` routes.
 

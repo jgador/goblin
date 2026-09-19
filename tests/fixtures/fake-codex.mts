@@ -1,25 +1,36 @@
 import { createInterface } from "node:readline";
 import { readFile, writeFile, appendFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
+
+type RequestId = string | number;
+interface IncomingMessage {
+    id?: RequestId;
+    method?: string;
+    params?: Record<string, unknown>;
+}
+type Account = { type: "apiKey"; apiKey?: string }
+    | { type: "chatgpt"; email: string; planType: string };
+
 const scenario = process.argv[2];
 const root = process.env.CODEX_HOME;
 if (!root)
     throw new Error("The fixture requires a private CODEX_HOME.");
 const accountFile = join(root, "auth.json");
-const send = (message) => {
+// Scenarios deliberately send incomplete or invalid protocol payloads.
+const send = (message: unknown) => {
     const bytes = Buffer.from(`${JSON.stringify(message)}\n`);
     if (scenario === "fragmented") {
         for (const byte of bytes) process.stdout.write(Buffer.from([byte]));
     } else process.stdout.write(bytes);
 };
-const result = (id, value) => send({ id, result: value });
+const result = (id: RequestId | undefined, value: unknown) => send({ id, result: value });
 let initialized = false;
 let acknowledged = false;
-let login = null;
-let timer;
-let promptTimer;
+let login: string | null = null;
+let timer: ReturnType<typeof setTimeout> | undefined;
+let promptTimer: ReturnType<typeof setTimeout> | undefined;
 let threadNumber = 0;
-let reordered = [];
+let reordered: (RequestId | undefined)[] = [];
 await writeFile(join(root, "pid"), String(process.pid));
 await writeFile(join(root, "arguments.json"), JSON.stringify(process.argv.slice(3)));
 if (scenario === "stubborn") process.on("SIGTERM", () => {});
@@ -34,7 +45,7 @@ async function finishLogin() {
     send({ method: "account/updated", params: { authMode: "chatgpt" } });
 }
 for await (const line of createInterface({ input: process.stdin })) {
-    const { id, method, params } = JSON.parse(line);
+    const { id, method, params = {} } = JSON.parse(line) as IncomingMessage;
     if (!method) {
         await appendFile(join(root, "server-responses.jsonl"), `${line}\n`);
         continue;
@@ -75,9 +86,9 @@ for await (const line of createInterface({ input: process.stdin })) {
             await finishLogin();
         }
         catch { }
-        let account = null;
+        let account: Account | null = null;
         try {
-            account = JSON.parse(await readFile(accountFile, "utf8"));
+            account = JSON.parse(await readFile(accountFile, "utf8")) as Account;
         }
         catch { }
         if (account?.type === "apiKey")
@@ -130,8 +141,8 @@ for await (const line of createInterface({ input: process.stdin })) {
             approvalPolicy: params.approvalPolicy, approvalsReviewer: "user", cwd: process.cwd() });
     }
     else if (method === "turn/start") {
-        const threadId = params.threadId;
-        const prompt = params.input[0].text;
+        const { threadId, input } = params as { threadId: string; input: { text: string }[] };
+        const prompt = input[0].text;
         const turnId = `test-turn-${threadNumber}`;
         const started = { id: turnId, status: "inProgress", items: [] };
         send({ method: "turn/started", params: { threadId, turn: started } });
