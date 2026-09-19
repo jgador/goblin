@@ -5,6 +5,12 @@ replaces the former TypeScript backend; it does not implement Codex Core.
 The existing authentication preview, HTTP routes, cookies, browser UI, and prompt
 limits remain in place.
 
+Codex is the current primary coding agent integration and the only runtime
+implemented today. The [architecture and refactoring plan](architecture-refactoring-plan.md)
+prepares Goblin for other agents, including Claude and GitHub Copilot. This
+document describes the current Codex adapter; its protocol and process model
+are not requirements for future integrations.
+
 ## Responsibilities
 
 | Layer | Owns |
@@ -14,15 +20,21 @@ limits remain in place.
 | `backend/src/Goblin.Web/Auth/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
 | `backend/src/Goblin.Web/Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |
 | `backend/src/Goblin.Web/Access/Workspace.cs` and `GoblinApplication.cs` | Private workspace paths, owner access, browser sessions, HTTP validation, static assets, and Minimal API routes |
-| Rust Codex App Server/Core | Credential storage/refresh, conversation history, turns, context windows, tokens, auto-compaction, model metadata, and runtime behavior |
+| Rust Codex App Server/Core | Codex credential storage/refresh, runtime conversation context, turns, context windows, tokens, auto-compaction, model metadata, and runtime behavior |
 
 The preview has one owner and one Codex process per data directory. Each prompt
 uses a fresh ephemeral thread, as before. Thread/turn IDs live only for that
 operation; there is no Goblin transcript store or persistent chat-session model.
-Browser unlock sessions remain separate from Codex conversations. Adding durable
-Goblin conversations later would require storing a Goblin-session-to-Codex-thread
-mapping and using Codex resume/read operations, while leaving conversation state
-with Codex.
+Browser unlock sessions remain separate from Codex conversations.
+
+In the proposed durable model, Goblin owns Work, conversation history,
+decisions, artifact references, and execution attempts in PostgreSQL. Each attempt records
+its runtime and any runtime-specific session references. Codex resume/read
+operations may restore Codex execution context; they do not replace Goblin's
+durable history. Context windows, compaction, and runtime resume mechanics
+remain integration concerns. A future Claude or GitHub Copilot integration
+should be able to receive Goblin's persisted context without depending on
+Codex's conversation store. The handoff details remain open in the plan.
 
 The transport initializes once per connection and acknowledges with `initialized`.
 It serializes writes, correlates out-of-order responses, decodes all known

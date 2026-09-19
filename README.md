@@ -4,6 +4,13 @@ Your self-hosted AI coworker.
 
 Goblin aims to turn everyday team conversations into completed, reviewable work.
 
+Codex is the current primary coding agent integration. Goblin's architecture is
+being prepared for other agents, including Claude and GitHub Copilot, with
+Goblin owning durable Work, history, and decisions across executions. Those
+additional integrations are future work. See the
+[architecture and refactoring plan](docs/architecture-refactoring-plan.md) for
+the proposed boundaries and first durable Work flow.
+
 The repository separates application source into [`backend/`](backend/) (C# and
 Codex integration) and [`frontend/`](frontend/) (browser UI). Application-wide
 tests live in [`tests/`](tests/), deployment files in [`deploy/`](deploy/), and
@@ -71,8 +78,8 @@ generated from the checked-in schemas using `System.Text.Json`.
 `npm start` builds the browser assets and .NET solution, then starts the C# host.
 Use `npm run typecheck` for TypeScript checks and a .NET build, or `npm test`
 for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
-See the [App Server migration notes](docs/app-server-migration.md) for architecture,
-model regeneration, and direct .NET commands.
+See the [App Server migration notes](docs/app-server-migration.md) for the current
+Codex integration, model regeneration, and direct .NET commands.
 
 An interactive [work experience preview](docs/work-experience-preview.md) is
 available at http://localhost:8787/work, or through **Explore work preview** on

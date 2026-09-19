@@ -11,7 +11,9 @@ Reviewed on 2026-09-19 against
 >
 > Agents execute Work.
 >
-> Codex is a runtime.
+> Codex is the primary runtime today.
+>
+> Other runtimes can execute Work.
 >
 > Postgres remembers.
 >
@@ -27,10 +29,17 @@ progress, decisions, execution attempts, artifacts, reviews, and outcomes.
 Conversations are one way humans interact with and modify Work; they are not
 the fundamental unit of the system.
 
-Agents are durable identities. Executions are temporary attempts that use a
-runtime, initially Codex. PostgreSQL owns durable application state and history.
-Wolverine coordinates asynchronous work, durable messaging, retries, and
-inbox/outbox behavior. The UI displays persisted state and issues commands.
+Codex is the current primary coding agent integration. The product must also
+be ready to use other agents, including Claude and GitHub Copilot. Those are
+future integration targets; the current application only integrates Codex.
+
+In this design, an **agent** is a durable Goblin identity, while a **runtime** is
+the integration that executes an attempt on its behalf. This distinguishes the
+assigned coworker from products such as Codex, Claude, or GitHub Copilot.
+Executions are temporary attempts that use a selected runtime, initially Codex.
+PostgreSQL owns durable application state and history. Wolverine coordinates
+asynchronous work, durable messaging, retries, and inbox/outbox behavior. The UI
+displays persisted state and issues commands.
 
 Prefer a modular monolith with strong logical boundaries. Keep deployment to
 the Goblin application, PostgreSQL, and isolated agent executions in the
@@ -50,10 +59,53 @@ consistency alone are not reasons to refactor.
 The detailed design remains open to the implementing agent. Recheck the
 repository before implementation if it has moved beyond the reviewed commit.
 
+## Readiness for other agents
+
+The user-established direction is to keep Codex primary now while preparing
+for agents such as Claude and GitHub Copilot. The boundaries below are proposed
+ways to satisfy that direction. The first durable Work flow still uses Codex;
+it does not require implementing all integrations or a plugin framework.
+
+- **Goblin owns continuity.** Work, agent identities, conversations, decisions,
+  artifacts, and execution history use Goblin-owned records. Runtime session
+  references may help resume an execution, but are not the source of truth for
+  the product's history. A different runtime can receive persisted context and
+  artifact references without needing to read a Codex thread.
+- **Integrations own runtime details.** Keep authentication, credential handling,
+  transport, protocol types, model selection, and session mechanics within each
+  integration. Introduce the shared execution contract with the first Work
+  consumer, covering only the behavior that flow needs. Adding another runtime
+  should not require rewriting Work lifecycle rules or public Work contracts.
+- **Capabilities are explicit.** Starting work, reporting progress, cancellation,
+  interactive approvals, and resuming after a restart can differ by runtime.
+  Validate required capabilities before dispatch and expose unsupported behavior
+  clearly. Preserve runtime-specific options where useful; do not model every
+  runtime as a Codex App Server or promise identical behavior.
+- **Attempts record their executor.** Record the selected runtime and connection
+  for each attempt, plus its model and runtime session references when available.
+  Keep credentials out of Work history. A later configuration change must not
+  rewrite which runtime performed an earlier attempt.
+
+Validate the supported CLI, SDK, or service interface for Claude and GitHub
+Copilot when choosing their integrations. Their exact mechanisms and capability
+sets remain open; listing them here is not a claim of implemented support.
+
+The main open choices for brainstorming are connected:
+
+| Choice | Provisional shape | Consequence to explore |
+| --- | --- | --- |
+| Agent identity and runtime choice | Assign Work to a stable Goblin agent with Codex as its initial runtime; show the runtime used in execution history. | The same coworker could use another runtime later. Separate agent identities tied to each product are another possible experience. |
+| Context handoff | A change of runtime starts a new attempt with Goblin's persisted context and artifacts. | Work stays continuous, but runtime-private context is not assumed portable; a handoff may need a prepared summary. |
+| Failure and fallback | Leave a failed or uncertain attempt visible and let the user choose a retry or another available runtime. | This preserves control over possible repeated actions; automatic fallback would need an explicit policy and recovery rules. |
+
+These choices remain proposals. The request to support other agents does not
+by itself settle switching behavior, automatic fallback, or collaboration
+between multiple agents on one Work item.
+
 ## Current evidence
 
 - The live application manages workspace access, Codex authentication, and
-  connection verification.
+  connection verification. There are no Claude or GitHub Copilot integrations.
 - [Authentication](../backend/src/Goblin.Web/Auth/Authentication.cs) owns login,
   account state, prompt validation, execution, and the queue that serializes
   these operations.
@@ -86,6 +138,8 @@ failures, then map those failures to HTTP responses at the HTTP boundary.
 
 Replace the generated Codex `PlanType` in the public HTTP contract with a
 Goblin-owned representation while preserving the existing wire format.
+Keep that account summary specific to the Codex connection; future integrations
+may have different authentication methods and account metadata.
 
 Preserve the existing coordination contract:
 
@@ -100,7 +154,8 @@ coordination that protects these behaviors.
 Introduce the durable agent-execution interface alongside its first Work
 consumer, when the required behavior is concrete. Today's deliberately
 restricted connection-check prompt should not define the future execution
-model.
+model. Use Goblin-owned inputs, execution events, results, and failures at that
+boundary; keep Codex thread and turn messages inside its adapter.
 
 Use the existing
 [HTTP authentication and prompt tests](../tests/integration/auth.test.ts) and
@@ -120,7 +175,10 @@ Avoid introducing a generic module framework.
 
 Separate application readiness from runtime availability. Goblin should remain
 available to inspect Work and repair connections when Codex fails. Runtime
-availability should remain visible as a separate capability status.
+availability should remain visible as a separate capability status for each
+configured integration and connection. A failed runtime should not hide Work
+history or prevent dispatch through another healthy, suitable runtime when one
+is implemented and configured.
 
 Make the readiness change separately from mechanical extraction. Update the
 Kubernetes probe, installer expectations, and relevant tests together. Define
@@ -142,8 +200,11 @@ Implement the smallest flow that can:
 4. Dispatch execution through Wolverine.
 5. Persist the result or failure and expose it to the UI.
 
-Start with one agent and one runtime. Keep Work identity, agent identity,
-execution-attempt identity, and Codex thread identity distinct.
+Start with one Goblin agent and Codex as its runtime. Keep Work identity, agent
+identity, execution-attempt identity, and runtime session identity distinct.
+Record the runtime selected for the attempt explicitly, even while Codex is
+the only implementation. Keep Codex thread and turn references within that
+runtime's execution metadata rather than using them as Work or agent IDs.
 
 Establish these contracts:
 
@@ -154,6 +215,11 @@ Establish these contracts:
 - Uncertain execution after a crash has an explicit recovery path.
 - A completed runtime turn does not automatically mean the intended Work
   outcome is achieved.
+
+When runtime switching is introduced, the proposed handoff creates a new attempt
+on the same Work. It cannot silently resume a Codex session through another
+integration. Resolve uncertain external actions before dispatching a replacement
+attempt. Switching is not required for the first flow using only Codex.
 
 Use short database transactions around state changes. Do not hold a transaction
 open throughout agent execution. Wolverine coordinates delivery and retries;
@@ -177,6 +243,12 @@ Add integration coverage for persisted state transitions, atomic dispatch,
 duplicate delivery, restart recovery, and browser disconnection. Exercise real
 PostgreSQL for the persistence and transaction contracts.
 
+Use a test double at the runtime boundary to check that Work orchestration
+does not require Codex protocol types or thread semantics. Before enabling a
+second real integration, validate its advertised capabilities and exercise
+context handoff and recovery through that integration. A test double alone
+does not establish compatibility with Claude or GitHub Copilot.
+
 ## Repository principles
 
 Document these principles in the repository and reference them from
@@ -190,21 +262,24 @@ Document these principles in the repository and reference them from
 5. Agents outlive attempts; attempts outlive HTTP requests.
 6. Add boundaries when behavior needs them, and preserve existing contracts
    during extraction.
+7. Codex is the current default integration, not a dependency of Work lifecycle
+   rules. Each attempt records its runtime; capability differences stay explicit.
 
 Let product behavior naturally form modules such as Work, Agents, Connections,
 and Conversations. Add Outcomes or other modules when their behavior warrants
 an independent boundary; do not create empty placeholders.
 
-Correct the future direction in the
-[App Server migration notes](app-server-migration.md), which currently recommend
-leaving future conversation state with Codex. Goblin should own its durable
-conversation history and decisions. Runtime context, compaction, and resume
-mechanics can remain runtime concerns.
+The [App Server migration notes](app-server-migration.md) distinguish today's
+ephemeral Codex conversations from the proposed durable model. Goblin should
+own its durable conversation history and decisions. Runtime context,
+compaction, and resume mechanics can remain runtime concerns. Keep that
+ownership consistent as Claude, GitHub Copilot, or other integrations are added.
 
 Automate the consequential rules first:
 
-- Dependency checks prevent product rules and contracts from referencing Codex
-  protocol or ASP.NET types. HTTP adapters remain free to use ASP.NET.
+- Dependency checks prevent product rules and contracts from referencing
+  runtime-specific protocols or SDKs, including Codex, or ASP.NET types. HTTP
+  adapters remain free to use ASP.NET.
 - Integration tests protect the durability and execution contracts above.
 - Existing protocol-generation checks continue to protect generated code.
 
