@@ -50,8 +50,14 @@ stage 'Preparing the Goblin password'
 cat > "$bootstrap_dir/hash-password.py" <<'PYTHON'
 __GOBLIN_PASSWORD_HASHER__
 PYTHON
-printf '%s' '__GOBLIN_PASSWORD_BASE64__' | base64 --decode | \
-  python3 "$bootstrap_dir/hash-password.py" > "$bootstrap_dir/owner-password"
+# Local provisioning supplies the verifier produced by the same hashing helper.
+# Azure supplies the password through the extension's protected settings.
+if [[ -n "${GOBLIN_PASSWORD_HASH_FILE:-}" ]]; then
+  install -m 0600 "$GOBLIN_PASSWORD_HASH_FILE" "$bootstrap_dir/owner-password"
+else
+  printf '%s' '__GOBLIN_PASSWORD_BASE64__' | base64 --decode | \
+    python3 "$bootstrap_dir/hash-password.py" > "$bootstrap_dir/owner-password"
+fi
 
 stage 'Preparing the setup bundle'
 # The deterministic, prebuilt zipapp is included in this version of the template.

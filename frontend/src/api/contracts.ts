@@ -24,8 +24,6 @@ export interface PromptResult {
 
 export interface SessionState {
   authenticated: boolean;
-  /** Public convenience password for a server bound exclusively to loopback. */
-  localDefaultPassword?: string;
 }
 
 export interface ApiFailure {

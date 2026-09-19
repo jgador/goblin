@@ -170,6 +170,17 @@ test("private auth filenames block even unfamiliar credential formats", (t) => {
   detected(repo.scan("staged"), "synthetic-short-value", "staged", "goblin-private-auth-file");
 });
 
+test("the local secret placeholder is allowed but force-added credentials are blocked", (t) => {
+  const repo = fixture(t);
+  repo.write(".gitignore", ".goblin-secrets/*\n!.goblin-secrets/.gitkeep\n");
+  repo.write(".goblin-secrets/.gitkeep", "");
+  repo.write(".goblin-secrets/owner-password", "synthetic-local-verifier");
+  repo.git("add", ".");
+  assert.equal(repo.scan("staged").status, 0);
+  repo.git("add", "--force", ".goblin-secrets/owner-password");
+  detected(repo.scan("staged"), "synthetic-local-verifier", "staged", "goblin-private-auth-file");
+});
+
 test("upstream provider rules remain enabled and allow comments cannot bypass them", (t) => {
   const repo = fixture(t);
   const secret = "ghp_" + randomBytes(18).toString("hex");

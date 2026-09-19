@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -153,8 +155,12 @@ public sealed class CodexClientTests
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "backend/schemas/codex"))) root = root.Parent;
-            Workspace workspace = await Workspace.OpenAsync(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}"),
-                "http://localhost:8787", useLocalDefaultPassword: true);
+            var data = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}")).FullName;
+            var passwordFile = Path.Combine(data, "owner-password");
+            byte[] salt = RandomNumberGenerator.GetBytes(16);
+            byte[] digest = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes("codex-client-test"), salt, 600_000, HashAlgorithmName.SHA256, 32);
+            await File.WriteAllTextAsync(passwordFile, $"pbkdf2-sha256$600000${Convert.ToBase64String(salt)}${Convert.ToBase64String(digest)}\n");
+            Workspace workspace = await Workspace.OpenAsync(data, "http://localhost:8787", passwordFile);
             return new(workspace, new(new()
             {
                 CodexHome = workspace.CodexHome,

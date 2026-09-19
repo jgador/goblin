@@ -52,7 +52,8 @@ pinned .NET SDK applies to commands run from either the root or `backend/`.
 | --- | --- |
 | `npm ci` | Install the locked workspace dependencies |
 | `npm run build` | Build frontend assets, test tooling, and the .NET solution |
-| `npm start` | Build everything and start the application |
+| `npm start` | Build, provision the local password on first run, and start the application |
+| `npm run setup:password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
 | `npm run build:assets` | Build only the frontend |
 | `npm run build --workspace frontend` | Run the frontend workspace build directly |
 | `npm run build:backend` | Build the .NET solution using any existing frontend output |

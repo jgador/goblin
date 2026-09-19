@@ -1,7 +1,6 @@
 using System;
 using Goblin.Web;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
 
 var portValue = Environment.GetEnvironmentVariable("GOBLIN_PORT") ?? "8787";
 if (!int.TryParse(portValue, out var port) || port is < 1 or > 65535)
@@ -18,8 +17,5 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     ConfigureCodex = options => options with { Command = Environment.GetEnvironmentVariable("GOBLIN_CODEX_COMMAND") ?? options.Command }
 });
 Console.WriteLine($"Goblin: {origin}");
-var workspace = app.Services.GetRequiredService<Workspace>();
-Console.WriteLine(workspace.LocalDefaultPassword is not null
-    ? "Workspace access: select Open workspace to use the prefilled local password."
-    : "Workspace access: use your Goblin password.");
+Console.WriteLine("Workspace access: use your Goblin password.");
 await app.RunAsync();

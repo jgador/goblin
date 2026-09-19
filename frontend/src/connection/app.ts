@@ -12,7 +12,6 @@ for (const container of document.querySelectorAll("[data-device-login-help]")) {
   container.append(byId("device-login-help-template", HTMLTemplateElement).content.cloneNode(true));
 }
 let unlocked = false;
-let localDefaultPassword: string | undefined;
 let busy = false;
 let state: AuthenticationState | null = null;
 let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -42,7 +41,7 @@ function showPanel(name: Panel) {
   if (visiblePanel !== name) {
     visiblePanel = name;
     if (name === "locked") {
-      byId("workspace-password", HTMLInputElement).value = localDefaultPassword ?? "";
+      byId("workspace-password", HTMLInputElement).value = "";
       byId("workspace-password").focus();
     }
     if (name === "pending") byId("verification-link").focus();
@@ -290,11 +289,6 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && un
 try {
   const session = await api("/api/session");
   unlocked = session.authenticated;
-  localDefaultPassword = session.localDefaultPassword;
-  if (localDefaultPassword !== undefined) {
-    byId("unlock-description").textContent = "The local password is filled in. Select Open workspace to continue.";
-    byId("workspace-password", HTMLInputElement).autocomplete = "off";
-  }
   if (unlocked) { showPanel("connect"); render(await api("/api/status")); }
   else showPanel("locked");
 } catch (error) {

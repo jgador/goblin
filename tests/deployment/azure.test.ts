@@ -17,7 +17,7 @@ const fakePassword = "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` ca
 // and absolute system paths. Python hashing, shell quoting and secret creation
 // all run; no Azure account, Kubernetes installation, or network is needed.
 async function bootstrap(root: string, password: string, nodeState: "ready" | "delayed" | "missing" | "not-ready" = "ready",
-  application: { publicOrigin?: string; hostname?: string; sourceRef?: string; dockerInstalled?: boolean; bootstrapOnly?: boolean; resume?: boolean; recovery?: boolean;
+  application: { publicOrigin?: string; hostname?: string; sourceRef?: string; passwordHashFile?: string; dockerInstalled?: boolean; bootstrapOnly?: boolean; resume?: boolean; recovery?: boolean;
     state?: "ready" | "docker-failed" | "build-failed" | "not-ready" | "ingress-failed" | "public-failed" | "cert-failed" | "webhook-failed" } = {}) {
   const bin = join(root, "bin");
   await mkdir(bin, { recursive: true });
@@ -167,6 +167,7 @@ sys.stdout.buffer.write(output.getvalue())
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GOBLIN_BOOTSTRAP_TEST_DIR: root,
       SERVICE_RESULT: application.recovery ? "signal" : "success",
       GOBLIN_PUBLIC_ORIGIN: application.publicOrigin ?? "",
+      GOBLIN_PASSWORD_HASH_FILE: application.passwordHashFile ?? "",
       GOBLIN_BOOTSTRAP_NODE_STATE: nodeState, GOBLIN_BOOTSTRAP_APP_STATE: application.state ?? "ready",
       GOBLIN_BOOTSTRAP_DOCKER_INSTALLED: String(application.dockerInstalled ?? true) },
     encoding: "utf8" as const,
@@ -375,6 +376,29 @@ test("Azure password survives provisioning and unlocks Goblin", async (t) => {
   app = await startBackend({ dataDir, passwordHashFile, publicOrigin: origin, allowInsecureHttp: true });
   assert.equal((await request("/api/session", fakePassword)).status, 401);
   assert.equal((await request("/api/session", newPassword)).status, 200);
+});
+
+test("the local repository verifier passes unchanged through Azure's bootstrap and Kubernetes Secret creation", async t => {
+  const root = await mkdtemp(join(tmpdir(), "goblin-local-bootstrap-password-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const passwordHashFile = join(root, ".goblin-secrets/owner-password");
+  execFileSync("python3", ["-c", `
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from password import ensure_password
+ensure_password(Path(sys.argv[2]))
+`, resolve("deploy/local"), passwordHashFile], { env: { ...process.env, GOBLIN_LOCAL_PASSWORD: fakePassword } });
+  const verifier = await readFile(passwordHashFile, "utf8");
+  const output = await bootstrap(root, "", "ready", { passwordHashFile, hostname: "localhost" });
+  const secret = JSON.parse(await readFile(join(root, "secret.json"), "utf8"));
+  assert.equal(Buffer.from(secret.data["owner-password"], "base64").toString(), verifier);
+  assert.equal(await readFile(join(root, "var/lib/goblin/install/private/owner-password"), "utf8"), verifier);
+  for (const text of [output, await readFile(join(root, "bootstrap.sh"), "utf8"), await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8")]) {
+    assert.ok(!text.includes(fakePassword));
+    assert.ok(!text.includes(Buffer.from(fakePassword).toString("base64")));
+    assert.ok(!text.includes(verifier.trim()));
+  }
 });
 
 test("a configured password file must exist and contain a supported verifier", async (t) => {

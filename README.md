@@ -47,18 +47,22 @@ npm run install:local -- start
 ```
 
 Open **http://localhost:8788** in Windows to follow installation and enter Goblin
-at the same address when ready. A new local test uses the password `goblin`.
+at the same address when ready. On first start, choose and confirm a Goblin password
+in the terminal. Local runs share the verifier in `.goblin-secrets/owner-password`.
 
 To try authentication first:
 
 ```bash
-# Requires .NET 10 SDK and Node.js 22+.
+# Requires .NET 10 SDK, Node.js 22+, and Python 3.
 npm ci
 npm start
 ```
 
-Open http://localhost:8787 and click **Open workspace**. The local password is
-prefilled; opening the page does not sign you in. See the [preview guide](docs/authentication-preview.md)
+On first start, choose and confirm your password in the terminal. Open
+http://localhost:8787, enter that password, and click **Open workspace**.
+Both local launch paths use Azure's password hasher and the same application login.
+Only the verifier is saved locally; `.goblin-secrets/` is ignored except for its
+empty `.gitkeep`. Subsequent starts reuse it. See the [preview guide](docs/authentication-preview.md)
 for sign-in, persistence checks, and deployment to your VM.
 
 The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official

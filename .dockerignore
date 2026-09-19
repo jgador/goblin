@@ -1,4 +1,5 @@
 .git
+.goblin-secrets
 .goblin-auth
 .goblin-browser-test
 .goblin-local

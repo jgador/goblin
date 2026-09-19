@@ -37,12 +37,8 @@ public static class GoblinApplication
 
     public static async Task<WebApplication> CreateAsync(ApplicationOptions options)
     {
-        // Never enable the public local password on a wildcard or network listener,
-        // even if the configured browser origin happens to be localhost.
-        bool localListener = Uri.TryCreate(options.ListenUrl, UriKind.Absolute, out Uri? listenOrigin)
-            && listenOrigin.Scheme is "http" or "https" && Workspace.IsLoopback(listenOrigin);
         Workspace workspace = await Workspace.OpenAsync(options.DataDirectory, options.PublicOrigin, options.PasswordHashFile,
-            options.AllowInsecureHttp, useLocalDefaultPassword: localListener);
+            options.AllowInsecureHttp);
         var runtimeOptions = new CodexOptions { CodexHome = workspace.CodexHome, Home = workspace.Home, Workspace = workspace.WorkingDirectory };
         runtimeOptions = options.ConfigureCodex?.Invoke(runtimeOptions) ?? runtimeOptions;
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions

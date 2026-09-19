@@ -15,7 +15,6 @@ public sealed record Notice(string Kind, string Message);
 public sealed record AuthenticationState(AccountView? Account, DeviceLogin? Login, Notice? Notice,
     string? Verification, bool RuntimeReady);
 public sealed record PromptResult(string Reply, string Model, long DurationMs, string AuthType);
-public sealed record SessionState(bool Authenticated,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LocalDefaultPassword = null);
+public sealed record SessionState(bool Authenticated);
 public sealed record ApiFailure(ErrorView Error);
 public sealed record ErrorView(string Code, string Message);

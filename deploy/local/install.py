@@ -17,6 +17,8 @@ import tarfile
 import time
 import urllib.request
 
+import password as local_password
+
 REPO = Path(__file__).resolve().parents[2]
 STATE = REPO / '.goblin-local'
 INSTALL = Path('/var/lib/goblin')
@@ -64,13 +66,13 @@ def snapshot_source(repo, destination):
     destination.chmod(0o600)
 
 
-def render_bootstrap(azure, bundle, hostname, source_ref, password):
+def render_bootstrap(azure, bundle, hostname, source_ref):
     encode = lambda value: base64.b64encode(value.encode()).decode()
     replacements = {
         '__GOBLIN_PASSWORD_HASHER__': (azure / 'hash-password.py').read_text(),
         '__GOBLIN_HOSTNAME_BASE64__': encode(hostname),
         '__GOBLIN_SOURCE_REF_BASE64__': encode(source_ref),
-        '__GOBLIN_PASSWORD_BASE64__': encode(password),
+        '__GOBLIN_PASSWORD_BASE64__': '',
         '__GOBLIN_SETUP_BUNDLE_BASE64__': base64.b64encode(bundle).decode(),
         '__GOBLIN_SETUP_BUNDLE_SHA256__': hashlib.sha256(bundle).hexdigest(),
     }
@@ -243,6 +245,22 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
     print(f'PostgreSQL is available at localhost:{port}; local access runs in the background. No kubectl port-forward is needed.')
 
 
+def prepare_password():
+    path = local_password.PASSWORD_FILE
+    legacy = STATE / 'login-password'
+    if not path.exists():
+        retained = INSTALL / 'install/private/owner-password'
+        if retained.exists():
+            local_password.save_verifier(path, local_password.read_verifier(retained))
+        elif legacy.exists():
+            local_password.save_verifier(path, local_password.hash_password(legacy.read_text().removesuffix('\n')))
+    local_password.ensure_password(path)
+    # Earlier local installations saved the original password. Once a verifier
+    # is retained, that recoverable copy is no longer needed.
+    legacy.unlink(missing_ok=True)
+    return path
+
+
 def prepare(config):
     print('Preparing the installation page and current source checkout…', flush=True)
     bundle = STATE / 'goblin-setup.pyz'
@@ -250,13 +268,7 @@ def prepare(config):
     source = STATE / 'source.tar.gz'
     snapshot_source(REPO, source)
     source_ref = run(['git', '-C', REPO, 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()
-    password_file = STATE / 'login-password'
-    password = password_file.read_text().removesuffix('\n') if password_file.exists() else os.environ.get('GOBLIN_LOCAL_PASSWORD', 'goblin')
-    # Validate before creating any system services; never echo the password.
-    run(['python3', REPO / 'deploy/azure/hash-password.py'], input=password, text=True, stdout=subprocess.DEVNULL)
-    if not password_file.exists():
-        private_write(password_file, password + '\n')
-    script = render_bootstrap(REPO / 'deploy/azure', bundle.read_bytes(), 'localhost', source_ref, password)
+    script = render_bootstrap(REPO / 'deploy/azure', bundle.read_bytes(), 'localhost', source_ref)
     INSTALL.mkdir(mode=0o751, exist_ok=True)
     OWNER.parent.mkdir(mode=0o700, exist_ok=True)
     private_write(OWNER, json.dumps(config, indent=2) + '\n')
@@ -274,6 +286,8 @@ ExecStartPre=/usr/bin/install -D -m 0600 /var/lib/goblin/local-test/source.tar.g
 
 def start(args):
     config = preflight(args.http_port)
+    password_file = prepare_password()
+    os.environ.pop('GOBLIN_LOCAL_PASSWORD', None)
     bootstrapped = INSTALL / 'bootstrap-status'
     complete_bootstrap = bootstrapped.exists() and bootstrapped.read_text().strip() == 'setup-ready'
     if not complete_bootstrap:
@@ -283,6 +297,16 @@ def start(args):
         state = read_status()
         if (SYSTEMD / 'k3s.service').exists():
             run(['systemctl', 'enable', '--now', 'k3s'])
+        retained = INSTALL / 'install/private/owner-password'
+        verifier = local_password.read_verifier(password_file)
+        if local_password.read_verifier(retained) != verifier:
+            if not state or state['status'] != 'ready':
+                raise RuntimeError('Finish or retry the current installation before changing its password verifier.')
+            secret = run(['k3s', 'kubectl', 'create', 'secret', 'generic', 'goblin-owner-password', '-n', 'goblin',
+                          f'--from-file=owner-password={password_file}', '--dry-run=client', '-o', 'json'], capture_output=True, text=True).stdout
+            run(['k3s', 'kubectl', 'apply', '--server-side', '--field-manager=goblin-bootstrap', '-f', '-'], input=secret, text=True)
+            run(['k3s', 'kubectl', 'delete', 'pod', '-n', 'goblin', '-l', 'app=goblin-auth', '--ignore-not-found=true', '--wait=true'])
+            private_write(retained, verifier)
         if config.get('postgres_port'):
             run(['systemctl', 'enable', '--now', DATABASE_SOCKET])
         if state and state['status'] != 'ready':
@@ -294,7 +318,9 @@ def start(args):
         print('Starting the setup page and background installation…', flush=True)
         # Pass the rendered bootstrap through stdin, not a file or command-line argument.
         with (STATE / 'bootstrap.log').open('ab') as log:
-            run(['bash'], input=script, text=True, stdout=log, stderr=subprocess.STDOUT)
+            environment = dict(os.environ, GOBLIN_PASSWORD_HASH_FILE=str(password_file))
+            environment.pop('GOBLIN_LOCAL_PASSWORD', None)
+            run(['bash'], input=script, text=True, stdout=log, stderr=subprocess.STDOUT, env=environment)
     # Check through the exact browser port, including the local TCP forwarder.
     for _ in range(30):
         try:
@@ -308,7 +334,7 @@ def start(args):
     print(f'Open in your Windows or Linux browser: {origin(config)}', flush=True)
     print('Installation continues in WSL/Linux after this command exits.')
     print('Progress: npm run install:local -- status')
-    print('Password: npm run install:local -- password (default for a new local test: goblin)')
+    print('Sign in with the Goblin password chosen during setup.')
     state = read_status()
     if state and state['status'] == 'failed':
         print('The previous attempt failed. Inspect logs, then run npm run install:local -- retry.')
@@ -383,7 +409,7 @@ def reset():
     if SETUP.parent.exists() and not any(SETUP.parent.iterdir()):
         SETUP.parent.rmdir()
     run(['systemctl', 'daemon-reload'])
-    print('Local Goblin cluster, application data and credentials removed. Docker and download caches retained.')
+    print('Local Goblin cluster and application data removed. The repository password verifier, Docker and download caches are retained.')
 
 
 def main():
@@ -405,7 +431,8 @@ def main():
         os.execvp('sudo', ['sudo', '--preserve-env=GOBLIN_LOCAL_PASSWORD', sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]])
     os.umask(0o077)
     if args.command == 'password':
-        print((STATE / 'login-password').read_text().removesuffix('\n'))
+        print(f'Local password verifier: {local_password.PASSWORD_FILE}')
+        print('The original password is not stored and cannot be displayed.')
         return
     if args.command in ('status', 'logs'):
         config = owned_config()
@@ -449,6 +476,6 @@ def main():
 if __name__ == '__main__':
     try:
         main()
-    except (RuntimeError, OSError, subprocess.CalledProcessError) as error:
+    except (RuntimeError, ValueError, OSError, EOFError, KeyboardInterrupt, subprocess.CalledProcessError) as error:
         print(f'Local installation: {error if not isinstance(error, subprocess.CalledProcessError) else "Command failed; inspect npm run install:local -- logs and .goblin-local/bootstrap.log."}', file=sys.stderr)
         sys.exit(1)
