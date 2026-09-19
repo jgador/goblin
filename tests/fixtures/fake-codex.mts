@@ -146,10 +146,18 @@ for await (const line of createInterface({ input: process.stdin })) {
         const turnId = `test-turn-${threadNumber}`;
         const started = { id: turnId, status: "inProgress", items: [] };
         send({ method: "turn/started", params: { threadId, turn: started } });
+        if (scenario === "work-retryable-error") {
+            send({ method: "error", params: { threadId, turnId, willRetry: true,
+                error: { message: "Upstream secret THIS-MUST-NOT-LEAK", codexErrorInfo: "unauthorized", additionalDetails: null } } });
+            result(id, { turn: started });
+            continue;
+        }
         function complete() {
             const failed = scenario === "prompt-fail" || scenario === "prompt-partial-failure" || prompt === "Trigger a simulated failure.";
             const message = { type: "agentMessage", id: "answer", phase: "final_answer",
-                text: scenario === "prompt-large" ? "x".repeat(8001) : "Hello from the connected account." };
+                text: scenario === "prompt-large" ? "x".repeat(8001) : scenario === "work-result"
+                    ? JSON.stringify({ kind: "result", text: "A proposed Work outcome" }) : scenario === "work-input"
+                    ? JSON.stringify({ kind: "input", text: "Which outcome matters?" }) : "Hello from the connected account." };
             send({ method: "item/completed", params: { completedAtMs: 1, threadId: "another-thread", turnId, item: { ...message, text: "Wrong thread" } } });
             send({ method: "item/completed", params: { completedAtMs: 1, threadId, turnId, item: { ...message, id: "commentary", phase: "commentary", text: "Thinking…" } } });
             if (scenario !== "prompt-empty" && scenario !== "prompt-fail") {

@@ -72,8 +72,8 @@ Logs are stored directly in WSL:
 - `.goblin-local/bootstrap.log` (local command's bootstrap output)
 
 Kubernetes diagnostics are available through `sudo k3s kubectl` and
-`sudo journalctl -u k3s`. PostgreSQL configuration and connection strings remain
-separate from this installation and cert-manager setup. After the bundle is ready,
+`sudo journalctl -u k3s`. The installer provisions PostgreSQL and applies schema migrations before
+starting Goblin. To repair or export local tooling credentials after installation,
 run `bash deploy/postgres/setup.sh` to enable
 [PostgreSQL certificate authentication](../../docs/database.md). For this runner,
 setup also enables persistent local database access at `localhost:55432` and

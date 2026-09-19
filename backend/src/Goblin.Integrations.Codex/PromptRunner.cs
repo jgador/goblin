@@ -5,11 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
 
-namespace Goblin.Web.Codex;
+namespace Goblin.Integrations.Codex;
 
 public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
 {
-    private static PublicError Cancelled() => new("prompt_cancelled", "The prompt was cancelled.", 408);
+    private static IntegrationFailure Cancelled() => new("prompt_cancelled", "The prompt was cancelled.");
 
     public async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, CancellationToken cancellationToken = default)
     {
@@ -26,8 +26,8 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             if (item is not AgentMessageThreadItem message || message.Phase == MessagePhase.Commentary) return;
             messages[message.Id] = message.Text;
             if (messages.Count > 32 || string.Join("\n\n", messages.Values).Length > 8000)
-                completion.TrySetException(new PublicError("prompt_reply_too_large",
-                    "The reply was too long. Try a shorter prompt.", 502));
+                completion.TrySetException(new IntegrationFailure("prompt_reply_too_large",
+                    "The reply was too long. Try a shorter prompt."));
         }
 
         void Notification(ServerNotification notification)
@@ -54,13 +54,13 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                     foreach (ThreadItem value in turn.Items) Save(value);
                     var reply = string.Join("\n\n", messages.Values).Trim();
                     if (reply.Length == 0)
-                        completion.TrySetException(new PublicError("prompt_empty_reply", "The model finished without a text reply. Please retry.", 502));
+                        completion.TrySetException(new IntegrationFailure("prompt_empty_reply", "The model finished without a text reply. Please retry."));
                     else completion.TrySetResult(reply);
                 }
             }
         }
 
-        void Disconnected() => completion.TrySetException(PublicError.RuntimeUnavailable());
+        void Disconnected() => completion.TrySetException(IntegrationFailure.RuntimeUnavailable());
         codex.Notification += Notification;
         codex.Disconnected += Disconnected;
         using CancellationTokenRegistration cancellation = cancellationToken.Register(() => completion.TrySetException(Cancelled()));
@@ -77,7 +77,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             lock (gate) threadId = thread.Thread.Id;
             if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" ||
                 thread.Sandbox is not ReadOnlySandboxPolicy || thread.ApprovalPolicy != AskForApproval.Never)
-                throw new PublicError("prompt_configuration_error", "Codex could not create an isolated conversation. Check the pinned runtime version.", 502);
+                throw new IntegrationFailure("prompt_configuration_error", "Codex could not create an isolated conversation. Check the pinned runtime version.");
             if (cancellationToken.IsCancellationRequested) throw Cancelled();
             TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
@@ -88,14 +88,14 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             });
             lock (gate)
             {
-                if (turnId is not null && turnId != started.Turn.Id) throw PublicError.RuntimeUnavailable();
+                if (turnId is not null && turnId != started.Turn.Id) throw IntegrationFailure.RuntimeUnavailable();
                 turnId = started.Turn.Id;
             }
             string reply;
             try { reply = await completion.Task.WaitAsync(timeout); }
             catch (TimeoutException)
             {
-                throw new PublicError("prompt_timeout", "The prompt took too long and was cancelled. Please retry.", 504);
+                throw new IntegrationFailure("prompt_timeout", "The prompt took too long and was cancelled. Please retry.");
             }
             return (reply, thread.Model, elapsed.ElapsedMilliseconds);
         }
@@ -117,7 +117,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
         }
     }
 
-    private static PublicError GenerationError(TurnError? error)
+    private static IntegrationFailure GenerationError(TurnError? error)
     {
         CodexErrorInfo? info = error?.CodexErrorInfo;
         var status = info switch
@@ -129,11 +129,11 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             _ => null
         };
         if (info == CodexErrorInfo.Unauthorized || status == 401)
-            return new("prompt_unauthorized", "OpenAI rejected the saved login. Disconnect Codex and sign in again.", 502);
+            return new("prompt_unauthorized", "OpenAI rejected the saved login. Disconnect Codex and sign in again.");
         if (info == CodexErrorInfo.UsageLimitExceeded || info == CodexErrorInfo.RateLimitExceeded || status == 429)
-            return new("prompt_limit_reached", "The connected account has reached a usage or rate limit. Check your plan or API billing, then retry later.", 429);
+            return new("prompt_limit_reached", "The connected account has reached a usage or rate limit. Check your plan or API billing, then retry later.");
         if (status == 403)
-            return new("prompt_access_denied", "The connected account cannot use this model. Check your account's model access and permissions.", 502);
-        return new("prompt_failed", "The model request failed. Check your account's model access and billing, then retry.", 502);
+            return new("prompt_access_denied", "The connected account cannot use this model. Check your account's model access and permissions.");
+        return new("prompt_failed", "The model request failed. Check your account's model access and billing, then retry.");
     }
 }

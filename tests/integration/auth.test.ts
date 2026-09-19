@@ -281,7 +281,7 @@ test("a stalled Codex request times out and doesn't leave a reusable pending pro
   await ctx.unlock();
   const result = await ctx.request("/api/status");
   assert.equal(result.status, 504);
-  assert.equal((await ctx.request("/readyz")).status, 503);
+  assert.equal((await ctx.request("/readyz")).status, 200, "runtime failure does not make the application unready");
 });
 
 test("prompts require a connected owner and use one isolated thread", async (t) => {

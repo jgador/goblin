@@ -82,7 +82,7 @@ fi
 # Patch just the database configuration of an existing Goblin deployment, without
 # replacing its image, owner password, origin, storage, or other custom settings.
 sandbox=$("${goblin_kubectl[@]}" get sandbox goblin-auth -n goblin --ignore-not-found -o name)
-if [[ -n "$sandbox" ]]; then
+if [[ -n "$sandbox" && "${GOBLIN_POSTGRES_CONFIGURE_APP:-true}" == true ]]; then
   patch=$(mktemp)
   trap 'rm -f "$patch"' EXIT
   "${goblin_kubectl[@]}" get sandbox goblin-auth -n goblin -o json | python3 deploy/postgres/configure-app.py > "$patch"

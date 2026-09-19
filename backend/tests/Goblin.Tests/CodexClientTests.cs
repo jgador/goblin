@@ -9,8 +9,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
+using Goblin.Integrations.Codex;
 using Goblin.Web;
-using Goblin.Web.Codex;
+using Goblin.Core.Work;
+using Goblin.Contracts.Runtime;
 using Xunit;
 
 namespace Goblin.Tests;
@@ -88,8 +90,8 @@ public sealed class CodexClientTests
         await fixture.Client.StartAsync();
         Task<GetAccountResponse> first = fixture.ReadAsync();
         Task<GetAccountResponse> second = fixture.ReadAsync();
-        Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<PublicError>(() => first)).Code);
-        Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<PublicError>(() => second)).Code);
+        Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<IntegrationFailure>(() => first)).Code);
+        Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<IntegrationFailure>(() => second)).Code);
         Assert.False(fixture.Client.Ready);
         var oldPid = await fixture.PidAsync();
         await fixture.Client.StartAsync();
@@ -103,7 +105,7 @@ public sealed class CodexClientTests
         await using Fixture fixture = await Fixture.CreateAsync("stubborn", TimeSpan.FromMilliseconds(500));
         await fixture.Client.StartAsync();
         var pid = await fixture.PidAsync();
-        PublicError error = await Assert.ThrowsAsync<PublicError>(() => fixture.ReadAsync());
+        IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.ReadAsync());
         Assert.Equal("runtime_timeout", error.Code);
         Assert.False(fixture.Client.Ready);
         await fixture.Client.StartAsync();
@@ -126,15 +128,55 @@ public sealed class CodexClientTests
     public async Task InitializationTimeoutAndShutdownRejectWaiters()
     {
         await using Fixture hung = await Fixture.CreateAsync("hang-initialize", TimeSpan.FromMilliseconds(500));
-        Assert.Equal("runtime_timeout", (await Assert.ThrowsAsync<PublicError>(() => hung.Client.StartAsync())).Code);
+        Assert.Equal("runtime_timeout", (await Assert.ThrowsAsync<IntegrationFailure>(() => hung.Client.StartAsync())).Code);
         await using Fixture fixture = await Fixture.CreateAsync("hang");
         await fixture.Client.StartAsync();
         Task<GetAccountResponse> request = fixture.ReadAsync();
         var pid = await fixture.PidAsync();
         await fixture.Client.DisposeAsync();
-        Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<PublicError>(() => request)).Code);
+        Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<IntegrationFailure>(() => request)).Code);
         Assert.False(IsAlive(pid));
-        await Assert.ThrowsAsync<PublicError>(() => fixture.Client.StartAsync());
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Client.StartAsync());
+    }
+
+    [Theory]
+    [InlineData("work-result", ObservationKind.Result)]
+    [InlineData("work-input", ObservationKind.InputRequired)]
+    public async Task WorkAdapterUsesPersistedContextAndKeepsEarlyResultProvenance(string scenario, ObservationKind expected)
+    {
+        await using Fixture fixture = await Fixture.CreateAsync(scenario);
+        var work = new WorkItem(Guid.NewGuid(), "Answer the durable objective", DateTimeOffset.UtcNow);
+        work.Assign(Guid.NewGuid(), DateTimeOffset.UtcNow);
+        work.AddContext(Guid.NewGuid(), "Retained context", DateTimeOffset.UtcNow);
+        work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid()), DateTimeOffset.UtcNow);
+        var progress = new List<ExecutionObservation>();
+        ExecutionObservation result = await new CodexWorkRunner(fixture.Client).RunAsync(work.Snapshot(), false,
+            value => { progress.Add(value); return Task.CompletedTask; }, default);
+        Assert.Equal(expected, result.Kind);
+        Assert.Equal("test-model", result.Session!.Model);
+        Assert.Equal("test-thread-1", result.Session.SessionReference);
+        Assert.Equal("test-turn-1", result.Session.OperationReference);
+        Assert.Contains(progress, x => x.Kind == ObservationKind.Running);
+        string requests = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl"));
+        Assert.Contains("Retained context", requests);
+        Assert.Contains("\"ephemeral\":false", requests);
+        Assert.Contains("\"outputSchema\"", requests);
+        Assert.Contains("\"networkAccess\":false", requests);
+    }
+
+    [Fact]
+    public async Task WorkAdapterInterruptsEvenAnUpstreamRetryableFailure()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync("work-retryable-error");
+        var work = new WorkItem(Guid.NewGuid(), "Surface every failure", DateTimeOffset.UtcNow);
+        work.Assign(Guid.NewGuid(), DateTimeOffset.UtcNow);
+        work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid()), DateTimeOffset.UtcNow);
+        IntegrationFailure failure = await Assert.ThrowsAsync<IntegrationFailure>(() =>
+            new CodexWorkRunner(fixture.Client).RunAsync(work.Snapshot(), false, _ => Task.CompletedTask, default));
+        Assert.DoesNotContain("THIS-MUST-NOT-LEAK", failure.Message);
+        string[] calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl"));
+        Assert.Single(calls, x => x.Contains("turn/start", StringComparison.Ordinal));
+        Assert.Contains(calls, x => x.Contains("turn/interrupt", StringComparison.Ordinal));
     }
 
     private static bool IsAlive(int pid)

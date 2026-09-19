@@ -14,13 +14,18 @@ WORKDIR /app
 COPY global.json ./
 COPY backend/Directory.Build.props ./backend/Directory.Build.props
 COPY backend/src ./backend/src
+COPY backend/tools ./backend/tools
 COPY --from=assets /app/frontend/dist ./frontend/dist
 RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --nologo
+RUN dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --nologo
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 # appsettings.json contains certificate paths; private keys are mounted at runtime.
 COPY --from=build --chown=1000:1000 /publish ./
+COPY --from=build --chown=1000:1000 /database /tools/database
+COPY backend/database/migrations /migrations
 COPY --from=assets /codex /opt/codex
 RUN mkdir -p /data && chown 1000:1000 /data
 

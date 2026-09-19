@@ -167,14 +167,15 @@ The independent systemd worker installs and checks:
 2. Cert-manager `v1.21.2`: all CRDs, controllers, and admission webhook.
 3. The Goblin owner password Secret and Agent Sandbox `v1.0.2`.
 4. The Goblin image, built with Docker and imported into K3s.
-5. The Goblin workload and its internal Traefik route.
-6. Public ingress and application readiness at the assigned hostname.
+5. Certificate-authenticated PostgreSQL and schema migrations.
+6. The Goblin workload, execution namespace, and internal Traefik route.
+7. Public ingress and application readiness at the assigned hostname.
 
 Cert-manager 1.21 supports Kubernetes 1.33–1.36. Its readiness probe submits a
 Certificate with `--dry-run=server`, so no Certificate, Issuer, CA, or Secret is
-created. Installing cert-manager does not modify PostgreSQL configuration,
-connection strings, database credentials, or authentication. PostgreSQL remains
-an explicit separate setup step. Run `bash deploy/postgres/setup.sh` from the
+created. After cert-manager is ready, the application installer provisions PostgreSQL
+and runs schema migrations before application startup. For repair and local
+tooling credentials, run `bash deploy/postgres/setup.sh` from the
 checkout to issue database certificates and configure password-free Npgsql
 connections; see the [database guide](../../docs/database.md). HTTPS remains
 independent.

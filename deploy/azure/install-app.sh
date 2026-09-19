@@ -52,13 +52,16 @@ DOCKER_BUILDKIT=1 docker build --load --network=host --platform linux/amd64 --ta
 stage 'Importing Goblin into Kubernetes'
 docker save --output "$bootstrap_dir/goblin-image.tar" "$goblin_image"
 k3s ctr --namespace k8s.io images import "$bootstrap_dir/goblin-image.tar"
+stage 'Configuring durable Work storage'
+GOBLIN_POSTGRES_CONFIGURE_APP=false bash "$goblin_source_dir/deploy/postgres/setup.sh"
+bash "$goblin_source_dir/deploy/postgres/migrate.sh" "$goblin_image"
 
 done_step
 step deploy
 stage 'Configuring the Goblin hostname'
 # Keep a rendered overlay on the VM for inspection and later HTTPS setup.
 install -d -m 0750 /var/lib/goblin/deploy/auth /var/lib/goblin/deploy/azure/app
-cp "$goblin_source_dir/deploy/auth/"{sandbox,kustomization}.yaml /var/lib/goblin/deploy/auth/
+cp "$goblin_source_dir/deploy/auth/"{sandbox,kustomization,execution}.yaml /var/lib/goblin/deploy/auth/
 cp "$goblin_source_dir/deploy/azure/app/"{ingress,kustomization}.yaml /var/lib/goblin/deploy/azure/app/
 python3 - "$goblin_hostname" "$goblin_image" "$goblin_origin" <<'PYTHON'
 from pathlib import Path

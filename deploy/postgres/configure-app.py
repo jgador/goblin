@@ -21,7 +21,7 @@ def replace_named(items, replacement):
 
 replace_named(spec.setdefault("volumes", []), {
     "name": "postgres-client",
-    "secret": {"secretName": "goblin-postgres-app-tls", "defaultMode": 0o440, "optional": True},
+    "secret": {"secretName": "goblin-postgres-app-tls", "defaultMode": 0o440},
 })
 replace_named(container.setdefault("volumeMounts", []), {
     "name": "postgres-client", "mountPath": "/etc/goblin-postgres", "readOnly": True,

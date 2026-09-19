@@ -1,7 +1,9 @@
 # Architecture and rewrite plan
 
-Status: four rewrite areas agreed; detailed design remains proposed.
-Implementation has not started.
+Status: the four rewrite areas are implemented in the current working tree: durable
+Work, integration boundaries, conditional execution hosting, and the persisted UI.
+Validation and remaining integration limits are recorded in the implementation
+checkpoint below. Future runtime switching and collaboration remain deferred.
 
 Initial code review on 2026-09-19 against
 [`master` at `caecffc`](https://github.com/jgador/goblin/commit/caecffcb5276a35a7a0520ed412c253d1af77635).
@@ -109,41 +111,69 @@ Validate the supported CLI, SDK, or service interface for Claude and GitHub
 Copilot when choosing their integrations. Their exact mechanisms and capability
 sets remain open; listing them here is not a claim of implemented support.
 
-The main open choices for brainstorming are connected:
+The connected choices and their current status are:
 
-| Choice | Provisional shape | Consequence to explore |
+| Choice | Current direction | Consequence to explore |
 | --- | --- | --- |
 | Agent identity and runtime choice | Assign Work to a stable Goblin agent with Codex as its initial runtime; show the runtime used in execution history. | The same coworker could use another runtime later. Separate agent identities tied to each product are another possible experience. |
 | Context handoff | A change of runtime starts a new attempt with Goblin's persisted context and artifacts. | Work stays continuous, but runtime-private context is not assumed portable; a handoff may need a prepared summary. |
-| Failure and fallback | Leave a failed or uncertain attempt visible and let the user choose a retry or another available runtime. | This preserves control over possible repeated actions; automatic fallback would need an explicit policy and recovery rules. |
+| Failure and fallback | Decided: every failure requires core-owned attention, with explicit user action before retrying failed Work. | Uncertain attempts must be reconciled first. Runtime switching and automatic fallback remain deferred. |
 
-The four rewrite areas are agreed. The choices in this table remain proposals;
-selecting the rewrite scope does not settle switching behavior, automatic
-fallback, or collaboration between multiple agents on one Work item.
+The initial implementation follows the plan's stable Goblin identity and Codex
+execution direction. Runtime switching, context handoff, automatic fallback, and
+collaboration between multiple agents on one Work item remain deferred proposals.
 
-## Current evidence
+### Failure and attention policy
 
-- The live application manages workspace access, Codex authentication, and
-  connection verification. There are no Claude or GitHub Copilot integrations.
-- [Authentication](../backend/src/Goblin.Web/Auth/Authentication.cs) owns login,
-  account state, prompt validation, execution, and the queue that serializes
-  these operations.
-- [GoblinApplication](../backend/src/Goblin.Web/GoblinApplication.cs) combines
-  registration, HTTP security, request parsing, static assets, endpoints, and
-  Codex recovery.
-- The public [HTTP contracts](../backend/src/Goblin.Web/Http/ApiContracts.cs)
-  expose the generated Codex `PlanType`. Codex transport and prompt execution
-  also throw the HTTP-oriented `PublicError`.
-- The [Work UI](../frontend/src/work/app.ts) uses simulated state and replies.
-  The initial [work_items table](../backend/database/migrations/0001_work_items.sql)
-  contains only `id` and `objective`; it is not connected to the preview.
-- PostgreSQL persistence and migration tooling exist. Wolverine is not yet
-  integrated.
-- `/readyz` depends entirely on Codex readiness, and the
-  [Kubernetes readiness probe](../deploy/auth/sandbox.yaml) uses it.
-- Codex currently runs as a child of the web application in the same pod and
-  OS user. The application database certificate mount is not an execution
-  isolation boundary.
+During implementation review on 2026-09-19, the user suggested that **Needs
+attention** belong in the core as well as the UI, and selected **"Surface every
+failure for attention"** over automatically recovering temporary failures.
+
+- Work owns its attention state and reason. Input requests, result review,
+  failures, and uncertain execution can all require attention. Execution attempts
+  retain their distinct statuses and provenance; a failed attempt does not end
+  the Work item.
+- Every observed dispatch or execution failure requires attention, including
+  temporary failures and failures before execution starts. There is no automatic
+  retry of failed Work. An explicit user action requests a new tracked attempt.
+- Message redelivery is not authorization to repeat execution. Wolverine's
+  transport recovery must respect persisted attention and attempt ownership;
+  handlers must not automatically retry failed runtime operations.
+- An uncertain attempt requires reconciliation before replacement. Confirming
+  that it stopped resolves uncertainty, but does not authorize a retry. A late
+  confirmed result goes to review; completion still requires approval.
+- Cancellation records intent until stopping is confirmed. A failed cancellation
+  requires attention and does not assert that execution stopped.
+- A database outage can prevent recording an attention transition immediately.
+  HTTP callers must receive a failed/pending command, never a fabricated saved
+  transition. Durable dispatch and host reconciliation must retain enough evidence
+  to surface the failure when storage returns, without restarting Work.
+
+These are application behaviors, not browser-only labels. Choosing a second real
+runtime for the planned integration experiment remains open and does not block
+the initial Codex implementation.
+
+## Baseline reviewed before implementation
+
+The reviewed application managed workspace access, Codex authentication, and a
+restricted verification prompt. Authentication and execution coordination lived
+in the web project; public account DTOs referenced generated Codex types. The
+Work screen used simulated replies and local state. PostgreSQL tooling existed,
+but Wolverine and durable Work were not connected. Readiness depended on Codex.
+These are the baseline problems addressed by the implementation below.
+
+### Execution environments — clarified by the user
+
+Work does not imply a repository or an agent sandbox. A question can execute
+without provisioning one. An explicit request to change a known repository uses
+a new isolated agent sandbox, GitHub credentials from Goblin sign-in, and the
+Goblin agent's Git author identity. The first implementation uses a fresh sandbox
+per repository attempt and a saved branch as the continuation checkpoint.
+
+A permanent taxonomy for questions, research, and investigations, and broader
+workspace reuse policy, are implementation/product details still deferred. They
+do not block these boundaries. Unspecified repositories are not guessed and
+repository commands are never sent to the text-only host.
 
 ## 1. Application core
 
@@ -376,3 +406,76 @@ During the initial review:
 Run the relevant existing tests and new contract tests for each implementation
 increment. A documentation-only addition does not establish that the proposed
 architecture has been implemented.
+
+## Implementation checkpoint — 2026-09-19
+
+Rechecked against `f0ebced`, including Codex 0.155.1. The user's failure policy
+and conditional-sandbox clarification are implemented. No remaining conflict
+blocks the agreed Codex implementation.
+
+- **Application:** `Goblin.Core` owns Work transitions and snapshots;
+  `Goblin.Application` owns transactional commands, connection reservations,
+  conversation tracking, execution coordination, and recovery. PostgreSQL stores
+  history, attempts, and command receipts. Wolverine's durable inbox/outbox is
+  migrated explicitly; the runtime application cannot create schema. Claims
+  commit before external starts. Repeated commands return their saved response.
+- **Integrations:** Codex transport and account management moved out of Web into
+  `Goblin.Integrations.Codex`. Shared contracts contain no generated protocol or
+  HTTP types. Runtime capabilities and connection availability are explicit.
+  Verification, account changes, active attempts, and cleanup share connection
+  reservation rules. Optional GitHub device sign-in supplies repository access.
+- **Hosting:** `Goblin.Execution` owns independent text workers and Kubernetes
+  Agent Sandboxes for repository changes. Workers receive scoped inputs and
+  credentials; repository pods have no application database mount or Kubernetes
+  token. Durable claims, host identity fences, process/pod observation, confirmed
+  cancellation, and cleanup recovery prevent blind redelivery. Cleanup failures
+  require attention and explicit reconciliation. `/readyz` checks the enabled
+  application database dependency independently of Codex.
+- **UI:** `/work` loads authenticated persisted views, submits versioned commands,
+  records decisions and approvals, displays execution provenance and recovery
+  controls, and retains an unconfirmed command for safe resubmission. Conversation
+  messages and tracking are durable. Sample data is separate and never drives
+  live state. There are no fabricated assistant replies.
+- **Deployment:** installers provision certificate-authenticated PostgreSQL and
+  run the migration job before replacing the app. The execution namespace has
+  restricted pod policy, separate RBAC, and public-only network egress. The image
+  contains the worker, pinned Codex, Git, and the migration tool.
+
+See [Work lifecycle](work-lifecycle.md), [execution and recovery](execution-hosting.md),
+[the Work screen](work-experience-preview.md), and [database setup](database.md)
+for the implemented contracts and operating instructions. The
+[second-runtime experiment](second-runtime-experiment.md) is planned; no Claude,
+Copilot execution, runtime handoff, fallback, or multi-agent capability is advertised.
+
+Validation in this session includes real PostgreSQL/Wolverine tests, core and
+protocol tests, browser journeys through the real Work APIs, existing HTTP and
+deployment regressions, a container build, and an isolated Kubernetes Codex
+startup/cleanup check. The final verification record below distinguishes these
+from an authenticated model task and GitHub push, which require configured
+service credentials and have not been exercised here.
+
+### Verification record
+
+- The complete solution builds without warnings. All 122 .NET tests pass,
+  including 39 core cases, protocol/transport coverage, real PostgreSQL and TLS
+  authentication, Wolverine dispatch/restart, a real storage outage, connection
+  reservations, process fencing/cancellation, and cleanup recovery. None skipped.
+- All 75 HTTP and deployment regression tests pass, including migration ordering,
+  account compatibility, readiness, access security, and installer recovery.
+- Browser coverage passes: the existing 12 connection/setup journeys and five
+  durable Work journeys. Work coverage includes lost-response resubmission,
+  refresh, another browser, mobile layout, and unavailable connection services.
+- The pinned real Codex binary passes isolated credential storage, restart, and
+  logout checks. Kubernetes smoke checks confirm non-root/read-only execution,
+  no database credentials or service token, blocked private-network access, real
+  Codex initialization, result observation, suspension, credential removal, and
+  rejection of duplicate starts. These checks do not submit a model task.
+- The container builds, generated protocol and Azure setup bundle are current,
+  and secret scanning reports no findings. Temporary test databases and sandbox
+  resources are removed after verification.
+
+Authenticated model execution and GitHub branch publication remain live-service
+validation limits. The second-runtime document is an experiment plan and CLI
+interface inspection, not an implemented second adapter. Workspace archival,
+formal Work classification, runtime switching, automatic fallback, and multiple
+agents on one Work item remain deferred as described above.

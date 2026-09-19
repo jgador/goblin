@@ -37,11 +37,12 @@ After a successful handoff, the setup UI and installer are disabled. A brief
 reconnection during the switch is normal. The small setup bundle, status, and
 logs remain on the VM for repair.
 
-Cert-manager is installed as an independent cluster add-on. It does not create
-certificates, install PostgreSQL, or change database connection strings,
-passwords, or authentication. After installation, run
-`bash deploy/postgres/setup.sh` from the checkout to enable
-[PostgreSQL certificate authentication](../../docs/database.md).
+After cert-manager is ready, the application installer provisions PostgreSQL with
+certificate authentication, runs the versioned schema migrations, and deploys
+Goblin plus the isolated execution namespace. A database or migration failure
+prevents application handoff. [Database setup](../../docs/database.md) and
+[execution hosting](../../docs/execution-hosting.md) cover repair, credentials,
+repository execution, and optional GitHub OAuth configuration.
 
 For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
 Enter your Goblin password to open the workspace. HTTPS and certificates remain

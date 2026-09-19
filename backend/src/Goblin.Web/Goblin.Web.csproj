@@ -5,7 +5,10 @@
   <ItemGroup>
     <Content Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../Goblin.Persistence/Goblin.Persistence.csproj" />
-    <ProjectReference Include="../Goblin.Protocol/Goblin.Protocol.csproj" />
+    <ProjectReference Include="../Goblin.Application/Goblin.Application.csproj" />
+    <ProjectReference Include="../Goblin.Execution/Goblin.Execution.csproj" />
+    <ProjectReference Include="../Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj" />
+    <ProjectReference Include="../Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />
     <Content Include="../../../frontend/dist/**/*" Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

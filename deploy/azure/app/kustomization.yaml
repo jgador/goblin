@@ -43,3 +43,19 @@ patches:
             ports:
               - protocol: TCP
                 port: 8787
+# Keep execution on the deployed image by updating the existing entry by name.
+replacements:
+  - source:
+      group: agents.x-k8s.io
+      version: v1beta1
+      kind: Sandbox
+      name: goblin-auth
+      fieldPath: spec.podTemplate.spec.containers.[name=auth].image
+    targets:
+      - select:
+          group: agents.x-k8s.io
+          version: v1beta1
+          kind: Sandbox
+          name: goblin-auth
+        fieldPaths:
+          - spec.podTemplate.spec.containers.[name=auth].env.[name=GOBLIN_EXECUTION_IMAGE].value

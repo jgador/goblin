@@ -136,6 +136,9 @@ public sealed class PostgresTests
 
         public async ValueTask DisposeAsync()
         {
+            // Close this process's idle application sessions before dropping a
+            // test database; the schema owner need not terminate other roles.
+            NpgsqlConnection.ClearAllPools();
             await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
             await connection.OpenAsync();
             await using var drop = new NpgsqlCommand($"DROP DATABASE {name} WITH (FORCE);", connection);

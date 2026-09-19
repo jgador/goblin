@@ -23,18 +23,23 @@ async function bootstrap(root: string, password: string, nodeState: "ready" | "d
   await mkdir(bin, { recursive: true });
   const source = join(root, "archive/goblin");
   await mkdir(join(source, "deploy/azure"), { recursive: true });
+  await cp("deploy/postgres", join(source, "deploy/postgres"), { recursive: true });
+  await mkdir(join(source, "backend/src/Goblin.Web"), { recursive: true });
+  await mkdir(join(source, "backend/tools/Goblin.Database"), { recursive: true });
+  await cp("backend/src/Goblin.Web/appsettings.json", join(source, "backend/src/Goblin.Web/appsettings.json"));
   await cp("deploy/auth", join(source, "deploy/auth"), { recursive: true });
   await cp("deploy/azure/app", join(source, "deploy/azure/app"), { recursive: true });
   await cp("Dockerfile", join(source, "Dockerfile"));
   await cp("frontend/src", join(source, "frontend/src"), { recursive: true });
   await cp("frontend/src/connection/index.html", join(root, "page.html"));
   execFileSync("tar", ["-czf", join(root, "source.tar.gz"), "-C", join(root, "archive"), "goblin"]);
-  for (const name of ["cloud-init", "sha256sum", "curl", "k3s", "sleep", "docker", "dockerd", "apt-get", "systemctl"]) {
+  for (const name of ["cloud-init", "sha256sum", "curl", "k3s", "kubectl", "sleep", "docker", "dockerd", "apt-get", "systemctl"]) {
     await writeFile(join(bin, name), `#!${process.execPath}
 const fs = require('node:fs');
 const path = require('node:path');
 const name = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
+if (name === 'kubectl') args.unshift('kubectl');
 const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
 const nodeState = process.env.GOBLIN_BOOTSTRAP_NODE_STATE;
 const appState = process.env.GOBLIN_BOOTSTRAP_APP_STATE;
@@ -76,8 +81,19 @@ if (name === 'curl') {
 } else if (name === 'systemctl') {
   fs.appendFileSync(path.join(root, 'systemctl-requests.jsonl'), JSON.stringify(args) + '\\n');
   if (args[0] === 'cat' && !fs.existsSync(path.join(root, 'etc/systemd/system', args[1]))) process.exit(1);
-} else if (name === 'k3s') {
+} else if (name === 'k3s' || name === 'kubectl') {
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args[1] === 'get' && args[2] === 'secret' && args.includes('json')) {
+    process.stdout.write(JSON.stringify({ items: ['app', 'admin'].map(role => ({ metadata: { name: 'goblin-postgres-' + role + '-tls' }, data: Object.fromEntries(['tls.crt', 'tls.key', 'ca.crt'].map(key => [key, Buffer.from('test-certificate-' + role).toString('base64')])) })) }));
+    process.exit(0);
+  }
+  if (args[1] === 'create' && args[2] === '-f') {
+    if (args[3] === '-') {
+      const resource = JSON.parse(fs.readFileSync(0, 'utf8'));
+      if (resource.kind === 'Job') process.stdout.write('job/goblin-test-migration');
+    } else process.stdout.write('job/goblin-test-verification');
+    process.exit(0);
+  }
   if (args[1] === 'get' && args[2] === 'service') {
     // Model K3s reconciling its watched HelmChartConfig, including chart v40's
     // service.spec.type setting. An ignored legacy value retains LoadBalancer.
@@ -487,7 +503,7 @@ test("Azure provisioning returns with a status page before any cluster or applic
   assert.ok(services.some(args => args.join(" ") === "enable --now goblin-installer.service"));
 });
 
-test("cert-manager readiness gates installation and never changes database authentication", async (t) => {
+test("cert-manager readiness gates database setup and migrations before application startup", async (t) => {
   const databaseFiles = ["backend/src/Goblin.Web/appsettings.json", "deploy/postgres/postgres.yaml", "deploy/postgres/setup.sh"];
   const before = await Promise.all(databaseFiles.map(path => readFile(path)));
   for (const state of ["ready", "cert-failed", "webhook-failed"] as const) {
@@ -498,7 +514,13 @@ test("cert-manager readiness gates installation and never changes database authe
     const calls: string[][] = (await readFile(join(root, "k3s-requests.jsonl"), "utf8")).trim().split("\n").map(line => JSON.parse(line));
     assert.ok(calls.some(args => args.includes("deployment/cert-manager-webhook")));
     if (state !== "cert-failed") assert.ok(calls.some(args => args.includes("--dry-run=server")));
-    assert.ok(!JSON.stringify(calls).includes("postgres"));
+    assert.equal(JSON.stringify(calls).includes("postgres"), state === "ready");
+    if (state === "ready") {
+      const migration = calls.findIndex(args => args.some(value => value.includes("goblin-test-migration")));
+      const application = calls.findIndex(args => args.includes("-k") && args.some(value => value.endsWith("/app")));
+      assert.ok(migration >= 0, "the schema migration job ran");
+      assert.ok(application > migration, "migrations finish before the application is deployed");
+    }
     const status = JSON.parse(await readFile(join(root, "var/lib/goblin/install/status.json"), "utf8"));
     assert.equal(status.status, state === "ready" ? "ready" : "failed");
     if (state !== "ready") {

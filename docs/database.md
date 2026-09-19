@@ -2,8 +2,8 @@
 
 SQL files define Goblin's database. EF Core reverse engineers that database into
 checked-in C# classes. PostgreSQL uses unquoted `snake_case` names; C# uses
-`PascalCase`, with attributes preserving the mapping. The initial
-`goblin.work_items` table establishes persistence; the Work UI still uses preview data.
+`PascalCase`, with attributes preserving the mapping. Work, conversations, connections, attempts, and command receipts are durable.
+Wolverine uses its own migrated message schema for inbox/outbox delivery.
 
 ## Set up certificate authentication in k3s
 
@@ -21,9 +21,9 @@ configuration changes, setup recreates its pod to load the certificate mount and
 connection string; its image, public origin, login, and storage are preserved.
 Rerunning setup preserves the database volume, CA, and existing certificate identities.
 
-This remains a separate step from VM provisioning and the initial bundle
-installation. Installing cert-manager alone does not enable PostgreSQL or change
-database authentication. The same setup works in the local WSL k3s cluster and Azure.
+The application installer now invokes this setup and the migration job before
+deploying Goblin. Running setup directly remains useful for development and
+repair. The same setup works in the local WSL k3s cluster and Azure.
 It does not configure a PostgreSQL instance installed directly on the host.
 
 Setup creates the following namespaced resources:
@@ -90,8 +90,8 @@ and CA private keys are never mounted into the application.
 
 The connection string has no password, and no private key is copied into the
 image. Npgsql supports these settings directly; no custom certificate validation
-or authentication callback is used by the application. An optional Secret mount
-lets the authentication preview start before the separate PostgreSQL setup step.
+or authentication callback is used by the application. The application certificate mount is required by the deployed durable Work
+configuration; repository agent sandboxes never receive this mount.
 
 For an existing image, setup sets the same certificate connection through
 `ConnectionStrings__Goblin` in the Sandbox so it takes effect without rebuilding.
@@ -265,7 +265,7 @@ context and entities are generated. Put custom behavior in partial classes
 ## Add another table later
 
 1. Add the next SQL file, for example
-   `backend/database/migrations/0002_work_notes.sql`:
+   `backend/database/migrations/0005_work_notes.sql`:
 
    ```sql
    CREATE TABLE goblin.work_notes (
@@ -301,16 +301,21 @@ second pass should produce no additional diff in `Generated/`.
 
 ## Application configuration and verification
 
-`Goblin.Web` registers `GoblinDbContext` when `ConnectionStrings:Goblin` is set.
-It reads the JSON copied from `backend/src/Goblin.Web/appsettings.json`, next to
-the executable both locally and in the published image. Rebuild and redeploy
-the backend after changing this file. Only application credentials belong in
-the web configuration. Codex still runs in that same pod and OS user, so this file
-is not an isolation boundary from the
-agent process; separating execution into its own Sandbox remains future work.
+`Goblin.Web` uses the application connection from its published configuration or
+`ConnectionStrings__Goblin`. Only application credentials belong there. Durable
+Work requires PostgreSQL and the committed migrations, including Wolverine's
+`goblin_messages` schema. Automatic schema creation is disabled.
 
-The authentication and Work previews continue to start without a configured
-database. There are no new Work API endpoints in this increment.
+The installer runs `bash deploy/postgres/migrate.sh IMAGE` before deploying a new
+application image. That job mounts only the schema administrator's client
+certificate and stops on failure. Direct development uses the migration command
+above. Database-first EF mappings include a separate partial configuration for
+the filtered active-attempt relationship; do not edit generated classes manually.
+
+`/readyz` checks the enabled database dependency independently of Codex. For a
+connection-only development session without PostgreSQL, explicitly set
+`GOBLIN_WORK_ENABLED=false`. This disables Work APIs. Repository execution uses
+[separate sandboxes](execution-hosting.md) without database credentials.
 
 Run the real PostgreSQL integration tests explicitly using the tooling's JSON
 configuration (keep the port-forward running):

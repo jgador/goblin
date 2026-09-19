@@ -16,25 +16,28 @@ are not requirements for future integrations.
 | Layer | Owns |
 | --- | --- |
 | `backend/src/Goblin.Protocol` | Generated POCO records, typed unions/enums, request IDs, and `System.Text.Json` converters |
-| `backend/src/Goblin.Web/Codex/CodexClient.cs` | Child process, isolated environment, JSONL framing, initialization, request correlation, typed notifications, timeouts, restart and shutdown |
-| `backend/src/Goblin.Web/Auth/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
-| `backend/src/Goblin.Web/Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |
+| `backend/src/Goblin.Integrations.Codex/CodexClient.cs` | Child process, isolated environment, JSONL framing, initialization, request correlation, typed notifications, timeouts, restart and shutdown |
+| `backend/src/Goblin.Integrations.Codex/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
+| `backend/src/Goblin.Integrations.Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |
 | `backend/src/Goblin.Web/Access/Workspace.cs` and `GoblinApplication.cs` | Private workspace paths, owner access, browser sessions, HTTP validation, static assets, and Minimal API routes |
 | Rust Codex App Server/Core | Codex credential storage/refresh, runtime conversation context, turns, context windows, tokens, auto-compaction, model metadata, and runtime behavior |
 
-The preview has one owner and one Codex process per data directory. Each prompt
-uses a fresh ephemeral thread, as before. Thread/turn IDs live only for that
-operation; there is no Goblin transcript store or persistent chat-session model.
-Browser unlock sessions remain separate from Codex conversations.
+Goblin has one owner and one application controller per data directory.
+Connection verification uses a restricted ephemeral Codex thread. Durable Work
+uses independent execution workers and non-ephemeral native sessions, with
+Goblin's persisted objective, messages, decisions, artifacts, and prior results
+as context. The connection-verification prompt does not define durable execution.
 
-In the proposed durable model, Goblin owns Work, conversation history,
-decisions, artifact references, and execution attempts in PostgreSQL. Each attempt records
-its runtime and any runtime-specific session references. Codex resume/read
-operations may restore Codex execution context; they do not replace Goblin's
-durable history. Context windows, compaction, and runtime resume mechanics
-remain integration concerns. A future Claude or GitHub Copilot integration
-should be able to receive Goblin's persisted context without depending on
-Codex's conversation store. The handoff details remain open in the plan.
+`CodexWorkRunner` translates Work into runtime inputs and maps progress, session
+provenance, a final result or input request, and safe failures back to shared
+contracts. It treats every reported runtime error as a failure, including errors
+that Codex says it could retry. Live approvals and native session resume are not
+advertised. Questions have tools disabled; repository tools run only in the
+[execution sandbox](execution-hosting.md).
+
+PostgreSQL owns Work history and decisions. Native session references aid
+inspection, but are not the product transcript. Future adapters can receive
+Goblin context without reading a Codex thread; handoff policy remains deferred.
 
 The transport initializes once per connection and acknowledges with `initialized`.
 It serializes writes, correlates out-of-order responses, decodes all known

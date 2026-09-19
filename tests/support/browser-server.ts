@@ -12,6 +12,7 @@ await writeFile(passwordHashFile, execFileSync("python3", ["deploy/azure/hash-pa
   input: "a", // Test-only password: confirm there is no minimum length.
 }), { mode: 0o600 });
 const app = await startBackend({ dataDir, passwordHashFile,
+  enableWork: !!process.env.GOBLIN_TEST_POSTGRES_APP,
   publicOrigin: "http://127.0.0.1:8798", listenUrl: "http://127.0.0.1:8798" });
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, async () => {
   await app.close();

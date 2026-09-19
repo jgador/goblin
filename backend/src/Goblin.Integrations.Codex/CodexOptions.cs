@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-namespace Goblin.Web.Codex;
+namespace Goblin.Integrations.Codex;
 
 public sealed record CodexOptions
 {
@@ -20,6 +20,7 @@ public sealed record CodexOptions
             .ToDictionary(x => (string)x.Key, x => (string?)x.Value);
     public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(20);
     public TimeSpan ShutdownTimeout { get; init; } = TimeSpan.FromSeconds(2);
+    public bool RepositoryExecution { get; init; }
 
     // npm distributes the official Rust binary. Prefer the pinned local package,
     // including on Windows where a .cmd shim cannot be spawned without a shell.
@@ -71,9 +72,10 @@ public sealed record CodexOptions
             "apps", "plugins", "remote_plugin", "multi_agent", "hooks", "memories", "goals",
             "code_mode", "code_mode_host", "skill_search", "skill_mcp_dependency_install",
             "sleep_tool", "request_permissions_tool", "workspace_dependencies"];
-        foreach (var feature in disabled) Config($"features.{feature}=false");
+        foreach (var feature in disabled)
+            if (!RepositoryExecution || feature is not ("shell_tool" or "unified_exec")) Config($"features.{feature}=false");
         Config("web_search=\"disabled\"");
-        Config("sandbox_mode=\"read-only\"");
+        Config(RepositoryExecution ? "sandbox_mode=\"danger-full-access\"" : "sandbox_mode=\"read-only\"");
         Config("approval_policy=\"never\"");
         Config("project_doc_max_bytes=0");
         Config("skills.include_instructions=false");

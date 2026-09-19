@@ -5,7 +5,8 @@ using System.Linq;
 using System.Text.Json;
 using Goblin.Protocol;
 using Goblin.Web;
-using Goblin.Web.Codex;
+using Goblin.Integrations.Codex;
+using Goblin.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +21,8 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     ListenUrl = config.ListenUrl,
     AssetDirectory = Path.Combine(config.Root, "frontend/dist"),
     RecoverRuntime = false,
+    EnableWork = config.EnableWork,
+    ExecutionHost = config.EnableWork ? new FakeWorkHost(config.DataDir) : null,
     PromptTimeout = TimeSpan.FromMilliseconds(config.PromptTimeoutMs),
     ConfigureCodex = options => options with
     {
@@ -89,5 +92,6 @@ internal sealed record FixtureOptions
     public int TimeoutMs { get; init; } = 2000;
     public int PromptTimeoutMs { get; init; } = 90000;
     public bool RealCodex { get; init; }
+    public bool EnableWork { get; init; }
     public string? Command { get; init; }
 }

@@ -3,9 +3,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
-using Goblin.Web.Codex;
+using Goblin.Contracts;
 
-namespace Goblin.Web;
+namespace Goblin.Integrations.Codex;
 
 public sealed class Authentication : IDisposable
 {
@@ -84,15 +84,15 @@ public sealed class Authentication : IDisposable
         await _codex.StartAsync();
         GetAccountResponse result = await _codex.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false });
         if (!result.RequiresOpenaiAuth)
-            throw new PublicError("unexpected_provider", "Goblin requires Codex's OpenAI provider. Check the runtime configuration.", 503);
+            throw new IntegrationFailure("unexpected_provider", "Goblin requires Codex's OpenAI provider. Check the runtime configuration.");
         lock (_gate)
         {
             _account = result.Account switch
             {
-                ChatgptAccount account => new ChatgptAccountView(account.Email, account.PlanType),
+                ChatgptAccount account => new ChatgptAccountView(account.Email, System.Text.Json.JsonSerializer.SerializeToElement(account.PlanType, ProtocolJson.Options).GetString()),
                 ApiKeyAccount => new ApiKeyAccountView(),
                 null => null,
-                _ => throw PublicError.RuntimeUnavailable()
+                _ => throw IntegrationFailure.RuntimeUnavailable()
             };
             if (_account is not null) _login = null;
         }
@@ -109,9 +109,9 @@ public sealed class Authentication : IDisposable
     {
         var prompt = value?.Trim() ?? "";
         if (prompt.Length is < 1 or > 500 || prompt.Any(c => c is <= '\x08' or '\x0b' or '\x0c' or >= '\x0e' and <= '\x1f'))
-            throw new PublicError("invalid_prompt", "Enter a short prompt of 1–500 characters.");
+            throw new IntegrationFailure("invalid_prompt", "Enter a short prompt of 1–500 characters.");
         if (Interlocked.CompareExchange(ref _promptPending, 1, 0) != 0)
-            throw new PublicError("prompt_in_progress", "A prompt is already running. Wait for it to finish.", 409);
+            throw new IntegrationFailure("prompt_in_progress", "A prompt is already running. Wait for it to finish.");
         return Run();
         async Task<PromptResult> Run()
         {
@@ -125,7 +125,7 @@ public sealed class Authentication : IDisposable
                     {
                         ApiKeyAccountView => "apiKey",
                         ChatgptAccountView => "chatgpt",
-                        _ => throw new PublicError("not_connected", "Connect a ChatGPT account or API key first.", 409)
+                        _ => throw new IntegrationFailure("not_connected", "Connect a ChatGPT account or API key first.")
                     };
                     (string Reply, string Model, long DurationMs) result = await _prompts.RunAsync(prompt, cancellationToken);
                     lock (_gate)
@@ -145,8 +145,8 @@ public sealed class Authentication : IDisposable
         await RefreshAsync();
         lock (_gate)
         {
-            if (_account is not null) throw new PublicError("already_connected", "Disconnect the current account before switching sign-in methods.", 409);
-            if (_login is not null) throw new PublicError("login_in_progress", "Sign-in is already in progress. Finish or cancel it first.", 409);
+            if (_account is not null) throw new IntegrationFailure("already_connected", "Disconnect the current account before switching sign-in methods.");
+            if (_login is not null) throw new IntegrationFailure("login_in_progress", "Sign-in is already in progress. Finish or cancel it first.");
         }
     }
 
@@ -163,7 +163,7 @@ public sealed class Authentication : IDisposable
         {
             if (result is ChatgptDeviceCodeLoginAccountResponse invalid)
                 try { await _codex.RequestAsync<CancelLoginAccountParams, CancelLoginAccountResponse>("account/login/cancel", new() { LoginId = invalid.LoginId }); } catch { }
-            throw new PublicError("unexpected_login_response", "Codex returned an unexpected sign-in response. Check the pinned Codex version.", 502);
+            throw new IntegrationFailure("unexpected_login_response", "Codex returned an unexpected sign-in response. Check the pinned Codex version.");
         }
         lock (_gate) _login = new(device.LoginId, url.AbsoluteUri, device.UserCode);
         return Snapshot();
@@ -173,7 +173,7 @@ public sealed class Authentication : IDisposable
     {
         var apiKey = value?.Trim() ?? "";
         if (apiKey.Length is < 20 or > 4096 || apiKey.Any(c => c is < '\x21' or > '\x7e'))
-            throw new PublicError("invalid_api_key", "Enter a complete OpenAI API key without spaces.");
+            throw new IntegrationFailure("invalid_api_key", "Enter a complete OpenAI API key without spaces.");
         await RequireDisconnectedAsync();
         var verification = await _verifyApiKey(apiKey);
         await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ApiKeyLoginAccountParams { ApiKey = apiKey });

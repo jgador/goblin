@@ -1830,3 +1830,15 @@ button:active:not(:disabled) {
         width: 100%;
     }
 }
+
+.preserve-lines { white-space: pre-wrap; overflow-wrap: anywhere; }
+.command-notice { padding: 12px 24px; background: #fff3d6; color: #54451c; }
+.command-notice button, .decision button { margin: 8px 8px 0 0; }
+.decision label, .chat-empty label { display: block; margin-top: 12px; }
+.decision input, .decision select, .chat-empty input { font: inherit; padding: 9px 12px; border: 1px solid #dadbd2; border-radius: 8px; max-width: 100%; }
+button:disabled { opacity: .55; cursor: wait; }
+.output-content { font-size: 14px; line-height: 1.7; }
+
+.sidebar-bottom p { font-size: 12px; line-height: 1.5; margin: 6px 0; }
+.github-connection { margin-top: 14px; font-size: 12px; }
+.decision select { margin: 8px 8px 0 0; padding: 8px; border: 1px solid var(--line, #dce2d4); border-radius: 8px; font: inherit; background: white; }

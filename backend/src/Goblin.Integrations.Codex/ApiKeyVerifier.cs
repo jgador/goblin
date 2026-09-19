@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
-namespace Goblin.Web;
+namespace Goblin.Integrations.Codex;
 
 public sealed class ApiKeyVerifier(HttpClient client)
 {
@@ -21,17 +21,17 @@ public sealed class ApiKeyVerifier(HttpClient client)
         try { response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead); }
         catch
         {
-            throw new PublicError("verification_unavailable",
-                "OpenAI could not be reached. Your key has not been saved. Please retry.", 502);
+            throw new IntegrationFailure("verification_unavailable",
+                "OpenAI could not be reached. Your key has not been saved. Please retry.");
         }
         using (response)
         {
             if (response.StatusCode == HttpStatusCode.Unauthorized)
-                throw new PublicError("invalid_api_key", "OpenAI rejected this API key. Check the key and try again.");
+                throw new IntegrationFailure("invalid_api_key", "OpenAI rejected this API key. Check the key and try again.");
             if (response.IsSuccessStatusCode) return "accepted";
             if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests) return "unverified";
-            throw new PublicError("verification_unavailable",
-                "OpenAI could not verify the key. Your key has not been saved. Please retry.", 502);
+            throw new IntegrationFailure("verification_unavailable",
+                "OpenAI could not verify the key. Your key has not been saved. Please retry.");
         }
     }
 }

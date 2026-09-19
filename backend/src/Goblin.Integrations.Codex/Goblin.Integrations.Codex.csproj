@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Goblin.Protocol/Goblin.Protocol.csproj" />
+    <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
+  </ItemGroup>
+</Project>
