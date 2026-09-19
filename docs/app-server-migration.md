@@ -51,8 +51,8 @@ period expires. HTTP prompt cancellation requests `turn/interrupt` and then
 
 ## Protocol regeneration
 
-The 305 checked-in schema files are authoritative. A separate coding agent
-generated models for all 698 named definitions plus their inline variants.
+The 312 checked-in schema files from Codex CLI **0.155.1** are authoritative.
+Generated models cover all 708 named definitions plus their inline variants.
 `backend/scripts/generate-protocol.py` is deterministic, verifies the aggregate and
 individual schemas agree, and records input hashes. Generated models are checked
 in, so an ordinary .NET build does not require Python or a Codex installation.
@@ -63,10 +63,11 @@ python3 backend/scripts/generate-protocol.py
 dotnet test backend/tests/Goblin.Protocol.Tests
 ```
 
-When upgrading Codex, regenerate the schemas with the chosen official binary,
-regenerate C#, review the schema diff, and rerun the tests before changing the
-runtime pin. Models use explicit JSON property names, required fields, enum wire
-names, and converters for discriminated/mixed unions. `JsonElement` is confined
+When upgrading Codex, update the runtime pin and lockfile, regenerate the schemas
+with that local npm binary, regenerate C#, review the schema diff, and rerun the
+tests. Keep the runtime and schema changes together. Models use explicit JSON
+property names, required fields, enum wire names, and converters for
+discriminated/mixed unions. `JsonElement` is confined
 to fields the schema leaves unconstrained, including envelope payloads; protocol
 operations and notifications use the generated typed models. See the
 [model project documentation](../backend/src/Goblin.Protocol/README.md).

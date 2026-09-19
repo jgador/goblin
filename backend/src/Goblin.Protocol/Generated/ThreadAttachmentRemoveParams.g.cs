@@ -8,11 +8,15 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FeedbackUploadResponse
+public sealed record ThreadAttachmentRemoveParams
 {
-    [JsonPropertyName("promptHash")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? PromptHash { get; init; }
+    [JsonPropertyName("attachmentType")]
+    [JsonRequired]
+    public required string AttachmentType { get; init; }
+
+    [JsonPropertyName("identityKey")]
+    [JsonRequired]
+    public required string IdentityKey { get; init; }
 
     [JsonPropertyName("threadId")]
     [JsonRequired]

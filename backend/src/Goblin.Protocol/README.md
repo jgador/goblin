@@ -3,6 +3,9 @@
 This project contains serialization models for the official Rust `codex app-server`.
 It implements no conversation, turn, model, token, or compaction behavior.
 
+The schemas target Codex CLI **0.155.1**, matching the runtime pinned in the root
+`package.json`. They use the default API export without `--experimental`.
+
 The checked-in files in `backend/schemas/codex` are the contract. Regenerate with:
 
 ```sh
@@ -14,9 +17,16 @@ dotnet test backend/tests/Goblin.Protocol.Tests/Goblin.Protocol.Tests.csproj
 The generator verifies that the aggregate and individual schemas agree, resolves
 all named definitions, and fails on unsupported constructs. Generated files and a
 hash of every input schema are checked in; building requires only the .NET SDK.
-Refresh the schemas with the installed Codex CLI before regenerating when adopting
-a new protocol version. Changes to the generated files should come from the
-generator or schema inputs.
+When adopting a new protocol version, update the runtime pin and lockfile, then
+refresh the schemas with the local npm binary before regenerating:
+
+```sh
+npm exec -- codex app-server generate-json-schema --out backend/schemas/codex
+python3 backend/scripts/generate-protocol.py
+```
+
+Review the schema diff and remove any obsolete schema files. Changes to the
+generated files should come from the generator or schema inputs.
 
 Use `ProtocolJson.Options` for serialization. Required members have `required` and
 `JsonRequired`; required nullable members still emit JSON null. Optional members

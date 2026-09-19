@@ -1,8 +1,8 @@
 {
-  "schemaSha256": "a02e63d92869a0d1cacefd833448bdc6363e2b9715448e7dc213f564b17cd8ae",
-  "schemaFiles": 305,
-  "namedDefinitions": 698,
-  "generatedTypes": 1131,
+  "schemaSha256": "c62942ad06b25fffc76ebe6f2b4f1885cc466e5bf30d9c563d03d5f30329c93e",
+  "schemaFiles": 312,
+  "namedDefinitions": 708,
+  "generatedTypes": 1145,
   "primitiveAliases": {
     "AbsolutePathBuf": "string",
     "AgentPath": "string",
