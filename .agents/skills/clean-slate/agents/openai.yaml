@@ -1,0 +1,5 @@
+interface:
+  display_name: "Clean Slate"
+  short_description: "Reset Goblin's WSL installation and all local test data"
+policy:
+  allow_implicit_invocation: false
