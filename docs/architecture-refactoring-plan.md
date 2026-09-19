@@ -1,8 +1,9 @@
-# Architecture and refactoring plan
+# Architecture and rewrite plan
 
-Status: proposed; implementation has not started.
+Status: four rewrite areas agreed; detailed design remains proposed.
+Implementation has not started.
 
-Reviewed on 2026-09-19 against
+Initial code review on 2026-09-19 against
 [`master` at `caecffc`](https://github.com/jgador/goblin/commit/caecffcb5276a35a7a0520ed412c253d1af77635).
 
 ## Architectural north star
@@ -47,14 +48,31 @@ self-hosted environment. Introduce network boundaries only for a concrete need.
 
 ## Scope and approach
 
-Make two preparatory refactors, followed by one small durable Work feature.
-Preserve existing behavior during structural changes. Treat changes to
-readiness and the introduction of durable execution as explicit behavior
-changes with their own validation.
+The user selected all four rewrite candidates during the architecture brainstorm
+on 2026-09-19:
 
-Do not perform a broad rewrite. Introduce abstractions when current or
-near-term behavior demonstrates their value. File size and aesthetic
-consistency alone are not reasons to refactor.
+1. Application core.
+2. Agent integration and connection management.
+3. Execution hosting and lifecycle.
+4. Work UI state and API interaction.
+
+This decision supersedes the earlier restriction against a broad rewrite and
+the sequence of two preparatory refactors followed by one small Work feature.
+Rebuild these four areas around durable Work and support for multiple runtimes.
+Much of durable Work is new development; the implementations being replaced
+are the preview's application coordination, connection model, execution hosting,
+and browser-owned Work state.
+
+Design the boundaries together and deliver them in runnable increments. The
+first durable Work flow is a milestone across the four areas; completion of that
+flow alone does not complete the rewrite scope. Preserve workspace access,
+credential protection, and explicit concurrency and recovery contracts as
+implementations change. Validate intentional changes to readiness, cancellation,
+and durable execution as product behavior.
+
+Retain the existing technology foundations described under Areas to preserve.
+Introduce abstractions for the responsibilities and runtime differences in this
+scope. File size and aesthetic consistency alone are not reasons to replace code.
 
 The detailed design remains open to the implementing agent. Recheck the
 repository before implementation if it has moved beyond the reviewed commit.
@@ -73,9 +91,10 @@ it does not require implementing all integrations or a plugin framework.
   artifact references without needing to read a Codex thread.
 - **Integrations own runtime details.** Keep authentication, credential handling,
   transport, protocol types, model selection, and session mechanics within each
-  integration. Introduce the shared execution contract with the first Work
-  consumer, covering only the behavior that flow needs. Adding another runtime
-  should not require rewriting Work lifecycle rules or public Work contracts.
+  integration. Design the shared execution contract around durable Work and
+  validate it with concrete consumers and runtime capabilities. Adding another
+  runtime should not require rewriting Work lifecycle rules or public Work
+  contracts.
 - **Capabilities are explicit.** Starting work, reporting progress, cancellation,
   interactive approvals, and resuming after a restart can differ by runtime.
   Validate required capabilities before dispatch and expose unsupported behavior
@@ -98,9 +117,9 @@ The main open choices for brainstorming are connected:
 | Context handoff | A change of runtime starts a new attempt with Goblin's persisted context and artifacts. | Work stays continuous, but runtime-private context is not assumed portable; a handoff may need a prepared summary. |
 | Failure and fallback | Leave a failed or uncertain attempt visible and let the user choose a retry or another available runtime. | This preserves control over possible repeated actions; automatic fallback would need an explicit policy and recovery rules. |
 
-These choices remain proposals. The request to support other agents does not
-by itself settle switching behavior, automatic fallback, or collaboration
-between multiple agents on one Work item.
+The four rewrite areas are agreed. The choices in this table remain proposals;
+selecting the rewrite scope does not settle switching behavior, automatic
+fallback, or collaboration between multiple agents on one Work item.
 
 ## Current evidence
 
@@ -126,128 +145,171 @@ between multiple agents on one Work item.
   OS user. The application database certificate mount is not an execution
   isolation boundary.
 
-## 1. Separate connection management from execution
+## 1. Application core
 
-The existing authentication design fits the connection preview, but durable
-Work execution should have its own owner.
+Rebuild application coordination around Work, Agents, Connections, and execution
+attempts. Replace the ownership currently concentrated in `Authentication` and
+`GoblinApplication` with modules that own their product behavior. Keep host
+composition, shared HTTP security, and error translation clear and centralized.
 
-Give connection management and connection verification explicit
-responsibilities. Keep Codex login messages, thread/turn handling, and protocol
-types inside the Codex integration. Map runtime failures to application
-failures, then map those failures to HTTP responses at the HTTP boundary.
+Work owns objectives, lifecycle transitions, decisions, result review, and
+completion rules. Persist conversation history and artifact references needed
+for continuity. Agents have stable identities; each execution attempt records
+its Work, assigned agent, runtime, connection, and runtime session references.
+Keep Work identity, agent identity, execution-attempt identity, and runtime
+session identity distinct.
 
-Replace the generated Codex `PlanType` in the public HTTP contract with a
-Goblin-owned representation while preserving the existing wire format.
-Keep that account summary specific to the Codex connection; future integrations
-may have different authentication methods and account metadata.
+HTTP endpoints submit application commands and return persisted views. Map
+runtime failures to application failures, then to HTTP responses at the HTTP
+boundary. Product rules and public Work contracts use Goblin-owned types.
 
-Preserve the existing coordination contract:
+Use PostgreSQL for durable state and Wolverine for asynchronous coordination.
+Work state and dispatch intent commit atomically. Keep database transactions
+short; application rules determine valid transitions and retries. A completed
+runtime turn does not automatically mean the intended Work outcome is achieved.
 
-- Overlapping prompts are rejected.
-- Account changes wait for the current prompt to finish.
+This area is complete when Work can be created independently of a conversation,
+assigned, executed, reviewed, and retrieved with its durable history through
+these boundaries. Durable Work execution belongs to the application core,
+independently of authentication.
+
+## 2. Agent integration and connection management
+
+Replace the single Codex connection model with explicit connections and runtime
+adapters. Separate connection setup and verification from durable execution.
+Keep Codex primary while making room for Claude, GitHub Copilot, and other
+integrations without changing Work lifecycle rules.
+
+Design shared execution inputs, events, results, failures, and capability
+reporting around Work. Keep authentication methods, account metadata, model
+selection, protocol types, and session mechanics specific to each integration.
+Today's restricted connection-check prompt must not define durable execution.
+Replace the generated Codex `PlanType` in the existing HTTP contract with a
+Goblin-owned representation while preserving its wire format.
+
+Record the selected connection and runtime for each attempt. Coordinate account
+changes with the executions using that connection, and make concurrency limits
+explicit for each runtime and execution environment. Preserve the current
+connection-verification contracts while replacing their implementation:
+
+- Overlapping verification prompts are rejected.
+- Account changes wait for the current verification prompt to finish.
 - Cancellation and timeouts clean up runtime operations.
-- Raw upstream errors and credentials do not reach the browser.
+- Raw upstream errors and credentials do not reach the browser or Work history.
 
-Extracting methods into separate services must not remove the shared
-coordination that protects these behaviors.
+The existing `/api/prompt` can retain request-cancellation behavior for connection
+verification. Accepted durable Work has its own lifecycle and cancellation
+commands, independent of the browser request.
 
-Introduce the durable agent-execution interface alongside its first Work
-consumer, when the required behavior is concrete. Today's deliberately
-restricted connection-check prompt should not define the future execution
-model. Use Goblin-owned inputs, execution events, results, and failures at that
-boundary; keep Codex thread and turn messages inside its adapter.
+Plan an early integration experiment against one additional real runtime to
+test the shared contract. The choice of Claude or GitHub Copilot, its supported
+CLI/SDK/service interface, and the production delivery timing remain open.
+Use test doubles for contract coverage, but validate advertised capabilities
+against a real integration before claiming support.
 
-Use the existing
-[HTTP authentication and prompt tests](../tests/integration/auth.test.ts) and
-[Codex transport tests](../backend/tests/Goblin.Tests/CodexClientTests.cs) as
-regression coverage. Add focused tests where the new boundaries expose an
-important contract.
+This area is complete when Codex operates through the shared boundaries,
+connection state and availability are explicit, and Work orchestration has no
+dependency on Codex protocol types or thread semantics. Full feature coverage
+for every future integration is separate from this rewrite scope.
 
-## 2. Keep composition in the host and separate application health
+## 3. Execution hosting and lifecycle
 
-`GoblinApplication.cs` is currently small enough to understand. The reason to
-extract responsibilities is that Work endpoints and orchestration would
-otherwise accumulate there.
+Replace the web application's ownership of the Codex child process with an
+explicit execution host and lifecycle. Give repository executions isolated
+environments with controlled workspace access and credentials. Keep execution
+isolation compatible with the modular monolith; the application and database
+remain the durable owners of Work.
 
-Move connection endpoint mapping and runtime lifecycle management into their
-owning modules. Keep shared HTTP security and error translation centralized.
-Avoid introducing a generic module framework.
-
-Separate application readiness from runtime availability. Goblin should remain
-available to inspect Work and repair connections when Codex fails. Runtime
-availability should remain visible as a separate capability status for each
-configured integration and connection. A failed runtime should not hide Work
-history or prevent dispatch through another healthy, suitable runtime when one
-is implemented and configured.
-
-Make the readiness change separately from mechanical extraction. Update the
-Kubernetes probe, installer expectations, and relevant tests together. Define
-application readiness around the services actually required by the enabled
-application features.
-
-Validate that a runtime failure does not prevent the UI and application APIs
-from exposing state and recovery controls.
-
-## 3. Establish the architecture through one durable Work flow
-
-This is a product increment beyond the preparatory refactors.
-
-Implement the smallest flow that can:
-
-1. Create and retrieve Work independently of a conversation.
-2. Assign it to a stable agent identity.
-3. Record a distinct execution attempt.
-4. Dispatch execution through Wolverine.
-5. Persist the result or failure and expose it to the UI.
-
-Start with one Goblin agent and Codex as its runtime. Keep Work identity, agent
-identity, execution-attempt identity, and runtime session identity distinct.
-Record the runtime selected for the attempt explicitly, even while Codex is
-the only implementation. Keep Codex thread and turn references within that
-runtime's execution metadata rather than using them as Work or agent IDs.
+Define how execution environments are created, assigned, observed, stopped,
+recovered, and cleaned up. Record execution ownership so that a restart or
+duplicate message cannot blindly launch a competing attempt. Preserve workspace
+state and artifact references needed for recovery; retain uncertain attempts
+for reconciliation before deciding whether to resume or replace them.
 
 Establish these contracts:
 
-- Work state and dispatch intent commit atomically.
 - Closing a browser does not cancel accepted durable Work.
 - A retry creates or resumes an explicitly tracked attempt.
 - Duplicate delivery cannot blindly start another execution.
 - Uncertain execution after a crash has an explicit recovery path.
-- A completed runtime turn does not automatically mean the intended Work
-  outcome is achieved.
+- Cancellation records intent and reconciles whether execution actually stopped.
+- Workspaces and credentials are accessible only to the executions that need them.
 
-When runtime switching is introduced, the proposed handoff creates a new attempt
-on the same Work. It cannot silently resume a Codex session through another
-integration. Resolve uncertain external actions before dispatching a replacement
-attempt. Switching is not required for the first flow using only Codex.
+Wolverine coordinates delivery and retries; durable messaging does not guarantee
+that external actions happen exactly once. Reconcile uncertain external actions
+before dispatching a replacement attempt. If runtime switching is introduced,
+the proposed handoff starts a new attempt on the same Work with recorded context
+and workspace references. Cross-runtime resume behavior remains an open design
+choice and cannot assume native sessions are portable.
 
-Use short database transactions around state changes. Do not hold a transaction
-open throughout agent execution. Wolverine coordinates delivery and retries;
-application rules determine which transitions and retries are valid.
-Durable messaging must not be treated as a guarantee that external actions
-happen exactly once.
+Separate application readiness from runtime availability. Goblin must remain
+available to inspect Work and repair connections when Codex fails. Report
+availability for each configured integration and connection. A failed runtime
+must not prevent dispatch through another healthy, suitable runtime once it is
+implemented and configured.
 
-The existing `/api/prompt` can retain its request-cancellation behavior for
-connection verification.
+Update the Kubernetes manifests, installer behavior, credential mounts, workspace
+storage, and readiness tests together. Define application readiness around the
+services required by enabled features. Application database credentials must
+stay outside agent execution environments.
 
-As this flow reaches the UI, replace simulated Work transitions with server
-commands and persisted views. This is the useful point to separate preview
-fixtures from rendering. Keep UI navigation and presentation state local, while
-the server owns durable Work state.
+This area is complete when real Codex execution uses the isolation boundary and
+restart, cancellation, duplicate delivery, and cleanup behavior are validated.
+Repository actions require this boundary before they are enabled.
 
-Before enabling repository actions, give executions their own sandbox.
-Execution isolation is compatible with keeping the application a modular
-monolith.
+## 4. Work UI state and API interaction
 
-Add integration coverage for persisted state transitions, atomic dispatch,
-duplicate delivery, restart recovery, and browser disconnection. Exercise real
-PostgreSQL for the persistence and transaction contracts.
+Replace the Work preview's local lifecycle mutations and simulated replies with
+server commands and persisted views. Rebuild state handling around Work identity,
+execution progress, conversations, decisions, outputs, and result review.
+Keep navigation, selected tabs, and presentation state local to the browser.
 
-Use a test double at the runtime boundary to check that Work orchestration
-does not require Codex protocol types or thread semantics. Before enabling a
-second real integration, validate its advertised capabilities and exercise
-context handoff and recovery through that integration. A test double alone
-does not establish compatibility with Claude or GitHub Copilot.
+Persist actions such as creating Work, answering a decision, requesting changes,
+and approving a result. An approval must still be visible after a refresh or in
+another browser. Distinguish a pending command from a server-confirmed transition,
+and handle failed or repeated submissions without inventing completed actions.
+
+Support progress updates and reconnect behavior that retrieves authoritative
+state. Show failures, uncertain attempts, and recovery controls. Identify which
+runtime performed an attempt, and expose capability differences when they affect
+an action. The user experience for selecting agents, changing runtimes, and
+automatic fallback remains open.
+
+Separate sample fixtures from application rendering. Preserve the current visual
+design, branding, frontend technology, accessibility, and HTTP security while
+replacing state ownership. Real Work uses authenticated APIs and persisted data.
+
+This area is complete when the Work journey operates through the real APIs and
+its history, decisions, and approvals survive refresh and reconnection. Simulated
+transitions must no longer drive the integrated product experience.
+
+## Delivery and validation across the four areas
+
+Start with an end-to-end milestone: create Work, assign a stable agent, commit
+dispatch intent, execute with Codex in an isolated environment, persist the
+result, and review it through the UI. Use this flow to validate all four designs
+and expose gaps early. Complete each area's contracts beyond that first flow.
+
+Use the existing
+[HTTP authentication and prompt tests](../tests/integration/auth.test.ts) and
+[Codex transport tests](../backend/tests/Goblin.Tests/CodexClientTests.cs) as
+regression coverage. Add meaningful tests for the new boundaries, including:
+
+- Persisted Work transitions, decisions, result review, and execution provenance.
+- Atomic dispatch, duplicate delivery, restart recovery, and cancellation.
+- Credential and workspace isolation during real execution.
+- Browser disconnection, refresh, reconnect, and repeated command submission.
+- Runtime failure while Work history and recovery controls remain available.
+- Runtime contracts that do not require Codex-specific types or session semantics.
+
+Exercise real PostgreSQL for persistence and transaction contracts, real Codex
+for execution and isolation, and browser journeys for durable UI behavior.
+
+The scenario "Codex edits files, Goblin restarts, and another runtime continues"
+connects the four areas: persisted attempts, context handoff, workspace recovery,
+and a comprehensible UI history. Keep this as an exploration scenario until
+handoff policy is settled. Validate it against a second real integration before
+claiming cross-runtime continuation; a test double alone is insufficient.
 
 ## Repository principles
 
@@ -260,8 +322,8 @@ Document these principles in the repository and reference them from
 4. PostgreSQL owns Goblin's durable history; runtime sessions are references to
    execution context.
 5. Agents outlive attempts; attempts outlive HTTP requests.
-6. Add boundaries when behavior needs them, and preserve existing contracts
-   during extraction.
+6. Use the four agreed behavioral boundaries to guide the rewrite, with explicit
+   compatibility and recovery contracts as implementations change.
 7. Codex is the current default integration, not a dependency of Work lifecycle
    rules. Each attempt records its runtime; capability differences stay explicit.
 
@@ -296,9 +358,10 @@ The transport already has tests for concurrency, framing, failure, cancellation,
 and process replacement. Preserve that investment while introducing boundaries
 around it.
 
-Do not add generic repositories, additional application services deployed over
-the network, separate Outcomes infrastructure, or a broad folder reorganization
-without demonstrated need. Keep business behavior outside regenerated files.
+Reorganize files and projects where needed to enforce the four agreed boundaries.
+Keep business behavior outside regenerated files. Generic repositories,
+additional application services deployed over the network, and separate Outcomes
+infrastructure still require demonstrated need beyond selecting this rewrite scope.
 
 ## Review validation
 

@@ -6,7 +6,7 @@ The existing authentication preview, HTTP routes, cookies, browser UI, and promp
 limits remain in place.
 
 Codex is the current primary coding agent integration and the only runtime
-implemented today. The [architecture and refactoring plan](architecture-refactoring-plan.md)
+implemented today. The [architecture and rewrite plan](architecture-refactoring-plan.md)
 prepares Goblin for other agents, including Claude and GitHub Copilot. This
 document describes the current Codex adapter; its protocol and process model
 are not requirements for future integrations.
