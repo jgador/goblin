@@ -13,7 +13,7 @@ public static class ApplicationServices
 {
     public static void ConfigureMessaging(WolverineOptions options, string connection)
     {
-        options.PersistMessagesWithPostgresql(connection, "goblin_messages").OverrideAutoCreateResources(AutoCreate.None);
+        options.PersistMessagesWithPostgresql(connection, "public").OverrideAutoCreateResources(AutoCreate.None);
         options.AutoBuildMessageStorageOnStartup = AutoCreate.None;
         options.UseEntityFrameworkCoreTransactions();
         options.Discovery.IncludeAssembly(typeof(DispatchWorkHandler).Assembly);

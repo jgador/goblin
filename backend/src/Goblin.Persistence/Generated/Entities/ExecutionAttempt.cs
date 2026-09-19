@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("execution_attempts", Schema = "goblin")]
+[Table("execution_attempts")]
 [Index("Status", "UpdatedAt", Name = "attempts_recovery")]
 public partial class ExecutionAttempt
 {

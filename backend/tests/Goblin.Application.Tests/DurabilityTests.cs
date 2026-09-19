@@ -243,7 +243,12 @@ public sealed class DurabilityTests
             await using (var db = new NpgsqlConnection(admin.ConnectionString))
             {
                 await db.OpenAsync();
-                await new NpgsqlCommand("CREATE SCHEMA goblin; GRANT USAGE ON SCHEMA goblin TO goblin_app; ALTER DEFAULT PRIVILEGES IN SCHEMA goblin GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO goblin_app;", db).ExecuteNonQueryAsync();
+                await new NpgsqlCommand("""
+                    REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+                    GRANT USAGE ON SCHEMA public TO goblin_app;
+                    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO goblin_app;
+                    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO goblin_app;
+                    """, db).ExecuteNonQueryAsync();
             }
             await SqlMigrations.ApplyAsync(admin.ConnectionString, Path.Combine(AppContext.BaseDirectory, "migrations"), TextWriter.Null);
             var fixture = new Fixture(app.ConnectionString, name, Path.Combine(Path.GetTempPath(), name));

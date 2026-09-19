@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("conversation_messages", Schema = "goblin")]
+[Table("conversation_messages")]
 [Index("ConversationId", "CreatedAt", "Id", Name = "conversation_history")]
 public partial class ConversationMessage
 {
