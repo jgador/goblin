@@ -13,7 +13,6 @@ namespace Goblin.Execution;
 public sealed record TextHostOptions(string Directory, string CodexHome, string CodexCommand,
     string WorkerAssembly, string DotnetCommand = "dotnet");
 public sealed record WorkerInput(WorkSnapshot Work, string CodexHome, string CodexCommand);
-public sealed record ProcessIdentity(int Pid, long StartedAt, string Machine);
 
 // No agent sandbox is allocated for text-only work. This independent worker has
 // tools disabled and receives an allowlisted environment, never DB credentials.
@@ -55,7 +54,7 @@ public sealed class LocalTextHost : IExecutionHost
         start.ArgumentList.Add(directory);
         using Process process = Process.Start(start) ?? throw new IOException("Worker did not start.");
         await ExecutionFiles.WriteAsync(Path.Combine(directory, "process.json"),
-            new ProcessIdentity(process.Id, process.StartTime.ToUniversalTime().Ticks, Environment.MachineName), token);
+            ProcessIdentity.Capture(process), token);
         // The worker never emits upstream details. Drain anyway to avoid pipes
         // preventing completion; disposal of the Process handle does not kill it.
         _ = DrainAsync(process.StandardOutput);
@@ -77,13 +76,13 @@ public sealed class LocalTextHost : IExecutionHost
             using (File.Open(Path.Combine(directory, "stopped"), FileMode.OpenOrCreate)) { }
             return new(ObservationKind.Stopped);
         }
-        if (identity.Machine != Environment.MachineName) return new(ObservationKind.Uncertain, Failure: FailureKind.HostUnavailable);
+        if (!identity.CanObserve()) return new(ObservationKind.Uncertain, Failure: FailureKind.HostUnavailable);
         Process? process = null;
         try
         {
             process = Process.GetProcessById(identity.Pid);
-            if (process.HasExited || process.StartTime.ToUniversalTime().Ticks != identity.StartedAt)
-                return new(ObservationKind.Stopped);
+            if (process.HasExited || !identity.Matches(process))
+                return await StoppedAsync(directory, token);
             if (stop)
             {
                 // Kill the tree and wait for termination; intent alone is not completion.
@@ -95,9 +94,16 @@ public sealed class LocalTextHost : IExecutionHost
             return await ExecutionFiles.ReadAsync<ExecutionObservation>(Path.Combine(directory, "progress.json"), token)
                 ?? new(ObservationKind.Pending);
         }
-        catch (ArgumentException) { return new(ObservationKind.Stopped); }
+        catch (ArgumentException) { return await StoppedAsync(directory, token); }
+        catch (FileNotFoundException) { return await StoppedAsync(directory, token); }
+        catch (DirectoryNotFoundException) { return await StoppedAsync(directory, token); }
         finally { process?.Dispose(); }
     }
+
+    private static async Task<ExecutionObservation> StoppedAsync(string directory, CancellationToken token) =>
+        // The worker may publish its result between the first read and exiting.
+        await ExecutionFiles.ReadAsync<ExecutionObservation>(Path.Combine(directory, "result.json"), token)
+            ?? new(ObservationKind.Stopped);
 
     public Task CleanupAsync(WorkSnapshot work, CancellationToken token)
     {
