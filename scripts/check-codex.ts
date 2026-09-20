@@ -10,15 +10,33 @@ import { writePasswordHash } from "../tests/support/backend.js";
 // verification and never reads personal credentials or submits a model task.
 const dataDir = await mkdtemp(join(tmpdir(), "goblin-codex-check-"));
 try {
-  const passwordHashFile = join(dataDir, "owner-password");
-  await writePasswordHash(passwordHashFile, "codex-storage-test");
-  for (const scenario of ["storage", "restore"]) {
-    const child = spawn("dotnet", [resolve("backend/tests/Goblin.TestHost/bin/Debug/net10.0/Goblin.TestHost.dll"),
-      JSON.stringify({ root: process.cwd(), dataDir, passwordHashFile, scenario, realCodex: true, timeoutMs: 20000 })], { stdio: "inherit" });
-    const [code] = await once(child, "exit");
-    if (code !== 0) throw new Error("The pinned Codex storage check failed.");
-  }
-  console.log("Pinned Rust Codex passed initialization, isolated key storage, process replacement, and logout through the C# client.");
+    const passwordHashFile = join(dataDir, "owner-password");
+    await writePasswordHash(passwordHashFile, "codex-storage-test");
+    for (const scenario of ["storage", "restore"]) {
+        const child = spawn(
+            "dotnet",
+            [
+                resolve(
+                    "backend/tests/Goblin.TestHost/bin/Debug/net10.0/Goblin.TestHost.dll",
+                ),
+                JSON.stringify({
+                    root: process.cwd(),
+                    dataDir,
+                    passwordHashFile,
+                    scenario,
+                    realCodex: true,
+                    timeoutMs: 20000,
+                }),
+            ],
+            { stdio: "inherit" },
+        );
+        const [code] = await once(child, "exit");
+        if (code !== 0)
+            throw new Error("The pinned Codex storage check failed.");
+    }
+    console.log(
+        "Pinned Rust Codex passed initialization, isolated key storage, process replacement, and logout through the C# client.",
+    );
 } finally {
-  await rm(dataDir, { recursive: true, force: true });
+    await rm(dataDir, { recursive: true, force: true });
 }

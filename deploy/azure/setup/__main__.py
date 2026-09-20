@@ -50,14 +50,30 @@ def update_state(path, action, value):
     # Writers hold the installer's flock for the entire attempt (including init).
     timestamp = now()
     if action == "init":
-        state = {"version": 1, "status": "waiting", "phase": "installing", "startedAt": timestamp,
-                 "updatedAt": timestamp, "attempt": 0, "currentStep": None, "message": "Waiting for installation to start.",
-                 "steps": [{"id": key, "label": label, "status": "waiting", "attempt": 0} for key, label in STEPS]}
+        state = {
+            "version": 1,
+            "status": "waiting",
+            "phase": "installing",
+            "startedAt": timestamp,
+            "updatedAt": timestamp,
+            "attempt": 0,
+            "currentStep": None,
+            "message": "Waiting for installation to start.",
+            "steps": [
+                {"id": key, "label": label, "status": "waiting", "attempt": 0}
+                for key, label in STEPS
+            ],
+        }
     else:
         state = json.loads(Path(path).read_text())
         if action == "begin":
-            state.update(status="running", phase="installing", currentStep=None,
-                         attempt=state["attempt"] + 1, message="Checking installation progress.")
+            state.update(
+                status="running",
+                phase="installing",
+                currentStep=None,
+                attempt=state["attempt"] + 1,
+                message="Checking installation progress.",
+            )
             # A completed marker is never sufficient evidence of readiness after a reboot.
             for step in state["steps"]:
                 step.update(status="waiting")
@@ -65,7 +81,9 @@ def update_state(path, action, value):
                 step.pop("error", None)
         elif action == "start":
             step = next(item for item in state["steps"] if item["id"] == value)
-            step.update(status="running", startedAt=timestamp, attempt=step["attempt"] + 1)
+            step.update(
+                status="running", startedAt=timestamp, attempt=step["attempt"] + 1
+            )
             state.update(currentStep=value, message=step["label"])
         elif action == "detail":
             state["message"] = value
@@ -73,18 +91,38 @@ def update_state(path, action, value):
             # The worker supplies its validated origin, never a request Host or query.
             state["publicUrl"] = value
         elif action == "complete":
-            step = next(item for item in state["steps"] if item["id"] == state["currentStep"])
+            step = next(
+                item for item in state["steps"] if item["id"] == state["currentStep"]
+            )
             step.update(status="complete", finishedAt=timestamp)
         elif action == "handoff":
-            state.update(phase="activating", message="Goblin is ready. Connecting to your workspace…")
+            state.update(
+                phase="activating",
+                message="Goblin is ready. Connecting to your workspace…",
+            )
         elif action == "failed":
-            state.update(status="failed", message="Installation stopped. An administrator can retry from the VM.")
+            state.update(
+                status="failed",
+                message="Installation stopped. An administrator can retry from the VM.",
+            )
             if state["currentStep"]:
-                step = next(item for item in state["steps"] if item["id"] == state["currentStep"])
-                step.update(status="failed", finishedAt=timestamp,
-                            error="This step did not finish. Review the installation log on the VM.")
+                step = next(
+                    item
+                    for item in state["steps"]
+                    if item["id"] == state["currentStep"]
+                )
+                step.update(
+                    status="failed",
+                    finishedAt=timestamp,
+                    error="This step did not finish. Review the installation log on the VM.",
+                )
         elif action == "ready":
-            state.update(status="ready", phase="complete", message="Goblin is ready.", finishedAt=timestamp)
+            state.update(
+                status="ready",
+                phase="complete",
+                message="Goblin is ready.",
+                finishedAt=timestamp,
+            )
         else:
             raise ValueError("Unknown state transition")
     state["updatedAt"] = timestamp
@@ -93,10 +131,12 @@ def update_state(path, action, value):
 
 def serve(state_path, host, port, health_socket=None):
     with zipfile.ZipFile(Path(__file__).parent) as bundle:
-        assets = {"/": ("text/html; charset=utf-8", bundle.read("index.html")),
-                  "/setup/app.js": ("text/javascript; charset=utf-8", bundle.read("app.js")),
-                  "/setup/styles.css": ("text/css; charset=utf-8", bundle.read("styles.css")),
-                  "/setup/icon.svg": ("image/svg+xml", bundle.read("icon.svg"))}
+        assets = {
+            "/": ("text/html; charset=utf-8", bundle.read("index.html")),
+            "/setup/app.js": ("text/javascript; charset=utf-8", bundle.read("app.js")),
+            "/setup/styles.css": ("text/css; charset=utf-8", bundle.read("styles.css")),
+            "/setup/icon.svg": ("image/svg+xml", bundle.read("icon.svg")),
+        }
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "GoblinSetup"
@@ -131,7 +171,10 @@ def serve(state_path, host, port, health_socket=None):
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            )
             self.end_headers()
             self.wfile.write(body)
 
@@ -151,7 +194,10 @@ def serve(state_path, host, port, health_socket=None):
                 local = ThreadingUnixStreamServer(health_socket, Handler)
                 local.daemon_threads = True
                 threading.Thread(target=local.serve_forever, daemon=True).start()
-            print(f"Goblin setup listening at http://{host}:{server.server_port}", flush=True)
+            print(
+                f"Goblin setup listening at http://{host}:{server.server_port}",
+                flush=True,
+            )
             server.serve_forever()
     finally:
         if local:
@@ -180,7 +226,12 @@ def main():
         update_state(args.path, args.action, args.value)
     elif args.command == "unpack":
         with zipfile.ZipFile(Path(__file__).parent) as bundle:
-            for name in ("installer.sh", "install-app.sh", "goblin-setup.service", "goblin-installer.service"):
+            for name in (
+                "installer.sh",
+                "install-app.sh",
+                "goblin-setup.service",
+                "goblin-installer.service",
+            ):
                 target = Path(args.destination) / name
                 target.write_bytes(bundle.read(name))
                 target.chmod(0o755 if name.endswith(".sh") else 0o644)

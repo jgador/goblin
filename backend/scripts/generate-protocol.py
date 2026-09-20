@@ -36,13 +36,18 @@ def semantic(value):
 def pascal(value):
     value = re.sub(r"v\d+::", "", value)
     parts = re.split(r"[^a-zA-Z0-9]+", value)
-    result = "".join(part[0].upper() + part[1:] if not part.isupper() else part.title()
-                     for part in parts if part)
+    result = "".join(
+        part[0].upper() + part[1:] if not part.isupper() else part.title()
+        for part in parts
+        if part
+    )
     return ("Value" + result) if not result or result[0].isdigit() else result
 
 
 def name_words(value):
-    return re.findall(r"[A-Z]+(?=[A-Z][a-z]|[0-9]|$)|[A-Z]?[a-z]+|[0-9]+", pascal(value))
+    return re.findall(
+        r"[A-Z]+(?=[A-Z][a-z]|[0-9]|$)|[A-Z]?[a-z]+|[0-9]+", pascal(value)
+    )
 
 
 def combine_type_names(first, second):
@@ -52,11 +57,16 @@ def combine_type_names(first, second):
     while prefix < min(len(left), len(right)) and left[prefix] == right[prefix]:
         prefix += 1
     suffix = 0
-    while (suffix < min(len(left), len(right)) - prefix
-           and left[-suffix - 1] == right[-suffix - 1]):
+    while (
+        suffix < min(len(left), len(right)) - prefix
+        and left[-suffix - 1] == right[-suffix - 1]
+    ):
         suffix += 1
-    return "".join(left[:len(left) - suffix] + right[prefix:len(right) - suffix]
-                   + (left[-suffix:] if suffix else []))
+    return "".join(
+        left[: len(left) - suffix]
+        + right[prefix : len(right) - suffix]
+        + (left[-suffix:] if suffix else [])
+    )
 
 
 def nested_type_name(owner, member, schema):
@@ -64,9 +74,15 @@ def nested_type_name(owner, member, schema):
     if isinstance(schema, dict) and schema.get("title"):
         return owner + member
     owner_words, member_words = name_words(owner), name_words(member)
-    if (isinstance(schema, dict) and schema.get("type") == "object" and len(member_words) > 1
-            and any(owner_words[start:start + len(member_words)] == member_words
-                    for start in range(len(owner_words) - len(member_words) + 1))):
+    if (
+        isinstance(schema, dict)
+        and schema.get("type") == "object"
+        and len(member_words) > 1
+        and any(
+            owner_words[start : start + len(member_words)] == member_words
+            for start in range(len(owner_words) - len(member_words) + 1)
+        )
+    ):
         return member + "Details"
     name = combine_type_names(owner, member)
     return owner + member if name == owner else name
@@ -111,14 +127,18 @@ def nullable_schema(schema):
 
 class Generator:
     def __init__(self):
-        aggregate = json.loads((SCHEMAS / "codex_app_server_protocol.schemas.json").read_text())
+        aggregate = json.loads(
+            (SCHEMAS / "codex_app_server_protocol.schemas.json").read_text()
+        )
         self.schemas = {}
         self.refs = {}
         for key, schema in aggregate["definitions"].items():
             definitions = schema.items() if key == "v2" else [(key, schema)]
             for name, value in definitions:
                 ref = f"#/definitions/{'v2/' if key == 'v2' else ''}{name}"
-                if name in self.schemas and semantic(value) != semantic(self.schemas[name]):
+                if name in self.schemas and semantic(value) != semantic(
+                    self.schemas[name]
+                ):
                     raise ValueError(f"Conflicting protocol definition: {name}")
                 self.schemas[name] = value
                 self.refs[ref] = name
@@ -140,11 +160,21 @@ class Generator:
             if path.name == "codex_app_server_protocol.v2.schemas.json":
                 local = schema["definitions"]
             else:
-                local = {path.stem: {key: value for key, value in schema.items() if key != "definitions"}}
+                local = {
+                    path.stem: {
+                        key: value
+                        for key, value in schema.items()
+                        if key != "definitions"
+                    }
+                }
                 local.update(schema.get("definitions", {}))
             for name, value in local.items():
-                if name not in self.schemas or semantic(value) != semantic(self.schemas[name]):
-                    raise ValueError(f"Aggregate and individual schemas disagree: {path.relative_to(ROOT)}: {name}")
+                if name not in self.schemas or semantic(value) != semantic(
+                    self.schemas[name]
+                ):
+                    raise ValueError(
+                        f"Aggregate and individual schemas disagree: {path.relative_to(ROOT)}: {name}"
+                    )
 
     @staticmethod
     def hash_schemas():
@@ -159,12 +189,17 @@ class Generator:
     def register(self, name, schema, *, parent=None):
         name = pascal(name)
         if name in self.schemas:
-            if semantic(self.schemas[name]) == semantic(schema) and self.parents.get(name) == parent:
+            if (
+                semantic(self.schemas[name]) == semantic(schema)
+                and self.parents.get(name) == parent
+            ):
                 return name
             suffix = 2
             while name + str(suffix) in self.schemas:
-                if (semantic(self.schemas[name + str(suffix)]) == semantic(schema)
-                        and self.parents.get(name + str(suffix)) == parent):
+                if (
+                    semantic(self.schemas[name + str(suffix)]) == semantic(schema)
+                    and self.parents.get(name + str(suffix)) == parent
+                ):
                     return name + str(suffix)
                 suffix += 1
             name += str(suffix)
@@ -177,7 +212,9 @@ class Generator:
         if "enum" in schema and schema.get("type") == "string":
             return schema["enum"]
         branches = schema.get("oneOf", schema.get("anyOf"))
-        if branches and all(branch.get("type") == "string" and "enum" in branch for branch in branches):
+        if branches and all(
+            branch.get("type") == "string" and "enum" in branch for branch in branches
+        ):
             return [item for branch in branches for item in branch["enum"]]
         return None
 
@@ -192,7 +229,11 @@ class Generator:
             if ref not in self.refs:
                 raise ValueError(f"Unresolved reference at {hint}: {ref}")
             name = self.emit(self.refs[ref])
-        elif self.enum_values(schema) is not None or "oneOf" in schema or "anyOf" in schema:
+        elif (
+            self.enum_values(schema) is not None
+            or "oneOf" in schema
+            or "anyOf" in schema
+        ):
             name = self.emit(self.register(hint, schema))
         elif schema.get("type") == "string":
             name = "string"
@@ -201,8 +242,15 @@ class Generator:
         elif schema.get("type") == "null":
             name = "ProtocolNull"
         elif schema.get("type") == "integer":
-            name = {"int64": "long", "int32": "int", "uint64": "ulong", "uint32": "uint",
-                    "uint16": "ushort", "uint": "ulong", None: "long"}.get(schema.get("format"))
+            name = {
+                "int64": "long",
+                "int32": "int",
+                "uint64": "ulong",
+                "uint32": "uint",
+                "uint16": "ushort",
+                "uint": "ulong",
+                None: "long",
+            }.get(schema.get("format"))
             if name is None:
                 raise ValueError(f"Unknown integer format at {hint}")
         elif schema.get("type") == "number":
@@ -210,7 +258,9 @@ class Generator:
         elif schema.get("type") == "array":
             name = f"List<{self.type_name(schema['items'], hint + 'Item')}>"
         elif schema.get("type") == "object":
-            if "properties" not in schema and schema.get("additionalProperties") not in (None, False):
+            if "properties" not in schema and schema.get(
+                "additionalProperties"
+            ) not in (None, False):
                 name = f"Dictionary<string, {self.type_name(schema['additionalProperties'], hint + 'Value')}>"
             else:
                 name = self.emit(self.register(hint, schema))
@@ -231,9 +281,13 @@ class Generator:
             self.generating.remove(name)
             return self.aliases[name]
         if name == "RequestId":
-            expected = {"anyOf": [{"type": "string"}, {"format": "int64", "type": "integer"}]}
+            expected = {
+                "anyOf": [{"type": "string"}, {"format": "int64", "type": "integer"}]
+            }
             if semantic(schema) != expected:
-                raise ValueError("RequestId schema changed; update its scalar union representation")
+                raise ValueError(
+                    "RequestId schema changed; update its scalar union representation"
+                )
             body = self.request_id()
         elif self.enum_values(schema) is not None:
             body = self.enum(name, self.enum_values(schema))
@@ -255,13 +309,20 @@ class Generator:
         if len(values) != len(set(values)):
             raise ValueError(f"Duplicate enum variants in {name}")
         names = set()
-        lines = [f"[JsonConverter(typeof(ProtocolStringEnumConverter<{name}>))]", f"public enum {name}", "{"]
+        lines = [
+            f"[JsonConverter(typeof(ProtocolStringEnumConverter<{name}>))]",
+            f"public enum {name}",
+            "{",
+        ]
         for value in values:
             member = pascal(value)
             if member in names:
                 raise ValueError(f"Enum member collision in {name}: {value}")
             names.add(member)
-            lines += [f"    [JsonStringEnumMemberName({literal(value)})]", f"    {member},"]
+            lines += [
+                f"    [JsonStringEnumMemberName({literal(value)})]",
+                f"    {member},",
+            ]
         return "\n".join(lines + ["}"])
 
     def properties(self, name, schema, discriminator=None, inherited=False):
@@ -274,12 +335,19 @@ class Generator:
             lines.append(f"    [JsonPropertyName({literal(key)})]")
             if discriminator == key:
                 constant = value["enum"][0]
-                lines += ["    [JsonRequired]",
-                          f"    public {'override ' if inherited else ''}string {prop}", "    {",
-                          f"        get => {literal(constant)};", "        init",
-                          "        {", f"            if (value != {literal(constant)})",
-                          f"                throw new JsonException({literal('Expected ' + key + ' discriminator ' + constant + '.')});",
-                          "        }", "    }", ""]
+                lines += [
+                    "    [JsonRequired]",
+                    f"    public {'override ' if inherited else ''}string {prop}",
+                    "    {",
+                    f"        get => {literal(constant)};",
+                    "        init",
+                    "        {",
+                    f"            if (value != {literal(constant)})",
+                    f"                throw new JsonException({literal('Expected ' + key + ' discriminator ' + constant + '.')});",
+                    "        }",
+                    "    }",
+                    "",
+                ]
                 continue
             type_name = self.type_name(value, nested_type_name(name, prop, value))
             if required:
@@ -287,17 +355,31 @@ class Generator:
             else:
                 if not type_name.endswith("?"):
                     type_name += "?"
-                lines.append("    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]")
-            lines += [f"    public {'required ' if required else ''}{type_name} {prop} {{ get; init; }}", ""]
+                lines.append(
+                    "    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]"
+                )
+            lines += [
+                f"    public {'required ' if required else ''}{type_name} {prop} {{ get; init; }}",
+                "",
+            ]
         if schema.get("additionalProperties") is True:
-            lines += ["    [JsonExtensionData]", "    public Dictionary<string, JsonElement>? AdditionalProperties { get; init; }", ""]
+            lines += [
+                "    [JsonExtensionData]",
+                "    public Dictionary<string, JsonElement>? AdditionalProperties { get; init; }",
+                "",
+            ]
         return lines
 
     def object(self, name, schema, parent=None, discriminator=None):
         lines = []
         if schema.get("additionalProperties") is False:
-            lines.append("[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]")
-        lines += [f"public sealed class {name}" + (f" : {parent}" if parent else ""), "{"]
+            lines.append(
+                "[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]"
+            )
+        lines += [
+            f"public sealed class {name}" + (f" : {parent}" if parent else ""),
+            "{",
+        ]
         lines += self.properties(name, schema, discriminator, parent is not None)
         return "\n".join(lines + ["}"])
 
@@ -306,7 +388,9 @@ class Generator:
             values = []
             for branch in branches:
                 prop = branch.get("properties", {}).get(key, {})
-                if len(prop.get("enum", [])) != 1 or key not in branch.get("required", []):
+                if len(prop.get("enum", [])) != 1 or key not in branch.get(
+                    "required", []
+                ):
                     break
                 values.append(prop["enum"][0])
             if len(values) == len(branches) and len(set(values)) == len(values):
@@ -316,74 +400,173 @@ class Generator:
     def union(self, name, schema):
         branches = schema.get("oneOf", schema.get("anyOf"))
         discriminator = self.discriminator(branches)
-        lines = [f"[JsonConverter(typeof({name}JsonConverter))]", f"public abstract class {name}", "{"]
+        lines = [
+            f"[JsonConverter(typeof({name}JsonConverter))]",
+            f"public abstract class {name}",
+            "{",
+        ]
         if discriminator:
-            lines += [f"    [JsonPropertyName({literal(discriminator)})]",
-                      f"    public abstract string {pascal(discriminator)} {{ get; init; }}", ""]
+            lines += [
+                f"    [JsonPropertyName({literal(discriminator)})]",
+                f"    public abstract string {pascal(discriminator)} {{ get; init; }}",
+                "",
+            ]
             if discriminator == "method":
-                methods = [branch["properties"]["method"]["enum"][0] for branch in branches]
-                lines += ["    public static bool IsKnownMethod(string method) => method is",
-                          "\n".join(f"        {literal(method)}" + (" or" if index < len(methods) - 1 else ";")
-                                    for index, method in enumerate(methods)), ""]
+                methods = [
+                    branch["properties"]["method"]["enum"][0] for branch in branches
+                ]
+                lines += [
+                    "    public static bool IsKnownMethod(string method) => method is",
+                    "\n".join(
+                        f"        {literal(method)}"
+                        + (" or" if index < len(methods) - 1 else ";")
+                        for index, method in enumerate(methods)
+                    ),
+                    "",
+                ]
         lines += self.properties(name, schema)
         variants = []
         for index, branch in enumerate(branches):
             if discriminator:
                 value = branch["properties"][discriminator]["enum"][0]
-                hint = pascal(value) + name if branch.get("title") else variant_type_name(pascal(value), name)
+                hint = (
+                    pascal(value) + name
+                    if branch.get("title")
+                    else variant_type_name(pascal(value), name)
+                )
                 variant = self.register(hint, branch, parent=name)
-                self.generated[variant] = self.object(variant, branch, name, discriminator)
+                self.generated[variant] = self.object(
+                    variant, branch, name, discriminator
+                )
                 variants.append((variant, variant, False, value))
             elif branch.get("type") == "object":
                 rawname = branch.get("title")
                 if not rawname:
                     required = branch.get("required", [])
-                    rawname = variant_type_name(pascal(required[0]) if required else f"Variant{index + 1}", name)
+                    rawname = variant_type_name(
+                        pascal(required[0]) if required else f"Variant{index + 1}", name
+                    )
                 variant = self.register(rawname, branch, parent=name)
                 self.generated[variant] = self.object(variant, branch, name)
                 variants.append((variant, variant, False, None))
             else:
                 enum_values = self.enum_values(branch)
-                inner = self.type_name(branch, name + ("Value" if enum_values else f"Variant{index + 1}Value"))
-                label = "String" if enum_values or inner == "string" else "Array" if inner.startswith("List<") else pascal(inner)
-                variant = self.register(variant_type_name(label, name, wrapped=True),
-                                        {"type": "object", "properties": {"value": branch}, "required": ["value"]}, parent=name)
-                self.generated[variant] = (f"[JsonConverter(typeof(ProtocolValueConverter<{variant}, {inner}>))]\n"
-                                           f"public sealed class {variant}({inner} value) : {name}, IProtocolValue<{variant}, {inner}>\n"
-                                           "{\n"
-                                           "    [JsonIgnore]\n"
-                                           f"    public {inner} Value {{ get; init; }} = value;\n\n"
-                                           f"    public static {variant} FromValue({inner} value) => new(value);\n"
-                                           "}")
+                inner = self.type_name(
+                    branch,
+                    name + ("Value" if enum_values else f"Variant{index + 1}Value"),
+                )
+                label = (
+                    "String"
+                    if enum_values or inner == "string"
+                    else "Array"
+                    if inner.startswith("List<")
+                    else pascal(inner)
+                )
+                variant = self.register(
+                    variant_type_name(label, name, wrapped=True),
+                    {
+                        "type": "object",
+                        "properties": {"value": branch},
+                        "required": ["value"],
+                    },
+                    parent=name,
+                )
+                self.generated[variant] = (
+                    f"[JsonConverter(typeof(ProtocolValueConverter<{variant}, {inner}>))]\n"
+                    f"public sealed class {variant}({inner} value) : {name}, IProtocolValue<{variant}, {inner}>\n"
+                    "{\n"
+                    "    [JsonIgnore]\n"
+                    f"    public {inner} Value {{ get; init; }} = value;\n\n"
+                    f"    public static {variant} FromValue({inner} value) => new(value);\n"
+                    "}"
+                )
                 variants.append((variant, inner, True, None))
                 if enum_values:
                     for value in enum_values:
-                        lines.append(f"    public static {name} {pascal(value)} {{ get; }} = new {variant}({inner}.{pascal(value)});")
-        lines += ["}", "", f"public sealed class {name}JsonConverter : JsonConverter<{name}>", "{",
-                  f"    public override {name} Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)", "    {"]
+                        lines.append(
+                            f"    public static {name} {pascal(value)} {{ get; }} = new {variant}({inner}.{pascal(value)});"
+                        )
+        lines += [
+            "}",
+            "",
+            f"public sealed class {name}JsonConverter : JsonConverter<{name}>",
+            "{",
+            f"    public override {name} Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)",
+            "    {",
+        ]
         if discriminator:
-            lines += [f"        return ProtocolUnion.ReadDiscriminator(ref reader, {literal(discriminator)}) switch", "        {"]
+            lines += [
+                f"        return ProtocolUnion.ReadDiscriminator(ref reader, {literal(discriminator)}) switch",
+                "        {",
+            ]
             for variant, _, _, value in variants:
-                lines.append(f"            {literal(value)} => JsonSerializer.Deserialize<{variant}>(ref reader, options)!,")
-            lines += [f"            _ => throw new JsonException({literal('Unknown ' + name + ' discriminator.')}),", "        };"]
+                lines.append(
+                    f"            {literal(value)} => JsonSerializer.Deserialize<{variant}>(ref reader, options)!,"
+                )
+            lines += [
+                f"            _ => throw new JsonException({literal('Unknown ' + name + ' discriminator.')}),",
+                "        };",
+            ]
         else:
             for index, (variant, inner, wrapped, _) in enumerate(variants):
-                lines += ["        {", "            var candidate = reader;", "            try", "            {",
-                          f"                var value = JsonSerializer.Deserialize<{inner}>(ref candidate, options);",
-                          "                if (value is null) throw new JsonException(\"Expected a non-null union value.\");" if inner not in ("long", "int", "bool", "ulong", "uint", "ushort", "double", "ProtocolNull") and self.enum_values(self.schemas.get(inner, {})) is None else "",
-                          "                reader = candidate;",
-                          f"                return {'new ' + variant + '(value)' if wrapped else 'value'};",
-                          "            }", "            catch (JsonException)", "            {", "                // This branch does not match; try the next schema alternative.", "            }", "        }"]
-            lines.append(f"        throw new JsonException({literal('Value does not match any ' + name + ' schema alternative.')});")
-        lines += ["    }", "", f"    public override void Write(Utf8JsonWriter writer, {name} value, JsonSerializerOptions options)", "    {", "        switch (value)", "        {"]
+                lines += [
+                    "        {",
+                    "            var candidate = reader;",
+                    "            try",
+                    "            {",
+                    f"                var value = JsonSerializer.Deserialize<{inner}>(ref candidate, options);",
+                    '                if (value is null) throw new JsonException("Expected a non-null union value.");'
+                    if inner
+                    not in (
+                        "long",
+                        "int",
+                        "bool",
+                        "ulong",
+                        "uint",
+                        "ushort",
+                        "double",
+                        "ProtocolNull",
+                    )
+                    and self.enum_values(self.schemas.get(inner, {})) is None
+                    else "",
+                    "                reader = candidate;",
+                    f"                return {'new ' + variant + '(value)' if wrapped else 'value'};",
+                    "            }",
+                    "            catch (JsonException)",
+                    "            {",
+                    "                // This branch does not match; try the next schema alternative.",
+                    "            }",
+                    "        }",
+                ]
+            lines.append(
+                f"        throw new JsonException({literal('Value does not match any ' + name + ' schema alternative.')});"
+            )
+        lines += [
+            "    }",
+            "",
+            f"    public override void Write(Utf8JsonWriter writer, {name} value, JsonSerializerOptions options)",
+            "    {",
+            "        switch (value)",
+            "        {",
+        ]
         for variant, _, wrapped, _ in variants:
-            lines += [f"            case {variant} typed:", f"                JsonSerializer.Serialize(writer, typed{'.Value' if wrapped else ''}, options);", "                break;"]
-        lines += ["            default:", f"                throw new JsonException({literal('Unknown ' + name + ' implementation.')});", "        }", "    }", "}"]
+            lines += [
+                f"            case {variant} typed:",
+                f"                JsonSerializer.Serialize(writer, typed{'.Value' if wrapped else ''}, options);",
+                "                break;",
+            ]
+        lines += [
+            "            default:",
+            f"                throw new JsonException({literal('Unknown ' + name + ' implementation.')});",
+            "        }",
+            "    }",
+            "}",
+        ]
         return "\n".join(line for line in lines if line is not None)
 
     @staticmethod
     def request_id():
-        return '''[JsonConverter(typeof(RequestIdJsonConverter))]
+        return """[JsonConverter(typeof(RequestIdJsonConverter))]
 public sealed class RequestId : IEquatable<RequestId>
 {
     public RequestId(string value) => String = value ?? throw new ArgumentNullException(nameof(value));
@@ -424,33 +607,53 @@ public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
         else if (value.Number is { } number) writer.WriteNumberValue(number);
         else throw new JsonException("An uninitialized request ID has no wire representation.");
     }
-}'''
+}"""
 
     def run(self):
         for name in sorted(self.named):
             self.emit(name)
         header = "// <auto-generated />\n// Source: backend/schemas/codex; regenerate with python3 backend/scripts/generate-protocol.py\n#nullable enable\nusing System;\nusing System.Collections.Generic;\nusing System.Text.Json;\nusing System.Text.Json.Serialization;\n\nnamespace Goblin.Protocol;\n\n"
-        files = {name + ".g.cs": header + value + "\n" for name, value in sorted(self.generated.items())}
-        manifest = {"schemaSha256": self.source_hash, "schemaFiles": len(list(SCHEMAS.rglob('*.json'))),
-                    "namedDefinitions": len(self.named), "generatedTypes": len(self.generated),
-                    "primitiveAliases": dict(sorted(self.aliases.items()))}
+        files = {
+            name + ".g.cs": header + value + "\n"
+            for name, value in sorted(self.generated.items())
+        }
+        manifest = {
+            "schemaSha256": self.source_hash,
+            "schemaFiles": len(list(SCHEMAS.rglob("*.json"))),
+            "namedDefinitions": len(self.named),
+            "generatedTypes": len(self.generated),
+            "primitiveAliases": dict(sorted(self.aliases.items())),
+        }
         files["manifest.json"] = json.dumps(manifest, indent=2) + "\n"
         return files
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="Fail when generated files differ or schemas have changed")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail when generated files differ or schemas have changed",
+    )
     args = parser.parse_args()
     files = Generator().run()
     current = {p.name: p for p in OUTPUT.glob("*") if p.is_file()}
-    changed = sorted(name for name, content in files.items() if name not in current or current[name].read_text() != content)
+    changed = sorted(
+        name
+        for name, content in files.items()
+        if name not in current or current[name].read_text() != content
+    )
     stale = sorted(set(current) - set(files))
     if args.check:
         if changed or stale:
-            print("Protocol generation is out of date: " + ", ".join(changed + stale), file=sys.stderr)
+            print(
+                "Protocol generation is out of date: " + ", ".join(changed + stale),
+                file=sys.stderr,
+            )
             return 1
-        print(f"Protocol generation is current ({len(files) - 1} generated model files).")
+        print(
+            f"Protocol generation is current ({len(files) - 1} generated model files)."
+        )
         return 0
     OUTPUT.mkdir(parents=True, exist_ok=True)
     for name in stale:
