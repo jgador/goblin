@@ -1,4 +1,5 @@
 import { Settings } from "../settings/settings.js";
+import { SystemResources } from "../settings/system.js";
 import type { Repository } from "../settings/github.js";
 import { icon, escapeHtml as e } from "./presentation.js";
 type Attempt = {
@@ -109,7 +110,13 @@ let pending: Pending | null = JSON.parse(
     draft = "";
 let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
-const settings = new Settings();
+const system = new SystemResources();
+const settings = new Settings(system);
+window.addEventListener("goblin-workspace-locked", () => {
+    authenticated = false;
+    forgetWorkspace();
+    render();
+});
 let repositories: Repository[] = [];
 window.addEventListener("goblin-connections-changed", () => {
     void refreshConnections();
@@ -161,6 +168,7 @@ function forgetWorkspace() {
     draft = "";
     drafts.clear();
     loaded = false;
+    system.reset();
     settings.reset();
 }
 async function refresh(preserveError = false) {
@@ -182,9 +190,14 @@ async function refresh(preserveError = false) {
         if (initialSettings) {
             const target = initialSettings;
             initialSettings = null;
-            void settings.open(target === "codex" ? "codex" : "connections");
+            void settings.open(
+                ["codex", "github", "system", "cluster"].includes(target)
+                    ? target
+                    : "connections",
+            );
         }
         void refreshConnections();
+        void system.refresh();
         const results = await Promise.allSettled([
             api<View[]>("/api/work"),
             api<Conversation[]>("/api/conversations"),
@@ -372,7 +385,7 @@ function renderSidebar() {
         <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${w.id}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)} · ${e(label(w.attention?.reason ?? w.status))}"><span class="work-title">${e(w.objective)}</span><span class="work-indicator ${statusClass(w)}">${icon(attention(w) ? "wait" : w.status === "Completed" ? "check" : w.status === "InProgress" ? "activity" : "clock")}<span class="sr-only">${e(label(w.attention?.reason ?? w.status))}</span></span></button>`).join("") || `<p class="sidebar-empty">${search || filter !== "all" ? "No matching work." : loaded ? "Your work will appear here." : "Loading your work…"}</p>`}</nav>
         <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
         <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen || search ? "" : "hidden"}>${chats.map((c) => `<button class="work-card ${view === "chat" && activeChat === c.id ? "selected" : ""}" data-action="select-chat" data-id="${c.id}" aria-current="${view === "chat" && activeChat === c.id ? "page" : "false"}"><span class="work-title">${e(c.title)}</span></button>`).join("") || '<p class="sidebar-empty">Save ideas and context here.</p>'}</nav></div>
-        <div class="sidebar-bottom"><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}<span>Settings</span></button><button class="icon-button" data-action="lock" aria-label="Lock workspace" title="Lock workspace">${icon("lock")}</button></div></aside>`;
+        <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button><div class="sidebar-bottom"><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}<span>Settings</span></button><button class="icon-button" data-action="lock" aria-label="Lock workspace" title="Lock workspace">${icon("lock")}</button></div></aside>`;
 }
 function renderHome() {
     const available = connections.some((c) => c.availability === "Available");
@@ -574,14 +587,17 @@ document.addEventListener("click", async (event) => {
     if (
         action === "settings" ||
         action === "settings-codex" ||
+        action === "settings-system" ||
         action === "settings-github"
     ) {
         await settings.open(
-            action === "settings-github"
-                ? "github"
-                : action === "settings-codex"
-                  ? "codex"
-                  : "connections",
+            action === "settings-system"
+                ? "system"
+                : action === "settings-github"
+                  ? "github"
+                  : action === "settings-codex"
+                    ? "codex"
+                    : "connections",
         );
         return;
     }

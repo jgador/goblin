@@ -53,6 +53,14 @@ spec:
               value: goblin-auth:0.1.0
             - name: GOBLIN_HEADLAMP_URL
               value: http://goblin-headlamp.goblin.svc:4466
+            - name: GOBLIN_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: GOBLIN_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

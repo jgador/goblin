@@ -61,6 +61,10 @@ Kubernetes installations also include [Headlamp](docs/cluster-view.md) at
 `/headlamp/` on Goblin's address. **Settings → Cluster → Open cluster** opens a
 read-only view of workloads, logs, events, and storage using your Goblin login.
 
+The sidebar’s **System** shortcut opens a [VM overview](docs/system-overview.md)
+with CPU, memory, disk space, recent usage, and service health. Readings cover the
+whole WSL or Azure Linux VM, including processes outside Kubernetes.
+
 To try authentication first:
 
 ```bash

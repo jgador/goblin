@@ -41,6 +41,53 @@ roleRef:
   kind: Role
   name: goblin-execution-controller
 ---
+# System overview: this machine's statistics, with no node proxy/exec authority.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: goblin-system-reader
+rules:
+  - apiGroups: [""]
+    resources: [nodes, nodes/stats]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: goblin-system-reader
+subjects:
+  - kind: ServiceAccount
+    name: goblin-execution-controller
+    namespace: goblin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: goblin-system-reader
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: goblin-system-reader
+  namespace: goblin
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: goblin-system-reader
+  namespace: goblin
+subjects:
+  - kind: ServiceAccount
+    name: goblin-execution-controller
+    namespace: goblin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: goblin-system-reader
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
