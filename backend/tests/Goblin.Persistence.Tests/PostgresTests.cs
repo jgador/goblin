@@ -157,11 +157,20 @@ public sealed class PostgresTests
         }
     }
 
-    private sealed class TestDatabase(string adminConnection, string appConnection, string name) : IAsyncDisposable
+    private sealed class TestDatabase : IAsyncDisposable
     {
+        private readonly string _name;
+
+        public TestDatabase(string adminConnection, string appConnection, string name)
+        {
+            _name = name;
+            AdminConnection = adminConnection;
+            AppConnection = appConnection;
+        }
+
         public static string Migrations => Path.Combine(AppContext.BaseDirectory, "migrations");
-        public string AdminConnection { get; } = adminConnection;
-        public string AppConnection { get; } = appConnection;
+        public string AdminConnection { get; }
+        public string AppConnection { get; }
 
         public GoblinDbContext Context() => new(new DbContextOptionsBuilder<GoblinDbContext>().UseNpgsql(AppConnection).Options);
 
@@ -201,7 +210,7 @@ public sealed class PostgresTests
             NpgsqlConnection.ClearAllPools();
             await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
             await connection.OpenAsync();
-            await using var drop = new NpgsqlCommand($"DROP DATABASE {name} WITH (FORCE);", connection);
+            await using var drop = new NpgsqlCommand($"DROP DATABASE {_name} WITH (FORCE);", connection);
             await drop.ExecuteNonQueryAsync();
         }
     }

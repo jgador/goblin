@@ -5,10 +5,16 @@ using Goblin.Integrations.Codex;
 
 namespace Goblin.Web;
 
-public sealed class PublicError(string code, string message, int status = 400) : Exception(message)
+public sealed class PublicError : Exception
 {
-    public string Code { get; } = code;
-    public int Status { get; } = status;
+    public PublicError(string code, string message, int status = 400) : base(message)
+    {
+        Code = code;
+        Status = status;
+    }
+
+    public string Code { get; }
+    public int Status { get; }
 
     public static PublicError Translate(Exception error) => error switch
     {

@@ -39,24 +39,28 @@ public static class ExecutionFiles
     }
 }
 
-public sealed class FileDispatchFailureJournal(string directory) : IDispatchFailureJournal
+public sealed class FileDispatchFailureJournal : IDispatchFailureJournal
 {
+    private readonly string _directory;
+
+    public FileDispatchFailureJournal(string directory) => _directory = directory;
+
     public async Task RecordAsync(DispatchFailureEvidence evidence, CancellationToken token)
     {
-        Directory.CreateDirectory(directory);
-        await ExecutionFiles.WriteAsync(Path.Combine(directory, evidence.AttemptId.ToString("N") + ".json"), evidence, token);
+        Directory.CreateDirectory(_directory);
+        await ExecutionFiles.WriteAsync(Path.Combine(_directory, evidence.AttemptId.ToString("N") + ".json"), evidence, token);
     }
     public async Task<DispatchFailureEvidence[]> ReadAsync(CancellationToken token)
     {
-        if (!Directory.Exists(directory)) return [];
+        if (!Directory.Exists(_directory)) return [];
         var entries = new System.Collections.Generic.List<DispatchFailureEvidence>();
-        foreach (string file in Directory.GetFiles(directory, "*.json"))
+        foreach (string file in Directory.GetFiles(_directory, "*.json"))
             if (await ExecutionFiles.ReadAsync<DispatchFailureEvidence>(file, token) is { } evidence) entries.Add(evidence);
         return [.. entries];
     }
     public Task RemoveAsync(Guid attemptId, CancellationToken token)
     {
-        File.Delete(Path.Combine(directory, attemptId.ToString("N") + ".json"));
+        File.Delete(Path.Combine(_directory, attemptId.ToString("N") + ".json"));
         return Task.CompletedTask;
     }
 }

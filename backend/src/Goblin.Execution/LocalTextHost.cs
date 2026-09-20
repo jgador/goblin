@@ -18,11 +18,15 @@ public sealed record ProcessIdentity(int Pid, long StartedAt, string Machine);
 // tools disabled and receives an allowlisted environment, never DB credentials.
 // Its journal survives the browser and web process. Repository work uses the
 // sandbox host, never this host.
-public sealed class LocalTextHost(TextHostOptions options) : IExecutionHost
+public sealed class LocalTextHost : IExecutionHost
 {
+    private readonly TextHostOptions _options;
+
+    public LocalTextHost(TextHostOptions options) => _options = options;
+
     public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
     public string EnvironmentFor(Guid workId, Guid attemptId) => "text/" + attemptId.ToString("N");
-    private string DirectoryFor(WorkSnapshot work) => Path.Combine(options.Directory, work.Attempts[^1].Id.ToString("N"));
+    private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString("N"));
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
@@ -34,8 +38,8 @@ public sealed class LocalTextHost(TextHostOptions options) : IExecutionHost
         // The persistent reservation is a tombstone as well as a start fence.
         using (File.Create(Path.Combine(directory, "reserved"))) { }
         await ExecutionFiles.WriteAsync(Path.Combine(directory, "input.json"),
-            new WorkerInput(work, options.CodexHome, options.CodexCommand), token);
-        var start = new ProcessStartInfo(options.DotnetCommand)
+            new WorkerInput(work, _options.CodexHome, _options.CodexCommand), token);
+        var start = new ProcessStartInfo(_options.DotnetCommand)
         {
             UseShellExecute = false,
             WorkingDirectory = directory,
@@ -45,7 +49,7 @@ public sealed class LocalTextHost(TextHostOptions options) : IExecutionHost
         start.Environment.Clear();
         start.Environment["PATH"] = Environment.GetEnvironmentVariable("PATH");
         start.Environment["LANG"] = "C.UTF-8";
-        start.ArgumentList.Add(options.WorkerAssembly);
+        start.ArgumentList.Add(_options.WorkerAssembly);
         start.ArgumentList.Add("--execute");
         start.ArgumentList.Add(directory);
         using Process process = Process.Start(start) ?? throw new IOException("Worker did not start.");

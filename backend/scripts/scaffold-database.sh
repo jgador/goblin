@@ -34,4 +34,10 @@ for path in Path("backend/src/Goblin.Persistence/Generated").rglob("*.cs"):
     path.write_text(text, encoding="utf-8", newline="\n")
 PY
 
+# Apply repository style preferences without converting regular constructors.
+dotnet format whitespace backend/src/Goblin.Persistence/Goblin.Persistence.csproj \
+  --no-restore --include-generated
+dotnet format style backend/src/Goblin.Persistence/Goblin.Persistence.csproj \
+  --no-restore --include-generated --severity info --exclude-diagnostics IDE0130 IDE1006
+
 printf 'Review Generated/ for schema changes, including obsolete entity files after table removal or renaming.\n'

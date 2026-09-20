@@ -279,15 +279,19 @@ public static class GoblinApplication
         catch (IOException) { throw new PublicError("invalid_request", "The request was interrupted."); }
     }
 
-    private sealed class CodexRecovery(CodexClient codex) : BackgroundService
+    private sealed class CodexRecovery : BackgroundService
     {
+        private readonly CodexClient _codex;
+
+        public CodexRecovery(CodexClient codex) => _codex = codex;
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
             bool firstAttempt = true;
             do
             {
-                try { await codex.StartAsync(stoppingToken); }
+                try { await _codex.StartAsync(stoppingToken); }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch
                 {
@@ -299,7 +303,7 @@ public static class GoblinApplication
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            await codex.DisposeAsync();
+            await _codex.DisposeAsync();
             await base.StopAsync(cancellationToken);
         }
     }

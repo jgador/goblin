@@ -7,8 +7,17 @@ using Goblin.Protocol;
 
 namespace Goblin.Integrations.Codex;
 
-public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
+public sealed class PromptRunner
 {
+    private readonly CodexClient _codex;
+    private readonly TimeSpan _timeout;
+
+    public PromptRunner(CodexClient codex, TimeSpan timeout)
+    {
+        _codex = codex;
+        _timeout = timeout;
+    }
+
     private static IntegrationFailure Cancelled() => new("prompt_cancelled", "The prompt was cancelled.");
 
     public async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, CancellationToken cancellationToken = default)
@@ -61,14 +70,14 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
         }
 
         void Disconnected() => completion.TrySetException(IntegrationFailure.RuntimeUnavailable());
-        codex.Notification += Notification;
-        codex.Disconnected += Disconnected;
+        _codex.Notification += Notification;
+        _codex.Disconnected += Disconnected;
         using CancellationTokenRegistration cancellation = cancellationToken.Register(() => completion.TrySetException(Cancelled()));
         try
         {
-            ThreadStartResponse thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
+            ThreadStartResponse thread = await _codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
             {
-                Cwd = codex.Options.Workspace,
+                Cwd = _codex.Options.Workspace,
                 Ephemeral = true,
                 ApprovalPolicy = AskForApproval.Never,
                 Sandbox = SandboxMode.ReadOnly,
@@ -80,7 +89,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                 thread.ApprovalPolicy is not StringAskForApproval { Value: AskForApprovalValue.Never })
                 throw new IntegrationFailure("prompt_configuration_error", "Codex could not create an isolated conversation. Check the pinned runtime version.");
             if (cancellationToken.IsCancellationRequested) throw Cancelled();
-            TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
+            TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
                 ThreadId = threadId,
                 Input = [new TextUserInput { Text = prompt }],
@@ -93,7 +102,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                 turnId = started.Turn.Id;
             }
             string reply;
-            try { reply = await completion.Task.WaitAsync(timeout); }
+            try { reply = await completion.Task.WaitAsync(_timeout); }
             catch (TimeoutException)
             {
                 throw new IntegrationFailure("prompt_timeout", "The prompt took too long and was cancelled. Please retry.");
@@ -102,17 +111,17 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
         }
         finally
         {
-            codex.Notification -= Notification;
-            codex.Disconnected -= Disconnected;
+            _codex.Notification -= Notification;
+            _codex.Disconnected -= Disconnected;
             // Observe faults even if thread/start or turn/start failed before the completion wait.
             _ = completion.Task.Exception;
-            if (threadId is not null && codex.Ready)
+            if (threadId is not null && _codex.Ready)
             {
                 if (turnId is not null && !finished)
-                    try { await codex.RequestAsync<TurnInterruptParams, TurnInterruptResponse>("turn/interrupt", new() { ThreadId = threadId, TurnId = turnId }); }
-                    catch { codex.Fail(); }
-                if (codex.Ready)
-                    try { await codex.RequestAsync<ThreadUnsubscribeParams, ThreadUnsubscribeResponse>("thread/unsubscribe", new() { ThreadId = threadId }); }
+                    try { await _codex.RequestAsync<TurnInterruptParams, TurnInterruptResponse>("turn/interrupt", new() { ThreadId = threadId, TurnId = turnId }); }
+                    catch { _codex.Fail(); }
+                if (_codex.Ready)
+                    try { await _codex.RequestAsync<ThreadUnsubscribeParams, ThreadUnsubscribeResponse>("thread/unsubscribe", new() { ThreadId = threadId }); }
                     catch { }
             }
         }

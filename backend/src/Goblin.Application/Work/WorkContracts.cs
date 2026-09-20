@@ -13,7 +13,9 @@ public sealed record AgentView(Guid Id, string Name, Guid ConnectionId, string? 
 public sealed record ConnectionView(Guid Id, string Runtime, string Name, string Availability);
 public sealed record DispatchWork(Guid WorkId, Guid AttemptId);
 public sealed record ReconcileWork(Guid WorkId, Guid AttemptId);
-public sealed class ApplicationFailure(string code) : Exception(code)
+public sealed class ApplicationFailure : Exception
 {
-    public string Code { get; } = code;
+    public ApplicationFailure(string code) : base(code) => Code = code;
+
+    public string Code { get; }
 }

@@ -6,8 +6,17 @@ using System.Threading.Tasks;
 
 namespace Goblin.Web;
 
-internal sealed class OwnerPassword(byte[] salt, byte[] digest)
+internal sealed class OwnerPassword
 {
+    private readonly byte[] _salt;
+    private readonly byte[] _digest;
+
+    public OwnerPassword(byte[] salt, byte[] digest)
+    {
+        _salt = salt;
+        _digest = digest;
+    }
+
     public static async Task<OwnerPassword> LoadAsync(string path)
     {
         // Every environment requires the same configured verifier.
@@ -27,9 +36,9 @@ internal sealed class OwnerPassword(byte[] salt, byte[] digest)
     public bool Verify(string value)
     {
         if (value.Length is 0 or > 128) return false;
-        byte[] candidate = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(value), salt,
+        byte[] candidate = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(value), _salt,
             600_000, HashAlgorithmName.SHA256, 32);
-        return CryptographicOperations.FixedTimeEquals(candidate, digest);
+        return CryptographicOperations.FixedTimeEquals(candidate, _digest);
     }
 
     private static InvalidOperationException InvalidHash() => new("The configured Goblin password hash file is invalid.");

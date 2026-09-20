@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<StringForcedChatgptWorkspaceIds, string>))]
-public sealed class StringForcedChatgptWorkspaceIds(string value) : ForcedChatgptWorkspaceIds, IProtocolValue<StringForcedChatgptWorkspaceIds, string>
+public sealed class StringForcedChatgptWorkspaceIds : ForcedChatgptWorkspaceIds, IProtocolValue<StringForcedChatgptWorkspaceIds, string>
 {
+    public StringForcedChatgptWorkspaceIds(string value) => Value = value;
+
     [JsonIgnore]
-    public string Value { get; init; } = value;
+    public string Value { get; init; }
 
     public static StringForcedChatgptWorkspaceIds FromValue(string value) => new(value);
 }

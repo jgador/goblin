@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<StringCodexErrorInfo, CodexErrorInfoValue>))]
-public sealed class StringCodexErrorInfo(CodexErrorInfoValue value) : CodexErrorInfo, IProtocolValue<StringCodexErrorInfo, CodexErrorInfoValue>
+public sealed class StringCodexErrorInfo : CodexErrorInfo, IProtocolValue<StringCodexErrorInfo, CodexErrorInfoValue>
 {
+    public StringCodexErrorInfo(CodexErrorInfoValue value) => Value = value;
+
     [JsonIgnore]
-    public CodexErrorInfoValue Value { get; init; } = value;
+    public CodexErrorInfoValue Value { get; init; }
 
     public static StringCodexErrorInfo FromValue(CodexErrorInfoValue value) => new(value);
 }

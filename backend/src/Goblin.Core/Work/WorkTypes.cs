@@ -30,9 +30,11 @@ public enum WorkRule
 }
 
 // These errors express product rules; the HTTP adapter chooses status codes.
-public sealed class WorkRuleException(WorkRule rule) : Exception(rule.ToString())
+public sealed class WorkRuleException : Exception
 {
-    public WorkRule Rule { get; } = rule;
+    public WorkRuleException(WorkRule rule) : base(rule.ToString()) => Rule = rule;
+
+    public WorkRule Rule { get; }
 }
 
 public sealed record WorkAttention(AttentionReason Reason, FailureKind? Failure = null);

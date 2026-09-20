@@ -6,8 +6,12 @@ using System.Threading.Tasks;
 
 namespace Goblin.Integrations.Codex;
 
-public sealed class ApiKeyVerifier(HttpClient client)
+public sealed class ApiKeyVerifier
 {
+    private readonly HttpClient _client;
+
+    public ApiKeyVerifier(HttpClient client) => _client = client;
+
     public static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false })
     {
         Timeout = TimeSpan.FromSeconds(10)
@@ -18,7 +22,7 @@ public sealed class ApiKeyVerifier(HttpClient client)
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         HttpResponseMessage response;
-        try { response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead); }
+        try { response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead); }
         catch
         {
             throw new IntegrationFailure("verification_unavailable",

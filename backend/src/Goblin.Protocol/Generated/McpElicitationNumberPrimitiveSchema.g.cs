@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<McpElicitationNumberPrimitiveSchema, McpElicitationNumberSchema>))]
-public sealed class McpElicitationNumberPrimitiveSchema(McpElicitationNumberSchema value) : McpElicitationPrimitiveSchema, IProtocolValue<McpElicitationNumberPrimitiveSchema, McpElicitationNumberSchema>
+public sealed class McpElicitationNumberPrimitiveSchema : McpElicitationPrimitiveSchema, IProtocolValue<McpElicitationNumberPrimitiveSchema, McpElicitationNumberSchema>
 {
+    public McpElicitationNumberPrimitiveSchema(McpElicitationNumberSchema value) => Value = value;
+
     [JsonIgnore]
-    public McpElicitationNumberSchema Value { get; init; } = value;
+    public McpElicitationNumberSchema Value { get; init; }
 
     public static McpElicitationNumberPrimitiveSchema FromValue(McpElicitationNumberSchema value) => new(value);
 }
