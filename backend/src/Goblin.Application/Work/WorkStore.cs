@@ -113,9 +113,10 @@ public sealed class WorkStore
                 Persistence.Entities.Agent agent = await db.Agents.SingleOrDefaultAsync(x => x.Id == work.AgentId, token)
                     ?? throw new ApplicationFailure("agent_required");
                 Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
-                var target = new ExecutionTarget(connection.Runtime, connection.Id, agent.Model,
-                    command.Repository ?? work.CurrentAttempt?.Target.Repository);
                 long attemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
+                RepositoryChange? repository = command.Repository ?? work.CurrentAttempt?.Target.Repository;
+                if (repository is not null) repository = await GitHubStore.BindAsync(db, repository, work.Id, attemptId, token);
+                var target = new ExecutionTarget(connection.Runtime, connection.Id, agent.Model, repository);
                 if (command.Action == WorkAction.Retry) work.RetryExecution(attemptId, target, now);
                 else work.QueueExecution(attemptId, target, now);
                 await outbox.PublishAsync(new DispatchWork(work.Id, attemptId));
@@ -175,6 +176,9 @@ public sealed class WorkStore
         if (connection.Availability is "Changing" or "Verifying") return null;
         FailureKind? failure = !supportsRuntime(attempt.Target) ? FailureKind.CapabilityUnavailable :
             connection.Availability != "Available" ? FailureKind.ConnectionUnavailable : null;
+        if (attempt.Target.Repository?.Grant is { } grant && !await db.GithubConnections.AnyAsync(x =>
+            x.Id == grant.ConnectionId && x.Generation == grant.Generation && x.AccountId == grant.AccountId && x.Availability == "Connected", token))
+            failure = FailureKind.ConnectionUnavailable;
         if (failure is null && await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == connection.Id &&
             (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending), token))
         {
@@ -271,7 +275,7 @@ public sealed class WorkStore
         await transaction.CommitAsync(token);
     }
 
-    private static async Task<IDbContextTransaction> BeginAsync(GoblinDbContext db, CancellationToken token)
+    internal static async Task<IDbContextTransaction> BeginAsync(GoblinDbContext db, CancellationToken token)
     {
         IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(token);
         try
@@ -300,6 +304,7 @@ public sealed class WorkStore
                     WorkId = work.Id,
                     AgentId = attempt.AgentId,
                     ConnectionId = attempt.Target.ConnectionId,
+                    GithubConnectionId = attempt.Target.Repository?.Grant?.ConnectionId,
                     Runtime = attempt.Target.Runtime,
                     QueuedAt = attempt.QueuedAt.UtcDateTime
                 };

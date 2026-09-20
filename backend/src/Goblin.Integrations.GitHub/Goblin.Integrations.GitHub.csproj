@@ -1,1 +1,3 @@
-<Project Sdk="Microsoft.NET.Sdk" />
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" /></ItemGroup>
+</Project>

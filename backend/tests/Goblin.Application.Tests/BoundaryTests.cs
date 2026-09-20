@@ -37,7 +37,7 @@ public sealed class BoundaryTests
         work.Assign(NextId(), DateTimeOffset.UtcNow);
         work.QueueExecution(NextId(), new("codex", NextId(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");
-        var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "/private/github.json"), new UnusedHost());
+        var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "http://goblin-repository:8788"), new UnusedHost(), new UnusedBroker());
         JsonObject manifest = host.Manifest(work.Snapshot(), false);
         JsonNode spec = manifest["spec"]!["podTemplate"]!["spec"]!;
         Assert.False(spec["automountServiceAccountToken"]!.GetValue<bool>());
@@ -58,5 +58,12 @@ public sealed class BoundaryTests
         public Task StartAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
         public Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) => throw new NotSupportedException();
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+    }
+    private sealed class UnusedBroker : IRepositoryBroker
+    {
+        public Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+        public Task<ExecutionObservation?> ObserveAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+        public Task StopAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+        public Task ReleaseAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
     }
 }

@@ -15,7 +15,9 @@ dist
 tests
 backend/tests
 docs
-deploy
+deploy/*
+!deploy/install-gh.mjs
+!deploy/goblin-github
 *.log
 *.tar
 playwright-report

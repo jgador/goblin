@@ -130,3 +130,14 @@ uncertainty, cancellation races, decisions, revisions, and approval. Real Postgr
 deduplication, dispatch, restart, reservations, uncertainty, and cleanup. Browser
 tests exercise persisted decisions and approvals. Aggregate tests do not replace
 these integration checks or authenticated runtime validation.
+
+## Repository authority
+
+Repository attempts capture their GitHub connection generation, account identity,
+repository ID, branch and policy in `RepositoryGrant`. Work inherits enabled
+repository settings when queued; the request cannot choose its own grant. The
+core validates the exact Work/attempt branch and allowed operation. The trusted
+repository adapter enforces it without sharing the upstream token with the agent.
+Publication receipts and dispatch are durable; uncertain remote effects must be
+reconciled before replacement. Settings cannot change an account or repository
+policy while affected Work is queued, active, uncertain, or awaiting cleanup.

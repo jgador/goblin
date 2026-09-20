@@ -4,7 +4,9 @@ This authentication implementation is a preview. It implements ChatGPT device-co
 login, OpenAI API-key login, and an automatic connection check using the saved account
 through Codex, the current primary and only implemented agent integration.
 Review authentication first;
-GitHub and repository integration remain a separate decision.
+GitHub uses the official GitHub CLI device flow, configured alongside Codex in
+**Settings → Connections**. See [execution hosting](execution-hosting.md) for
+repository permissions and credential isolation.
 
 The [architecture plan](architecture-refactoring-plan.md) prepares for other
 agents, including Claude and GitHub Copilot. Their authentication flows and

@@ -1,8 +1,16 @@
+import { Settings } from "../settings/settings.js";
+import type { Repository } from "../settings/github.js";
 import { icon, escapeHtml as e } from "./presentation.js";
 type Attempt = {
     id: string;
     status: string;
-    target: { runtime: string };
+    target: {
+        runtime: string;
+        repository?: {
+            repository: string;
+            grant?: { login: string; branch: string };
+        };
+    };
     session?: { model?: string };
     failure?: string;
     cleanupPending?: boolean;
@@ -73,6 +81,11 @@ let pending: Pending | null = JSON.parse(
     draft = "";
 let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
+const settings = new Settings();
+let repositories: Repository[] = [];
+window.addEventListener("goblin-connections-changed", () => {
+    void refreshConnections();
+});
 const current = () => work.find((x) => x.work.id === selected);
 const time = (value: string) => new Date(value).toLocaleString();
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -139,9 +152,10 @@ async function refresh(preserveError = false) {
 async function refreshConnections() {
     if (connectionsLoading) return;
     connectionsLoading = true;
-    const [runtime, repository] = await Promise.allSettled([
+    const [runtime, repository, enabled] = await Promise.allSettled([
         api<Connection[]>("/api/connections"),
         api<NonNullable<typeof github>>("/api/github"),
+        api<Repository[]>("/api/github/repositories"),
     ]);
     if (runtime.status === "fulfilled") connections = runtime.value;
     else
@@ -152,6 +166,7 @@ async function refreshConnections() {
     if (repository.status === "fulfilled") github = repository.value;
     else if (github)
         github = { ...github, notice: "GitHub status could not be refreshed." };
+    if (enabled.status === "fulfilled") repositories = enabled.value;
     connectionsLoading = false;
     render();
 }
@@ -212,21 +227,27 @@ function composer(kind: string, placeholder: string) {
     return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><span class="composer-note">${icon("link")}Your context stays here</span><button class="send" type="submit" aria-label="Send message" ${sending || pending ? "disabled" : ""}>${icon("up")}</button></div></form></div>`;
 }
 function render() {
+    const activeButton =
+        root.contains(document.activeElement) &&
+        document.activeElement instanceof HTMLButtonElement
+            ? { ...document.activeElement.dataset }
+            : null;
     const context = view + ":" + selected + ":" + activeChat;
     const preserved =
         context === renderedContext
             ? Array.from(
-                  document.querySelectorAll<
-                      HTMLInputElement | HTMLSelectElement
-                  >("input[id],select[id]"),
+                  root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+                      "input[id],select[id]",
+                  ),
               ).map((x) => [x.id, x.value] as const)
             : [];
     const openDetails =
         context === renderedContext &&
         !!document.querySelector("details[open]");
     const focus =
-            document.activeElement instanceof HTMLTextAreaElement ||
-            document.activeElement instanceof HTMLInputElement
+            root.contains(document.activeElement) &&
+            (document.activeElement instanceof HTMLTextAreaElement ||
+                document.activeElement instanceof HTMLInputElement)
                 ? document.activeElement
                 : null,
         cursor = focus?.selectionStart;
@@ -234,7 +255,7 @@ function render() {
     renderedContext = context;
     if (focus instanceof HTMLTextAreaElement) draft = focus.value;
     const scroll = document.querySelector(".detail-body")?.scrollTop ?? 0;
-    root.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="/assets/branding/icon.svg" alt="Goblin"><span>goblin</span></div><button class="new-chat" data-action="new-work">${icon("plus")}New work</button><nav class="nav" aria-label="Main navigation"><button class="nav-button ${view !== "chat" ? "active" : ""}" data-action="view-work">${icon("work")}Work<span class="nav-count">${work.filter((x) => attention(x.work)).length}</span></button><button class="nav-button ${view === "chat" ? "active" : ""}" data-action="view-chat">${icon("chat")}Conversations</button></nav><div class="sidebar-note"><div class="section-label">Your workspace</div><p>A place for the things<br>we’re working on together.</p></div><div class="sidebar-bottom"><a class="connection-link" href="/">Connection settings</a><p>${connections.map((c) => `${e(c.name)} · ${e(c.availability)}`).join("<br>")}</p>${github ? `<div class="github-connection"><strong>GitHub</strong><p>${e(github.login ?? (github.configured ? "Not connected" : "OAuth app not configured"))}</p>${github.notice ? `<p>${e(github.notice)}</p>` : ""}${github.userCode ? `<p>Code: <strong>${e(github.userCode)}</strong></p><a href="https://github.com/login/device" target="_blank" rel="noreferrer">Finish GitHub sign-in</a>` : github.login ? button("github-disconnect", "Disconnect GitHub") : github.configured ? button("github-connect", "Connect GitHub") : ""}</div>` : ""}</div></aside><main class="main-shell"><div class="preview-bar"><div class="preview-left"><button class="mobile-menu" data-action="view-work">${icon("work")}goblin</button><button class="mobile-menu" data-action="view-chat">${icon("chat")}Conversations</button><span class="preview-label">Your work</span></div><div class="preview-right"><a class="connection-link" href="/">Connections</a><button class="reset" data-action="refresh">${icon("refresh")}Refresh</button></div></div>${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}${!authenticated ? `<section class="chat-empty"><div class="goblin-portrait"><img src="/assets/branding/icon.svg" alt="Goblin"></div><h1>Unlock your workspace</h1><p>Your work and its history stay here.</p><form data-form="unlock"><label for="password">Goblin password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button class="primary">Unlock</button></form></section>` : view === "chat" ? renderChat() : view === "new" ? `<section class="chat-workspace"><div class="chat-scroll"><div class="chat-inner"><div class="chat-empty"><div class="goblin-portrait"><img src="/assets/branding/icon.svg" alt="Goblin"></div><h1>What should we work on?</h1><p>Start with the outcome. Assign an agent when you’re ready.</p></div></div></div>${composer("new", "Describe the intended outcome…")}</section>` : renderWork()}</main></div>`;
+    root.innerHTML = `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="/assets/branding/icon.svg" alt="Goblin"><span>goblin</span></div><button class="new-chat" data-action="new-work">${icon("plus")}New work</button><nav class="nav" aria-label="Main navigation"><button class="nav-button ${view !== "chat" ? "active" : ""}" data-action="view-work">${icon("work")}Work<span class="nav-count">${work.filter((x) => attention(x.work)).length}</span></button><button class="nav-button ${view === "chat" ? "active" : ""}" data-action="view-chat">${icon("chat")}Conversations</button></nav><div class="sidebar-note"><div class="section-label">Your workspace</div><p>A place for the things<br>we’re working on together.</p></div><div class="sidebar-bottom"><button class="sidebar-connection" data-action="settings-codex">Codex · ${e(connections[0]?.availability ?? "Not connected")}</button><button class="sidebar-connection" data-action="settings-github">GitHub · ${e(github?.login ?? "Not connected")}</button><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}<span class="settings-label">Settings</span></button></div></aside><main class="main-shell"><div class="preview-bar"><div class="preview-left"><button class="mobile-menu" data-action="view-work">${icon("work")}goblin</button><button class="mobile-menu" data-action="view-chat">${icon("chat")}Conversations</button><span class="preview-label">Your work</span></div><div class="preview-right"><button class="connection-link" data-action="settings">Settings</button><button class="reset" data-action="refresh">${icon("refresh")}Refresh</button></div></div>${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}${!authenticated ? `<section class="chat-empty"><div class="goblin-portrait"><img src="/assets/branding/icon.svg" alt="Goblin"></div><h1>Unlock your workspace</h1><p>Your work and its history stay here.</p><form data-form="unlock"><label for="password">Goblin password</label><input id="password" name="password" type="password" autocomplete="current-password" required><button class="primary">Unlock</button></form></section>` : view === "chat" ? renderChat() : view === "new" ? `<section class="chat-workspace"><div class="chat-scroll"><div class="chat-inner"><div class="chat-empty"><div class="goblin-portrait"><img src="/assets/branding/icon.svg" alt="Goblin"></div><h1>What should we work on?</h1><p>Start with the outcome. Assign an agent when you’re ready.</p></div></div></div>${composer("new", "Describe the intended outcome…")}</section>` : renderWork()}</main></div>`;
     for (const [id, value] of preserved) {
         const field = document.getElementById(id) as
             HTMLInputElement | HTMLSelectElement | null;
@@ -254,7 +275,16 @@ function render() {
         )
             replacement.setSelectionRange(cursor, cursor);
     }
-    const body = document.querySelector(".detail-body");
+    if (activeButton?.action)
+        Array.from(root.querySelectorAll<HTMLButtonElement>("[data-action]"))
+            .find(
+                (button) =>
+                    button.dataset.action === activeButton.action &&
+                    button.dataset.id === activeButton.id &&
+                    button.dataset.value === activeButton.value,
+            )
+            ?.focus();
+    const body = root.querySelector(".detail-body");
     if (body) body.scrollTop = scroll;
 }
 function renderWork() {
@@ -286,7 +316,7 @@ function renderDetail() {
         attempt = w.attempts.at(-1);
     let body = "";
     if (tab === "activity")
-        body = `<div class="timeline">${w.history.map((h) => `<div class="timeline-item"><div class="timeline-icon">${icon("activity")}</div><h4>${e(label(h.kind))}</h4><p class="preserve-lines">${e(h.text ?? (h.failure ? label(h.failure) : ""))}</p><time>${e(time(h.occurredAt))}</time></div>`).join("")}</div><h3>Executions</h3>${w.attempts.map((a) => `<p>${e(a.target.runtime)} · ${e(a.session?.model ?? "Model not reported")} · ${e(label(a.status))}<br><small>${e(a.id)}</small></p>`).join("")}`;
+        body = `<div class="timeline">${w.history.map((h) => `<div class="timeline-item"><div class="timeline-icon">${icon("activity")}</div><h4>${e(label(h.kind))}</h4><p class="preserve-lines">${e(h.text ?? (h.failure ? label(h.failure) : ""))}</p><time>${e(time(h.occurredAt))}</time></div>`).join("")}</div><h3>Executions</h3>${w.attempts.map((a) => `<p>${e(a.target.runtime)} · ${e(a.session?.model ?? "Model not reported")} · ${e(label(a.status))}<br><small>${e(a.id)}</small>${a.target.repository?.grant ? `<br><small>${e(a.target.repository.repository)} · ${e(a.target.repository.grant.branch)} · @${e(a.target.repository.grant.login)}</small>` : ""}</p>`).join("")}`;
     else if (tab === "outputs")
         body =
             w.results
@@ -338,7 +368,15 @@ function controls(w: Work) {
     if (w.status === "Ready")
         content = !w.agentId
             ? `<p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select id="agent">${agents.map((a) => `<option value="${a.id}">${e(a.name)}</option>`).join("")}</select>${button("assign", "Assign agent", true)}`
-            : `<p>Ready when you are.</p>${button("execute", "Start work", true)}<details><summary>Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><label>Repository <input id="repository" placeholder="owner/repository"></label><label>Agent Git name <input id="git-name" value="Goblin"></label><label>Agent Git email <input id="git-email" type="email"></label>${runtimes.some((r) => r.repositoryExecution) ? button("repository-execute", "Start repository work") : "<p>Repository execution is unavailable on this Goblin.</p>"}</details>`;
+            : `<p>Ready when you are.</p>${button("execute", "Start work", true)}<details><summary>Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><label>Repository <select id="repository"><option value="">Choose an enabled repository</option>${repositories
+                  .filter((r) => r.enabled)
+                  .map(
+                      (r) =>
+                          `<option value="${e(r.name)}">${e(r.name)}</option>`,
+                  )
+                  .join(
+                      "",
+                  )}</select></label><p>Enable repositories in Settings → GitHub.</p><label>Agent Git name <input id="git-name" value="Goblin"></label><label>Agent Git email <input id="git-email" type="email"></label>${runtimes.some((r) => r.repositoryExecution) ? button("repository-execute", "Start repository work") : "<p>Repository execution is unavailable on this Goblin.</p>"}</details>`;
     if (w.attention?.reason === "ResultReview")
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
     if (w.attention?.reason === "InputRequired")
@@ -363,17 +401,12 @@ document.addEventListener("click", async (event) => {
     if (!target) return;
     const action = target.dataset.action,
         value = target.dataset.value;
-    if (action === "github-connect" || action === "github-disconnect") {
-        try {
-            github = await api(
-                "/api/github/" +
-                    (action === "github-connect" ? "connect" : "disconnect"),
-                {},
-            );
-        } catch (failure) {
-            error = (failure as Error).message;
-        }
-        render();
+    if (
+        action === "settings" ||
+        action === "settings-codex" ||
+        action === "settings-github"
+    ) {
+        await settings.open(action === "settings-github" ? "github" : "codex");
         return;
     }
     if (action === "refresh") {

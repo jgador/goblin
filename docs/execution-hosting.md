@@ -12,22 +12,46 @@ disabled. It does not allocate an Agent Sandbox or receive database credentials.
 This first text capability answers from supplied context; live research tools
 and a formal question/investigation taxonomy remain deferred.
 
-Repository execution must name `owner/repository` explicitly. The UI also asks
-for the Goblin agent's Git author name and email; they are saved with the attempt.
-The host allocates an Agent Sandbox and a private PVC in `goblin-executions`.
-The worker clones that repository, creates a unique
-`goblin/<work-id>/<attempt-id>` branch, and uses the GitHub credential connected
-inside Goblin. A completed interaction commits changes and pushes that branch.
-It never targets the default branch automatically. Follow-ups start a fresh
-sandbox from the last saved branch for that repository. Failed or uncertain
-workspaces remain on their PVC for investigation.
+Repository execution selects a repository enabled under **Settings → GitHub**.
+The agent's Git author name/email remain separate from the connected GitHub account.
+Each attempt records the GitHub account identity and connection generation,
+repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>` branch.
+It gets a fresh Agent Sandbox and private PVC in `goblin-executions`.
+
+The sandbox receives repository content as a Git bundle and an attempt capability.
+It never receives the GitHub token. A trusted repository broker in the Goblin
+controller validates operations against the persisted attempt and processes Git
+objects in its own bare repository; agent Git configuration and hooks never enter
+that repository. `goblin-github publish` publishes commits to the exact assigned
+branch. `goblin-github pull-request` opens its draft PR (later branch publications
+update the same PR). `goblin-github fetch` refreshes the sandbox's origin references.
+The completed interaction also publishes a checkpoint automatically. Merging,
+auto-merge, other branches, tags, and repository administration are unavailable.
+
+Publication commands are persisted with Wolverine dispatch intent. Repeated command
+IDs cannot publish again. An uncertain response is reconciled by checking the exact
+remote branch commit or PR; failed Work is never automatically retried. External
+CLI processes have a 120-second watchdog and the operation has a 120-second deadline.
+After controller loss, a saved boot identity and monotonic uptime bound child lifetime;
+remote absence alone is not proof that a write stopped. A replacement attempt gets
+a different branch and can continue from the previous published checkpoint.
+
+Account/repository changes wait for queued, active, uncertain, and cleanup-pending
+repository attempts. A different GitHub account disables the existing repository
+allowlist until it is explicitly configured again. Connection secrets and CLI
+output are excluded from Work history and browser responses.
 
 The worker image has non-root execution, a read-only root filesystem, dropped
 capabilities, resource limits, and a one-hour deadline. Repository tools may edit
-and execute inside that sandbox without interactive command approval. The pod
-has no application data volume, database certificate, or service-account token.
-Network policy allows DNS and public HTTP(S), and blocks private networks and
-inbound traffic. This uses Kubernetes container isolation on the installed
+and execute inside that sandbox without interactive command approval. Repository
+workers enable Codex's `shell_tool`, `unified_exec`, and `code_mode_host` features;
+the command host is required for model-directed commands even with the optional
+`code_mode` feature disabled. Text workers keep all three execution features off.
+The pod has no application data volume, database certificate, or service-account token.
+Network policy allows DNS, public HTTP(S), and the controller’s internal repository
+port (8788). Other private network access and inbound traffic are blocked. The
+repository port accepts only attempt capabilities; it cannot serve the UI or
+workspace APIs, and public UI ports cannot serve repository operations. This uses Kubernetes container isolation on the installed
 runtime; it does not claim VM isolation or protection from a compromised kernel.
 
 ## Durable ownership
@@ -91,15 +115,24 @@ attention while the application and history stay accessible.
 | `GOBLIN_EXECUTION_IMAGE` | Worker image, normally the same version as Goblin. |
 | `GOBLIN_KUBERNETES_URL` | Optional API address; defaults to the in-cluster API. |
 | `GOBLIN_KUBERNETES_TOKEN_FILE`, `GOBLIN_KUBERNETES_CA_FILE` | Controller credentials/trust paths, mounted only in the app. |
-| `GOBLIN_GITHUB_CLIENT_ID` | GitHub OAuth application's public client ID; enable device flow for that application. |
 
-GitHub sign-in uses device authorization with `repo` and `read:user` scopes. Set
-its client ID in the Goblin container configuration, then use **Connect GitHub**
-in Work. The access token is stored privately in Goblin's data volume and copied
-only into the selected repository execution. Tokens never enter Work JSON, git
-remote URLs, command arguments, or browser views. **Disconnect GitHub** removes
-Goblin's local credential; remote token revocation remains available in GitHub's
-authorized-app settings. Codex/OpenAI sign-in remains separate.
+GitHub sign-in uses the bundled official `gh` CLI (2.101.0, checksum-pinned for
+amd64 and arm64). Open **Settings → GitHub → Connect GitHub**, copy the device
+code, and authorize **GitHub CLI** on GitHub. No custom OAuth app, client ID,
+callback URL, or manually copied access token is needed. `gh` requests its standard
+OAuth scopes; Goblin's repository allowlist is enforced by the broker, not by a
+branch-scoped OAuth token.
+
+The private CLI profile lives under the persisted data directory's `github-cli/`.
+Headless containers use a private file with mode 0600 rather than a system keyring.
+No host `GH_TOKEN`, `GITHUB_TOKEN`, browser command, or CLI configuration is inherited.
+The existing custom OAuth connection needs one new CLI sign-in; its legacy token is
+never imported into the new profile. Disconnect removes Goblin's saved profile;
+remote revocation is available in GitHub's authorized application settings.
+
+GitHub branch rules provide a second safeguard; account bypass privileges matter.
+Branch publication can trigger existing GitHub Actions under their configured
+permissions. The broker's branch restriction does not reconfigure those workflows.
 
 The Azure/local installer provisions PostgreSQL, verifies certificate login,
 runs `deploy/postgres/migrate.sh IMAGE`, then deploys the application and execution
@@ -110,11 +143,26 @@ certificate. Neither Wolverine nor EF creates schema at application startup.
 
 Tests exercise real PostgreSQL transactions and Wolverine delivery, process
 fencing/cancellation, contract dependencies, connection reservations, cleanup
-failure recovery, and browser decisions/approvals/repeated commands. A disposable
-Kubernetes namespace exercises the generated isolation policy and real Codex
-initialization, result observation, suspension, and credential cleanup.
+failure recovery, and browser decisions/approvals/repeated commands. The broker
+is additionally tested with real local Git bundles and a bare remote. The packaged
+non-root image obtained a real GitHub device code and cancelled sign-in without
+installing credentials. The pinned Codex initialization, isolated credential
+storage, process replacement, and logout checks also passed.
 
-A successful authenticated model task and GitHub commit/push require configured
-service credentials. Those operations were not exercised in this implementation
-session. No cross-runtime continuation or second production integration is
-claimed; see [the bounded experiment](second-runtime-experiment.md).
+The local PostgreSQL run used password authentication; six certificate-specific
+tests were skipped, so it does not establish certificate authentication coverage.
+Live Kubernetes validation of the updated repository network route is still
+required; it was not performed in this session.
+
+The command-host regression runs the pinned Codex binary against a local model
+fixture. It verifies that a model-issued nested command writes a file for repository
+Work and remains blocked for text Work. This catches a disabled `code_mode_host`,
+which a direct app-server `command/exec` check does not detect.
+
+A subsequent WSL check used the connected ChatGPT account and the corrected
+production adapter in a Kubernetes container with the execution security settings.
+Codex successfully ran commands, wrote a file, and made a local Git commit. The
+temporary pod and credential Secret were removed afterward. This check did not
+publish to GitHub or open a PR; those workflows still need an authenticated test
+of the complete repository path. No cross-runtime continuation or second production
+integration is claimed; see [the bounded experiment](second-runtime-experiment.md).

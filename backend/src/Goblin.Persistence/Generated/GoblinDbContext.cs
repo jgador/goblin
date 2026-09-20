@@ -22,6 +22,12 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<ExecutionAttempt> ExecutionAttempts { get; set; }
 
+    public virtual DbSet<GithubConnection> GithubConnections { get; set; }
+
+    public virtual DbSet<GithubRepository> GithubRepositories { get; set; }
+
+    public virtual DbSet<RepositoryOperation> RepositoryOperations { get; set; }
+
     public virtual DbSet<WorkCommand> WorkCommands { get; set; }
 
     public virtual DbSet<WorkItem> WorkItems { get; set; }
@@ -81,9 +87,47 @@ public partial class GoblinDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("execution_attempts_connection_id_fkey");
 
+            entity.HasOne(d => d.GithubConnection).WithMany(p => p.ExecutionAttempts).HasConstraintName("execution_attempts_github_connection_id_fkey");
+
             entity.HasOne(d => d.Work).WithMany(p => p.ExecutionAttempts)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("execution_attempts_work_id_fkey");
+        });
+
+        modelBuilder.Entity<GithubConnection>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("github_connections_pkey");
+
+            entity.Property(e => e.Availability).HasDefaultValueSql("'Disconnected'::text");
+        });
+
+        modelBuilder.Entity<GithubRepository>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("github_repositories_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Enabled).HasDefaultValue(true);
+
+            entity.HasOne(d => d.Connection).WithMany(p => p.GithubRepositories)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("github_repositories_connection_id_fkey");
+        });
+
+        modelBuilder.Entity<RepositoryOperation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("repository_operations_pkey");
+
+            entity.HasIndex(e => e.AttemptId, "one_repository_operation")
+                .IsUnique()
+                .HasFilter("(state = ANY (ARRAY['Queued'::text, 'Running'::text, 'Uncertain'::text]))");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Attempt).WithOne(p => p.RepositoryOperation)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("repository_operations_attempt_id_fkey");
         });
 
         modelBuilder.Entity<WorkCommand>(entity =>

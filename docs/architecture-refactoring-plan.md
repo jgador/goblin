@@ -166,7 +166,7 @@ These are the baseline problems addressed by the implementation below.
 
 Work does not imply a repository or an agent sandbox. A question can execute
 without provisioning one. An explicit request to change a known repository uses
-a new isolated agent sandbox, GitHub credentials from Goblin sign-in, and the
+a new isolated agent sandbox, brokered GitHub access from Goblin sign-in, and the
 Goblin agent's Git author identity. The first implementation uses a fresh sandbox
 per repository attempt and a saved branch as the continuation checkpoint.
 

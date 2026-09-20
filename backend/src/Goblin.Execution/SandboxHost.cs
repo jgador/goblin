@@ -12,19 +12,21 @@ using Goblin.Core.Work;
 
 namespace Goblin.Execution;
 
-public sealed record SandboxOptions(string Namespace, string Image, string CodexHome, string GitHubCredentialFile);
+public sealed record SandboxOptions(string Namespace, string Image, string CodexHome, string RepositoryUrl);
 
 public sealed class SandboxHost : IExecutionHost
 {
     private readonly KubernetesApi _api;
     private readonly SandboxOptions _options;
     private readonly IExecutionHost _textHost;
+    private readonly IRepositoryBroker _repositories;
 
-    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost)
+    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories)
     {
         _api = api;
         _options = options;
         _textHost = textHost;
+        _repositories = repositories;
     }
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
@@ -42,12 +44,15 @@ public sealed class SandboxHost : IExecutionHost
         if (!await _api.CreateAsync(Sandboxes, Manifest(work, suspended: false), token)) return;
         // Credentials are scoped to this execution's mounts, outside Work JSON.
         string codex = await File.ReadAllTextAsync(Path.Combine(_options.CodexHome, "auth.json"), token);
-        string github = await File.ReadAllTextAsync(_options.GitHubCredentialFile, token);
-        using var githubJson = JsonDocument.Parse(github);
-        string accessToken = githubJson.RootElement.GetProperty("accessToken").GetString()!;
+        string capability = await _repositories.PrepareAsync(work, token);
         JsonObject secret = Resource("v1", "Secret", name, work);
         secret["type"] = "Opaque";
-        secret["stringData"] = new JsonObject { ["auth.json"] = codex, ["github-token"] = accessToken };
+        secret["stringData"] = new JsonObject
+        {
+            ["auth.json"] = codex,
+            ["repository-capability"] = capability,
+            ["repository-url"] = _options.RepositoryUrl
+        };
         await _api.CreateAsync(Core + "/secrets", secret, token);
         JsonObject input = Resource("v1", "ConfigMap", name, work);
         input["data"] = new JsonObject { ["input.json"] = JsonSerializer.Serialize(new WorkerInput(work, "/run/codex", "codex"), ExecutionFiles.Json) };
@@ -64,6 +69,8 @@ public sealed class SandboxHost : IExecutionHost
     {
         if (work.Attempts[^1].Target.Repository is null) return await _textHost.ObserveAsync(work, stop, token);
         string name = Name(work);
+        ExecutionObservation? repositoryObservation = await _repositories.ObserveAsync(work, token);
+        if (repositoryObservation?.Kind == ObservationKind.Uncertain) stop = true;
         JsonObject? sandbox = await _api.GetAsync(Sandboxes + "/" + name, token);
         if (sandbox is null)
         {
@@ -82,9 +89,9 @@ public sealed class SandboxHost : IExecutionHost
             {
                 string? logs = await _api.LogsAsync(Core + "/pods/" + podName + "/log?container=execution&limitBytes=262144", token);
                 string? result = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_RESULT ", StringComparison.Ordinal));
-                if (result is not null)
+                if (result is not null && repositoryObservation is null)
                     return JsonSerializer.Deserialize<ExecutionObservation>(result[14..], ExecutionFiles.Json)!;
-                if (phase is "Succeeded" or "Failed") return new(ObservationKind.Failed, Failure: FailureKind.ExecutionFailed);
+                if (phase is "Succeeded" or "Failed" && repositoryObservation is null) return new(ObservationKind.Failed, Failure: FailureKind.ExecutionFailed);
                 string? progress = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_PROGRESS ", StringComparison.Ordinal));
                 if (!stop && progress is not null)
                     return JsonSerializer.Deserialize<ExecutionObservation>(progress[16..], ExecutionFiles.Json)!;
@@ -95,7 +102,13 @@ public sealed class SandboxHost : IExecutionHost
             await _api.PatchAsync(Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
             // Suspension is intent. Confirm only after every owned pod is gone.
             pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
-            return new(pods?["items"]?.AsArray().Count == 0 ? ObservationKind.Stopped : ObservationKind.Pending);
+            if (pods?["items"]?.AsArray().Count == 0)
+            {
+                try { await _repositories.StopAsync(work, token); }
+                catch { return new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed); }
+                return new(ObservationKind.Stopped);
+            }
+            return repositoryObservation ?? new(ObservationKind.Pending);
         }
         return new(ObservationKind.Pending);
     }
@@ -104,6 +117,7 @@ public sealed class SandboxHost : IExecutionHost
     {
         if (work.Attempts[^1].Target.Repository is null) { await _textHost.CleanupAsync(work, token); return; }
         string name = Name(work);
+        await _repositories.StopAsync(work, token);
         await _api.PatchAsync(Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
         await _api.DeleteAsync(Core + "/secrets/" + name, token);
         await _api.DeleteAsync(Core + "/configmaps/" + name, token);
@@ -117,6 +131,7 @@ public sealed class SandboxHost : IExecutionHost
         }
         // Keep the suspended identity fence and workspace PVC for recovery.
         // No database certificate, web data volume, or service token was mounted.
+        await _repositories.ReleaseAsync(work, token);
     }
 
     public JsonObject Manifest(WorkSnapshot work, bool suspended)

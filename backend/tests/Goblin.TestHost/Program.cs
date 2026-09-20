@@ -22,6 +22,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     AssetDirectory = Path.Combine(config.Root, "frontend/dist"),
     RecoverRuntime = false,
     EnableWork = config.EnableWork,
+    GitHubCommand = config.GitHubCommand ?? "gh",
     ExecutionHost = config.EnableWork ? new FakeWorkHost(config.DataDir) : null,
     PromptTimeout = TimeSpan.FromMilliseconds(config.PromptTimeoutMs),
     ConfigureCodex = options => options with
@@ -94,4 +95,5 @@ internal sealed record FixtureOptions
     public bool RealCodex { get; init; }
     public bool EnableWork { get; init; }
     public string? Command { get; init; }
+    public string? GitHubCommand { get; init; }
 }

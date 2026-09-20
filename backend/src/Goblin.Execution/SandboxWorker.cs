@@ -37,32 +37,23 @@ public static class SandboxWorker
         Directory.CreateDirectory(codexHome);
         File.Copy("/run/credentials/auth.json", Path.Combine(codexHome, "auth.json"), overwrite: true);
         File.SetUnixFileMode(Path.Combine(codexHome, "auth.json"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        // No token appears in remote URLs, git config, argv, or Work history.
-        string askpass = "/runtime/git-askpass";
-        await File.WriteAllTextAsync(askpass, "#!/bin/sh\ncase \"$1\" in *Username*) printf '%s' x-access-token ;; *) cat /run/credentials/github-token ;; esac\n");
-        File.SetUnixFileMode(askpass, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var gitEnvironment = new Dictionary<string, string>
         {
             ["HOME"] = home,
             ["PATH"] = Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin:/bin",
-            ["GIT_ASKPASS"] = askpass,
             ["GIT_TERMINAL_PROMPT"] = "0",
             ["GIT_CONFIG_NOSYSTEM"] = "1",
             ["GIT_CONFIG_GLOBAL"] = "/dev/null"
         };
-        string branch = "goblin/" + input.Work.Id.ToString(CultureInfo.InvariantCulture) + "/" + input.Work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture);
+        string branch = repository.Grant!.Branch;
         ExecutionObservation? runtimeOutcome = null;
         ExecutionSession? runtimeSession = null;
         try
         {
-            await GitAsync(root, gitEnvironment, "clone", "--", "https://github.com/" + repository.Repository + ".git", checkout);
-            // A fresh sandbox can continue a reviewed checkpoint without sharing
-            // a mutable checkout with another Work item or trusting native sessions.
-            AttemptSnapshot? previous = input.Work.Attempts.SkipLast(1).LastOrDefault(a =>
-                a.Target.Repository?.Repository == repository.Repository && input.Work.Artifacts.Any(x => x.AttemptId == a.Id));
-            if (previous is null) await GitAsync(checkout, gitEnvironment, "checkout", "-b", branch);
-            else await GitAsync(checkout, gitEnvironment, "checkout", "-b", branch,
-                "origin/goblin/" + input.Work.Id.ToString(CultureInfo.InvariantCulture) + "/" + previous.Id.ToString(CultureInfo.InvariantCulture));
+            string bundle = Path.Combine(root, "input.bundle");
+            await RepositoryClient.DownloadAsync(input.Work.Attempts[^1].Id, bundle);
+            await GitAsync(root, gitEnvironment, "clone", "--branch", branch, "--", bundle, checkout);
+            await GitAsync(checkout, gitEnvironment, "remote", "set-url", "origin", "https://github.com/" + repository.Repository + ".git");
             await GitAsync(checkout, gitEnvironment, "config", "user.name", repository.GitAuthorName);
             await GitAsync(checkout, gitEnvironment, "config", "user.email", repository.GitAuthorEmail);
             await using (var codex = new CodexClient(new()
@@ -84,7 +75,7 @@ public static class SandboxWorker
                 int changes = await GitAsync(checkout, gitEnvironment, ["diff", "--cached", "--quiet"], allowDifference: true);
                 if (changes == 1)
                     await GitAsync(checkout, gitEnvironment, "commit", "-m", "Goblin Work " + input.Work.Id.ToString(CultureInfo.InvariantCulture));
-                await GitAsync(checkout, gitEnvironment, "push", "origin", "HEAD:refs/heads/" + branch);
+                await RepositoryClient.SubmitAsync(input.Work.Attempts[^1].Id, branch, checkout, "publish");
                 outcome = outcome with { ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
             }
         }

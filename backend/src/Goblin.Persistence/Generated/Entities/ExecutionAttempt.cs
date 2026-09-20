@@ -47,6 +47,9 @@ public partial class ExecutionAttempt
     [Column("cleanup_failed")]
     public bool CleanupFailed { get; set; }
 
+    [Column("github_connection_id")]
+    public long? GithubConnectionId { get; set; }
+
     [ForeignKey("AgentId")]
     [InverseProperty("ExecutionAttempts")]
     public virtual Agent Agent { get; set; } = null!;
@@ -54,6 +57,13 @@ public partial class ExecutionAttempt
     [ForeignKey("ConnectionId")]
     [InverseProperty("ExecutionAttempt")]
     public virtual Connection Connection { get; set; } = null!;
+
+    [ForeignKey("GithubConnectionId")]
+    [InverseProperty("ExecutionAttempts")]
+    public virtual GithubConnection? GithubConnection { get; set; }
+
+    [InverseProperty("Attempt")]
+    public virtual RepositoryOperation? RepositoryOperation { get; set; }
 
     [ForeignKey("WorkId")]
     [InverseProperty("ExecutionAttempts")]

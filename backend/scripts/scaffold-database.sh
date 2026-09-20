@@ -18,6 +18,9 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --table public.conversation_messages \
   --table public.conversations \
   --table public.execution_attempts \
+  --table public.github_connections \
+  --table public.github_repositories \
+  --table public.repository_operations \
   --table public.work_commands \
   --table public.work_items \
   --data-annotations \

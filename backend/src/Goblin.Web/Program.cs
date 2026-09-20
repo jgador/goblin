@@ -12,6 +12,11 @@ if (args.Length == 1 && args[0] == "--sandbox-execute")
     Environment.ExitCode = await Goblin.Execution.SandboxWorker.RunAsync();
     return;
 }
+if (args.Length > 0 && args[0] == "--repository")
+{
+    Environment.ExitCode = await Goblin.Execution.RepositoryClient.RunAsync(args[1..]);
+    return;
+}
 
 string portValue = Environment.GetEnvironmentVariable("GOBLIN_PORT") ?? "8787";
 if (!int.TryParse(portValue, out int port) || port is < 1 or > 65535)

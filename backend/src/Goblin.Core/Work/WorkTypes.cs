@@ -80,7 +80,8 @@ public sealed record RepositoryChange
     public string Repository { get; }
     public string GitAuthorName { get; }
     public string GitAuthorEmail { get; }
-    public RepositoryChange(string repository, string gitAuthorName, string gitAuthorEmail)
+    public RepositoryGrant? Grant { get; }
+    public RepositoryChange(string repository, string gitAuthorName, string gitAuthorEmail, RepositoryGrant? grant = null)
     {
         string[] parts = (repository ?? "").Split('/');
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(gitAuthorName) || string.IsNullOrWhiteSpace(gitAuthorEmail) ||
@@ -94,6 +95,21 @@ public sealed record RepositoryChange
         Repository = repository!;
         GitAuthorName = gitAuthorName;
         GitAuthorEmail = gitAuthorEmail;
+        Grant = grant;
+    }
+}
+
+// Immutable authority captured when an attempt is queued; enforced outside the agent.
+public sealed record RepositoryGrant(long ConnectionId, string Generation, string AccountId,
+    string Login, long RepositoryId, string BaseBranch, string Branch, int PolicyVersion = 1)
+{
+    public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, string operation)
+    {
+        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion != 1 ||
+            Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
+            !string.Equals(repository, requestedRepository, StringComparison.OrdinalIgnoreCase) ||
+            operation is not ("publish" or "pull-request" or "fetch"))
+            throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }
 
