@@ -74,8 +74,12 @@ public sealed class ApiKeyVerifierTests
     public void HttpOptInStillRequiresAnExactOrigin(string origin) =>
         Assert.Throws<ArgumentException>(() => Workspace.ValidateOrigin(origin, allowInsecureHttp: true));
 
-    private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    private sealed class Handler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(respond(request));
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
+
+        public Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) => _respond = respond;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(_respond(request));
     }
 }

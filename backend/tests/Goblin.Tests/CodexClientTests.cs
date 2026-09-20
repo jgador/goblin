@@ -185,10 +185,16 @@ public sealed class CodexClientTests
         catch (ArgumentException) { return false; }
     }
 
-    private sealed class Fixture(Workspace workspace, CodexClient client) : IAsyncDisposable
+    private sealed class Fixture : IAsyncDisposable
     {
-        public Workspace Workspace { get; } = workspace;
-        public CodexClient Client { get; } = client;
+        public Fixture(Workspace workspace, CodexClient client)
+        {
+            Workspace = workspace;
+            Client = client;
+        }
+
+        public Workspace Workspace { get; }
+        public CodexClient Client { get; }
         public Task<GetAccountResponse> ReadAsync(CancellationToken cancellationToken = default) =>
             Client.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false }, cancellationToken);
         public async Task<int> PidAsync() => int.Parse(await File.ReadAllTextAsync(Path.Combine(Workspace.CodexHome, "pid")));

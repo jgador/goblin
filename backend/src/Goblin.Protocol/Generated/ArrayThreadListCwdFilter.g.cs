@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<ArrayThreadListCwdFilter, List<string>>))]
-public sealed class ArrayThreadListCwdFilter(List<string> value) : ThreadListCwdFilter, IProtocolValue<ArrayThreadListCwdFilter, List<string>>
+public sealed class ArrayThreadListCwdFilter : ThreadListCwdFilter, IProtocolValue<ArrayThreadListCwdFilter, List<string>>
 {
+    public ArrayThreadListCwdFilter(List<string> value) => Value = value;
+
     [JsonIgnore]
-    public List<string> Value { get; init; } = value;
+    public List<string> Value { get; init; }
 
     public static ArrayThreadListCwdFilter FromValue(List<string> value) => new(value);
 }

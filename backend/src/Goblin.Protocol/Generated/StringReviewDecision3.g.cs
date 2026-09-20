@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<StringReviewDecision3, ReviewDecisionValue3>))]
-public sealed class StringReviewDecision3(ReviewDecisionValue3 value) : ReviewDecision, IProtocolValue<StringReviewDecision3, ReviewDecisionValue3>
+public sealed class StringReviewDecision3 : ReviewDecision, IProtocolValue<StringReviewDecision3, ReviewDecisionValue3>
 {
+    public StringReviewDecision3(ReviewDecisionValue3 value) => Value = value;
+
     [JsonIgnore]
-    public ReviewDecisionValue3 Value { get; init; } = value;
+    public ReviewDecisionValue3 Value { get; init; }
 
     public static StringReviewDecision3 FromValue(ReviewDecisionValue3 value) => new(value);
 }

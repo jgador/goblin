@@ -5,8 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence;
 
-public partial class GoblinDbContext(DbContextOptions<GoblinDbContext> options) : DbContext(options)
+public partial class GoblinDbContext : DbContext
 {
+    public GoblinDbContext(DbContextOptions<GoblinDbContext> options)
+        : base(options)
+    {
+    }
+
     public virtual DbSet<Agent> Agents { get; set; }
 
     public virtual DbSet<Connection> Connections { get; set; }

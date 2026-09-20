@@ -24,6 +24,9 @@ The implemented boundary and its current limitations are documented in
 - Keep SQL migrations immutable, regenerate EF mappings from the database, and
   put custom behavior outside generated files. Preserve the frontend technology,
   visual design, branding, accessibility, and HTTP security.
+- Use regular constructors for class declarations and readonly fields for
+  retained dependencies. Preserve existing property contracts and positional
+  record declarations.
 
 Use `dotnet test backend/tests/Goblin.Core.Tests` for core changes. `npm test`
 builds and runs protocol checks, .NET tests, HTTP tests, and deployment tests.

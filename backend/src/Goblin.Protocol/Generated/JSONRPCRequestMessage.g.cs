@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<JSONRPCRequestMessage, JSONRPCRequest>))]
-public sealed class JSONRPCRequestMessage(JSONRPCRequest value) : JSONRPCMessage, IProtocolValue<JSONRPCRequestMessage, JSONRPCRequest>
+public sealed class JSONRPCRequestMessage : JSONRPCMessage, IProtocolValue<JSONRPCRequestMessage, JSONRPCRequest>
 {
+    public JSONRPCRequestMessage(JSONRPCRequest value) => Value = value;
+
     [JsonIgnore]
-    public JSONRPCRequest Value { get; init; } = value;
+    public JSONRPCRequest Value { get; init; }
 
     public static JSONRPCRequestMessage FromValue(JSONRPCRequest value) => new(value);
 }

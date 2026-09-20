@@ -473,10 +473,11 @@ class Generator:
                 )
                 self.generated[variant] = (
                     f"[JsonConverter(typeof(ProtocolValueConverter<{variant}, {inner}>))]\n"
-                    f"public sealed class {variant}({inner} value) : {name}, IProtocolValue<{variant}, {inner}>\n"
+                    f"public sealed class {variant} : {name}, IProtocolValue<{variant}, {inner}>\n"
                     "{\n"
+                    f"    public {variant}({inner} value) => Value = value;\n\n"
                     "    [JsonIgnore]\n"
-                    f"    public {inner} Value {{ get; init; }} = value;\n\n"
+                    f"    public {inner} Value {{ get; init; }}\n\n"
                     f"    public static {variant} FromValue({inner} value) => new(value);\n"
                     "}"
                 )
@@ -509,14 +510,8 @@ class Generator:
             ]
         else:
             for index, (variant, inner, wrapped, _) in enumerate(variants):
-                lines += [
-                    "        {",
-                    "            var candidate = reader;",
-                    "            try",
-                    "            {",
-                    f"                var value = JsonSerializer.Deserialize<{inner}>(ref candidate, options);",
-                    '                if (value is null) throw new JsonException("Expected a non-null union value.");'
-                    if inner
+                nullable = (
+                    inner
                     not in (
                         "long",
                         "int",
@@ -528,7 +523,18 @@ class Generator:
                         "ProtocolNull",
                     )
                     and self.enum_values(self.schemas.get(inner, {})) is None
-                    else "",
+                )
+                lines += [
+                    "        {",
+                    "            Utf8JsonReader candidate = reader;",
+                    "            try",
+                    "            {",
+                    f"                {inner} value = JsonSerializer.Deserialize<{inner}>(ref candidate, options)"
+                    + (
+                        ' ?? throw new JsonException("Expected a non-null union value.");'
+                        if nullable
+                        else ";\n"
+                    ),
                     "                reader = candidate;",
                     f"                return {'new ' + variant + '(value)' if wrapped else 'value'};",
                     "            }",
@@ -596,7 +602,7 @@ public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
         => reader.TokenType switch
         {
             JsonTokenType.String => new RequestId(reader.GetString()!),
-            JsonTokenType.Number when reader.TryGetInt64(out var number) => new RequestId(number),
+            JsonTokenType.Number when reader.TryGetInt64(out long number) => new RequestId(number),
             _ => throw new JsonException("A request ID must be a string or signed 64-bit integer."),
         };
 

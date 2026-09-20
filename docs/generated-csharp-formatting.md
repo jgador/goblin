@@ -1,5 +1,15 @@
 # Generated C# formatting audit
 
+## Current generator status
+
+The constructor refactor applies the protocol generator follow-up described
+below and emits regular constructors for all generated wrapper classes.
+Protocol regeneration now preserves the audited formatting. EF scaffolding also
+formats its output with the repository's current settings, which prefer regular
+constructors. The historical primary-constructor change below is superseded.
+
+## Original audit
+
 Audited on 2026-09-20 with .NET SDK 10.0.301 and the repository's
 `.editorconfig`. The scope was the 1,145 checked-in protocol C# files and eight
 EF Core context/entity files.

@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<McpElicitationMultiSelectEnumSchemaVariant, McpElicitationMultiSelectEnumSchema>))]
-public sealed class McpElicitationMultiSelectEnumSchemaVariant(McpElicitationMultiSelectEnumSchema value) : McpElicitationEnumSchema, IProtocolValue<McpElicitationMultiSelectEnumSchemaVariant, McpElicitationMultiSelectEnumSchema>
+public sealed class McpElicitationMultiSelectEnumSchemaVariant : McpElicitationEnumSchema, IProtocolValue<McpElicitationMultiSelectEnumSchemaVariant, McpElicitationMultiSelectEnumSchema>
 {
+    public McpElicitationMultiSelectEnumSchemaVariant(McpElicitationMultiSelectEnumSchema value) => Value = value;
+
     [JsonIgnore]
-    public McpElicitationMultiSelectEnumSchema Value { get; init; } = value;
+    public McpElicitationMultiSelectEnumSchema Value { get; init; }
 
     public static McpElicitationMultiSelectEnumSchemaVariant FromValue(McpElicitationMultiSelectEnumSchema value) => new(value);
 }

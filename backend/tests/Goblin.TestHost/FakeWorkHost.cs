@@ -7,11 +7,15 @@ using Goblin.Core.Work;
 using Goblin.Execution;
 
 // Durable browser fixture; never compiled into the application image.
-internal sealed class FakeWorkHost(string root) : IExecutionHost
+internal sealed class FakeWorkHost : IExecutionHost
 {
+    private readonly string _root;
+
+    public FakeWorkHost(string root) => _root = root;
+
     public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
     public string EnvironmentFor(Guid workId, Guid attemptId) => "fixture/" + attemptId;
-    private string PathFor(WorkSnapshot work) => Path.Combine(root, work.Attempts[^1].Id + ".work-result");
+    private string PathFor(WorkSnapshot work) => Path.Combine(_root, work.Attempts[^1].Id + ".work-result");
     public Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
         bool question = work.Objective.Contains("decision", StringComparison.OrdinalIgnoreCase) && work.Decisions.Length == 0;

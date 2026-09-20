@@ -12,7 +12,7 @@ using Goblin.Protocol;
 namespace Goblin.Integrations.Codex;
 
 /// <summary>Owns a connection to the official Rust app-server; no conversation state lives here.</summary>
-public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
+public sealed partial class CodexClient : IAsyncDisposable
 {
     private readonly Lock _gate = new();
     private readonly SemaphoreSlim _writeGate = new(1, 1);
@@ -24,7 +24,9 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
     private bool _closed;
     private bool _ready;
 
-    public CodexOptions Options { get; } = options;
+    public CodexClient(CodexOptions options) => Options = options;
+
+    public CodexOptions Options { get; }
     public bool Ready { get { lock (_gate) return _ready; } }
     public event Action<ServerNotification>? Notification;
     public event Action? Disconnected;

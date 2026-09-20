@@ -225,8 +225,19 @@ public sealed class DurabilityTests
             ? Task.FromException(new IOException("Fixture cleanup failure")) : Task.CompletedTask;
     }
 
-    private sealed class Fixture(string app, string name, string directory) : IAsyncDisposable
+    private sealed class Fixture : IAsyncDisposable
     {
+        private readonly string _app;
+        private readonly string _name;
+        private readonly string _directory;
+
+        public Fixture(string app, string name, string directory)
+        {
+            _app = app;
+            _name = name;
+            _directory = directory;
+        }
+
         public Runtime Runtime { get; } = new();
         public IHost Host { get; private set; } = null!;
         public static async Task<Fixture> CreateAsync()
@@ -261,11 +272,11 @@ public sealed class DurabilityTests
         {
             HostApplicationBuilder builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
-            builder.Services.AddGoblinPersistence(app);
+            builder.Services.AddGoblinPersistence(_app);
             builder.Services.AddWorkApplication();
             builder.Services.AddSingleton<IExecutionHost>(Runtime);
-            builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(directory));
-            builder.UseWolverine(o => ApplicationServices.ConfigureMessaging(o, app));
+            builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(_directory));
+            builder.UseWolverine(o => ApplicationServices.ConfigureMessaging(o, _app));
             Host = builder.Build();
             await Host.StartAsync();
         }
@@ -274,16 +285,16 @@ public sealed class DurabilityTests
         {
             await using var admin = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
             await admin.OpenAsync();
-            await new NpgsqlCommand("ALTER DATABASE " + name + " ALLOW_CONNECTIONS " + (available ? "true" : "false"), admin).ExecuteNonQueryAsync();
+            await new NpgsqlCommand("ALTER DATABASE " + _name + " ALLOW_CONNECTIONS " + (available ? "true" : "false"), admin).ExecuteNonQueryAsync();
             if (!available) await CloseApplicationSessions();
         }
         private async Task CloseApplicationSessions()
         {
-            var cleanup = new NpgsqlConnectionStringBuilder(app) { Database = "postgres", Pooling = false };
+            var cleanup = new NpgsqlConnectionStringBuilder(_app) { Database = "postgres", Pooling = false };
             await using var connection = new NpgsqlConnection(cleanup.ConnectionString);
             await connection.OpenAsync();
             await using var close = new NpgsqlCommand("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = @name AND usename = current_user", connection);
-            close.Parameters.AddWithValue("name", name);
+            close.Parameters.AddWithValue("name", _name);
             await close.ExecuteNonQueryAsync();
         }
         public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
@@ -312,8 +323,8 @@ public sealed class DurabilityTests
             await CloseApplicationSessions();
             await using var db = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
             await db.OpenAsync();
-            await new NpgsqlCommand("DROP DATABASE " + name + " WITH (FORCE)", db).ExecuteNonQueryAsync();
-            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+            await new NpgsqlCommand("DROP DATABASE " + _name + " WITH (FORCE)", db).ExecuteNonQueryAsync();
+            if (Directory.Exists(_directory)) Directory.Delete(_directory, true);
         }
     }
 }

@@ -219,8 +219,9 @@ The recommended command is:
 bash backend/scripts/scaffold-database.sh
 ```
 
-It restores the local tool, regenerates the selected application tables, and normalizes
-generated C# files to UTF-8 without a BOM and LF line endings. It reads
+It restores the local tool, regenerates the selected application tables, normalizes
+generated C# files to UTF-8 without a BOM and LF line endings, and applies the
+repository's whitespace and style rules, including regular constructors. It reads
 `ConnectionStrings:Goblin` from `backend/tools/Goblin.Database/appsettings.json`;
 ordinary application access is enough to inspect the mapped schema. It starts
 neither the web server nor Codex.

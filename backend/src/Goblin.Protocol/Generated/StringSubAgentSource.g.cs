@@ -9,10 +9,12 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<StringSubAgentSource, SubAgentSourceValue>))]
-public sealed class StringSubAgentSource(SubAgentSourceValue value) : SubAgentSource, IProtocolValue<StringSubAgentSource, SubAgentSourceValue>
+public sealed class StringSubAgentSource : SubAgentSource, IProtocolValue<StringSubAgentSource, SubAgentSourceValue>
 {
+    public StringSubAgentSource(SubAgentSourceValue value) => Value = value;
+
     [JsonIgnore]
-    public SubAgentSourceValue Value { get; init; } = value;
+    public SubAgentSourceValue Value { get; init; }
 
     public static StringSubAgentSource FromValue(SubAgentSourceValue value) => new(value);
 }

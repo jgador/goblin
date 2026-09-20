@@ -12,8 +12,12 @@ namespace Goblin.Integrations.Codex;
 
 // Durable execution has its own inputs/results. The restricted verification
 // endpoint and its cancellation/size policy do not define Work execution.
-public sealed class CodexWorkRunner(CodexClient codex)
+public sealed class CodexWorkRunner
 {
+    private readonly CodexClient _codex;
+
+    public CodexWorkRunner(CodexClient codex) => _codex = codex;
+
     public async Task<ExecutionObservation> RunAsync(WorkSnapshot work, bool repositoryChanges,
         Func<ExecutionObservation, Task> progress, CancellationToken token)
     {
@@ -67,14 +71,14 @@ public sealed class CodexWorkRunner(CodexClient codex)
             }
         }
         void Disconnected() => completion.TrySetException(IntegrationFailure.RuntimeUnavailable());
-        codex.Notification += Notification;
-        codex.Disconnected += Disconnected;
+        _codex.Notification += Notification;
+        _codex.Disconnected += Disconnected;
         try
         {
-            await codex.StartAsync(token);
-            ThreadStartResponse thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
+            await _codex.StartAsync(token);
+            ThreadStartResponse thread = await _codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
             {
-                Cwd = codex.Options.Workspace,
+                Cwd = _codex.Options.Workspace,
                 Ephemeral = false,
                 Model = work.Attempts[^1].Target.RequestedModel,
                 ApprovalPolicy = AskForApproval.Never,
@@ -94,7 +98,7 @@ public sealed class CodexWorkRunner(CodexClient codex)
                 required = new[] { "kind", "text" },
                 properties = new { kind = new { type = "string", @enum = new[] { "result", "input" } }, text = new { type = "string" } }
             });
-            TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
+            TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
                 ThreadId = threadId,
                 Input = [new TextUserInput { Text = context }],
@@ -134,12 +138,12 @@ public sealed class CodexWorkRunner(CodexClient codex)
         }
         finally
         {
-            codex.Notification -= Notification;
-            codex.Disconnected -= Disconnected;
+            _codex.Notification -= Notification;
+            _codex.Disconnected -= Disconnected;
             _ = completion.Task.Exception;
-            if (threadId is not null && turnId is not null && !completion.Task.IsCompletedSuccessfully && codex.Ready)
-                try { await codex.RequestAsync<TurnInterruptParams, TurnInterruptResponse>("turn/interrupt", new() { ThreadId = threadId, TurnId = turnId }); }
-                catch { codex.Fail(); }
+            if (threadId is not null && turnId is not null && !completion.Task.IsCompletedSuccessfully && _codex.Ready)
+                try { await _codex.RequestAsync<TurnInterruptParams, TurnInterruptResponse>("turn/interrupt", new() { ThreadId = threadId, TurnId = turnId }); }
+                catch { _codex.Fail(); }
         }
     }
 }
