@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ChatgptAuthTokensLoginAccountResponse : LoginAccountResponse
+public sealed class ChatgptAuthTokensLoginAccountResponse : LoginAccountResponse
 {
     [JsonPropertyName("type")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SearchResponsesApiWebSearchAction : ResponsesApiWebSearchAction
+public sealed class SearchResponsesApiWebSearchAction : ResponsesApiWebSearchAction
 {
     [JsonPropertyName("queries")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

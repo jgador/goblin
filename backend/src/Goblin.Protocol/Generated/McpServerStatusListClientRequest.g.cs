@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpServerStatusListClientRequest : ClientRequest
+public sealed class McpServerStatusListClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

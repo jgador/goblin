@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record LocalShellCallResponseItem : ResponseItem
+public sealed class LocalShellCallResponseItem : ResponseItem
 {
     [JsonPropertyName("action")]
     [JsonRequired]

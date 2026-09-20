@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record Thread
+public sealed class Thread
 {
     [JsonPropertyName("agentNickname")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

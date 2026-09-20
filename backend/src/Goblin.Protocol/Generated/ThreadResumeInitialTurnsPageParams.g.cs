@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadResumeInitialTurnsPageParams
+public sealed class ThreadResumeInitialTurnsPageParams
 {
     [JsonPropertyName("itemsView")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

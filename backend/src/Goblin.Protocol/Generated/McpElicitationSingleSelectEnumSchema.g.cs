@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(McpElicitationSingleSelectEnumSchemaJsonConverter))]
-public abstract record McpElicitationSingleSelectEnumSchema
+public abstract class McpElicitationSingleSelectEnumSchema
 {
 }
 
@@ -24,7 +24,7 @@ public sealed class McpElicitationSingleSelectEnumSchemaJsonConverter : JsonConv
                 var value = JsonSerializer.Deserialize<McpElicitationUntitledSingleSelectEnumSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationUntitledSingleSelectEnumSchemaMcpElicitationSingleSelectEnumSchema(value);
+                return new McpElicitationUntitledSingleSelectEnumSchemaVariant(value);
             }
             catch (JsonException)
             {
@@ -38,7 +38,7 @@ public sealed class McpElicitationSingleSelectEnumSchemaJsonConverter : JsonConv
                 var value = JsonSerializer.Deserialize<McpElicitationTitledSingleSelectEnumSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationTitledSingleSelectEnumSchemaMcpElicitationSingleSelectEnumSchema(value);
+                return new McpElicitationTitledSingleSelectEnumSchemaVariant(value);
             }
             catch (JsonException)
             {
@@ -52,10 +52,10 @@ public sealed class McpElicitationSingleSelectEnumSchemaJsonConverter : JsonConv
     {
         switch (value)
         {
-            case McpElicitationUntitledSingleSelectEnumSchemaMcpElicitationSingleSelectEnumSchema typed:
+            case McpElicitationUntitledSingleSelectEnumSchemaVariant typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case McpElicitationTitledSingleSelectEnumSchemaMcpElicitationSingleSelectEnumSchema typed:
+            case McpElicitationTitledSingleSelectEnumSchemaVariant typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
             default:

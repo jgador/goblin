@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ModelsRequirements
+public sealed class ModelsRequirements
 {
     [JsonPropertyName("newThread")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

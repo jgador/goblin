@@ -8,6 +8,6 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecResizeResponse
+public sealed class CommandExecResizeResponse
 {
 }

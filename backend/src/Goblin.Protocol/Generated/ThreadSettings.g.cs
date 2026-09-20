@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadSettings
+public sealed class ThreadSettings
 {
     [JsonPropertyName("activePermissionProfile")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

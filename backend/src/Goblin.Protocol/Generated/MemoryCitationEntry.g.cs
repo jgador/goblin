@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MemoryCitationEntry
+public sealed class MemoryCitationEntry
 {
     [JsonPropertyName("lineEnd")]
     [JsonRequired]

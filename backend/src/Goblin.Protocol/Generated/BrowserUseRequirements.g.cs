@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record BrowserUseRequirements
+public sealed class BrowserUseRequirements
 {
     [JsonPropertyName("allowGlobalPersistentApproval")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ToolsV2
+public sealed class ToolsV2
 {
     [JsonPropertyName("web_search")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

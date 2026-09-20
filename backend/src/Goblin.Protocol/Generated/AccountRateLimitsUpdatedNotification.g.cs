@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AccountRateLimitsUpdatedNotification
+public sealed class AccountRateLimitsUpdatedNotification
 {
     [JsonPropertyName("rateLimits")]
     [JsonRequired]

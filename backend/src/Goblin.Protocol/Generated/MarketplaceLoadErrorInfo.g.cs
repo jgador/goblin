@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MarketplaceLoadErrorInfo
+public sealed class MarketplaceLoadErrorInfo
 {
     [JsonPropertyName("marketplacePath")]
     [JsonRequired]

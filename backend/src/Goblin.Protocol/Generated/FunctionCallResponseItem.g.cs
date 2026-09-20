@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FunctionCallResponseItem : ResponseItem
+public sealed class FunctionCallResponseItem : ResponseItem
 {
     [JsonPropertyName("arguments")]
     [JsonRequired]

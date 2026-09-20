@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadSectionMoveParams
+public sealed class ThreadSectionMoveParams
 {
     [JsonPropertyName("beforeThreadId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

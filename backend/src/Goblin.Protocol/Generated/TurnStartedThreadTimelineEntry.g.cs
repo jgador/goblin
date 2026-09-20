@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnStartedThreadTimelineEntry : ThreadTimelineEntry
+public sealed class TurnStartedThreadTimelineEntry : ThreadTimelineEntry
 {
     [JsonPropertyName("position")]
     [JsonRequired]

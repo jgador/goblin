@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GetWorkspaceMessagesResponse
+public sealed class GetWorkspaceMessagesResponse
 {
     [JsonPropertyName("featureEnabled")]
     [JsonRequired]

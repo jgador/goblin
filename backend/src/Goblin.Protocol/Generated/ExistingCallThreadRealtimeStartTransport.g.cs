@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExistingCallThreadRealtimeStartTransport : ThreadRealtimeStartTransport
+public sealed class ExistingCallThreadRealtimeStartTransport : ThreadRealtimeStartTransport
 {
     [JsonPropertyName("callId")]
     [JsonRequired]

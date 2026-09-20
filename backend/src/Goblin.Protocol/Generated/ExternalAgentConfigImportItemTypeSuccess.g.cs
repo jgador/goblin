@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentConfigImportItemTypeSuccess
+public sealed class ExternalAgentConfigImportItemTypeSuccess
 {
     [JsonPropertyName("cwd")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

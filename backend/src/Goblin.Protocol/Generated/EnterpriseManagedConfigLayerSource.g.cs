@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record EnterpriseManagedConfigLayerSource : ConfigLayerSource
+public sealed class EnterpriseManagedConfigLayerSource : ConfigLayerSource
 {
     [JsonPropertyName("id")]
     [JsonRequired]

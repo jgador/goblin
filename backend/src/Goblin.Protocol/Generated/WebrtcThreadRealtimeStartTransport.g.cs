@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WebrtcThreadRealtimeStartTransport : ThreadRealtimeStartTransport
+public sealed class WebrtcThreadRealtimeStartTransport : ThreadRealtimeStartTransport
 {
     [JsonPropertyName("sdp")]
     [JsonRequired]

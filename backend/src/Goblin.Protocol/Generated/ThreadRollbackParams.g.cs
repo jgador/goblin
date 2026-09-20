@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRollbackParams
+public sealed class ThreadRollbackParams
 {
     [JsonPropertyName("numTurns")]
     [JsonRequired]

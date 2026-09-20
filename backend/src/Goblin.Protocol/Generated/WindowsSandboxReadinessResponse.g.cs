@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WindowsSandboxReadinessResponse
+public sealed class WindowsSandboxReadinessResponse
 {
     [JsonPropertyName("status")]
     [JsonRequired]

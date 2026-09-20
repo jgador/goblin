@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RemoteControlStatusChangedNotification
+public sealed class RemoteControlStatusChangedNotification
 {
     [JsonPropertyName("environmentId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ListFilesParsedCommand : ParsedCommand
+public sealed class ListFilesParsedCommand : ParsedCommand
 {
     [JsonPropertyName("cmd")]
     [JsonRequired]

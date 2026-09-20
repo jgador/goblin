@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record OverriddenMetadata
+public sealed class OverriddenMetadata
 {
     [JsonPropertyName("effectiveValue")]
     [JsonRequired]

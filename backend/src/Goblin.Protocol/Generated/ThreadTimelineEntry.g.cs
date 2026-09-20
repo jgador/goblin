@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ThreadTimelineEntryJsonConverter))]
-public abstract record ThreadTimelineEntry
+public abstract class ThreadTimelineEntry
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRealtimeOutputAudioDeltaNotification
+public sealed class ThreadRealtimeOutputAudioDeltaNotification
 {
     [JsonPropertyName("audio")]
     [JsonRequired]

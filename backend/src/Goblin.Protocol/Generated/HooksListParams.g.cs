@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record HooksListParams
+public sealed class HooksListParams
 {
     [JsonPropertyName("cwds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

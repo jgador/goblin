@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigBatchWriteParams
+public sealed class ConfigBatchWriteParams
 {
     [JsonPropertyName("edits")]
     [JsonRequired]

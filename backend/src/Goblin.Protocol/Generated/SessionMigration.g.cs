@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SessionMigration
+public sealed class SessionMigration
 {
     [JsonPropertyName("cwd")]
     [JsonRequired]

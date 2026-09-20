@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(McpServerElicitationRequestParamsJsonConverter))]
-public abstract record McpServerElicitationRequestParams
+public abstract class McpServerElicitationRequestParams
 {
     [JsonPropertyName("mode")]
     public abstract string Mode { get; init; }

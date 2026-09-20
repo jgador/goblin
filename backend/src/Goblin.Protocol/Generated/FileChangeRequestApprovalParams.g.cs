@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FileChangeRequestApprovalParams
+public sealed class FileChangeRequestApprovalParams
 {
     [JsonPropertyName("grantRoot")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

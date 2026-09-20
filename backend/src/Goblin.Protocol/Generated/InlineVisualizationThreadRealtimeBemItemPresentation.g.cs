@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InlineVisualizationThreadRealtimeBemItemPresentation : ThreadRealtimeBemItemPresentation
+public sealed class InlineVisualizationThreadRealtimeBemItemPresentation : ThreadRealtimeBemItemPresentation
 {
     [JsonPropertyName("index")]
     [JsonRequired]

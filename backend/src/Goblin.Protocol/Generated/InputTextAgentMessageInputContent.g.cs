@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InputTextAgentMessageInputContent : AgentMessageInputContent
+public sealed class InputTextAgentMessageInputContent : AgentMessageInputContent
 {
     [JsonPropertyName("text")]
     [JsonRequired]

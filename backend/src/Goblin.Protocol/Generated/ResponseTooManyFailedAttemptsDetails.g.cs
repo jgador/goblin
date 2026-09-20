@@ -8,10 +8,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecisionAcceptWithExecpolicyAmendment
+public sealed class ResponseTooManyFailedAttemptsDetails
 {
-    [JsonPropertyName("execpolicy_amendment")]
-    [JsonRequired]
-    public required List<string> ExecpolicyAmendment { get; init; }
+    [JsonPropertyName("httpStatusCode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ushort? HttpStatusCode { get; init; }
 
 }

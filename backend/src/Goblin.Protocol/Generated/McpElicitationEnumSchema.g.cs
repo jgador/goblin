@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(McpElicitationEnumSchemaJsonConverter))]
-public abstract record McpElicitationEnumSchema
+public abstract class McpElicitationEnumSchema
 {
 }
 
@@ -24,7 +24,7 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
                 var value = JsonSerializer.Deserialize<McpElicitationSingleSelectEnumSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationSingleSelectEnumSchemaMcpElicitationEnumSchema(value);
+                return new McpElicitationSingleSelectEnumSchemaVariant(value);
             }
             catch (JsonException)
             {
@@ -38,7 +38,7 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
                 var value = JsonSerializer.Deserialize<McpElicitationMultiSelectEnumSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationMultiSelectEnumSchemaMcpElicitationEnumSchema(value);
+                return new McpElicitationMultiSelectEnumSchemaVariant(value);
             }
             catch (JsonException)
             {
@@ -52,7 +52,7 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
                 var value = JsonSerializer.Deserialize<McpElicitationLegacyTitledEnumSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationLegacyTitledEnumSchemaMcpElicitationEnumSchema(value);
+                return new McpElicitationLegacyTitledEnumSchemaVariant(value);
             }
             catch (JsonException)
             {
@@ -66,13 +66,13 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
     {
         switch (value)
         {
-            case McpElicitationSingleSelectEnumSchemaMcpElicitationEnumSchema typed:
+            case McpElicitationSingleSelectEnumSchemaVariant typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case McpElicitationMultiSelectEnumSchemaMcpElicitationEnumSchema typed:
+            case McpElicitationMultiSelectEnumSchemaVariant typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case McpElicitationLegacyTitledEnumSchemaMcpElicitationEnumSchema typed:
+            case McpElicitationLegacyTitledEnumSchemaVariant typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
             default:

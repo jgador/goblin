@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DynamicToolCallResponse
+public sealed class DynamicToolCallResponse
 {
     [JsonPropertyName("contentItems")]
     [JsonRequired]

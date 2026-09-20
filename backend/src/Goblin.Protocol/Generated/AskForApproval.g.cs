@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(AskForApprovalJsonConverter))]
-public abstract record AskForApproval
+public abstract class AskForApproval
 {
     public static AskForApproval Untrusted { get; } = new StringAskForApproval(AskForApprovalValue.Untrusted);
     public static AskForApproval OnRequest { get; } = new StringAskForApproval(AskForApprovalValue.OnRequest);

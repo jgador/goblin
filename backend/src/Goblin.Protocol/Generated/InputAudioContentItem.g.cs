@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InputAudioContentItem : ContentItem
+public sealed class InputAudioContentItem : ContentItem
 {
     [JsonPropertyName("audio_url")]
     [JsonRequired]

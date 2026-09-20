@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginSkillReadParams
+public sealed class PluginSkillReadParams
 {
     [JsonPropertyName("remoteMarketplaceName")]
     [JsonRequired]

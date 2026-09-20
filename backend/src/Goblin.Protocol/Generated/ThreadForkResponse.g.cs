@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadForkResponse
+public sealed class ThreadForkResponse
 {
     [JsonPropertyName("approvalPolicy")]
     [JsonRequired]

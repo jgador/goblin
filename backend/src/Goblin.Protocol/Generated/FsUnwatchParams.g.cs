@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsUnwatchParams
+public sealed class FsUnwatchParams
 {
     [JsonPropertyName("watchId")]
     [JsonRequired]

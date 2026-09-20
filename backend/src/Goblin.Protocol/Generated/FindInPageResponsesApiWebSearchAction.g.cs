@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FindInPageResponsesApiWebSearchAction : ResponsesApiWebSearchAction
+public sealed class FindInPageResponsesApiWebSearchAction : ResponsesApiWebSearchAction
 {
     [JsonPropertyName("pattern")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

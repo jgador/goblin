@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadArchiveParams
+public sealed class ThreadArchiveParams
 {
     [JsonPropertyName("threadId")]
     [JsonRequired]

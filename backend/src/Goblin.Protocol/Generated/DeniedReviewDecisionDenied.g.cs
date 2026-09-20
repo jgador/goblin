@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DeniedReviewDecisionDenied
+public sealed class DeniedReviewDecisionDenied
 {
     [JsonPropertyName("rejection")]
     [JsonRequired]

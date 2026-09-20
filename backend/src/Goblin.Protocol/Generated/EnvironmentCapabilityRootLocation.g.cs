@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record EnvironmentCapabilityRootLocation : CapabilityRootLocation
+public sealed class EnvironmentCapabilityRootLocation : CapabilityRootLocation
 {
     [JsonPropertyName("environmentId")]
     [JsonRequired]

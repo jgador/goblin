@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnError
+public sealed class TurnError
 {
     [JsonPropertyName("additionalDetails")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

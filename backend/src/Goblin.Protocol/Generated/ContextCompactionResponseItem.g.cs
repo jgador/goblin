@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ContextCompactionResponseItem : ResponseItem
+public sealed class ContextCompactionResponseItem : ResponseItem
 {
     [JsonPropertyName("encrypted_content")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

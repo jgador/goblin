@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FuzzyFileSearchParams
+public sealed class FuzzyFileSearchParams
 {
     [JsonPropertyName("cancellationToken")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

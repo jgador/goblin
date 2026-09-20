@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record DeniedReviewDecision : ReviewDecision
+public sealed class DeniedReviewDecision : ReviewDecision
 {
     [JsonPropertyName("denied")]
     [JsonRequired]

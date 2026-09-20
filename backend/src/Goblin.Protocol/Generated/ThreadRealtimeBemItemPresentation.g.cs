@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ThreadRealtimeBemItemPresentationJsonConverter))]
-public abstract record ThreadRealtimeBemItemPresentation
+public abstract class ThreadRealtimeBemItemPresentation
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

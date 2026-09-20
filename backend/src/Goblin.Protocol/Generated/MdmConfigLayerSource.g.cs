@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MdmConfigLayerSource : ConfigLayerSource
+public sealed class MdmConfigLayerSource : ConfigLayerSource
 {
     [JsonPropertyName("domain")]
     [JsonRequired]

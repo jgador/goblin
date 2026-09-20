@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginMarketplaceEntry
+public sealed class PluginMarketplaceEntry
 {
     [JsonPropertyName("interface")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

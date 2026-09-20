@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SessionFlagsConfigLayerSource : ConfigLayerSource
+public sealed class SessionFlagsConfigLayerSource : ConfigLayerSource
 {
     [JsonPropertyName("type")]
     [JsonRequired]

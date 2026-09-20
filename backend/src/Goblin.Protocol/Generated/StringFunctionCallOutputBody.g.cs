@@ -9,7 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ProtocolValueConverter<StringFunctionCallOutputBody, string>))]
-public sealed record StringFunctionCallOutputBody(string Value) : FunctionCallOutputBody, IProtocolValue<StringFunctionCallOutputBody, string>
+public sealed class StringFunctionCallOutputBody(string value) : FunctionCallOutputBody, IProtocolValue<StringFunctionCallOutputBody, string>
 {
+    [JsonIgnore]
+    public string Value { get; init; } = value;
+
     public static StringFunctionCallOutputBody FromValue(string value) => new(value);
 }

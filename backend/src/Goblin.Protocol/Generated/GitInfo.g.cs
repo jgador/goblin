@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GitInfo
+public sealed class GitInfo
 {
     [JsonPropertyName("branch")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ChatgptAccount : Account
+public sealed class ChatgptAccount : Account
 {
     [JsonPropertyName("email")]
     [JsonRequired]

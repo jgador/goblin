@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigurationUpdateResponseItem : ResponseItem
+public sealed class ConfigurationUpdateResponseItem : ResponseItem
 {
     [JsonPropertyName("reasoning")]
     [JsonRequired]

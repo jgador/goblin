@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(McpElicitationPrimitiveSchemaJsonConverter))]
-public abstract record McpElicitationPrimitiveSchema
+public abstract class McpElicitationPrimitiveSchema
 {
 }
 
@@ -24,7 +24,7 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
                 var value = JsonSerializer.Deserialize<McpElicitationEnumSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationEnumSchemaMcpElicitationPrimitiveSchema(value);
+                return new McpElicitationEnumPrimitiveSchema(value);
             }
             catch (JsonException)
             {
@@ -38,7 +38,7 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
                 var value = JsonSerializer.Deserialize<McpElicitationStringSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationStringSchemaMcpElicitationPrimitiveSchema(value);
+                return new McpElicitationStringPrimitiveSchema(value);
             }
             catch (JsonException)
             {
@@ -52,7 +52,7 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
                 var value = JsonSerializer.Deserialize<McpElicitationNumberSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationNumberSchemaMcpElicitationPrimitiveSchema(value);
+                return new McpElicitationNumberPrimitiveSchema(value);
             }
             catch (JsonException)
             {
@@ -66,7 +66,7 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
                 var value = JsonSerializer.Deserialize<McpElicitationBooleanSchema>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new McpElicitationBooleanSchemaMcpElicitationPrimitiveSchema(value);
+                return new McpElicitationBooleanPrimitiveSchema(value);
             }
             catch (JsonException)
             {
@@ -80,16 +80,16 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
     {
         switch (value)
         {
-            case McpElicitationEnumSchemaMcpElicitationPrimitiveSchema typed:
+            case McpElicitationEnumPrimitiveSchema typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case McpElicitationStringSchemaMcpElicitationPrimitiveSchema typed:
+            case McpElicitationStringPrimitiveSchema typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case McpElicitationNumberSchemaMcpElicitationPrimitiveSchema typed:
+            case McpElicitationNumberPrimitiveSchema typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case McpElicitationBooleanSchemaMcpElicitationPrimitiveSchema typed:
+            case McpElicitationBooleanPrimitiveSchema typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
             default:

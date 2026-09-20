@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginInstalledResponse
+public sealed class PluginInstalledResponse
 {
     [JsonPropertyName("marketplaceLoadErrors")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InputAudioFunctionCallOutputContentItem : FunctionCallOutputContentItem
+public sealed class InputAudioFunctionCallOutputContentItem : FunctionCallOutputContentItem
 {
     [JsonPropertyName("audio_url")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record OtherResponseItem : ResponseItem
+public sealed class OtherResponseItem : ResponseItem
 {
     [JsonPropertyName("type")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadSectionListResponse
+public sealed class ThreadSectionListResponse
 {
     [JsonPropertyName("data")]
     [JsonRequired]

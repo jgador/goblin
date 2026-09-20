@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AgentConfiguredHookHandler : ConfiguredHookHandler
+public sealed class AgentConfiguredHookHandler : ConfiguredHookHandler
 {
     [JsonPropertyName("type")]
     [JsonRequired]

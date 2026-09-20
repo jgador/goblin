@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CollabAgentToolCallThreadItem : ThreadItem
+public sealed class CollabAgentToolCallThreadItem : ThreadItem
 {
     [JsonPropertyName("agentsStates")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ImageUserInput : UserInput
+public sealed class ImageUserInput : UserInput
 {
     [JsonPropertyName("detail")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

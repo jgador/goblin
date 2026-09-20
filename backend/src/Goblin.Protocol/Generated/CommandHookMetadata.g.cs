@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandHookMetadata : HookMetadata
+public sealed class CommandHookMetadata : HookMetadata
 {
     [JsonPropertyName("async")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

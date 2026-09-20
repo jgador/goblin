@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MarketplaceRemoveResponse
+public sealed class MarketplaceRemoveResponse
 {
     [JsonPropertyName("installedRoot")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

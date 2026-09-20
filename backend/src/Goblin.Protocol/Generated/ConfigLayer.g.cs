@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigLayer
+public sealed class ConfigLayer
 {
     [JsonPropertyName("config")]
     [JsonRequired]

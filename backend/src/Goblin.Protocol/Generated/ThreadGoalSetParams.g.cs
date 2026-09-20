@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadGoalSetParams
+public sealed class ThreadGoalSetParams
 {
     [JsonPropertyName("objective")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FeedbackUploadClientRequest : ClientRequest
+public sealed class FeedbackUploadClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

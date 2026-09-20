@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadGoal
+public sealed class ThreadGoal
 {
     [JsonPropertyName("createdAt")]
     [JsonRequired]

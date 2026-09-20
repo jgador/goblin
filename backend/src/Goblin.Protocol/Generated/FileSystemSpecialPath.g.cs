@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(FileSystemSpecialPathJsonConverter))]
-public abstract record FileSystemSpecialPath
+public abstract class FileSystemSpecialPath
 {
     [JsonPropertyName("kind")]
     public abstract string Kind { get; init; }

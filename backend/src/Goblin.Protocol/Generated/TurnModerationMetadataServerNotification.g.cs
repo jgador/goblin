@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnModerationMetadataServerNotification : ServerNotification
+public sealed class TurnModerationMetadataServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

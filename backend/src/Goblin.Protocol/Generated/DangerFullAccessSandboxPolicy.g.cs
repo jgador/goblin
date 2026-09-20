@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DangerFullAccessSandboxPolicy : SandboxPolicy
+public sealed class DangerFullAccessSandboxPolicy : SandboxPolicy
 {
     [JsonPropertyName("type")]
     [JsonRequired]

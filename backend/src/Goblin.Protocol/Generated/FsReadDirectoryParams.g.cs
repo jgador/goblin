@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsReadDirectoryParams
+public sealed class FsReadDirectoryParams
 {
     [JsonPropertyName("path")]
     [JsonRequired]

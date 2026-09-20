@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadUsageBreakdownGroup
+public sealed class ThreadUsageBreakdownGroup
 {
     [JsonPropertyName("cachedInputTokens")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

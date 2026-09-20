@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ModelUpgradeInfo
+public sealed class ModelUpgradeInfo
 {
     [JsonPropertyName("migrationMarkdown")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

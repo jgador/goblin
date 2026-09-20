@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnToolOutput
+public sealed class TurnToolOutput
 {
     [JsonPropertyName("name")]
     [JsonRequired]

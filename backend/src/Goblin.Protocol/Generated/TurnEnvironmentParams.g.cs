@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnEnvironmentParams
+public sealed class TurnEnvironmentParams
 {
     [JsonPropertyName("cwd")]
     [JsonRequired]

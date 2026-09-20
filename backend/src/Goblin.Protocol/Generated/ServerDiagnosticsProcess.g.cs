@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ServerDiagnosticsProcess
+public sealed class ServerDiagnosticsProcess
 {
     [JsonPropertyName("id")]
     [JsonRequired]

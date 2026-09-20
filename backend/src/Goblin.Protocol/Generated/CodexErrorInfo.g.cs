@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(CodexErrorInfoJsonConverter))]
-public abstract record CodexErrorInfo
+public abstract class CodexErrorInfo
 {
     public static CodexErrorInfo ContextWindowExceeded { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.ContextWindowExceeded);
     public static CodexErrorInfo SessionBudgetExceeded { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.SessionBudgetExceeded);

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigRequirementsReadResponse
+public sealed class ConfigRequirementsReadResponse
 {
     [JsonPropertyName("requirements")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

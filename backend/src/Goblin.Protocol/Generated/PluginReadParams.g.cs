@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginReadParams
+public sealed class PluginReadParams
 {
     [JsonPropertyName("marketplacePath")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

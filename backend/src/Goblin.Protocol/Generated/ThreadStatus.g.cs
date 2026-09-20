@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ThreadStatusJsonConverter))]
-public abstract record ThreadStatus
+public abstract class ThreadStatus
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

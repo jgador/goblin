@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RateLimitResetCreditsSummary
+public sealed class RateLimitResetCreditsSummary
 {
     [JsonPropertyName("availableCount")]
     [JsonRequired]

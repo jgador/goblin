@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentConfigImportRecordHistoryClientRequest : ClientRequest
+public sealed class ExternalAgentConfigImportRecordHistoryClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

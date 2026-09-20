@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadStatusChangedNotification
+public sealed class ThreadStatusChangedNotification
 {
     [JsonPropertyName("status")]
     [JsonRequired]

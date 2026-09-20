@@ -8,6 +8,6 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadSectionMoveResponse
+public sealed class ThreadSectionMoveResponse
 {
 }

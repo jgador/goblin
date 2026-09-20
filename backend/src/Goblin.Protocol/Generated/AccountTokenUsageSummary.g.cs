@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AccountTokenUsageSummary
+public sealed class AccountTokenUsageSummary
 {
     [JsonPropertyName("currentStreakDays")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

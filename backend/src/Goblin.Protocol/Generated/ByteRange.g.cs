@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ByteRange
+public sealed class ByteRange
 {
     [JsonPropertyName("end")]
     [JsonRequired]

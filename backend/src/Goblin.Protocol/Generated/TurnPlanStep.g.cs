@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnPlanStep
+public sealed class TurnPlanStep
 {
     [JsonPropertyName("status")]
     [JsonRequired]

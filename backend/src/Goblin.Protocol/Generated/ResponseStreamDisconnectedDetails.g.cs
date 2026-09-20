@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ResponseStreamDisconnectedCodexErrorInfoResponseStreamDisconnected
+public sealed class ResponseStreamDisconnectedDetails
 {
     [JsonPropertyName("httpStatusCode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

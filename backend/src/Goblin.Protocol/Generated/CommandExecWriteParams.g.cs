@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecWriteParams
+public sealed class CommandExecWriteParams
 {
     [JsonPropertyName("closeStdin")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

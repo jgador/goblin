@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InputTextDynamicToolCallOutputContentItem : DynamicToolCallOutputContentItem
+public sealed class InputTextDynamicToolCallOutputContentItem : DynamicToolCallOutputContentItem
 {
     [JsonPropertyName("text")]
     [JsonRequired]

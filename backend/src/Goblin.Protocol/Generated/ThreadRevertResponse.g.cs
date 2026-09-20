@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRevertResponse
+public sealed class ThreadRevertResponse
 {
     [JsonPropertyName("itemsBackwardsCursor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

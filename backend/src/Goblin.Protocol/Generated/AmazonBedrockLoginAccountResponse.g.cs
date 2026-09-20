@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AmazonBedrockLoginAccountResponse : LoginAccountResponse
+public sealed class AmazonBedrockLoginAccountResponse : LoginAccountResponse
 {
     [JsonPropertyName("type")]
     [JsonRequired]

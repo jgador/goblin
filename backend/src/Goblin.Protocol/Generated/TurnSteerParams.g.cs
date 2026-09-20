@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnSteerParams
+public sealed class TurnSteerParams
 {
     [JsonPropertyName("clientUserMessageId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

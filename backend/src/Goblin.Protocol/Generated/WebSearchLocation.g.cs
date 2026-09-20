@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record WebSearchLocation
+public sealed class WebSearchLocation
 {
     [JsonPropertyName("city")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsRemoveClientRequest : ClientRequest
+public sealed class FsRemoveClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

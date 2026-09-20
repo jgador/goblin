@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ReasoningTextDeltaNotification
+public sealed class ReasoningTextDeltaNotification
 {
     [JsonPropertyName("contentIndex")]
     [JsonRequired]

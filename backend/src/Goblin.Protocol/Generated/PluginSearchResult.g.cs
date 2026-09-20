@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginSearchResult
+public sealed class PluginSearchResult
 {
     [JsonPropertyName("marketplaceName")]
     [JsonRequired]

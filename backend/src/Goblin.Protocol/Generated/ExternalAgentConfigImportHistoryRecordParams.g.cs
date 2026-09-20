@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentConfigImportHistoryRecordParams
+public sealed class ExternalAgentConfigImportHistoryRecordParams
 {
     [JsonPropertyName("itemTypeResults")]
     [JsonRequired]

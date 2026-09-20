@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SkillToolDependency
+public sealed class SkillToolDependency
 {
     [JsonPropertyName("command")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

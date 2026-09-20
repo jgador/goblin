@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AgentMessageResponseItem : ResponseItem
+public sealed class AgentMessageResponseItem : ResponseItem
 {
     [JsonPropertyName("author")]
     [JsonRequired]

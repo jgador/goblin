@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record JSONRPCError
+public sealed class JSONRPCError
 {
     [JsonPropertyName("error")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpToolCallError
+public sealed class McpToolCallError
 {
     [JsonPropertyName("message")]
     [JsonRequired]

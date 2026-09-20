@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ProcessExitedNotification
+public sealed class ProcessExitedNotification
 {
     [JsonPropertyName("exitCode")]
     [JsonRequired]

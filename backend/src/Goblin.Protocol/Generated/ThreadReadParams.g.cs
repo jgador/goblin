@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadReadParams
+public sealed class ThreadReadParams
 {
     [JsonPropertyName("includeTurns")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

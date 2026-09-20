@@ -8,10 +8,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ResponseTooManyFailedAttemptsCodexErrorInfoResponseTooManyFailedAttempts
+public sealed class ActiveTurnNotSteerableDetails
 {
-    [JsonPropertyName("httpStatusCode")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ushort? HttpStatusCode { get; init; }
+    [JsonPropertyName("turnKind")]
+    [JsonRequired]
+    public required NonSteerableTurnKind TurnKind { get; init; }
 
 }

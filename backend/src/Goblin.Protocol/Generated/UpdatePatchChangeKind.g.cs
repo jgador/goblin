@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record UpdatePatchChangeKind : PatchChangeKind
+public sealed class UpdatePatchChangeKind : PatchChangeKind
 {
     [JsonPropertyName("move_path")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(GuardianApprovalReviewActionJsonConverter))]
-public abstract record GuardianApprovalReviewAction
+public abstract class GuardianApprovalReviewAction
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

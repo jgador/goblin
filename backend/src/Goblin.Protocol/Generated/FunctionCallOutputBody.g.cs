@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(FunctionCallOutputBodyJsonConverter))]
-public abstract record FunctionCallOutputBody
+public abstract class FunctionCallOutputBody
 {
 }
 

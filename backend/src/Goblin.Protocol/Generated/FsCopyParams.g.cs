@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsCopyParams
+public sealed class FsCopyParams
 {
     [JsonPropertyName("destinationPath")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadAttachmentRemoveParams
+public sealed class ThreadAttachmentRemoveParams
 {
     [JsonPropertyName("attachmentType")]
     [JsonRequired]

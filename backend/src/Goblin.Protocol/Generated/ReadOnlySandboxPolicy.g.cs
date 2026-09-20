@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ReadOnlySandboxPolicy : SandboxPolicy
+public sealed class ReadOnlySandboxPolicy : SandboxPolicy
 {
     [JsonPropertyName("networkAccess")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

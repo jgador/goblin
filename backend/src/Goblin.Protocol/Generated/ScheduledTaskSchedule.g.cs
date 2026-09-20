@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ScheduledTaskScheduleJsonConverter))]
-public abstract record ScheduledTaskSchedule
+public abstract class ScheduledTaskSchedule
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

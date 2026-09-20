@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record W3cTraceContext
+public sealed class W3cTraceContext
 {
     [JsonPropertyName("traceparent")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

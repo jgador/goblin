@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WorkspaceWriteSandboxPolicy : SandboxPolicy
+public sealed class WorkspaceWriteSandboxPolicy : SandboxPolicy
 {
     [JsonPropertyName("excludeSlashTmp")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

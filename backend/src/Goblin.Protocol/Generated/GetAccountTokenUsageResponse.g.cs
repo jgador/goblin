@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GetAccountTokenUsageResponse
+public sealed class GetAccountTokenUsageResponse
 {
     [JsonPropertyName("dailyUsageBuckets")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

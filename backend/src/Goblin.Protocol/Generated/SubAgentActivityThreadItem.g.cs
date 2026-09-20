@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SubAgentActivityThreadItem : ThreadItem
+public sealed class SubAgentActivityThreadItem : ThreadItem
 {
     [JsonPropertyName("agentPath")]
     [JsonRequired]

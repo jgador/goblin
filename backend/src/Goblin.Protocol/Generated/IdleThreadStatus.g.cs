@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record IdleThreadStatus : ThreadStatus
+public sealed class IdleThreadStatus : ThreadStatus
 {
     [JsonPropertyName("type")]
     [JsonRequired]

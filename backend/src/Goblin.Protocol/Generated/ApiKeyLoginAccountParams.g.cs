@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ApiKeyLoginAccountParams : LoginAccountParams
+public sealed class ApiKeyLoginAccountParams : LoginAccountParams
 {
     [JsonPropertyName("apiKey")]
     [JsonRequired]

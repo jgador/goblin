@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ProjectConfigLayerSource : ConfigLayerSource
+public sealed class ProjectConfigLayerSource : ConfigLayerSource
 {
     [JsonPropertyName("dotCodexFolder")]
     [JsonRequired]

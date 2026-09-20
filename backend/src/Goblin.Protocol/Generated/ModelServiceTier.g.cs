@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ModelServiceTier
+public sealed class ModelServiceTier
 {
     [JsonPropertyName("description")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PackagedDefaultsConfigLayerSource : ConfigLayerSource
+public sealed class PackagedDefaultsConfigLayerSource : ConfigLayerSource
 {
     [JsonPropertyName("file")]
     [JsonRequired]

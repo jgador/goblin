@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RealtimeVoicesList
+public sealed class RealtimeVoicesList
 {
     [JsonPropertyName("defaultV1")]
     [JsonRequired]

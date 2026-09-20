@@ -76,7 +76,8 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             });
             lock (gate) threadId = thread.Thread.Id;
             if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" ||
-                thread.Sandbox is not ReadOnlySandboxPolicy || thread.ApprovalPolicy != AskForApproval.Never)
+                thread.Sandbox is not ReadOnlySandboxPolicy ||
+                thread.ApprovalPolicy is not StringAskForApproval { Value: AskForApprovalValue.Never })
                 throw new IntegrationFailure("prompt_configuration_error", "Codex could not create an isolated conversation. Check the pinned runtime version.");
             if (cancellationToken.IsCancellationRequested) throw Cancelled();
             TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
@@ -128,9 +129,9 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
             ResponseTooManyFailedAttemptsCodexErrorInfo value => value.ResponseTooManyFailedAttempts.HttpStatusCode,
             _ => null
         };
-        if (info == CodexErrorInfo.Unauthorized || status == 401)
+        if (info is StringCodexErrorInfo { Value: CodexErrorInfoValue.Unauthorized } || status == 401)
             return new("prompt_unauthorized", "OpenAI rejected the saved login. Disconnect Codex and sign in again.");
-        if (info == CodexErrorInfo.UsageLimitExceeded || info == CodexErrorInfo.RateLimitExceeded || status == 429)
+        if (info is StringCodexErrorInfo { Value: CodexErrorInfoValue.UsageLimitExceeded or CodexErrorInfoValue.RateLimitExceeded } || status == 429)
             return new("prompt_limit_reached", "The connected account has reached a usage or rate limit. Check your plan or API billing, then retry later.");
         if (status == 403)
             return new("prompt_access_denied", "The connected account cannot use this model. Check your account's model access and permissions.");

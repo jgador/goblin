@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ProjectRoot
+public sealed class ProjectRoot
 {
     [JsonPropertyName("path")]
     [JsonRequired]

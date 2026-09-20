@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TextElement
+public sealed class TextElement
 {
     [JsonPropertyName("byteRange")]
     [JsonRequired]

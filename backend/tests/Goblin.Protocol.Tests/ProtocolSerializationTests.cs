@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json;
 using Xunit;
 
@@ -39,7 +40,11 @@ public sealed class ProtocolSerializationTests
         ChatgptDeviceCodeLoginAccountResponse response = Assert.IsType<ChatgptDeviceCodeLoginAccountResponse>(Read<LoginAccountResponse>(json));
         Assert.Equal("login-1", response.LoginId);
         Assert.Equal("ABCD-EFGH", response.UserCode);
-        Assert.Equal(response, Read<LoginAccountResponse>(Write<LoginAccountResponse>(response)));
+        ChatgptDeviceCodeLoginAccountResponse restored = Assert.IsType<ChatgptDeviceCodeLoginAccountResponse>(
+            Read<LoginAccountResponse>(Write<LoginAccountResponse>(response)));
+        Assert.Equal(response.LoginId, restored.LoginId);
+        Assert.Equal(response.UserCode, restored.UserCode);
+        Assert.Equal(response.VerificationUrl, restored.VerificationUrl);
     }
 
     [Fact]
@@ -126,6 +131,29 @@ public sealed class ProtocolSerializationTests
     }
 
     [Fact]
+    public void DeserializedRequestIdsMatchDictionaryKeysWithoutConfusingStringsAndNumbers()
+    {
+        var pending = new Dictionary<RequestId, string>
+        {
+            [new RequestId(7)] = "numeric request",
+            [new RequestId("7")] = "string request",
+        };
+
+        Assert.Equal("numeric request", pending[Read<RequestId>("7")]);
+        Assert.Equal("string request", pending[Read<RequestId>("\"7\"")]);
+    }
+
+    [Fact]
+    public void NullRequestIdsAreRejectedInEnvelopes()
+    {
+        Assert.Throws<JsonException>(() => Read<JSONRPCResponse>("""{"id":null,"result":{}}"""));
+        Assert.Throws<JsonException>(() => Write(new JSONRPCResponse
+        {
+            Id = null!, Result = JsonSerializer.SerializeToElement(new { }),
+        }));
+    }
+
+    [Fact]
     public void JsonRpcEnvelopeKeepsOnlyUnconstrainedPayloadAsJsonElement()
     {
         const string json = """{"id":7,"result":{"requiresOpenaiAuth":true,"account":{"type":"apiKey"}}}""";
@@ -135,7 +163,7 @@ public sealed class ProtocolSerializationTests
         Assert.True(result.RequiresOpenaiAuth);
         Assert.IsType<ApiKeyAccount>(result.Account);
         JSONRPCMessage message = Read<JSONRPCMessage>(json);
-        Assert.IsType<JSONRPCResponseJSONRPCMessage>(message);
+        Assert.IsType<JSONRPCResponseMessage>(message);
         Assert.Equal(json, Write(message));
     }
 
@@ -144,12 +172,25 @@ public sealed class ProtocolSerializationTests
     {
         var primitive = new StringAskForApproval(AskForApprovalValue.Never);
         Assert.Equal("\"never\"", Write(primitive));
-        Assert.Equal(AskForApproval.Never, Read<AskForApproval>(Write(primitive)));
+        Assert.Equal(AskForApprovalValue.Never, Assert.IsType<StringAskForApproval>(Read<AskForApproval>(Write(primitive))).Value);
         const string json = """{"granular":{"mcp_elicitations":false,"rules":true,"sandbox_approval":false}}""";
         GranularAskForApproval granular = Assert.IsType<GranularAskForApproval>(Read<AskForApproval>(json));
         Assert.True(granular.Granular.Rules);
         Assert.False(granular.Granular.SandboxApproval);
         Assert.Equal(json, Write<AskForApproval>(granular));
+    }
+
+    [Fact]
+    public void ShortenedExecpolicyPayloadKeepsItsNestedWireNames()
+    {
+        const string json = """{"acceptWithExecpolicyAmendment":{"execpolicy_amendment":["git","status"]}}""";
+        var decision = Assert.IsType<AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision>(
+            Read<CommandExecutionApprovalDecision>(json));
+        AcceptWithExecpolicyAmendmentDetails payload = decision.AcceptWithExecpolicyAmendment;
+
+        Assert.Equal(["git", "status"], payload.ExecpolicyAmendment);
+        Assert.Equal(json, Write(decision));
+        Assert.Equal(json, Write<CommandExecutionApprovalDecision>(decision));
     }
 
     [Theory]

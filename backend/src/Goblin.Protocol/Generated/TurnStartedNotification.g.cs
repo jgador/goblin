@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnStartedNotification
+public sealed class TurnStartedNotification
 {
     [JsonPropertyName("threadId")]
     [JsonRequired]

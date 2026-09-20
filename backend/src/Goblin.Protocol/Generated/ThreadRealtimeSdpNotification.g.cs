@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRealtimeSdpNotification
+public sealed class ThreadRealtimeSdpNotification
 {
     [JsonPropertyName("sdp")]
     [JsonRequired]

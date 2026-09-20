@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ItemFileChangeRequestApprovalServerRequest : ServerRequest
+public sealed class ItemFileChangeRequestApprovalServerRequest : ServerRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

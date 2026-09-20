@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadGoalGetParams
+public sealed class ThreadGoalGetParams
 {
     [JsonPropertyName("threadId")]
     [JsonRequired]

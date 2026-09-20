@@ -9,10 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ResponseTooManyFailedAttemptsCodexErrorInfo : CodexErrorInfo
+public sealed class ResponseTooManyFailedAttemptsCodexErrorInfo : CodexErrorInfo
 {
     [JsonPropertyName("responseTooManyFailedAttempts")]
     [JsonRequired]
-    public required ResponseTooManyFailedAttemptsCodexErrorInfoResponseTooManyFailedAttempts ResponseTooManyFailedAttempts { get; init; }
+    public required ResponseTooManyFailedAttemptsDetails ResponseTooManyFailedAttempts { get; init; }
 
 }

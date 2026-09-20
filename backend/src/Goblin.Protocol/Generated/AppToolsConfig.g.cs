@@ -8,6 +8,6 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppToolsConfig
+public sealed class AppToolsConfig
 {
 }

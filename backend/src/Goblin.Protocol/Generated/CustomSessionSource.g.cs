@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record CustomSessionSource : SessionSource
+public sealed class CustomSessionSource : SessionSource
 {
     [JsonPropertyName("custom")]
     [JsonRequired]

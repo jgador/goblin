@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginShareSaveParams
+public sealed class PluginShareSaveParams
 {
     [JsonPropertyName("discoverability")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

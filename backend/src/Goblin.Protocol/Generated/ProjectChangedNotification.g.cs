@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ProjectChangedNotification
+public sealed class ProjectChangedNotification
 {
     [JsonPropertyName("changeType")]
     [JsonRequired]

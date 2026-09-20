@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record UncommittedChangesReviewTarget : ReviewTarget
+public sealed class UncommittedChangesReviewTarget : ReviewTarget
 {
     [JsonPropertyName("type")]
     [JsonRequired]

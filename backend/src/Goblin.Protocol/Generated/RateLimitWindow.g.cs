@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RateLimitWindow
+public sealed class RateLimitWindow
 {
     [JsonPropertyName("resetsAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

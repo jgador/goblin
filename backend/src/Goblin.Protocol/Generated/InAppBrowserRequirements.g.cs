@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InAppBrowserRequirements
+public sealed class InAppBrowserRequirements
 {
     [JsonPropertyName("allowExternalBrowserSettingsImport")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

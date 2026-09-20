@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadEnvironment
+public sealed class ThreadEnvironment
 {
     [JsonPropertyName("cwd")]
     [JsonRequired]

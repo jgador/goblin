@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecTerminalSize
+public sealed class CommandExecTerminalSize
 {
     [JsonPropertyName("cols")]
     [JsonRequired]

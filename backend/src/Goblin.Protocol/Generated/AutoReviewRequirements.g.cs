@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AutoReviewRequirements
+public sealed class AutoReviewRequirements
 {
     [JsonPropertyName("ignoreRules")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

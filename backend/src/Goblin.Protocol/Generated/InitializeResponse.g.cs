@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InitializeResponse
+public sealed class InitializeResponse
 {
     [JsonPropertyName("codexHome")]
     [JsonRequired]

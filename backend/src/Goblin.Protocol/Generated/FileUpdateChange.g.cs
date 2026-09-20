@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FileUpdateChange
+public sealed class FileUpdateChange
 {
     [JsonPropertyName("diff")]
     [JsonRequired]

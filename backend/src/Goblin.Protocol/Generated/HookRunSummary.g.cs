@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record HookRunSummary
+public sealed class HookRunSummary
 {
     [JsonPropertyName("completedAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

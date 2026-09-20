@@ -8,10 +8,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ApprovedExecpolicyAmendmentReviewDecisionApprovedExecpolicyAmendment
+public sealed class NetworkPolicyAmendmentDetails
 {
-    [JsonPropertyName("proposed_execpolicy_amendment")]
+    [JsonPropertyName("network_policy_amendment")]
     [JsonRequired]
-    public required List<string> ProposedExecpolicyAmendment { get; init; }
+    public required NetworkPolicyAmendment NetworkPolicyAmendment { get; init; }
 
 }

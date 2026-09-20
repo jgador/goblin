@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnStartedServerNotification : ServerNotification
+public sealed class TurnStartedServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

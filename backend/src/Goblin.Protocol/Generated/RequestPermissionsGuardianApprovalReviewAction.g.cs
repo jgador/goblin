@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RequestPermissionsGuardianApprovalReviewAction : GuardianApprovalReviewAction
+public sealed class RequestPermissionsGuardianApprovalReviewAction : GuardianApprovalReviewAction
 {
     [JsonPropertyName("permissions")]
     [JsonRequired]

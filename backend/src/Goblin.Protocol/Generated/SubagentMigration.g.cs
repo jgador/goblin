@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SubagentMigration
+public sealed class SubagentMigration
 {
     [JsonPropertyName("name")]
     [JsonRequired]

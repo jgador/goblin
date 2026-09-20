@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigWriteResponse
+public sealed class ConfigWriteResponse
 {
     [JsonPropertyName("filePath")]
     [JsonRequired]

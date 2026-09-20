@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandConfiguredHookHandler : ConfiguredHookHandler
+public sealed class CommandConfiguredHookHandler : ConfiguredHookHandler
 {
     [JsonPropertyName("additionalContextLimit")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

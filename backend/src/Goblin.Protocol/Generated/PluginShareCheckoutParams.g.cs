@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginShareCheckoutParams
+public sealed class PluginShareCheckoutParams
 {
     [JsonPropertyName("remotePluginId")]
     [JsonRequired]

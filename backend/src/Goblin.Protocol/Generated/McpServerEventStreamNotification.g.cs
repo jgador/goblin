@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpServerEventStreamNotification
+public sealed class McpServerEventStreamNotification
 {
     [JsonPropertyName("notification")]
     [JsonRequired]

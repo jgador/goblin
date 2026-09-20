@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ItemCompletedNotification
+public sealed class ItemCompletedNotification
 {
     [JsonPropertyName("completedAtMs")]
     [JsonRequired]

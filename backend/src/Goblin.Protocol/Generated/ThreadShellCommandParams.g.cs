@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadShellCommandParams
+public sealed class ThreadShellCommandParams
 {
     [JsonPropertyName("command")]
     [JsonRequired]

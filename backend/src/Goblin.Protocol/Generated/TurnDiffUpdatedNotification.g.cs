@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnDiffUpdatedNotification
+public sealed class TurnDiffUpdatedNotification
 {
     [JsonPropertyName("diff")]
     [JsonRequired]

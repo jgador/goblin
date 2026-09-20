@@ -8,6 +8,6 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SkillsExtraRootsSetResponse
+public sealed class SkillsExtraRootsSetResponse
 {
 }

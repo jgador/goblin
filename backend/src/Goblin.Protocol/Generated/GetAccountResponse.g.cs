@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GetAccountResponse
+public sealed class GetAccountResponse
 {
     [JsonPropertyName("account")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

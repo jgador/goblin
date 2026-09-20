@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DeleteFileChange : FileChange
+public sealed class DeleteFileChange : FileChange
 {
     [JsonPropertyName("content")]
     [JsonRequired]

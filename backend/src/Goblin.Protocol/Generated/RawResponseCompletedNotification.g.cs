@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RawResponseCompletedNotification
+public sealed class RawResponseCompletedNotification
 {
     [JsonPropertyName("responseId")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TranscriptSegmentThreadRealtimeItem : ThreadRealtimeItem
+public sealed class TranscriptSegmentThreadRealtimeItem : ThreadRealtimeItem
 {
     [JsonPropertyName("role")]
     [JsonRequired]

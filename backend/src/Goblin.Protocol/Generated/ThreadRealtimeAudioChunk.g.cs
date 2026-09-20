@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRealtimeAudioChunk
+public sealed class ThreadRealtimeAudioChunk
 {
     [JsonPropertyName("data")]
     [JsonRequired]

@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(JSONRPCMessageJsonConverter))]
-public abstract record JSONRPCMessage
+public abstract class JSONRPCMessage
 {
 }
 
@@ -24,7 +24,7 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
                 var value = JsonSerializer.Deserialize<JSONRPCRequest>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new JSONRPCRequestJSONRPCMessage(value);
+                return new JSONRPCRequestMessage(value);
             }
             catch (JsonException)
             {
@@ -38,7 +38,7 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
                 var value = JsonSerializer.Deserialize<JSONRPCNotification>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new JSONRPCNotificationJSONRPCMessage(value);
+                return new JSONRPCNotificationMessage(value);
             }
             catch (JsonException)
             {
@@ -52,7 +52,7 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
                 var value = JsonSerializer.Deserialize<JSONRPCResponse>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new JSONRPCResponseJSONRPCMessage(value);
+                return new JSONRPCResponseMessage(value);
             }
             catch (JsonException)
             {
@@ -66,7 +66,7 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
                 var value = JsonSerializer.Deserialize<JSONRPCError>(ref candidate, options);
                 if (value is null) throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
-                return new JSONRPCErrorJSONRPCMessage(value);
+                return new JSONRPCErrorMessage(value);
             }
             catch (JsonException)
             {
@@ -80,16 +80,16 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
     {
         switch (value)
         {
-            case JSONRPCRequestJSONRPCMessage typed:
+            case JSONRPCRequestMessage typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case JSONRPCNotificationJSONRPCMessage typed:
+            case JSONRPCNotificationMessage typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case JSONRPCResponseJSONRPCMessage typed:
+            case JSONRPCResponseMessage typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
-            case JSONRPCErrorJSONRPCMessage typed:
+            case JSONRPCErrorMessage typed:
                 JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
             default:

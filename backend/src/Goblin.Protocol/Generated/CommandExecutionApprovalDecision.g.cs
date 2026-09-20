@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(CommandExecutionApprovalDecisionJsonConverter))]
-public abstract record CommandExecutionApprovalDecision
+public abstract class CommandExecutionApprovalDecision
 {
     public static CommandExecutionApprovalDecision Accept { get; } = new StringCommandExecutionApprovalDecision(CommandExecutionApprovalDecisionValue.Accept);
     public static CommandExecutionApprovalDecision AcceptForSession { get; } = new StringCommandExecutionApprovalDecision2(CommandExecutionApprovalDecisionValue2.AcceptForSession);

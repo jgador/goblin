@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SummaryTextReasoningItemReasoningSummary : ReasoningItemReasoningSummary
+public sealed class SummaryTextReasoningItemReasoningSummary : ReasoningItemReasoningSummary
 {
     [JsonPropertyName("text")]
     [JsonRequired]

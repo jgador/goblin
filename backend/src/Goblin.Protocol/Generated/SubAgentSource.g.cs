@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(SubAgentSourceJsonConverter))]
-public abstract record SubAgentSource
+public abstract class SubAgentSource
 {
     public static SubAgentSource Review { get; } = new StringSubAgentSource(SubAgentSourceValue.Review);
     public static SubAgentSource Compact { get; } = new StringSubAgentSource(SubAgentSourceValue.Compact);

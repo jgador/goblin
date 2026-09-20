@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record BrowserUseConfig
+public sealed class BrowserUseConfig
 {
     [JsonPropertyName("allow_history_access")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

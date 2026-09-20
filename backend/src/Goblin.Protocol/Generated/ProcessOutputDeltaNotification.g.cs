@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ProcessOutputDeltaNotification
+public sealed class ProcessOutputDeltaNotification
 {
     [JsonPropertyName("capReached")]
     [JsonRequired]

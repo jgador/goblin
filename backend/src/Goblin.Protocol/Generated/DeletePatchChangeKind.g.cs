@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DeletePatchChangeKind : PatchChangeKind
+public sealed class DeletePatchChangeKind : PatchChangeKind
 {
     [JsonPropertyName("type")]
     [JsonRequired]

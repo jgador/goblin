@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(SessionSourceJsonConverter))]
-public abstract record SessionSource
+public abstract class SessionSource
 {
     public static SessionSource Cli { get; } = new StringSessionSource(SessionSourceValue.Cli);
     public static SessionSource Vscode { get; } = new StringSessionSource(SessionSourceValue.Vscode);

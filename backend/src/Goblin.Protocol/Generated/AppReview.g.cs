@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppReview
+public sealed class AppReview
 {
     [JsonPropertyName("status")]
     [JsonRequired]

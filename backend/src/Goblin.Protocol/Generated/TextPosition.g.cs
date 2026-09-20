@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TextPosition
+public sealed class TextPosition
 {
     [JsonPropertyName("column")]
     [JsonRequired]

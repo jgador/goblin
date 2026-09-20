@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadTokenUsage
+public sealed class ThreadTokenUsage
 {
     [JsonPropertyName("last")]
     [JsonRequired]

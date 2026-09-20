@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginInstallParams
+public sealed class PluginInstallParams
 {
     [JsonPropertyName("installAttemptId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

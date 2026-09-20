@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsReadFileResponse
+public sealed class FsReadFileResponse
 {
     [JsonPropertyName("dataBase64")]
     [JsonRequired]

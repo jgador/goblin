@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppInfo
+public sealed class AppInfo
 {
     [JsonPropertyName("appMetadata")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

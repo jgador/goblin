@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ResponseUsageMetadata
+public sealed class ResponseUsageMetadata
 {
     [JsonPropertyName("amount")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

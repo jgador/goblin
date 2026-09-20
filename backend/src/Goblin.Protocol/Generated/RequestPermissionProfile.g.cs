@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record RequestPermissionProfile
+public sealed class RequestPermissionProfile
 {
     [JsonPropertyName("fileSystem")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

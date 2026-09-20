@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpToolCallGuardianApprovalReviewAction : GuardianApprovalReviewAction
+public sealed class McpToolCallGuardianApprovalReviewAction : GuardianApprovalReviewAction
 {
     [JsonPropertyName("connectorId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

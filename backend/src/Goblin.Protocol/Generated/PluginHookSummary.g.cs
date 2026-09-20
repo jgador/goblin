@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginHookSummary
+public sealed class PluginHookSummary
 {
     [JsonPropertyName("eventName")]
     [JsonRequired]

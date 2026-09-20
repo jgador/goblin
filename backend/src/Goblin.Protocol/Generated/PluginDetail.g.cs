@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginDetail
+public sealed class PluginDetail
 {
     [JsonPropertyName("appTemplates")]
     [JsonRequired]

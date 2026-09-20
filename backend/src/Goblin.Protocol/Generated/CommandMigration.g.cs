@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandMigration
+public sealed class CommandMigration
 {
     [JsonPropertyName("name")]
     [JsonRequired]
