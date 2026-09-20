@@ -18,11 +18,10 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
     public override McpElicitationEnumSchema Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationSingleSelectEnumSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationSingleSelectEnumSchema value = JsonSerializer.Deserialize<McpElicitationSingleSelectEnumSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationSingleSelectEnumSchemaVariant(value);
             }
@@ -32,11 +31,10 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationMultiSelectEnumSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationMultiSelectEnumSchema value = JsonSerializer.Deserialize<McpElicitationMultiSelectEnumSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationMultiSelectEnumSchemaVariant(value);
             }
@@ -46,11 +44,10 @@ public sealed class McpElicitationEnumSchemaJsonConverter : JsonConverter<McpEli
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationLegacyTitledEnumSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationLegacyTitledEnumSchema value = JsonSerializer.Deserialize<McpElicitationLegacyTitledEnumSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationLegacyTitledEnumSchemaVariant(value);
             }

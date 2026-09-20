@@ -23,7 +23,7 @@ public partial class Conversation
     public DateTime CreatedAt { get; set; }
 
     [InverseProperty("Conversation")]
-    public virtual ICollection<ConversationMessage> ConversationMessages { get; set; } = new List<ConversationMessage>();
+    public virtual ICollection<ConversationMessage> ConversationMessages { get; set; } = [];
 
     [ForeignKey("WorkId")]
     [InverseProperty("Conversations")]

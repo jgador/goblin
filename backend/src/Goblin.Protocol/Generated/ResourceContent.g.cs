@@ -18,11 +18,10 @@ public sealed class ResourceContentJsonConverter : JsonConverter<ResourceContent
     public override ResourceContent Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<TextResourceContent>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                TextResourceContent value = JsonSerializer.Deserialize<TextResourceContent>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -32,11 +31,10 @@ public sealed class ResourceContentJsonConverter : JsonConverter<ResourceContent
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<BlobResourceContent>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                BlobResourceContent value = JsonSerializer.Deserialize<BlobResourceContent>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }

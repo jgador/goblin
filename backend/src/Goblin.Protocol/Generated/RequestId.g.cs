@@ -38,7 +38,7 @@ public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
         => reader.TokenType switch
         {
             JsonTokenType.String => new RequestId(reader.GetString()!),
-            JsonTokenType.Number when reader.TryGetInt64(out var number) => new RequestId(number),
+            JsonTokenType.Number when reader.TryGetInt64(out long number) => new RequestId(number),
             _ => throw new JsonException("A request ID must be a string or signed 64-bit integer."),
         };
 

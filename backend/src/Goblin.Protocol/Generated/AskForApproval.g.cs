@@ -21,10 +21,10 @@ public sealed class AskForApprovalJsonConverter : JsonConverter<AskForApproval>
     public override AskForApproval Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<AskForApprovalValue>(ref candidate, options);
+                AskForApprovalValue value = JsonSerializer.Deserialize<AskForApprovalValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringAskForApproval(value);
@@ -35,11 +35,10 @@ public sealed class AskForApprovalJsonConverter : JsonConverter<AskForApproval>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<GranularAskForApproval>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                GranularAskForApproval value = JsonSerializer.Deserialize<GranularAskForApproval>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }

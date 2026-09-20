@@ -27,8 +27,8 @@ public partial class Agent
     public virtual Connection Connection { get; set; } = null!;
 
     [InverseProperty("Agent")]
-    public virtual ICollection<ExecutionAttempt> ExecutionAttempts { get; set; } = new List<ExecutionAttempt>();
+    public virtual ICollection<ExecutionAttempt> ExecutionAttempts { get; set; } = [];
 
     [InverseProperty("Agent")]
-    public virtual ICollection<WorkItem> WorkItems { get; set; } = new List<WorkItem>();
+    public virtual ICollection<WorkItem> WorkItems { get; set; } = [];
 }

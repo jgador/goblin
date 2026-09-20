@@ -20,10 +20,10 @@ public sealed class MultiAgentModeJsonConverter : JsonConverter<MultiAgentMode>
     public override MultiAgentMode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<MultiAgentModeValue>(ref candidate, options);
+                MultiAgentModeValue value = JsonSerializer.Deserialize<MultiAgentModeValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringMultiAgentMode(value);
@@ -34,11 +34,10 @@ public sealed class MultiAgentModeJsonConverter : JsonConverter<MultiAgentMode>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CustomMultiAgentMode>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                CustomMultiAgentMode value = JsonSerializer.Deserialize<CustomMultiAgentMode>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
