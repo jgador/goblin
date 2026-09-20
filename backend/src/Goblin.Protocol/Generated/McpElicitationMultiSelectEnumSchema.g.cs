@@ -18,11 +18,10 @@ public sealed class McpElicitationMultiSelectEnumSchemaJsonConverter : JsonConve
     public override McpElicitationMultiSelectEnumSchema Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationUntitledMultiSelectEnumSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationUntitledMultiSelectEnumSchema value = JsonSerializer.Deserialize<McpElicitationUntitledMultiSelectEnumSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationUntitledMultiSelectEnumSchemaVariant(value);
             }
@@ -32,11 +31,10 @@ public sealed class McpElicitationMultiSelectEnumSchemaJsonConverter : JsonConve
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationTitledMultiSelectEnumSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationTitledMultiSelectEnumSchema value = JsonSerializer.Deserialize<McpElicitationTitledMultiSelectEnumSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationTitledMultiSelectEnumSchemaVariant(value);
             }

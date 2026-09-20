@@ -40,11 +40,11 @@ public partial class WorkItem
     public virtual Agent? Agent { get; set; }
 
     [InverseProperty("Work")]
-    public virtual ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
+    public virtual ICollection<Conversation> Conversations { get; set; } = [];
 
     [InverseProperty("Work")]
-    public virtual ICollection<ExecutionAttempt> ExecutionAttempts { get; set; } = new List<ExecutionAttempt>();
+    public virtual ICollection<ExecutionAttempt> ExecutionAttempts { get; set; } = [];
 
     [InverseProperty("Work")]
-    public virtual ICollection<WorkCommand> WorkCommands { get; set; } = new List<WorkCommand>();
+    public virtual ICollection<WorkCommand> WorkCommands { get; set; } = [];
 }

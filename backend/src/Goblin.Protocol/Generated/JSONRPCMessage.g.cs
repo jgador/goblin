@@ -18,11 +18,10 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
     public override JSONRPCMessage Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<JSONRPCRequest>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                JSONRPCRequest value = JsonSerializer.Deserialize<JSONRPCRequest>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new JSONRPCRequestMessage(value);
             }
@@ -32,11 +31,10 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<JSONRPCNotification>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                JSONRPCNotification value = JsonSerializer.Deserialize<JSONRPCNotification>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new JSONRPCNotificationMessage(value);
             }
@@ -46,11 +44,10 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<JSONRPCResponse>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                JSONRPCResponse value = JsonSerializer.Deserialize<JSONRPCResponse>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new JSONRPCResponseMessage(value);
             }
@@ -60,11 +57,10 @@ public sealed class JSONRPCMessageJsonConverter : JsonConverter<JSONRPCMessage>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<JSONRPCError>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                JSONRPCError value = JsonSerializer.Deserialize<JSONRPCError>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new JSONRPCErrorMessage(value);
             }

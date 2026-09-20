@@ -23,10 +23,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
     public override ReviewDecision Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ReviewDecisionValue>(ref candidate, options);
+                ReviewDecisionValue value = JsonSerializer.Deserialize<ReviewDecisionValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringReviewDecision(value);
@@ -37,11 +37,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ApprovedExecpolicyAmendmentReviewDecision>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ApprovedExecpolicyAmendmentReviewDecision value = JsonSerializer.Deserialize<ApprovedExecpolicyAmendmentReviewDecision>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -51,10 +50,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ReviewDecisionValue2>(ref candidate, options);
+                ReviewDecisionValue2 value = JsonSerializer.Deserialize<ReviewDecisionValue2>(ref candidate, options);
 
                 reader = candidate;
                 return new StringReviewDecision2(value);
@@ -65,10 +64,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ReviewDecisionValue3>(ref candidate, options);
+                ReviewDecisionValue3 value = JsonSerializer.Deserialize<ReviewDecisionValue3>(ref candidate, options);
 
                 reader = candidate;
                 return new StringReviewDecision3(value);
@@ -79,11 +78,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<NetworkPolicyAmendmentReviewDecision>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                NetworkPolicyAmendmentReviewDecision value = JsonSerializer.Deserialize<NetworkPolicyAmendmentReviewDecision>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -93,11 +91,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<DeniedReviewDecision>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                DeniedReviewDecision value = JsonSerializer.Deserialize<DeniedReviewDecision>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -107,10 +104,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ReviewDecisionValue4>(ref candidate, options);
+                ReviewDecisionValue4 value = JsonSerializer.Deserialize<ReviewDecisionValue4>(ref candidate, options);
 
                 reader = candidate;
                 return new StringReviewDecision4(value);
@@ -121,10 +118,10 @@ public sealed class ReviewDecisionJsonConverter : JsonConverter<ReviewDecision>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ReviewDecisionValue5>(ref candidate, options);
+                ReviewDecisionValue5 value = JsonSerializer.Deserialize<ReviewDecisionValue5>(ref candidate, options);
 
                 reader = candidate;
                 return new StringReviewDecision5(value);

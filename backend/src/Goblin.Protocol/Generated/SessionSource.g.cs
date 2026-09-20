@@ -23,10 +23,10 @@ public sealed class SessionSourceJsonConverter : JsonConverter<SessionSource>
     public override SessionSource Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<SessionSourceValue>(ref candidate, options);
+                SessionSourceValue value = JsonSerializer.Deserialize<SessionSourceValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringSessionSource(value);
@@ -37,11 +37,10 @@ public sealed class SessionSourceJsonConverter : JsonConverter<SessionSource>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CustomSessionSource>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                CustomSessionSource value = JsonSerializer.Deserialize<CustomSessionSource>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -51,11 +50,10 @@ public sealed class SessionSourceJsonConverter : JsonConverter<SessionSource>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<SubAgentSessionSource>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                SubAgentSessionSource value = JsonSerializer.Deserialize<SubAgentSessionSource>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }

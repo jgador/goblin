@@ -18,11 +18,10 @@ public sealed class FunctionCallOutputBodyJsonConverter : JsonConverter<Function
     public override FunctionCallOutputBody Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<string>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                string value = JsonSerializer.Deserialize<string>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new StringFunctionCallOutputBody(value);
             }
@@ -32,11 +31,10 @@ public sealed class FunctionCallOutputBodyJsonConverter : JsonConverter<Function
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<List<FunctionCallOutputContentItem>>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                List<FunctionCallOutputContentItem> value = JsonSerializer.Deserialize<List<FunctionCallOutputContentItem>>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new ArrayFunctionCallOutputBody(value);
             }

@@ -31,10 +31,10 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
     public override CodexErrorInfo Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CodexErrorInfoValue>(ref candidate, options);
+                CodexErrorInfoValue value = JsonSerializer.Deserialize<CodexErrorInfoValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringCodexErrorInfo(value);
@@ -45,11 +45,10 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<HttpConnectionFailedCodexErrorInfo>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                HttpConnectionFailedCodexErrorInfo value = JsonSerializer.Deserialize<HttpConnectionFailedCodexErrorInfo>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -59,11 +58,10 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ResponseStreamConnectionFailedCodexErrorInfo>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ResponseStreamConnectionFailedCodexErrorInfo value = JsonSerializer.Deserialize<ResponseStreamConnectionFailedCodexErrorInfo>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -73,11 +71,10 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ResponseStreamDisconnectedCodexErrorInfo>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ResponseStreamDisconnectedCodexErrorInfo value = JsonSerializer.Deserialize<ResponseStreamDisconnectedCodexErrorInfo>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -87,11 +84,10 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ResponseTooManyFailedAttemptsCodexErrorInfo>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ResponseTooManyFailedAttemptsCodexErrorInfo value = JsonSerializer.Deserialize<ResponseTooManyFailedAttemptsCodexErrorInfo>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -101,11 +97,10 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ActiveTurnNotSteerableCodexErrorInfo>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ActiveTurnNotSteerableCodexErrorInfo value = JsonSerializer.Deserialize<ActiveTurnNotSteerableCodexErrorInfo>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }

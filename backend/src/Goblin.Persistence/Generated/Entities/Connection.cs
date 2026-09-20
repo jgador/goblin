@@ -26,7 +26,7 @@ public partial class Connection
     public DateTime ChangedAt { get; set; }
 
     [InverseProperty("Connection")]
-    public virtual ICollection<Agent> Agents { get; set; } = new List<Agent>();
+    public virtual ICollection<Agent> Agents { get; set; } = [];
 
     [InverseProperty("Connection")]
     public virtual ExecutionAttempt? ExecutionAttempt { get; set; }

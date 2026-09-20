@@ -18,11 +18,10 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
     public override McpElicitationPrimitiveSchema Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationEnumSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationEnumSchema value = JsonSerializer.Deserialize<McpElicitationEnumSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationEnumPrimitiveSchema(value);
             }
@@ -32,11 +31,10 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationStringSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationStringSchema value = JsonSerializer.Deserialize<McpElicitationStringSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationStringPrimitiveSchema(value);
             }
@@ -46,11 +44,10 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationNumberSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationNumberSchema value = JsonSerializer.Deserialize<McpElicitationNumberSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationNumberPrimitiveSchema(value);
             }
@@ -60,11 +57,10 @@ public sealed class McpElicitationPrimitiveSchemaJsonConverter : JsonConverter<M
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<McpElicitationBooleanSchema>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                McpElicitationBooleanSchema value = JsonSerializer.Deserialize<McpElicitationBooleanSchema>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new McpElicitationBooleanPrimitiveSchema(value);
             }

@@ -22,10 +22,10 @@ public sealed class CommandExecutionApprovalDecisionJsonConverter : JsonConverte
     public override CommandExecutionApprovalDecision Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue>(ref candidate, options);
+                CommandExecutionApprovalDecisionValue value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringCommandExecutionApprovalDecision(value);
@@ -36,10 +36,10 @@ public sealed class CommandExecutionApprovalDecisionJsonConverter : JsonConverte
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue2>(ref candidate, options);
+                CommandExecutionApprovalDecisionValue2 value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue2>(ref candidate, options);
 
                 reader = candidate;
                 return new StringCommandExecutionApprovalDecision2(value);
@@ -50,11 +50,10 @@ public sealed class CommandExecutionApprovalDecisionJsonConverter : JsonConverte
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision value = JsonSerializer.Deserialize<AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -64,11 +63,10 @@ public sealed class CommandExecutionApprovalDecisionJsonConverter : JsonConverte
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision value = JsonSerializer.Deserialize<ApplyNetworkPolicyAmendmentCommandExecutionApprovalDecision>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -78,10 +76,10 @@ public sealed class CommandExecutionApprovalDecisionJsonConverter : JsonConverte
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue3>(ref candidate, options);
+                CommandExecutionApprovalDecisionValue3 value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue3>(ref candidate, options);
 
                 reader = candidate;
                 return new StringCommandExecutionApprovalDecision3(value);
@@ -92,10 +90,10 @@ public sealed class CommandExecutionApprovalDecisionJsonConverter : JsonConverte
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue4>(ref candidate, options);
+                CommandExecutionApprovalDecisionValue4 value = JsonSerializer.Deserialize<CommandExecutionApprovalDecisionValue4>(ref candidate, options);
 
                 reader = candidate;
                 return new StringCommandExecutionApprovalDecision4(value);

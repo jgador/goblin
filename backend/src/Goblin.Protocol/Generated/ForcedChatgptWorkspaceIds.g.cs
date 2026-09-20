@@ -18,11 +18,10 @@ public sealed class ForcedChatgptWorkspaceIdsJsonConverter : JsonConverter<Force
     public override ForcedChatgptWorkspaceIds Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<string>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                string value = JsonSerializer.Deserialize<string>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new StringForcedChatgptWorkspaceIds(value);
             }
@@ -32,11 +31,10 @@ public sealed class ForcedChatgptWorkspaceIdsJsonConverter : JsonConverter<Force
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<List<string>>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                List<string> value = JsonSerializer.Deserialize<List<string>>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return new ArrayForcedChatgptWorkspaceIds(value);
             }

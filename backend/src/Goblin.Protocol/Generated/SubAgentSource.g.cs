@@ -21,10 +21,10 @@ public sealed class SubAgentSourceJsonConverter : JsonConverter<SubAgentSource>
     public override SubAgentSource Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<SubAgentSourceValue>(ref candidate, options);
+                SubAgentSourceValue value = JsonSerializer.Deserialize<SubAgentSourceValue>(ref candidate, options);
 
                 reader = candidate;
                 return new StringSubAgentSource(value);
@@ -35,11 +35,10 @@ public sealed class SubAgentSourceJsonConverter : JsonConverter<SubAgentSource>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<ThreadSpawnSubAgentSource>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                ThreadSpawnSubAgentSource value = JsonSerializer.Deserialize<ThreadSpawnSubAgentSource>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
@@ -49,11 +48,10 @@ public sealed class SubAgentSourceJsonConverter : JsonConverter<SubAgentSource>
             }
         }
         {
-            var candidate = reader;
+            Utf8JsonReader candidate = reader;
             try
             {
-                var value = JsonSerializer.Deserialize<OtherSubAgentSource>(ref candidate, options);
-                if (value is null) throw new JsonException("Expected a non-null union value.");
+                OtherSubAgentSource value = JsonSerializer.Deserialize<OtherSubAgentSource>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
                 reader = candidate;
                 return value;
             }
