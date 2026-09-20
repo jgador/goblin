@@ -25,6 +25,7 @@ public static class ApplicationServices
 
     public static void AddWorkApplication(this IServiceCollection services)
     {
+        services.AddScoped<WorkOutboxFactory>();
         services.AddScoped<WorkStore>();
         services.AddScoped<ConversationStore>();
         services.AddSingleton<ExecutionCoordinator>();

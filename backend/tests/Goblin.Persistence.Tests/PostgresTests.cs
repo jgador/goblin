@@ -5,6 +5,7 @@ using Goblin.Database;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Xunit;
 
@@ -30,24 +31,24 @@ public sealed class PostgresTests
         await using TestDatabase database = await TestDatabase.CreateAsync();
         var id = Guid.NewGuid();
         const string objective = "Persist café 🧌 and 'quoted' text";
-        await using (GoblinDbContext write = database.Context())
+        await using (GoblinDbContext write = await database.ContextFactory.CreateDbContextAsync())
         {
             write.WorkItems.Add(new WorkItem { Id = id, Objective = objective });
             await write.SaveChangesAsync();
         }
-        await using (GoblinDbContext read = database.Context())
+        await using (GoblinDbContext read = await database.ContextFactory.CreateDbContextAsync())
         {
             WorkItem item = await read.WorkItems.SingleAsync(x => x.Id == id);
             Assert.Equal(objective, item.Objective);
             item.Objective = "Updated objective";
             await read.SaveChangesAsync();
         }
-        await using (GoblinDbContext delete = database.Context())
+        await using (GoblinDbContext delete = await database.ContextFactory.CreateDbContextAsync())
         {
             Assert.Equal("Updated objective", (await delete.WorkItems.SingleAsync()).Objective);
             await delete.WorkItems.ExecuteDeleteAsync();
         }
-        await using GoblinDbContext empty = database.Context();
+        await using GoblinDbContext empty = await database.ContextFactory.CreateDbContextAsync();
         Assert.False(await empty.WorkItems.AnyAsync());
     }
 
@@ -130,7 +131,7 @@ public sealed class PostgresTests
             """, app))
             await seed.ExecuteNonQueryAsync();
 
-        await using GoblinDbContext db = database.Context();
+        await using GoblinDbContext db = await database.ContextFactory.CreateDbContextAsync();
         Assert.True((await db.ExecutionAttempts.SingleAsync()).CleanupPending);
         await using (var message = new NpgsqlCommand("SELECT body FROM public.wolverine_incoming_envelopes WHERE id = '30000000-0000-0000-0000-000000000001';", app))
             Assert.Equal(new byte[] { 1, 2, 3 }, (byte[])(await message.ExecuteScalarAsync())!);
@@ -160,19 +161,21 @@ public sealed class PostgresTests
     private sealed class TestDatabase : IAsyncDisposable
     {
         private readonly string _name;
+        private readonly ServiceProvider _services;
 
         public TestDatabase(string adminConnection, string appConnection, string name)
         {
             _name = name;
             AdminConnection = adminConnection;
             AppConnection = appConnection;
+            _services = new ServiceCollection().AddGoblinPersistence(appConnection).BuildServiceProvider(validateScopes: true);
         }
 
         public static string Migrations => Path.Combine(AppContext.BaseDirectory, "migrations");
         public string AdminConnection { get; }
         public string AppConnection { get; }
 
-        public GoblinDbContext Context() => new(new DbContextOptionsBuilder<GoblinDbContext>().UseNpgsql(AppConnection).Options);
+        public IDbContextFactory<GoblinDbContext> ContextFactory => _services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
 
         public static async Task<TestDatabase> CreateAsync()
         {
@@ -205,6 +208,7 @@ public sealed class PostgresTests
 
         public async ValueTask DisposeAsync()
         {
+            await _services.DisposeAsync();
             // Close this process's idle application sessions before dropping a
             // test database; the schema owner need not terminate other roles.
             NpgsqlConnection.ClearAllPools();

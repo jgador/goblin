@@ -178,7 +178,7 @@ to issue certificates and read Secrets in the `goblin` namespace.
 | `deploy/postgres/` | PostgreSQL 16.15, certificate resources, TLS/auth configuration, setup/export scripts |
 | `backend/database/migrations/` | Ordered, immutable SQL schema changes |
 | `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
-| `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime DbContext registration |
+| `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime `IDbContextFactory<GoblinDbContext>` registration |
 | `backend/tools/Goblin.Database/` | SQL migration runner and isolated host for dotnet ef |
 | `backend/scripts/scaffold-database.sh` | Repeatable reverse-engineering command |
 

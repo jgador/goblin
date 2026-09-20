@@ -9,6 +9,6 @@ public static class PersistenceServices
     public static IServiceCollection AddGoblinPersistence(this IServiceCollection services, string connectionString)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-        return services.AddDbContext<GoblinDbContext>(options => options.UseNpgsql(connectionString));
+        return services.AddDbContextFactory<GoblinDbContext>(options => options.UseNpgsql(connectionString));
     }
 }

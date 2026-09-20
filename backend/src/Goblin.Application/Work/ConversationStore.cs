@@ -16,14 +16,20 @@ public sealed record ConversationCommand(Guid ConversationId, Guid MessageId, st
 
 public sealed class ConversationStore
 {
-    private readonly GoblinDbContext _db;
+    private readonly IDbContextFactory<GoblinDbContext> _dbFactory;
 
-    public ConversationStore(GoblinDbContext db) => _db = db;
+    public ConversationStore(IDbContextFactory<GoblinDbContext> dbFactory) => _dbFactory = dbFactory;
 
     public async Task<ConversationView[]> ListAsync(CancellationToken token = default)
     {
-        Persistence.Entities.Conversation[] conversations = await _db.Conversations.AsNoTracking().OrderByDescending(x => x.CreatedAt).ToArrayAsync(token);
-        Persistence.Entities.ConversationMessage[] messages = await _db.ConversationMessages.AsNoTracking().OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync(token);
+        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
+        return await ListAsync(db, token);
+    }
+
+    private static async Task<ConversationView[]> ListAsync(GoblinDbContext db, CancellationToken token)
+    {
+        Persistence.Entities.Conversation[] conversations = await db.Conversations.AsNoTracking().OrderByDescending(x => x.CreatedAt).ToArrayAsync(token);
+        Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.AsNoTracking().OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync(token);
         return [.. conversations.Select(c => new ConversationView(c.Id, c.Title, c.WorkId,
             [.. messages.Where(m => m.ConversationId == c.Id).Select(m => new ConversationMessageView(m.Id, m.Body, m.CreatedAt))]))];
     }
@@ -32,30 +38,31 @@ public sealed class ConversationStore
     {
         if (command.ConversationId == Guid.Empty || command.MessageId == Guid.Empty || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
-        await using IDbContextTransaction transaction = await _db.Database.BeginTransactionAsync();
-        await _db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(716352019)");
-        Persistence.Entities.Conversation? conversation = await _db.Conversations.SingleOrDefaultAsync(x => x.Id == command.ConversationId);
+        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(716352019)");
+        Persistence.Entities.Conversation? conversation = await db.Conversations.SingleOrDefaultAsync(x => x.Id == command.ConversationId);
         if (conversation is null)
         {
             if (string.IsNullOrWhiteSpace(command.Text)) throw new ApplicationFailure("invalid_command");
             conversation = new() { Id = command.ConversationId, Title = command.Text[..Math.Min(command.Text.Length, 80)], CreatedAt = DateTime.UtcNow };
-            _db.Conversations.Add(conversation);
+            db.Conversations.Add(conversation);
         }
-        Persistence.Entities.ConversationMessage? existing = await _db.ConversationMessages.SingleOrDefaultAsync(x => x.Id == command.MessageId);
+        Persistence.Entities.ConversationMessage? existing = await db.ConversationMessages.SingleOrDefaultAsync(x => x.Id == command.MessageId);
         if (existing is not null && (existing.ConversationId != conversation.Id || existing.Body != command.Text))
             throw new ApplicationFailure("command_id_reused");
         if (existing is null && !string.IsNullOrWhiteSpace(command.Text))
-            _db.ConversationMessages.Add(new() { Id = command.MessageId, ConversationId = conversation.Id, Body = command.Text, CreatedAt = DateTime.UtcNow });
+            db.ConversationMessages.Add(new() { Id = command.MessageId, ConversationId = conversation.Id, Body = command.Text, CreatedAt = DateTime.UtcNow });
 
         if (command.WorkId is { } workId && conversation.WorkId is null)
         {
-            if (workId == Guid.Empty || await _db.WorkItems.AnyAsync(x => x.Id == workId)) throw new ApplicationFailure("work_already_exists");
-            await _db.SaveChangesAsync();
-            Persistence.Entities.ConversationMessage[] messages = await _db.ConversationMessages.Where(x => x.ConversationId == conversation.Id)
+            if (workId == Guid.Empty || await db.WorkItems.AnyAsync(x => x.Id == workId)) throw new ApplicationFailure("work_already_exists");
+            await db.SaveChangesAsync();
+            Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.Where(x => x.ConversationId == conversation.Id)
                 .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync();
             var work = new WorkItem(workId, messages[0].Body, DateTimeOffset.UtcNow);
             foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1)) work.AddContext(message.Id, message.Body, message.CreatedAt);
-            _db.WorkItems.Add(new()
+            db.WorkItems.Add(new()
             {
                 Id = workId,
                 Objective = work.Objective,
@@ -69,15 +76,15 @@ public sealed class ConversationStore
         }
         else if (conversation.WorkId is { } linked && existing is null && !string.IsNullOrWhiteSpace(command.Text))
         {
-            Persistence.Entities.WorkItem row = await _db.WorkItems.SingleAsync(x => x.Id == linked);
+            Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
             var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, WorkStore.Json)!);
             work.AddContext(command.MessageId, command.Text, DateTimeOffset.UtcNow);
             row.State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json);
             row.Version++;
             row.UpdatedAt = DateTime.UtcNow;
         }
-        await _db.SaveChangesAsync();
+        await db.SaveChangesAsync();
         await transaction.CommitAsync();
-        return (await ListAsync()).Single(x => x.Id == conversation.Id);
+        return (await ListAsync(db, default)).Single(x => x.Id == conversation.Id);
     }
 }
