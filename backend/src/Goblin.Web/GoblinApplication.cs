@@ -161,7 +161,8 @@ public static class GoblinApplication
                 try
                 {
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                    GoblinDbContext db = context.RequestServices.GetRequiredService<GoblinDbContext>();
+                    IDbContextFactory<GoblinDbContext> factory = context.RequestServices.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
+                    await using GoblinDbContext db = await factory.CreateDbContextAsync(timeout.Token);
                     await db.WorkItems.AsNoTracking().Select(x => x.Id).Take(1).ToArrayAsync(timeout.Token);
                 }
                 catch { ready = false; }

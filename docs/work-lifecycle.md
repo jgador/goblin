@@ -63,6 +63,12 @@ Wolverine dispatch intent commit together. Claims commit before contacting the
 host. Command IDs plus payload fingerprints prevent repeated submissions from
 repeating transitions; expected versions reject stale actions.
 
+Each store operation creates and disposes its own EF Core context through
+`IDbContextFactory<GoblinDbContext>`. Transactional reads, the advisory lock, and
+writes use that same context. Work commands enroll it in a fresh Wolverine
+outbox so buffered messages cannot carry over from another operation, including
+one that rolled back. Factory-created contexts do not share transactions.
+
 Completed interactions commit cleanup intent with the outcome. Cleanup confirms
 that repository pods stopped and removes their credential mounts. Failure keeps
 Work in attention, retains the outcome, and blocks replacement until explicit

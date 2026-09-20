@@ -97,12 +97,76 @@ public sealed class DurabilityTests
         await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "No agent assigned"));
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(rejected, id, WorkAction.Execute, 1)));
         using IServiceScope scope = fixture.Host.Services.CreateScope();
-        GoblinDbContext db = scope.ServiceProvider.GetRequiredService<GoblinDbContext>();
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
         Assert.False(await db.WorkCommands.AnyAsync(x => x.Id == rejected));
         Assert.False(await db.ExecutionAttempts.AnyAsync(x => x.WorkId == id));
         Assert.Equal(1, (await fixture.Get(id)).Version);
         Assert.Empty(fixture.Runtime.Starts);
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, 99, AgentId: WorkStore.DefaultAgentId)));
+    }
+
+    [DatabaseFact]
+    public async Task ReusedWorkStoreIsolatesConcurrentCommandsAndFailedDispatchTransactions()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
+        Guid id = Guid.NewGuid(), rejected = Guid.NewGuid();
+        var create = new WorkCommand(Guid.NewGuid(), id, WorkAction.Create, Text: "Keep each operation independent");
+        WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => store.ApplyAsync(create)));
+        Assert.All(created, x => Assert.Equal(1, x.Version));
+        WorkView assigned = await store.ApplyAsync(new(Guid.NewGuid(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
+
+        // Fail the database write after dispatch has been published into the
+        // transaction, rather than rejecting the command before publishing.
+        await fixture.RejectId("work_commands", rejected);
+        await Assert.ThrowsAsync<DbUpdateException>(() => store.ApplyAsync(new(rejected, id, WorkAction.Execute, assigned.Version)));
+        await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
+        {
+            Assert.False(await db.WorkCommands.AnyAsync(x => x.Id == rejected));
+            Assert.False(await db.ExecutionAttempts.AnyAsync(x => x.WorkId == id));
+            Assert.Equal(0, await db.Database.SqlQueryRaw<int>("""
+                SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelopes
+                WHERE message_type LIKE '%DispatchWork%'
+                """).SingleAsync());
+        }
+        Assert.Equal(assigned.Version, (await store.GetAsync(id)).Version);
+        Assert.Empty(fixture.Runtime.Starts);
+
+        WorkView queued = await store.ApplyAsync(new(Guid.NewGuid(), id, WorkAction.Execute, assigned.Version));
+        Guid attempt = Assert.Single(queued.Work.Attempts).Id;
+        await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        Assert.Equal(1, fixture.Runtime.Starts[attempt]);
+        Assert.Single((await fixture.Get(id)).Work.Attempts);
+    }
+
+    [DatabaseFact]
+    public async Task ReusedConversationStoreRollsBackBothSavesBeforeTrackingWorkAgain()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConversationStore store = scope.ServiceProvider.GetRequiredService<ConversationStore>();
+        Guid conversationId = Guid.NewGuid(), messageId = Guid.NewGuid(), rejectedWork = Guid.NewGuid();
+        await fixture.RejectId("work_items", rejectedWork);
+        await Assert.ThrowsAsync<DbUpdateException>(() => store.ApplyAsync(new(conversationId, messageId, "Track this conversation", rejectedWork)));
+        await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
+        {
+            Assert.False(await db.Conversations.AnyAsync(x => x.Id == conversationId));
+            Assert.False(await db.ConversationMessages.AnyAsync(x => x.Id == messageId));
+            Assert.False(await db.WorkItems.AnyAsync(x => x.Id == rejectedWork));
+        }
+
+        Guid workId = Guid.NewGuid();
+        var command = new ConversationCommand(conversationId, messageId, "Track this conversation", workId);
+        ConversationView tracked = await store.ApplyAsync(command);
+        Assert.Equal(workId, tracked.WorkId);
+        Assert.Single(tracked.Messages);
+        Assert.Single((await store.ApplyAsync(command)).Messages);
+        await store.ApplyAsync(new(conversationId, Guid.NewGuid(), "Additional context"));
+        Assert.Equal(2, Assert.Single(await store.ListAsync()).Messages.Length);
+        WorkView work = await fixture.Get(workId);
+        Assert.Equal(2, work.Version);
+        Assert.Equal("Track this conversation", work.Work.Objective);
     }
 
     [DatabaseFact]
@@ -281,6 +345,14 @@ public sealed class DurabilityTests
             await Host.StartAsync();
         }
         public async Task RestartAsync() { await Host.StopAsync(); Host.Dispose(); await StartAsync(); }
+        public async Task RejectId(string table, Guid id)
+        {
+            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN")) { Database = _name };
+            await using var connection = new NpgsqlConnection(admin.ConnectionString);
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand($"ALTER TABLE public.{table} ADD CONSTRAINT rejected_test_id CHECK (id <> '{id}')", connection);
+            await command.ExecuteNonQueryAsync();
+        }
         public async Task SetDatabaseAvailable(bool available)
         {
             await using var admin = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
