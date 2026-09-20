@@ -8,11 +8,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Protocol;
-using Goblin.Integrations.Codex;
-using Goblin.Web;
-using Goblin.Core.Work;
 using Goblin.Contracts.Runtime;
+using Goblin.Core.Work;
+using Goblin.Integrations.Codex;
+using Goblin.Protocol;
+using Goblin.Web;
 using Xunit;
 
 namespace Goblin.Tests;
@@ -25,14 +25,14 @@ public sealed class CodexClientTests
         await using Fixture fixture = await Fixture.CreateAsync();
         await Task.WhenAll(Enumerable.Range(0, 12).Select(_ => fixture.Client.StartAsync()));
         await fixture.ReadAsync();
-        var calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
+        string[] calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
         Assert.Equal(["initialize", "initialized", "account/read"], calls.Select(line => JsonSerializer.Deserialize<JSONRPCNotification>(line, ProtocolJson.Options)!.Method));
         Dictionary<string, string> environment = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "environment.json")))!;
         Assert.False(environment.ContainsKey("OPENAI_API_KEY"));
         Assert.False(environment.ContainsKey("GOBLIN_SECRET"));
         Assert.Equal(fixture.Workspace.Home, environment["HOME"]);
         Assert.Equal(fixture.Workspace.CodexHome, environment["CODEX_HOME"]);
-        var args = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "arguments.json"));
+        string args = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "arguments.json"));
         Assert.Contains("app-server", args);
         Assert.Contains("features.multi_agent=false", args);
         Assert.Contains("skills.include_instructions=false", args);
@@ -72,8 +72,8 @@ public sealed class CodexClientTests
         await using Fixture fixture = await Fixture.CreateAsync("server-request");
         await fixture.Client.StartAsync();
         await fixture.ReadAsync();
-        var file = Path.Combine(fixture.Workspace.CodexHome, "server-responses.jsonl");
-        for (var i = 0; i < 100 && !File.Exists(file); i++) await Task.Delay(10);
+        string file = Path.Combine(fixture.Workspace.CodexHome, "server-responses.jsonl");
+        for (int i = 0; i < 100 && !File.Exists(file); i++) await Task.Delay(10);
         JSONRPCError reply = JsonSerializer.Deserialize<JSONRPCError>((await File.ReadAllLinesAsync(file))[0], ProtocolJson.Options)!;
         Assert.Equal(new RequestId("approval-42"), reply.Id);
         Assert.Equal(-32601, reply.Error.Code);
@@ -93,7 +93,7 @@ public sealed class CodexClientTests
         Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<IntegrationFailure>(() => first)).Code);
         Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<IntegrationFailure>(() => second)).Code);
         Assert.False(fixture.Client.Ready);
-        var oldPid = await fixture.PidAsync();
+        int oldPid = await fixture.PidAsync();
         await fixture.Client.StartAsync();
         Assert.True(fixture.Client.Ready);
         Assert.False(IsAlive(oldPid));
@@ -104,7 +104,7 @@ public sealed class CodexClientTests
     {
         await using Fixture fixture = await Fixture.CreateAsync("stubborn", TimeSpan.FromMilliseconds(500));
         await fixture.Client.StartAsync();
-        var pid = await fixture.PidAsync();
+        int pid = await fixture.PidAsync();
         IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.ReadAsync());
         Assert.Equal("runtime_timeout", error.Code);
         Assert.False(fixture.Client.Ready);
@@ -132,7 +132,7 @@ public sealed class CodexClientTests
         await using Fixture fixture = await Fixture.CreateAsync("hang");
         await fixture.Client.StartAsync();
         Task<GetAccountResponse> request = fixture.ReadAsync();
-        var pid = await fixture.PidAsync();
+        int pid = await fixture.PidAsync();
         await fixture.Client.DisposeAsync();
         Assert.Equal("runtime_unavailable", (await Assert.ThrowsAsync<IntegrationFailure>(() => request)).Code);
         Assert.False(IsAlive(pid));
@@ -197,8 +197,8 @@ public sealed class CodexClientTests
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "backend/schemas/codex"))) root = root.Parent;
-            var data = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}")).FullName;
-            var passwordFile = Path.Combine(data, "owner-password");
+            string data = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}")).FullName;
+            string passwordFile = Path.Combine(data, "owner-password");
             byte[] salt = RandomNumberGenerator.GetBytes(16);
             byte[] digest = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes("codex-client-test"), salt, 600_000, HashAlgorithmName.SHA256, 32);
             await File.WriteAllTextAsync(passwordFile, $"pbkdf2-sha256$600000${Convert.ToBase64String(salt)}${Convert.ToBase64String(digest)}\n");

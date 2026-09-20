@@ -49,7 +49,7 @@ public sealed class GitHubConnection(string? clientId, string credentialFile) : 
         {
             if (File.Exists(credentialFile))
             {
-                var credentials = JsonSerializer.Deserialize<GitHubCredentials>(await File.ReadAllTextAsync(credentialFile), Json)!;
+                GitHubCredentials credentials = JsonSerializer.Deserialize<GitHubCredentials>(await File.ReadAllTextAsync(credentialFile), Json)!;
                 return new(!string.IsNullOrWhiteSpace(clientId), credentials.Login, null, null, null);
             }
             if (_deviceCode is null) return new(!string.IsNullOrWhiteSpace(clientId), null, null, null, null);
@@ -59,7 +59,9 @@ public sealed class GitHubConnection(string? clientId, string credentialFile) : 
                 _nextPoll = DateTimeOffset.UtcNow.AddSeconds(_interval);
                 using JsonDocument response = await PostAsync("https://github.com/login/oauth/access_token", new()
                 {
-                    ["client_id"] = clientId!, ["device_code"] = _deviceCode, ["grant_type"] = "urn:ietf:params:oauth:grant-type:device_code"
+                    ["client_id"] = clientId!,
+                    ["device_code"] = _deviceCode,
+                    ["grant_type"] = "urn:ietf:params:oauth:grant-type:device_code"
                 });
                 if (response.RootElement.TryGetProperty("access_token", out JsonElement access))
                 {
@@ -67,7 +69,7 @@ public sealed class GitHubConnection(string? clientId, string credentialFile) : 
                     using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
                     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                     request.Headers.UserAgent.ParseAdd("Goblin/0.1");
-                    using var account = await _client.SendAsync(request);
+                    using HttpResponseMessage account = await _client.SendAsync(request);
                     if (!account.IsSuccessStatusCode) throw new GitHubFailure();
                     using JsonDocument user = JsonDocument.Parse(await account.Content.ReadAsStringAsync());
                     string login = user.RootElement.GetProperty("login").GetString()!;
@@ -102,7 +104,7 @@ public sealed class GitHubConnection(string? clientId, string credentialFile) : 
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new FormUrlEncodedContent(form) };
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var response = await _client.SendAsync(request);
+        using HttpResponseMessage response = await _client.SendAsync(request);
         if (!response.IsSuccessStatusCode) throw new GitHubFailure();
         return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
     }

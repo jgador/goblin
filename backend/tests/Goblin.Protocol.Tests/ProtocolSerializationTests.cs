@@ -149,7 +149,8 @@ public sealed class ProtocolSerializationTests
         Assert.Throws<JsonException>(() => Read<JSONRPCResponse>("""{"id":null,"result":{}}"""));
         Assert.Throws<JsonException>(() => Write(new JSONRPCResponse
         {
-            Id = null!, Result = JsonSerializer.SerializeToElement(new { }),
+            Id = null!,
+            Result = JsonSerializer.SerializeToElement(new { }),
         }));
     }
 
@@ -184,7 +185,7 @@ public sealed class ProtocolSerializationTests
     public void ShortenedExecpolicyPayloadKeepsItsNestedWireNames()
     {
         const string json = """{"acceptWithExecpolicyAmendment":{"execpolicy_amendment":["git","status"]}}""";
-        var decision = Assert.IsType<AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision>(
+        AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision decision = Assert.IsType<AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision>(
             Read<CommandExecutionApprovalDecision>(json));
         AcceptWithExecpolicyAmendmentDetails payload = decision.AcceptWithExecpolicyAmendment;
 

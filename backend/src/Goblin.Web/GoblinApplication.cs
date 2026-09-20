@@ -3,26 +3,26 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Persistence;
-using Goblin.Integrations.Codex;
-using Goblin.Contracts;
-using Goblin.Contracts.Runtime;
 using Goblin.Application;
 using Goblin.Application.Work;
+using Goblin.Contracts;
+using Goblin.Contracts.Runtime;
 using Goblin.Execution;
-using Microsoft.EntityFrameworkCore;
-using System.Text.Json.Serialization;
-using Wolverine;
+using Goblin.Integrations.Codex;
 using Goblin.Integrations.GitHub;
+using Goblin.Persistence;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Wolverine;
 
 namespace Goblin.Web;
 
@@ -130,14 +130,14 @@ public static class GoblinApplication
             try
             {
                 HttpRequest request = context.Request;
-                var path = request.Path.Value ?? "/";
+                string path = request.Path.Value ?? "/";
                 // Endpoint routing treats /work and /work/ as the same route.
                 if (path == "/work/") path = "/work";
-                var get = HttpMethods.IsGet(request.Method);
-                var post = HttpMethods.IsPost(request.Method);
+                bool get = HttpMethods.IsGet(request.Method);
+                bool post = HttpMethods.IsPost(request.Method);
                 if (get && path is "/healthz" or "/readyz") { await next(context); return; }
                 workspace.ValidateRequest(request);
-                var publicRequest = (get && staticFiles.ContainsKey(path)) || (path == "/api/session" && (get || post));
+                bool publicRequest = (get && staticFiles.ContainsKey(path)) || (path == "/api/session" && (get || post));
                 if (!publicRequest)
                     context.Items[SessionKey] = workspace.SessionId(request) ?? throw new PublicError("workspace_locked", "Unlock the workspace to continue.", 401);
                 if (post) context.Items[BodyKey] = await ReadBodyAsync(request);
@@ -161,7 +161,7 @@ public static class GoblinApplication
                 try
                 {
                     using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                    var db = context.RequestServices.GetRequiredService<GoblinDbContext>();
+                    GoblinDbContext db = context.RequestServices.GetRequiredService<GoblinDbContext>();
                     await db.WorkItems.AsNoTracking().Select(x => x.Id).Take(1).ToArrayAsync(timeout.Token);
                 }
                 catch { ready = false; }
@@ -185,7 +185,7 @@ public static class GoblinApplication
             bool available = false;
             try
             {
-                var result = await auth.SendPromptAsync(StringField(context, "prompt"), context.RequestAborted);
+                PromptResult result = await auth.SendPromptAsync(StringField(context, "prompt"), context.RequestAborted);
                 available = true;
                 return Results.Json(result);
             }
@@ -205,7 +205,7 @@ public static class GoblinApplication
             app.MapPost("/api/conversations/commands", async (HttpContext context, ConversationStore store) =>
             {
                 var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
-                var command = JsonSerializer.Deserialize<ConversationCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
+                ConversationCommand command = JsonSerializer.Deserialize<ConversationCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
                     ?? throw new PublicError("invalid_command", "Send a conversation command.");
                 return await store.ApplyAsync(command);
             });
@@ -221,7 +221,7 @@ public static class GoblinApplication
             app.MapPost("/api/work/commands", async (HttpContext context, WorkStore store) =>
             {
                 var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
-                var command = JsonSerializer.Deserialize<WorkCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
+                WorkCommand command = JsonSerializer.Deserialize<WorkCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
                     ?? throw new PublicError("invalid_command", "Send a work command.");
                 // Once accepted, the command has an independent transaction and
                 // execution lifecycle. RequestAborted is deliberately not passed.
@@ -262,8 +262,8 @@ public static class GoblinApplication
             throw new PublicError("invalid_content_type", "Send JSON content.", 415);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(request.HttpContext.RequestAborted);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
-        var buffer = new byte[8193];
-        var size = 0;
+        byte[] buffer = new byte[8193];
+        int size = 0;
         try
         {
             int read;
@@ -284,7 +284,7 @@ public static class GoblinApplication
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
-            var firstAttempt = true;
+            bool firstAttempt = true;
             do
             {
                 try { await codex.StartAsync(stoppingToken); }

@@ -13,11 +13,11 @@ if (args.Length == 1 && args[0] == "--sandbox-execute")
     return;
 }
 
-var portValue = Environment.GetEnvironmentVariable("GOBLIN_PORT") ?? "8787";
-if (!int.TryParse(portValue, out var port) || port is < 1 or > 65535)
+string portValue = Environment.GetEnvironmentVariable("GOBLIN_PORT") ?? "8787";
+if (!int.TryParse(portValue, out int port) || port is < 1 or > 65535)
     throw new ArgumentException("GOBLIN_PORT must be a valid port.");
-var origin = Environment.GetEnvironmentVariable("GOBLIN_PUBLIC_ORIGIN") ?? $"http://localhost:{port}";
-var host = Environment.GetEnvironmentVariable("GOBLIN_HOST") ?? "127.0.0.1";
+string origin = Environment.GetEnvironmentVariable("GOBLIN_PUBLIC_ORIGIN") ?? $"http://localhost:{port}";
+string host = Environment.GetEnvironmentVariable("GOBLIN_HOST") ?? "127.0.0.1";
 await using WebApplication app = await GoblinApplication.CreateAsync(new()
 {
     DataDirectory = Environment.GetEnvironmentVariable("GOBLIN_DATA_DIR") ?? ".goblin-auth",

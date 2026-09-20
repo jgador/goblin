@@ -30,7 +30,7 @@ public sealed class CertificateTests
     [PostgresCertificateFact]
     public async Task CertificateAuthenticatesTheApplicationWithoutAPassword()
     {
-        var settings = App();
+        NpgsqlConnectionStringBuilder settings = App();
         Assert.True(string.IsNullOrEmpty(settings.Password));
         await using var connection = new NpgsqlConnection(settings.ConnectionString);
         await connection.OpenAsync();
@@ -45,7 +45,7 @@ public sealed class CertificateTests
     [PostgresCertificateFact]
     public async Task MissingClientCertificateIsRejectedEvenWithAPassword()
     {
-        var settings = App();
+        NpgsqlConnectionStringBuilder settings = App();
         settings.SslCertificate = null;
         settings.SslKey = null;
         settings.Password = "unused-test-password";
@@ -57,7 +57,7 @@ public sealed class CertificateTests
     [PostgresCertificateFact]
     public async Task ApplicationCertificateCannotAuthenticateAsAdministrator()
     {
-        var settings = App();
+        NpgsqlConnectionStringBuilder settings = App();
         settings.Username = "goblin_admin";
         await using var connection = new NpgsqlConnection(settings.ConnectionString);
         PostgresException error = await Assert.ThrowsAsync<PostgresException>(() => connection.OpenAsync());
@@ -67,7 +67,7 @@ public sealed class CertificateTests
     [PostgresCertificateFact]
     public async Task UnencryptedConnectionsAreRejected()
     {
-        var settings = App();
+        NpgsqlConnectionStringBuilder settings = App();
         settings.SslMode = SslMode.Disable;
         await using var connection = new NpgsqlConnection(settings.ConnectionString);
         PostgresException error = await Assert.ThrowsAsync<PostgresException>(() => connection.OpenAsync());
@@ -85,7 +85,7 @@ public sealed class CertificateTests
             var request = new CertificateRequest("CN=Unrelated test CA", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
             request.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, false, 0, true));
             using X509Certificate2 certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddMinutes(-1), DateTimeOffset.UtcNow.AddDays(1));
-            var settings = App();
+            NpgsqlConnectionStringBuilder settings = App();
             settings.RootCertificate = Path.Combine(directory, "ca.crt");
             await File.WriteAllTextAsync(settings.RootCertificate, certificate.ExportCertificatePem());
             await using var connection = new NpgsqlConnection(settings.ConnectionString);
@@ -101,7 +101,7 @@ public sealed class CertificateTests
         var builder = new NpgsqlDataSourceBuilder(App().ConnectionString);
         builder.UseSslClientAuthenticationOptionsCallback(options => options.TargetHost = "not-the-database.invalid");
         await using NpgsqlDataSource source = builder.Build();
-        NpgsqlException error = await Assert.ThrowsAsync<NpgsqlException>(async () => { await using var connection = await source.OpenConnectionAsync(); });
+        NpgsqlException error = await Assert.ThrowsAsync<NpgsqlException>(async () => { await using NpgsqlConnection connection = await source.OpenConnectionAsync(); });
         Assert.IsType<AuthenticationException>(error.InnerException);
     }
 }

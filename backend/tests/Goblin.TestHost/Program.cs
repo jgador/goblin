@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Goblin.Contracts;
+using Goblin.Integrations.Codex;
 using Goblin.Protocol;
 using Goblin.Web;
-using Goblin.Integrations.Codex;
-using Goblin.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 

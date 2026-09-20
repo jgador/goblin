@@ -15,9 +15,9 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
     {
         if (cancellationToken.IsCancellationRequested) throw Cancelled();
         var elapsed = Stopwatch.StartNew();
-        var gate = new object();
+        object gate = new();
         string? threadId = null, turnId = null;
-        var finished = false;
+        bool finished = false;
         var messages = new OrderedDictionary<string, string>();
         var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -52,7 +52,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
                     if (turn.Status == TurnStatus.Failed) { completion.TrySetException(GenerationError(turn.Error)); return; }
                     if (turn.Status != TurnStatus.Completed) { completion.TrySetException(Cancelled()); return; }
                     foreach (ThreadItem value in turn.Items) Save(value);
-                    var reply = string.Join("\n\n", messages.Values).Trim();
+                    string reply = string.Join("\n\n", messages.Values).Trim();
                     if (reply.Length == 0)
                         completion.TrySetException(new IntegrationFailure("prompt_empty_reply", "The model finished without a text reply. Please retry."));
                     else completion.TrySetResult(reply);
@@ -121,7 +121,7 @@ public sealed class PromptRunner(CodexClient codex, TimeSpan timeout)
     private static IntegrationFailure GenerationError(TurnError? error)
     {
         CodexErrorInfo? info = error?.CodexErrorInfo;
-        var status = info switch
+        ushort? status = info switch
         {
             HttpConnectionFailedCodexErrorInfo value => value.HttpConnectionFailed.HttpStatusCode,
             ResponseStreamConnectionFailedCodexErrorInfo value => value.ResponseStreamConnectionFailed.HttpStatusCode,

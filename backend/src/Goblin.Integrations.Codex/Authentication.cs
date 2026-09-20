@@ -2,8 +2,8 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Protocol;
 using Goblin.Contracts;
+using Goblin.Protocol;
 
 namespace Goblin.Integrations.Codex;
 
@@ -107,7 +107,7 @@ public sealed class Authentication : IDisposable
 
     public Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
     {
-        var prompt = value?.Trim() ?? "";
+        string prompt = value?.Trim() ?? "";
         if (prompt.Length is < 1 or > 500 || prompt.Any(c => c is <= '\x08' or '\x0b' or '\x0c' or >= '\x0e' and <= '\x1f'))
             throw new IntegrationFailure("invalid_prompt", "Enter a short prompt of 1–500 characters.");
         if (Interlocked.CompareExchange(ref _promptPending, 1, 0) != 0)
@@ -171,11 +171,11 @@ public sealed class Authentication : IDisposable
 
     public Task<AuthenticationState> LoginApiKeyAsync(string? value) => Serial(async () =>
     {
-        var apiKey = value?.Trim() ?? "";
+        string apiKey = value?.Trim() ?? "";
         if (apiKey.Length is < 20 or > 4096 || apiKey.Any(c => c is < '\x21' or > '\x7e'))
             throw new IntegrationFailure("invalid_api_key", "Enter a complete OpenAI API key without spaces.");
         await RequireDisconnectedAsync();
-        var verification = await _verifyApiKey(apiKey);
+        string verification = await _verifyApiKey(apiKey);
         await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ApiKeyLoginAccountParams { ApiKey = apiKey });
         lock (_gate)
         {

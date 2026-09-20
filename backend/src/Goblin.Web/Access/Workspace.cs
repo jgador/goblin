@@ -30,9 +30,9 @@ public sealed partial class Workspace
         _origin = ValidateOrigin(publicOrigin, allowInsecureHttp);
         _allowedOrigins.Add(_origin.GetLeftPart(UriPartial.Authority));
         if (IsLoopback(_origin))
-            foreach (var host in new[] { "localhost", "127.0.0.1", "[::1]" })
+            foreach (string? host in new[] { "localhost", "127.0.0.1", "[::1]" })
                 _allowedOrigins.Add($"{_origin.Scheme}://{host}{(_origin.IsDefaultPort ? "" : $":{_origin.Port}")}");
-        foreach (var origin in _allowedOrigins) _allowedHosts.Add(new Uri(origin).Authority);
+        foreach (string origin in _allowedOrigins) _allowedHosts.Add(new Uri(origin).Authority);
     }
 
     public string DataDirectory { get; }
@@ -59,8 +59,8 @@ public sealed partial class Workspace
         ValidateOrigin(publicOrigin, allowInsecureHttp);
         if (string.IsNullOrWhiteSpace(passwordHashFile))
             throw new InvalidOperationException("A Goblin password is required. Set GOBLIN_PASSWORD_HASH_FILE to a password verifier file.");
-        var data = Path.GetFullPath(directory);
-        foreach (var path in new[] { data, Path.Combine(data, "codex"), Path.Combine(data, "home"), Path.Combine(data, "workspace") })
+        string data = Path.GetFullPath(directory);
+        foreach (string? path in new[] { data, Path.Combine(data, "codex"), Path.Combine(data, "home"), Path.Combine(data, "workspace") })
         {
             if (OperatingSystem.IsWindows()) Directory.CreateDirectory(path);
             else
@@ -82,9 +82,9 @@ public sealed partial class Workspace
 
     public string? SessionId(HttpRequest request)
     {
-        var value = request.Cookies[CookieName];
+        string? value = request.Cookies[CookieName];
         if (value is null || !SessionTokenPattern().IsMatch(value)) return null;
-        var id = Convert.ToHexString(Hash(value));
+        string id = Convert.ToHexString(Hash(value));
         lock (_gate)
         {
             if (_sessions.TryGetValue(id, out DateTimeOffset expiry) && expiry > DateTimeOffset.UtcNow) return id;
@@ -111,9 +111,9 @@ public sealed partial class Workspace
                 throw new PublicError("invalid_password", "The Goblin password is incorrect.", 401);
             }
             _failedUnlocks.Clear();
-            foreach (var id in _sessions.Where(x => x.Value <= now).Select(x => x.Key).ToArray()) _sessions.Remove(id);
+            foreach (string? id in _sessions.Where(x => x.Value <= now).Select(x => x.Key).ToArray()) _sessions.Remove(id);
             if (_sessions.Count >= 32) _sessions.RemoveAt(0);
-            var session = NewSessionToken();
+            string session = NewSessionToken();
             _sessions.Add(Convert.ToHexString(Hash(session)), now + SessionLifetime);
             SetCookie(response, session, SessionLifetime);
             return Session(true);

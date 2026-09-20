@@ -42,9 +42,12 @@ public static class SandboxWorker
         File.SetUnixFileMode(askpass, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         var gitEnvironment = new Dictionary<string, string>
         {
-            ["HOME"] = home, ["PATH"] = Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin:/bin",
-            ["GIT_ASKPASS"] = askpass, ["GIT_TERMINAL_PROMPT"] = "0",
-            ["GIT_CONFIG_NOSYSTEM"] = "1", ["GIT_CONFIG_GLOBAL"] = "/dev/null"
+            ["HOME"] = home,
+            ["PATH"] = Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin:/bin",
+            ["GIT_ASKPASS"] = askpass,
+            ["GIT_TERMINAL_PROMPT"] = "0",
+            ["GIT_CONFIG_NOSYSTEM"] = "1",
+            ["GIT_CONFIG_GLOBAL"] = "/dev/null"
         };
         string branch = "goblin/" + input.Work.Id.ToString("N") + "/" + input.Work.Attempts[^1].Id.ToString("N");
         ExecutionObservation? runtimeOutcome = null;
@@ -54,7 +57,7 @@ public static class SandboxWorker
             await GitAsync(root, gitEnvironment, "clone", "--", "https://github.com/" + repository.Repository + ".git", checkout);
             // A fresh sandbox can continue a reviewed checkpoint without sharing
             // a mutable checkout with another Work item or trusting native sessions.
-            var previous = input.Work.Attempts.SkipLast(1).LastOrDefault(a =>
+            AttemptSnapshot? previous = input.Work.Attempts.SkipLast(1).LastOrDefault(a =>
                 a.Target.Repository?.Repository == repository.Repository && input.Work.Artifacts.Any(x => x.AttemptId == a.Id));
             if (previous is null) await GitAsync(checkout, gitEnvironment, "checkout", "-b", branch);
             else await GitAsync(checkout, gitEnvironment, "checkout", "-b", branch,
@@ -63,7 +66,11 @@ public static class SandboxWorker
             await GitAsync(checkout, gitEnvironment, "config", "user.email", repository.GitAuthorEmail);
             await using (var codex = new CodexClient(new()
             {
-                Home = home, CodexHome = codexHome, Workspace = checkout, Command = "codex", RepositoryExecution = true
+                Home = home,
+                CodexHome = codexHome,
+                Workspace = checkout,
+                Command = "codex",
+                RepositoryExecution = true
             }))
             {
                 outcome = await new CodexWorkRunner(codex).RunAsync(input.Work, true,
@@ -91,10 +98,15 @@ public static class SandboxWorker
         GitAsync(directory, environment, args, false);
     private static async Task<int> GitAsync(string directory, Dictionary<string, string> environment, string[] args, bool allowDifference)
     {
-        var info = new ProcessStartInfo("git") { WorkingDirectory = directory, UseShellExecute = false,
-            RedirectStandardOutput = true, RedirectStandardError = true };
+        var info = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = directory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
         info.Environment.Clear();
-        foreach (var (key, value) in environment) info.Environment[key] = value;
+        foreach ((string? key, string? value) in environment) info.Environment[key] = value;
         foreach (string arg in args) info.ArgumentList.Add(arg);
         using Process process = Process.Start(info)!;
         Task stdout = DrainAsync(process.StandardOutput), stderr = DrainAsync(process.StandardError);
@@ -105,7 +117,7 @@ public static class SandboxWorker
     }
     private static async Task DrainAsync(StreamReader reader)
     {
-        var buffer = new char[4096];
+        char[] buffer = new char[4096];
         while (await reader.ReadAsync(buffer) > 0) { }
     }
     private static void Emit(ExecutionObservation observation) => Console.WriteLine("GOBLIN_RESULT " + JsonSerializer.Serialize(observation, ExecutionFiles.Json));

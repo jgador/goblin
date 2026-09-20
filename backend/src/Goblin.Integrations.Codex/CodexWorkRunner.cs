@@ -17,7 +17,7 @@ public sealed class CodexWorkRunner(CodexClient codex)
     public async Task<ExecutionObservation> RunAsync(WorkSnapshot work, bool repositoryChanges,
         Func<ExecutionObservation, Task> progress, CancellationToken token)
     {
-        var gate = new object();
+        object gate = new();
         string? threadId = null, turnId = null;
         string? latestProgress = null;
         var messages = new OrderedDictionary<string, string>();
@@ -72,9 +72,10 @@ public sealed class CodexWorkRunner(CodexClient codex)
         try
         {
             await codex.StartAsync(token);
-            var thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
+            ThreadStartResponse thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
             {
-                Cwd = codex.Options.Workspace, Ephemeral = false,
+                Cwd = codex.Options.Workspace,
+                Ephemeral = false,
                 Model = work.Attempts[^1].Target.RequestedModel,
                 ApprovalPolicy = AskForApproval.Never,
                 Sandbox = repositoryChanges ? SandboxMode.DangerFullAccess : SandboxMode.ReadOnly,
@@ -88,13 +89,17 @@ public sealed class CodexWorkRunner(CodexClient codex)
             string context = JsonSerializer.Serialize(new { work.Objective, work.Messages, work.Decisions, work.Results, work.Artifacts });
             JsonElement schema = JsonSerializer.SerializeToElement(new
             {
-                type = "object", additionalProperties = false, required = new[] { "kind", "text" },
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "kind", "text" },
                 properties = new { kind = new { type = "string", @enum = new[] { "result", "input" } }, text = new { type = "string" } }
             });
-            var started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
+            TurnStartResponse started = await codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
-                ThreadId = threadId, Input = [new TextUserInput { Text = context }],
-                ApprovalPolicy = AskForApproval.Never, OutputSchema = schema,
+                ThreadId = threadId,
+                Input = [new TextUserInput { Text = context }],
+                ApprovalPolicy = AskForApproval.Never,
+                OutputSchema = schema,
                 SandboxPolicy = repositoryChanges ? new ExternalSandboxSandboxPolicy { NetworkAccess = NetworkAccess.Enabled }
                     : new ReadOnlySandboxPolicy { NetworkAccess = false }
             }, token);

@@ -58,7 +58,7 @@ public sealed class ExecutionHostTests
 
     private static WorkSnapshot Claimed()
     {
-        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
         var work = new WorkItem(Guid.NewGuid(), "Answer a question", now);
         work.Assign(Guid.NewGuid(), now);
         work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid()), now);

@@ -85,7 +85,7 @@ public sealed class ExecutionCoordinator(IServiceScopeFactory scopes, IExecution
                 ExecutionAttempt? a = current.CurrentAttempt;
                 if (a is null || a.Id != attempt.Id || a.OwnerId != attempt.OwnerId ||
                     a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled) return;
-                var now = DateTimeOffset.UtcNow;
+                DateTimeOffset now = DateTimeOffset.UtcNow;
                 if (a.StartedAt is null && observation.Session is not null)
                     current.ExecutionStarted(a.Id, a.OwnerId!.Value, observation.Session, now);
                 switch (observation.Kind)
@@ -202,8 +202,8 @@ public sealed class WorkRecovery(IServiceScopeFactory scopes, ExecutionCoordinat
             {
                 await coordinator.DrainFailuresAsync(stoppingToken);
                 using IServiceScope scope = scopes.CreateScope();
-                var attempts = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
-                foreach (var attempt in attempts)
+                Persistence.Entities.ExecutionAttempt[] attempts = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
+                foreach (Persistence.Entities.ExecutionAttempt attempt in attempts)
                 {
                     try
                     {

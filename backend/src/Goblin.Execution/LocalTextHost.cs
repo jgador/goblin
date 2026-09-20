@@ -37,8 +37,10 @@ public sealed class LocalTextHost(TextHostOptions options) : IExecutionHost
             new WorkerInput(work, options.CodexHome, options.CodexCommand), token);
         var start = new ProcessStartInfo(options.DotnetCommand)
         {
-            UseShellExecute = false, WorkingDirectory = directory,
-            RedirectStandardOutput = true, RedirectStandardError = true
+            UseShellExecute = false,
+            WorkingDirectory = directory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
         };
         start.Environment.Clear();
         start.Environment["PATH"] = Environment.GetEnvironmentVariable("PATH");

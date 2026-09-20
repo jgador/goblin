@@ -29,7 +29,7 @@ public sealed class WorkLifecycleTests
     [InlineData("contract-test-runtime")]
     public void SuccessfulExecutionRequiresAnExplicitResultReview(string runtime)
     {
-        var (work, attempt, owner) = Running(runtime);
+        (WorkItem? work, Guid attempt, Guid owner) = Running(runtime);
         work.ProposeResult(attempt, owner, "The first implementation is ready.", Now);
 
         Assert.Equal(AttemptStatus.Succeeded, work.CurrentAttempt!.Status);
@@ -52,7 +52,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void DuplicateDeliveryAndCompetingOwnersCannotClaimAnAttemptAgain()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         Guid owner = Guid.NewGuid();
         Assert.True(work.TryClaimExecution(attempt, owner, "sandbox/attempt-one", Now));
         Assert.False(work.TryClaimExecution(attempt, owner, "sandbox/duplicate", Now));
@@ -68,7 +68,7 @@ public sealed class WorkLifecycleTests
     [MemberData(nameof(Failures))]
     public void EveryFailureBeforeExecutionRequiresAttentionAndAnExplicitRetry(FailureKind failure)
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         work.DispatchFailed(attempt, failure, Now);
         Assert.Equal(WorkStatus.NeedsAttention, work.Status);
         Assert.Equal(new WorkAttention(AttentionReason.Failure, failure), work.Attention);
@@ -91,7 +91,7 @@ public sealed class WorkLifecycleTests
     [MemberData(nameof(Failures))]
     public void EveryConfirmedExecutionFailureRequiresAttention(FailureKind failure)
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         work.ExecutionFailed(attempt, owner, failure, Now);
         Assert.Equal(WorkStatus.NeedsAttention, work.Status);
         Assert.Equal(new WorkAttention(AttentionReason.Failure, failure), work.Attention);
@@ -104,7 +104,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void ACrashAfterClaimRequiresReconciliationBeforeAnyRetry()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         Guid owner = Guid.NewGuid();
         Assert.True(work.TryClaimExecution(attempt, owner, "sandbox/possibly-started", Now));
         // A claim was committed, but the process crashed before recording a start.
@@ -128,7 +128,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void AConfirmedLateResultResolvesUncertaintyWithoutRepeatingWork()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         work.ExecutionUncertain(attempt, owner, FailureKind.RuntimeDisconnected, Now);
         work.ProposeResult(attempt, owner, "Recovered result from the original execution.", Now);
         Assert.Equal(AttemptStatus.Succeeded, work.CurrentAttempt!.Status);
@@ -141,7 +141,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void OldOrUnownedExecutionEventsCannotChangeCurrentWork()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         int events = work.History.Count;
         Reject(WorkRule.OwnershipMismatch, () => work.ProposeResult(attempt, Guid.NewGuid(), "Wrong owner", Now));
         Reject(WorkRule.InvalidTransition, () => work.DispatchFailed(attempt, FailureKind.DispatchFailed, Now));
@@ -160,7 +160,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void RetryingCapturesNewConfigurationWithoutRewritingProvenance()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         ExecutionAttempt original = work.CurrentAttempt!;
         ExecutionTarget originalTarget = original.Target;
         work.ExecutionFailed(attempt, owner, FailureKind.ExecutionFailed, Now);
@@ -179,7 +179,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void InvalidRetriesAreAtomicAndCannotReuseAttemptIdentity()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         work.DispatchFailed(attempt, FailureKind.ConnectionUnavailable, Now);
         int events = work.History.Count;
         Reject(WorkRule.AttemptAlreadyExists, () => work.RetryExecution(attempt, Target(), Now));
@@ -192,7 +192,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void InputAndRevisionsStayWithWorkAcrossSeparateAttempts()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         Guid agent = work.AgentId!.Value;
         Guid decision = Guid.NewGuid();
         work.RequestInput(attempt, owner, decision, "Which setup approach?", Now);
@@ -228,7 +228,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void CompletionBeforeStartAcknowledgementStillRecordsProvenanceWithoutResuming()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         Guid owner = Guid.NewGuid();
         work.TryClaimExecution(attempt, owner, "sandbox/fast-result", Now);
         work.ProposeResult(attempt, owner, "Result notification arrived before the start response.", Now);
@@ -245,7 +245,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void ADelayedStartAcknowledgementDoesNotClearFailureAttention()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         Guid owner = Guid.NewGuid();
         work.TryClaimExecution(attempt, owner, "sandbox/lost-acknowledgement", Now);
         work.ExecutionUncertain(attempt, owner, FailureKind.RuntimeDisconnected, Now);
@@ -258,7 +258,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void CancellationBeforeClaimPreventsDispatch()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         work.RequestCancellation(Now);
         Assert.Equal(WorkStatus.Cancelled, work.Status);
         Assert.Equal(AttemptStatus.Cancelled, work.CurrentAttempt!.Status);
@@ -271,7 +271,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void CancellationRequiresConfirmationEvenWhenRequestedBeforeStartNotification()
     {
-        var (work, attempt) = Queued();
+        (WorkItem? work, Guid attempt) = Queued();
         Guid owner = Guid.NewGuid();
         work.TryClaimExecution(attempt, owner, "sandbox/starting", Now);
         work.RequestCancellation(Now);
@@ -288,7 +288,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void FailedCancellationRequiresAttentionAndCannotEnableAReplacement()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         work.RequestCancellation(Now);
         work.ExecutionUncertain(attempt, owner, FailureKind.CancellationFailed, Now);
         Assert.Equal(WorkStatus.NeedsAttention, work.Status);
@@ -303,7 +303,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void CompletionRacingCancellationStillRequiresReviewOfTheActualResult()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         work.RequestCancellation(Now);
         work.ProposeResult(attempt, owner, "Completed before cancellation reached the runtime.", Now);
         Assert.Equal(AttemptStatus.Succeeded, work.CurrentAttempt!.Status);
@@ -315,7 +315,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void CancellationOfAnUncertainAttemptMustStillWaitForTheHost()
     {
-        var (work, attempt, owner) = Running();
+        (WorkItem? work, Guid attempt, Guid owner) = Running();
         work.ExecutionUncertain(attempt, owner, FailureKind.TimedOut, Now);
         work.RequestCancellation(Now);
         Assert.Equal(WorkStatus.Cancelling, work.Status);
@@ -328,7 +328,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void ReadModelsCannotMutateTheAggregatesCollections()
     {
-        var (work, _, _) = Running();
+        (WorkItem? work, Guid _, Guid _) = Running();
         Assert.Throws<NotSupportedException>(() => ((IList<WorkEvent>)work.History).Clear());
         Assert.Throws<NotSupportedException>(() => ((IList<ExecutionAttempt>)work.Attempts).Clear());
         Assert.Throws<NotSupportedException>(() => ((IList<WorkDecision>)work.Decisions).Clear());
@@ -351,7 +351,7 @@ public sealed class WorkLifecycleTests
 
     private static (WorkItem Work, Guid Attempt, Guid Owner) Running(string runtime = "codex")
     {
-        var (work, attempt) = Queued(runtime);
+        (WorkItem? work, Guid attempt) = Queued(runtime);
         Guid owner = Guid.NewGuid();
         work.TryClaimExecution(attempt, owner, "sandbox/" + attempt, Now);
         work.ExecutionStarted(attempt, owner, new("actual-model", "opaque-session", "opaque-operation"), Now);

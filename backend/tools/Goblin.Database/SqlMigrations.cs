@@ -12,7 +12,7 @@ public static class SqlMigrations
 {
     public static async Task ApplyAsync(string connectionString, string directory, TextWriter output)
     {
-        string[] files = Directory.GetFiles(directory, "*.sql").Order(StringComparer.Ordinal).ToArray();
+        string[] files = [.. Directory.GetFiles(directory, "*.sql").Order(StringComparer.Ordinal)];
         if (files.Length == 0) throw new InvalidOperationException("No SQL migrations found.");
 
         await using var connection = new NpgsqlConnection(connectionString);
@@ -46,7 +46,7 @@ public static class SqlMigrations
             }
             foreach ((string name, string hash) in applied)
             {
-                if (!scripts.TryGetValue(name, out var script) || script.Hash != hash)
+                if (!scripts.TryGetValue(name, out (string Sql, string Hash) script) || script.Hash != hash)
                 {
                     await output.WriteLineAsync($"Applied migration was removed or changed: {name}. Restore it and add a new migration.");
                     throw new InvalidOperationException("Migration history differs from source.");
