@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginSkillReadResponse
+public sealed class PluginSkillReadResponse
 {
     [JsonPropertyName("contents")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

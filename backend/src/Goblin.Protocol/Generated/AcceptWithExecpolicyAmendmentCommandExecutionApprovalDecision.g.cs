@@ -9,10 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision : CommandExecutionApprovalDecision
+public sealed class AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision : CommandExecutionApprovalDecision
 {
     [JsonPropertyName("acceptWithExecpolicyAmendment")]
     [JsonRequired]
-    public required AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecisionAcceptWithExecpolicyAmendment AcceptWithExecpolicyAmendment { get; init; }
+    public required AcceptWithExecpolicyAmendmentDetails AcceptWithExecpolicyAmendment { get; init; }
 
 }

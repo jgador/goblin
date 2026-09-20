@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FeedbackUploadResponse
+public sealed class FeedbackUploadResponse
 {
     [JsonPropertyName("promptHash")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

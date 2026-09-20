@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record HookOutputEntry
+public sealed class HookOutputEntry
 {
     [JsonPropertyName("kind")]
     [JsonRequired]

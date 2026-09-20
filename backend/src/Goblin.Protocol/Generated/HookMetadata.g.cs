@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(HookMetadataJsonConverter))]
-public abstract record HookMetadata
+public abstract class HookMetadata
 {
     [JsonPropertyName("handlerType")]
     public abstract string HandlerType { get; init; }

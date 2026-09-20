@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WindowsSandboxSetupStartResponse
+public sealed class WindowsSandboxSetupStartResponse
 {
     [JsonPropertyName("started")]
     [JsonRequired]

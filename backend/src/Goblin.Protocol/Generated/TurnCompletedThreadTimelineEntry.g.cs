@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnCompletedThreadTimelineEntry : ThreadTimelineEntry
+public sealed class TurnCompletedThreadTimelineEntry : ThreadTimelineEntry
 {
     [JsonPropertyName("completed_at")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

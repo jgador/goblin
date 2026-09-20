@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ImageGenerationCallResponseItem : ResponseItem
+public sealed class ImageGenerationCallResponseItem : ResponseItem
 {
     [JsonPropertyName("id")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record CustomMultiAgentMode : MultiAgentMode
+public sealed class CustomMultiAgentMode : MultiAgentMode
 {
     [JsonPropertyName("custom")]
     [JsonRequired]

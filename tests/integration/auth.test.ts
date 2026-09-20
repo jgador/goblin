@@ -324,13 +324,18 @@ test("prompts use the saved ChatGPT account and handle completion before the RPC
 });
 
 test("failed generations never report success or expose raw errors, even after partial text", async (t) => {
-  for (const scenario of ["prompt-fail", "prompt-partial-failure"]) {
+  for (const [scenario, status, code] of [
+    ["prompt-fail", 502, "prompt_unauthorized"],
+    ["prompt-partial-failure", 502, "prompt_unauthorized"],
+    ["prompt-usage-limit", 429, "prompt_limit_reached"],
+    ["prompt-rate-limit", 429, "prompt_limit_reached"],
+  ] as const) {
     const ctx = await start(t, { scenario });
     await ctx.unlock();
     await ctx.request("/api/auth/api-key", { apiKey: exampleKey });
     const result = await ctx.request("/api/prompt", { prompt: "Hello" });
-    assert.equal(result.status, 502);
-    assert.equal(result.error.code, "prompt_unauthorized");
+    assert.equal(result.status, status);
+    assert.equal(result.error.code, code);
     assert.equal(result.body.reply, undefined);
     assert.doesNotMatch(JSON.stringify(result.body), /THIS-MUST-NOT-LEAK|PRIVATE-DETAILS/);
   }

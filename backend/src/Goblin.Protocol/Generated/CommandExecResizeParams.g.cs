@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecResizeParams
+public sealed class CommandExecResizeParams
 {
     [JsonPropertyName("processId")]
     [JsonRequired]

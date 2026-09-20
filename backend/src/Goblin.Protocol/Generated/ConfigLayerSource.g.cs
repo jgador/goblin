@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ConfigLayerSourceJsonConverter))]
-public abstract record ConfigLayerSource
+public abstract class ConfigLayerSource
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

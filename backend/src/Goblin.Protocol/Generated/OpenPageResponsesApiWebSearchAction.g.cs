@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record OpenPageResponsesApiWebSearchAction : ResponsesApiWebSearchAction
+public sealed class OpenPageResponsesApiWebSearchAction : ResponsesApiWebSearchAction
 {
     [JsonPropertyName("type")]
     [JsonRequired]

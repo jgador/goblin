@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FileSystemSandboxEntry
+public sealed class FileSystemSandboxEntry
 {
     [JsonPropertyName("access")]
     [JsonRequired]

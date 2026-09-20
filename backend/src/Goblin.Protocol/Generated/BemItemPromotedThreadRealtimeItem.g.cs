@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record BemItemPromotedThreadRealtimeItem : ThreadRealtimeItem
+public sealed class BemItemPromotedThreadRealtimeItem : ThreadRealtimeItem
 {
     [JsonPropertyName("item_id")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsChangedServerNotification : ServerNotification
+public sealed class FsChangedServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

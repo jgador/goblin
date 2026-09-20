@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecResponse
+public sealed class CommandExecResponse
 {
     [JsonPropertyName("exitCode")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnModerationMetadataNotification
+public sealed class TurnModerationMetadataNotification
 {
     [JsonPropertyName("metadata")]
     [JsonRequired]

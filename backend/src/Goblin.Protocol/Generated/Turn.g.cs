@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record Turn
+public sealed class Turn
 {
     [JsonPropertyName("completedAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

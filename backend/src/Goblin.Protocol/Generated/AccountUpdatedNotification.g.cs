@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AccountUpdatedNotification
+public sealed class AccountUpdatedNotification
 {
     [JsonPropertyName("authMode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

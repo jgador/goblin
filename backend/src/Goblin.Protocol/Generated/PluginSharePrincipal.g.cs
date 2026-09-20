@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginSharePrincipal
+public sealed class PluginSharePrincipal
 {
     [JsonPropertyName("name")]
     [JsonRequired]

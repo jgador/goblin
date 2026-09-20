@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpToolCallAppContext
+public sealed class McpToolCallAppContext
 {
     [JsonPropertyName("actionName")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

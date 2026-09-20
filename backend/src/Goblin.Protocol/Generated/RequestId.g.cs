@@ -9,13 +9,20 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(RequestIdJsonConverter))]
-public readonly record struct RequestId
+public sealed class RequestId : IEquatable<RequestId>
 {
     public RequestId(string value) => String = value ?? throw new ArgumentNullException(nameof(value));
     public RequestId(long value) => Number = value;
 
+    [JsonIgnore]
     public string? String { get; }
+    [JsonIgnore]
     public long? Number { get; }
+
+    // Responses carry new instances of the IDs used to key pending requests.
+    public bool Equals(RequestId? other) => other is not null && String == other.String && Number == other.Number;
+    public override bool Equals(object? obj) => obj is RequestId other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(String, Number);
 
     public static implicit operator RequestId(string value) => new(value);
     public static implicit operator RequestId(long value) => new(value);
@@ -25,6 +32,8 @@ public readonly record struct RequestId
 
 public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
 {
+    public override bool HandleNull => true;
+
     public override RequestId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         => reader.TokenType switch
         {
@@ -35,6 +44,7 @@ public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
 
     public override void Write(Utf8JsonWriter writer, RequestId value, JsonSerializerOptions options)
     {
+        if (value is null) throw new JsonException("A request ID must be a string or signed 64-bit integer.");
         if (value.String is { } text) writer.WriteStringValue(text);
         else if (value.Number is { } number) writer.WriteNumberValue(number);
         else throw new JsonException("An uninitialized request ID has no wire representation.");

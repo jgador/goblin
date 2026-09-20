@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentConfigImportCompletedServerNotification : ServerNotification
+public sealed class ExternalAgentConfigImportCompletedServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpResourceReadParams
+public sealed class McpResourceReadParams
 {
     [JsonPropertyName("connectorId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

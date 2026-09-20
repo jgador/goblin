@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record McpElicitationStringSchema
+public sealed class McpElicitationStringSchema
 {
     [JsonPropertyName("default")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

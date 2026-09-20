@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadSetNameParams
+public sealed class ThreadSetNameParams
 {
     [JsonPropertyName("name")]
     [JsonRequired]

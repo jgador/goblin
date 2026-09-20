@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record EnvironmentConnectionNotification
+public sealed class EnvironmentConnectionNotification
 {
     [JsonPropertyName("environmentId")]
     [JsonRequired]

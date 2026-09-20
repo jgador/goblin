@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MarketplaceRemoveClientRequest : ClientRequest
+public sealed class MarketplaceRemoveClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

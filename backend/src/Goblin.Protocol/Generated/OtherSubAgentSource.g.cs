@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record OtherSubAgentSource : SubAgentSource
+public sealed class OtherSubAgentSource : SubAgentSource
 {
     [JsonPropertyName("other")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginShareListItem
+public sealed class PluginShareListItem
 {
     [JsonPropertyName("localPluginPath")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

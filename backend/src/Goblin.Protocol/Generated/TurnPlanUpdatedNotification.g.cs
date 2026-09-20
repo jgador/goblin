@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnPlanUpdatedNotification
+public sealed class TurnPlanUpdatedNotification
 {
     [JsonPropertyName("explanation")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AttestationGenerateResponse
+public sealed class AttestationGenerateResponse
 {
     [JsonPropertyName("token")]
     [JsonRequired]

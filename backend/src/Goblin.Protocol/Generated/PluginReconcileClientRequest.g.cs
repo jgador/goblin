@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginReconcileClientRequest : ClientRequest
+public sealed class PluginReconcileClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

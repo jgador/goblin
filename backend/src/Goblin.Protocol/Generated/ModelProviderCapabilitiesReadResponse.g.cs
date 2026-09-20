@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ModelProviderCapabilitiesReadResponse
+public sealed class ModelProviderCapabilitiesReadResponse
 {
     [JsonPropertyName("imageGeneration")]
     [JsonRequired]

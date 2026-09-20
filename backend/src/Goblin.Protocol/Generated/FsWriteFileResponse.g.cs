@@ -8,6 +8,6 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsWriteFileResponse
+public sealed class FsWriteFileResponse
 {
 }

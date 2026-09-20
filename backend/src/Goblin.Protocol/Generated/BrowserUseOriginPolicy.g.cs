@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record BrowserUseOriginPolicy
+public sealed class BrowserUseOriginPolicy
 {
     [JsonPropertyName("access")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

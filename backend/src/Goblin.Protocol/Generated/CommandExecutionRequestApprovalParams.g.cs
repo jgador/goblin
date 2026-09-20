@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecutionRequestApprovalParams
+public sealed class CommandExecutionRequestApprovalParams
 {
     [JsonPropertyName("approvalId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

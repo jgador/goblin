@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadSettingsUpdatedNotification
+public sealed class ThreadSettingsUpdatedNotification
 {
     [JsonPropertyName("threadId")]
     [JsonRequired]

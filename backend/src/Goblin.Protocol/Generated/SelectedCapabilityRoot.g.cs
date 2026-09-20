@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SelectedCapabilityRoot
+public sealed class SelectedCapabilityRoot
 {
     [JsonPropertyName("id")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRealtimeStartedNotification
+public sealed class ThreadRealtimeStartedNotification
 {
     [JsonPropertyName("realtimeSessionId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

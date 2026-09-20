@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SpendControlLimitSnapshot
+public sealed class SpendControlLimitSnapshot
 {
     [JsonPropertyName("limit")]
     [JsonRequired]

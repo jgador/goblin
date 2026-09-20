@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ComputerUseWindowsConfig
+public sealed class ComputerUseWindowsConfig
 {
     [JsonPropertyName("aumids")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

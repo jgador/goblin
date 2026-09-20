@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpServerStartupStatusUpdatedServerNotification : ServerNotification
+public sealed class McpServerStartupStatusUpdatedServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ToolSearchCallResponseItem : ResponseItem
+public sealed class ToolSearchCallResponseItem : ResponseItem
 {
     [JsonPropertyName("arguments")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record Config
+public sealed class Config
 {
     [JsonPropertyName("analytics")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record BaseBranchReviewTarget : ReviewTarget
+public sealed class BaseBranchReviewTarget : ReviewTarget
 {
     [JsonPropertyName("branch")]
     [JsonRequired]

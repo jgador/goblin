@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRealtimeErrorNotification
+public sealed class ThreadRealtimeErrorNotification
 {
     [JsonPropertyName("message")]
     [JsonRequired]

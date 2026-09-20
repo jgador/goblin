@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ApplicationNetworkRequirements
+public sealed class ApplicationNetworkRequirements
 {
     [JsonPropertyName("domains")]
     [JsonRequired]

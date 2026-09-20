@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CollaborationMode
+public sealed class CollaborationMode
 {
     [JsonPropertyName("mode")]
     [JsonRequired]

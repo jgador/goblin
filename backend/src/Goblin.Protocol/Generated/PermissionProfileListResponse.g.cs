@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PermissionProfileListResponse
+public sealed class PermissionProfileListResponse
 {
     [JsonPropertyName("data")]
     [JsonRequired]

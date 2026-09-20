@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadShellCommandClientRequest : ClientRequest
+public sealed class ThreadShellCommandClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

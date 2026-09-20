@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ImageGenerationThreadItem : ThreadItem
+public sealed class ImageGenerationThreadItem : ThreadItem
 {
     [JsonPropertyName("failure")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

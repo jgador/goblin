@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppsListParams
+public sealed class AppsListParams
 {
     [JsonPropertyName("cursor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadMetadataUpdateParams
+public sealed class ThreadMetadataUpdateParams
 {
     [JsonPropertyName("gitInfo")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

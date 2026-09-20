@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record LocalPluginSource : PluginSource
+public sealed class LocalPluginSource : PluginSource
 {
     [JsonPropertyName("path")]
     [JsonRequired]

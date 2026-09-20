@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record Model
+public sealed class Model
 {
     [JsonPropertyName("additionalSpeedTiers")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

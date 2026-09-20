@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsGetMetadataClientRequest : ClientRequest
+public sealed class FsGetMetadataClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

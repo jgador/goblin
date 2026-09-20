@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PromptHookMetadata : HookMetadata
+public sealed class PromptHookMetadata : HookMetadata
 {
     [JsonPropertyName("handlerType")]
     [JsonRequired]

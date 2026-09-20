@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record NetworkAccessGuardianApprovalReviewAction : GuardianApprovalReviewAction
+public sealed class NetworkAccessGuardianApprovalReviewAction : GuardianApprovalReviewAction
 {
     [JsonPropertyName("host")]
     [JsonRequired]

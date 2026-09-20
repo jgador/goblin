@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(DynamicToolNamespaceToolJsonConverter))]
-public abstract record DynamicToolNamespaceTool
+public abstract class DynamicToolNamespaceTool
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

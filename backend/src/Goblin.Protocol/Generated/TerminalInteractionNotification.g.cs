@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TerminalInteractionNotification
+public sealed class TerminalInteractionNotification
 {
     [JsonPropertyName("itemId")]
     [JsonRequired]

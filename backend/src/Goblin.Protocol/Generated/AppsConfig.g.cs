@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppsConfig
+public sealed class AppsConfig
 {
     [JsonPropertyName("_default")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

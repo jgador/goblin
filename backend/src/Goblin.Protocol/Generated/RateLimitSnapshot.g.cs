@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RateLimitSnapshot
+public sealed class RateLimitSnapshot
 {
     [JsonPropertyName("credits")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

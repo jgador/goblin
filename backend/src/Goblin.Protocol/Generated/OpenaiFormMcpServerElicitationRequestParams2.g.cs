@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record OpenaiFormMcpServerElicitationRequestParams2 : McpServerElicitationRequestParams
+public sealed class OpenaiFormMcpServerElicitationRequestParams2 : McpServerElicitationRequestParams
 {
     [JsonPropertyName("_meta")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

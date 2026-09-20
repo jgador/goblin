@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ItemAgentMessageDeltaServerNotification : ServerNotification
+public sealed class ItemAgentMessageDeltaServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnSteerClientRequest : ClientRequest
+public sealed class TurnSteerClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

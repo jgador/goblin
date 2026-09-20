@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecTerminateParams
+public sealed class CommandExecTerminateParams
 {
     [JsonPropertyName("processId")]
     [JsonRequired]

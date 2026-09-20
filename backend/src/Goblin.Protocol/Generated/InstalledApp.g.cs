@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InstalledApp
+public sealed class InstalledApp
 {
     [JsonPropertyName("callable")]
     [JsonRequired]

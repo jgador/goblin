@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(LocalShellActionJsonConverter))]
-public abstract record LocalShellAction
+public abstract class LocalShellAction
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record HttpConnectionFailedCodexErrorInfoHttpConnectionFailed
+public sealed class HttpConnectionFailedDetails
 {
     [JsonPropertyName("httpStatusCode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

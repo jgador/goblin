@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ResourceTemplate
+public sealed class ResourceTemplate
 {
     [JsonPropertyName("annotations")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

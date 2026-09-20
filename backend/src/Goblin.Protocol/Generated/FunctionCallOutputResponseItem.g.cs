@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FunctionCallOutputResponseItem : ResponseItem
+public sealed class FunctionCallOutputResponseItem : ResponseItem
 {
     [JsonPropertyName("call_id")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

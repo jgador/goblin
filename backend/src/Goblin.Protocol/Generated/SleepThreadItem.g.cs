@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SleepThreadItem : ThreadItem
+public sealed class SleepThreadItem : ThreadItem
 {
     [JsonPropertyName("durationMs")]
     [JsonRequired]

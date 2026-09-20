@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpResourceReadResponse
+public sealed class McpResourceReadResponse
 {
     [JsonPropertyName("contents")]
     [JsonRequired]

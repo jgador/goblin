@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record Project
+public sealed class Project
 {
     [JsonPropertyName("createdAt")]
     [JsonRequired]

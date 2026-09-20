@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CompactionResponseItem : ResponseItem
+public sealed class CompactionResponseItem : ResponseItem
 {
     [JsonPropertyName("encrypted_content")]
     [JsonRequired]

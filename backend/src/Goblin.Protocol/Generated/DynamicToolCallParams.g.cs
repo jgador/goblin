@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DynamicToolCallParams
+public sealed class DynamicToolCallParams
 {
     [JsonPropertyName("arguments")]
     [JsonRequired]

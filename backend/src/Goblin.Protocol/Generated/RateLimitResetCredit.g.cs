@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RateLimitResetCredit
+public sealed class RateLimitResetCredit
 {
     [JsonPropertyName("description")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

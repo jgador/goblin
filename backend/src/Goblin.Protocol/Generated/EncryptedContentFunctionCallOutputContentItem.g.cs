@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record EncryptedContentFunctionCallOutputContentItem : FunctionCallOutputContentItem
+public sealed class EncryptedContentFunctionCallOutputContentItem : FunctionCallOutputContentItem
 {
     [JsonPropertyName("encrypted_content")]
     [JsonRequired]

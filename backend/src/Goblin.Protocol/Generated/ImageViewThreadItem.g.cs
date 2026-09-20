@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ImageViewThreadItem : ThreadItem
+public sealed class ImageViewThreadItem : ThreadItem
 {
     [JsonPropertyName("id")]
     [JsonRequired]

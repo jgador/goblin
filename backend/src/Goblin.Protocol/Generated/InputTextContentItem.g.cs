@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InputTextContentItem : ContentItem
+public sealed class InputTextContentItem : ContentItem
 {
     [JsonPropertyName("text")]
     [JsonRequired]

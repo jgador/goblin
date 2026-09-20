@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CancelLoginAccountResponse
+public sealed class CancelLoginAccountResponse
 {
     [JsonPropertyName("status")]
     [JsonRequired]

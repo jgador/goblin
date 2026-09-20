@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record JSONRPCRequest
+public sealed class JSONRPCRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

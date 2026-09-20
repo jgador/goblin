@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WorkspaceMessage
+public sealed class WorkspaceMessage
 {
     [JsonPropertyName("archivedAt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

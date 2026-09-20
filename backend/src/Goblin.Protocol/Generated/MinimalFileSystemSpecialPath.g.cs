@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MinimalFileSystemSpecialPath : FileSystemSpecialPath
+public sealed class MinimalFileSystemSpecialPath : FileSystemSpecialPath
 {
     [JsonPropertyName("kind")]
     [JsonRequired]

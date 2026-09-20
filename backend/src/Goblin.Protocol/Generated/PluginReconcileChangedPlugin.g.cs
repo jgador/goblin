@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginReconcileChangedPlugin
+public sealed class PluginReconcileChangedPlugin
 {
     [JsonPropertyName("hasApps")]
     [JsonRequired]

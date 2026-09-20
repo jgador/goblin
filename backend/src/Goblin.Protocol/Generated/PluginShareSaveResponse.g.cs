@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginShareSaveResponse
+public sealed class PluginShareSaveResponse
 {
     [JsonPropertyName("canPublishToWorkspace")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

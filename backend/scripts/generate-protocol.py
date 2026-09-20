@@ -41,6 +41,43 @@ def pascal(value):
     return ("Value" + result) if not result or result[0].isdigit() else result
 
 
+def name_words(value):
+    return re.findall(r"[A-Z]+(?=[A-Z][a-z]|[0-9]|$)|[A-Z]?[a-z]+|[0-9]+", pascal(value))
+
+
+def combine_type_names(first, second):
+    """Keep shared PascalCase prefixes and suffixes only once."""
+    left, right = name_words(first), name_words(second)
+    prefix = 0
+    while prefix < min(len(left), len(right)) and left[prefix] == right[prefix]:
+        prefix += 1
+    suffix = 0
+    while (suffix < min(len(left), len(right)) - prefix
+           and left[-suffix - 1] == right[-suffix - 1]):
+        suffix += 1
+    return "".join(left[:len(left) - suffix] + right[prefix:len(right) - suffix]
+                   + (left[-suffix:] if suffix else []))
+
+
+def nested_type_name(owner, member, schema):
+    _, schema = nullable_schema(schema)
+    if isinstance(schema, dict) and schema.get("title"):
+        return owner + member
+    owner_words, member_words = name_words(owner), name_words(member)
+    if (isinstance(schema, dict) and schema.get("type") == "object" and len(member_words) > 1
+            and any(owner_words[start:start + len(member_words)] == member_words
+                    for start in range(len(owner_words) - len(member_words) + 1))):
+        return member + "Details"
+    name = combine_type_names(owner, member)
+    return owner + member if name == owner else name
+
+
+def variant_type_name(label, parent, *, wrapped=False):
+    name = combine_type_names(label, parent)
+    # A wrapper must remain distinct from both its payload and its base class.
+    return name + "Variant" if name == parent or wrapped and name == label else name
+
+
 def literal(value):
     return json.dumps(value, ensure_ascii=True)
 
@@ -86,6 +123,7 @@ class Generator:
                 self.schemas[name] = value
                 self.refs[ref] = name
         self.named = set(self.schemas)
+        self.parents = {}
         self.verify_individual_schemas()
         self.generated = {}
         self.generating = set()
@@ -118,18 +156,20 @@ class Generator:
             digest.update(b"\0")
         return digest.hexdigest()
 
-    def register(self, name, schema):
+    def register(self, name, schema, *, parent=None):
         name = pascal(name)
         if name in self.schemas:
-            if semantic(self.schemas[name]) == semantic(schema):
+            if semantic(self.schemas[name]) == semantic(schema) and self.parents.get(name) == parent:
                 return name
             suffix = 2
             while name + str(suffix) in self.schemas:
-                if semantic(self.schemas[name + str(suffix)]) == semantic(schema):
+                if (semantic(self.schemas[name + str(suffix)]) == semantic(schema)
+                        and self.parents.get(name + str(suffix)) == parent):
                     return name + str(suffix)
                 suffix += 1
             name += str(suffix)
         self.schemas[name] = schema
+        self.parents[name] = parent
         return name
 
     def enum_values(self, schema):
@@ -241,7 +281,7 @@ class Generator:
                           f"                throw new JsonException({literal('Expected ' + key + ' discriminator ' + constant + '.')});",
                           "        }", "    }", ""]
                 continue
-            type_name = self.type_name(value, name + prop)
+            type_name = self.type_name(value, nested_type_name(name, prop, value))
             if required:
                 lines.append("    [JsonRequired]")
             else:
@@ -257,7 +297,7 @@ class Generator:
         lines = []
         if schema.get("additionalProperties") is False:
             lines.append("[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]")
-        lines += [f"public sealed record {name}" + (f" : {parent}" if parent else ""), "{"]
+        lines += [f"public sealed class {name}" + (f" : {parent}" if parent else ""), "{"]
         lines += self.properties(name, schema, discriminator, parent is not None)
         return "\n".join(lines + ["}"])
 
@@ -276,7 +316,7 @@ class Generator:
     def union(self, name, schema):
         branches = schema.get("oneOf", schema.get("anyOf"))
         discriminator = self.discriminator(branches)
-        lines = [f"[JsonConverter(typeof({name}JsonConverter))]", f"public abstract record {name}", "{"]
+        lines = [f"[JsonConverter(typeof({name}JsonConverter))]", f"public abstract class {name}", "{"]
         if discriminator:
             lines += [f"    [JsonPropertyName({literal(discriminator)})]",
                       f"    public abstract string {pascal(discriminator)} {{ get; init; }}", ""]
@@ -290,25 +330,29 @@ class Generator:
         for index, branch in enumerate(branches):
             if discriminator:
                 value = branch["properties"][discriminator]["enum"][0]
-                variant = self.register(pascal(value) + name, branch)
+                hint = pascal(value) + name if branch.get("title") else variant_type_name(pascal(value), name)
+                variant = self.register(hint, branch, parent=name)
                 self.generated[variant] = self.object(variant, branch, name, discriminator)
                 variants.append((variant, variant, False, value))
             elif branch.get("type") == "object":
                 rawname = branch.get("title")
                 if not rawname:
                     required = branch.get("required", [])
-                    rawname = (pascal(required[0]) if required else f"Variant{index + 1}") + name
-                variant = self.register(rawname, branch)
+                    rawname = variant_type_name(pascal(required[0]) if required else f"Variant{index + 1}", name)
+                variant = self.register(rawname, branch, parent=name)
                 self.generated[variant] = self.object(variant, branch, name)
                 variants.append((variant, variant, False, None))
             else:
                 enum_values = self.enum_values(branch)
                 inner = self.type_name(branch, name + ("Value" if enum_values else f"Variant{index + 1}Value"))
                 label = "String" if enum_values or inner == "string" else "Array" if inner.startswith("List<") else pascal(inner)
-                variant = self.register(label + name, {"type": "object", "properties": {"value": branch}, "required": ["value"]})
+                variant = self.register(variant_type_name(label, name, wrapped=True),
+                                        {"type": "object", "properties": {"value": branch}, "required": ["value"]}, parent=name)
                 self.generated[variant] = (f"[JsonConverter(typeof(ProtocolValueConverter<{variant}, {inner}>))]\n"
-                                           f"public sealed record {variant}({inner} Value) : {name}, IProtocolValue<{variant}, {inner}>\n"
+                                           f"public sealed class {variant}({inner} value) : {name}, IProtocolValue<{variant}, {inner}>\n"
                                            "{\n"
+                                           "    [JsonIgnore]\n"
+                                           f"    public {inner} Value {{ get; init; }} = value;\n\n"
                                            f"    public static {variant} FromValue({inner} value) => new(value);\n"
                                            "}")
                 variants.append((variant, inner, True, None))
@@ -340,13 +384,20 @@ class Generator:
     @staticmethod
     def request_id():
         return '''[JsonConverter(typeof(RequestIdJsonConverter))]
-public readonly record struct RequestId
+public sealed class RequestId : IEquatable<RequestId>
 {
     public RequestId(string value) => String = value ?? throw new ArgumentNullException(nameof(value));
     public RequestId(long value) => Number = value;
 
+    [JsonIgnore]
     public string? String { get; }
+    [JsonIgnore]
     public long? Number { get; }
+
+    // Responses carry new instances of the IDs used to key pending requests.
+    public bool Equals(RequestId? other) => other is not null && String == other.String && Number == other.Number;
+    public override bool Equals(object? obj) => obj is RequestId other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(String, Number);
 
     public static implicit operator RequestId(string value) => new(value);
     public static implicit operator RequestId(long value) => new(value);
@@ -356,6 +407,8 @@ public readonly record struct RequestId
 
 public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
 {
+    public override bool HandleNull => true;
+
     public override RequestId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         => reader.TokenType switch
         {
@@ -366,6 +419,7 @@ public sealed class RequestIdJsonConverter : JsonConverter<RequestId>
 
     public override void Write(Utf8JsonWriter writer, RequestId value, JsonSerializerOptions options)
     {
+        if (value is null) throw new JsonException("A request ID must be a string or signed 64-bit integer.");
         if (value.String is { } text) writer.WriteStringValue(text);
         else if (value.Number is { } number) writer.WriteNumberValue(number);
         else throw new JsonException("An uninitialized request ID has no wire representation.");

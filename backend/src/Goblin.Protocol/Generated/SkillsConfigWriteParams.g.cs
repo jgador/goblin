@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SkillsConfigWriteParams
+public sealed class SkillsConfigWriteParams
 {
     [JsonPropertyName("enabled")]
     [JsonRequired]

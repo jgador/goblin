@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentConfigDetectResponse
+public sealed class ExternalAgentConfigDetectResponse
 {
     [JsonPropertyName("connectors")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

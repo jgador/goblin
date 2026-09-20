@@ -9,10 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ResponseStreamDisconnectedCodexErrorInfo : CodexErrorInfo
+public sealed class ResponseStreamDisconnectedCodexErrorInfo : CodexErrorInfo
 {
     [JsonPropertyName("responseStreamDisconnected")]
     [JsonRequired]
-    public required ResponseStreamDisconnectedCodexErrorInfoResponseStreamDisconnected ResponseStreamDisconnected { get; init; }
+    public required ResponseStreamDisconnectedDetails ResponseStreamDisconnected { get; init; }
 
 }

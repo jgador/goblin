@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnInterruptParams
+public sealed class TurnInterruptParams
 {
     [JsonPropertyName("threadId")]
     [JsonRequired]

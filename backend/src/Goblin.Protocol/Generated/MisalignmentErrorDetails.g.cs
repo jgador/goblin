@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MisalignmentErrorDetails
+public sealed class MisalignmentErrorDetails
 {
     [JsonPropertyName("detailedExplanation")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

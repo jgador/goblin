@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FeedbackRequirements
+public sealed class FeedbackRequirements
 {
     [JsonPropertyName("enabled")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

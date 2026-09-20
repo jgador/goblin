@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CompactionTriggerResponseItem : ResponseItem
+public sealed class CompactionTriggerResponseItem : ResponseItem
 {
     [JsonPropertyName("type")]
     [JsonRequired]

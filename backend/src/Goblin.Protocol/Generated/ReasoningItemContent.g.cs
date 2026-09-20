@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ReasoningItemContentJsonConverter))]
-public abstract record ReasoningItemContent
+public abstract class ReasoningItemContent
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

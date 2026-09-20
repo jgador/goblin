@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DeprecationNoticeServerNotification : ServerNotification
+public sealed class DeprecationNoticeServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

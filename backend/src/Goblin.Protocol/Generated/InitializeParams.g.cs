@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InitializeParams
+public sealed class InitializeParams
 {
     [JsonPropertyName("capabilities")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

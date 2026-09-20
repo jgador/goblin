@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRevertParams
+public sealed class ThreadRevertParams
 {
     [JsonPropertyName("beforeTurnId")]
     [JsonRequired]

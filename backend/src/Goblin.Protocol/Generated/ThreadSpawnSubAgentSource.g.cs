@@ -9,10 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ThreadSpawnSubAgentSource : SubAgentSource
+public sealed class ThreadSpawnSubAgentSource : SubAgentSource
 {
     [JsonPropertyName("thread_spawn")]
     [JsonRequired]
-    public required ThreadSpawnSubAgentSourceThreadSpawn ThreadSpawn { get; init; }
+    public required ThreadSpawnDetails ThreadSpawn { get; init; }
 
 }

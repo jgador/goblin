@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record EncryptedContentAgentMessageInputContent : AgentMessageInputContent
+public sealed class EncryptedContentAgentMessageInputContent : AgentMessageInputContent
 {
     [JsonPropertyName("encrypted_content")]
     [JsonRequired]

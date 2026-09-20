@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ModelVerificationNotification
+public sealed class ModelVerificationNotification
 {
     [JsonPropertyName("threadId")]
     [JsonRequired]

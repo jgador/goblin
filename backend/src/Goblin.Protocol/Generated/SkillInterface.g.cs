@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SkillInterface
+public sealed class SkillInterface
 {
     [JsonPropertyName("brandColor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record WebSearchToolConfig
+public sealed class WebSearchToolConfig
 {
     [JsonPropertyName("allowed_domains")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WindowsSandboxSetupCompletedServerNotification : ServerNotification
+public sealed class WindowsSandboxSetupCompletedServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

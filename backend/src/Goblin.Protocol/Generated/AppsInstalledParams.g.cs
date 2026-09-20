@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppsInstalledParams
+public sealed class AppsInstalledParams
 {
     [JsonPropertyName("forceRefresh")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

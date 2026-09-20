@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommandExecutionThreadItem : ThreadItem
+public sealed class CommandExecutionThreadItem : ThreadItem
 {
     [JsonPropertyName("aggregatedOutput")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

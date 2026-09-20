@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WindowsWorldWritableWarningServerNotification : ServerNotification
+public sealed class WindowsWorldWritableWarningServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

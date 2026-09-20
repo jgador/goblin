@@ -8,10 +8,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ResponseStreamConnectionFailedCodexErrorInfoResponseStreamConnectionFailed
+public sealed class ApplyNetworkPolicyAmendmentDetails
 {
-    [JsonPropertyName("httpStatusCode")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public ushort? HttpStatusCode { get; init; }
+    [JsonPropertyName("network_policy_amendment")]
+    [JsonRequired]
+    public required NetworkPolicyAmendment NetworkPolicyAmendment { get; init; }
 
 }

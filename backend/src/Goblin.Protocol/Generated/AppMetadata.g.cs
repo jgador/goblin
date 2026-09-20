@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppMetadata
+public sealed class AppMetadata
 {
     [JsonPropertyName("categories")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

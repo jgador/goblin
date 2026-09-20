@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AdditionalPermissionProfile
+public sealed class AdditionalPermissionProfile
 {
     [JsonPropertyName("fileSystem")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

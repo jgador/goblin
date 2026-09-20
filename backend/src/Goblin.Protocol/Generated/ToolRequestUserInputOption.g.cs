@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ToolRequestUserInputOption
+public sealed class ToolRequestUserInputOption
 {
     [JsonPropertyName("description")]
     [JsonRequired]

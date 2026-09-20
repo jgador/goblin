@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ClientRequestJsonConverter))]
-public abstract record ClientRequest
+public abstract class ClientRequest
 {
     [JsonPropertyName("method")]
     public abstract string Method { get; init; }

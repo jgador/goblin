@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record NetworkRequirements
+public sealed class NetworkRequirements
 {
     [JsonPropertyName("allowLocalBinding")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

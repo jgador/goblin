@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppLinkConfig
+public sealed class AppLinkConfig
 {
     [JsonPropertyName("approvals_reviewer")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

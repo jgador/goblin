@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record NetworkPolicyAmendment
+public sealed class NetworkPolicyAmendment
 {
     [JsonPropertyName("action")]
     [JsonRequired]

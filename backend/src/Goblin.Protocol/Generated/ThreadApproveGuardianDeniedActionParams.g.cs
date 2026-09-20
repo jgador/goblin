@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadApproveGuardianDeniedActionParams
+public sealed class ThreadApproveGuardianDeniedActionParams
 {
     [JsonPropertyName("event")]
     [JsonRequired]

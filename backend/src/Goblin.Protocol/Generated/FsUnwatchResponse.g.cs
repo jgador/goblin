@@ -8,6 +8,6 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsUnwatchResponse
+public sealed class FsUnwatchResponse
 {
 }

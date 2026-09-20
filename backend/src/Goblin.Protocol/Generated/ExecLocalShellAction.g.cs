@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExecLocalShellAction : LocalShellAction
+public sealed class ExecLocalShellAction : LocalShellAction
 {
     [JsonPropertyName("command")]
     [JsonRequired]

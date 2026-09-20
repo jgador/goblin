@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record SendAddCreditsNudgeEmailResponse
+public sealed class SendAddCreditsNudgeEmailResponse
 {
     [JsonPropertyName("status")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MarketplaceRemoveParams
+public sealed class MarketplaceRemoveParams
 {
     [JsonPropertyName("marketplaceName")]
     [JsonRequired]

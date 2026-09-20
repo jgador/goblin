@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record RemoteControlEnableParams
+public sealed class RemoteControlEnableParams
 {
     [JsonPropertyName("ephemeral")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record HookErrorInfo
+public sealed class HookErrorInfo
 {
     [JsonPropertyName("message")]
     [JsonRequired]

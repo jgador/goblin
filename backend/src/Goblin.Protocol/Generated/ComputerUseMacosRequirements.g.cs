@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ComputerUseMacosRequirements
+public sealed class ComputerUseMacosRequirements
 {
     [JsonPropertyName("bundleIds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

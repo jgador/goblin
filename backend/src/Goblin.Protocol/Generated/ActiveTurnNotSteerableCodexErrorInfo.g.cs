@@ -9,10 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record ActiveTurnNotSteerableCodexErrorInfo : CodexErrorInfo
+public sealed class ActiveTurnNotSteerableCodexErrorInfo : CodexErrorInfo
 {
     [JsonPropertyName("activeTurnNotSteerable")]
     [JsonRequired]
-    public required ActiveTurnNotSteerableCodexErrorInfoActiveTurnNotSteerable ActiveTurnNotSteerable { get; init; }
+    public required ActiveTurnNotSteerableDetails ActiveTurnNotSteerable { get; init; }
 
 }

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ApiKeyAccount : Account
+public sealed class ApiKeyAccount : Account
 {
     [JsonPropertyName("type")]
     [JsonRequired]

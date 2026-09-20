@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpToolCallResult
+public sealed class McpToolCallResult
 {
     [JsonPropertyName("_meta")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

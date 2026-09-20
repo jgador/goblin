@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpToolCallThreadItem : ThreadItem
+public sealed class McpToolCallThreadItem : ThreadItem
 {
     [JsonPropertyName("appContext")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

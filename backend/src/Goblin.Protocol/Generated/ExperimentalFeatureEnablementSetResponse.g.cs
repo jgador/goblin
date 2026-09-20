@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExperimentalFeatureEnablementSetResponse
+public sealed class ExperimentalFeatureEnablementSetResponse
 {
     [JsonPropertyName("enablement")]
     [JsonRequired]

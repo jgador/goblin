@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WeekdaysScheduledTaskSchedule : ScheduledTaskSchedule
+public sealed class WeekdaysScheduledTaskSchedule : ScheduledTaskSchedule
 {
     [JsonPropertyName("time")]
     [JsonRequired]

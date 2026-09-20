@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppsReadResponse
+public sealed class AppsReadResponse
 {
     [JsonPropertyName("apps")]
     [JsonRequired]

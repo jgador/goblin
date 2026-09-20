@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ReviewDecisionJsonConverter))]
-public abstract record ReviewDecision
+public abstract class ReviewDecision
 {
     public static ReviewDecision Approved { get; } = new StringReviewDecision(ReviewDecisionValue.Approved);
     public static ReviewDecision ApprovedForSession { get; } = new StringReviewDecision2(ReviewDecisionValue2.ApprovedForSession);

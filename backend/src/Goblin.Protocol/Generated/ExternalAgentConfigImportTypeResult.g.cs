@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentConfigImportTypeResult
+public sealed class ExternalAgentConfigImportTypeResult
 {
     [JsonPropertyName("failures")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InputAudioDynamicToolCallOutputContentItem : DynamicToolCallOutputContentItem
+public sealed class InputAudioDynamicToolCallOutputContentItem : DynamicToolCallOutputContentItem
 {
     [JsonPropertyName("audioUrl")]
     [JsonRequired]

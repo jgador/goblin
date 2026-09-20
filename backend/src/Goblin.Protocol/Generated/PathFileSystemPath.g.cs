@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PathFileSystemPath : FileSystemPath
+public sealed class PathFileSystemPath : FileSystemPath
 {
     [JsonPropertyName("path")]
     [JsonRequired]

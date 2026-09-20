@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InternalChatMessageMetadataPassthrough
+public sealed class InternalChatMessageMetadataPassthrough
 {
     [JsonPropertyName("turn_id")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

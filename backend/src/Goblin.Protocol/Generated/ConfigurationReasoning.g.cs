@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigurationReasoning
+public sealed class ConfigurationReasoning
 {
     [JsonPropertyName("effort")]
     [JsonRequired]

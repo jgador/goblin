@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PluginSummary
+public sealed class PluginSummary
 {
     [JsonPropertyName("authPolicy")]
     [JsonRequired]

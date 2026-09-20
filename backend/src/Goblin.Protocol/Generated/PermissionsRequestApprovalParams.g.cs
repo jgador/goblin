@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record PermissionsRequestApprovalParams
+public sealed class PermissionsRequestApprovalParams
 {
     [JsonPropertyName("cwd")]
     [JsonRequired]

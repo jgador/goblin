@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AppTemplateSummary
+public sealed class AppTemplateSummary
 {
     [JsonPropertyName("canonicalConnectorId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

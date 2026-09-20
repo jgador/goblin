@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigWarningNotification
+public sealed class ConfigWarningNotification
 {
     [JsonPropertyName("details")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

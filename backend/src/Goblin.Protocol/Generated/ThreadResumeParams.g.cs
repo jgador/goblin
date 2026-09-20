@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadResumeParams
+public sealed class ThreadResumeParams
 {
     [JsonPropertyName("approvalPolicy")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

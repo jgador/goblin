@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GlobPatternFileSystemPath : FileSystemPath
+public sealed class GlobPatternFileSystemPath : FileSystemPath
 {
     [JsonPropertyName("pattern")]
     [JsonRequired]

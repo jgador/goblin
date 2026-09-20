@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CommitReviewTarget : ReviewTarget
+public sealed class CommitReviewTarget : ReviewTarget
 {
     [JsonPropertyName("sha")]
     [JsonRequired]

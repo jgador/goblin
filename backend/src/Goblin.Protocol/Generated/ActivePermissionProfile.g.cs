@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ActivePermissionProfile
+public sealed class ActivePermissionProfile
 {
     [JsonPropertyName("extends")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

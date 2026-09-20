@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record QueuedSubmission
+public sealed class QueuedSubmission
 {
     [JsonPropertyName("clientUserMessageId")]
     [JsonRequired]

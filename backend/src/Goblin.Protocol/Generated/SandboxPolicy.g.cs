@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(SandboxPolicyJsonConverter))]
-public abstract record SandboxPolicy
+public abstract class SandboxPolicy
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

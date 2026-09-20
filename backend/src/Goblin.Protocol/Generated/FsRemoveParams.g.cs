@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsRemoveParams
+public sealed class FsRemoveParams
 {
     [JsonPropertyName("force")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

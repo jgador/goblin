@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpToolConfiguredHookHandler : ConfiguredHookHandler
+public sealed class McpToolConfiguredHookHandler : ConfiguredHookHandler
 {
     [JsonPropertyName("input")]
     [JsonRequired]

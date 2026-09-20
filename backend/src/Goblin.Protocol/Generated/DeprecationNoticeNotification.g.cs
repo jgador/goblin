@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record DeprecationNoticeNotification
+public sealed class DeprecationNoticeNotification
 {
     [JsonPropertyName("details")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

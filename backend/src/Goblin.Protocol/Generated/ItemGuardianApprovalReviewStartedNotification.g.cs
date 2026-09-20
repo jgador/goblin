@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ItemGuardianApprovalReviewStartedNotification
+public sealed class ItemGuardianApprovalReviewStartedNotification
 {
     [JsonPropertyName("action")]
     [JsonRequired]

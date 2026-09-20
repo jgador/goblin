@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FunctionDynamicToolNamespaceTool : DynamicToolNamespaceTool
+public sealed class FunctionDynamicToolNamespaceTool : DynamicToolNamespaceTool
 {
     [JsonPropertyName("deferLoading")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

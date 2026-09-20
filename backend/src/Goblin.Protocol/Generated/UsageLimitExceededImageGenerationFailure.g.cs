@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record UsageLimitExceededImageGenerationFailure : ImageGenerationFailure
+public sealed class UsageLimitExceededImageGenerationFailure : ImageGenerationFailure
 {
     [JsonPropertyName("limitId")]
     [JsonRequired]

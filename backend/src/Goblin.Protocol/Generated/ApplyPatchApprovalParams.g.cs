@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ApplyPatchApprovalParams
+public sealed class ApplyPatchApprovalParams
 {
     [JsonPropertyName("callId")]
     [JsonRequired]

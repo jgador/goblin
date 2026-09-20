@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AmazonBedrockLoginAccountParams : LoginAccountParams
+public sealed class AmazonBedrockLoginAccountParams : LoginAccountParams
 {
     [JsonPropertyName("apiKey")]
     [JsonRequired]

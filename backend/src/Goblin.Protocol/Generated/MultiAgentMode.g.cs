@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(MultiAgentModeJsonConverter))]
-public abstract record MultiAgentMode
+public abstract class MultiAgentMode
 {
     public static MultiAgentMode ExplicitRequestOnly { get; } = new StringMultiAgentMode(MultiAgentModeValue.ExplicitRequestOnly);
     public static MultiAgentMode Proactive { get; } = new StringMultiAgentMode(MultiAgentModeValue.Proactive);

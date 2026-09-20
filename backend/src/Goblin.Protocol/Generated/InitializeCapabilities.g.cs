@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record InitializeCapabilities
+public sealed class InitializeCapabilities
 {
     [JsonPropertyName("experimentalApi")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

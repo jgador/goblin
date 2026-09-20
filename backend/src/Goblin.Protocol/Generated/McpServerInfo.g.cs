@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record McpServerInfo
+public sealed class McpServerInfo
 {
     [JsonPropertyName("description")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

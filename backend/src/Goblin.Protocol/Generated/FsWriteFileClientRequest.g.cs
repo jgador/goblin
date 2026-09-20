@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsWriteFileClientRequest : ClientRequest
+public sealed class FsWriteFileClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

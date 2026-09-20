@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ActiveThreadStatus : ThreadStatus
+public sealed class ActiveThreadStatus : ThreadStatus
 {
     [JsonPropertyName("activeFlags")]
     [JsonRequired]

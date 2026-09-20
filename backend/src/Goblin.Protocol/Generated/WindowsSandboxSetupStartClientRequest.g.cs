@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record WindowsSandboxSetupStartClientRequest : ClientRequest
+public sealed class WindowsSandboxSetupStartClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

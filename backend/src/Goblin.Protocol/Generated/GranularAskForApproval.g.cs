@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record GranularAskForApproval : AskForApproval
+public sealed class GranularAskForApproval : AskForApproval
 {
     [JsonPropertyName("granular")]
     [JsonRequired]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AdditionalContextEntry
+public sealed class AdditionalContextEntry
 {
     [JsonPropertyName("kind")]
     [JsonRequired]

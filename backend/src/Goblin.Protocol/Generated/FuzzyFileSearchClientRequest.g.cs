@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FuzzyFileSearchClientRequest : ClientRequest
+public sealed class FuzzyFileSearchClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

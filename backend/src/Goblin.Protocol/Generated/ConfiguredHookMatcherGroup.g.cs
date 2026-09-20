@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfiguredHookMatcherGroup
+public sealed class ConfiguredHookMatcherGroup
 {
     [JsonPropertyName("hooks")]
     [JsonRequired]

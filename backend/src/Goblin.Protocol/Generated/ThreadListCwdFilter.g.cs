@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(ThreadListCwdFilterJsonConverter))]
-public abstract record ThreadListCwdFilter
+public abstract class ThreadListCwdFilter
 {
 }
 

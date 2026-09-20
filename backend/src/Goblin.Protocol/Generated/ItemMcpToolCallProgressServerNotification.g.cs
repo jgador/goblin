@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ItemMcpToolCallProgressServerNotification : ServerNotification
+public sealed class ItemMcpToolCallProgressServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

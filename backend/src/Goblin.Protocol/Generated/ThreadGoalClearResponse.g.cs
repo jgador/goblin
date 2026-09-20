@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadGoalClearResponse
+public sealed class ThreadGoalClearResponse
 {
     [JsonPropertyName("cleared")]
     [JsonRequired]

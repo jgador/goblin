@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadRollbackResponse
+public sealed class ThreadRollbackResponse
 {
     [JsonPropertyName("thread")]
     [JsonRequired]

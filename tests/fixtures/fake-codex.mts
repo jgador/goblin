@@ -153,7 +153,8 @@ for await (const line of createInterface({ input: process.stdin })) {
             continue;
         }
         function complete() {
-            const failed = scenario === "prompt-fail" || scenario === "prompt-partial-failure" || prompt === "Trigger a simulated failure.";
+            const failed = scenario === "prompt-fail" || scenario === "prompt-partial-failure" ||
+                scenario === "prompt-usage-limit" || scenario === "prompt-rate-limit" || prompt === "Trigger a simulated failure.";
             const message = { type: "agentMessage", id: "answer", phase: "final_answer",
                 text: scenario === "prompt-large" ? "x".repeat(8001) : scenario === "work-result"
                     ? JSON.stringify({ kind: "result", text: "A proposed Work outcome" }) : scenario === "work-input"
@@ -163,7 +164,9 @@ for await (const line of createInterface({ input: process.stdin })) {
             if (scenario !== "prompt-empty" && scenario !== "prompt-fail") {
                 send({ method: "item/completed", params: { completedAtMs: 1, threadId, turnId, item: message } });
             }
-            const error = failed ? { message: "Upstream secret THIS-MUST-NOT-LEAK", codexErrorInfo: "unauthorized", additionalDetails: "PRIVATE-DETAILS" } : null;
+            const codexErrorInfo = scenario === "prompt-usage-limit" ? "usageLimitExceeded" :
+                scenario === "prompt-rate-limit" ? "rateLimitExceeded" : "unauthorized";
+            const error = failed ? { message: "Upstream secret THIS-MUST-NOT-LEAK", codexErrorInfo, additionalDetails: "PRIVATE-DETAILS" } : null;
             if (error)
                 send({ method: "error", params: { threadId, turnId, willRetry: false, error } });
             send({ method: "turn/completed", params: { threadId, turn: { id: turnId,

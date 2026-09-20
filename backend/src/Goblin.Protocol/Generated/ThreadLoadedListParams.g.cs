@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadLoadedListParams
+public sealed class ThreadLoadedListParams
 {
     [JsonPropertyName("cursor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ApplyPatchApprovalResponse
+public sealed class ApplyPatchApprovalResponse
 {
     [JsonPropertyName("decision")]
     [JsonRequired]

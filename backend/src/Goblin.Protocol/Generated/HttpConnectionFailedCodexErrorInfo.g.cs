@@ -9,10 +9,10 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
-public sealed record HttpConnectionFailedCodexErrorInfo : CodexErrorInfo
+public sealed class HttpConnectionFailedCodexErrorInfo : CodexErrorInfo
 {
     [JsonPropertyName("httpConnectionFailed")]
     [JsonRequired]
-    public required HttpConnectionFailedCodexErrorInfoHttpConnectionFailed HttpConnectionFailed { get; init; }
+    public required HttpConnectionFailedDetails HttpConnectionFailed { get; init; }
 
 }

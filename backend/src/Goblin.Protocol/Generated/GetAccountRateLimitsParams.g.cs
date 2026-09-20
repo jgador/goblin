@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GetAccountRateLimitsParams
+public sealed class GetAccountRateLimitsParams
 {
     [JsonPropertyName("excludeResetCreditDetails")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

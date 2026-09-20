@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ManagedHooksRequirements
+public sealed class ManagedHooksRequirements
 {
     [JsonPropertyName("Interrupt")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

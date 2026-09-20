@@ -9,7 +9,7 @@ using System.Text.Json.Serialization;
 namespace Goblin.Protocol;
 
 [JsonConverter(typeof(PatchChangeKindJsonConverter))]
-public abstract record PatchChangeKind
+public abstract class PatchChangeKind
 {
     [JsonPropertyName("type")]
     public abstract string Type { get; init; }

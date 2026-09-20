@@ -15,7 +15,7 @@ are not requirements for future integrations.
 
 | Layer | Owns |
 | --- | --- |
-| `backend/src/Goblin.Protocol` | Generated POCO records, typed unions/enums, request IDs, and `System.Text.Json` converters |
+| `backend/src/Goblin.Protocol` | Generated POCO classes, typed unions/enums, request IDs, and explicit `System.Text.Json` attributes/converters |
 | `backend/src/Goblin.Integrations.Codex/CodexClient.cs` | Child process, isolated environment, JSONL framing, initialization, request correlation, typed notifications, timeouts, restart and shutdown |
 | `backend/src/Goblin.Integrations.Codex/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
 | `backend/src/Goblin.Integrations.Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |

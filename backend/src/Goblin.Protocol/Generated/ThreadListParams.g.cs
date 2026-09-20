@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadListParams
+public sealed class ThreadListParams
 {
     [JsonPropertyName("archived")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

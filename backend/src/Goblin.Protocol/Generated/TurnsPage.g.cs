@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record TurnsPage
+public sealed class TurnsPage
 {
     [JsonPropertyName("backwardsCursor")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

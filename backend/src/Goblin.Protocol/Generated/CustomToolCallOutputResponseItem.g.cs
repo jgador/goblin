@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record CustomToolCallOutputResponseItem : ResponseItem
+public sealed class CustomToolCallOutputResponseItem : ResponseItem
 {
     [JsonPropertyName("call_id")]
     [JsonRequired]

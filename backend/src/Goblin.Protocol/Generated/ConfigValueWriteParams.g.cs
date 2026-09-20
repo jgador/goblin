@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigValueWriteParams
+public sealed class ConfigValueWriteParams
 {
     [JsonPropertyName("expectedVersion")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

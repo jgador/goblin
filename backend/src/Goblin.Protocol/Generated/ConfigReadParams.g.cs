@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigReadParams
+public sealed class ConfigReadParams
 {
     [JsonPropertyName("cwd")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

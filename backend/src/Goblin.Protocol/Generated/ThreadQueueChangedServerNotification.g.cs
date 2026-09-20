@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ThreadQueueChangedServerNotification : ServerNotification
+public sealed class ThreadQueueChangedServerNotification : ServerNotification
 {
     [JsonPropertyName("method")]
     [JsonRequired]

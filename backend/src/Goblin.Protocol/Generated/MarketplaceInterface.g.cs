@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record MarketplaceInterface
+public sealed class MarketplaceInterface
 {
     [JsonPropertyName("displayName")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

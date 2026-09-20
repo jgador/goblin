@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record LegacyManagedConfigTomlFromFileConfigLayerSource : ConfigLayerSource
+public sealed class LegacyManagedConfigTomlFromFileConfigLayerSource : ConfigLayerSource
 {
     [JsonPropertyName("file")]
     [JsonRequired]

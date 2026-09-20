@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record FsWatchResponse
+public sealed class FsWatchResponse
 {
     [JsonPropertyName("path")]
     [JsonRequired]

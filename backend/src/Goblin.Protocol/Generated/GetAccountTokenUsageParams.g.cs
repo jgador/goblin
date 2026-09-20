@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GetAccountTokenUsageParams
+public sealed class GetAccountTokenUsageParams
 {
     [JsonPropertyName("threadId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ExternalAgentImportedConnectorCandidate
+public sealed class ExternalAgentImportedConnectorCandidate
 {
     [JsonPropertyName("name")]
     [JsonRequired]

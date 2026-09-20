@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ConfigBatchWriteClientRequest : ClientRequest
+public sealed class ConfigBatchWriteClientRequest : ClientRequest
 {
     [JsonPropertyName("id")]
     [JsonRequired]

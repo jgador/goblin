@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GitPluginSource : PluginSource
+public sealed class GitPluginSource : PluginSource
 {
     [JsonPropertyName("path")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record HookPromptThreadItem : ThreadItem
+public sealed class HookPromptThreadItem : ThreadItem
 {
     [JsonPropertyName("fragments")]
     [JsonRequired]

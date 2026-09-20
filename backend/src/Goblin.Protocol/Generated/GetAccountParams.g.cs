@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record GetAccountParams
+public sealed class GetAccountParams
 {
     [JsonPropertyName("refreshToken")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

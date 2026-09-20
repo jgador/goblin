@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record ChatgptAuthTokensRefreshParams
+public sealed class ChatgptAuthTokensRefreshParams
 {
     [JsonPropertyName("previousAccountId")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

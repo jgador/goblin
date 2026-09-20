@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed record AuthRecoveryNotification
+public sealed class AuthRecoveryNotification
 {
     [JsonPropertyName("message")]
     [JsonRequired]
