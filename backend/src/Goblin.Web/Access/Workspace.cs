@@ -76,7 +76,12 @@ public sealed partial class Workspace
     {
         if (!_allowedHosts.Contains(request.Host.Value ?? ""))
             throw new PublicError("invalid_host", "Open the configured workspace address.", 403);
-        if (HttpMethods.IsPost(request.Method) && !_allowedOrigins.Contains(request.Headers.Origin.ToString()))
+        if (HttpMethods.IsPost(request.Method)) ValidateOrigin(request);
+    }
+
+    public void ValidateOrigin(HttpRequest request)
+    {
+        if (!_allowedOrigins.Contains(request.Headers.Origin.ToString()))
             throw new PublicError("invalid_origin", "This request must come from the workspace page.", 403);
     }
 

@@ -24,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Wolverine;
+using Yarp.ReverseProxy.Forwarder;
 
 namespace Goblin.Web;
 
@@ -42,6 +43,7 @@ public sealed record ApplicationOptions
     public bool EnableWork { get; init; }
     public IExecutionHost? ExecutionHost { get; init; }
     public string GitHubCommand { get; init; } = "gh";
+    public string? HeadlampUrl { get; init; }
 }
 
 public static class GoblinApplication
@@ -69,6 +71,11 @@ public static class GoblinApplication
         });
         // Request and upstream details can contain credentials. Log only explicit safe startup messages.
         builder.Logging.ClearProviders();
+        if (!string.IsNullOrWhiteSpace(options.HeadlampUrl))
+        {
+            builder.Services.AddHttpForwarder();
+            builder.Services.AddSingleton(services => new HeadlampProxy(services.GetRequiredService<IHttpForwarder>(), options.HeadlampUrl));
+        }
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
         builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
@@ -119,6 +126,7 @@ public static class GoblinApplication
         // Resolve eagerly so event subscriptions exist before the first initialization.
         Authentication auth = app.Services.GetRequiredService<Authentication>();
         CodexClient codex = app.Services.GetRequiredService<CodexClient>();
+        HeadlampProxy? headlamp = app.Services.GetService<HeadlampProxy>();
         var staticFiles = new Dictionary<string, (byte[] Body, string ContentType)>();
         foreach ((string? path, string? file, string? type) in new[]
         {
@@ -166,6 +174,17 @@ public static class GoblinApplication
                 bool post = HttpMethods.IsPost(request.Method);
                 if (get && path is "/healthz" or "/readyz") { await next(context); return; }
                 workspace.ValidateRequest(request);
+                if (request.Path.StartsWithSegments("/headlamp", StringComparison.Ordinal))
+                {
+                    if (headlamp is null) throw new PublicError("cluster_unavailable", "The cluster view requires Goblin's Kubernetes installation.", 404);
+                    if (workspace.SessionId(request) is null)
+                    {
+                        if (get && request.Headers.Accept.ToString().Contains("text/html", StringComparison.Ordinal))
+                        { response.Redirect("/?returnTo=headlamp"); return; }
+                        throw new PublicError("workspace_locked", "Unlock the workspace to continue.", 401);
+                    }
+                    await headlamp.SendAsync(context, workspace); return;
+                }
                 bool publicRequest = (get && staticFiles.ContainsKey(path)) || (path == "/api/session" && (get || post));
                 if (!publicRequest)
                     context.Items[SessionKey] = workspace.SessionId(request) ?? throw new PublicError("workspace_locked", "Unlock the workspace to continue.", 401);
@@ -203,6 +222,7 @@ public static class GoblinApplication
         app.MapGet("/api/session", (HttpContext context) => workspace.Session(workspace.SessionId(context.Request) is not null));
         app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "password"), context.Response));
         app.MapPost("/api/session/lock", (HttpContext context) => workspace.Lock((string)context.Items[SessionKey]!, context.Response));
+        app.MapGet("/api/cluster", () => Results.Json(new { available = headlamp is not null }));
         app.MapGet("/api/status", (Delegate)((HttpContext context) => ConnectionAsync(context, false, auth.StatusAsync)));
         app.MapPost("/api/auth/chatgpt", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.LoginChatGptAsync)));
         app.MapPost("/api/auth/api-key", (Delegate)((HttpContext context) => ConnectionAsync(context, true, () => auth.LoginApiKeyAsync(StringField(context, "apiKey")))));

@@ -7,7 +7,10 @@ import type {
     Notice,
 } from "../api/contracts.js";
 
-export async function mountCodex(root: HTMLElement) {
+export async function mountCodex(
+    root: HTMLElement,
+    onUnlocked?: () => boolean,
+) {
     function byId<Element extends HTMLElement>(
         id: string,
         kind: { new (): Element },
@@ -398,6 +401,7 @@ export async function mountCodex(root: HTMLElement) {
         action("Opening workspace…", async () => {
             await api("/api/session", { password });
             unlocked = true;
+            if (onUnlocked?.()) return;
             showPanel("connect");
             render(await api("/api/status"));
         });
@@ -466,6 +470,7 @@ export async function mountCodex(root: HTMLElement) {
         const session = await api("/api/session");
         unlocked = session.authenticated;
         if (unlocked) {
+            if (onUnlocked?.()) return;
             showPanel("connect");
             render(await api("/api/status"));
         } else showPanel("locked");

@@ -17,6 +17,7 @@ export interface BackendOptions {
     verification?: "accepted" | "unverified" | "invalid";
     enableWork?: boolean;
     gitHubCommand?: string;
+    headlampUrl?: string;
 }
 
 export async function writePasswordHash(path: string, password: string) {

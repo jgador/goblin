@@ -29,6 +29,11 @@ maintains a small TCP forwarder from loopback port 8788 to Linux port 80, so
 Windows access continues when Kubernetes takes over from the setup server.
 The setup UI stops and disables itself after installation; the forwarder remains.
 
+Open **Settings → Cluster → Open cluster**, or
+**http://localhost:8788/headlamp/**, to inspect Kubernetes in Headlamp using your
+Goblin login. This is read-only access to workloads, logs, events, and storage.
+The path uses the same chosen browser port. See [the cluster view](../../docs/cluster-view.md).
+
 Azure uses its assigned DNS name instead of localhost. Open the deployment's
 `goblinUrl` output to see the same setup page, progress, and handoff. The local
 forwarder is only for testing and is not included in Azure provisioning.

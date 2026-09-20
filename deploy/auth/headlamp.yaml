@@ -1,0 +1,179 @@
+# Headlamp is reachable only through Goblin's authenticated /headlamp proxy.
+# The dedicated account can inspect the cluster but cannot read Secrets or change it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: goblin-cluster-viewer
+  namespace: goblin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: goblin-cluster-viewer
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, services, endpoints, events, namespaces, nodes, persistentvolumes, persistentvolumeclaims, replicationcontrollers, resourcequotas, limitranges, serviceaccounts, configmaps]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, daemonsets, statefulsets, replicasets, controllerrevisions]
+    verbs: [get, list, watch]
+  - apiGroups: [batch]
+    resources: [jobs, cronjobs]
+    verbs: [get, list, watch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, ingressclasses, networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch]
+  - apiGroups: [storage.k8s.io]
+    resources: [storageclasses, csidrivers, csinodes, csistoragecapacities, volumeattachments]
+    verbs: [get, list, watch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings, clusterroles, clusterrolebindings]
+    verbs: [get, list, watch]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+  - apiGroups: [apiregistration.k8s.io]
+    resources: [apiservices]
+    verbs: [get, list, watch]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [events.k8s.io]
+    resources: [events]
+    verbs: [get, list, watch]
+  - apiGroups: [metrics.k8s.io]
+    resources: [pods, nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [agents.x-k8s.io]
+    resources: [sandboxes, sandboxclaims, sandboxtemplates, sandboxwarmpools]
+    verbs: [get, list, watch]
+  - apiGroups: [cert-manager.io]
+    resources: [certificates, certificaterequests, issuers, clusterissuers]
+    verbs: [get, list, watch]
+  # Headlamp uses these non-mutating reviews to hide unavailable UI actions.
+  - apiGroups: [authorization.k8s.io]
+    resources: [selfsubjectaccessreviews, selfsubjectrulesreviews]
+    verbs: [create]
+  - apiGroups: [authentication.k8s.io]
+    resources: [selfsubjectreviews]
+    verbs: [create]
+  - nonResourceURLs: [/api, /api/*, /apis, /apis/*, /version, /healthz, /livez, /readyz]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: goblin-cluster-viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: goblin-cluster-viewer
+subjects:
+  - kind: ServiceAccount
+    name: goblin-cluster-viewer
+    namespace: goblin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goblin-headlamp
+  namespace: goblin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goblin-headlamp
+  template:
+    metadata:
+      labels:
+        app: goblin-headlamp
+    spec:
+      serviceAccountName: goblin-cluster-viewer
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: headlamp
+          image: ghcr.io/headlamp-k8s/headlamp:v0.45.0@sha256:db3f0e0fc58d358d41daa3fe7fc852437552c7ee873c3645470f7b86a8e0db49
+          args:
+            - -in-cluster
+            - -in-cluster-context-name=goblin
+            - -base-url=/headlamp
+            # Goblin authenticates every request; NetworkPolicy excludes other callers.
+            - -unsafe-use-service-account-token
+          env:
+            - name: HEADLAMP_STATIC_PLUGINS_DIR
+              value: ""
+          ports:
+            - name: http
+              containerPort: 4466
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: temporary
+              mountPath: /tmp
+          readinessProbe:
+            httpGet:
+              path: /headlamp/
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /headlamp/
+              port: http
+            initialDelaySeconds: 10
+      volumes:
+        - name: temporary
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblin-headlamp
+  namespace: goblin
+spec:
+  selector:
+    app: goblin-headlamp
+  ports:
+    - name: http
+      port: 4466
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goblin-headlamp
+  namespace: goblin
+spec:
+  podSelector:
+    matchLabels:
+      app: goblin-headlamp
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: goblin-auth
+      ports:
+        - protocol: TCP
+          port: 4466

@@ -44,6 +44,12 @@ prevents application handoff. [Database setup](../../docs/database.md) and
 [execution hosting](../../docs/execution-hosting.md) cover repair, credentials,
 repository execution, and GitHub CLI sign-in through Settings.
 
+Headlamp is installed alongside Goblin at **`<goblinUrl>/headlamp/`**. Open
+**Settings → Cluster → Open cluster** to inspect workloads, logs, events, and
+storage using the same Goblin password. It uses the assigned VM hostname and
+the existing route, with read-only cluster access and no extra public port.
+See [the cluster view](../../docs/cluster-view.md) for permissions and checks.
+
 For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
 Enter your Goblin password to open the workspace. HTTPS and certificates remain
 a separate setup step; HTTP traffic, including passwords and sessions, is unencrypted.

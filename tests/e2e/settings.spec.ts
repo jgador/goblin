@@ -20,6 +20,7 @@ async function settingsFixture(page: Page) {
             path = new URL(request.url()).pathname;
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
+        else if (path === "/api/cluster") json = { available: true };
         else if (path === "/api/status")
             json = {
                 account: {
@@ -75,6 +76,13 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     const dialog = page.getByRole("dialog", { name: "Settings" });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText("owner@example.test · plus")).toBeVisible();
+    await dialog.getByRole("button", { name: "Cluster", exact: true }).click();
+    const cluster = dialog.getByRole("link", { name: "Open cluster" });
+    await expect(cluster).toHaveAttribute("href", "/headlamp/");
+    await expect(cluster).toHaveAttribute("target", "_blank");
+    await expect(
+        dialog.getByText(/Your Goblin login gives you read-only access/),
+    ).toBeVisible();
     await dialog.getByRole("button", { name: "GitHub", exact: true }).click();
     await dialog
         .getByRole("button", { name: "Connect GitHub", exact: true })

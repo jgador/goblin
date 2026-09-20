@@ -31,6 +31,8 @@
     "test:secrets": "node --test scripts/check-secrets.test.mts",
     "pretest:codex": "npm run build",
     "test:codex": "node dist/scripts/check-codex.js",
+    "pretest:headlamp": "npm run build",
+    "test:headlamp": "node dist/scripts/check-headlamp.js",
     "pretest:browser": "npm run build",
     "test:browser": "playwright test"
   },
