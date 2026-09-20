@@ -36,9 +36,14 @@ h1, h2, h3, h4, p { margin: 0; }
 .icon-button:hover, .quiet-button:hover { background: #e9ede2; }
 .new-chat { display: flex; align-items: center; justify-content: flex-start; gap: 11px; border-radius: 9px; background: var(--green); color: white; font-size: 14px; font-weight: 500; padding: 11px 14px; }
 .new-chat:hover, .primary:hover, .send:hover { background: #34563e; }
-.sidebar-search { display: flex; align-items: center; gap: 10px; padding: 12px 10px; margin: 9px 0 18px; color: #76806d; }
+.sidebar-search { display: flex; align-items: center; gap: 10px; padding: 11px 9px; margin: 9px 0 18px; border: 1px solid transparent; border-radius: var(--control-radius); color: #76806d; }
 .sidebar-search svg { width: 17px; height: 17px; }
-.sidebar-search input { border: 0; background: transparent; padding: 3px 0; min-width: 0; width: 100%; font-size: 13px; }
+.sidebar-search input { appearance: none; border: 0; background: transparent; padding: 3px 0; min-width: 0; width: 100%; font-size: 13px; }
+.sidebar-search:focus-within { border-color: var(--control-focus); box-shadow: 0 0 0 1px var(--control-focus); }
+.sidebar-search input:focus-visible, .composer textarea:focus-visible { outline: none; box-shadow: none; }
+@media (forced-colors: active) {
+    .sidebar-search:focus-within, .composer:focus-within { outline: 2px solid Highlight; outline-offset: 2px; }
+}
 .sidebar-search input::placeholder { color: #697466; }
 .sidebar-history { overflow: auto; min-height: 0; flex: 1; scrollbar-width: thin; }
 .history-heading { display: flex; justify-content: space-between; align-items: center; padding: 0 10px; margin: 0 0 12px; }
@@ -90,8 +95,8 @@ h1, h2, h3, h4, p { margin: 0; }
 .composer-wrap { width: min(100%, 802px); margin: 0 auto; padding: 15px 36px 23px; flex-shrink: 0; }
 .home .composer-wrap { padding: 0; }
 .composer { background: #fffefb; border: 1px solid #dbe1d2; border-radius: 19px; padding: 17px 17px 12px; box-shadow: 0 3px 15px #243d2c05; text-align: left; }
-.composer:focus-within { border-color: #99ae87; box-shadow: 0 0 0 2px #99ae8712; }
-.composer textarea { background: transparent; border: 0; outline: 0; width: 100%; resize: vertical; min-height: 70px; max-height: 30dvh; display: block; font-size: 15px; line-height: 1.6; padding: 0 3px; }
+.composer:focus-within { border-color: var(--control-focus); box-shadow: 0 0 0 1px var(--control-focus); }
+.composer textarea { appearance: none; background: transparent; border: 0; outline: 0; box-shadow: none; width: 100%; resize: vertical; min-height: 70px; max-height: 30dvh; display: block; font-size: 15px; line-height: 1.6; padding: 0 3px; }
 .composer textarea::placeholder { color: #87907e; }
 .composer-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; }
 .composer-note { color: #78846e; font-size: 11px; }
@@ -141,7 +146,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .secondary { background: var(--paper); color: #5f704f; border: 1px solid #d5ddca; }
 .secondary:hover { background: #edf2e5; }
 .decision label { display: block; margin-top: 12px; }
-.decision input, .decision select { display: block; font-size: 13px; padding: 9px 12px; border: 1px solid #d5ddca; border-radius: 8px; max-width: 100%; background: var(--paper); margin-top: 6px; }
+.decision .field-control { margin-top: 6px; }
 .decision details { margin: 16px 0 9px; border-top: 1px solid #e1e7d5; padding-top: 12px; }
 .decision summary { cursor: pointer; color: #415f32; }
 .decision details p { margin: 10px 0; line-height: 1.7; }
@@ -170,7 +175,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .unlock-card h1 { font-size: 29px; font-weight: 500; letter-spacing: -.8px; color: var(--green); margin-bottom: 14px; }
 .unlock-card p { font-size: 14px; line-height: 1.8; color: #6d7962; }
 .unlock-card label { display: block; font-size: 13px; margin: 28px 0 8px; }
-.unlock-card input { width: 100%; border: 1px solid #d3dcc9; border-radius: 9px; padding: 12px 14px; background: var(--paper); }
+.unlock-card .field-control { padding: 12px 14px; }
 .unlock-card .primary { width: 100%; margin-top: 15px; font-size: 14px; padding: 12px; }
 .unlock-card .command-notice { margin-top: 18px; border-radius: 9px; }
 .unlock-note { color: #839076; font-size: 12px; }

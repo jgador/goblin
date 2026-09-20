@@ -33,7 +33,7 @@
           <p class="description" id="unlock-description">Enter the password chosen when this Goblin workspace was set up.</p>
           <form id="unlock-form">
             <label for="workspace-password">Goblin password</label>
-            <input id="workspace-password" name="workspace-password" type="password" autocomplete="current-password" spellcheck="false" required maxlength="128">
+            <input class="field-control" id="workspace-password" name="workspace-password" type="password" autocomplete="current-password" spellcheck="false" required maxlength="128">
             <button class="primary full" type="submit">Open workspace <span aria-hidden="true">↗</span></button>
           </form>
           <p class="footnote">This password opens Goblin. You’ll connect your ChatGPT account or API key next.</p>
@@ -54,7 +54,7 @@
             <form id="api-key-form">
               <p class="description">API usage is billed separately from your ChatGPT subscription.</p>
               <label for="api-key">OpenAI API key</label>
-              <input id="api-key" name="api-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" required minlength="20" maxlength="4096">
+              <input class="field-control" id="api-key" name="api-key" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false" required minlength="20" maxlength="4096">
               <button class="secondary full" type="submit">Connect API key</button>
               <p class="footnote">Get a key from the <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer">OpenAI Platform</a>. Goblin checks the connection with a small request that counts toward your API billing.</p>
             </form>

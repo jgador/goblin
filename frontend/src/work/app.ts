@@ -434,7 +434,7 @@ function render() {
             ? current()!.work.objective.slice(0, 70) + " · Goblin"
             : "Goblin";
     if (!authenticated) {
-        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
+        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
         root.innerHTML = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${mobile.matches && !sidebarCollapsed ? "inert" : ""}>
             <header class="workspace-header"><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button><span class="workspace-name">${view === "chat" ? "Conversation" : "Goblin"}</span></div><div class="header-actions">${view === "work" && current() ? `<button class="quiet-button" data-action="details" aria-expanded="${detailsOpen}" aria-controls="work-details">${icon("inbox")}Details</button>` : ""}<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button></div></header>
@@ -549,8 +549,8 @@ function controls(w: Work) {
     let content = "";
     if (w.status === "Ready")
         content = !w.agentId
-            ? `<p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select id="agent">${agents.map((a) => `<option value="${a.id}">${e(a.name)}</option>`).join("")}</select>${button("assign", "Assign agent", true)}`
-            : `<p>Ready when you are.</p>${button("execute", "Start work", true)}<details id="repository-options"><summary>Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><label>Repository <select id="repository"><option value="">Choose an enabled repository</option>${repositories
+            ? `<p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select class="field-control select-control" id="agent"><button type="button"><selectedcontent></selectedcontent></button>${agents.map((a) => `<option value="${a.id}">${e(a.name)}</option>`).join("")}</select>${button("assign", "Assign agent", true)}`
+            : `<p>Ready when you are.</p>${button("execute", "Start work", true)}<details id="repository-options"><summary>Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><label>Repository <select class="field-control select-control" id="repository"><button type="button"><selectedcontent></selectedcontent></button><option value="">Choose an enabled repository</option>${repositories
                   .filter((r) => r.enabled)
                   .map(
                       (r) =>
@@ -558,7 +558,7 @@ function controls(w: Work) {
                   )
                   .join(
                       "",
-                  )}</select></label><p>Enable repositories in Settings → GitHub.</p><label>Agent Git name <input id="git-name" value="Goblin"></label><label>Agent Git email <input id="git-email" type="email"></label>${runtimes.some((r) => r.repositoryExecution) ? button("repository-execute", "Start repository work") : "<p>Repository execution is unavailable on this Goblin.</p>"}</details>`;
+                  )}</select></label><p>Enable repositories in Settings → GitHub.</p><label>Agent Git name <input class="field-control" id="git-name" value="Goblin"></label><label>Agent Git email <input class="field-control" id="git-email" type="email"></label>${runtimes.some((r) => r.repositoryExecution) ? button("repository-execute", "Start repository work") : "<p>Repository execution is unavailable on this Goblin.</p>"}</details>`;
     if (w.attention?.reason === "ResultReview")
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
     if (w.attention?.reason === "InputRequired")
