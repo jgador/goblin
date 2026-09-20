@@ -51,6 +51,8 @@ spec:
               value: goblin-executions
             - name: GOBLIN_EXECUTION_IMAGE
               value: goblin-auth:0.1.0
+            - name: GOBLIN_HEADLAMP_URL
+              value: http://goblin-headlamp.goblin.svc:4466
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

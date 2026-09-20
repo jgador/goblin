@@ -31,6 +31,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
     AllowInsecureHttp = string.Equals(Environment.GetEnvironmentVariable("GOBLIN_ALLOW_INSECURE_HTTP"), "true", StringComparison.OrdinalIgnoreCase),
     ListenUrl = $"http://{host}:{port}",
     EnableWork = !string.Equals(Environment.GetEnvironmentVariable("GOBLIN_WORK_ENABLED"), "false", StringComparison.OrdinalIgnoreCase),
+    HeadlampUrl = Environment.GetEnvironmentVariable("GOBLIN_HEADLAMP_URL"),
     ConfigureCodex = options => options with { Command = Environment.GetEnvironmentVariable("GOBLIN_CODEX_COMMAND") ?? options.Command }
 });
 Console.WriteLine($"Goblin: {origin}");

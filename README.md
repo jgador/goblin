@@ -57,6 +57,10 @@ Open **http://localhost:8788** in Windows to follow installation and enter Gobli
 at the same address when ready. On first start, choose and confirm a Goblin password
 in the terminal. Local runs share the verifier in `.goblin-secrets/owner-password`.
 
+Kubernetes installations also include [Headlamp](docs/cluster-view.md) at
+`/headlamp/` on Goblin's address. **Settings → Cluster → Open cluster** opens a
+read-only view of workloads, logs, events, and storage using your Goblin login.
+
 To try authentication first:
 
 ```bash
