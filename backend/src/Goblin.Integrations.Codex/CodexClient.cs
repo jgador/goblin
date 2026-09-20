@@ -128,7 +128,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
 
     private async Task SendAsync<T>(Process child, T message, CancellationToken cancellationToken = default)
     {
-        var line = JsonSerializer.Serialize(message, ProtocolJson.Options);
+        string line = JsonSerializer.Serialize(message, ProtocolJson.Options);
         await _writeGate.WaitAsync(cancellationToken);
         try
         {
@@ -144,7 +144,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
     {
         try
         {
-            await foreach (var line in JsonLines.ReadAsync(child.StandardOutput))
+            await foreach (string line in JsonLines.ReadAsync(child.StandardOutput))
             {
                 lock (_gate) if (_process != child) return;
                 (bool hasMethod, bool hasId, bool hasError) = InspectEnvelope(line);
@@ -213,7 +213,7 @@ public sealed partial class CodexClient(CodexOptions options) : IAsyncDisposable
     {
         try
         {
-            var buffer = new char[4096];
+            char[] buffer = new char[4096];
             while (await child.StandardError.ReadAsync(buffer) > 0) { }
         }
         catch { }

@@ -3,8 +3,8 @@ using Goblin.Application.Work;
 using JasperFx;
 using Microsoft.Extensions.DependencyInjection;
 using Wolverine;
-using Wolverine.ErrorHandling;
 using Wolverine.EntityFrameworkCore;
+using Wolverine.ErrorHandling;
 using Wolverine.Postgresql;
 
 namespace Goblin.Application;

@@ -25,7 +25,7 @@ public sealed class KubernetesApi : IDisposable
         var handler = new HttpClientHandler { AllowAutoRedirect = false };
         if (caFile is not null)
         {
-            var root = X509CertificateLoader.LoadCertificateFromFile(caFile);
+            X509Certificate2 root = X509CertificateLoader.LoadCertificateFromFile(caFile);
             handler.ServerCertificateCustomValidationCallback = (_, certificate, _, errors) =>
             {
                 if (certificate is null || (errors & SslPolicyErrors.RemoteCertificateNameMismatch) != 0) return false;
@@ -57,7 +57,7 @@ public sealed class KubernetesApi : IDisposable
         if (_tokenFile is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", (await File.ReadAllTextAsync(_tokenFile, token)).Trim());
         if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8,
             method == HttpMethod.Patch ? "application/merge-patch+json" : "application/json");
-        using var response = await _client.SendAsync(request, token);
+        using HttpResponseMessage response = await _client.SendAsync(request, token);
         if ((allowMissing && response.StatusCode == HttpStatusCode.NotFound) ||
             (allowConflict && response.StatusCode == HttpStatusCode.Conflict)) return null;
         if (!response.IsSuccessStatusCode) throw new IOException("Execution control plane request failed.");

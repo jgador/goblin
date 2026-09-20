@@ -37,10 +37,10 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task RepeatedCommandsConcurrentClaimsAndApprovalSurviveNewScopes()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        await using Fixture fixture = await Fixture.CreateAsync();
         Guid id = Guid.NewGuid();
         var create = new WorkCommand(Guid.NewGuid(), id, WorkAction.Create, Text: "Produce a reviewable answer");
-        var created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => fixture.Apply(create)));
+        WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => fixture.Apply(create)));
         Assert.All(created, x => Assert.Equal(1, x.Version));
         Assert.Single((await fixture.Get(id)).Work.History);
         WorkView assigned = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
@@ -68,14 +68,14 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task UncertainExecutionBlocksRetryAndAccountChangeUntilStopped()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
         Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Uncertain, Failure: FailureKind.RuntimeDisconnected);
         await fixture.Reconcile(id, attempt);
         WorkView uncertain = await fixture.Get(id);
         await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Retry, uncertain.Version)));
-        using (var scope = fixture.Host.Services.CreateScope())
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
             await Assert.ThrowsAsync<ApplicationFailure>(() => scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", true));
         await fixture.RestartAsync();
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
@@ -92,12 +92,12 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task InvalidCommandRollsBackStateReceiptAndDispatch()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        await using Fixture fixture = await Fixture.CreateAsync();
         Guid id = Guid.NewGuid(), rejected = Guid.NewGuid();
         await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "No agent assigned"));
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(rejected, id, WorkAction.Execute, 1)));
-        using var scope = fixture.Host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<GoblinDbContext>();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        GoblinDbContext db = scope.ServiceProvider.GetRequiredService<GoblinDbContext>();
         Assert.False(await db.WorkCommands.AnyAsync(x => x.Id == rejected));
         Assert.False(await db.ExecutionAttempts.AnyAsync(x => x.WorkId == id));
         Assert.Equal(1, (await fixture.Get(id)).Version);
@@ -108,7 +108,7 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task CancellationWaitsForStoppingEvidenceAndFailureIsNeverRetried()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
         Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Cancel, running.Version));
@@ -125,8 +125,8 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task PersistedDispatchFailureEvidencePreventsRedeliveryFromStarting()
     {
-        await using var fixture = await Fixture.CreateAsync();
-        using (var scope = fixture.Host.Services.CreateScope())
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, "Disconnected", false);
         Guid id = Guid.NewGuid();
         WorkView w = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "Unavailable connection"));
@@ -142,7 +142,7 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task CleanupFailureSurvivesRestartAndRequiresReconciliationBeforeApproval()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
         Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         fixture.Runtime.FailCleanup = true;
@@ -166,16 +166,16 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task VerificationReservationsPreventDispatchAndPreserveWaitingAccountChanges()
     {
-        await using var fixture = await Fixture.CreateAsync();
-        using var scope = fixture.Host.Services.CreateScope();
-        var store = scope.ServiceProvider.GetRequiredService<WorkStore>();
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
         await store.BeginVerificationAsync(WorkStore.DefaultAgentId);
         await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
         Guid id = Guid.NewGuid();
         WorkView work = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "Wait for verification"));
         work = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, work.Version, AgentId: WorkStore.DefaultAgentId));
         work = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Execute, work.Version));
-        var coordinator = fixture.Host.Services.GetRequiredService<ExecutionCoordinator>();
+        ExecutionCoordinator coordinator = fixture.Host.Services.GetRequiredService<ExecutionCoordinator>();
         Guid attempt = work.Work.Attempts[^1].Id;
         await coordinator.DispatchAsync(new(id, attempt), CancellationToken.None);
         Assert.Empty(fixture.Runtime.Starts);
@@ -192,7 +192,7 @@ public sealed class DurabilityTests
     [DatabaseFact]
     public async Task StorageOutageEvidenceIsSurfacedBeforeHostReconciliation()
     {
-        await using var fixture = await Fixture.CreateAsync();
+        await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
         Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         await fixture.SetDatabaseAvailable(false);
@@ -253,13 +253,13 @@ public sealed class DurabilityTests
             await SqlMigrations.ApplyAsync(admin.ConnectionString, Path.Combine(AppContext.BaseDirectory, "migrations"), TextWriter.Null);
             var fixture = new Fixture(app.ConnectionString, name, Path.Combine(Path.GetTempPath(), name));
             await fixture.StartAsync();
-            using var scope = fixture.Host.Services.CreateScope();
+            using IServiceScope scope = fixture.Host.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, "Available", false);
             return fixture;
         }
         private async Task StartAsync()
         {
-            var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
+            HostApplicationBuilder builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
             builder.Logging.ClearProviders();
             builder.Services.AddGoblinPersistence(app);
             builder.Services.AddWorkApplication();
@@ -286,8 +286,8 @@ public sealed class DurabilityTests
             close.Parameters.AddWithValue("name", name);
             await close.ExecuteNonQueryAsync();
         }
-        public async Task<WorkView> Apply(WorkCommand command) { using var scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
-        public async Task<WorkView> Get(Guid id) { using var scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(id); }
+        public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
+        public async Task<WorkView> Get(Guid id) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(id); }
         public Task Reconcile(Guid id, Guid attempt) => Host.Services.GetRequiredService<ExecutionCoordinator>().ReconcileAsync(new(id, attempt), CancellationToken.None);
         public async Task<WorkView> StartWork()
         {

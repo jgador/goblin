@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -17,7 +19,7 @@ public sealed class BoundaryTests
     [Fact]
     public void PublicContractsAndWorkOrchestrationDoNotReferenceProtocolsOrHttp()
     {
-        foreach (var assembly in new[] { typeof(AccountView).Assembly, typeof(WorkStore).Assembly })
+        foreach (Assembly? assembly in new[] { typeof(AccountView).Assembly, typeof(WorkStore).Assembly })
             Assert.DoesNotContain(assembly.GetReferencedAssemblies(), x =>
                 x.Name!.Contains("Protocol", StringComparison.Ordinal) || x.Name.Contains("Integrations", StringComparison.Ordinal) ||
                 x.Name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
@@ -33,8 +35,8 @@ public sealed class BoundaryTests
         work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "/private/github.json"), new UnusedHost());
-        var manifest = host.Manifest(work.Snapshot(), false);
-        var spec = manifest["spec"]!["podTemplate"]!["spec"]!;
+        JsonObject manifest = host.Manifest(work.Snapshot(), false);
+        JsonNode spec = manifest["spec"]!["podTemplate"]!["spec"]!;
         Assert.False(spec["automountServiceAccountToken"]!.GetValue<bool>());
         Assert.Equal("Never", spec["restartPolicy"]!.GetValue<string>());
         Assert.Equal(1000, spec["securityContext"]!["runAsUser"]!.GetValue<int>());

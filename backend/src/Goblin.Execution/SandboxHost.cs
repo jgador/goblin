@@ -33,17 +33,17 @@ public sealed class SandboxHost(KubernetesApi api, SandboxOptions options, IExec
         string github = await File.ReadAllTextAsync(options.GitHubCredentialFile, token);
         using var githubJson = JsonDocument.Parse(github);
         string accessToken = githubJson.RootElement.GetProperty("accessToken").GetString()!;
-        var secret = Resource("v1", "Secret", name, work);
+        JsonObject secret = Resource("v1", "Secret", name, work);
         secret["type"] = "Opaque";
         secret["stringData"] = new JsonObject { ["auth.json"] = codex, ["github-token"] = accessToken };
         await api.CreateAsync(Core + "/secrets", secret, token);
-        var input = Resource("v1", "ConfigMap", name, work);
+        JsonObject input = Resource("v1", "ConfigMap", name, work);
         input["data"] = new JsonObject { ["input.json"] = JsonSerializer.Serialize(new WorkerInput(work, "/run/codex", "codex"), ExecutionFiles.Json) };
         await api.CreateAsync(Core + "/configmaps", input, token);
-        var volume = Resource("v1", "PersistentVolumeClaim", name, work);
+        JsonObject volume = Resource("v1", "PersistentVolumeClaim", name, work);
         volume["spec"] = JsonNode.Parse("""{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"2Gi"}}}""");
         await api.CreateAsync(Core + "/persistentvolumeclaims", volume, token);
-        var reserved = await api.GetAsync(Sandboxes + "/" + name, token);
+        JsonObject? reserved = await api.GetAsync(Sandboxes + "/" + name, token);
         if (reserved?["spec"]?["operatingMode"]?.GetValue<string>() == "Suspended")
             await CleanupAsync(work, token);
     }
@@ -61,7 +61,7 @@ public sealed class SandboxHost(KubernetesApi api, SandboxOptions options, IExec
             sandbox = await api.GetAsync(Sandboxes + "/" + name, token);
             stop = true;
         }
-        var pods = await api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), token);
+        JsonObject? pods = await api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), token);
         foreach (JsonNode? pod in pods?["items"]?.AsArray() ?? [])
         {
             string podName = pod!["metadata"]!["name"]!.GetValue<string>();
@@ -99,7 +99,7 @@ public sealed class SandboxHost(KubernetesApi api, SandboxOptions options, IExec
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         while (true)
         {
-            var pods = await api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), timeout.Token);
+            JsonObject? pods = await api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), timeout.Token);
             if (pods?["items"]?.AsArray().Count == 0) break;
             await Task.Delay(200, timeout.Token);
         }
@@ -110,8 +110,8 @@ public sealed class SandboxHost(KubernetesApi api, SandboxOptions options, IExec
     public JsonObject Manifest(WorkSnapshot work, bool suspended)
     {
         string name = Name(work);
-        var resource = Resource("agents.x-k8s.io/v1beta1", "Sandbox", name, work);
-        var pod = JsonNode.Parse("""
+        JsonObject resource = Resource("agents.x-k8s.io/v1beta1", "Sandbox", name, work);
+        JsonNode pod = JsonNode.Parse("""
             {"metadata":{"labels":{}},"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never",
              "activeDeadlineSeconds":3600,"terminationGracePeriodSeconds":15,
              "securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000,"seccompProfile":{"type":"RuntimeDefault"}},
@@ -135,11 +135,17 @@ public sealed class SandboxHost(KubernetesApi api, SandboxOptions options, IExec
 
     private static JsonObject Resource(string apiVersion, string kind, string name, WorkSnapshot work) => new()
     {
-        ["apiVersion"] = apiVersion, ["kind"] = kind,
-        ["metadata"] = new JsonObject { ["name"] = name, ["labels"] = new JsonObject
+        ["apiVersion"] = apiVersion,
+        ["kind"] = kind,
+        ["metadata"] = new JsonObject
         {
-            ["goblin-attempt"] = work.Attempts[^1].Id.ToString("N"), ["goblin-work"] = work.Id.ToString("N"),
-            ["app"] = "goblin-execution"
-        } }
+            ["name"] = name,
+            ["labels"] = new JsonObject
+            {
+                ["goblin-attempt"] = work.Attempts[^1].Id.ToString("N"),
+                ["goblin-work"] = work.Id.ToString("N"),
+                ["app"] = "goblin-execution"
+            }
+        }
     };
 }

@@ -52,7 +52,7 @@ public sealed class FileDispatchFailureJournal(string directory) : IDispatchFail
         var entries = new System.Collections.Generic.List<DispatchFailureEvidence>();
         foreach (string file in Directory.GetFiles(directory, "*.json"))
             if (await ExecutionFiles.ReadAsync<DispatchFailureEvidence>(file, token) is { } evidence) entries.Add(evidence);
-        return entries.ToArray();
+        return [.. entries];
     }
     public Task RemoveAsync(Guid attemptId, CancellationToken token)
     {

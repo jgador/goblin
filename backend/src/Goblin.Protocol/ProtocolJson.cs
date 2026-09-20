@@ -55,7 +55,7 @@ public sealed class ProtocolStringEnumConverter<T> : JsonConverter<T> where T : 
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
-        if (!Names.TryGetValue(value, out var name))
+        if (!Names.TryGetValue(value, out string? name))
             throw new JsonException($"Invalid {typeof(T).Name} enum value.");
         writer.WriteStringValue(name);
     }
@@ -96,7 +96,7 @@ internal static class ProtocolUnion
         {
             if (probe.TokenType != JsonTokenType.PropertyName)
                 throw new JsonException("Expected a protocol property name.");
-            var matches = probe.ValueTextEquals(propertyName);
+            bool matches = probe.ValueTextEquals(propertyName);
             if (!probe.Read())
                 throw new JsonException("Incomplete protocol object.");
             if (matches)

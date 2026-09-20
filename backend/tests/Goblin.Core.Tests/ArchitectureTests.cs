@@ -12,7 +12,7 @@ public sealed class ArchitectureTests
     [Fact]
     public void ProductRulesHaveNoRuntimeHttpMessagingOrPersistenceDependencies()
     {
-        string[] dependencies = typeof(WorkItem).Assembly.GetReferencedAssemblies().Select(x => x.Name!).ToArray();
+        string[] dependencies = [.. typeof(WorkItem).Assembly.GetReferencedAssemblies().Select(x => x.Name!)];
         Assert.All(dependencies, name => Assert.True(name == "System.Runtime" || name == "System.Collections" ||
             name == "System.Private.CoreLib", "Unexpected core dependency: " + name));
 

@@ -33,7 +33,10 @@ public static class ExecutionWorker
         ExecutionSession? session = null;
         await using (var codex = new CodexClient(new()
         {
-            Home = runtimeHome, CodexHome = input.CodexHome, Workspace = workspace, Command = input.CodexCommand
+            Home = runtimeHome,
+            CodexHome = input.CodexHome,
+            Workspace = workspace,
+            Command = input.CodexCommand
         }))
         {
             try

@@ -12,9 +12,9 @@ using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Wolverine.EntityFrameworkCore;
-using Row = Goblin.Persistence.Entities.WorkItem;
 using AttemptRow = Goblin.Persistence.Entities.ExecutionAttempt;
 using Receipt = Goblin.Persistence.Entities.WorkCommand;
+using Row = Goblin.Persistence.Entities.WorkItem;
 
 namespace Goblin.Application.Work;
 
@@ -33,7 +33,7 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
     {
         Row[] rows = await db.WorkItems.AsNoTracking().OrderByDescending(x => x.UpdatedAt)
             .ThenBy(x => x.Id).ToArrayAsync(token);
-        return rows.Select(View).ToArray();
+        return [.. rows.Select(View)];
     }
 
     public async Task<WorkView> GetAsync(Guid id, CancellationToken token = default) =>
@@ -60,7 +60,7 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
             return JsonSerializer.Deserialize<WorkView>(receipt.Response, Json)!;
         }
 
-        var now = DateTimeOffset.UtcNow;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
         Row? row = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == command.WorkId, token);
         WorkItem work;
         if (command.Action == WorkAction.Create)
@@ -87,9 +87,9 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
                 break;
             case WorkAction.Execute:
             case WorkAction.Retry:
-                var agent = await db.Agents.SingleOrDefaultAsync(x => x.Id == work.AgentId, token)
+                Persistence.Entities.Agent agent = await db.Agents.SingleOrDefaultAsync(x => x.Id == work.AgentId, token)
                     ?? throw new ApplicationFailure("agent_required");
-                var connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
+                Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
                 var target = new ExecutionTarget(connection.Runtime, connection.Id, agent.Model,
                     command.Repository ?? work.CurrentAttempt?.Target.Repository);
                 Guid attemptId = Guid.NewGuid();
@@ -115,7 +115,7 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
                 work.AddContext(command.CommandId, command.Text ?? "", now);
                 break;
             case WorkAction.Reconcile:
-                var uncertain = work.CurrentAttempt;
+                ExecutionAttempt? uncertain = work.CurrentAttempt;
                 if (uncertain is null || (!uncertain.CleanupPending && uncertain.Status is not (AttemptStatus.Uncertain or AttemptStatus.CancellationRequested)))
                     throw new ApplicationFailure("reconciliation_not_required");
                 await outbox.PublishAsync(new ReconcileWork(work.Id, uncertain.Id));
@@ -123,8 +123,14 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
         }
         await SaveAsync(row, work, now, token);
         WorkView view = View(row);
-        db.WorkCommands.Add(new() { Id = command.CommandId, WorkId = work.Id,
-            Fingerprint = fingerprint, Response = JsonSerializer.Serialize(view, Json), CreatedAt = now.UtcDateTime });
+        db.WorkCommands.Add(new()
+        {
+            Id = command.CommandId,
+            WorkId = work.Id,
+            Fingerprint = fingerprint,
+            Response = JsonSerializer.Serialize(view, Json),
+            CreatedAt = now.UtcDateTime
+        });
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return view;
     }
@@ -139,8 +145,8 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
         if (row is null) return null;
         WorkItem work = Restore(row);
         if (work.CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != command.AttemptId) return null;
-        var now = DateTimeOffset.UtcNow;
-        var connection = await db.Connections.SingleAsync(x => x.Id == attempt.Target.ConnectionId, token);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == attempt.Target.ConnectionId, token);
         if (connection.Availability is "Changing" or "Verifying") return null;
         FailureKind? failure = !supportsRuntime(attempt.Target) ? FailureKind.CapabilityUnavailable :
             connection.Availability != "Available" ? FailureKind.ConnectionUnavailable : null;
@@ -181,7 +187,7 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
         if (requireIdle && await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
             (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending), token))
             throw new ApplicationFailure("connection_in_use");
-        var row = await db.Connections.SingleAsync(x => x.Id == id, token);
+        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == "Changing")
         {
             if (requireIdle) throw new ApplicationFailure("connection_in_use");
@@ -197,7 +203,7 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
     public async Task BeginVerificationAsync(Guid id, CancellationToken token = default)
     {
         await using IDbContextTransaction transaction = await BeginAsync(token);
-        var row = await db.Connections.SingleAsync(x => x.Id == id, token);
+        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == "Verifying") throw new ApplicationFailure("prompt_in_progress");
         if (row.Availability == "Changing" || await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
             (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending), token))
@@ -211,7 +217,7 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
     public async Task EndVerificationAsync(Guid id, bool available)
     {
         await using IDbContextTransaction transaction = await BeginAsync(default);
-        var row = await db.Connections.SingleAsync(x => x.Id == id);
+        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id);
         // A waiting account change owns the reservation until its operation ends.
         if (row.Availability != "Verifying") return;
         row.Availability = available ? "Available" : "Unavailable";
@@ -254,9 +260,15 @@ public sealed class WorkStore(GoblinDbContext db, IDbContextOutbox<GoblinDbConte
             AttemptRow? saved = await db.ExecutionAttempts.SingleOrDefaultAsync(x => x.Id == attempt.Id, token);
             if (saved is null)
             {
-                saved = new() { Id = attempt.Id, WorkId = work.Id, AgentId = attempt.AgentId,
-                    ConnectionId = attempt.Target.ConnectionId, Runtime = attempt.Target.Runtime,
-                    QueuedAt = attempt.QueuedAt.UtcDateTime };
+                saved = new()
+                {
+                    Id = attempt.Id,
+                    WorkId = work.Id,
+                    AgentId = attempt.AgentId,
+                    ConnectionId = attempt.Target.ConnectionId,
+                    Runtime = attempt.Target.Runtime,
+                    QueuedAt = attempt.QueuedAt.UtcDateTime
+                };
                 db.ExecutionAttempts.Add(saved);
             }
             saved.Status = attempt.Status.ToString();
