@@ -100,6 +100,10 @@ Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 `npm run secrets:history` to check existing commits before a push. See the
 [secret-scanning guide](docs/secret-scanning.md) for installation and scan scope.
 
+The repository-local Codex hook formats TypeScript, Python, and C# after each
+completed turn. See [formatting setup](docs/formatting.md) for tool installation,
+manual commands, and the required hook trust step.
+
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses
 `frontend/public/assets/branding/icon.svg`, copied from the light-background, icon-only

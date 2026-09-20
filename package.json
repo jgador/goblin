@@ -16,6 +16,8 @@
     "build": "npm run build:assets && npm run build:tools && npm run build:backend",
     "typecheck": "npm run typecheck --workspace frontend && npm run typecheck:scripts && tsc -p tsconfig.json --noEmit && npm run build:backend",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json",
+    "format:typescript": "prettier --write --ignore-path .gitignore \"**/*.{ts,tsx,mts,cts}\"",
+    "format:python": ".venv/bin/python scripts/format-python.py",
     "prestart": "npm run build",
     "start": "python3 deploy/local/start.py",
     "pretest": "npm run build",
@@ -38,6 +40,7 @@
   "devDependencies": {
     "@playwright/test": "1.63.0",
     "@types/node": "24.13.4",
+    "prettier": "3.9.8",
     "typescript": "7.0.2"
   }
 }

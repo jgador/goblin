@@ -1,0 +1,18 @@
+# Repository-local hooks. Review and trust this hook with /hooks in Codex.
+[[hooks.Stop]]
+
+[[hooks.Stop.hooks]]
+type = "command"
+command = '''
+set -e
+cd "$(git rev-parse --show-toplevel)"
+npm run format:typescript >&2
+npm run format:python >&2
+cd backend
+# Generated protocol types and EF mappings must stay reproducible.
+dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
+dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 IDE1006 --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
+printf '{}\n'
+'''
+timeout = 600
+statusMessage = "Formatting TypeScript, Python, and .NET"
