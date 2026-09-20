@@ -32,7 +32,7 @@ public sealed class ExecutionCoordinator
             // Evidence written during a database outage wins over redelivery.
             if ((await _failures.ReadAsync(token)).Any(x => x.AttemptId == command.AttemptId)) return;
             using IServiceScope scope = _scopes.CreateScope();
-            claimed = await scope.ServiceProvider.GetRequiredService<WorkStore>().ClaimAsync(command, Guid.NewGuid(),
+            claimed = await scope.ServiceProvider.GetRequiredService<WorkStore>().ClaimAsync(command,
                 _host.EnvironmentFor(command.WorkId, command.AttemptId),
                 target => _host.Capabilities.Any(x => x.Runtime == target.Runtime &&
                     (target.Repository is null ? x.TextExecution : x.RepositoryExecution)), token);
@@ -91,6 +91,8 @@ public sealed class ExecutionCoordinator
         }
         using (IServiceScope scope = _scopes.CreateScope())
         {
+            long decisionId = observation.Kind == ObservationKind.InputRequired
+                ? await scope.ServiceProvider.GetRequiredService<IdentityStore>().NextEventAsync(token) : 0;
             await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(work.Id, current =>
             {
                 ExecutionAttempt? a = current.CurrentAttempt;
@@ -112,7 +114,7 @@ public sealed class ExecutionCoordinator
                             current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
                         break;
                     case ObservationKind.InputRequired:
-                        current.RequestInput(a.Id, a.OwnerId!.Value, Guid.NewGuid(), observation.Text!, now);
+                        current.RequestInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, now);
                         if (observation.ArtifactReference is not null)
                             current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
                         break;

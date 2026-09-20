@@ -14,7 +14,7 @@ internal sealed class FakeWorkHost : IExecutionHost
     public FakeWorkHost(string root) => _root = root;
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
-    public string EnvironmentFor(Guid workId, Guid attemptId) => "fixture/" + attemptId;
+    public string EnvironmentFor(long workId, long attemptId) => "fixture/" + attemptId;
     private string PathFor(WorkSnapshot work) => Path.Combine(_root, work.Attempts[^1].Id + ".work-result");
     public Task StartAsync(WorkSnapshot work, CancellationToken token)
     {

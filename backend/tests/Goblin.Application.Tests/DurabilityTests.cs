@@ -34,18 +34,66 @@ public sealed class DatabaseFactAttribute : FactAttribute
 
 public sealed class DurabilityTests
 {
+    private static long _nextId = int.MaxValue;
+    private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
+
+    [DatabaseFact]
+    public async Task ReservedIdsStayUniqueAcrossConcurrentRequestsAndBeyondJavaScriptPrecision()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        IdentityStore ids = scope.ServiceProvider.GetRequiredService<IdentityStore>();
+        await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
+            await db.Database.ExecuteSqlRawAsync("SELECT setval('public.work_items_id_seq', 9007199254740993, false)");
+        ReservedIdentities[] reservations = await Task.WhenAll(Enumerable.Range(0, 16)
+            .Select(_ => ids.ReserveAsync(new([IdentityKind.Work]))));
+        long[] values = [.. reservations.Select(x => x.Ids.Single())];
+        Assert.Equal(16, values.Distinct().Count());
+        Assert.All(values, id => Assert.True(id > 9007199254740992L));
+        long commandId = (await ids.ReserveAsync(new([IdentityKind.Command]))).Ids.Single();
+        var create = new WorkCommand(commandId, values[0], WorkAction.Create, Text: "Exact database identity");
+        WorkView saved = await fixture.Apply(create);
+        Assert.Equal(values[0], saved.Work.Id);
+        Assert.Equal(saved.Version, (await fixture.Apply(create)).Version);
+        Assert.Equal(saved.Work.Id, (await fixture.Get(saved.Work.Id)).Work.Id);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => ids.ReserveAsync(new([IdentityKind.Event])));
+    }
+
+    [DatabaseFact]
+    public async Task ConversationAndWorkCommandsUseDistinctCoreContextIdentities()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        IdentityStore ids = scope.ServiceProvider.GetRequiredService<IdentityStore>();
+        ConversationStore conversations = scope.ServiceProvider.GetRequiredService<ConversationStore>();
+        long[] first = (await ids.ReserveAsync(new([IdentityKind.Conversation, IdentityKind.Message, IdentityKind.Work]))).Ids;
+        await conversations.ApplyAsync(new(first[0], first[1], "Track the release", first[2]));
+        long messageId = (await ids.ReserveAsync(new([IdentityKind.Message]))).Ids.Single();
+        long commandId = (await ids.ReserveAsync(new([IdentityKind.Command, IdentityKind.Command]))).Ids[^1];
+        Assert.Equal(messageId, commandId); // Separate table sequences can produce the same number.
+        await conversations.ApplyAsync(new(first[0], messageId, "Conversation context"));
+        WorkView work = await fixture.Get(first[2]);
+        var command = new WorkCommand(commandId, first[2], WorkAction.AddContext, work.Version, "Work context");
+        WorkView updated = await fixture.Apply(command);
+        Assert.Equal(new[] { "Conversation context", "Work context" }, updated.Work.Messages.Select(x => x.Text));
+        Assert.Equal(2, updated.Work.Messages.Select(x => x.Id).Distinct().Count());
+        Assert.Equal(updated.Version, (await fixture.Apply(command)).Version);
+        await conversations.ApplyAsync(new(first[0], messageId, "Conversation context"));
+        Assert.Equal(2, (await fixture.Get(first[2])).Work.Messages.Length);
+    }
+
     [DatabaseFact]
     public async Task RepeatedCommandsConcurrentClaimsAndApprovalSurviveNewScopes()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
-        Guid id = Guid.NewGuid();
-        var create = new WorkCommand(Guid.NewGuid(), id, WorkAction.Create, Text: "Produce a reviewable answer");
+        long id = NextId();
+        var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Produce a reviewable answer");
         WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => fixture.Apply(create)));
         Assert.All(created, x => Assert.Equal(1, x.Version));
         Assert.Single((await fixture.Get(id)).Work.History);
-        WorkView assigned = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
-        WorkView queued = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Execute, assigned.Version));
-        Guid attempt = queued.Work.Attempts.Single().Id;
+        WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
+        WorkView queued = await fixture.Apply(new(NextId(), id, WorkAction.Execute, assigned.Version));
+        long attempt = queued.Work.Attempts.Single().Id;
         await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => fixture.Host.Services.GetRequiredService<ExecutionCoordinator>().DispatchAsync(new(id, attempt), CancellationToken.None)));
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
@@ -53,7 +101,7 @@ public sealed class DurabilityTests
         await fixture.Host.Services.GetRequiredService<ExecutionCoordinator>().ReconcileAsync(new(id, attempt), CancellationToken.None);
         WorkView review = await fixture.Get(id);
         Assert.Equal(AttentionReason.ResultReview, review.Work.Attention!.Reason);
-        var approve = new WorkCommand(Guid.NewGuid(), id, WorkAction.Approve, review.Version, AttemptId: attempt);
+        var approve = new WorkCommand(NextId(), id, WorkAction.Approve, review.Version, AttemptId: attempt);
         WorkView approved = await fixture.Apply(approve);
         Assert.Equal(WorkStatus.Completed, approved.Work.Status);
         Assert.Equal(approved.Version, (await fixture.Apply(approve)).Version);
@@ -70,11 +118,11 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
-        Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
+        long id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Uncertain, Failure: FailureKind.RuntimeDisconnected);
         await fixture.Reconcile(id, attempt);
         WorkView uncertain = await fixture.Get(id);
-        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Retry, uncertain.Version)));
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Retry, uncertain.Version)));
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
             await Assert.ThrowsAsync<ApplicationFailure>(() => scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", true));
         await fixture.RestartAsync();
@@ -84,7 +132,7 @@ public sealed class DurabilityTests
         WorkView failed = await fixture.Get(id);
         Assert.Equal(AttentionReason.Failure, failed.Work.Attention!.Reason);
         Assert.Single(fixture.Runtime.Starts);
-        WorkView retried = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Retry, failed.Version));
+        WorkView retried = await fixture.Apply(new(NextId(), id, WorkAction.Retry, failed.Version));
         Assert.Equal(2, retried.Work.Attempts.Length);
         Assert.NotEqual(attempt, retried.Work.Attempts[^1].Id);
     }
@@ -93,8 +141,8 @@ public sealed class DurabilityTests
     public async Task InvalidCommandRollsBackStateReceiptAndDispatch()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
-        Guid id = Guid.NewGuid(), rejected = Guid.NewGuid();
-        await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "No agent assigned"));
+        long id = NextId(), rejected = NextId();
+        await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "No agent assigned"));
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(rejected, id, WorkAction.Execute, 1)));
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
@@ -102,7 +150,7 @@ public sealed class DurabilityTests
         Assert.False(await db.ExecutionAttempts.AnyAsync(x => x.WorkId == id));
         Assert.Equal(1, (await fixture.Get(id)).Version);
         Assert.Empty(fixture.Runtime.Starts);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, 99, AgentId: WorkStore.DefaultAgentId)));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id, WorkAction.Assign, 99, AgentId: WorkStore.DefaultAgentId)));
     }
 
     [DatabaseFact]
@@ -111,11 +159,11 @@ public sealed class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
-        Guid id = Guid.NewGuid(), rejected = Guid.NewGuid();
-        var create = new WorkCommand(Guid.NewGuid(), id, WorkAction.Create, Text: "Keep each operation independent");
+        long id = NextId(), rejected = NextId();
+        var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Keep each operation independent");
         WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => store.ApplyAsync(create)));
         Assert.All(created, x => Assert.Equal(1, x.Version));
-        WorkView assigned = await store.ApplyAsync(new(Guid.NewGuid(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
+        WorkView assigned = await store.ApplyAsync(new(NextId(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
 
         // Fail the database write after dispatch has been published into the
         // transaction, rather than rejecting the command before publishing.
@@ -133,8 +181,8 @@ public sealed class DurabilityTests
         Assert.Equal(assigned.Version, (await store.GetAsync(id)).Version);
         Assert.Empty(fixture.Runtime.Starts);
 
-        WorkView queued = await store.ApplyAsync(new(Guid.NewGuid(), id, WorkAction.Execute, assigned.Version));
-        Guid attempt = Assert.Single(queued.Work.Attempts).Id;
+        WorkView queued = await store.ApplyAsync(new(NextId(), id, WorkAction.Execute, assigned.Version));
+        long attempt = Assert.Single(queued.Work.Attempts).Id;
         await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
         Assert.Single((await fixture.Get(id)).Work.Attempts);
@@ -146,7 +194,7 @@ public sealed class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         ConversationStore store = scope.ServiceProvider.GetRequiredService<ConversationStore>();
-        Guid conversationId = Guid.NewGuid(), messageId = Guid.NewGuid(), rejectedWork = Guid.NewGuid();
+        long conversationId = NextId(), messageId = NextId(), rejectedWork = NextId();
         await fixture.RejectId("work_items", rejectedWork);
         await Assert.ThrowsAsync<DbUpdateException>(() => store.ApplyAsync(new(conversationId, messageId, "Track this conversation", rejectedWork)));
         await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
@@ -156,13 +204,13 @@ public sealed class DurabilityTests
             Assert.False(await db.WorkItems.AnyAsync(x => x.Id == rejectedWork));
         }
 
-        Guid workId = Guid.NewGuid();
+        long workId = NextId();
         var command = new ConversationCommand(conversationId, messageId, "Track this conversation", workId);
         ConversationView tracked = await store.ApplyAsync(command);
         Assert.Equal(workId, tracked.WorkId);
         Assert.Single(tracked.Messages);
         Assert.Single((await store.ApplyAsync(command)).Messages);
-        await store.ApplyAsync(new(conversationId, Guid.NewGuid(), "Additional context"));
+        await store.ApplyAsync(new(conversationId, NextId(), "Additional context"));
         Assert.Equal(2, Assert.Single(await store.ListAsync()).Messages.Length);
         WorkView work = await fixture.Get(workId);
         Assert.Equal(2, work.Version);
@@ -174,8 +222,8 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
-        Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
-        await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Cancel, running.Version));
+        long id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
+        await fixture.Apply(new(NextId(), id, WorkAction.Cancel, running.Version));
         Assert.Equal(WorkStatus.Cancelling, (await fixture.Get(id)).Work.Status);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Uncertain, Failure: FailureKind.CancellationFailed);
         await fixture.Reconcile(id, attempt);
@@ -192,10 +240,10 @@ public sealed class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, "Disconnected", false);
-        Guid id = Guid.NewGuid();
-        WorkView w = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "Unavailable connection"));
-        w = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, w.Version, AgentId: WorkStore.DefaultAgentId));
-        w = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Execute, w.Version));
+        long id = NextId();
+        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Unavailable connection"));
+        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, AgentId: WorkStore.DefaultAgentId));
+        w = await fixture.Apply(new(NextId(), id, WorkAction.Execute, w.Version));
         await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.Failure);
         Assert.Empty(fixture.Runtime.Starts);
         await fixture.RestartAsync();
@@ -208,14 +256,14 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
-        Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
+        long id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         fixture.Runtime.FailCleanup = true;
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved before cleanup");
         await fixture.Reconcile(id, attempt);
         WorkView blocked = await fixture.Get(id);
         Assert.Equal(AttentionReason.CleanupRequired, blocked.Work.Attention!.Reason);
         Assert.Single(blocked.Work.Results);
-        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Approve, blocked.Version, AttemptId: attempt)));
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Approve, blocked.Version, AttemptId: attempt)));
         await fixture.RestartAsync();
         fixture.Runtime.FailCleanup = false;
         Assert.Equal(AttentionReason.CleanupRequired, (await fixture.Get(id)).Work.Attention!.Reason);
@@ -223,7 +271,7 @@ public sealed class DurabilityTests
         WorkView review = await fixture.Get(id);
         Assert.Equal(AttentionReason.ResultReview, review.Work.Attention!.Reason);
         Assert.False(review.Work.Attempts[^1].CleanupPending);
-        await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Approve, review.Version, AttemptId: attempt));
+        await fixture.Apply(new(NextId(), id, WorkAction.Approve, review.Version, AttemptId: attempt));
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
     }
 
@@ -235,12 +283,12 @@ public sealed class DurabilityTests
         WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
         await store.BeginVerificationAsync(WorkStore.DefaultAgentId);
         await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
-        Guid id = Guid.NewGuid();
-        WorkView work = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "Wait for verification"));
-        work = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Assign, work.Version, AgentId: WorkStore.DefaultAgentId));
-        work = await fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Execute, work.Version));
+        long id = NextId();
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Wait for verification"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: WorkStore.DefaultAgentId));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Execute, work.Version));
         ExecutionCoordinator coordinator = fixture.Host.Services.GetRequiredService<ExecutionCoordinator>();
-        Guid attempt = work.Work.Attempts[^1].Id;
+        long attempt = work.Work.Attempts[^1].Id;
         await coordinator.DispatchAsync(new(id, attempt), CancellationToken.None);
         Assert.Empty(fixture.Runtime.Starts);
         Assert.Equal(WorkStatus.Queued, (await fixture.Get(id)).Work.Status);
@@ -258,7 +306,7 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         WorkView running = await fixture.StartWork();
-        Guid id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
+        long id = running.Work.Id, attempt = running.Work.Attempts[^1].Id;
         await fixture.SetDatabaseAvailable(false);
         try { await Assert.ThrowsAnyAsync<Exception>(() => fixture.Reconcile(id, attempt)); }
         finally { await fixture.SetDatabaseAvailable(true); }
@@ -267,17 +315,17 @@ public sealed class DurabilityTests
         await fixture.RestartAsync();
         WorkView uncertain = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.UncertainExecution);
         Assert.Equal(FailureKind.StorageUnavailable, uncertain.Work.Attention!.Failure);
-        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(Guid.NewGuid(), id, WorkAction.Retry, uncertain.Version)));
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Retry, uncertain.Version)));
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
     }
 
     private sealed class Runtime : IExecutionHost
     {
-        public ConcurrentDictionary<Guid, int> Starts { get; } = new();
-        public ConcurrentDictionary<Guid, ExecutionObservation> Observations { get; } = new();
+        public ConcurrentDictionary<long, int> Starts { get; } = new();
+        public ConcurrentDictionary<long, ExecutionObservation> Observations { get; } = new();
         public bool FailCleanup { get; set; }
         public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
-        public string EnvironmentFor(Guid work, Guid attempt) => "test/" + attempt;
+        public string EnvironmentFor(long work, long attempt) => "test/" + attempt;
         public Task StartAsync(WorkSnapshot work, CancellationToken token)
         {
             Starts.AddOrUpdate(work.Attempts[^1].Id, 1, (_, count) => count + 1);
@@ -345,7 +393,7 @@ public sealed class DurabilityTests
             await Host.StartAsync();
         }
         public async Task RestartAsync() { await Host.StopAsync(); Host.Dispose(); await StartAsync(); }
-        public async Task RejectId(string table, Guid id)
+        public async Task RejectId(string table, long id)
         {
             var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN")) { Database = _name };
             await using var connection = new NpgsqlConnection(admin.ConnectionString);
@@ -370,17 +418,17 @@ public sealed class DurabilityTests
             await close.ExecuteNonQueryAsync();
         }
         public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
-        public async Task<WorkView> Get(Guid id) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(id); }
-        public Task Reconcile(Guid id, Guid attempt) => Host.Services.GetRequiredService<ExecutionCoordinator>().ReconcileAsync(new(id, attempt), CancellationToken.None);
+        public async Task<WorkView> Get(long id) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(id); }
+        public Task Reconcile(long id, long attempt) => Host.Services.GetRequiredService<ExecutionCoordinator>().ReconcileAsync(new(id, attempt), CancellationToken.None);
         public async Task<WorkView> StartWork()
         {
-            Guid id = Guid.NewGuid();
-            WorkView w = await Apply(new(Guid.NewGuid(), id, WorkAction.Create, Text: "Test durable execution"));
-            w = await Apply(new(Guid.NewGuid(), id, WorkAction.Assign, w.Version, AgentId: WorkStore.DefaultAgentId));
-            await Apply(new(Guid.NewGuid(), id, WorkAction.Execute, w.Version));
+            long id = NextId();
+            WorkView w = await Apply(new(NextId(), id, WorkAction.Create, Text: "Test durable execution"));
+            w = await Apply(new(NextId(), id, WorkAction.Assign, w.Version, AgentId: WorkStore.DefaultAgentId));
+            await Apply(new(NextId(), id, WorkAction.Execute, w.Version));
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
-        public async Task<WorkView> Until(Guid id, Func<WorkView, bool> ready)
+        public async Task<WorkView> Until(long id, Func<WorkView, bool> ready)
         {
             for (int i = 0; i < 100; i++) { WorkView w = await Get(id); if (ready(w)) return w; await Task.Delay(100); }
             throw new TimeoutException("Expected durable transition did not arrive.");

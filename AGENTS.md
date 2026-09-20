@@ -21,9 +21,12 @@ The implemented boundary and its current limitations are documented in
 - Follow the four behavioral boundaries and their compatibility/recovery
   contracts. Preserve the existing transport and protocol tests. Repository
   execution requires the isolation boundary in the plan.
-- Keep SQL migrations immutable, regenerate EF mappings from the database, and
-  put custom behavior outside generated files. Preserve the frontend technology,
-  visual design, branding, accessibility, and HTTP security.
+- Until the first real deployment, consolidate schema changes into
+  `backend/database/migrations/0001_initial.sql`; breaking changes are allowed.
+  Local development provisioning does not freeze this unreleased baseline.
+  After deployment, keep SQL migrations immutable. Regenerate EF mappings from
+  the database and put custom behavior outside generated files. Preserve the
+  frontend technology, visual design, branding, accessibility, and HTTP security.
 - Use regular constructors for class declarations and readonly fields for
   retained dependencies. Preserve existing property contracts and positional
   record declarations.

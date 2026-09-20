@@ -12,7 +12,7 @@ public partial class WorkItem
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("objective")]
     public string Objective { get; set; } = null!;
@@ -27,7 +27,7 @@ public partial class WorkItem
     public string Status { get; set; } = null!;
 
     [Column("agent_id")]
-    public Guid? AgentId { get; set; }
+    public long? AgentId { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }

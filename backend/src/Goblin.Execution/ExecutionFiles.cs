@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -48,7 +49,7 @@ public sealed class FileDispatchFailureJournal : IDispatchFailureJournal
     public async Task RecordAsync(DispatchFailureEvidence evidence, CancellationToken token)
     {
         Directory.CreateDirectory(_directory);
-        await ExecutionFiles.WriteAsync(Path.Combine(_directory, evidence.AttemptId.ToString("N") + ".json"), evidence, token);
+        await ExecutionFiles.WriteAsync(Path.Combine(_directory, evidence.AttemptId.ToString(CultureInfo.InvariantCulture) + ".json"), evidence, token);
     }
     public async Task<DispatchFailureEvidence[]> ReadAsync(CancellationToken token)
     {
@@ -58,9 +59,9 @@ public sealed class FileDispatchFailureJournal : IDispatchFailureJournal
             if (await ExecutionFiles.ReadAsync<DispatchFailureEvidence>(file, token) is { } evidence) entries.Add(evidence);
         return [.. entries];
     }
-    public Task RemoveAsync(Guid attemptId, CancellationToken token)
+    public Task RemoveAsync(long attemptId, CancellationToken token)
     {
-        File.Delete(Path.Combine(_directory, attemptId.ToString("N") + ".json"));
+        File.Delete(Path.Combine(_directory, attemptId.ToString(CultureInfo.InvariantCulture) + ".json"));
         return Task.CompletedTask;
     }
 }

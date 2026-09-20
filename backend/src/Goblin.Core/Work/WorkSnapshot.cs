@@ -4,14 +4,14 @@ namespace Goblin.Core.Work;
 
 // A versioned, Goblin-owned persistence contract. Infrastructure chooses its
 // encoding. Restoring never emits events or executes side effects.
-public sealed record WorkSnapshot(int SchemaVersion, Guid Id, string Objective,
-    Guid? AgentId, WorkStatus Status, WorkAttention? Attention,
+public sealed record WorkSnapshot(int SchemaVersion, long Id, string Objective,
+    long? AgentId, WorkStatus Status, WorkAttention? Attention,
     AttemptSnapshot[] Attempts, WorkEvent[] History, WorkDecision[] Decisions,
     WorkResult[] Results, WorkMessage[] Messages, WorkArtifact[] Artifacts);
 
-public sealed record AttemptSnapshot(Guid Id, Guid WorkId, Guid AgentId,
+public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
     ExecutionTarget Target, DateTimeOffset QueuedAt, AttemptStatus Status,
-    Guid? OwnerId, string? EnvironmentReference, ExecutionSession? Session,
+    long? OwnerId, string? EnvironmentReference, ExecutionSession? Session,
     DateTimeOffset? ClaimedAt, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt,
     DateTimeOffset? CancellationRequestedAt, FailureKind? Failure,
     bool CleanupPending = false, bool CleanupFailed = false);
@@ -28,7 +28,7 @@ public sealed partial class WorkItem
                 a.Status, a.OwnerId, a.EnvironmentReference, a.Session, a.ClaimedAt,
                 a.StartedAt, a.FinishedAt, a.CancellationRequestedAt, a.Failure, a.CleanupPending, a.CleanupFailed);
         }
-        return new(1, Id, Objective, AgentId, Status, Attention, attempts,
+        return new(2, Id, Objective, AgentId, Status, Attention, attempts,
             [.. _history], [.. _decisions], [.. _results],
             [.. _messages], [.. _artifacts]);
     }
@@ -36,8 +36,8 @@ public sealed partial class WorkItem
     public static WorkItem Restore(WorkSnapshot state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        Require(state.SchemaVersion == 1 && state.History.Length > 0 &&
-            Enum.IsDefined(state.Status), WorkRule.InvalidValue);
+        Require(state.SchemaVersion == 2 && state.History.Length > 0 &&
+            (state.AgentId is null or > 0) && Enum.IsDefined(state.Status), WorkRule.InvalidValue);
         var work = new WorkItem(state.Id, state.Objective, state.History[0].OccurredAt)
         {
             AgentId = state.AgentId,
@@ -52,8 +52,9 @@ public sealed partial class WorkItem
         }
         foreach (AttemptSnapshot a in state.Attempts)
         {
-            Require(a.WorkId == state.Id && a.Id != Guid.Empty && a.AgentId != Guid.Empty &&
-                Enum.IsDefined(a.Status) && !work._attempts.Exists(x => x.Id == a.Id), WorkRule.InvalidValue);
+            Require(a.WorkId == state.Id && a.Id > 0 && a.AgentId > 0 &&
+                (a.OwnerId is null or > 0) && Enum.IsDefined(a.Status) &&
+                !work._attempts.Exists(x => x.Id == a.Id), WorkRule.InvalidValue);
             work._attempts.Add(new(a.Id, a.WorkId, a.AgentId, a.Target, a.QueuedAt)
             {
                 Status = a.Status,

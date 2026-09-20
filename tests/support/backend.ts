@@ -42,7 +42,18 @@ export async function startBackend(options: BackendOptions) {
                 ...options,
             }),
         ],
-        { stdio: ["pipe", "pipe", "pipe"] },
+        {
+            stdio: ["pipe", "pipe", "pipe"],
+            env: {
+                ...process.env,
+                ...(options.enableWork && process.env.GOBLIN_TEST_POSTGRES_APP
+                    ? {
+                          ConnectionStrings__Goblin:
+                              process.env.GOBLIN_TEST_POSTGRES_APP,
+                      }
+                    : {}),
+            },
+        },
     );
     const exited = once(child, "exit");
     let errors = "";

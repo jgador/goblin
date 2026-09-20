@@ -16,16 +16,16 @@ public sealed record ExecutionObservation(ObservationKind Kind, ExecutionSession
 public interface IExecutionHost
 {
     RuntimeCapabilities[] Capabilities { get; }
-    string EnvironmentFor(Guid workId, Guid attemptId);
+    string EnvironmentFor(long workId, long attemptId);
     Task StartAsync(WorkSnapshot work, CancellationToken token);
     Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token);
     Task CleanupAsync(WorkSnapshot work, CancellationToken token);
 }
 
-public sealed record DispatchFailureEvidence(Guid WorkId, Guid AttemptId, FailureKind Failure, bool Cleanup = false);
+public sealed record DispatchFailureEvidence(long WorkId, long AttemptId, FailureKind Failure, bool Cleanup = false);
 public interface IDispatchFailureJournal
 {
     Task RecordAsync(DispatchFailureEvidence evidence, CancellationToken token);
     Task<DispatchFailureEvidence[]> ReadAsync(CancellationToken token);
-    Task RemoveAsync(Guid attemptId, CancellationToken token);
+    Task RemoveAsync(long attemptId, CancellationToken token);
 }

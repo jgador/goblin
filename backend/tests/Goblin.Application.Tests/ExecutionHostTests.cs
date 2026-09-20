@@ -12,6 +12,9 @@ namespace Goblin.Application.Tests;
 
 public sealed class ExecutionHostTests
 {
+    private static long _nextId = int.MaxValue;
+    private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
+
     [Fact]
     public async Task CancellationBeforeDeliveryFencesARealTextWorkerStart()
     {
@@ -40,7 +43,7 @@ public sealed class ExecutionHostTests
         try
         {
             await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => host.StartAsync(work, default)));
-            string attemptDirectory = Path.Combine(directory, work.Attempts[^1].Id.ToString("N"));
+            string attemptDirectory = Path.Combine(directory, work.Attempts[^1].Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             while (!File.Exists(Path.Combine(attemptDirectory, "starts"))) await Task.Delay(20, timeout.Token);
             Assert.Single(await File.ReadAllLinesAsync(Path.Combine(attemptDirectory, "starts")));
@@ -59,10 +62,10 @@ public sealed class ExecutionHostTests
     private static WorkSnapshot Claimed()
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        var work = new WorkItem(Guid.NewGuid(), "Answer a question", now);
-        work.Assign(Guid.NewGuid(), now);
-        work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid()), now);
-        work.TryClaimExecution(work.CurrentAttempt!.Id, Guid.NewGuid(), "text-test", now);
+        var work = new WorkItem(NextId(), "Answer a question", now);
+        work.Assign(NextId(), now);
+        work.QueueExecution(NextId(), new("codex", NextId()), now);
+        work.TryClaimExecution(work.CurrentAttempt!.Id, NextId(), "text-test", now);
         return work.Snapshot();
     }
 }
