@@ -1,7 +1,2 @@
-import { mountCodex } from "./codex.js";
-await mountCodex(document.body, () => {
-    if (new URLSearchParams(location.search).get("returnTo") !== "headlamp")
-        return false;
-    location.replace("/headlamp/");
-    return true;
-});
+// Compatibility entry point for the original home script URL.
+import "../work/app.js";

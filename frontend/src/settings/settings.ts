@@ -8,10 +8,28 @@ export class Settings {
     private githubMounted = false;
     private opener: HTMLElement | null = null;
     private openerAction = "settings";
+    private generation = 0;
+    private codexDispose?: () => void;
+    private githubDispose?: () => void;
+    get isOpen() {
+        return this.dialog.open;
+    }
+    reset() {
+        this.generation++;
+        this.dialog.close();
+        this.codexDispose?.();
+        this.githubDispose?.();
+        this.codexDispose = this.githubDispose = undefined;
+        this.codexMounted = this.githubMounted = false;
+        for (const panel of this.dialog.querySelectorAll<HTMLElement>(
+            "[data-provider-panel]",
+        ))
+            panel.replaceWith(panel.cloneNode(false));
+    }
     constructor() {
         this.dialog.className = "settings-dialog";
         this.dialog.setAttribute("aria-labelledby", "settings-title");
-        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close" aria-label="Close settings">×</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="codex">${icon("spark")}Codex</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button></nav><div class="settings-content"><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
+        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close" aria-label="Close settings">×</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
         document.body.append(this.dialog);
         this.dialog
             .querySelector(".settings-close")!
@@ -46,15 +64,19 @@ export class Settings {
             .forEach((button) => {
                 button.classList.toggle(
                     "selected",
-                    button.dataset.provider === provider,
+                    button.dataset.provider ===
+                        (provider === "codex" ? "connections" : provider),
                 );
                 button.setAttribute(
                     "aria-current",
-                    button.dataset.provider === provider ? "page" : "false",
+                    button.dataset.provider ===
+                        (provider === "codex" ? "connections" : provider)
+                        ? "page"
+                        : "false",
                 );
             });
     }
-    async open(provider = "codex") {
+    async open(provider = "connections") {
         this.opener = document.activeElement as HTMLElement;
         this.openerAction = this.opener?.dataset.action ?? "settings";
         this.select(provider);
@@ -62,6 +84,19 @@ export class Settings {
         await this.mount(provider);
     }
     private async mount(provider: string) {
+        if (provider === "connections") {
+            const panel = this.dialog.querySelector<HTMLElement>(
+                '[data-provider-panel="connections"]',
+            )!;
+            panel.innerHTML = `<h3>AI connections</h3><p class="settings-description">Choose how Goblin connects to the AI that does your work.</p><div class="provider-card"><div class="provider-heading">${icon("spark")}<h4>Codex</h4><span class="provider-default">Default</span></div><p class="settings-description">Connect with your ChatGPT account or an OpenAI API key.</p><button class="settings-primary" data-connect-codex>Manage connection</button></div><p class="settings-description">GitHub repository access is managed separately under GitHub.</p>`;
+            panel
+                .querySelector("[data-connect-codex]")!
+                .addEventListener("click", () => {
+                    this.select("codex");
+                    void this.mount("codex");
+                });
+            return;
+        }
         if (provider === "cluster") {
             const panel = this.dialog.querySelector<HTMLElement>(
                 '[data-provider-panel="cluster"]',
@@ -88,7 +123,7 @@ export class Settings {
         if (provider === "github") {
             if (!this.githubMounted) {
                 this.githubMounted = true;
-                mountGitHub(
+                this.githubDispose = mountGitHub(
                     this.dialog.querySelector<HTMLElement>(
                         '[data-provider-panel="github"]',
                     )!,
@@ -101,11 +136,24 @@ export class Settings {
         const panel = this.dialog.querySelector<HTMLElement>(
             '[data-provider-panel="codex"]',
         )!;
+        const generation = this.generation;
         try {
             const response = await fetch("/connection/panel.html");
             if (!response.ok) throw new Error();
-            panel.innerHTML = await response.text();
-            await mountCodex(panel);
+            const html = await response.text();
+            if (generation !== this.generation) return;
+            panel.innerHTML =
+                '<button class="provider-back" type="button">← AI connections</button>' +
+                html;
+            panel
+                .querySelector(".provider-back")!
+                .addEventListener("click", () => {
+                    this.select("connections");
+                    void this.mount("connections");
+                });
+            const dispose = await mountCodex(panel);
+            if (generation !== this.generation) dispose?.();
+            else this.codexDispose = dispose;
         } catch {
             panel.textContent =
                 "Codex settings could not be loaded. Refresh Goblin and try again.";

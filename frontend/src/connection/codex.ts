@@ -34,6 +34,7 @@ export async function mountCodex(
             ).content.cloneNode(true),
         );
     }
+    let disposed = false;
     let unlocked = false;
     let busy = false;
     let state: AuthenticationState | null = null;
@@ -357,7 +358,8 @@ export async function mountCodex(
 
     function schedulePoll() {
         clearTimeout(pollTimer);
-        if (unlocked) pollTimer = setTimeout(poll, state?.login ? 2000 : 7000);
+        if (unlocked && !disposed)
+            pollTimer = setTimeout(poll, state?.login ? 2000 : 7000);
     }
 
     async function poll() {
@@ -462,9 +464,10 @@ export async function mountCodex(
         }
     });
 
-    document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && unlocked && !busy) poll();
-    });
+    const visible = () => {
+        if (!disposed && !document.hidden && unlocked && !busy) void poll();
+    };
+    document.addEventListener("visibilitychange", visible);
 
     try {
         const session = await api("/api/session");
@@ -483,4 +486,10 @@ export async function mountCodex(
         );
     }
     schedulePoll();
+    return () => {
+        disposed = true;
+        unlocked = false;
+        clearTimeout(pollTimer);
+        document.removeEventListener("visibilitychange", visible);
+    };
 }

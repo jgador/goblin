@@ -5,7 +5,8 @@ login, OpenAI API-key login, and an automatic connection check using the saved a
 through Codex, the current primary and only implemented agent integration.
 Review authentication first;
 GitHub uses the official GitHub CLI device flow, configured alongside Codex in
-**Settings → Connections**. See [execution hosting](execution-hosting.md) for
+**Settings → GitHub**. Codex sign-in is under **Settings → AI connections →
+Manage connection** on the Codex card. See [execution hosting](execution-hosting.md) for
 repository permissions and credential isolation.
 
 The [architecture plan](architecture-refactoring-plan.md) prepares for other
@@ -35,6 +36,8 @@ Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
 
 On first start, choose and confirm your password in the terminal; input is hidden.
 Open **http://localhost:8787**, enter that password, and click **Open workspace**.
+The homepage opens your Work workspace. Open Settings to configure an AI connection;
+`/?settings=codex` also opens the Codex panel after unlocking.
 Subsequent starts reuse its saved verifier. After locking the workspace or
 restarting Goblin, enter the password again. There is no default password or prefill.
 

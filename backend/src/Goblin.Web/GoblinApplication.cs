@@ -130,7 +130,7 @@ public static class GoblinApplication
         var staticFiles = new Dictionary<string, (byte[] Body, string ContentType)>();
         foreach ((string? path, string? file, string? type) in new[]
         {
-            ("/", "connection/index.html", "text/html; charset=utf-8"),
+            ("/", "work/index.html", "text/html; charset=utf-8"),
             ("/app.js", "connection/app.js", "text/javascript; charset=utf-8"),
             ("/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
             ("/connection/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
@@ -138,7 +138,7 @@ public static class GoblinApplication
             ("/settings/settings.js", "settings/settings.js", "text/javascript; charset=utf-8"),
             ("/settings/github.js", "settings/github.js", "text/javascript; charset=utf-8"),
             ("/settings/styles.css", "settings/styles.css", "text/css; charset=utf-8"),
-            ("/styles.css", "connection/styles.css", "text/css; charset=utf-8"),
+            ("/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/work", "work/index.html", "text/html; charset=utf-8"),
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
             ("/work/presentation.js", "work/presentation.js", "text/javascript; charset=utf-8"),

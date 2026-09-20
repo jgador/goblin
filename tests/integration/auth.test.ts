@@ -327,8 +327,13 @@ test("expired login and upstream errors reveal no upstream secrets", async (t) =
     const ctx = await start(t, { scenario: "expired" });
     await ctx.unlock();
     await ctx.request("/api/auth/chatgpt", {});
-    await delay(100);
-    const result = await ctx.request("/api/status");
+    // The notification is asynchronous; loaded CI/build hosts can exceed 100 ms.
+    const deadline = Date.now() + 5000;
+    let result = await ctx.request("/api/status");
+    while (result.data.login && Date.now() < deadline) {
+        await delay(25);
+        result = await ctx.request("/api/status");
+    }
     assert.equal(result.data.login, null);
     assert.ok(result.data.notice);
     assert.equal(result.data.notice.kind, "error");

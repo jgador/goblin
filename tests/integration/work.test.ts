@@ -60,7 +60,7 @@ test("the work preview and its assets are public while workspace APIs remain pro
         assert.ok(result.type.startsWith(contentType), path);
         assert.match(result.csp, /script-src 'self'; style-src 'self'/);
         assert.ok(result.body.length > 0);
-        if (path === "/work" || path === "/work/") {
+        if (path === "/" || path === "/work" || path === "/work/") {
             assert.match(result.body, /src="\/work\/app\.js"/);
             assert.match(result.body, /href="\/work\/styles\.css"/);
         }
