@@ -59,7 +59,7 @@ test("localhost requires the chosen password without prefilling it, including af
         await password.fill(chosenPassword);
         await open.click();
         await expect(
-            page.getByRole("heading", { name: "Choose how to sign in" }),
+            page.getByRole("heading", { name: "What should we work on?" }),
         ).toBeVisible();
         expect(loginRequests).toEqual([
             { password: "goblin" },
@@ -67,7 +67,7 @@ test("localhost requires the chosen password without prefilling it, including af
         ]);
         await page.reload();
         await expect(
-            page.getByRole("heading", { name: "Choose how to sign in" }),
+            page.getByRole("heading", { name: "What should we work on?" }),
         ).toBeVisible();
         expect(loginRequests).toHaveLength(2);
 
@@ -80,7 +80,7 @@ test("localhost requires the chosen password without prefilling it, including af
         await password.fill(chosenPassword);
         await open.click();
         await expect(
-            page.getByRole("heading", { name: "Choose how to sign in" }),
+            page.getByRole("heading", { name: "What should we work on?" }),
         ).toBeVisible();
         expect(loginRequests).toHaveLength(3);
     } finally {

@@ -8,7 +8,9 @@ test.describe("durable Work", () => {
     async function unlock(page: import("@playwright/test").Page) {
         await page.goto("/work");
         await page.getByLabel("Goblin password", { exact: true }).fill("a");
-        await page.getByRole("button", { name: "Unlock", exact: true }).click();
+        await page
+            .getByRole("button", { name: "Open workspace", exact: true })
+            .click();
         await expect(
             page.getByRole("heading", { name: "Work", exact: true }),
         ).toBeVisible();
@@ -26,13 +28,15 @@ test.describe("durable Work", () => {
         objective: string,
     ) {
         await page
-            .getByRole("button", { name: "Create work", exact: true })
+            .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
         await page
             .getByRole("textbox", { name: "Describe the intended outcome…" })
             .fill(objective);
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .click();
         await expect(page.locator(".detail h2")).toHaveText(objective);
         await page
             .getByRole("button", { name: "Assign agent", exact: true })
@@ -75,6 +79,9 @@ test.describe("durable Work", () => {
         );
         await page.reload();
         await page.getByRole("button", { name: new RegExp(objective) }).click();
+        await page
+            .getByRole("button", { name: "Details", exact: true })
+            .click();
         await page.getByRole("tab", { name: "Outputs" }).click();
         await expect(
             page.getByRole("heading", { name: "Approved result" }),
@@ -138,6 +145,9 @@ test.describe("durable Work", () => {
             "Release context " + Date.now() + ' <img src=x onerror="alert(1)">';
         await page.getByRole("textbox").fill(text);
         await page.getByRole("button", { name: "Send message" }).click();
+        await expect(page).toHaveURL(/\?conversation=\d+/);
+        await page.reload();
+        await expect(page.locator(".message-text").first()).toHaveText(text);
         await page
             .getByRole("button", { name: "Track this work", exact: true })
             .click();
@@ -166,7 +176,9 @@ test.describe("durable Work", () => {
             path: test.info().outputPath("mobile-work.png"),
             fullPage: true,
         });
-        await page.getByRole("button", { name: "Work", exact: true }).click();
+        await page
+            .getByRole("button", { name: "Show sidebar", exact: true })
+            .click();
         await expect(
             page.getByRole("heading", { name: "Work", exact: true }),
         ).toBeVisible();
@@ -186,10 +198,12 @@ test.describe("durable Work", () => {
             { times: 1 },
         );
         await page
-            .getByRole("button", { name: "Create work", exact: true })
+            .getByRole("button", { name: "New work", exact: true })
             .click();
         await page.getByRole("textbox").fill(objective);
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .click();
         await expect(
             page.getByRole("button", { name: "Resend command" }),
         ).toBeVisible();
@@ -220,18 +234,22 @@ test.describe("durable Work", () => {
             { times: 1 },
         );
         await page
-            .getByRole("button", { name: "Create work", exact: true })
+            .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
         await page.getByRole("textbox").fill(objective);
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .click();
         await expect(page.getByRole("alert")).toBeVisible();
         await expect(
             page.getByRole("button", { name: "Resend command" }),
         ).toHaveCount(0);
         await expect(page.getByRole("textbox")).toHaveValue(objective);
         expect(submissions).toBe(0);
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .click();
         await expect(page.locator(".detail h2")).toHaveText(objective);
         expect(submissions).toBe(1);
     });

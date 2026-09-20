@@ -1,4 +1,9 @@
 const icons: Record<string, string> = {
+    sidebar:
+        '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
+    close: '<path d="m6 6 12 12M6 18 18 6"/>',
     settings:
         '<path d="m9 3-.6 2.1-2 .9-2-.6-2 3.5 1.5 1.6v2.3L2.4 14l2 3.5 2-.5 2 1L9 20h4l.6-2.1 2-.9 2 .6 2-3.5-1.5-1.6v-2.3L19.6 8l-2-3.5-2 .5-2-1L13 3Z"/><circle cx="11" cy="11.5" r="3"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',

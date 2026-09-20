@@ -17,6 +17,20 @@ const reply = {
 };
 
 async function savedAccount(page: Page, account: Account = chatgpt) {
+    for (const path of [
+        "work",
+        "conversations",
+        "agents",
+        "runtimes",
+        "connections",
+        "github/repositories",
+    ])
+        await page.route(`**/api/${path}`, (route) =>
+            route.fulfill({ json: [] }),
+        );
+    await page.route("**/api/github", (route) =>
+        route.fulfill({ json: { configured: false } }),
+    );
     const state: AuthenticationState = {
         account,
         login: null,
@@ -111,7 +125,7 @@ test("saved accounts check automatically and require a manual retry after failur
                 : { json: reply },
         );
     });
-    await page.goto("/");
+    await page.goto("/?settings=codex");
     for (const [index, failure] of failures.entries()) {
         await expect(page.locator("#connection-status")).toHaveText(
             failure.title,
@@ -160,7 +174,7 @@ test("API key failures explain how to restore access", async ({ page }) => {
             },
         }),
     );
-    await page.goto("/");
+    await page.goto("/?settings=codex");
     await expect(page.locator("#connection-status")).toHaveText(
         "API key rejected",
     );
@@ -184,7 +198,7 @@ test("network errors fail the check and a retry can recover", async ({
     await page.route("**/api/prompt", (route) =>
         checks++ === 0 ? route.abort("failed") : route.fulfill({ json: reply }),
     );
-    await page.goto("/");
+    await page.goto("/?settings=codex");
     await expect(page.locator("#connection-status")).toHaveText(
         "Connection check failed",
     );
@@ -212,7 +226,7 @@ test("an expired workspace session clears the check and verifies again after unl
             });
         } else await route.fulfill({ json: reply });
     });
-    await page.goto("/");
+    await page.goto("/?settings=codex");
     await expect(page.locator("#connection-status")).toHaveText(
         "Verifying connection…",
     );
@@ -239,7 +253,7 @@ test("account changes clear a previous success and trigger a fresh check", async
         if (++checks === 2) await checkGate.promise;
         await route.fulfill({ json: reply });
     });
-    await page.goto("/");
+    await page.goto("/?settings=codex");
     await expect(page.locator("#connection-status")).toHaveText("Connected");
     state.account = {
         type: "chatgpt",
@@ -280,7 +294,7 @@ test("losing account status removes a previous success without automatically sen
         checks++;
         return route.fulfill({ json: reply });
     });
-    await page.goto("/");
+    await page.goto("/?settings=codex");
     await expect(page.locator("#connection-status")).toHaveText("Connected");
     await page.route(
         "**/api/status",

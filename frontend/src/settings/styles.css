@@ -30,8 +30,13 @@
 .settings-repositories > button { margin-top:12px; }
 .settings-dialog [hidden] { display:none !important; }
 .settings-dialog button:focus-visible,.settings-dialog a:focus-visible { outline:3px solid #79a557; outline-offset:3px; }
-.sidebar-connection { display:block; width:100%; text-align:left; padding:9px 11px; color:#677061; font-size:11px; overflow-wrap:anywhere; }
-.sidebar-settings { margin-top:13px; border-top:1px solid #dce1d2; padding-top:18px; width:100%; }
-.sidebar-settings svg { width:19px; height:19px; }
-@media(max-width:950px) { .sidebar-connection { font-size:10px; padding:8px 0; text-align:center; } .sidebar-settings .settings-label { display:none; } }
-@media(max-width:760px) { .settings-dialog { width:100vw; max-width:none; height:100dvh; max-height:none; border:0; border-radius:0; } .settings-layout { display:block; } .settings-header { padding:18px; } .settings-nav { display:flex; padding:10px 16px; gap:8px; } .settings-nav p { display:none; } .settings-nav button { width:auto; margin:0; } .settings-content { padding:22px; max-height:calc(100dvh - 140px); } }
+@media(max-width:760px) { .settings-dialog { width:100vw; max-width:none; height:100dvh; max-height:none; border:0; border-radius:0; } .settings-layout { display:block; } .settings-header { padding:18px; } .settings-nav { display:flex; padding:10px 12px; gap:4px; overflow:auto; } .settings-nav p { display:none; } .settings-nav button { width:auto; margin:0; font-size:12px; flex-shrink:0; } .settings-content { padding:22px; max-height:calc(100dvh - 140px); } }
+
+.provider-card { border:1px solid var(--border); border-radius:12px; padding:20px; margin:22px 0; }
+.provider-heading { display:flex; align-items:center; gap:9px; }
+.settings-content .provider-heading h4 { font-size:16px; margin:0; }
+.provider-default { margin-left:auto; font-size:10px; padding:3px 7px; background:#edf2e5; color:#667d53; border-radius:5px; }
+.settings-content .provider-back { margin-bottom:22px; border:0; padding:0; background:none; font-size:12px; }
+
+.settings-nav .settings-lock { margin-top:30px; font-size:12px; }
+@media(max-width:760px) { .settings-nav .settings-lock { margin-top:0; } }

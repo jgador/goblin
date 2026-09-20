@@ -75,6 +75,12 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     await page.locator('.sidebar [data-action="settings"]').click();
     const dialog = page.getByRole("dialog", { name: "Settings" });
     await expect(dialog).toBeVisible();
+    await expect(
+        dialog.getByRole("heading", { name: "AI connections" }),
+    ).toBeVisible();
+    await dialog
+        .getByRole("button", { name: "Manage connection", exact: true })
+        .click();
     await expect(dialog.getByText("owner@example.test · plus")).toBeVisible();
     await dialog.getByRole("button", { name: "Cluster", exact: true }).click();
     const cluster = dialog.getByRole("link", { name: "Open cluster" });
@@ -96,7 +102,8 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     await expect(
         page.getByPlaceholder("Describe the intended outcome…"),
     ).toHaveValue("Keep this draft while I connect GitHub");
-    await page.locator('.sidebar [data-action="settings-github"]').click();
+    await page.locator('.sidebar [data-action="settings"]').click();
+    await dialog.getByRole("button", { name: "GitHub", exact: true }).click();
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     github.status = "Connected";
     github.login = "owner";
@@ -113,7 +120,7 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     });
     await dialog.getByRole("button", { name: "Close settings" }).click();
     await expect(
-        page.locator('.sidebar [data-action="settings-github"]'),
+        page.locator('.sidebar [data-action="settings"]'),
     ).toBeFocused();
     expect(errors).toEqual([]);
 });
@@ -124,14 +131,20 @@ test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
     await settingsFixture(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/work");
-    await page.locator('.preview-right [data-action="settings"]').click();
+    await page
+        .getByRole("button", { name: "Show sidebar", exact: true })
+        .click();
+    await page.locator('.sidebar [data-action="settings"]').click();
     const dialog = page.getByRole("dialog", { name: "Settings" });
     await dialog.getByRole("button", { name: "GitHub", exact: true }).click();
     await dialog
         .getByRole("button", { name: "Connect GitHub", exact: true })
         .click();
     await page.reload();
-    await page.locator('.preview-right [data-action="settings"]').click();
+    await page
+        .getByRole("button", { name: "Show sidebar", exact: true })
+        .click();
+    await page.locator('.sidebar [data-action="settings"]').click();
     await dialog.getByRole("button", { name: "GitHub", exact: true }).click();
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     await page.screenshot({

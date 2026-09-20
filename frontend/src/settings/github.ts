@@ -38,8 +38,10 @@ export function mountGitHub(root: HTMLElement) {
         available: Repository[] = [],
         browsing = false,
         more = false;
-    let generation = 0;
+    let generation = 0,
+        disposed = false;
     function render() {
+        if (disposed) return;
         const focus = root.contains(document.activeElement)
             ? (document.activeElement as HTMLElement).dataset.github
             : null;
@@ -145,7 +147,12 @@ export function mountGitHub(root: HTMLElement) {
     });
     render();
     void Promise.all([refresh(), loadEnabled()]).then(render);
-    setInterval(() => {
+    const timer = setInterval(() => {
         if (!document.hidden && !busy) void refresh();
     }, 2000);
+    return () => {
+        disposed = true;
+        generation++;
+        clearInterval(timer);
+    };
 }

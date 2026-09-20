@@ -1,9 +1,22 @@
 # Work experience
 
-Open `/work` or **Open work** from the connection page, then unlock Goblin.
-The screen uses authenticated APIs and PostgreSQL. Sample fixtures remain in
+Open `/` and unlock Goblin to start from **What should we work on?**. The same
+workspace shell serves `/work`; selected Work uses `/work?item=<id>` so refresh
+returns to that item. The screen uses authenticated APIs and PostgreSQL. Sample fixtures remain in
 `frontend/src/work/sample-fixtures.ts` for design reference and are not loaded
 by the application.
+
+One collapsible sidebar contains New work, search, recent Work, attention/completed
+filters, and saved Conversations. Settings stays at the bottom. On mobile, the
+sidebar opens over the main area and closes after selecting Work. Desktop collapse
+preference is saved locally. Unsent drafts survive navigation within the page and
+opening Settings; ordinary drafts are not saved across a browser refresh.
+
+The homepage is independent of any AI provider. **Settings → AI connections →
+Manage connection** on the Codex card opens
+the existing ChatGPT/API-key flow. GitHub repository access and Cluster have their
+own Settings entries. Only Codex execution is currently implemented; the AI
+connections area can accommodate future integrations without replacing the home.
 
 Create Work by describing its intended outcome, assign the Goblin agent, and
 choose **Start work** for a text question. **Repository changes** requires a known
@@ -20,6 +33,10 @@ Every observed failure requires attention. Retry creates a new attempt only afte
 an uncertain execution has been reconciled. Cancellation waits for stopping
 confirmation. Cleanup failures also require reconciliation before continuation.
 The activity view records the runtime and model reported for each attempt.
+Open **Details** to see execution information and the Conversation, Activity, and
+Outputs tabs. The main conversation places saved questions, results, and permitted
+actions together. Creating Work still only saves the objective; **Start work** is
+an explicit action after assignment.
 
 The browser distinguishes saving from a confirmed transition. If a response is
 lost, it retains the original command in session storage and offers **Resend

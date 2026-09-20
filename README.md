@@ -85,8 +85,9 @@ for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for the current
 Codex integration, model regeneration, and direct .NET commands.
 
-The [Work screen](docs/work-experience-preview.md) is available at
-http://localhost:8787/work or through **Open work** on the connection page.
+The [workspace](docs/work-experience-preview.md) opens at http://localhost:8787.
+Start from the home composer, or select existing Work in the collapsible sidebar.
+AI connections, GitHub repository access, and Cluster are available in Settings.
 Create and assign Work, execute with Codex, answer decisions, review outcomes,
 and approve completion. History and approvals are stored in PostgreSQL; failures
 require attention and explicit recovery.
@@ -94,7 +95,7 @@ require attention and explicit recovery.
 Durable Work requires a configured, migrated PostgreSQL database. The installer
 sets this up before starting Goblin. For direct local development, follow the
 [database guide](docs/database.md) first, then run `npm start`. Set
-`GOBLIN_WORK_ENABLED=false` to run only the connection screen without PostgreSQL.
+`GOBLIN_WORK_ENABLED=false` to manage connections without PostgreSQL.
 [Execution hosting](docs/execution-hosting.md) covers repository sandboxes,
 GitHub sign-in, credentials, recovery, and current validation limits.
 
