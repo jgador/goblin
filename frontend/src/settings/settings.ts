@@ -1,6 +1,7 @@
 import { mountCodex } from "../connection/codex.js";
 import { mountGitHub } from "./github.js";
 import { icon } from "../work/presentation.js";
+import { SystemResources } from "./system.js";
 
 export class Settings {
     private readonly dialog = document.createElement("dialog");
@@ -11,6 +12,7 @@ export class Settings {
     private generation = 0;
     private codexDispose?: () => void;
     private githubDispose?: () => void;
+    private readonly system: SystemResources;
     get isOpen() {
         return this.dialog.open;
     }
@@ -26,11 +28,31 @@ export class Settings {
         ))
             panel.replaceWith(panel.cloneNode(false));
     }
-    constructor() {
+    constructor(system: SystemResources) {
+        this.system = system;
         this.dialog.className = "settings-dialog";
         this.dialog.setAttribute("aria-labelledby", "settings-title");
         this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close" aria-label="Close settings">×</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
         document.body.append(this.dialog);
+        const systemButton = document.createElement("button");
+        systemButton.dataset.provider = "system";
+        systemButton.innerHTML = `${icon("activity")}System`;
+        this.dialog
+            .querySelector('[data-provider="cluster"]')!
+            .before(systemButton);
+        const systemPanel = document.createElement("section");
+        systemPanel.dataset.providerPanel = "system";
+        systemPanel.setAttribute("aria-label", "System resources");
+        systemPanel.hidden = true;
+        this.dialog.querySelector(".settings-content")!.append(systemPanel);
+        this.dialog.addEventListener("click", (event) => {
+            if (
+                (event.target as Element).closest("[data-open-system-cluster]")
+            ) {
+                this.select("cluster");
+                void this.mount("cluster");
+            }
+        });
         this.dialog
             .querySelector(".settings-close")!
             .addEventListener("click", () => this.dialog.close());
@@ -84,6 +106,14 @@ export class Settings {
         await this.mount(provider);
     }
     private async mount(provider: string) {
+        if (provider === "system") {
+            this.system.mount(
+                this.dialog.querySelector<HTMLElement>(
+                    '[data-provider-panel="system"]',
+                )!,
+            );
+            return;
+        }
         if (provider === "connections") {
             const panel = this.dialog.querySelector<HTMLElement>(
                 '[data-provider-panel="connections"]',

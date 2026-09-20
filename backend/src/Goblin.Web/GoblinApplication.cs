@@ -15,6 +15,7 @@ using Goblin.Execution;
 using Goblin.Integrations.Codex;
 using Goblin.Integrations.GitHub;
 using Goblin.Persistence;
+using Goblin.Web.Monitoring;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -44,6 +45,7 @@ public sealed record ApplicationOptions
     public IExecutionHost? ExecutionHost { get; init; }
     public string GitHubCommand { get; init; } = "gh";
     public string? HeadlampUrl { get; init; }
+    public ISystemSource? SystemSource { get; init; }
 }
 
 public static class GoblinApplication
@@ -71,6 +73,19 @@ public static class GoblinApplication
         });
         // Request and upstream details can contain credentials. Log only explicit safe startup messages.
         builder.Logging.ClearProviders();
+        string? nodeName = builder.Configuration["GOBLIN_NODE_NAME"];
+        if (options.SystemSource is not null) builder.Services.AddSingleton(options.SystemSource);
+        else if (!string.IsNullOrWhiteSpace(nodeName))
+            builder.Services.AddSingleton<ISystemSource>(_ =>
+            {
+                string tokenFile = builder.Configuration["GOBLIN_KUBERNETES_TOKEN_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token";
+                string caFile = builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
+                return new KubernetesSystemSource(builder.Configuration["GOBLIN_KUBERNETES_URL"],
+                    nodeName, builder.Configuration["GOBLIN_NAMESPACE"] ?? "goblin",
+                    builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"] ?? "goblin-executions", tokenFile, caFile);
+            });
+        builder.Services.AddSingleton(services => new SystemMonitor(services.GetService<ISystemSource>()));
+        builder.Services.AddHostedService(services => services.GetRequiredService<SystemMonitor>());
         if (!string.IsNullOrWhiteSpace(options.HeadlampUrl))
         {
             builder.Services.AddHttpForwarder();
@@ -137,6 +152,7 @@ public static class GoblinApplication
             ("/connection/panel.html", "connection/panel.html", "text/html; charset=utf-8"),
             ("/settings/settings.js", "settings/settings.js", "text/javascript; charset=utf-8"),
             ("/settings/github.js", "settings/github.js", "text/javascript; charset=utf-8"),
+            ("/settings/system.js", "settings/system.js", "text/javascript; charset=utf-8"),
             ("/settings/styles.css", "settings/styles.css", "text/css; charset=utf-8"),
             ("/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/work", "work/index.html", "text/html; charset=utf-8"),
@@ -223,6 +239,7 @@ public static class GoblinApplication
         app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "password"), context.Response));
         app.MapPost("/api/session/lock", (HttpContext context) => workspace.Lock((string)context.Items[SessionKey]!, context.Response));
         app.MapGet("/api/cluster", () => Results.Json(new { available = headlamp is not null }));
+        app.MapGet("/api/system", (SystemMonitor monitor) => Results.Json(monitor.Current));
         app.MapGet("/api/status", (Delegate)((HttpContext context) => ConnectionAsync(context, false, auth.StatusAsync)));
         app.MapPost("/api/auth/chatgpt", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.LoginChatGptAsync)));
         app.MapPost("/api/auth/api-key", (Delegate)((HttpContext context) => ConnectionAsync(context, true, () => auth.LoginApiKeyAsync(StringField(context, "apiKey")))));

@@ -182,6 +182,35 @@ test("workspace access is required, cookies are private, and credential files ar
     assert.equal((await stat(join(ctx.dataDir, "codex"))).mode & 0o777, 0o700);
 });
 
+test("VM monitoring requires workspace access and does not gate readiness", async (t) => {
+    for (const publicOrigin of [
+        "http://localhost:8787",
+        "http://goblin.southeastasia.cloudapp.azure.com",
+    ]) {
+        const ctx = await start(t, { publicOrigin, allowInsecureHttp: true });
+        assert.equal((await ctx.request("/api/system")).status, 401);
+        await ctx.unlock();
+        const response = await ctx.request("/api/system");
+        assert.equal(response.status, 200);
+        assert.equal(response.body.status, "unsupported");
+        assert.equal(response.body.machine, null);
+        assert.deepEqual(response.body.history, []);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.equal(
+            (
+                await ctx.request("/api/system", undefined, {
+                    headers: { Host: "foreign.example" },
+                })
+            ).status,
+            403,
+        );
+        assert.equal((await ctx.request("/readyz")).status, 200);
+        await ctx.request("/api/session/lock", {});
+        assert.equal((await ctx.request("/api/system")).status, 401);
+        await ctx.close();
+    }
+});
+
 test("mutations reject foreign origins and unexpected hosts", async (t) => {
     const ctx = await start(t);
     await ctx.unlock();
