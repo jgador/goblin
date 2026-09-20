@@ -29,7 +29,7 @@ public sealed class PostgresTests
     public async Task WorkItemRoundTripUsesTheApplicationRoleAndSeparateContexts()
     {
         await using TestDatabase database = await TestDatabase.CreateAsync();
-        var id = Guid.NewGuid();
+        const long id = 2147483648L;
         const string objective = "Persist café 🧌 and 'quoted' text";
         await using (GoblinDbContext write = await database.ContextFactory.CreateDbContextAsync())
         {
@@ -119,13 +119,13 @@ public sealed class PostgresTests
         await app.OpenAsync();
         await using (var seed = new NpgsqlCommand("""
             INSERT INTO public.work_items (id, objective)
-                VALUES ('10000000-0000-0000-0000-000000000001', 'Finish cleanup');
+                VALUES (2147483648, 'Finish cleanup');
             INSERT INTO public.execution_attempts
                 (id, work_id, agent_id, connection_id, runtime, status, queued_at, updated_at, cleanup_pending)
-                VALUES ('20000000-0000-0000-0000-000000000001',
-                    '10000000-0000-0000-0000-000000000001',
-                    '00000000-0000-0000-0000-000000000001',
-                    '00000000-0000-0000-0000-000000000001', 'codex', 'Succeeded', now(), now(), true);
+                VALUES (2147483648,
+                    2147483648,
+                    1,
+                    1, 'codex', 'Succeeded', now(), now(), true);
             INSERT INTO public.wolverine_incoming_envelopes (id, status, owner_id, body, message_type)
                 VALUES ('30000000-0000-0000-0000-000000000001', 'Incoming', 0, decode('010203', 'hex'), 'DispatchWork');
             """, app))
@@ -143,7 +143,7 @@ public sealed class PostgresTests
         await using (var duplicate = new NpgsqlCommand("""
             INSERT INTO public.execution_attempts
                 (id, work_id, agent_id, connection_id, runtime, status, queued_at, updated_at)
-            SELECT '20000000-0000-0000-0000-000000000002', work_id, agent_id,
+            SELECT 2147483649, work_id, agent_id,
                 connection_id, runtime, 'Starting', queued_at, updated_at FROM public.execution_attempts;
             """, app))
         {
@@ -151,7 +151,7 @@ public sealed class PostgresTests
             Assert.Equal(PostgresErrorCodes.UniqueViolation, conflict.SqlState);
             Assert.Equal("one_execution_per_connection", conflict.ConstraintName);
         }
-        await using (var orphan = new NpgsqlCommand("UPDATE public.execution_attempts SET work_id = '10000000-0000-0000-0000-000000000002';", app))
+        await using (var orphan = new NpgsqlCommand("UPDATE public.execution_attempts SET work_id = 2147483649;", app))
         {
             PostgresException conflict = await Assert.ThrowsAsync<PostgresException>(() => orphan.ExecuteNonQueryAsync());
             Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, conflict.SqlState);

@@ -5,6 +5,29 @@ application. `Goblin.Application` persists its versioned snapshots, commands,
 conversations, and attempt projections in PostgreSQL and dispatches through
 Wolverine. Runtime adapters and the UI consume Goblin-owned contracts.
 
+## Product identities
+
+Goblin identities are positive C# `long` / PostgreSQL `bigint` values. The browser
+keeps IDs and version numbers as decimal strings because JavaScript numbers cannot
+represent the full 64-bit range. Work HTTP responses encode `long` values as strings
+and accept decimal strings in commands. Runtime session references remain opaque
+strings; Wolverine retains its own storage types.
+
+Before constructing a new command, the browser posts `{ "kinds": ["Command", "Work"] }`
+to `/api/identities` and receives `{ "ids": ["1", "1"] }` in the requested order.
+The authenticated endpoint accepts one to four entries from `Command`, `Work`,
+`Conversation`, and `Message`. Each uses its table's identity sequence, so values
+can coincide across tables. The concrete command, including its reserved IDs,
+is retained for resubmission after an unconfirmed response. An allocation failure
+creates no pending command or Work; gaps in sequences are expected.
+
+Attempts reserve their ID before state and dispatch intent commit. Claim owners,
+decisions, and core context messages use `work_event_ids`, independent of table
+identities. A context entry is not identified by its source command/message ID:
+those IDs come from separate sequences and may coincide. Core snapshots use
+schema version 2 for the bigint model. Earlier GUID snapshots and host journals
+are incompatible with this unreleased schema change.
+
 ## Attention belongs to Work
 
 The user selected **"Surface every failure for attention"** on 2026-09-19.

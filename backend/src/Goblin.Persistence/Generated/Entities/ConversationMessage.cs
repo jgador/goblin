@@ -12,10 +12,10 @@ public partial class ConversationMessage
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("conversation_id")]
-    public Guid ConversationId { get; set; }
+    public long ConversationId { get; set; }
 
     [Column("body")]
     public string Body { get; set; } = null!;

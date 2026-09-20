@@ -12,16 +12,16 @@ public partial class ExecutionAttempt
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("work_id")]
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     [Column("agent_id")]
-    public Guid AgentId { get; set; }
+    public long AgentId { get; set; }
 
     [Column("connection_id")]
-    public Guid ConnectionId { get; set; }
+    public long ConnectionId { get; set; }
 
     [Column("runtime")]
     public string Runtime { get; set; } = null!;
@@ -30,7 +30,7 @@ public partial class ExecutionAttempt
     public string Status { get; set; } = null!;
 
     [Column("owner_id")]
-    public Guid? OwnerId { get; set; }
+    public long? OwnerId { get; set; }
 
     [Column("environment_reference")]
     public string? EnvironmentReference { get; set; }

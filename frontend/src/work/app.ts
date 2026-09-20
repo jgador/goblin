@@ -15,7 +15,7 @@ type Work = {
     attention?: { reason: string; failure?: string };
     attempts: Attempt[];
     history: {
-        sequence: number;
+        sequence: string;
         kind: string;
         text?: string;
         failure?: string;
@@ -26,7 +26,7 @@ type Work = {
     artifacts: { name: string; reference: string }[];
 };
 type View = {
-    version: number;
+    version: string;
     createdAt: string;
     updatedAt: string;
     work: Work;
@@ -40,6 +40,7 @@ type Conversation = {
 type Agent = { id: string; name: string };
 type Connection = { id: string; name: string; availability: string };
 type Pending = { path: string; body: Record<string, unknown> };
+type IdentityKind = "Work" | "Command" | "Conversation" | "Message";
 type Tab = "conversation" | "activity" | "outputs";
 let work: View[] = [],
     conversations: Conversation[] = [],
@@ -109,7 +110,7 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
         );
     return result as T;
 }
-async function refresh() {
+async function refresh(preserveError = false) {
     if (loading || sending) return;
     loading = true;
     try {
@@ -124,7 +125,7 @@ async function refresh() {
             ]);
             if (!work.some((x) => x.work.id === selected))
                 selected = work[0]?.work.id ?? "";
-            if (!pending) error = "";
+            if (!pending && !preserveError) error = "";
             loaded = true;
             void refreshConnections();
         }
@@ -156,37 +157,52 @@ async function refreshConnections() {
 }
 async function send(
     path: string,
-    body: Record<string, unknown>,
+    body: Record<string, unknown> | (() => Promise<Record<string, unknown>>),
     repeat = false,
 ) {
-    if (sending || (pending && !repeat)) return;
-    pending = { path, body };
-    sessionStorage.setItem("goblin.pendingCommand", JSON.stringify(pending));
+    if (sending || (pending && !repeat)) return false;
     sending = true;
     error = "";
+    let confirmed = false;
     render();
     try {
-        await api(path, body);
+        const command = typeof body === "function" ? await body() : body;
+        pending = { path, body: command };
+        sessionStorage.setItem(
+            "goblin.pendingCommand",
+            JSON.stringify(pending),
+        );
+        render();
+        await api(path, command);
         pending = null;
         sessionStorage.removeItem("goblin.pendingCommand");
         draft = "";
         changing = false;
+        confirmed = true;
     } catch (failure) {
         error = (failure as Error).message;
     } finally {
         sending = false;
-        await refresh();
+        await refresh(!confirmed);
     }
+    return confirmed;
+}
+async function reserve(...kinds: IdentityKind[]): Promise<string[]> {
+    const result = await api<{ ids: string[] }>("/api/identities", { kinds });
+    return result.ids;
 }
 async function command(action: string, extra: Record<string, unknown> = {}) {
     const item = current();
     if (item)
-        await send("/api/work/commands", {
-            commandId: crypto.randomUUID(),
-            workId: item.work.id,
-            action,
-            expectedVersion: item.version,
-            ...extra,
+        await send("/api/work/commands", async () => {
+            const [commandId] = await reserve("Command");
+            return {
+                commandId,
+                workId: item.work.id,
+                action,
+                expectedVersion: item.version,
+                ...extra,
+            };
         });
 }
 function message(author: string, text: string, at?: string) {
@@ -433,17 +449,21 @@ document.addEventListener("click", async (event) => {
             attemptId: current()?.work.attempts.at(-1)?.id,
         });
     if (action === "track") {
-        const c = conversations.find((x) => x.id === activeChat)!,
-            workId = crypto.randomUUID();
-        await send("/api/conversations/commands", {
-            conversationId: c.id,
-            messageId: crypto.randomUUID(),
-            text: null,
-            workId,
-        });
-        if (!pending) {
-            selected =
-                conversations.find((x) => x.id === c.id)?.workId ?? workId;
+        const c = conversations.find((x) => x.id === activeChat)!;
+        const confirmed = await send(
+            "/api/conversations/commands",
+            async () => {
+                const [workId, messageId] = await reserve("Work", "Message");
+                return {
+                    conversationId: c.id,
+                    messageId,
+                    text: null,
+                    workId,
+                };
+            },
+        );
+        if (confirmed) {
+            selected = conversations.find((x) => x.id === c.id)?.workId ?? "";
             view = "work";
             detailOpen = true;
         }
@@ -468,24 +488,25 @@ document.addEventListener("submit", async (event) => {
     const text = String(data.get("reply") ?? "").trim();
     if (!text) return;
     if (kind === "new") {
-        const id = crypto.randomUUID();
-        await send("/api/work/commands", {
-            commandId: crypto.randomUUID(),
-            workId: id,
-            action: "Create",
-            text,
+        let id = "";
+        const confirmed = await send("/api/work/commands", async () => {
+            const [commandId, workId] = await reserve("Command", "Work");
+            id = workId;
+            return { commandId, workId, action: "Create", text };
         });
-        if (!pending) {
+        if (confirmed) {
             selected = id;
             view = "work";
             detailOpen = true;
         }
     } else if (kind === "chat") {
-        activeChat ||= crypto.randomUUID();
-        await send("/api/conversations/commands", {
-            conversationId: activeChat,
-            messageId: crypto.randomUUID(),
-            text,
+        await send("/api/conversations/commands", async () => {
+            const [messageId, conversationId] = await reserve(
+                "Message",
+                ...(activeChat ? [] : ["Conversation" as const]),
+            );
+            activeChat ||= conversationId;
+            return { conversationId: activeChat, messageId, text };
         });
     } else {
         const w = current()?.work;

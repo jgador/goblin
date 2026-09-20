@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -25,8 +26,8 @@ public sealed class LocalTextHost : IExecutionHost
     public LocalTextHost(TextHostOptions options) => _options = options;
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
-    public string EnvironmentFor(Guid workId, Guid attemptId) => "text/" + attemptId.ToString("N");
-    private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString("N"));
+    public string EnvironmentFor(long workId, long attemptId) => "text/" + attemptId.ToString(CultureInfo.InvariantCulture);
+    private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture));
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {

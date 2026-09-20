@@ -32,8 +32,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("agents_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
-
             entity.HasOne(d => d.Connection).WithMany(p => p.Agents)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("agents_connection_id_fkey");
@@ -43,7 +41,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("connections_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.Availability).HasDefaultValueSql("'Disconnected'::text");
             entity.Property(e => e.ChangedAt).HasDefaultValueSql("now()");
         });
@@ -52,7 +49,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("conversations_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
 
             entity.HasOne(d => d.Work).WithMany(p => p.Conversations).HasConstraintName("conversations_work_id_fkey");
@@ -62,7 +58,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("conversation_messages_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
 
             entity.HasOne(d => d.Conversation).WithMany(p => p.ConversationMessages)
@@ -77,8 +72,6 @@ public partial class GoblinDbContext : DbContext
             entity.HasIndex(e => e.ConnectionId, "one_execution_per_connection")
                 .IsUnique()
                 .HasFilter("((status = ANY (ARRAY['Starting'::text, 'Running'::text, 'CancellationRequested'::text, 'Uncertain'::text])) OR cleanup_pending)");
-
-            entity.Property(e => e.Id).ValueGeneratedNever();
 
             entity.HasOne(d => d.Agent).WithMany(p => p.ExecutionAttempts)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -97,7 +90,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("work_commands_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
 
             entity.HasOne(d => d.Work).WithMany(p => p.WorkCommands)
@@ -109,7 +101,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("work_items_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.Status).HasDefaultValueSql("'Ready'::text");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
@@ -117,6 +108,7 @@ public partial class GoblinDbContext : DbContext
 
             entity.HasOne(d => d.Agent).WithMany(p => p.WorkItems).HasConstraintName("work_items_agent_id_fkey");
         });
+        modelBuilder.HasSequence("work_event_ids");
 
         OnModelCreatingPartial(modelBuilder);
     }

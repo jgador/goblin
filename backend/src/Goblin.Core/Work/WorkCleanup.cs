@@ -6,7 +6,7 @@ public sealed partial class WorkItem
 {
     // Commit cleanup intent with the outcome, before removing runtime evidence
     // or credentials. A failed cleanup blocks replacement execution and approval.
-    public void RequireCleanup(Guid attemptId, Guid ownerId, DateTimeOffset now)
+    public void RequireCleanup(long attemptId, long ownerId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
         Require(attempt.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled,
@@ -16,7 +16,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.CleanupRequired, now, attemptId);
     }
 
-    public void ReportCleanupFailure(Guid attemptId, Guid ownerId, DateTimeOffset now)
+    public void ReportCleanupFailure(long attemptId, long ownerId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
         Require(attempt.CleanupPending, WorkRule.InvalidTransition);
@@ -27,7 +27,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.CleanupFailed, now, attemptId, failure: FailureKind.CleanupFailed);
     }
 
-    public void ConfirmCleanup(Guid attemptId, Guid ownerId, DateTimeOffset now)
+    public void ConfirmCleanup(long attemptId, long ownerId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
         if (!attempt.CleanupPending) return;

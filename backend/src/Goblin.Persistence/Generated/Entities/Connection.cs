@@ -11,7 +11,7 @@ public partial class Connection
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("runtime")]
     public string Runtime { get; set; } = null!;

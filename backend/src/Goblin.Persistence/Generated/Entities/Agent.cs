@@ -11,13 +11,13 @@ public partial class Agent
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("name")]
     public string Name { get; set; } = null!;
 
     [Column("connection_id")]
-    public Guid ConnectionId { get; set; }
+    public long ConnectionId { get; set; }
 
     [Column("model")]
     public string? Model { get; set; }

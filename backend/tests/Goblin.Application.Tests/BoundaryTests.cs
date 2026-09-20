@@ -16,6 +16,9 @@ namespace Goblin.Application.Tests;
 
 public sealed class BoundaryTests
 {
+    private static long _nextId = int.MaxValue;
+    private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
+
     [Fact]
     public void PublicContractsAndWorkOrchestrationDoNotReferenceProtocolsOrHttp()
     {
@@ -30,9 +33,9 @@ public sealed class BoundaryTests
     [Fact]
     public void RepositorySandboxMountsOnlyItsOwnInputsWorkspaceAndCredentials()
     {
-        var work = new WorkItem(Guid.NewGuid(), "Edit assigned repository", DateTimeOffset.UtcNow);
-        work.Assign(Guid.NewGuid(), DateTimeOffset.UtcNow);
-        work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Edit assigned repository", DateTimeOffset.UtcNow);
+        work.Assign(NextId(), DateTimeOffset.UtcNow);
+        work.QueueExecution(NextId(), new("codex", NextId(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "/private/github.json"), new UnusedHost());
         JsonObject manifest = host.Manifest(work.Snapshot(), false);
@@ -51,7 +54,7 @@ public sealed class BoundaryTests
     private sealed class UnusedHost : IExecutionHost
     {
         public RuntimeCapabilities[] Capabilities => [];
-        public string EnvironmentFor(Guid workId, Guid attemptId) => throw new NotSupportedException();
+        public string EnvironmentFor(long workId, long attemptId) => throw new NotSupportedException();
         public Task StartAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
         public Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) => throw new NotSupportedException();
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();

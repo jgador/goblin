@@ -19,6 +19,9 @@ namespace Goblin.Tests;
 
 public sealed class CodexClientTests
 {
+    private static long _nextId = int.MaxValue;
+    private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
+
     [Fact]
     public async Task ConcurrentStartsPerformExactlyOneHandshakeAndIsolateConfiguration()
     {
@@ -145,10 +148,10 @@ public sealed class CodexClientTests
     public async Task WorkAdapterUsesPersistedContextAndKeepsEarlyResultProvenance(string scenario, ObservationKind expected)
     {
         await using Fixture fixture = await Fixture.CreateAsync(scenario);
-        var work = new WorkItem(Guid.NewGuid(), "Answer the durable objective", DateTimeOffset.UtcNow);
-        work.Assign(Guid.NewGuid(), DateTimeOffset.UtcNow);
-        work.AddContext(Guid.NewGuid(), "Retained context", DateTimeOffset.UtcNow);
-        work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid()), DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Answer the durable objective", DateTimeOffset.UtcNow);
+        work.Assign(NextId(), DateTimeOffset.UtcNow);
+        work.AddContext(NextId(), "Retained context", DateTimeOffset.UtcNow);
+        work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
         var progress = new List<ExecutionObservation>();
         ExecutionObservation result = await new CodexWorkRunner(fixture.Client).RunAsync(work.Snapshot(), false,
             value => { progress.Add(value); return Task.CompletedTask; }, default);
@@ -168,9 +171,9 @@ public sealed class CodexClientTests
     public async Task WorkAdapterInterruptsEvenAnUpstreamRetryableFailure()
     {
         await using Fixture fixture = await Fixture.CreateAsync("work-retryable-error");
-        var work = new WorkItem(Guid.NewGuid(), "Surface every failure", DateTimeOffset.UtcNow);
-        work.Assign(Guid.NewGuid(), DateTimeOffset.UtcNow);
-        work.QueueExecution(Guid.NewGuid(), new("codex", Guid.NewGuid()), DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Surface every failure", DateTimeOffset.UtcNow);
+        work.Assign(NextId(), DateTimeOffset.UtcNow);
+        work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
         IntegrationFailure failure = await Assert.ThrowsAsync<IntegrationFailure>(() =>
             new CodexWorkRunner(fixture.Client).RunAsync(work.Snapshot(), false, _ => Task.CompletedTask, default));
         Assert.DoesNotContain("THIS-MUST-NOT-LEAK", failure.Message);

@@ -40,30 +40,30 @@ public sealed class WorkRuleException : Exception
 public sealed record WorkAttention(AttentionReason Reason, FailureKind? Failure = null);
 
 public sealed record WorkEvent(long Sequence, DateTimeOffset OccurredAt, WorkEventKind Kind,
-    Guid? AttemptId = null, Guid? AgentId = null, Guid? DecisionId = null,
+    long? AttemptId = null, long? AgentId = null, long? DecisionId = null,
     FailureKind? Failure = null, string? Text = null);
 
-public sealed record WorkDecision(Guid Id, Guid AttemptId, string Question,
+public sealed record WorkDecision(long Id, long AttemptId, string Question,
     DateTimeOffset RequestedAt, string? Answer = null, DateTimeOffset? AnsweredAt = null);
 
-public sealed record WorkResult(Guid AttemptId, string Text, DateTimeOffset ProposedAt,
+public sealed record WorkResult(long AttemptId, string Text, DateTimeOffset ProposedAt,
     DateTimeOffset? ApprovedAt = null, string? RequestedChanges = null);
 
-public sealed record WorkMessage(Guid Id, string Text, DateTimeOffset CreatedAt);
-public sealed record WorkArtifact(Guid AttemptId, string Reference, string Name, DateTimeOffset CreatedAt);
+public sealed record WorkMessage(long Id, string Text, DateTimeOffset CreatedAt);
+public sealed record WorkArtifact(long AttemptId, string Reference, string Name, DateTimeOffset CreatedAt);
 
 // Runtime/session identifiers are opaque references. There are deliberately no
 // Codex thread/turn types, authentication fields, or transport handles here.
 public sealed record ExecutionTarget
 {
     public string Runtime { get; }
-    public Guid ConnectionId { get; }
+    public long ConnectionId { get; }
     public string? RequestedModel { get; }
     public RepositoryChange? Repository { get; }
 
-    public ExecutionTarget(string runtime, Guid connectionId, string? requestedModel = null, RepositoryChange? repository = null)
+    public ExecutionTarget(string runtime, long connectionId, string? requestedModel = null, RepositoryChange? repository = null)
     {
-        if (string.IsNullOrWhiteSpace(runtime) || connectionId == Guid.Empty ||
+        if (string.IsNullOrWhiteSpace(runtime) || connectionId <= 0 ||
             (requestedModel is not null && string.IsNullOrWhiteSpace(requestedModel)))
             throw new WorkRuleException(WorkRule.InvalidValue);
         Runtime = runtime.Trim();
@@ -102,7 +102,7 @@ public sealed record ExecutionSession(string? Model = null, string? SessionRefer
 
 public sealed class ExecutionAttempt
 {
-    internal ExecutionAttempt(Guid id, Guid workId, Guid agentId, ExecutionTarget target, DateTimeOffset now)
+    internal ExecutionAttempt(long id, long workId, long agentId, ExecutionTarget target, DateTimeOffset now)
     {
         Id = id;
         WorkId = workId;
@@ -111,13 +111,13 @@ public sealed class ExecutionAttempt
         QueuedAt = now;
     }
 
-    public Guid Id { get; }
-    public Guid WorkId { get; }
-    public Guid AgentId { get; }
+    public long Id { get; }
+    public long WorkId { get; }
+    public long AgentId { get; }
     public ExecutionTarget Target { get; }
     public DateTimeOffset QueuedAt { get; }
     public AttemptStatus Status { get; internal set; } = AttemptStatus.Queued;
-    public Guid? OwnerId { get; internal set; }
+    public long? OwnerId { get; internal set; }
     public string? EnvironmentReference { get; internal set; }
     public ExecutionSession? Session { get; internal set; }
     public DateTimeOffset? ClaimedAt { get; internal set; }

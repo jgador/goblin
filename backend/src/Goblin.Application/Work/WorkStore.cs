@@ -32,7 +32,7 @@ public sealed class WorkStore
         _outboxes = outboxes;
     }
 
-    public static readonly Guid DefaultAgentId = new("00000000-0000-0000-0000-000000000001");
+    public static readonly long DefaultAgentId = 1;
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter() }
@@ -46,7 +46,7 @@ public sealed class WorkStore
         return [.. rows.Select(View)];
     }
 
-    public async Task<WorkView> GetAsync(Guid id, CancellationToken token = default)
+    public async Task<WorkView> GetAsync(long id, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         return View(await db.WorkItems.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, token)
@@ -69,7 +69,7 @@ public sealed class WorkStore
 
     public async Task<WorkView> ApplyAsync(WorkCommand command, CancellationToken token = default)
     {
-        if (command.CommandId == Guid.Empty || command.WorkId == Guid.Empty || !Enum.IsDefined(command.Action))
+        if (command.CommandId <= 0 || command.WorkId <= 0 || !Enum.IsDefined(command.Action))
             throw new ApplicationFailure("invalid_command");
         if (command.Text?.Length > 4000) throw new ApplicationFailure("text_too_long");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
@@ -104,7 +104,7 @@ public sealed class WorkStore
         {
             case WorkAction.Create: break;
             case WorkAction.Assign:
-                Guid agentId = command.AgentId ?? throw new ApplicationFailure("agent_required");
+                long agentId = command.AgentId ?? throw new ApplicationFailure("agent_required");
                 if (!await db.Agents.AnyAsync(x => x.Id == agentId, token)) throw new ApplicationFailure("agent_not_found");
                 work.Assign(agentId, now);
                 break;
@@ -115,7 +115,7 @@ public sealed class WorkStore
                 Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
                 var target = new ExecutionTarget(connection.Runtime, connection.Id, agent.Model,
                     command.Repository ?? work.CurrentAttempt?.Target.Repository);
-                Guid attemptId = Guid.NewGuid();
+                long attemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
                 if (command.Action == WorkAction.Retry) work.RetryExecution(attemptId, target, now);
                 else work.QueueExecution(attemptId, target, now);
                 await outbox.PublishAsync(new DispatchWork(work.Id, attemptId));
@@ -126,16 +126,16 @@ public sealed class WorkStore
                     await outbox.PublishAsync(new ReconcileWork(work.Id, cancelled.Id));
                 break;
             case WorkAction.Answer:
-                work.AnswerDecision(command.DecisionId ?? Guid.Empty, command.Text ?? "", now);
+                work.AnswerDecision(command.DecisionId ?? 0, command.Text ?? "", now);
                 break;
             case WorkAction.RequestChanges:
-                work.RequestChanges(command.AttemptId ?? Guid.Empty, command.Text ?? "", now);
+                work.RequestChanges(command.AttemptId ?? 0, command.Text ?? "", now);
                 break;
             case WorkAction.Approve:
-                work.ApproveResult(command.AttemptId ?? Guid.Empty, now);
+                work.ApproveResult(command.AttemptId ?? 0, now);
                 break;
             case WorkAction.AddContext:
-                work.AddContext(command.CommandId, command.Text ?? "", now);
+                work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event, token), command.Text ?? "", now);
                 break;
             case WorkAction.Reconcile:
                 ExecutionAttempt? uncertain = work.CurrentAttempt;
@@ -160,7 +160,7 @@ public sealed class WorkStore
 
     // A successful claim is committed before the caller can contact the host.
     // Returning null means this delivery has no permission to start execution.
-    public async Task<WorkSnapshot?> ClaimAsync(DispatchWork command, Guid ownerId, string environment,
+    public async Task<WorkSnapshot?> ClaimAsync(DispatchWork command, string environment,
         Func<ExecutionTarget, bool> supportsRuntime, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
@@ -183,13 +183,13 @@ public sealed class WorkStore
             return null;
         }
         if (failure is not null) work.DispatchFailed(attempt.Id, failure.Value, now);
-        else if (!work.TryClaimExecution(attempt.Id, ownerId, environment, now)) return null;
+        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), environment, now)) return null;
         await SaveAsync(db, row, work, now, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return failure is null ? work.Snapshot() : null;
     }
 
-    public async Task MutateAsync(Guid workId, Action<WorkItem> transition, CancellationToken token = default)
+    public async Task MutateAsync(long workId, Action<WorkItem> transition, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
@@ -212,7 +212,7 @@ public sealed class WorkStore
             .OrderBy(x => x.QueuedAt).ToArrayAsync(token);
     }
 
-    public async Task SetConnectionAsync(Guid id, string availability, bool requireIdle, CancellationToken token = default, bool completeChange = false)
+    public async Task SetConnectionAsync(long id, string availability, bool requireIdle, CancellationToken token = default, bool completeChange = false)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
@@ -232,7 +232,7 @@ public sealed class WorkStore
         await transaction.CommitAsync(token);
     }
 
-    public async Task BeginVerificationAsync(Guid id, CancellationToken token = default)
+    public async Task BeginVerificationAsync(long id, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
@@ -247,7 +247,7 @@ public sealed class WorkStore
         await transaction.CommitAsync(token);
     }
 
-    public async Task EndVerificationAsync(Guid id, bool available)
+    public async Task EndVerificationAsync(long id, bool available)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
         await using IDbContextTransaction transaction = await BeginAsync(db, default);

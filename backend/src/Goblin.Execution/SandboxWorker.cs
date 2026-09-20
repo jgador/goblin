@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -49,7 +50,7 @@ public static class SandboxWorker
             ["GIT_CONFIG_NOSYSTEM"] = "1",
             ["GIT_CONFIG_GLOBAL"] = "/dev/null"
         };
-        string branch = "goblin/" + input.Work.Id.ToString("N") + "/" + input.Work.Attempts[^1].Id.ToString("N");
+        string branch = "goblin/" + input.Work.Id.ToString(CultureInfo.InvariantCulture) + "/" + input.Work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture);
         ExecutionObservation? runtimeOutcome = null;
         ExecutionSession? runtimeSession = null;
         try
@@ -61,7 +62,7 @@ public static class SandboxWorker
                 a.Target.Repository?.Repository == repository.Repository && input.Work.Artifacts.Any(x => x.AttemptId == a.Id));
             if (previous is null) await GitAsync(checkout, gitEnvironment, "checkout", "-b", branch);
             else await GitAsync(checkout, gitEnvironment, "checkout", "-b", branch,
-                "origin/goblin/" + input.Work.Id.ToString("N") + "/" + previous.Id.ToString("N"));
+                "origin/goblin/" + input.Work.Id.ToString(CultureInfo.InvariantCulture) + "/" + previous.Id.ToString(CultureInfo.InvariantCulture));
             await GitAsync(checkout, gitEnvironment, "config", "user.name", repository.GitAuthorName);
             await GitAsync(checkout, gitEnvironment, "config", "user.email", repository.GitAuthorEmail);
             await using (var codex = new CodexClient(new()
@@ -82,7 +83,7 @@ public static class SandboxWorker
                 await GitAsync(checkout, gitEnvironment, "add", "--all");
                 int changes = await GitAsync(checkout, gitEnvironment, ["diff", "--cached", "--quiet"], allowDifference: true);
                 if (changes == 1)
-                    await GitAsync(checkout, gitEnvironment, "commit", "-m", "Goblin Work " + input.Work.Id.ToString("N"));
+                    await GitAsync(checkout, gitEnvironment, "commit", "-m", "Goblin Work " + input.Work.Id.ToString(CultureInfo.InvariantCulture));
                 await GitAsync(checkout, gitEnvironment, "push", "origin", "HEAD:refs/heads/" + branch);
                 outcome = outcome with { ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
             }

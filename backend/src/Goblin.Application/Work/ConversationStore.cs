@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Goblin.Application.Work;
 
-public sealed record ConversationMessageView(Guid Id, string Text, DateTime CreatedAt);
-public sealed record ConversationView(Guid Id, string Title, Guid? WorkId, ConversationMessageView[] Messages);
-public sealed record ConversationCommand(Guid ConversationId, Guid MessageId, string? Text, Guid? WorkId = null);
+public sealed record ConversationMessageView(long Id, string Text, DateTime CreatedAt);
+public sealed record ConversationView(long Id, string Title, long? WorkId, ConversationMessageView[] Messages);
+public sealed record ConversationCommand(long ConversationId, long MessageId, string? Text, long? WorkId = null);
 
 public sealed class ConversationStore
 {
@@ -36,7 +36,7 @@ public sealed class ConversationStore
 
     public async Task<ConversationView> ApplyAsync(ConversationCommand command)
     {
-        if (command.ConversationId == Guid.Empty || command.MessageId == Guid.Empty || command.Text?.Length > 4000)
+        if (command.ConversationId <= 0 || command.MessageId <= 0 || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
         await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
@@ -56,12 +56,13 @@ public sealed class ConversationStore
 
         if (command.WorkId is { } workId && conversation.WorkId is null)
         {
-            if (workId == Guid.Empty || await db.WorkItems.AnyAsync(x => x.Id == workId)) throw new ApplicationFailure("work_already_exists");
+            if (workId <= 0 || await db.WorkItems.AnyAsync(x => x.Id == workId)) throw new ApplicationFailure("work_already_exists");
             await db.SaveChangesAsync();
             Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.Where(x => x.ConversationId == conversation.Id)
                 .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync();
             var work = new WorkItem(workId, messages[0].Body, DateTimeOffset.UtcNow);
-            foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1)) work.AddContext(message.Id, message.Body, message.CreatedAt);
+            foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1))
+                work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
             db.WorkItems.Add(new()
             {
                 Id = workId,
@@ -78,7 +79,7 @@ public sealed class ConversationStore
         {
             Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
             var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, WorkStore.Json)!);
-            work.AddContext(command.MessageId, command.Text, DateTimeOffset.UtcNow);
+            work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
             row.State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json);
             row.Version++;
             row.UpdatedAt = DateTime.UtcNow;

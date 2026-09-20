@@ -11,10 +11,10 @@ public partial class WorkCommand
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("work_id")]
-    public Guid WorkId { get; set; }
+    public long WorkId { get; set; }
 
     [Column("fingerprint")]
     public string Fingerprint { get; set; } = null!;

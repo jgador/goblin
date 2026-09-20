@@ -205,6 +205,37 @@ test.describe("durable Work", () => {
         ).toHaveLength(1);
     });
 
+    test("an ID allocation failure preserves the draft without submitting a command", async ({
+        page,
+    }) => {
+        await unlock(page);
+        const objective = "Allocation interrupted " + Date.now();
+        let submissions = 0;
+        page.on("request", (request) => {
+            if (request.url().endsWith("/api/work/commands")) submissions++;
+        });
+        await page.route(
+            "**/api/identities",
+            (route) => route.abort("failed"),
+            { times: 1 },
+        );
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .first()
+            .click();
+        await page.getByRole("textbox").fill(objective);
+        await page.getByRole("button", { name: "Send message" }).click();
+        await expect(page.getByRole("alert")).toBeVisible();
+        await expect(
+            page.getByRole("button", { name: "Resend command" }),
+        ).toHaveCount(0);
+        await expect(page.getByRole("textbox")).toHaveValue(objective);
+        expect(submissions).toBe(0);
+        await page.getByRole("button", { name: "Send message" }).click();
+        await expect(page.locator(".detail h2")).toHaveText(objective);
+        expect(submissions).toBe(1);
+    });
+
     test("connection failures leave Work history and controls available", async ({
         page,
     }) => {

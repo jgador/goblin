@@ -15,9 +15,9 @@ public sealed partial class WorkItem
     private readonly List<WorkMessage> _messages = [];
     private readonly List<WorkArtifact> _artifacts = [];
 
-    public Guid Id { get; }
+    public long Id { get; }
     public string Objective { get; }
-    public Guid? AgentId { get; private set; }
+    public long? AgentId { get; private set; }
     public WorkStatus Status { get; private set; } = WorkStatus.Ready;
     public WorkAttention? Attention { get; private set; }
     public IReadOnlyList<ExecutionAttempt> Attempts { get; }
@@ -28,7 +28,7 @@ public sealed partial class WorkItem
     public IReadOnlyList<WorkArtifact> Artifacts { get; }
     public ExecutionAttempt? CurrentAttempt => _attempts.Count == 0 ? null : _attempts[^1];
 
-    public WorkItem(Guid id, string objective, DateTimeOffset now)
+    public WorkItem(long id, string objective, DateTimeOffset now)
     {
         RequireId(id);
         Id = id;
@@ -42,7 +42,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.Created, now, text: Objective);
     }
 
-    public void AddContext(Guid messageId, string text, DateTimeOffset now)
+    public void AddContext(long messageId, string text, DateTimeOffset now)
     {
         RequireId(messageId);
         Require(!_messages.Exists(x => x.Id == messageId), WorkRule.InvalidValue);
@@ -51,13 +51,13 @@ public sealed partial class WorkItem
         Record(WorkEventKind.ContextAdded, now, text: input);
     }
 
-    public void ReportProgress(Guid attemptId, Guid ownerId, string text, DateTimeOffset now)
+    public void ReportProgress(long attemptId, long ownerId, string text, DateTimeOffset now)
     {
         OwnedActiveAttempt(attemptId, ownerId);
         Record(WorkEventKind.ProgressReported, now, attemptId, text: RequireText(text));
     }
 
-    public void AddArtifact(Guid attemptId, Guid ownerId, string reference, string name, DateTimeOffset now)
+    public void AddArtifact(long attemptId, long ownerId, string reference, string name, DateTimeOffset now)
     {
         OwnedAttempt(attemptId, ownerId);
         string location = RequireText(reference);
@@ -67,7 +67,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.ArtifactRecorded, now, attemptId, text: title);
     }
 
-    public void Assign(Guid agentId, DateTimeOffset now)
+    public void Assign(long agentId, DateTimeOffset now)
     {
         RequireId(agentId);
         Require(Status == WorkStatus.Ready, WorkRule.InvalidTransition);
@@ -76,7 +76,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.Assigned, now, agentId: agentId);
     }
 
-    public void QueueExecution(Guid attemptId, ExecutionTarget target, DateTimeOffset now)
+    public void QueueExecution(long attemptId, ExecutionTarget target, DateTimeOffset now)
     {
         Require(Status == WorkStatus.Ready, WorkRule.InvalidTransition);
         ValidateNewAttempt(attemptId, target);
@@ -85,7 +85,7 @@ public sealed partial class WorkItem
 
     // Only an explicit retry command can leave failure attention. Temporary
     // failures use precisely the same transition as other failures.
-    public void RetryExecution(Guid attemptId, ExecutionTarget target, DateTimeOffset now)
+    public void RetryExecution(long attemptId, ExecutionTarget target, DateTimeOffset now)
     {
         Require(CurrentAttempt?.Status != AttemptStatus.Uncertain, WorkRule.ReconciliationRequired);
         Require(Status == WorkStatus.NeedsAttention && Attention?.Reason == AttentionReason.Failure &&
@@ -97,7 +97,7 @@ public sealed partial class WorkItem
 
     // Commit the successful claim before launching anything externally. Every
     // subsequent delivery, even from this owner, returns false and must not launch.
-    public bool TryClaimExecution(Guid attemptId, Guid ownerId, string environmentReference, DateTimeOffset now)
+    public bool TryClaimExecution(long attemptId, long ownerId, string environmentReference, DateTimeOffset now)
     {
         RequireId(ownerId);
         string environment = RequireText(environmentReference);
@@ -112,7 +112,7 @@ public sealed partial class WorkItem
         return true;
     }
 
-    public void ExecutionStarted(Guid attemptId, Guid ownerId, ExecutionSession session, DateTimeOffset now)
+    public void ExecutionStarted(long attemptId, long ownerId, ExecutionSession session, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(session);
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
@@ -128,7 +128,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.ExecutionStarted, now, attempt.Id);
     }
 
-    public void DispatchFailed(Guid attemptId, FailureKind failure, DateTimeOffset now)
+    public void DispatchFailed(long attemptId, FailureKind failure, DateTimeOffset now)
     {
         RequireFailure(failure);
         ExecutionAttempt attempt = RequireCurrent(attemptId);
@@ -138,14 +138,14 @@ public sealed partial class WorkItem
 
     // Call only with host/runtime evidence that the execution is no longer
     // running. A timeout or lost connection alone belongs in ExecutionUncertain.
-    public void ExecutionFailed(Guid attemptId, Guid ownerId, FailureKind failure, DateTimeOffset now)
+    public void ExecutionFailed(long attemptId, long ownerId, FailureKind failure, DateTimeOffset now)
     {
         RequireFailure(failure);
         ExecutionAttempt attempt = OwnedActiveAttempt(attemptId, ownerId);
         Fail(attempt, failure, uncertain: false, now);
     }
 
-    public void ExecutionUncertain(Guid attemptId, Guid ownerId, FailureKind failure, DateTimeOffset now)
+    public void ExecutionUncertain(long attemptId, long ownerId, FailureKind failure, DateTimeOffset now)
     {
         RequireFailure(failure);
         ExecutionAttempt attempt = OwnedActiveAttempt(attemptId, ownerId);
@@ -154,7 +154,7 @@ public sealed partial class WorkItem
 
     // Reconciliation confirms a stopped execution; it never queues replacement
     // work. The host adapter is responsible for obtaining trustworthy evidence.
-    public void ConfirmExecutionStopped(Guid attemptId, Guid ownerId, DateTimeOffset now)
+    public void ConfirmExecutionStopped(long attemptId, long ownerId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
         Require(attempt.Status is AttemptStatus.Uncertain or AttemptStatus.CancellationRequested, WorkRule.InvalidTransition);
@@ -175,7 +175,7 @@ public sealed partial class WorkItem
         }
     }
 
-    public void ProposeResult(Guid attemptId, Guid ownerId, string text, DateTimeOffset now)
+    public void ProposeResult(long attemptId, long ownerId, string text, DateTimeOffset now)
     {
         string result = RequireText(text);
         ExecutionAttempt attempt = CompletableAttempt(attemptId, ownerId);
@@ -188,7 +188,7 @@ public sealed partial class WorkItem
 
     // An input request is a completed runtime interaction with an unresolved
     // Work decision. Live runtime approvals will need a separate capability.
-    public void RequestInput(Guid attemptId, Guid ownerId, Guid decisionId, string question, DateTimeOffset now)
+    public void RequestInput(long attemptId, long ownerId, long decisionId, string question, DateTimeOffset now)
     {
         RequireId(decisionId);
         string input = RequireText(question);
@@ -201,7 +201,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.InputRequested, now, attemptId, decisionId: decisionId, text: input);
     }
 
-    public void AnswerDecision(Guid decisionId, string answer, DateTimeOffset now)
+    public void AnswerDecision(long decisionId, string answer, DateTimeOffset now)
     {
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         string input = RequireText(answer);
@@ -215,7 +215,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.InputProvided, now, CurrentAttempt!.Id, decisionId: decisionId, text: input);
     }
 
-    public void RequestChanges(Guid resultAttemptId, string feedback, DateTimeOffset now)
+    public void RequestChanges(long resultAttemptId, string feedback, DateTimeOffset now)
     {
         string input = RequireText(feedback);
         RequireReview(resultAttemptId);
@@ -225,7 +225,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.ChangesRequested, now, resultAttemptId, text: input);
     }
 
-    public void ApproveResult(Guid resultAttemptId, DateTimeOffset now)
+    public void ApproveResult(long resultAttemptId, DateTimeOffset now)
     {
         RequireReview(resultAttemptId);
         _results[^1] = _results[^1] with { ApprovedAt = now };
@@ -260,7 +260,7 @@ public sealed partial class WorkItem
         Record(WorkEventKind.Cancelled, now, attempt?.Id);
     }
 
-    private void RequireReview(Guid resultAttemptId)
+    private void RequireReview(long resultAttemptId)
     {
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         RequireCurrent(resultAttemptId);
@@ -268,7 +268,7 @@ public sealed partial class WorkItem
             _results.Count > 0 && _results[^1].AttemptId == resultAttemptId, WorkRule.InvalidTransition);
     }
 
-    private void ValidateNewAttempt(Guid attemptId, ExecutionTarget target)
+    private void ValidateNewAttempt(long attemptId, ExecutionTarget target)
     {
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         RequireId(attemptId);
@@ -277,7 +277,7 @@ public sealed partial class WorkItem
         Require(!_attempts.Exists(x => x.Id == attemptId), WorkRule.AttemptAlreadyExists);
     }
 
-    private void Queue(Guid attemptId, ExecutionTarget target, DateTimeOffset now)
+    private void Queue(long attemptId, ExecutionTarget target, DateTimeOffset now)
     {
         _attempts.Add(new(attemptId, Id, AgentId!.Value, target, now));
         Status = WorkStatus.Queued;
@@ -285,13 +285,13 @@ public sealed partial class WorkItem
         Record(WorkEventKind.ExecutionQueued, now, attemptId, AgentId);
     }
 
-    private ExecutionAttempt RequireCurrent(Guid attemptId)
+    private ExecutionAttempt RequireCurrent(long attemptId)
     {
         Require(CurrentAttempt is not null && CurrentAttempt.Id == attemptId, WorkRule.AttemptNotCurrent);
         return CurrentAttempt!;
     }
 
-    private ExecutionAttempt OwnedAttempt(Guid attemptId, Guid ownerId)
+    private ExecutionAttempt OwnedAttempt(long attemptId, long ownerId)
     {
         RequireId(ownerId);
         ExecutionAttempt attempt = RequireCurrent(attemptId);
@@ -299,7 +299,7 @@ public sealed partial class WorkItem
         return attempt;
     }
 
-    private ExecutionAttempt OwnedActiveAttempt(Guid attemptId, Guid ownerId)
+    private ExecutionAttempt OwnedActiveAttempt(long attemptId, long ownerId)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
         Require(attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested,
@@ -307,7 +307,7 @@ public sealed partial class WorkItem
         return attempt;
     }
 
-    private ExecutionAttempt CompletableAttempt(Guid attemptId, Guid ownerId)
+    private ExecutionAttempt CompletableAttempt(long attemptId, long ownerId)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
         Require(attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested or AttemptStatus.Uncertain,
@@ -332,8 +332,8 @@ public sealed partial class WorkItem
             now, attempt.Id, failure: failure);
     }
 
-    private void Record(WorkEventKind kind, DateTimeOffset now, Guid? attemptId = null,
-        Guid? agentId = null, Guid? decisionId = null, FailureKind? failure = null, string? text = null) =>
+    private void Record(WorkEventKind kind, DateTimeOffset now, long? attemptId = null,
+        long? agentId = null, long? decisionId = null, FailureKind? failure = null, string? text = null) =>
         _history.Add(new(_history.Count + 1L, now, kind, attemptId, agentId, decisionId, failure, text));
 
     private static string RequireText(string value)
@@ -342,7 +342,7 @@ public sealed partial class WorkItem
         return value.Trim();
     }
 
-    private static void RequireId(Guid id) => Require(id != Guid.Empty, WorkRule.InvalidValue);
+    private static void RequireId(long id) => Require(id > 0, WorkRule.InvalidValue);
     private static void RequireFailure(FailureKind failure) => Require(Enum.IsDefined(failure), WorkRule.InvalidValue);
     private static void Require(bool condition, WorkRule rule)
     {

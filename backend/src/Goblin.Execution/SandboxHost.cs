@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -27,10 +28,10 @@ public sealed class SandboxHost : IExecutionHost
     }
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
-    public string EnvironmentFor(Guid workId, Guid attemptId) => "goblin/" + attemptId.ToString("N");
+    public string EnvironmentFor(long workId, long attemptId) => "goblin/" + attemptId.ToString(CultureInfo.InvariantCulture);
     private string Core => "/api/v1/namespaces/" + _options.Namespace;
     private string Sandboxes => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + _options.Namespace + "/sandboxes";
-    private static string Name(WorkSnapshot work) => "work-" + work.Attempts[^1].Id.ToString("N");
+    private static string Name(WorkSnapshot work) => "work-" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture);
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
@@ -72,7 +73,7 @@ public sealed class SandboxHost : IExecutionHost
             sandbox = await _api.GetAsync(Sandboxes + "/" + name, token);
             stop = true;
         }
-        JsonObject? pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), token);
+        JsonObject? pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
         foreach (JsonNode? pod in pods?["items"]?.AsArray() ?? [])
         {
             string podName = pod!["metadata"]!["name"]!.GetValue<string>();
@@ -93,7 +94,7 @@ public sealed class SandboxHost : IExecutionHost
         {
             await _api.PatchAsync(Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
             // Suspension is intent. Confirm only after every owned pod is gone.
-            pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), token);
+            pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
             return new(pods?["items"]?.AsArray().Count == 0 ? ObservationKind.Stopped : ObservationKind.Pending);
         }
         return new(ObservationKind.Pending);
@@ -110,7 +111,7 @@ public sealed class SandboxHost : IExecutionHost
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         while (true)
         {
-            JsonObject? pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString("N"), timeout.Token);
+            JsonObject? pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), timeout.Token);
             if (pods?["items"]?.AsArray().Count == 0) break;
             await Task.Delay(200, timeout.Token);
         }
@@ -153,8 +154,8 @@ public sealed class SandboxHost : IExecutionHost
             ["name"] = name,
             ["labels"] = new JsonObject
             {
-                ["goblin-attempt"] = work.Attempts[^1].Id.ToString("N"),
-                ["goblin-work"] = work.Id.ToString("N"),
+                ["goblin-attempt"] = work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture),
+                ["goblin-work"] = work.Id.ToString(CultureInfo.InvariantCulture),
                 ["app"] = "goblin-execution"
             }
         }

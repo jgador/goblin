@@ -11,13 +11,13 @@ public partial class Conversation
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("title")]
     public string Title { get; set; } = null!;
 
     [Column("work_id")]
-    public Guid? WorkId { get; set; }
+    public long? WorkId { get; set; }
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }

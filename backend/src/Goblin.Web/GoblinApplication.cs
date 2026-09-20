@@ -46,6 +46,12 @@ public static class GoblinApplication
 {
     private const string BodyKey = "goblin.body";
     private const string SessionKey = "goblin.session";
+    private static readonly JsonSerializerOptions WorkJson = new(WorkStore.Json)
+    {
+        Converters = { new LongJsonConverter() }
+    };
+
+    private static IResult WorkResponse<T>(T value) => Results.Json(value, WorkJson);
 
     public static async Task<WebApplication> CreateAsync(ApplicationOptions options)
     {
@@ -202,21 +208,28 @@ public static class GoblinApplication
                 try { return await github.DisconnectAsync(); }
                 finally { await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Disconnected", requireIdle: false, completeChange: true); }
             });
-            app.MapGet("/api/conversations", (ConversationStore store, CancellationToken token) => store.ListAsync(token));
+            app.MapGet("/api/conversations", async (ConversationStore store, CancellationToken token) => WorkResponse(await store.ListAsync(token)));
             app.MapPost("/api/conversations/commands", async (HttpContext context, ConversationStore store) =>
             {
                 var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
                 ConversationCommand command = JsonSerializer.Deserialize<ConversationCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
                     ?? throw new PublicError("invalid_command", "Send a conversation command.");
-                return await store.ApplyAsync(command);
+                return WorkResponse(await store.ApplyAsync(command));
             });
-            app.MapGet("/api/work", (WorkStore store, CancellationToken token) => store.ListAsync(token));
-            app.MapGet("/api/work/{id:guid}", (Guid id, WorkStore store, CancellationToken token) => store.GetAsync(id, token));
-            app.MapGet("/api/agents", (WorkStore store, CancellationToken token) => store.AgentsAsync(token));
+            app.MapGet("/api/work", async (WorkStore store, CancellationToken token) => WorkResponse(await store.ListAsync(token)));
+            app.MapGet("/api/work/{id:long}", async (long id, WorkStore store, CancellationToken token) => WorkResponse(await store.GetAsync(id, token)));
+            app.MapPost("/api/identities", async (HttpContext context, IdentityStore store, CancellationToken token) =>
+            {
+                var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
+                IdentityRequest request = JsonSerializer.Deserialize<IdentityRequest>(JsonSerializer.Serialize(body), WorkStore.Json)
+                    ?? throw new PublicError("invalid_command", "Specify the IDs to reserve.");
+                return WorkResponse(await store.ReserveAsync(request, token));
+            });
+            app.MapGet("/api/agents", async (WorkStore store, CancellationToken token) => WorkResponse(await store.AgentsAsync(token)));
             app.MapGet("/api/connections", async (HttpContext context, WorkStore store, CancellationToken token) =>
             {
                 try { await ConnectionAsync(context, false, auth.StatusAsync); } catch (IntegrationFailure) { }
-                return await store.ConnectionsAsync(token);
+                return WorkResponse(await store.ConnectionsAsync(token));
             });
             app.MapGet("/api/runtimes", (IExecutionHost host) => host.Capabilities);
             app.MapPost("/api/work/commands", async (HttpContext context, WorkStore store) =>
@@ -226,7 +239,7 @@ public static class GoblinApplication
                     ?? throw new PublicError("invalid_command", "Send a work command.");
                 // Once accepted, the command has an independent transaction and
                 // execution lifecycle. RequestAborted is deliberately not passed.
-                return await store.ApplyAsync(command);
+                return WorkResponse(await store.ApplyAsync(command));
             });
         }
         app.MapFallback("/{**path}", () => Results.Json(new ApiFailure(new("not_found", "This endpoint does not exist.")), statusCode: 404));
