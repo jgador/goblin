@@ -1,4 +1,5 @@
 """Produce a merge patch for an existing Sandbox, preserving its other settings."""
+
 import copy
 import json
 from pathlib import Path
@@ -19,15 +20,28 @@ def replace_named(items, replacement):
     items.append(replacement)
 
 
-replace_named(spec.setdefault("volumes", []), {
-    "name": "postgres-client",
-    "secret": {"secretName": "goblin-postgres-app-tls", "defaultMode": 0o440},
-})
-replace_named(container.setdefault("volumeMounts", []), {
-    "name": "postgres-client", "mountPath": "/etc/goblin-postgres", "readOnly": True,
-})
-connection = json.loads((root / "backend/src/Goblin.Web/appsettings.json").read_text())["ConnectionStrings"]["Goblin"]
+replace_named(
+    spec.setdefault("volumes", []),
+    {
+        "name": "postgres-client",
+        "secret": {"secretName": "goblin-postgres-app-tls", "defaultMode": 0o440},
+    },
+)
+replace_named(
+    container.setdefault("volumeMounts", []),
+    {
+        "name": "postgres-client",
+        "mountPath": "/etc/goblin-postgres",
+        "readOnly": True,
+    },
+)
+connection = json.loads((root / "backend/src/Goblin.Web/appsettings.json").read_text())[
+    "ConnectionStrings"
+]["Goblin"]
 # This also upgrades running images built with the former password configuration.
-replace_named(container.setdefault("env", []), {"name": "ConnectionStrings__Goblin", "value": connection})
+replace_named(
+    container.setdefault("env", []),
+    {"name": "ConnectionStrings__Goblin", "value": connection},
+)
 if spec != original:
     json.dump({"spec": {"podTemplate": {"spec": spec}}}, sys.stdout)
