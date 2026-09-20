@@ -54,6 +54,15 @@ spec:
     - to:
         - namespaceSelector:
             matchLabels:
+              kubernetes.io/metadata.name: goblin
+          podSelector:
+            matchLabels:
+              app: goblin-auth
+      ports:
+        - {protocol: TCP, port: 8788}
+    - to:
+        - namespaceSelector:
+            matchLabels:
               kubernetes.io/metadata.name: kube-system
           podSelector:
             matchLabels:

@@ -16,6 +16,7 @@ export interface BackendOptions {
     promptTimeoutMs?: number;
     verification?: "accepted" | "unverified" | "invalid";
     enableWork?: boolean;
+    gitHubCommand?: string;
 }
 
 export async function writePasswordHash(path: string, password: string) {

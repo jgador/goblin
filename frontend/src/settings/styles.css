@@ -1,0 +1,37 @@
+.settings-dialog { --green:#243d2c; --muted:#6c746c; --border:#e2e5dc; width:min(780px,calc(100vw - 40px)); max-height:min(760px,calc(100dvh - 60px)); padding:0; border:1px solid #dfe3d8; border-radius:18px; background:#fffefb; color:#272e29; box-shadow:0 24px 100px #15271b30; }
+.settings-dialog::backdrop { background:#16271955; backdrop-filter:blur(3px); }
+.settings-header { display:flex; align-items:center; justify-content:space-between; padding:22px 26px; border-bottom:1px solid var(--border); }
+.settings-header h2 { font-size:22px; font-weight:600; margin:0; letter-spacing:-.5px; }
+.settings-close { width:34px; height:34px; font-size:26px; border:0; border-radius:7px; color:#6c746c; background:transparent; }
+.settings-layout { display:grid; grid-template-columns:166px minmax(0,1fr); min-height:430px; }
+.settings-nav { padding:22px 14px; background:#f3f5ed; }
+.settings-nav p { padding:0 10px; font-size:11px; color:#7b837a; margin:0 0 14px; }
+.settings-nav button { display:flex; align-items:center; gap:10px; width:100%; padding:12px 10px; border-radius:7px; text-align:left; margin-bottom:5px; background:transparent; color:#5a6658; }
+.settings-nav button.selected { background:#e0e7d6; color:var(--green); }
+.settings-nav svg { width:18px; height:18px; }
+.settings-content { padding:25px; min-width:0; max-height:calc(100dvh - 160px); overflow:auto; }
+.settings-content h3 { font-size:18px; margin:0 0 10px; font-weight:600; }
+.settings-content h4 { font-size:14px; margin:24px 0 8px; }
+.settings-description { font-size:12px; line-height:1.7; color:var(--muted); margin:9px 0 18px; }
+.settings-content button,.settings-primary { font-size:12px; border:1px solid #d4dbcd; border-radius:7px; padding:9px 12px; color:var(--green); background:#fffefb; cursor:pointer; }
+.settings-content button:disabled { opacity:.55; cursor:default; }
+.settings-content .settings-primary { background:var(--green); border-color:var(--green); color:white; display:inline-block; text-decoration:none; }
+.settings-content .codex-settings .primary { color:white; background:var(--green); }
+.settings-content .codex-settings .card { border:0; padding:0; box-shadow:none; }
+.codex-settings #lock-button { display:none; }
+.settings-account { background:#f2f5eb; border:1px solid #e0e7d6; padding:15px; border-radius:9px; font-size:13px; margin:18px 0; overflow-wrap:anywhere; }
+.settings-actions { display:flex; gap:9px; flex-wrap:wrap; }
+.settings-notice { padding:12px; background:#fff2e9; border:1px solid #eed8c5; color:#805333; border-radius:8px; font-size:12px; line-height:1.7; }
+.settings-code { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:18px 0; background:#f2f5eb; padding:14px; border-radius:8px; }
+.settings-code code { font-size:23px; letter-spacing:2px; }
+.repository-row { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; border-bottom:1px solid var(--border); padding:11px 0; }
+.repository-row span { overflow-wrap:anywhere; }
+.repository-picker { margin-top:14px; }
+.settings-repositories > button { margin-top:12px; }
+.settings-dialog [hidden] { display:none !important; }
+.settings-dialog button:focus-visible,.settings-dialog a:focus-visible { outline:3px solid #79a557; outline-offset:3px; }
+.sidebar-connection { display:block; width:100%; text-align:left; padding:9px 11px; color:#677061; font-size:11px; overflow-wrap:anywhere; }
+.sidebar-settings { margin-top:13px; border-top:1px solid #dce1d2; padding-top:18px; width:100%; }
+.sidebar-settings svg { width:19px; height:19px; }
+@media(max-width:950px) { .sidebar-connection { font-size:10px; padding:8px 0; text-align:center; } .sidebar-settings .settings-label { display:none; } }
+@media(max-width:760px) { .settings-dialog { width:100vw; max-width:none; height:100dvh; max-height:none; border:0; border-radius:0; } .settings-layout { display:block; } .settings-header { padding:18px; } .settings-nav { display:flex; padding:10px 16px; gap:8px; } .settings-nav p { display:none; } .settings-nav button { width:auto; margin:0; } .settings-content { padding:22px; max-height:calc(100dvh - 140px); } }

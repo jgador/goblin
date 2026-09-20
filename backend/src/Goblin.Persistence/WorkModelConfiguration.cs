@@ -13,5 +13,8 @@ public partial class GoblinDbContext
         modelBuilder.Entity<Connection>().Ignore(x => x.ExecutionAttempt);
         modelBuilder.Entity<ExecutionAttempt>().HasOne(x => x.Connection).WithMany()
             .HasForeignKey(x => x.ConnectionId).OnDelete(DeleteBehavior.Restrict);
+        modelBuilder.Entity<ExecutionAttempt>().Ignore(x => x.RepositoryOperation);
+        modelBuilder.Entity<RepositoryOperation>().HasOne(x => x.Attempt).WithMany()
+            .HasForeignKey(x => x.AttemptId).OnDelete(DeleteBehavior.Restrict);
     }
 }

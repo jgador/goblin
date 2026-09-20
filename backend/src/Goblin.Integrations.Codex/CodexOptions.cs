@@ -68,12 +68,15 @@ public sealed record CodexOptions
         Config("model_provider=\"openai\"");
         Config("cli_auth_credentials_store=\"file\"");
         Config("analytics.enabled=false");
-        string[] disabled = ["shell_tool", "unified_exec", "shell_snapshot", "view_image", "image_generation",
+        // Model-directed commands need the code-mode host even when the optional
+        // code_mode feature is off. Only isolated repository workers may run them.
+        foreach (string feature in new[] { "shell_tool", "unified_exec", "code_mode_host" })
+            Config($"features.{feature}={(RepositoryExecution ? "true" : "false")}");
+        string[] disabled = ["shell_snapshot", "view_image", "image_generation",
             "apps", "plugins", "remote_plugin", "multi_agent", "hooks", "memories", "goals",
-            "code_mode", "code_mode_host", "skill_search", "skill_mcp_dependency_install",
+            "code_mode", "skill_search", "skill_mcp_dependency_install",
             "sleep_tool", "request_permissions_tool", "workspace_dependencies"];
-        foreach (string feature in disabled)
-            if (!RepositoryExecution || feature is not ("shell_tool" or "unified_exec")) Config($"features.{feature}=false");
+        foreach (string feature in disabled) Config($"features.{feature}=false");
         Config("web_search=\"disabled\"");
         Config(RepositoryExecution ? "sandbox_mode=\"danger-full-access\"" : "sandbox_mode=\"read-only\"");
         Config("approval_policy=\"never\"");

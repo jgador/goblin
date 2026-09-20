@@ -1,3 +1,4 @@
+using Goblin.Application.Repositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
 using JasperFx;
@@ -20,6 +21,7 @@ public static class ApplicationServices
         options.LocalQueue("work").UseDurableInbox();
         options.PublishMessage<DispatchWork>().ToLocalQueue("work");
         options.PublishMessage<ReconcileWork>().ToLocalQueue("work");
+        options.PublishMessage<PublishRepository>().ToLocalQueue("work");
         options.Policies.OnException<System.Exception>().MoveToErrorQueue();
     }
 
@@ -28,6 +30,7 @@ public static class ApplicationServices
         services.AddScoped<WorkOutboxFactory>();
         services.AddScoped<IdentityStore>();
         services.AddScoped<WorkStore>();
+        services.AddScoped<GitHubStore>();
         services.AddScoped<ConversationStore>();
         services.AddSingleton<ExecutionCoordinator>();
         services.AddHostedService<WorkRecovery>();

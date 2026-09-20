@@ -6,6 +6,8 @@ COPY frontend/package.json ./frontend/package.json
 RUN npm ci
 COPY frontend ./frontend
 RUN npm run build:assets
+COPY deploy/install-gh.mjs /tmp/install-gh.mjs
+RUN node /tmp/install-gh.mjs
 # Keep the official native runtime's resources adjacent to its binary.
 RUN node --input-type=module -e 'import { cpSync } from "node:fs"; const arch = process.arch; const target = arch === "arm64" ? "aarch64-unknown-linux-musl" : "x86_64-unknown-linux-musl"; cpSync(`node_modules/@openai/codex-linux-${arch}/vendor/${target}`, "/codex", { recursive: true });'
 
@@ -27,6 +29,8 @@ COPY --from=build --chown=1000:1000 /publish ./
 COPY --from=build --chown=1000:1000 /database /tools/database
 COPY backend/database/migrations /migrations
 COPY --from=assets /codex /opt/codex
+COPY --from=assets /githubcli/bin/gh /usr/local/bin/gh
+COPY --chmod=755 deploy/goblin-github /usr/local/bin/goblin-github
 RUN mkdir -p /data && chown 1000:1000 /data
 
 USER 1000:1000

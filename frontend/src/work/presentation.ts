@@ -1,4 +1,6 @@
 const icons: Record<string, string> = {
+    settings:
+        '<path d="m9 3-.6 2.1-2 .9-2-.6-2 3.5 1.5 1.6v2.3L2.4 14l2 3.5 2-.5 2 1L9 20h4l.6-2.1 2-.9 2 .6 2-3.5-1.5-1.6v-2.3L19.6 8l-2-3.5-2 .5-2-1L13 3Z"/><circle cx="11" cy="11.5" r="3"/>',
     plus: '<path d="M12 5v14M5 12h14"/>',
     chat: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5A8.5 8.5 0 0 1 9.5 3H13a8 8 0 0 1 8 8.5Z"/><path d="M7 9h9M7 13h6"/>',
     work: '<rect x="4" y="5" width="16" height="16" rx="3"/><path d="M9 5V3h6v2M8 11l1 1 2-2M13 11h3M8 16h8"/>',

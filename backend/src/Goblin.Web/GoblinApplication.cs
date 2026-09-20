@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application;
+using Goblin.Application.Repositories;
 using Goblin.Application.Work;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
@@ -40,6 +41,7 @@ public sealed record ApplicationOptions
     public bool RecoverRuntime { get; init; } = true;
     public bool EnableWork { get; init; }
     public IExecutionHost? ExecutionHost { get; init; }
+    public string GitHubCommand { get; init; } = "gh";
 }
 
 public static class GoblinApplication
@@ -70,6 +72,9 @@ public static class GoblinApplication
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
         builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        string? executionNamespace = builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"];
+        bool repositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(executionNamespace);
+        builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
         if (options.EnableWork)
         {
             if (string.IsNullOrWhiteSpace(databaseConnection)) throw new InvalidOperationException("Durable Work requires PostgreSQL.");
@@ -78,22 +83,24 @@ public static class GoblinApplication
             IExecutionHost executionHost = new LocalTextHost(new(
                 Path.Combine(workspace.DataDirectory, "executions"), workspace.CodexHome, runtimeOptions.Command,
                 typeof(GoblinApplication).Assembly.Location));
-            string? executionNamespace = builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"];
+            builder.Services.AddSingleton<IRepositoryRemote, GitHubRepositoryRemote>();
+            builder.Services.AddSingleton(new RepositoryBrokerOptions(Path.Combine(workspace.DataDirectory, "repositories")));
+            builder.Services.AddSingleton<RepositoryBroker>();
+            builder.Services.AddSingleton<IRepositoryBroker>(services => services.GetRequiredService<RepositoryBroker>());
             if (!string.IsNullOrWhiteSpace(executionNamespace))
             {
                 var kubernetes = new KubernetesApi(builder.Configuration["GOBLIN_KUBERNETES_URL"],
                     builder.Configuration["GOBLIN_KUBERNETES_TOKEN_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token",
                     builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
                 builder.Services.AddSingleton(kubernetes);
-                executionHost = new SandboxHost(kubernetes, new(executionNamespace,
+                builder.Services.AddSingleton<IExecutionHost>(services => options.ExecutionHost ?? new SandboxHost(kubernetes, new(executionNamespace,
                     builder.Configuration["GOBLIN_EXECUTION_IMAGE"] ?? "goblin-auth:0.1.0", workspace.CodexHome,
-                    Path.Combine(workspace.DataDirectory, "github.json")), executionHost);
+                    "http://goblin-repository.goblin.svc:8788"), executionHost, services.GetRequiredService<IRepositoryBroker>()));
             }
-            builder.Services.AddSingleton(options.ExecutionHost ?? executionHost);
-            builder.Services.AddSingleton(new GitHubConnection(builder.Configuration["GOBLIN_GITHUB_CLIENT_ID"], Path.Combine(workspace.DataDirectory, "github.json")));
+            else builder.Services.AddSingleton(options.ExecutionHost ?? executionHost);
             builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(Path.Combine(workspace.DataDirectory, "dispatch-failures")));
         }
-        builder.WebHost.UseUrls(options.ListenUrl);
+        builder.WebHost.UseUrls(repositoryListener ? [options.ListenUrl, "http://0.0.0.0:8788"] : [options.ListenUrl]);
         builder.WebHost.ConfigureKestrel(server =>
         {
             server.AddServerHeader = false;
@@ -117,6 +124,12 @@ public static class GoblinApplication
         {
             ("/", "connection/index.html", "text/html; charset=utf-8"),
             ("/app.js", "connection/app.js", "text/javascript; charset=utf-8"),
+            ("/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
+            ("/connection/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
+            ("/connection/panel.html", "connection/panel.html", "text/html; charset=utf-8"),
+            ("/settings/settings.js", "settings/settings.js", "text/javascript; charset=utf-8"),
+            ("/settings/github.js", "settings/github.js", "text/javascript; charset=utf-8"),
+            ("/settings/styles.css", "settings/styles.css", "text/css; charset=utf-8"),
             ("/styles.css", "connection/styles.css", "text/css; charset=utf-8"),
             ("/work", "work/index.html", "text/html; charset=utf-8"),
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
@@ -137,6 +150,16 @@ public static class GoblinApplication
             {
                 HttpRequest request = context.Request;
                 string path = request.Path.Value ?? "/";
+                if (path.StartsWith("/internal/repository/", StringComparison.Ordinal))
+                {
+                    if (!repositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin"))
+                        throw new PublicError("not_found", "This endpoint does not exist.", 404);
+                    string[] segments = path.Split('/');
+                    if (segments.Length < 5 || !long.TryParse(segments[3], out long attemptId)) throw new PublicError("not_found", "This endpoint does not exist.", 404);
+                    await context.RequestServices.GetRequiredService<RepositoryBroker>().AuthorizeAsync(attemptId, request.Headers["X-Goblin-Repository"].ToString(), true, request.HttpContext.RequestAborted);
+                    await next(context); return;
+                }
+                if (repositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);
                 // Endpoint routing treats /work and /work/ as the same route.
                 if (path == "/work/") path = "/work";
                 bool get = HttpMethods.IsGet(request.Method);
@@ -198,16 +221,49 @@ public static class GoblinApplication
             }
             finally { if (store is not null) await store.EndVerificationAsync(WorkStore.DefaultAgentId, available); }
         }));
+        var githubGate = new SemaphoreSlim(1);
+        async Task<GitHubState> GitHubAsync(HttpContext context, string action)
+        {
+            await githubGate.WaitAsync(context.RequestAborted);
+            GitHubConnection github = context.RequestServices.GetRequiredService<GitHubConnection>();
+            GitHubStore? store = options.EnableWork ? context.RequestServices.GetRequiredService<GitHubStore>() : null;
+            try
+            {
+                if (action is "connect" or "disconnect" or "cancel")
+                {
+                    if (store is not null) await store.BeginChangeAsync(context.RequestAborted);
+                }
+                GitHubState state = action switch
+                {
+                    "connect" => await github.StartAsync(),
+                    "disconnect" or "cancel" => await github.DisconnectAsync(),
+                    "check" => await github.CheckAsync(context.RequestAborted),
+                    _ => await github.StatusAsync()
+                };
+                if (store is not null) await store.ObserveAsync(state.Account, state.Status);
+                return state;
+            }
+            finally { githubGate.Release(); }
+        }
+        app.MapGet("/api/github", (Delegate)((HttpContext context) => GitHubAsync(context, "status")));
+        foreach (string action in new[] { "connect", "disconnect", "cancel", "check" })
+            app.MapPost("/api/github/" + action, (Delegate)((HttpContext context) => GitHubAsync(context, action)));
         if (options.EnableWork)
         {
-            app.MapGet("/api/github", (GitHubConnection github) => github.StatusAsync());
-            app.MapPost("/api/github/connect", (GitHubConnection github) => github.StartAsync());
-            app.MapPost("/api/github/disconnect", async (GitHubConnection github, WorkStore store) =>
+            app.MapGet("/api/github/repositories", async (GitHubStore store, CancellationToken token) => WorkResponse(await store.RepositoriesAsync(token)));
+            app.MapGet("/api/github/available-repositories", async (GitHubConnection github, int? page, CancellationToken token) => WorkResponse(await github.RepositoriesAsync(page ?? 1, token)));
+            app.MapPost("/api/github/repositories", async (HttpContext context, GitHubConnection github, GitHubStore store) =>
             {
-                await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", requireIdle: true);
-                try { return await github.DisconnectAsync(); }
-                finally { await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Disconnected", requireIdle: false, completeChange: true); }
+                RepositoryAccount account = (await github.StatusAsync()).Account ?? throw new PublicError("repository_unavailable", "Connect GitHub first.", 409);
+                RepositoryInfo repository = await github.RepositoryAsync(StringField(context, "repository") ?? "", context.RequestAborted);
+                await store.SetRepositoryAsync(repository, StringField(context, "enabled") == "true", account.Generation, context.RequestAborted);
+                return WorkResponse(await store.RepositoriesAsync());
             });
+            app.MapGet("/internal/repository/{attemptId:long}/input", (long attemptId, RepositoryBroker broker) => Results.File(broker.InputPath(attemptId), "application/octet-stream"));
+            app.MapPost("/internal/repository/{attemptId:long}/{operationId:guid}/{kind}", async (long attemptId, Guid operationId, string kind, HttpContext context, RepositoryBroker broker) =>
+                Results.Json(await broker.EnqueueAsync(attemptId, operationId, kind, context.Request.Body, context.RequestAborted)));
+            app.MapGet("/internal/repository/{attemptId:long}/operations/{operationId:guid}", async (long attemptId, Guid operationId, RepositoryBroker broker, CancellationToken token) =>
+                Results.Json(await broker.StatusAsync(attemptId, operationId, token)));
             app.MapGet("/api/conversations", async (ConversationStore store, CancellationToken token) => WorkResponse(await store.ListAsync(token)));
             app.MapPost("/api/conversations/commands", async (HttpContext context, ConversationStore store) =>
             {

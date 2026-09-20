@@ -86,7 +86,10 @@ public sealed class CodexWorkRunner
                 BaseInstructions = "You execute a Goblin Work item. Return a JSON object with kind and text. " +
                     "Use kind result for a proposed outcome requiring human review, or input for a question that prevents progress. " +
                     "Do not claim approval or completion on behalf of the user. " +
-                    (repositoryChanges ? "Work only on the assigned repository in this isolated environment. " :
+                    (repositoryChanges ? "Work only on the assigned repository and branch in this isolated environment. " +
+                        "Commit locally and use goblin-github publish to publish the branch; use goblin-github pull-request to open its draft PR after publishing. " +
+                        "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
+                        "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
                         "Use only the supplied context. Do not call tools, inspect files, browse, or run commands. ")
             }, token);
             lock (gate) threadId = thread.Thread.Id;

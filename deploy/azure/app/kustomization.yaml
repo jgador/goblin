@@ -30,10 +30,10 @@ patches:
       kind: NetworkPolicy
       name: goblin-auth
     patch: |-
-      - op: replace
-        path: /spec/ingress
+      - op: add
+        path: /spec/ingress/-
         value:
-          - from:
+            from:
               - namespaceSelector:
                   matchLabels:
                     kubernetes.io/metadata.name: kube-system

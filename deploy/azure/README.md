@@ -42,7 +42,7 @@ certificate authentication, runs the versioned schema migrations, and deploys
 Goblin plus the isolated execution namespace. A database or migration failure
 prevents application handoff. [Database setup](../../docs/database.md) and
 [execution hosting](../../docs/execution-hosting.md) cover repair, credentials,
-repository execution, and optional GitHub OAuth configuration.
+repository execution, and GitHub CLI sign-in through Settings.
 
 For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
 Enter your Goblin password to open the workspace. HTTPS and certificates remain
