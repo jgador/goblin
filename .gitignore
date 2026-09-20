@@ -11,6 +11,8 @@
 .goblin-local/
 .goblin-postgres/
 node_modules/
+.venv/
+.ruff_cache/
 dist/
 playwright-report/
 test-results/
