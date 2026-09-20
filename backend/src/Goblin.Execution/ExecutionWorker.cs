@@ -27,7 +27,7 @@ public static class ExecutionWorker
             if (File.Exists(Path.Combine(directory, "stopped"))) return 0;
             using var process = System.Diagnostics.Process.GetCurrentProcess();
             await ExecutionFiles.WriteAsync(Path.Combine(directory, "process.json"),
-                new ProcessIdentity(process.Id, process.StartTime.ToUniversalTime().Ticks, Environment.MachineName));
+                ProcessIdentity.Capture(process));
         }
         ExecutionObservation outcome;
         ExecutionSession? session = null;

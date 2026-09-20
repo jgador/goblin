@@ -53,6 +53,15 @@ runtime; it does not claim VM isolation or protection from a compromised kernel.
    deletes its Secret and input ConfigMap. A cleanup failure becomes core-owned
    Needs attention and requires explicit reconciliation.
 
+Linux text-worker journals identify a process by PID, kernel start ticks, boot ID,
+and PID namespace. Wall-clock `Process.StartTime` values can differ between the
+worker and controller and must not be used to establish that a process stopped.
+Older timestamp-only journals remain uncertain unless a saved outcome is available;
+they cannot authorize killing a process or launching a replacement. Observation
+also rereads the outcome after detecting exit so a just-published response is
+preserved. This does not reopen attempts already finalized as failed by an older
+version; recovering those saved outcomes requires a separate explicit repair.
+
 Suspended Sandbox identities and workspace PVCs are retained. Do not delete
 identity fences while messages or controllers from those attempts could still
 arrive. Retention/archival automation is not implemented; an operator can inspect
