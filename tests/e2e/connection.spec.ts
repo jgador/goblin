@@ -31,6 +31,16 @@ async function savedAccount(page: Page, account: Account = chatgpt) {
     await page.route("**/api/github", (route) =>
         route.fulfill({ json: { configured: false } }),
     );
+    await page.route("**/api/system", (route) =>
+        route.fulfill({
+            json: {
+                status: "unsupported",
+                notice: null,
+                machine: null,
+                history: [],
+            },
+        }),
+    );
     const state: AuthenticationState = {
         account,
         login: null,

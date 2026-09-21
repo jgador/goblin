@@ -32,6 +32,7 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
 export function mountGitHub(root: HTMLElement) {
     let state: GitHubState | null = null,
         busy = false,
+        busyAction = "",
         error = "",
         page = 1;
     let enabled: Repository[] = [],
@@ -40,19 +41,27 @@ export function mountGitHub(root: HTMLElement) {
         more = false;
     let generation = 0,
         disposed = false;
+    let focusedAction = "",
+        focusedRepository = "";
     function render() {
         if (disposed) return;
-        const focus = root.contains(document.activeElement)
-            ? (document.activeElement as HTMLElement).dataset.github
+        const active = root.contains(document.activeElement)
+            ? (document.activeElement as HTMLElement)
             : null;
+        if (active?.dataset.github) {
+            focusedAction = active.dataset.github;
+            focusedRepository = active.dataset.repository ?? "";
+        }
         root.innerHTML = `<h3>GitHub</h3><p class="settings-description">Choose the account and repositories Goblin can use.</p>
           <div class="settings-account" role="status">${e(state?.login ? `@${state.login} · ${state.status}` : (state?.status ?? "Loading connection…"))}</div>
           ${error || state?.notice ? `<p class="settings-notice" role="${error ? "alert" : "status"}">${e(error || state?.notice)}</p>` : ""}
           ${
-              state?.status === "Connecting"
-                  ? `<p>Authorize GitHub CLI using this one-time code.</p>${state.userCode ? `<div class="settings-code"><code>${e(state.userCode)}</code><button data-github="copy">Copy code</button></div><a class="settings-primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a>` : `<p role="status">Getting your sign-in code…</p>`}<p class="settings-description">Waiting for you to finish signing in. You can close Settings and return.</p><button data-github="cancel">Cancel sign-in</button>`
-                  : state?.login
-                    ? `<div class="settings-actions"><button data-github="check">Check connection</button><button data-github="disconnect">Disconnect GitHub</button></div><p class="settings-description">Disconnect removes Goblin’s saved access. You can revoke the GitHub CLI authorization from GitHub’s application settings.</p>
+              !state
+                  ? '<p class="settings-description" role="status">Loading GitHub settings…</p>'
+                  : state.status === "Connecting"
+                    ? `<p>Authorize GitHub CLI using this one-time code.</p>${state.userCode ? `<div class="settings-code"><code>${e(state.userCode)}</code><button data-github="copy">Copy code</button></div><a class="settings-primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a>` : `<p role="status">Getting your sign-in code…</p>`}<p class="settings-description">Waiting for you to finish signing in. You can close Settings and return.</p><button data-github="cancel">Cancel sign-in</button>`
+                    : state?.login
+                      ? `<div class="settings-actions"><button data-github="check">Check connection</button><button data-github="disconnect">Disconnect GitHub</button></div><p class="settings-description">Disconnect removes Goblin’s saved access. You can revoke the GitHub CLI authorization from GitHub’s application settings.</p>
           <div class="settings-repositories"><h4>Enabled repositories</h4><p class="settings-description">Work inherits access to its assigned branch. Merging stays with you.</p>${
               enabled
                   .filter((r) => r.enabled)
@@ -62,15 +71,42 @@ export function mountGitHub(root: HTMLElement) {
                   )
                   .join("") || `<p>No repositories enabled yet.</p>`
           }<button data-github="browse">Choose repositories</button>${browsing ? `<div class="repository-picker">${available.map((r) => `<div class="repository-row"><span>${e(r.name)}</span><button data-github="enable" data-repository="${e(r.name)}" ${!r.canPush || enabled.some((x) => x.id === r.id && x.enabled) ? "disabled" : ""}>${enabled.some((x) => x.id === r.id && x.enabled) ? "Enabled" : r.canPush ? "Enable" : "Read only"}</button></div>`).join("") || "No repositories available."}${more ? `<button data-github="more">Load more</button>` : ""}</div>` : ""}</div>`
-                    : `<button class="settings-primary" data-github="connect">Connect GitHub</button><p class="settings-description">Sign in on GitHub with a one-time code. No app registration or token copying is needed.</p>`
+                      : `<button class="settings-primary" data-github="connect">Connect GitHub</button><p class="settings-description">Sign in on GitHub with a one-time code. No app registration or token copying is needed.</p>`
           }`;
+        root.setAttribute("aria-busy", String(busy));
+        if (busy) {
+            const message = document.createElement("p");
+            message.className = "settings-description";
+            message.setAttribute("role", "status");
+            message.textContent =
+                busyAction === "browse" || busyAction === "more"
+                    ? "Loading repositories…"
+                    : busyAction === "check"
+                      ? "Checking connection…"
+                      : "Saving changes…";
+            root.append(message);
+        }
         if (busy)
             for (const button of root.querySelectorAll("button"))
                 button.disabled = true;
-        if (focus)
-            root.querySelector<HTMLElement>(
-                `[data-github="${focus}"]`,
-            )?.focus();
+        if (!busy && (active || document.activeElement === document.body)) {
+            const buttons = Array.from(
+                root.querySelectorAll<HTMLButtonElement>("[data-github]"),
+            ).filter((button) => !button.disabled);
+            const replacement =
+                buttons.find(
+                    (button) =>
+                        button.dataset.github === focusedAction &&
+                        (button.dataset.repository ?? "") === focusedRepository,
+                ) ??
+                (focusedRepository
+                    ? buttons.find(
+                          (button) =>
+                              button.dataset.repository === focusedRepository,
+                      )
+                    : undefined);
+            replacement?.focus({ preventScroll: true });
+        }
     }
     async function refresh() {
         const version = generation;
@@ -115,15 +151,17 @@ export function mountGitHub(root: HTMLElement) {
             return;
         }
         busy = true;
+        busyAction = action;
         generation++;
         error = "";
         render();
         try {
             if (action === "browse" || action === "more") {
-                page = action === "browse" ? 1 : page + 1;
+                const nextPage = action === "browse" ? 1 : page + 1;
                 const result = await api<Repository[]>(
-                    `/api/github/available-repositories?page=${page}`,
+                    `/api/github/available-repositories?page=${nextPage}`,
                 );
+                page = nextPage;
                 available = page === 1 ? result : [...available, ...result];
                 more = result.length === 100;
                 browsing = true;

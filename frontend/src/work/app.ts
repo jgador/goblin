@@ -84,6 +84,11 @@ let sessionChecked = false,
     workUnavailable = false;
 let initialSettings = query.get("settings");
 const drafts = new Map<string, string>();
+const setupDrafts = new Map<
+    string,
+    { values: [string, string][]; open: boolean }
+>();
+const setupErrors = new Map<string, Record<string, string>>();
 const draftKey = () =>
     view === "work"
         ? `work:${selected}`
@@ -167,6 +172,8 @@ function forgetWorkspace() {
     github = null;
     draft = "";
     drafts.clear();
+    setupDrafts.clear();
+    setupErrors.clear();
     loaded = false;
     system.reset();
     settings.reset();
@@ -404,8 +411,27 @@ function render() {
         "button[data-action]",
     );
     const buttonData = activeButton ? { ...activeButton.dataset } : null;
-    const context = view + ":" + selected + ":" + activeChat;
+    const context = draftKey();
     const sameContext = context === renderedContext;
+    // Keep the native picker and its keyboard interaction alive during polling.
+    // Loaded state is applied on the next render after the user leaves the select.
+    if (active?.closest("select") && sameContext && authenticated && !sending)
+        return;
+    if (
+        authenticated &&
+        renderedContext.startsWith("work:") &&
+        root.querySelector(".work-setup")
+    )
+        setupDrafts.set(renderedContext, {
+            values: Array.from(
+                root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+                    ".work-setup input:not([readonly]),.work-setup select",
+                ),
+            ).map((x) => [x.id, x.value]),
+            open:
+                root.querySelector<HTMLDetailsElement>("#repository-options")
+                    ?.open ?? false,
+        });
     const preserved = sameContext
         ? Array.from(
               root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
@@ -423,6 +449,8 @@ function render() {
         active instanceof HTMLInputElement
             ? active
             : null;
+    const activeId = active?.id;
+    const activeSummary = active?.closest("summary")?.parentElement?.id;
     const cursor = focus?.selectionStart,
         cursorEnd = focus?.selectionEnd;
     const scrolls = Array.from(
@@ -450,6 +478,18 @@ function render() {
         const detail = document.getElementById(id) as HTMLDetailsElement | null;
         if (detail) detail.open = true;
     }
+    const setup = setupDrafts.get(context);
+    for (const [id, value] of setup?.values ?? []) {
+        const field = document.getElementById(id) as
+            HTMLInputElement | HTMLSelectElement | null;
+        if (field) field.value = value;
+    }
+    const repositoryOptions = root.querySelector<HTMLDetailsElement>(
+        "#repository-options",
+    );
+    if (repositoryOptions && setup?.open) repositoryOptions.open = true;
+    updateRepositoryBranch();
+    showSetupErrors();
     if (focus?.id && sameContext) {
         const replacement = document.getElementById(focus.id) as
             HTMLInputElement | HTMLTextAreaElement | null;
@@ -476,6 +516,17 @@ function render() {
                     b.getClientRects().length,
             )
             ?.focus({ preventScroll: true });
+    if (sameContext && !focus && !buttonData) {
+        const replacement = activeSummary
+            ? document
+                  .getElementById(activeSummary)
+                  ?.querySelector<HTMLElement>("summary")
+            : activeId
+              ? document.getElementById(activeId)
+              : null;
+        if (replacement && !replacement.closest("[inert]"))
+            replacement.focus({ preventScroll: true });
+    }
     for (const [name, top] of scrolls) {
         const element = root.querySelector<HTMLElement>(
             `[data-scroll="${name}"]`,
@@ -539,7 +590,7 @@ function renderDetail() {
                 `<button class="tab ${tab === t ? "active" : ""}" id="tab-${t}" role="tab" aria-selected="${tab === t}" aria-controls="detail-content" tabindex="${tab === t ? 0 : -1}" data-action="tab" data-value="${t}">${icon(t === "conversation" ? "chat" : t === "activity" ? "activity" : "file")}${t[0].toUpperCase() + t.slice(1)}</button>`,
         )
         .join("");
-    return `<header class="detail-heading"><div class="title-row"><h2 tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div id="work-details" class="work-details" ${detailsOpen ? "" : "hidden"}><div class="detail-properties"><span>${e(agents.find((a) => a.id === w.agentId)?.name ?? "Unassigned")}</span><span>Work ${e(w.id)}</span><span>${attempt ? `${e(attempt.target.runtime)}${attempt.session?.model ? " · " + e(attempt.session.model) : ""}` : "No execution yet"}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}<div class="tabs" role="tablist" aria-label="Work detail views">${tabs}</div></div></header><div class="detail-body" id="detail-content" data-scroll="detail" ${detailsOpen ? `role="tabpanel" aria-labelledby="tab-${tab}"` : 'aria-label="Work conversation"'}><div class="thread-content">${body}${tab === "conversation" ? controls(w) : ""}</div></div>${tab === "conversation" ? composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === "InputRequired" ? "Answer Goblin’s question…" : "Add context to this work…") : ""}`;
+    return `<header class="detail-heading" data-scroll="heading"><div class="title-row"><h2 tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div id="work-details" class="work-details" ${detailsOpen ? "" : "hidden"}><div class="detail-properties"><span>${e(agents.find((a) => a.id === w.agentId)?.name ?? "Unassigned")}</span><span>Work ${e(w.id)}</span><span>${attempt ? `${e(attempt.target.runtime)}${attempt.session?.model ? " · " + e(attempt.session.model) : ""}` : "No execution yet"}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}<div class="tabs" role="tablist" aria-label="Work detail views">${tabs}</div></div></header><div class="detail-body" id="detail-content" data-scroll="detail" ${detailsOpen ? `role="tabpanel" aria-labelledby="tab-${tab}"` : 'aria-label="Work conversation"'}><div class="thread-content">${body}${tab === "conversation" ? controls(w) : ""}</div></div>${tab === "conversation" ? composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === "InputRequired" ? "Answer Goblin’s question…" : "Add context to this work…") : ""}`;
 }
 function controls(w: Work) {
     if (w.attention?.reason === "CleanupRequired")
@@ -549,8 +600,8 @@ function controls(w: Work) {
     let content = "";
     if (w.status === "Ready")
         content = !w.agentId
-            ? `<p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select class="field-control select-control" id="agent"><button type="button"><selectedcontent></selectedcontent></button>${agents.map((a) => `<option value="${a.id}">${e(a.name)}</option>`).join("")}</select>${button("assign", "Assign agent", true)}`
-            : `<p>Ready when you are.</p>${button("execute", "Start work", true)}<details id="repository-options"><summary>Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><label>Repository <select class="field-control select-control" id="repository"><button type="button"><selectedcontent></selectedcontent></button><option value="">Choose an enabled repository</option>${repositories
+            ? `<form class="work-setup" data-form="assign"><p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select class="field-control select-control" id="agent" name="agent" required ${agents.length ? "" : "disabled"}><button type="button"><selectedcontent></selectedcontent></button>${agents.map((a) => `<option value="${a.id}">${e(a.name)}</option>`).join("") || '<option value="">No agents available</option>'}</select>${agents.length ? `<button id="assign-agent" class="primary" type="submit" ${sending || pending ? "disabled" : ""}>Assign agent</button>` : '<p class="field-hint" role="status">No agents are available. Refresh to check again.</p>'}</form>`
+            : `<p>Ready when you are.</p>${button("execute", "Start work", true)}<details id="repository-options"><summary>${icon("chevron")}Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><form class="work-setup" data-form="repository" novalidate><label for="repository">Repository</label><select class="field-control select-control" id="repository" name="repository" required aria-describedby="repository-error"><button type="button"><selectedcontent></selectedcontent></button><option value="">${repositories.some((r) => r.enabled) ? "Choose an enabled repository" : connectionsLoading ? "Loading repositories…" : "No repositories enabled"}</option>${repositories
                   .filter((r) => r.enabled)
                   .map(
                       (r) =>
@@ -558,7 +609,7 @@ function controls(w: Work) {
                   )
                   .join(
                       "",
-                  )}</select></label><p>Enable repositories in Settings → GitHub.</p><label>Agent Git name <input class="field-control" id="git-name" value="Goblin"></label><label>Agent Git email <input class="field-control" id="git-email" type="email"></label>${runtimes.some((r) => r.repositoryExecution) ? button("repository-execute", "Start repository work") : "<p>Repository execution is unavailable on this Goblin.</p>"}</details>`;
+                  )}</select><p class="field-error" id="repository-error" hidden></p><button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button><label for="repository-branch">Default branch</label><input class="field-control" id="repository-branch" readonly placeholder="Choose a repository first" aria-describedby="branch-hint"><p id="branch-hint" class="field-hint">New attempts start from the repository’s default branch. Follow-up attempts use the saved checkpoint. Changes are saved to a separate Goblin branch.</p><div class="identity-fields"><div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="Goblin" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div><div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" placeholder="goblin@example.com" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div></div><p class="field-hint">Used as the author identity for this agent’s commits.</p>${runtimes.some((r) => r.repositoryExecution) ? `<button id="start-repository" type="submit" class="primary" ${sending || pending ? "disabled" : ""}>Start repository work</button>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}</form></details>`;
     if (w.attention?.reason === "ResultReview")
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
     if (w.attention?.reason === "InputRequired")
@@ -572,6 +623,25 @@ function controls(w: Work) {
     if (!["Completed", "Cancelled", "Cancelling"].includes(w.status))
         content += button("cancel", "Cancel work");
     return content ? `<div class="decision">${content}</div>` : "";
+}
+function updateRepositoryBranch() {
+    const repository = root.querySelector<HTMLSelectElement>("#repository");
+    const branch = root.querySelector<HTMLInputElement>("#repository-branch");
+    if (branch)
+        branch.value =
+            repositories.find((r) => r.name === repository?.value)
+                ?.defaultBranch ?? "";
+}
+function showSetupErrors() {
+    const errors = setupErrors.get(renderedContext) ?? {};
+    for (const id of ["repository", "git-name", "git-email"]) {
+        const field = document.getElementById(id);
+        const message = document.getElementById(id + "-error");
+        if (!field || !message) continue;
+        field.setAttribute("aria-invalid", String(!!errors[id]));
+        message.textContent = errors[id] ?? "";
+        message.hidden = !errors[id];
+    }
 }
 function renderChat() {
     const c = conversations.find((x) => x.id === activeChat);
@@ -660,25 +730,7 @@ document.addEventListener("click", async (event) => {
         changing = true;
         tab = "conversation";
     }
-    if (action === "assign")
-        await command("Assign", {
-            agentId: document.querySelector<HTMLSelectElement>("#agent")?.value,
-        });
     if (action === "execute") await command("Execute");
-    if (action === "repository-execute")
-        await command("Execute", {
-            repository: {
-                repository:
-                    document.querySelector<HTMLInputElement>("#repository")
-                        ?.value,
-                gitAuthorName:
-                    document.querySelector<HTMLInputElement>("#git-name")
-                        ?.value,
-                gitAuthorEmail:
-                    document.querySelector<HTMLInputElement>("#git-email")
-                        ?.value,
-            },
-        });
     if (action === "retry") await command("Retry");
     if (action === "reconcile") await command("Reconcile");
     if (action === "cancel") await command("Cancel");
@@ -725,6 +777,34 @@ document.addEventListener("submit", async (event) => {
     event.preventDefault();
     const kind = event.target.dataset.form,
         data = new FormData(event.target);
+    if (kind === "assign") {
+        await command("Assign", { agentId: data.get("agent") });
+        return;
+    }
+    if (kind === "repository") {
+        const repository = String(data.get("repository") ?? "");
+        const gitAuthorName = String(data.get("git-name") ?? "").trim();
+        const gitAuthorEmail = String(data.get("git-email") ?? "").trim();
+        const errors: Record<string, string> = {};
+        if (!repository) errors.repository = "Choose an enabled repository.";
+        if (!gitAuthorName)
+            errors["git-name"] = "Enter a name for the agent’s commits.";
+        const email =
+            event.target.querySelector<HTMLInputElement>("#git-email")!;
+        if (!gitAuthorEmail || email.validity.typeMismatch)
+            errors["git-email"] =
+                "Enter a valid email for the agent’s commits.";
+        setupErrors.set(renderedContext, errors);
+        showSetupErrors();
+        if (Object.keys(errors).length) {
+            document.getElementById(Object.keys(errors)[0])?.focus();
+            return;
+        }
+        await command("Execute", {
+            repository: { repository, gitAuthorName, gitAuthorEmail },
+        });
+        return;
+    }
     if (kind === "unlock") {
         event.target.querySelector<HTMLInputElement>(
             "input[type=password]",
@@ -789,6 +869,14 @@ document.addEventListener("submit", async (event) => {
 });
 document.addEventListener("input", (event) => {
     if (
+        event.target instanceof HTMLInputElement &&
+        event.target.closest(".work-setup")
+    ) {
+        const errors = setupErrors.get(renderedContext);
+        if (errors) delete errors[event.target.id];
+        showSetupErrors();
+    }
+    if (
         event.target instanceof HTMLTextAreaElement &&
         root.contains(event.target)
     )
@@ -799,6 +887,17 @@ document.addEventListener("input", (event) => {
     ) {
         search = event.target.value;
         render();
+    }
+});
+document.addEventListener("change", (event) => {
+    if (
+        event.target instanceof HTMLSelectElement &&
+        event.target.id === "repository"
+    ) {
+        const errors = setupErrors.get(renderedContext);
+        if (errors) delete errors.repository;
+        updateRepositoryBranch();
+        showSetupErrors();
     }
 });
 document.addEventListener("keydown", (event) => {

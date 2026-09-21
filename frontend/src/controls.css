@@ -6,7 +6,15 @@
     --control-muted: #78836e;
     --control-accent: #e8eedf;
     --control-radius: 8px;
+    --scrollbar-thumb: #bdc8b2;
 }
+
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background-color: #97aa87; }
+::-webkit-scrollbar-corner { background: transparent; }
 
 .field-control {
     appearance: none;
@@ -40,6 +48,9 @@
     color: var(--control-muted);
     opacity: .65;
 }
+.field-control[readonly] { background-color: #f0f2e9; color: #65765a; }
+.field-control[aria-invalid=true] { border-color: #a15e3d; }
+.field-error { color: #8b4e32; font-size: 12px; margin-top: 6px; line-height: 1.5; }
 
 .select-control {
     cursor: pointer;
@@ -63,6 +74,7 @@
         width: 100%;
         min-width: 0;
         padding: 0;
+        margin: 0;
         border: 0;
         background: transparent;
         color: inherit;
@@ -114,6 +126,7 @@
     .field-control { transition: none; }
 }
 @media (forced-colors: active) {
+    * { scrollbar-color: auto; scrollbar-width: auto; }
     .field-control:focus { outline: 2px solid Highlight; outline-offset: 2px; }
     .select-control { appearance: auto; background-image: none; }
     .select-control::picker(select) { appearance: auto; }
