@@ -4,3 +4,4 @@ resources:
   - sandbox.yaml
   - execution.yaml
   - headlamp.yaml
+  - ../victorialogs

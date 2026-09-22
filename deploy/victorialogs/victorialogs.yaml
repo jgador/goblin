@@ -1,0 +1,108 @@
+# Private, single-node log store. Do not expose this service with an Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblin-victorialogs
+  namespace: goblin
+spec:
+  selector:
+    app: goblin-victorialogs
+  ports:
+    - name: http
+      port: 9428
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: goblin-victorialogs
+  namespace: goblin
+spec:
+  serviceName: goblin-victorialogs
+  replicas: 1
+  selector:
+    matchLabels:
+      app: goblin-victorialogs
+  template:
+    metadata:
+      labels:
+        app: goblin-victorialogs
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: victorialogs
+          image: victoriametrics/victoria-logs:v1.20.0
+          args:
+            - -storageDataPath=/victoria-logs-data
+            - -retentionPeriod=14d
+            - -httpListenAddr=:9428
+          ports:
+            - name: http
+              containerPort: 9428
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /victoria-logs-data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goblin-victorialogs
+  namespace: goblin
+spec:
+  podSelector:
+    matchLabels:
+      app: goblin-victorialogs
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: goblin-fluent-bit
+      ports:
+        - protocol: TCP
+          port: 9428

@@ -48,6 +48,7 @@ async function bootstrap(
             | "build-failed"
             | "not-ready"
             | "headlamp-failed"
+            | "logs-failed"
             | "ingress-failed"
             | "public-failed"
             | "sandbox-failed"
@@ -71,6 +72,9 @@ async function bootstrap(
         join(source, "backend/src/Goblin.Web/appsettings.json"),
     );
     await cp("deploy/auth", join(source, "deploy/auth"), { recursive: true });
+    await cp("deploy/victorialogs", join(source, "deploy/victorialogs"), {
+        recursive: true,
+    });
     await cp("deploy/azure/app", join(source, "deploy/azure/app"), {
         recursive: true,
     });
@@ -215,6 +219,8 @@ if (name === 'curl') {
   } else if (args[1] === 'wait' && args.includes('sandbox/app') && appState === 'not-ready') {
     process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/goblin-headlamp') && appState === 'headlamp-failed') {
+    process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('statefulset/goblin-victorialogs') && appState === 'logs-failed') {
     process.exit(1);
   } else if (args[1] === 'create' && args[2] === 'namespace') {
     process.stdout.write(JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: args[3] } }));
@@ -674,13 +680,14 @@ test("installer installs Docker without dropping K3s forwarding or replacing exi
     );
 });
 
-test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, or ingress fails", async (t) => {
+test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, logs, or ingress fails", async (t) => {
     for (const state of [
         "sandbox-failed",
         "docker-failed",
         "build-failed",
         "not-ready",
         "headlamp-failed",
+        "logs-failed",
         "ingress-failed",
     ] as const) {
         const root = await mkdtemp(join(tmpdir(), "goblin-app-failed-"));
@@ -706,6 +713,43 @@ test("installer cannot report ready when Agent Sandbox, Docker, the application 
             "failed",
         );
     }
+});
+
+test("installer deploys VictoriaLogs and waits for storage and collectors", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-logs-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await bootstrap(root, fakePassword);
+    const deployed = join(root, "var/lib/goblin/deploy/victorialogs");
+    for (const name of [
+        "kustomization.yaml",
+        "victorialogs.yaml",
+        "fluent-bit.yaml",
+        "fluent-bit.conf",
+    ]) {
+        assert.equal(
+            await readFile(join(deployed, name), "utf8"),
+            await readFile(join("deploy/victorialogs", name), "utf8"),
+        );
+    }
+    const calls: string[][] = (
+        await readFile(join(root, "k3s-requests.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const applied = calls.findIndex(
+        (args) =>
+            args[1] === "apply" &&
+            args.includes("-k") &&
+            args.some((value) => value.endsWith("/deploy/azure/app")),
+    );
+    const store = calls.findIndex((args) =>
+        args.includes("statefulset/goblin-victorialogs"),
+    );
+    const collector = calls.findIndex((args) =>
+        args.includes("daemonset/goblin-fluent-bit"),
+    );
+    assert.ok(applied >= 0 && store > applied && collector > store);
 });
 
 test("bootstrap rejects invalid hostname/ref input before invoking the application builder", async (t) => {

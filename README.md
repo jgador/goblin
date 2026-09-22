@@ -65,6 +65,10 @@ The sidebar’s **System** shortcut opens a [VM overview](docs/system-overview.m
 with CPU, memory, disk space, recent usage, and service health. Readings cover the
 whole WSL or Azure Linux VM, including processes outside Kubernetes.
 
+Kubernetes installations collect container output in a private
+[VictoriaLogs store](docs/logging.md) with 14-day retention. Logs are available
+to cluster administrators through a temporary port-forward, not a public route.
+
 To try authentication first:
 
 ```bash
