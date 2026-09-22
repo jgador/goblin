@@ -33,7 +33,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--green); font-size: 24px; font-weight: 600; letter-spacing: -.9px; text-decoration: none; }
 .brand img { width: 31px; height: 31px; object-fit: contain; }
 .icon-button { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 8px; color: #6b7765; }
-.icon-button:hover, .quiet-button:hover { background: #e9ede2; }
+.icon-button:hover { background: #e9ede2; }
 .new-chat { display: flex; align-items: center; justify-content: flex-start; gap: 11px; border-radius: 9px; background: var(--green); color: white; font-size: 14px; font-weight: 500; padding: 11px 14px; }
 .new-chat:hover, .primary:hover:not(:disabled), .send:hover:not(:disabled) { background: #34563e; }
 .sidebar-search { display: flex; align-items: center; gap: 10px; padding: 11px 9px; margin: 9px 0 18px; border: 1px solid transparent; border-radius: var(--control-radius); color: #76806d; }
@@ -85,8 +85,6 @@ h1, h2, h3, h4, p { margin: 0; }
 .workspace-header { flex-shrink: 0; height: 70px; padding: 16px 27px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .header-left, .header-actions { display: flex; align-items: center; gap: 10px; }
 .workspace-name { color: #5c6a54; font-size: 17px; font-weight: 500; letter-spacing: -.3px; }
-.quiet-button { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 8px; font-size: 12px; color: #65735b; }
-.quiet-button svg { width: 16px; height: 16px; }
 .home { display: flex; flex: 1; min-height: 0; overflow: auto; align-items: center; justify-content: center; padding: 32px 30px 100px; }
 .home-content { width: min(100%, 730px); text-align: center; margin: auto; }
 .home-portrait { width: 59px; height: 59px; object-fit: contain; margin-bottom: 22px; }

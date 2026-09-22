@@ -74,7 +74,6 @@ let view: "work" | "chat" | "new" =
     tab: Tab = "conversation",
     filter = "all",
     search = "",
-    detailsOpen = false,
     conversationsOpen = false;
 const mobile = matchMedia("(max-width: 760px)");
 let sidebarCollapsed =
@@ -355,7 +354,6 @@ function navigate(next: typeof view, id = "") {
     } else history.replaceState(null, "", "/");
     draft = drafts.get(draftKey()) ?? "";
     changing = false;
-    detailsOpen = false;
     tab = "conversation";
     if (mobile.matches) sidebarCollapsed = true;
 }
@@ -465,7 +463,7 @@ function render() {
         root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
         root.innerHTML = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${mobile.matches && !sidebarCollapsed ? "inert" : ""}>
-            <header class="workspace-header"><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button><span class="workspace-name">${view === "chat" ? "Conversation" : "Goblin"}</span></div><div class="header-actions">${view === "work" && current() ? `<button class="quiet-button" data-action="details" aria-expanded="${detailsOpen}" aria-controls="work-details">${icon("inbox")}Details</button>` : ""}<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button></div></header>
+            <header class="workspace-header"><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button><span class="workspace-name">${view === "chat" ? "Conversation" : "Goblin"}</span></div><div class="header-actions"><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button></div></header>
             ${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}
             ${view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main></div>`;
     }
@@ -590,7 +588,7 @@ function renderDetail() {
                 `<button class="tab ${tab === t ? "active" : ""}" id="tab-${t}" role="tab" aria-selected="${tab === t}" aria-controls="detail-content" tabindex="${tab === t ? 0 : -1}" data-action="tab" data-value="${t}">${icon(t === "conversation" ? "chat" : t === "activity" ? "activity" : "file")}${t[0].toUpperCase() + t.slice(1)}</button>`,
         )
         .join("");
-    return `<header class="detail-heading" data-scroll="heading"><div class="title-row"><h2 tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div id="work-details" class="work-details" ${detailsOpen ? "" : "hidden"}><div class="detail-properties"><span>${e(agents.find((a) => a.id === w.agentId)?.name ?? "Unassigned")}</span><span>Work ${e(w.id)}</span><span>${attempt ? `${e(attempt.target.runtime)}${attempt.session?.model ? " · " + e(attempt.session.model) : ""}` : "No execution yet"}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}<div class="tabs" role="tablist" aria-label="Work detail views">${tabs}</div></div></header><div class="detail-body" id="detail-content" data-scroll="detail" ${detailsOpen ? `role="tabpanel" aria-labelledby="tab-${tab}"` : 'aria-label="Work conversation"'}><div class="thread-content">${body}${tab === "conversation" ? controls(w) : ""}</div></div>${tab === "conversation" ? composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === "InputRequired" ? "Answer Goblin’s question…" : "Add context to this work…") : ""}`;
+    return `<header class="detail-heading" data-scroll="heading"><div class="title-row"><h2 tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div id="work-details" class="work-details"><div class="detail-properties"><span>${e(agents.find((a) => a.id === w.agentId)?.name ?? "Unassigned")}</span><span>Work ${e(w.id)}</span><span>${attempt ? `${e(attempt.target.runtime)}${attempt.session?.model ? " · " + e(attempt.session.model) : ""}` : "No execution yet"}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}<div class="tabs" role="tablist" aria-label="Work detail views">${tabs}</div></div></header><div class="detail-body" id="detail-content" data-scroll="detail" role="tabpanel" aria-labelledby="tab-${tab}"><div class="thread-content">${body}${tab === "conversation" ? controls(w) : ""}</div></div>${tab === "conversation" ? composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === "InputRequired" ? "Answer Goblin’s question…" : "Add context to this work…") : ""}`;
 }
 function controls(w: Work) {
     if (w.attention?.reason === "CleanupRequired")
@@ -720,10 +718,6 @@ document.addEventListener("click", async (event) => {
     }
     if (action === "select-chat") navigate("chat", target.dataset.id!);
     if (action === "select-work") navigate("work", target.dataset.id!);
-    if (action === "details") {
-        detailsOpen = !detailsOpen;
-        if (!detailsOpen) tab = "conversation";
-    }
     if (action === "tab") tab = value as Tab;
     if (action === "filter") filter = value!;
     if (action === "changes") {
