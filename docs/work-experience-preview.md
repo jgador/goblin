@@ -33,10 +33,10 @@ Every observed failure requires attention. Retry creates a new attempt only afte
 an uncertain execution has been reconciled. Cancellation waits for stopping
 confirmation. Cleanup failures also require reconciliation before continuation.
 The activity view records the runtime and model reported for each attempt.
-Open **Details** to see execution information and the Conversation, Activity, and
-Outputs tabs. The main conversation places saved questions, results, and permitted
-actions together. Creating Work still only saves the objective; **Start work** is
-an explicit action after assignment.
+Execution information and the Conversation, Activity, and Outputs tabs are
+always visible when viewing Work. The main conversation places saved questions,
+results, and permitted actions together. Creating Work still only saves the
+objective; **Start work** is an explicit action after assignment.
 
 The browser distinguishes saving from a confirmed transition. If a response is
 lost, it retains the original command in session storage and offers **Resend
