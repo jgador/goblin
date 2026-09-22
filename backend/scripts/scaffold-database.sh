@@ -23,6 +23,8 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --table public.repository_operations \
   --table public.work_commands \
   --table public.work_items \
+  --table public.workspace_checkpoints \
+  --table public.workspace_sessions \
   --data-annotations \
   --no-onconfiguring \
   --force

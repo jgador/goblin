@@ -86,11 +86,15 @@ public sealed class CodexWorkRunner
                 BaseInstructions = "You execute a Goblin Work item. Return a JSON object with kind and text. " +
                     "Use kind result for a proposed outcome requiring human review, or input for a question that prevents progress. " +
                     "Do not claim approval or completion on behalf of the user. " +
+                    "Set releaseWorkspace based on whether this conversation still needs repository compute. " +
+                    "Use false when continuing interactive investigation needs the existing workspace, true when waiting for review, longer human input, or no further file access. " +
+                    "A release request is only intent; Goblin verifies and saves a recoverable checkpoint before releasing compute. Respect an explicit request to keep the workspace open. " +
                     (repositoryChanges ? "Work only on the assigned repository and branch in this isolated environment. " +
                         "Commit locally and use goblin-github publish to publish the branch; use goblin-github pull-request to open its draft PR after publishing. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
-                        "Use only the supplied context. Do not call tools, inspect files, browse, or run commands. ")
+                        "Use only the supplied context. Do not call tools, inspect files, browse, or run commands. " +
+                        (work.Attempts[^1].ReasoningOnly ? "If the latest request requires inspecting or changing repository files, return kind workspace with a short reason. Otherwise answer or ask clarifying questions using the saved Work context. " : ""))
             }, token);
             lock (gate) threadId = thread.Thread.Id;
             string context = JsonSerializer.Serialize(new { work.Objective, work.Messages, work.Decisions, work.Results, work.Artifacts });
@@ -98,8 +102,13 @@ public sealed class CodexWorkRunner
             {
                 type = "object",
                 additionalProperties = false,
-                required = new[] { "kind", "text" },
-                properties = new { kind = new { type = "string", @enum = new[] { "result", "input" } }, text = new { type = "string" } }
+                required = new[] { "kind", "text", "releaseWorkspace" },
+                properties = new
+                {
+                    kind = new { type = "string", @enum = work.Attempts[^1].ReasoningOnly ? new[] { "result", "input", "workspace" } : ["result", "input"] },
+                    text = new { type = "string" },
+                    releaseWorkspace = new { type = "boolean" }
+                }
             });
             TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
@@ -116,7 +125,7 @@ public sealed class CodexWorkRunner
                 turnId = started.Turn.Id;
             }
             var session = new ExecutionSession(thread.Model, threadId, turnId);
-            await progress(new(ObservationKind.Running, session));
+            await progress(new(ObservationKind.Running, session) { TurnNumber = work.Attempts[^1].TurnNumber });
             Task<string> completed = completion.Task.WaitAsync(TimeSpan.FromMinutes(30), token);
             string? reported = null;
             while (!completed.IsCompleted)
@@ -127,7 +136,7 @@ public sealed class CodexWorkRunner
                 lock (gate) next = latestProgress;
                 if (!string.IsNullOrWhiteSpace(next) && next != reported)
                 {
-                    await progress(new(ObservationKind.Running, session, next));
+                    await progress(new(ObservationKind.Running, session, next) { TurnNumber = work.Attempts[^1].TurnNumber });
                     reported = next;
                 }
             }
@@ -135,9 +144,14 @@ public sealed class CodexWorkRunner
             using JsonDocument output = JsonDocument.Parse(text);
             string? kind = output.RootElement.GetProperty("kind").GetString();
             string? body = output.RootElement.GetProperty("text").GetString();
-            if (string.IsNullOrWhiteSpace(body) || kind is not ("result" or "input"))
+            if (string.IsNullOrWhiteSpace(body) || (kind is not ("result" or "input") && !(kind == "workspace" && work.Attempts[^1].ReasoningOnly)))
                 throw new IntegrationFailure("invalid_work_result", "The runtime returned an invalid result.");
-            return new(kind == "input" ? ObservationKind.InputRequired : ObservationKind.Result, session, body);
+            return new(kind == "workspace" ? ObservationKind.WorkspaceRequired : kind == "input" ? ObservationKind.Paused : ObservationKind.Result, session, body)
+            {
+                TurnNumber = work.Attempts[^1].TurnNumber,
+                ReleaseWorkspace = !repositoryChanges || kind == "result" ||
+                    !output.RootElement.TryGetProperty("releaseWorkspace", out JsonElement release) || release.GetBoolean()
+            };
         }
         finally
         {

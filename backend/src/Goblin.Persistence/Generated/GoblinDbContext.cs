@@ -32,6 +32,10 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<WorkItem> WorkItems { get; set; }
 
+    public virtual DbSet<WorkspaceCheckpoint> WorkspaceCheckpoints { get; set; }
+
+    public virtual DbSet<WorkspaceSession> WorkspaceSessions { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Agent>(entity =>
@@ -77,7 +81,9 @@ public partial class GoblinDbContext : DbContext
 
             entity.HasIndex(e => e.ConnectionId, "one_execution_per_connection")
                 .IsUnique()
-                .HasFilter("((status = ANY (ARRAY['Starting'::text, 'Running'::text, 'CancellationRequested'::text, 'Uncertain'::text])) OR cleanup_pending)");
+                .HasFilter("((status = ANY (ARRAY['Starting'::text, 'Running'::text, 'CancellationRequested'::text, 'Uncertain'::text])) OR cleanup_pending OR workspace_retained)");
+
+            entity.Property(e => e.TurnNumber).HasDefaultValue(1);
 
             entity.HasOne(d => d.Agent).WithMany(p => p.ExecutionAttempts)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -151,6 +157,45 @@ public partial class GoblinDbContext : DbContext
             entity.Property(e => e.Version).HasDefaultValue(1L);
 
             entity.HasOne(d => d.Agent).WithMany(p => p.WorkItems).HasConstraintName("work_items_agent_id_fkey");
+        });
+
+        modelBuilder.Entity<WorkspaceCheckpoint>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("workspace_checkpoints_pkey");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Attempt).WithMany(p => p.WorkspaceCheckpoints)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("workspace_checkpoints_attempt_id_fkey");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.WorkspaceCheckpoints)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("workspace_checkpoints_work_id_fkey");
+        });
+
+        modelBuilder.Entity<WorkspaceSession>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("workspace_sessions_pkey");
+
+            entity.HasIndex(e => e.WorkId, "one_inspection_per_work")
+                .IsUnique()
+                .HasFilter("(state = ANY (ARRAY['Queued'::text, 'Starting'::text, 'Available'::text, 'Stopping'::text]))");
+
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Attempt).WithMany(p => p.WorkspaceSessions)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("workspace_sessions_attempt_id_fkey");
+
+            entity.HasOne(d => d.Checkpoint).WithMany(p => p.WorkspaceSessions).HasConstraintName("workspace_sessions_checkpoint_id_fkey");
+
+            entity.HasOne(d => d.Work).WithOne(p => p.WorkspaceSession)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("workspace_sessions_work_id_fkey");
         });
         modelBuilder.HasSequence("work_event_ids");
 

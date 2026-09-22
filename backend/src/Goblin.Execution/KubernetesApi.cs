@@ -1,9 +1,11 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Security;
+using System.Net.WebSockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -62,6 +64,19 @@ public sealed class KubernetesApi : IDisposable
             (allowConflict && response.StatusCode == HttpStatusCode.Conflict)) return null;
         if (!response.IsSuccessStatusCode) throw new IOException("Execution control plane request failed.");
         return await response.Content.ReadAsStringAsync(token);
+    }
+    public async Task<ClientWebSocket> ExecAsync(string ns, string pod, string container, string[] command, bool tty, CancellationToken token)
+    {
+        // Callers supply only a recorded inspection pod, never browser-selected K8s paths.
+        var socket = new ClientWebSocket();
+        socket.Options.AddSubProtocol("v4.channel.k8s.io");
+        if (_tokenFile is not null) socket.Options.SetRequestHeader("Authorization", "Bearer " + (await File.ReadAllTextAsync(_tokenFile, token)).Trim());
+        string query = "container=" + Uri.EscapeDataString(container) + "&stdin=true&stdout=true&stderr=" + (!tty).ToString().ToLowerInvariant() + "&tty=" + tty.ToString().ToLowerInvariant();
+        foreach (string argument in command) query += "&command=" + Uri.EscapeDataString(argument);
+        var uri = new UriBuilder(new Uri(_client.BaseAddress!, "/api/v1/namespaces/" + ns + "/pods/" + pod + "/exec?" + query));
+        uri.Scheme = uri.Scheme == "https" ? "wss" : "ws";
+        try { await socket.ConnectAsync(uri.Uri, _client, token); return socket; }
+        catch { socket.Dispose(); throw; }
     }
     public void Dispose() => _client.Dispose();
 }

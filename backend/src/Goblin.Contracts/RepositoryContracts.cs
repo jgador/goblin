@@ -10,6 +10,8 @@ public sealed record RepositoryOperationResult(string? Commit, string? Url);
 
 public interface IRepositoryRemote
 {
+    Task PrepareCheckpointAsync(RepositoryChange repository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token) =>
+        throw new System.NotSupportedException("Checkpoint restoration is unavailable.");
     Task PrepareAsync(RepositoryChange repository, string directory, string? checkpoint, CancellationToken token);
     Task<string> InspectBundleAsync(RepositoryChange repository, string directory, string bundle, CancellationToken token);
     Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token);

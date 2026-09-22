@@ -529,3 +529,59 @@ test("the scoped composer retains command identity and draft until the selected 
     });
     expect(commands[1]).toEqual(commands[0]);
 });
+
+test("saved workspace inspection needs no compute and renders files as text", async ({
+    page,
+}) => {
+    await workspace(page);
+    const checkpoint = "a1761716-c9f5-47c5-bcae-f41c4da61f64";
+    const posts: string[] = [];
+    await page.route("**/api/work/1/workspace**", (route) => {
+        const url = new URL(route.request().url());
+        if (route.request().method() === "POST") posts.push(url.pathname);
+        let json: unknown = {
+            checkpoints: [
+                {
+                    id: checkpoint,
+                    attemptId: "1",
+                    turnNumber: 1,
+                    branch: "goblin/1/1",
+                    commitSha: "a".repeat(40),
+                    createdAt: "2026-09-23T00:00:00Z",
+                },
+            ],
+            sessions: [],
+            terminalAvailable: true,
+        };
+        if (url.pathname.endsWith("/files"))
+            json = url.searchParams.has("path")
+                ? {
+                      path: "repository/report.txt",
+                      text: "<script>window.workspaceInjected=true</script>\nSaved output",
+                  }
+                : {
+                      files: [{ path: "repository/report.txt", size: 80 }],
+                      truncated: false,
+                  };
+        return route.fulfill({ json });
+    });
+    await page.goto("/work?item=1");
+    await page
+        .getByRole("button", { name: "Open workspace", exact: true })
+        .click();
+    const dialog = page.getByRole("dialog", { name: "Workspace", exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "report.txt" }).click();
+    await expect(dialog.getByLabel("File preview")).toContainText(
+        "Saved output",
+    );
+    expect(
+        await page.evaluate(() => Reflect.get(window, "workspaceInjected")),
+    ).toBeUndefined();
+    expect(posts).toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Open workspace", exact: true }),
+    ).toBeFocused();
+});

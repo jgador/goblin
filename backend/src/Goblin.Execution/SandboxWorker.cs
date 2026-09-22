@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,27 +16,18 @@ public static class SandboxWorker
 {
     public static async Task<int> RunAsync()
     {
-        if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("Agent sandboxes require Linux.");
-        const string root = "/workspace";
-        string resultFile = Path.Combine(root, "goblin-result.json");
-        ExecutionObservation? saved = await ExecutionFiles.ReadAsync<ExecutionObservation>(resultFile);
-        if (saved is not null) { Emit(saved); return 0; }
-        try { using var reservation = new FileStream(Path.Combine(root, "goblin-attempt"), FileMode.CreateNew, FileAccess.Write, FileShare.None); }
-        catch (IOException)
-        {
-            // A replacement pod must never re-execute an uncertain attempt.
-            Emit(new(ObservationKind.Uncertain, Failure: FailureKind.HostUnavailable));
-            return 1;
-        }
-        ExecutionObservation outcome;
+        if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException();
+        const string root = "/workspace", checkout = "/workspace/repository";
+        string state = Path.Combine(root, ".goblin");
+        Directory.CreateDirectory(state);
         WorkerInput input = (await ExecutionFiles.ReadAsync<WorkerInput>("/run/input/input.json"))!;
-        RepositoryChange repository = input.Work.Attempts[^1].Target.Repository!;
-        string home = "/runtime/home", codexHome = "/runtime/codex", checkout = Path.Combine(root, "repository");
-        Directory.CreateDirectory(home);
-        Directory.CreateDirectory(codexHome);
-        File.Copy("/run/credentials/auth.json", Path.Combine(codexHome, "auth.json"), overwrite: true);
+        WorkSnapshot work = input.Work;
+        int allocation = work.Attempts[^1].WorkspaceNumber;
+        string home = "/runtime/home", codexHome = "/runtime/codex";
+        Directory.CreateDirectory(home); Directory.CreateDirectory(codexHome);
+        File.Copy("/run/credentials/auth.json", Path.Combine(codexHome, "auth.json"), true);
         File.SetUnixFileMode(Path.Combine(codexHome, "auth.json"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        var gitEnvironment = new Dictionary<string, string>
+        var environment = new Dictionary<string, string>
         {
             ["HOME"] = home,
             ["PATH"] = Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin:/bin",
@@ -45,72 +35,100 @@ public static class SandboxWorker
             ["GIT_CONFIG_NOSYSTEM"] = "1",
             ["GIT_CONFIG_GLOBAL"] = "/dev/null"
         };
-        string branch = repository.Grant!.Branch;
-        ExecutionObservation? runtimeOutcome = null;
-        ExecutionSession? runtimeSession = null;
-        try
+        while (true)
         {
-            string bundle = Path.Combine(root, "input.bundle");
-            await RepositoryClient.DownloadAsync(input.Work.Attempts[^1].Id, bundle);
-            await GitAsync(root, gitEnvironment, "clone", "--branch", branch, "--", bundle, checkout);
-            await GitAsync(checkout, gitEnvironment, "remote", "set-url", "origin", "https://github.com/" + repository.Repository + ".git");
-            await GitAsync(checkout, gitEnvironment, "config", "user.name", repository.GitAuthorName);
-            await GitAsync(checkout, gitEnvironment, "config", "user.email", repository.GitAuthorEmail);
-            await using (var codex = new CodexClient(new()
+            AttemptSnapshot attempt = work.Attempts[^1];
+            string prefix = Path.Combine(state, "turn-" + attempt.TurnNumber);
+            // Each runtime turn has its own create-only fence, even in a retained pod.
+            try { using var gate = new FileStream(prefix + ".claimed", FileMode.CreateNew, FileAccess.Write); }
+            catch (IOException) { Emit(new(ObservationKind.Uncertain, Failure: FailureKind.HostUnavailable) { TurnNumber = attempt.TurnNumber }); return 1; }
+            ExecutionObservation outcome;
+            ExecutionSession? session = null;
+            string stage = "Restore";
+            try
             {
-                Home = home,
-                CodexHome = codexHome,
-                Workspace = checkout,
-                Command = "codex",
-                RepositoryExecution = true
-            }))
-            {
-                outcome = await new CodexWorkRunner(codex).RunAsync(input.Work, true,
-                    value => { runtimeSession = value.Session ?? runtimeSession; Console.WriteLine("GOBLIN_PROGRESS " + JsonSerializer.Serialize(value, ExecutionFiles.Json)); return Task.CompletedTask; }, CancellationToken.None);
+                RepositoryChange repository = attempt.Target.Repository!;
+                string branch = repository.Grant!.Branch;
+                if (!Directory.Exists(checkout))
+                {
+                    WorkspaceCheckpoint? restored = await RepositoryClient.RestoreAsync(work, root);
+                    if (restored is null)
+                    {
+                        string bundle = Path.Combine(state, "input.bundle");
+                        await RepositoryClient.DownloadAsync(attempt.Id, bundle);
+                        await GitAsync(root, environment, "clone", "--branch", branch, "--", bundle, checkout);
+                    }
+                    else
+                    {
+                        if ((await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim() != restored.CommitSha) throw new IOException("Checkpoint mismatch.");
+                        await GitAsync(checkout, environment, "checkout", "-B", branch, restored.CommitSha);
+                    }
+                    await GitAsync(checkout, environment, "remote", "set-url", "origin", "https://github.com/" + repository.Repository + ".git");
+                    await GitAsync(checkout, environment, "config", "user.name", repository.GitAuthorName);
+                    await GitAsync(checkout, environment, "config", "user.email", repository.GitAuthorEmail);
+                }
+                string baseline = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
+                stage = "Runtime";
+                await using (var codex = new CodexClient(new() { Home = home, CodexHome = codexHome, Workspace = checkout, Command = "codex", RepositoryExecution = true }))
+                {
+                    outcome = await new CodexWorkRunner(codex).RunAsync(work, true, value =>
+                    {
+                        session = value.Session ?? session;
+                        Console.WriteLine("GOBLIN_PROGRESS " + JsonSerializer.Serialize(value with { TurnNumber = attempt.TurnNumber }, ExecutionFiles.Json));
+                        return Task.CompletedTask;
+                    }, CancellationToken.None);
+                }
+                stage = "Checkpoint";
+                WorkspaceFiles.EnsureQuiescent();
+                await GitAsync(checkout, environment, "add", "--all");
+                if (!string.IsNullOrWhiteSpace(await GitAsync(checkout, environment, "diff", "--cached", "--name-only")))
+                    await GitAsync(checkout, environment, "commit", "-m", "Goblin Work " + work.Id.ToString(CultureInfo.InvariantCulture));
+                stage = "Publish";
+                await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, "publish");
+                string commit = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
+                await File.WriteAllTextAsync(Path.Combine(state, "changes.patch"), await GitAsync(checkout, environment, "diff", baseline, commit));
+                string archive = Path.Combine("/tmp", Guid.NewGuid().ToString("N") + ".tar.gz");
+                stage = "Archive";
+                WorkspaceCheckpoint saved;
+                try { WorkspaceFiles.Pack(root, archive); saved = await RepositoryClient.SaveAsync(work, commit, archive); }
+                finally { File.Delete(archive); }
+                outcome = outcome with { CheckpointId = saved.Id.ToString(), ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
             }
-            runtimeOutcome = outcome;
-            if (outcome.Kind is ObservationKind.Result or ObservationKind.InputRequired)
+            catch (TimeoutException) { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.TimedOut); }
+            catch { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.ExecutionFailed); }
+            outcome = outcome with { TurnNumber = attempt.TurnNumber };
+            if (outcome.Kind is ObservationKind.Failed or ObservationKind.Uncertain)
+                await ExecutionFiles.WriteAsync(prefix + ".failure.json", new { stage, failure = outcome.Failure });
+            await ExecutionFiles.WriteAsync(prefix + ".result.json", outcome);
+            Emit(outcome);
+            if (outcome.Kind != ObservationKind.Paused || outcome.ReleaseWorkspace) return 0;
+            // A semantic keep decision holds the environment. Polling transports an
+            // already-claimed next turn; it never decides to execute or retry Work.
+            while (true)
             {
-                await GitAsync(checkout, gitEnvironment, "add", "--all");
-                int changes = await GitAsync(checkout, gitEnvironment, ["diff", "--cached", "--quiet"], allowDifference: true);
-                if (changes == 1)
-                    await GitAsync(checkout, gitEnvironment, "commit", "-m", "Goblin Work " + input.Work.Id.ToString(CultureInfo.InvariantCulture));
-                await RepositoryClient.SubmitAsync(input.Work.Attempts[^1].Id, branch, checkout, "publish");
-                outcome = outcome with { ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
+                await Task.Delay(1000);
+                WorkSnapshot? next;
+                try { next = await RepositoryClient.CurrentAsync(attempt.Id); }
+                catch { continue; }
+                if (next is null) continue;
+                AttemptSnapshot candidate = next.Attempts[^1];
+                if (candidate.WorkspaceNumber != allocation || candidate.Status is AttemptStatus.Cancelled or AttemptStatus.CancellationRequested) return 0;
+                if (candidate.TurnNumber > attempt.TurnNumber && candidate.Status == AttemptStatus.Starting)
+                { work = next; break; }
             }
         }
-        catch (TimeoutException) { outcome = new(ObservationKind.Failed, runtimeSession, Failure: FailureKind.TimedOut); }
-        catch { outcome = new(ObservationKind.Failed, runtimeOutcome?.Session ?? runtimeSession, Failure: FailureKind.ExecutionFailed); }
-        await ExecutionFiles.WriteAsync(resultFile, outcome);
-        Emit(outcome);
-        return 0;
     }
-
-    private static Task<int> GitAsync(string directory, Dictionary<string, string> environment, params string[] args) =>
-        GitAsync(directory, environment, args, false);
-    private static async Task<int> GitAsync(string directory, Dictionary<string, string> environment, string[] args, bool allowDifference)
+    private static async Task<string> GitAsync(string directory, Dictionary<string, string> environment, params string[] arguments)
     {
-        var info = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = directory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        info.Environment.Clear();
-        foreach ((string? key, string? value) in environment) info.Environment[key] = value;
-        foreach (string arg in args) info.ArgumentList.Add(arg);
+        var info = new ProcessStartInfo("git") { WorkingDirectory = directory, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        info.Environment.Clear(); foreach (KeyValuePair<string, string> entry in environment) info.Environment[entry.Key] = entry.Value;
+        info.ArgumentList.Add("-c"); info.ArgumentList.Add("core.hooksPath=/dev/null");
+        foreach (string argument in arguments) info.ArgumentList.Add(argument);
         using Process process = Process.Start(info)!;
-        Task stdout = DrainAsync(process.StandardOutput), stderr = DrainAsync(process.StandardError);
-        await process.WaitForExitAsync();
-        await Task.WhenAll(stdout, stderr);
-        if (process.ExitCode != 0 && !(allowDifference && process.ExitCode == 1)) throw new IOException("Repository operation failed.");
-        return process.ExitCode;
-    }
-    private static async Task DrainAsync(StreamReader reader)
-    {
-        char[] buffer = new char[4096];
-        while (await reader.ReadAsync(buffer) > 0) { }
+        Task<string> output = process.StandardOutput.ReadToEndAsync(); Task<string> error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync(); await error;
+        if (process.ExitCode != 0) throw new IOException("Repository operation failed.");
+        return await output;
     }
     private static void Emit(ExecutionObservation observation) => Console.WriteLine("GOBLIN_RESULT " + JsonSerializer.Serialize(observation, ExecutionFiles.Json));
 }

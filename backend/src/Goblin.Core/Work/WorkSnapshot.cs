@@ -14,7 +14,15 @@ public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
     long? OwnerId, string? EnvironmentReference, ExecutionSession? Session,
     DateTimeOffset? ClaimedAt, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt,
     DateTimeOffset? CancellationRequestedAt, FailureKind? Failure,
-    bool CleanupPending = false, bool CleanupFailed = false);
+    bool CleanupPending = false, bool CleanupFailed = false)
+{
+    public bool ReasoningOnly { get; init; }
+    public int TurnNumber { get; init; } = 1;
+    public int WorkspaceNumber { get; init; } = 1;
+    public bool ReleaseWorkspace { get; init; } = true;
+    public string? CheckpointId { get; init; }
+    public ExecutionTurnRecord[] PriorTurns { get; init; } = [];
+}
 
 public sealed partial class WorkItem
 {
@@ -26,7 +34,15 @@ public sealed partial class WorkItem
             ExecutionAttempt a = _attempts[i];
             attempts[i] = new(a.Id, a.WorkId, a.AgentId, a.Target, a.QueuedAt,
                 a.Status, a.OwnerId, a.EnvironmentReference, a.Session, a.ClaimedAt,
-                a.StartedAt, a.FinishedAt, a.CancellationRequestedAt, a.Failure, a.CleanupPending, a.CleanupFailed);
+                a.StartedAt, a.FinishedAt, a.CancellationRequestedAt, a.Failure, a.CleanupPending, a.CleanupFailed)
+            {
+                ReasoningOnly = a.ReasoningOnly,
+                TurnNumber = a.TurnNumber,
+                WorkspaceNumber = a.WorkspaceNumber,
+                ReleaseWorkspace = a.ReleaseWorkspace,
+                CheckpointId = a.CheckpointId,
+                PriorTurns = a.PriorTurns
+            };
         }
         return new(2, Id, Objective, AgentId, Status, Attention, attempts,
             [.. _history], [.. _decisions], [.. _results],
@@ -67,7 +83,13 @@ public sealed partial class WorkItem
                 CancellationRequestedAt = a.CancellationRequestedAt,
                 Failure = a.Failure,
                 CleanupPending = a.CleanupPending,
-                CleanupFailed = a.CleanupFailed
+                CleanupFailed = a.CleanupFailed,
+                ReasoningOnly = a.ReasoningOnly,
+                TurnNumber = a.TurnNumber,
+                WorkspaceNumber = a.WorkspaceNumber,
+                ReleaseWorkspace = a.ReleaseWorkspace,
+                CheckpointId = a.CheckpointId,
+                PriorTurns = a.PriorTurns
             });
         }
         work._decisions.AddRange(state.Decisions);

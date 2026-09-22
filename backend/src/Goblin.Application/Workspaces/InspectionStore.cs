@@ -1,0 +1,134 @@
+using System;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Goblin.Application.Work;
+using Goblin.Contracts.Runtime;
+using Goblin.Core.Work;
+using Goblin.Persistence;
+using Goblin.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Wolverine.EntityFrameworkCore;
+
+namespace Goblin.Application.Workspaces;
+
+public sealed record StartInspection(Guid Id);
+public sealed record StopInspection(Guid Id);
+public sealed record InspectionView(Guid Id, long WorkId, long AttemptId, Guid? CheckpointId, string State);
+public sealed class InspectionStore
+{
+    private readonly IDbContextFactory<GoblinDbContext> _factory;
+    private readonly WorkOutboxFactory _outboxes;
+    private readonly WorkspaceLimits _limits;
+    public InspectionStore(IDbContextFactory<GoblinDbContext> factory, WorkOutboxFactory outboxes, WorkspaceLimits limits)
+    { _factory = factory; _outboxes = outboxes; _limits = limits; }
+    public async Task<InspectionView[]> ListAsync(long workId, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        return await db.WorkspaceSessions.AsNoTracking().Where(x => x.WorkId == workId).OrderByDescending(x => x.CreatedAt)
+            .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, x.CheckpointId, x.State)).ToArrayAsync(token);
+    }
+    public async Task<InspectionView> OpenAsync(long workId, Guid id, long attemptId, Guid? checkpointId, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        WorkspaceSession? row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id, token);
+        if (row is not null)
+        {
+            if (row.WorkId != workId || row.AttemptId != attemptId || row.CheckpointId != checkpointId) throw new ApplicationFailure("command_id_reused");
+            return View(row);
+        }
+        if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == workId && (x.State == "Queued" || x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention"), token))
+            throw new ApplicationFailure("workspace_session_exists");
+        Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
+        WorkSnapshot work = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(workRow.State!, WorkStore.Json)!;
+        AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.Repository is not null) ?? throw new ApplicationFailure("workspace_not_found");
+        if (checkpointId is null) WorkspaceSessionRules.RequireOpenable(attempt.Status);
+        if (checkpointId is not null && !await db.WorkspaceCheckpoints.AnyAsync(x => x.Id == checkpointId && x.WorkId == workId && x.AttemptId == attemptId, token))
+            throw new ApplicationFailure("workspace_not_found");
+        int index = Array.FindIndex(work.Attempts, x => x.Id == attemptId) + 1;
+        row = new()
+        {
+            Id = id,
+            WorkId = workId,
+            AttemptId = attemptId,
+            CheckpointId = checkpointId,
+            SourceVolume = "run-" + workId + "-" + index + (attempt.WorkspaceNumber == 1 ? "" : "-s" + attempt.WorkspaceNumber),
+            State = "Queued",
+            CapabilityHash = "",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.WorkspaceSessions.Add(row);
+        IDbContextOutbox outbox = _outboxes.Create(db);
+        await outbox.PublishAsync(new StartInspection(id));
+        await outbox.SaveChangesAndFlushMessagesAsync(token);
+        return View(row);
+    }
+    public async Task StopAsync(long workId, Guid id, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        WorkspaceSession row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id && x.WorkId == workId, token) ?? throw new ApplicationFailure("workspace_not_found");
+        if (row.State == "Stopped") return;
+        row.State = "Stopping"; row.CapabilityHash = ""; row.UpdatedAt = DateTime.UtcNow;
+        IDbContextOutbox outbox = _outboxes.Create(db);
+        await outbox.PublishAsync(new StopInspection(id));
+        await outbox.SaveChangesAndFlushMessagesAsync(token);
+    }
+    public async Task<InspectionAllocation?> ClaimAsync(Guid id, string capability, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
+        if (row.State != "Queued") return null;
+        int occupied = await db.ExecutionAttempts.CountAsync(x => x.GithubConnectionId != null &&
+            (x.Status == "Starting" || x.Status == "Running" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
+        occupied += await db.WorkspaceSessions.CountAsync(x => x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention", token);
+        if (occupied >= _limits.MaxSandboxes) return null;
+        row.State = "Starting"; row.CapabilityHash = Hash(capability); row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(token); await tx.CommitAsync(token);
+        return Allocation(row);
+    }
+    public async Task<InspectionAllocation> GetAsync(Guid id, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        return Allocation(await db.WorkspaceSessions.AsNoTracking().SingleAsync(x => x.Id == id, token));
+    }
+    public async Task<InspectionView> RequireAvailableAsync(long workId, Guid id, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        WorkspaceSession row = await db.WorkspaceSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.WorkId == workId && x.State == "Available", token)
+            ?? throw new ApplicationFailure("workspace_unavailable");
+        return View(row);
+    }
+    public async Task<InspectionAllocation> AuthorizeRestoreAsync(Guid id, string capability, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        WorkspaceSession? row = await db.WorkspaceSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Starting", token);
+        if (row is null || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(row.CapabilityHash), Encoding.UTF8.GetBytes(Hash(capability))))
+            throw new ApplicationFailure("workspace_unavailable");
+        return Allocation(row);
+    }
+    public async Task ObserveAsync(Guid id, string observed, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
+        row.State = WorkspaceSessionRules.Observe(row.State, observed); row.UpdatedAt = DateTime.UtcNow;
+        if (row.State is "Stopped" or "NeedsAttention") row.CapabilityHash = "";
+        await db.SaveChangesAsync(token); await tx.CommitAsync(token);
+    }
+    public async Task<InspectionView[]> PendingAsync(CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        return await db.WorkspaceSessions.AsNoTracking().Where(x => x.State == "Queued" || x.State == "Starting" || x.State == "Available" || x.State == "Stopping")
+            .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, x.CheckpointId, x.State)).ToArrayAsync(token);
+    }
+    private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    private static InspectionView View(Persistence.Entities.WorkspaceSession x) => new(x.Id, x.WorkId, x.AttemptId, x.CheckpointId, x.State);
+    private static InspectionAllocation Allocation(Persistence.Entities.WorkspaceSession x) => new(x.Id, x.WorkId, x.AttemptId, x.CheckpointId, x.SourceVolume);
+}

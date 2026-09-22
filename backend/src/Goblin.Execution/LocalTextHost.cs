@@ -26,11 +26,11 @@ public sealed class LocalTextHost : IExecutionHost
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
     public string EnvironmentFor(long workId, long attemptId) => "text/" + attemptId.ToString(CultureInfo.InvariantCulture);
-    private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture));
+    private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture) + (work.Attempts[^1].TurnNumber == 1 ? "" : "-turn-" + work.Attempts[^1].TurnNumber));
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is not null) throw new InvalidOperationException("Repository execution requires an agent sandbox.");
+        if (work.Attempts[^1].Target.Repository is not null && !work.Attempts[^1].ReasoningOnly) throw new InvalidOperationException("Repository execution requires an agent sandbox.");
         string directory = DirectoryFor(work);
         Directory.CreateDirectory(directory);
         using FileStream gate = await GateAsync(directory, token);
@@ -61,7 +61,10 @@ public sealed class LocalTextHost : IExecutionHost
         _ = DrainAsync(process.StandardError);
     }
 
-    public async Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token)
+    public async Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) =>
+        (await ObserveCoreAsync(work, stop, token)) with { TurnNumber = work.Attempts[^1].TurnNumber };
+
+    private async Task<ExecutionObservation> ObserveCoreAsync(WorkSnapshot work, bool stop, CancellationToken token)
     {
         string directory = DirectoryFor(work);
         Directory.CreateDirectory(directory);

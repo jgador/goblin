@@ -5,6 +5,10 @@ executions. Work is durable whether or not it needs a sandbox. Codex 0.155.1 is
 the implemented runtime; the Work core and orchestration do not reference its
 protocol. Agent, Work, attempt, connection, and native session IDs stay distinct.
 
+The [workspace lifecycle](workspace-lifecycle.md) supersedes the original
+one-interaction-per-attempt behavior: questions can pause an attempt, runtime turns
+have distinct ownership, and an AI release decision is gated by verified archives.
+
 ## Choosing an environment
 
 A text question uses an independent worker process with tools and web search
@@ -16,9 +20,11 @@ Repository execution selects a repository enabled under **Settings → GitHub**.
 The agent's Git author name/email remain separate from the connected GitHub account.
 Each attempt records the GitHub account identity and connection generation,
 repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>` branch.
-It gets a fresh Agent Sandbox and private PVC named
+Its first allocation gets an Agent Sandbox and private PVC named
 `run-<work-id>-<attempt-number>` in `agents`. The suffix starts at 1 for each Work
 and advances with each new execution; the global attempt ID remains unchanged.
+Released workspaces restore into a new allocation with an `-s<number>` suffix.
+Retained allocations serve subsequent turns through a claimed-input channel.
 The pod uses the Sandbox's name. Environment references record the namespace,
 Work ID, and global attempt ID (`k8s/agents/run-<work-id>/<attempt-id>`), with the
 pod suffix derived from the durable attempt history. See

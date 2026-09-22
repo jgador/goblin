@@ -5,6 +5,9 @@ application. `Goblin.Application` persists its versioned snapshots, commands,
 conversations, and attempt projections in PostgreSQL and dispatches through
 Wolverine. Runtime adapters and the UI consume Goblin-owned contracts.
 
+The [workspace lifecycle](workspace-lifecycle.md) describes multi-turn attempts,
+verified checkpoints, restoration, and read-only inspection.
+
 The [Work-centered workspace](work-centered-ui.md) documents the UI hierarchy,
 its projections of these contracts, and deferred backend/schema capabilities.
 
@@ -40,7 +43,7 @@ attention. Successful runtime execution also does not complete Work by itself.
 
 | Attention reason | What must happen next |
 | --- | --- |
-| `InputRequired` | Answer the recorded decision; the Work becomes ready to continue. |
+| `InputRequired` | Answer the recorded decision; a paused attempt queues its next runtime turn. Older completed interactions become Ready. |
 | `ResultReview` | Approve the specific result or request changes. Approval completes Work. |
 | `Failure` | Explicitly request a retry, or cancel Work. A retry records a new attempt. |
 | `UncertainExecution` | Reconcile the existing execution before allowing a retry, or request cancellation and await confirmation. |
@@ -50,10 +53,12 @@ The attention reason belongs to the aggregate. The browser should present it and
 its permitted actions. It must not infer successful actions from local clicks or
 collapse uncertain execution into an ordinary retryable failure.
 
-Answering input and requesting changes record user intent and return Work to
-`Ready`. The user can then issue Start work to queue the next attempt. These core transitions do not launch processes. Input requests in
-this increment represent completed runtime interactions that returned a question;
-live tool approvals need a separately validated runtime capability.
+Answering a paused input request records intent and atomically queues the next
+runtime turn of the same attempt. An AI keep/release decision controls workspace
+continuity through verified checkpoints. Answering older completed interactions
+and requesting changes after a result return Work to Ready for an explicit new
+execution. Core transitions never launch processes. Live tool approvals remain a
+separate runtime capability.
 
 ## Execution ownership and recovery
 

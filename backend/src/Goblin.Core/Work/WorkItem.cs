@@ -212,6 +212,7 @@ public sealed partial class WorkItem
         _decisions[^1] = _decisions[^1] with { Answer = input, AnsweredAt = now };
         Status = WorkStatus.Ready;
         Attention = null;
+        if (CurrentAttempt?.Status == AttemptStatus.Waiting) ContinueExecution(now);
         Record(WorkEventKind.InputProvided, now, CurrentAttempt!.Id, decisionId: decisionId, text: input);
     }
 
@@ -241,7 +242,7 @@ public sealed partial class WorkItem
         Require(Status != WorkStatus.Completed, WorkRule.InvalidTransition);
         ExecutionAttempt? attempt = CurrentAttempt;
         Record(WorkEventKind.CancellationRequested, now, attempt?.Id);
-        if (attempt is not null && attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.Uncertain)
+        if (attempt is not null && attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.Uncertain or AttemptStatus.Waiting)
         {
             attempt.Status = AttemptStatus.CancellationRequested;
             attempt.CancellationRequestedAt ??= now;
@@ -302,7 +303,7 @@ public sealed partial class WorkItem
     private ExecutionAttempt OwnedActiveAttempt(long attemptId, long ownerId)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
-        Require(attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested,
+        Require(attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested or AttemptStatus.Waiting,
             WorkRule.InvalidTransition);
         return attempt;
     }

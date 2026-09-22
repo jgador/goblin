@@ -59,9 +59,6 @@ test.describe("durable Work", () => {
         ).toBeVisible({ timeout: 15000 });
         await page.getByRole("textbox").fill("Prioritize a small release.");
         await page.getByRole("button", { name: "Send message" }).click();
-        await page
-            .getByRole("button", { name: "Start work", exact: true })
-            .click();
         await expect(
             page.getByRole("button", { name: "Approve & complete" }),
         ).toBeVisible({ timeout: 15000 });

@@ -3,7 +3,7 @@ using System;
 namespace Goblin.Core.Work;
 
 public enum WorkStatus { Ready, Queued, InProgress, Cancelling, NeedsAttention, Completed, Cancelled }
-public enum AttemptStatus { Queued, Starting, Running, CancellationRequested, Succeeded, Failed, Uncertain, Cancelled }
+public enum AttemptStatus { Queued, Starting, Running, CancellationRequested, Succeeded, Failed, Uncertain, Cancelled, Waiting }
 public enum AttentionReason { InputRequired, ResultReview, Failure, UncertainExecution, CleanupRequired }
 
 // Integrations translate upstream errors into these categories. Raw exceptions,
@@ -20,7 +20,7 @@ public enum WorkEventKind
     ExecutionFailed, ExecutionUncertain, ExecutionStopped, RetryRequested,
     InputRequested, InputProvided, ResultProposed, ChangesRequested, ResultApproved,
     CancellationRequested, Cancelled, ContextAdded, ProgressReported, ArtifactRecorded,
-    CleanupRequired, CleanupFailed, CleanupCompleted
+    CleanupRequired, CleanupFailed, CleanupCompleted, ExecutionContinued, WorkspaceSaved, WorkspaceReleased
 }
 
 public enum WorkRule
@@ -143,4 +143,15 @@ public sealed class ExecutionAttempt
     public FailureKind? Failure { get; internal set; }
     public bool CleanupPending { get; internal set; }
     public bool CleanupFailed { get; internal set; }
+    public bool ReasoningOnly { get; internal set; }
+    public int TurnNumber { get; internal set; } = 1;
+    public int WorkspaceNumber { get; internal set; } = 1;
+    public bool ReleaseWorkspace { get; internal set; } = true;
+    public string? CheckpointId { get; internal set; }
+    public ExecutionTurnRecord[] PriorTurns { get; internal set; } = [];
 }
+
+// Runtime turns and physical allocations do not replace the logical attempt.
+public sealed record ExecutionTurnRecord(int Number, int WorkspaceNumber, long? OwnerId,
+    string? EnvironmentReference, ExecutionSession? Session, DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt, string? CheckpointId);

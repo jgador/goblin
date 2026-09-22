@@ -17,6 +17,18 @@ export type Attempt = {
     failure?: string;
     environmentReference?: string;
     cleanupPending?: boolean;
+    turnNumber?: number;
+    workspaceNumber?: number;
+    checkpointId?: string;
+    releaseWorkspace?: boolean;
+    priorTurns?: {
+        number: number;
+        workspaceNumber: number;
+        startedAt?: string;
+        finishedAt?: string;
+        session?: { model?: string };
+        checkpointId?: string;
+    }[];
 };
 export type Work = {
     id: string;
