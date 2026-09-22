@@ -141,7 +141,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     expect(commands).toEqual([]);
 });
 
-test("search, attention filters, and optional details share one main work area", async ({
+test("search, attention filters, and persistent details share one main work area", async ({
     page,
 }) => {
     const commands = await workspace(page);
@@ -173,20 +173,43 @@ test("search, attention filters, and optional details share one main work area",
     await expect(
         page.getByRole("button", { name: "Approve & complete" }),
     ).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Activity" })).toHaveCount(0);
+    await expect(
+        page.getByRole("button", { name: "Details", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
+    await expect(page.locator(".detail-properties span")).toHaveText([
+        "Goblin",
+        "Work 1",
+        "codex · fixture-model",
+    ]);
+    await expect(
+        page.getByText("owner/project · goblin/1/1", { exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("tab", { name: "Conversation" })).toBeVisible();
+    await expect(
+        page.getByRole("tabpanel", { name: "Conversation" }),
+    ).toBeVisible();
     await page.screenshot({ path: "test-results/workspace-work.png" });
     await page
         .getByPlaceholder("Add context to this work…")
         .fill("Keep the review draft");
-    await page.getByRole("button", { name: "Details", exact: true }).click();
-    await expect(
-        page.getByText("owner/project · goblin/1/1", { exact: true }),
-    ).toBeVisible();
     await page.getByRole("tab", { name: "Activity" }).click();
     await expect(
         page.getByRole("heading", { name: "Executions", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Details", exact: true }).click();
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Activity" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+    );
+    await expect(
+        page.getByRole("tabpanel", { name: "Activity" }),
+    ).toBeVisible();
+    await page.getByRole("tab", { name: "Activity" }).press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Outputs" })).toBeFocused();
+    await expect(page.getByRole("tabpanel", { name: "Outputs" })).toBeVisible();
+    await page.getByRole("tab", { name: "Conversation" }).click();
     await expect(
         page.getByPlaceholder("Add context to this work…"),
     ).toHaveValue("Keep the review draft");
@@ -195,6 +218,7 @@ test("search, attention filters, and optional details share one main work area",
         .getByPlaceholder("Describe the intended outcome…")
         .fill("A second idea");
     await page.getByRole("button", { name: /Polish the welcome page/ }).click();
+    await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
     await expect(
         page.getByPlaceholder("Add context to this work…"),
     ).toHaveValue("Keep the review draft");
@@ -232,6 +256,14 @@ test("mobile navigation restores focus and leaves the selected work at full widt
     await page.getByRole("button", { name: /Polish the welcome page/ }).click();
     await expect(nav).not.toBeVisible();
     await expect(page.locator(".detail h2")).toBeFocused();
+    await expect(
+        page.getByRole("button", { name: "Details", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Outputs" })).toBeVisible();
+    await expect(
+        page.getByText("owner/project · goblin/1/1", { exact: true }),
+    ).toBeVisible();
     await expect(
         page.getByRole("button", { name: "Approve & complete" }),
     ).toBeVisible();

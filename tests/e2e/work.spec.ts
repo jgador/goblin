@@ -79,9 +79,6 @@ test.describe("durable Work", () => {
         );
         await page.reload();
         await page.getByRole("button", { name: new RegExp(objective) }).click();
-        await page
-            .getByRole("button", { name: "Details", exact: true })
-            .click();
         await page.getByRole("tab", { name: "Outputs" }).click();
         await expect(
             page.getByRole("heading", { name: "Approved result" }),
