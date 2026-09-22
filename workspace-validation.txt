@@ -1,2 +1,3 @@
 first-checkpoint
 second-checkpoint
+final-checkpoint
