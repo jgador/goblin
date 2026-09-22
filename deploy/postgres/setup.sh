@@ -81,15 +81,15 @@ fi
 
 # Patch just the database configuration of an existing Goblin deployment, without
 # replacing its image, owner password, origin, storage, or other custom settings.
-sandbox=$("${goblin_kubectl[@]}" get sandbox goblin-auth -n goblin --ignore-not-found -o name)
+sandbox=$("${goblin_kubectl[@]}" get sandbox app -n goblin --ignore-not-found -o name)
 if [[ -n "$sandbox" && "${GOBLIN_POSTGRES_CONFIGURE_APP:-true}" == true ]]; then
   patch=$(mktemp)
   trap 'rm -f "$patch"' EXIT
-  "${goblin_kubectl[@]}" get sandbox goblin-auth -n goblin -o json | python3 deploy/postgres/configure-app.py > "$patch"
+  "${goblin_kubectl[@]}" get sandbox app -n goblin -o json | python3 deploy/postgres/configure-app.py > "$patch"
   if [[ -s "$patch" ]]; then
-    "${goblin_kubectl[@]}" patch sandbox goblin-auth -n goblin --type=merge --patch-file "$patch"
+    "${goblin_kubectl[@]}" patch sandbox app -n goblin --type=merge --patch-file "$patch"
     "${goblin_kubectl[@]}" delete pod -n goblin -l app=goblin-auth --ignore-not-found=true --wait=true
-    "${goblin_kubectl[@]}" wait --for=condition=Ready sandbox/goblin-auth -n goblin --timeout=300s
+    "${goblin_kubectl[@]}" wait --for=condition=Ready sandbox/app -n goblin --timeout=300s
   fi
 fi
 if [[ -n "$local_port" ]]; then

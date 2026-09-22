@@ -11,6 +11,9 @@ filters, and saved Conversations. Settings stays at the bottom. On mobile, the
 sidebar opens over the main area and closes after selecting Work. Desktop collapse
 preference is saved locally. Unsent drafts survive navigation within the page and
 opening Settings; ordinary drafts are not saved across a browser refresh.
+The workspace's Refresh button and background polling update homepage data in
+place, keeping the composer, focus, and scroll position. Connection prompts stay
+visible during a status check and change only when the result changes.
 
 The homepage is independent of any AI provider. **Settings → AI connections →
 Manage connection** on the Codex card opens

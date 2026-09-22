@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
@@ -23,6 +24,8 @@ public sealed class SandboxHost : IExecutionHost
 
     public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories)
     {
+        if (!ValidNamespace(options.Namespace))
+            throw new ArgumentException("Invalid execution namespace.", nameof(options));
         _api = api;
         _options = options;
         _textHost = textHost;
@@ -30,18 +33,43 @@ public sealed class SandboxHost : IExecutionHost
     }
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
-    public string EnvironmentFor(long workId, long attemptId) => "goblin/" + attemptId.ToString(CultureInfo.InvariantCulture);
-    private string Core => "/api/v1/namespaces/" + _options.Namespace;
-    private string Sandboxes => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + _options.Namespace + "/sandboxes";
-    private static string Name(WorkSnapshot work) => "work-" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture);
+    // Claims retain the global IDs; the visible suffix comes from the Work's
+    // durable execution history, not from the global attempt sequence.
+    public string EnvironmentFor(long workId, long attemptId) => "k8s/" + _options.Namespace + "/run-" +
+        workId.ToString(CultureInfo.InvariantCulture) + "/" + attemptId.ToString(CultureInfo.InvariantCulture);
+
+    private static bool ValidNamespace(string value) => Regex.IsMatch(value, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
+
+    private static string RunName(WorkSnapshot work) => "run-" + work.Id.ToString(CultureInfo.InvariantCulture) + "-" +
+        work.Attempts.Length.ToString(CultureInfo.InvariantCulture);
+
+    private SandboxAddress Address(WorkSnapshot work)
+    {
+        AttemptSnapshot attempt = work.Attempts[^1];
+        string id = attempt.Id.ToString(CultureInfo.InvariantCulture);
+        // Use the claimed namespace even if configuration changes after dispatch.
+        if (attempt.EnvironmentReference is null) return new(_options.Namespace, RunName(work));
+        string[] parts = attempt.EnvironmentReference.Split('/');
+        if (parts.Length == 4 && parts[0] == "k8s" && ValidNamespace(parts[1]) &&
+            parts[2] == "run-" + work.Id.ToString(CultureInfo.InvariantCulture) && parts[3] == id)
+            return new(parts[1], RunName(work));
+        throw new IOException("Unrecognized execution environment reference.");
+    }
+
+    private sealed record SandboxAddress(string Namespace, string Name)
+    {
+        public string Core => "/api/v1/namespaces/" + Namespace;
+        public string Sandboxes => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + Namespace + "/sandboxes";
+    }
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
         if (work.Attempts[^1].Target.Repository is null) { await _textHost.StartAsync(work, token); return; }
-        string name = Name(work);
+        SandboxAddress address = Address(work);
+        string name = address.Name;
         // Reserve the identity before provisioning inputs. A delayed or duplicate
         // starter that meets a cancellation fence cannot recreate credentials.
-        if (!await _api.CreateAsync(Sandboxes, Manifest(work, suspended: false), token)) return;
+        if (!await _api.CreateAsync(address.Sandboxes, Manifest(work, suspended: false), token)) return;
         // Credentials are scoped to this execution's mounts, outside Work JSON.
         string codex = await File.ReadAllTextAsync(Path.Combine(_options.CodexHome, "auth.json"), token);
         string capability = await _repositories.PrepareAsync(work, token);
@@ -53,14 +81,14 @@ public sealed class SandboxHost : IExecutionHost
             ["repository-capability"] = capability,
             ["repository-url"] = _options.RepositoryUrl
         };
-        await _api.CreateAsync(Core + "/secrets", secret, token);
+        await _api.CreateAsync(address.Core + "/secrets", secret, token);
         JsonObject input = Resource("v1", "ConfigMap", name, work);
         input["data"] = new JsonObject { ["input.json"] = JsonSerializer.Serialize(new WorkerInput(work, "/run/codex", "codex"), ExecutionFiles.Json) };
-        await _api.CreateAsync(Core + "/configmaps", input, token);
+        await _api.CreateAsync(address.Core + "/configmaps", input, token);
         JsonObject volume = Resource("v1", "PersistentVolumeClaim", name, work);
         volume["spec"] = JsonNode.Parse("""{"accessModes":["ReadWriteOnce"],"resources":{"requests":{"storage":"2Gi"}}}""");
-        await _api.CreateAsync(Core + "/persistentvolumeclaims", volume, token);
-        JsonObject? reserved = await _api.GetAsync(Sandboxes + "/" + name, token);
+        await _api.CreateAsync(address.Core + "/persistentvolumeclaims", volume, token);
+        JsonObject? reserved = await _api.GetAsync(address.Sandboxes + "/" + name, token);
         if (reserved?["spec"]?["operatingMode"]?.GetValue<string>() == "Suspended")
             await CleanupAsync(work, token);
     }
@@ -68,26 +96,27 @@ public sealed class SandboxHost : IExecutionHost
     public async Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token)
     {
         if (work.Attempts[^1].Target.Repository is null) return await _textHost.ObserveAsync(work, stop, token);
-        string name = Name(work);
+        SandboxAddress address = Address(work);
+        string name = address.Name;
         ExecutionObservation? repositoryObservation = await _repositories.ObserveAsync(work, token);
         if (repositoryObservation?.Kind == ObservationKind.Uncertain) stop = true;
-        JsonObject? sandbox = await _api.GetAsync(Sandboxes + "/" + name, token);
+        JsonObject? sandbox = await _api.GetAsync(address.Sandboxes + "/" + name, token);
         if (sandbox is null)
         {
             // Reserve the deterministic name in suspended mode. Any in-flight
             // create either wins first and is observed, or loses to this fence.
-            await _api.CreateAsync(Sandboxes, Manifest(work, suspended: true), token);
-            sandbox = await _api.GetAsync(Sandboxes + "/" + name, token);
+            await _api.CreateAsync(address.Sandboxes, Manifest(work, suspended: true), token);
+            sandbox = await _api.GetAsync(address.Sandboxes + "/" + name, token);
             stop = true;
         }
-        JsonObject? pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
+        JsonObject? pods = await _api.GetAsync(address.Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
         foreach (JsonNode? pod in pods?["items"]?.AsArray() ?? [])
         {
             string podName = pod!["metadata"]!["name"]!.GetValue<string>();
             string phase = pod["status"]?["phase"]?.GetValue<string>() ?? "Pending";
             if (phase is "Running" or "Succeeded" or "Failed")
             {
-                string? logs = await _api.LogsAsync(Core + "/pods/" + podName + "/log?container=execution&limitBytes=262144", token);
+                string? logs = await _api.LogsAsync(address.Core + "/pods/" + podName + "/log?container=execution&limitBytes=262144", token);
                 string? result = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_RESULT ", StringComparison.Ordinal));
                 if (result is not null && repositoryObservation is null)
                     return JsonSerializer.Deserialize<ExecutionObservation>(result[14..], ExecutionFiles.Json)!;
@@ -99,9 +128,9 @@ public sealed class SandboxHost : IExecutionHost
         }
         if (stop || sandbox?["spec"]?["operatingMode"]?.GetValue<string>() == "Suspended")
         {
-            await _api.PatchAsync(Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
+            await _api.PatchAsync(address.Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
             // Suspension is intent. Confirm only after every owned pod is gone.
-            pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
+            pods = await _api.GetAsync(address.Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
             if (pods?["items"]?.AsArray().Count == 0)
             {
                 try { await _repositories.StopAsync(work, token); }
@@ -116,16 +145,17 @@ public sealed class SandboxHost : IExecutionHost
     public async Task CleanupAsync(WorkSnapshot work, CancellationToken token)
     {
         if (work.Attempts[^1].Target.Repository is null) { await _textHost.CleanupAsync(work, token); return; }
-        string name = Name(work);
+        SandboxAddress address = Address(work);
+        string name = address.Name;
         await _repositories.StopAsync(work, token);
-        await _api.PatchAsync(Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
-        await _api.DeleteAsync(Core + "/secrets/" + name, token);
-        await _api.DeleteAsync(Core + "/configmaps/" + name, token);
+        await _api.PatchAsync(address.Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
+        await _api.DeleteAsync(address.Core + "/secrets/" + name, token);
+        await _api.DeleteAsync(address.Core + "/configmaps/" + name, token);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         while (true)
         {
-            JsonObject? pods = await _api.GetAsync(Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), timeout.Token);
+            JsonObject? pods = await _api.GetAsync(address.Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), timeout.Token);
             if (pods?["items"]?.AsArray().Count == 0) break;
             await Task.Delay(200, timeout.Token);
         }
@@ -136,8 +166,10 @@ public sealed class SandboxHost : IExecutionHost
 
     public JsonObject Manifest(WorkSnapshot work, bool suspended)
     {
-        string name = Name(work);
+        SandboxAddress address = Address(work);
+        string name = address.Name;
         JsonObject resource = Resource("agents.x-k8s.io/v1beta1", "Sandbox", name, work);
+        resource["metadata"]!["namespace"] = address.Namespace;
         JsonNode pod = JsonNode.Parse("""
             {"metadata":{"labels":{}},"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never",
              "activeDeadlineSeconds":3600,"terminationGracePeriodSeconds":15,

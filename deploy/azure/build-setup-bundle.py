@@ -39,6 +39,7 @@ names = [
     "goblin-setup.service",
     "goblin-installer.service",
     "installer.sh",
+    "sandbox-kustomization.yaml",
     "install-app.sh",
 ]
 sources = {

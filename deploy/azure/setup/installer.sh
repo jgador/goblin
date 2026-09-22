@@ -14,8 +14,9 @@ download() { curl --fail --silent --show-error --location --retry 5 --connect-ti
 
 K3S_VERSION='v1.36.4+k3s1'
 K3S_INSTALL_SHA256='46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad'
-SANDBOX_VERSION='v1.0.2'
-SANDBOX_MANIFEST_SHA256='5daf76bba85ba656a8877c9bcce1c9598bd124a61875b59b4256095fdbf1fcdb'
+# Core only: Goblin uses Sandbox directly, without the optional extensions.
+SANDBOX_VERSION='v1.0.3'
+SANDBOX_MANIFEST_SHA256='725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96'
 CERT_MANAGER_VERSION='v1.21.2'
 CERT_MANAGER_SHA256='e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f'
 traefik_config=/var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml
@@ -232,9 +233,12 @@ k3s kubectl create secret generic goblin-owner-password -n goblin \
 stage 'Installing Agent Sandbox'
 download "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/${SANDBOX_VERSION}/sandbox.yaml" "$bootstrap_dir/sandbox.yaml"
 printf '%s  %s\n' "$SANDBOX_MANIFEST_SHA256" "$bootstrap_dir/sandbox.yaml" | sha256sum --check
-k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f "$bootstrap_dir/sandbox.yaml"
+# Keep upstream image paths, CRD names and RBAC names intact. Kustomize moves
+# namespaced resources and service-account references, and shortens the Deployment.
+cp "$setup_dir/sandbox-kustomization.yaml" "$bootstrap_dir/kustomization.yaml"
+k3s kubectl apply --server-side --field-manager=goblin-bootstrap -k "$bootstrap_dir"
 k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
-k3s kubectl rollout status deployment/agent-sandbox-controller -n agent-sandbox-system --timeout=300s
+k3s kubectl rollout status deployment/sandbox -n sandbox --timeout=300s
 done_step
 
 # shellcheck source=deploy/azure/install-app.sh

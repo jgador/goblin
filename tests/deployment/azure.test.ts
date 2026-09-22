@@ -9,7 +9,9 @@ import {
     mkdir,
     mkdtemp,
     readFile,
+    readdir,
     rm,
+    stat,
     writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -36,6 +38,7 @@ async function bootstrap(
         sourceRef?: string;
         passwordHashFile?: string;
         dockerInstalled?: boolean;
+        dockerEnvironment?: NodeJS.ProcessEnv;
         bootstrapOnly?: boolean;
         resume?: boolean;
         recovery?: boolean;
@@ -47,6 +50,7 @@ async function bootstrap(
             | "headlamp-failed"
             | "ingress-failed"
             | "public-failed"
+            | "sandbox-failed"
             | "cert-failed"
             | "webhook-failed";
     } = {},
@@ -118,10 +122,20 @@ if (name === 'curl') {
     fs.writeFileSync(output, '#!/bin/sh\\nexit 0\\n');
   }
 } else if (name === 'sha256sum') {
-  if (args.includes('--check')) fs.readFileSync(0);
+  if (args.includes('--check')) fs.appendFileSync(path.join(root, 'checksum-checks.jsonl'), JSON.stringify(fs.readFileSync(0, 'utf8')) + '\\n');
   else process.stdout.write(require('node:crypto').createHash('sha256').update(fs.readFileSync(args[0])).digest('hex') + '  ' + args[0]);
 } else if (name === 'docker' || name === 'dockerd') {
   fs.appendFileSync(path.join(root, 'docker-requests.jsonl'), JSON.stringify([name, ...args]) + '\\n');
+  if (name === 'docker') {
+    const configDir = path.join(root, 'var/lib/goblin/install/private/work/docker-config');
+    if (process.env.DOCKER_CONFIG !== configDir || process.env.DOCKER_HOST !== 'unix:///var/run/docker.sock')
+      throw new Error('Installer must use its own Docker configuration and the native daemon');
+    for (const key of ['DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'BUILDX_CONFIG', 'BUILDX_BUILDER'])
+      if (key in process.env) throw new Error('Installer inherited ' + key);
+    const config = JSON.parse(fs.readFileSync(path.join(configDir, 'config.json'), 'utf8'));
+    if (JSON.stringify(config) !== JSON.stringify({ auths: { 'https://index.docker.io/v1/': {} } }))
+      throw new Error('Installer must pull anonymously without a credential helper');
+  }
   if (process.env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED === 'false' && !fs.existsSync(path.join(root, 'docker-installed')))
     process.exit(127);
   if (args[0] === 'info' && appState === 'docker-failed') process.exit(1);
@@ -162,6 +176,8 @@ if (name === 'curl') {
     process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : fs.readFileSync(path.join(root, 'ingress-mode'), 'utf8'));
   } else if (args[1] === 'rollout' && args.includes('deployment/cert-manager-webhook') && appState === 'cert-failed') {
     process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('deployment/sandbox') && appState === 'sandbox-failed') {
+    process.exit(1);
   } else if (args[1] === 'create' && args.includes('--dry-run=server') && appState === 'webhook-failed') {
     process.exit(1);
   } else if (args[1] === 'get' && args[2] === 'nodes') {
@@ -196,7 +212,7 @@ if (name === 'curl') {
       process.stderr.write('error: timed out waiting for the condition on nodes/goblin\\n');
       process.exit(1);
     }
-  } else if (args[1] === 'wait' && args.includes('sandbox/goblin-auth') && appState === 'not-ready') {
+  } else if (args[1] === 'wait' && args.includes('sandbox/app') && appState === 'not-ready') {
     process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/goblin-headlamp') && appState === 'headlamp-failed') {
     process.exit(1);
@@ -285,7 +301,8 @@ sys.stdout.buffer.write(output.getvalue())
         cwd: root,
         env: {
             ...process.env,
-            PATH: `${bin}:${process.env.PATH}`,
+            ...application.dockerEnvironment,
+            PATH: `${bin}:${application.dockerEnvironment?.PATH ?? process.env.PATH}`,
             GOBLIN_BOOTSTRAP_TEST_DIR: root,
             SERVICE_RESULT: application.recovery ? "signal" : "success",
             GOBLIN_PUBLIC_ORIGIN: application.publicOrigin ?? "",
@@ -370,6 +387,79 @@ test("installer waits for node registration after API readiness, including trans
     assert.match(output, /Checking Kubernetes node readiness/);
 });
 
+test("installer verifies the pinned Agent Sandbox core release and waits for its controller", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-sandbox-version-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await bootstrap(root, fakePassword);
+    const downloads: string[][] = (
+        await readFile(join(root, "curl-requests.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const sandboxDownloads = downloads
+        .flat()
+        .filter((arg) =>
+            arg.startsWith("https://github.com/kubernetes-sigs/agent-sandbox/"),
+        );
+    assert.deepEqual(sandboxDownloads, [
+        "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.3/sandbox.yaml",
+    ]);
+    const manifest = join(
+        root,
+        "var/lib/goblin/install/private/work/sandbox.yaml",
+    );
+    const checks: string[] = (
+        await readFile(join(root, "checksum-checks.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    assert.ok(
+        checks.includes(
+            `725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96  ${manifest}\n`,
+        ),
+    );
+    const calls: string[][] = (
+        await readFile(join(root, "k3s-requests.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const applied = calls.findIndex(
+        (args) =>
+            args[1] === "apply" &&
+            args.includes("-k") &&
+            args.includes(join(root, "var/lib/goblin/install/private/work")) &&
+            args.includes("--server-side") &&
+            args.includes("--field-manager=goblin-bootstrap"),
+    );
+    const established = calls.findIndex(
+        (args) =>
+            args[1] === "wait" &&
+            args.includes("crd/sandboxes.agents.x-k8s.io") &&
+            args.includes("--for=condition=Established"),
+    );
+    const ready = calls.findIndex(
+        (args) =>
+            args[1] === "rollout" &&
+            args[2] === "status" &&
+            args.includes("deployment/sandbox") &&
+            args.includes("sandbox"),
+    );
+    const application = calls.findIndex(
+        (args) =>
+            args[1] === "apply" &&
+            args.includes(join(root, "var/lib/goblin/deploy/azure/app")),
+    );
+    assert.ok(
+        applied >= 0 &&
+            established > applied &&
+            ready > established &&
+            application > ready,
+    );
+});
+
 test("installer installs the application and uses Azure's hostname for both routing and origin", async (t) => {
     for (const hostname of [
         "goblin-prod.southeastasia.cloudapp.azure.com",
@@ -442,14 +532,15 @@ test("installer installs the application and uses Azure's hostname for both rout
             (args) => args[0] === "ctr" && args.includes("import"),
         );
         const applied = calls.findIndex(
-            (args) => args[1] === "apply" && args.includes("-k"),
+            (args) =>
+                args[1] === "apply" &&
+                args.includes(join(root, "var/lib/goblin/deploy/azure/app")),
         );
         const restarted = calls.findIndex(
             (args) => args[1] === "delete" && args[2] === "pod",
         );
         const ready = calls.findIndex(
-            (args) =>
-                args[1] === "wait" && args.includes("sandbox/goblin-auth"),
+            (args) => args[1] === "wait" && args.includes("sandbox/app"),
         );
         assert.ok(
             imported >= 0 &&
@@ -489,6 +580,55 @@ test("installer installs the application and uses Azure's hostname for both rout
             "the public probe selects a single IPv4 node address",
         );
     }
+});
+
+test("installer isolates Docker configuration from Desktop credentials, contexts and builders across retries", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-docker-config-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const personal = join(root, "personal-docker");
+    await mkdir(personal);
+    const personalConfig = JSON.stringify({
+        credsStore: "desktop.exe",
+        currentContext: "desktop-linux",
+        auths: { "https://index.docker.io/v1/": { auth: "test-only" } },
+    });
+    await writeFile(join(personal, "config.json"), personalConfig);
+    const dockerEnvironment = {
+        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        DOCKER_CONFIG: personal,
+        DOCKER_HOST: "tcp://desktop.invalid:2376",
+        DOCKER_CONTEXT: "desktop-linux",
+        DOCKER_TLS: "1",
+        DOCKER_TLS_VERIFY: "1",
+        DOCKER_CERT_PATH: join(personal, "certs"),
+        BUILDX_CONFIG: join(personal, "buildx"),
+        BUILDX_BUILDER: "personal-builder",
+    };
+    await assert.rejects(
+        bootstrap(root, fakePassword, "ready", {
+            dockerEnvironment,
+            state: "build-failed",
+        }),
+    );
+    const configDir = join(
+        root,
+        "var/lib/goblin/install/private/work/docker-config",
+    );
+    assert.equal((await stat(configDir)).mode & 0o777, 0o700);
+    assert.equal(
+        (await stat(join(configDir, "config.json"))).mode & 0o777,
+        0o600,
+    );
+    await bootstrap(root, fakePassword, "ready", {
+        dockerEnvironment,
+        resume: true,
+    });
+    assert.equal(
+        await readFile(join(personal, "config.json"), "utf8"),
+        personalConfig,
+    );
+    assert.deepEqual(await readdir(personal), ["config.json"]);
+    await assert.rejects(access(configDir), { code: "ENOENT" });
 });
 
 test("installer installs Docker without dropping K3s forwarding or replacing existing daemon settings", async (t) => {
@@ -534,8 +674,9 @@ test("installer installs Docker without dropping K3s forwarding or replacing exi
     );
 });
 
-test("installer cannot report ready when Docker, the application build, pod, Headlamp, or ingress fails", async (t) => {
+test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, or ingress fails", async (t) => {
     for (const state of [
+        "sandbox-failed",
         "docker-failed",
         "build-failed",
         "not-ready",

@@ -3,6 +3,17 @@
 # The worker supplies configuration and the private working directory.
 # shellcheck disable=SC2154
 step image
+# This installer builds public images on the local Linux daemon. Do not inherit
+# an interactive user's registry logins, Desktop helpers, contexts or builders.
+export DOCKER_CONFIG="$bootstrap_dir/docker-config"
+install -d -m 0700 "$DOCKER_CONFIG"
+# An explicit anonymous Hub entry also prevents Docker from auto-detecting a
+# host credential store when loading an otherwise empty configuration.
+printf '{"auths":{"https://index.docker.io/v1/":{}}}\n' > "$DOCKER_CONFIG/config.json"
+chmod 0600 "$DOCKER_CONFIG/config.json"
+unset DOCKER_CONTEXT DOCKER_TLS DOCKER_TLS_VERIFY DOCKER_CERT_PATH BUILDX_CONFIG BUILDX_BUILDER
+export DOCKER_HOST=unix:///var/run/docker.sock
+
 stage 'Installing Docker'
 if ! docker --version >/dev/null 2>&1 || ! dockerd --version >/dev/null 2>&1; then
   # Configure this before package installation can start Docker. Preserve any
@@ -79,7 +90,7 @@ k3s kubectl delete pod -n goblin -l app=goblin-auth --ignore-not-found=true --wa
 done_step
 step verify
 stage 'Checking Goblin readiness'
-k3s kubectl wait --for=condition=Ready sandbox/goblin-auth -n goblin --timeout=300s
+k3s kubectl wait --for=condition=Ready sandbox/app -n goblin --timeout=300s
 k3s kubectl rollout status deployment/goblin-headlamp -n goblin --timeout=300s
 k3s kubectl rollout status deployment/traefik -n kube-system --timeout=300s
 check_app() {

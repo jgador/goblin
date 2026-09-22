@@ -8,7 +8,7 @@ patches:
       group: agents.x-k8s.io
       version: v1beta1
       kind: Sandbox
-      name: goblin-auth
+      name: app
     patch: |-
       - op: replace
         path: /spec/podTemplate/spec/containers/0/image
@@ -49,13 +49,13 @@ replacements:
       group: agents.x-k8s.io
       version: v1beta1
       kind: Sandbox
-      name: goblin-auth
+      name: app
       fieldPath: spec.podTemplate.spec.containers.[name=auth].image
     targets:
       - select:
           group: agents.x-k8s.io
           version: v1beta1
           kind: Sandbox
-          name: goblin-auth
+          name: app
         fieldPaths:
           - spec.podTemplate.spec.containers.[name=auth].env.[name=GOBLIN_EXECUTION_IMAGE].value

@@ -23,6 +23,12 @@ leaves installation running in the background. Keep WSL running; closing the
 browser or terminal does not stop the installer. Starting an existing installation
 preserves its data and password.
 
+Starting an existing installation does not upgrade Agent Sandbox. Follow the
+[v1.0.3 in-place upgrade instructions](../azure/reference.md#agent-sandbox-v103-upgrade)
+to update its controller without resetting the cluster or deleting Goblin data.
+For this unreleased naming change, recreate local test installations as described
+in [Kubernetes names](../../docs/kubernetes-names.md#local-test-installations).
+
 There is no nested VM, VM image download, Windows hosts-file edit, or manual
 port forwarding. Windows uses WSL's default localhost forwarding. The runner
 maintains a small TCP forwarder from loopback port 8788 to Linux port 80, so
@@ -44,6 +50,13 @@ Use Ubuntu on x86-64 with systemd, Python 3, curl, and Git. Allow several GiB of
 free memory and disk space for Kubernetes, image downloads, and the application
 build. The installer needs Linux ports 80 and 443 and the chosen browser port.
 Windows port 80 can remain occupied; the Windows browser uses 8788.
+
+Docker Desktop and its WSL integration are not required. The installer uses the
+native Linux Docker engine with its own private client configuration for anonymous
+public-image pulls. It does not use or modify your personal Docker configuration,
+registry logins, Desktop credential helper, contexts, or builders. Existing images
+and build caches on the native engine are retained. Docker Hub's anonymous pull
+limits still apply.
 
 If systemd is disabled, add this to `/etc/wsl.conf`, preserving other settings:
 
