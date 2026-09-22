@@ -13,7 +13,11 @@ using Goblin.Core.Work;
 
 namespace Goblin.Execution;
 
-public sealed record SandboxOptions(string Namespace, string Image, string CodexHome, string RepositoryUrl);
+public sealed record SandboxOptions(string Namespace, string Image, string CodexHome, string RepositoryUrl)
+{
+    public string CpuLimit { get; init; } = "2";
+    public string MemoryLimit { get; init; } = "2Gi";
+}
 
 public sealed class SandboxHost : IExecutionHost
 {
@@ -21,8 +25,10 @@ public sealed class SandboxHost : IExecutionHost
     private readonly SandboxOptions _options;
     private readonly IExecutionHost _textHost;
     private readonly IRepositoryBroker _repositories;
+    private readonly IWorkspaceArchive? _archives;
+    private readonly WorkspaceLimits _limits;
 
-    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories)
+    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories, IWorkspaceArchive? archives = null, WorkspaceLimits? limits = null)
     {
         if (!ValidNamespace(options.Namespace))
             throw new ArgumentException("Invalid execution namespace.", nameof(options));
@@ -30,6 +36,8 @@ public sealed class SandboxHost : IExecutionHost
         _options = options;
         _textHost = textHost;
         _repositories = repositories;
+        _archives = archives;
+        _limits = limits ?? new();
     }
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
@@ -41,7 +49,8 @@ public sealed class SandboxHost : IExecutionHost
     private static bool ValidNamespace(string value) => Regex.IsMatch(value, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
 
     private static string RunName(WorkSnapshot work) => "run-" + work.Id.ToString(CultureInfo.InvariantCulture) + "-" +
-        work.Attempts.Length.ToString(CultureInfo.InvariantCulture);
+        work.Attempts.Length.ToString(CultureInfo.InvariantCulture) +
+        (work.Attempts[^1].WorkspaceNumber == 1 ? "" : "-s" + work.Attempts[^1].WorkspaceNumber);
 
     private SandboxAddress Address(WorkSnapshot work)
     {
@@ -64,12 +73,21 @@ public sealed class SandboxHost : IExecutionHost
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is null) { await _textHost.StartAsync(work, token); return; }
+        if (work.Attempts[^1].Target.Repository is null || work.Attempts[^1].ReasoningOnly) { await _textHost.StartAsync(work, token); return; }
         SandboxAddress address = Address(work);
         string name = address.Name;
         // Reserve the identity before provisioning inputs. A delayed or duplicate
         // starter that meets a cancellation fence cannot recreate credentials.
-        if (!await _api.CreateAsync(address.Sandboxes, Manifest(work, suspended: false), token)) return;
+        if (!await _api.CreateAsync(address.Sandboxes, Manifest(work, suspended: false), token))
+        {
+            JsonObject? existing = await _api.GetAsync(address.Sandboxes + "/" + name, token);
+            JsonObject? existingPod = await _api.GetAsync(address.Core + "/pods/" + name, token);
+            if (work.Attempts[^1].TurnNumber > 1 && existing?["spec"]?["operatingMode"]?.GetValue<string>() == "Running" &&
+                existingPod?["status"]?["phase"]?.GetValue<string>() == "Running") return;
+            if (work.Attempts[^1].TurnNumber == 1) return;
+            throw new IOException("Execution allocation cannot be restarted.");
+        }
+        await ReclaimAsync(address, token);
         // Credentials are scoped to this execution's mounts, outside Work JSON.
         string codex = await File.ReadAllTextAsync(Path.Combine(_options.CodexHome, "auth.json"), token);
         string capability = await _repositories.PrepareAsync(work, token);
@@ -93,9 +111,12 @@ public sealed class SandboxHost : IExecutionHost
             await CleanupAsync(work, token);
     }
 
-    public async Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token)
+    public async Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) =>
+        (await ObserveCoreAsync(work, stop, token)) with { TurnNumber = work.Attempts[^1].TurnNumber };
+
+    private async Task<ExecutionObservation> ObserveCoreAsync(WorkSnapshot work, bool stop, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is null) return await _textHost.ObserveAsync(work, stop, token);
+        if (work.Attempts[^1].Target.Repository is null || work.Attempts[^1].ReasoningOnly) return await _textHost.ObserveAsync(work, stop, token);
         SandboxAddress address = Address(work);
         string name = address.Name;
         ExecutionObservation? repositoryObservation = await _repositories.ObserveAsync(work, token);
@@ -114,16 +135,34 @@ public sealed class SandboxHost : IExecutionHost
         {
             string podName = pod!["metadata"]!["name"]!.GetValue<string>();
             string phase = pod["status"]?["phase"]?.GetValue<string>() ?? "Pending";
+            if (podName != name) continue;
+            if (work.Attempts[^1].Status == AttemptStatus.Waiting && !stop)
+            {
+                if (phase == "Running") return new(ObservationKind.Pending);
+                if (phase is "Succeeded" or "Failed") return new(ObservationKind.Stopped);
+            }
             if (phase is "Running" or "Succeeded" or "Failed")
             {
                 string? logs = await _api.LogsAsync(address.Core + "/pods/" + podName + "/log?container=execution&limitBytes=262144", token);
                 string? result = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_RESULT ", StringComparison.Ordinal));
                 if (result is not null && repositoryObservation is null)
-                    return JsonSerializer.Deserialize<ExecutionObservation>(result[14..], ExecutionFiles.Json)!;
-                if (phase is "Succeeded" or "Failed" && repositoryObservation is null) return new(ObservationKind.Failed, Failure: FailureKind.ExecutionFailed);
+                {
+                    ExecutionObservation observation = JsonSerializer.Deserialize<ExecutionObservation>(result[14..], ExecutionFiles.Json)!;
+                    if (observation.TurnNumber == work.Attempts[^1].TurnNumber && !(stop && observation.Kind == ObservationKind.Paused))
+                    {
+                        if (observation.CheckpointId is not null && (_archives is null || !Guid.TryParse(observation.CheckpointId, out Guid checkpoint) ||
+                            !await _archives.VerifiedAsync(checkpoint, work.Attempts[^1].Id, observation.TurnNumber, token)))
+                            return new(ObservationKind.Uncertain, Failure: FailureKind.StorageUnavailable) { TurnNumber = work.Attempts[^1].TurnNumber };
+                        return observation;
+                    }
+                }
+                if (phase is "Succeeded" or "Failed" && repositoryObservation is null) return new(ObservationKind.Failed, Failure: FailureKind.ExecutionFailed) { TurnNumber = work.Attempts[^1].TurnNumber };
                 string? progress = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_PROGRESS ", StringComparison.Ordinal));
                 if (!stop && progress is not null)
-                    return JsonSerializer.Deserialize<ExecutionObservation>(progress[16..], ExecutionFiles.Json)!;
+                {
+                    ExecutionObservation update = JsonSerializer.Deserialize<ExecutionObservation>(progress[16..], ExecutionFiles.Json)!;
+                    if (update.TurnNumber == work.Attempts[^1].TurnNumber) return update;
+                }
             }
         }
         if (stop || sandbox?["spec"]?["operatingMode"]?.GetValue<string>() == "Suspended")
@@ -131,11 +170,11 @@ public sealed class SandboxHost : IExecutionHost
             await _api.PatchAsync(address.Sandboxes + "/" + name, new() { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
             // Suspension is intent. Confirm only after every owned pod is gone.
             pods = await _api.GetAsync(address.Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
-            if (pods?["items"]?.AsArray().Count == 0)
+            if (!(pods?["items"]?.AsArray().Any(p => p?["metadata"]?["name"]?.GetValue<string>() == name) ?? false))
             {
                 try { await _repositories.StopAsync(work, token); }
                 catch { return new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed); }
-                return new(ObservationKind.Stopped);
+                return new(ObservationKind.Stopped) { TurnNumber = work.Attempts[^1].TurnNumber };
             }
             return repositoryObservation ?? new(ObservationKind.Pending);
         }
@@ -144,7 +183,7 @@ public sealed class SandboxHost : IExecutionHost
 
     public async Task CleanupAsync(WorkSnapshot work, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is null) { await _textHost.CleanupAsync(work, token); return; }
+        if (work.Attempts[^1].Target.Repository is null || work.Attempts[^1].ReasoningOnly) { await _textHost.CleanupAsync(work, token); return; }
         SandboxAddress address = Address(work);
         string name = address.Name;
         await _repositories.StopAsync(work, token);
@@ -156,12 +195,35 @@ public sealed class SandboxHost : IExecutionHost
         while (true)
         {
             JsonObject? pods = await _api.GetAsync(address.Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), timeout.Token);
-            if (pods?["items"]?.AsArray().Count == 0) break;
+            if (!(pods?["items"]?.AsArray().Any(p => p?["metadata"]?["name"]?.GetValue<string>() == name) ?? false)) break;
             await Task.Delay(200, timeout.Token);
         }
         // Keep the suspended identity fence and workspace PVC for recovery.
         // No database certificate, web data volume, or service token was mounted.
         await _repositories.ReleaseAsync(work, token);
+    }
+
+    private async Task ReclaimAsync(SandboxAddress address, CancellationToken token)
+    {
+        if (_archives is null) return;
+        JsonObject? volumes = await _api.GetAsync(address.Core + "/persistentvolumeclaims?labelSelector=app%3Dgoblin-execution", token);
+        JsonNode?[] candidates = volumes?["items"]?.AsArray().ToArray() ?? [];
+        int retained = candidates.Length;
+        if (retained < _limits.MaxCachedVolumes) return;
+        JsonObject? pods = await _api.GetAsync(address.Core + "/pods", token);
+        foreach (JsonNode? volume in candidates)
+        {
+            if (retained < _limits.MaxCachedVolumes) break;
+            string name = volume!["metadata"]!["name"]!.GetValue<string>();
+            if (pods?["items"]?.AsArray().Any(p => p?["spec"]?["volumes"]?.AsArray().Any(v =>
+                v?["persistentVolumeClaim"]?["claimName"]?.GetValue<string>() == name) == true) == true) continue;
+            if (!long.TryParse(volume["metadata"]?["labels"]?["goblin-attempt"]?.GetValue<string>(), out long attemptId)) continue;
+            int number = int.TryParse(volume["metadata"]?["labels"]?["goblin-workspace"]?.GetValue<string>(), out int parsed) ? parsed : 1;
+            if (!await _archives.CanDiscardAsync(attemptId, number, token)) continue;
+            await _api.DeleteAsync(address.Core + "/persistentvolumeclaims/" + name, token);
+            retained--;
+        }
+        if (retained >= _limits.MaxCachedVolumes) throw new IOException("Workspace storage needs attention before another allocation.");
     }
 
     public JsonObject Manifest(WorkSnapshot work, bool suspended)
@@ -185,6 +247,8 @@ public sealed class SandboxHost : IExecutionHost
             """)!;
         pod["metadata"]!["labels"] = resource["metadata"]!["labels"]!.DeepClone();
         pod["spec"]!["containers"]![0]!["image"] = _options.Image;
+        pod["spec"]!["containers"]![0]!["resources"]!["limits"]!["cpu"] = _options.CpuLimit;
+        pod["spec"]!["containers"]![0]!["resources"]!["limits"]!["memory"] = _options.MemoryLimit;
         pod["spec"]!["volumes"]![0]!["persistentVolumeClaim"]!["claimName"] = name;
         pod["spec"]!["volumes"]![2]!["secret"]!["secretName"] = name;
         pod["spec"]!["volumes"]![3]!["configMap"]!["name"] = name;
@@ -203,7 +267,8 @@ public sealed class SandboxHost : IExecutionHost
             {
                 ["goblin-attempt"] = work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture),
                 ["goblin-work"] = work.Id.ToString(CultureInfo.InvariantCulture),
-                ["app"] = "goblin-execution"
+                ["app"] = "goblin-execution",
+                ["goblin-workspace"] = work.Attempts[^1].WorkspaceNumber.ToString(CultureInfo.InvariantCulture)
             }
         }
     };

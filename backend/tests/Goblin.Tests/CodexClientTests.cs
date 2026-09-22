@@ -144,7 +144,7 @@ public sealed class CodexClientTests
 
     [Theory]
     [InlineData("work-result", ObservationKind.Result)]
-    [InlineData("work-input", ObservationKind.InputRequired)]
+    [InlineData("work-input", ObservationKind.Paused)]
     public async Task WorkAdapterUsesPersistedContextAndKeepsEarlyResultProvenance(string scenario, ObservationKind expected)
     {
         await using Fixture fixture = await Fixture.CreateAsync(scenario);
@@ -164,6 +164,12 @@ public sealed class CodexClientTests
         Assert.Contains("Retained context", requests);
         Assert.Contains("\"ephemeral\":false", requests);
         Assert.Contains("\"outputSchema\"", requests);
+        using var turnRequest = JsonDocument.Parse(requests.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .First(line => line.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal)));
+        JsonElement schema = turnRequest.RootElement.GetProperty("params").GetProperty("outputSchema");
+        foreach (JsonElement required in schema.GetProperty("required").EnumerateArray())
+            Assert.True(schema.GetProperty("properties").TryGetProperty(required.GetString()!, out _));
+        Assert.Equal("boolean", schema.GetProperty("properties").GetProperty("releaseWorkspace").GetProperty("type").GetString());
         Assert.Contains("\"networkAccess\":false", requests);
     }
 

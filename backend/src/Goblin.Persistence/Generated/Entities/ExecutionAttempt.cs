@@ -50,6 +50,12 @@ public partial class ExecutionAttempt
     [Column("github_connection_id")]
     public long? GithubConnectionId { get; set; }
 
+    [Column("turn_number")]
+    public int TurnNumber { get; set; }
+
+    [Column("workspace_retained")]
+    public bool WorkspaceRetained { get; set; }
+
     [ForeignKey("AgentId")]
     [InverseProperty("ExecutionAttempts")]
     public virtual Agent Agent { get; set; } = null!;
@@ -68,4 +74,10 @@ public partial class ExecutionAttempt
     [ForeignKey("WorkId")]
     [InverseProperty("ExecutionAttempts")]
     public virtual WorkItem Work { get; set; } = null!;
+
+    [InverseProperty("Attempt")]
+    public virtual ICollection<WorkspaceCheckpoint> WorkspaceCheckpoints { get; set; } = [];
+
+    [InverseProperty("Attempt")]
+    public virtual ICollection<WorkspaceSession> WorkspaceSessions { get; set; } = [];
 }

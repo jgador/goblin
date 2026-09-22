@@ -47,4 +47,10 @@ public partial class WorkItem
 
     [InverseProperty("Work")]
     public virtual ICollection<WorkCommand> WorkCommands { get; set; } = [];
+
+    [InverseProperty("Work")]
+    public virtual ICollection<WorkspaceCheckpoint> WorkspaceCheckpoints { get; set; } = [];
+
+    [InverseProperty("Work")]
+    public virtual WorkspaceSession? WorkspaceSession { get; set; }
 }

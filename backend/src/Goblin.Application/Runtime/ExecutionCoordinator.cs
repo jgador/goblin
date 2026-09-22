@@ -43,13 +43,13 @@ public sealed class ExecutionCoordinator
         {
             // Shutdown is not permission to redeliver a claimed external start.
             if (claimed is not null)
-                await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable), CancellationToken.None);
+                await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
         catch
         {
             await _failures.RecordAsync(new(command.WorkId, command.AttemptId,
-                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable), CancellationToken.None);
+                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }
@@ -62,7 +62,7 @@ public sealed class ExecutionCoordinator
         {
             // Even a failed database read is evidence, not permission to run the
             // attempt again. Surface it after storage returns.
-            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.StorageUnavailable), CancellationToken.None);
+            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.StorageUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
     }
@@ -73,9 +73,9 @@ public sealed class ExecutionCoordinator
         using (IServiceScope scope = _scopes.CreateScope())
             work = (await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(command.WorkId, token)).Work;
         AttemptSnapshot? attempt = work.Attempts.LastOrDefault();
-        if (attempt is null || attempt.Id != command.AttemptId || attempt.OwnerId is null) return;
+        if (attempt is null || attempt.Id != command.AttemptId || attempt.OwnerId is null || (command.TurnNumber != 0 && command.TurnNumber != attempt.TurnNumber)) return;
         bool active = attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or
-            AttemptStatus.CancellationRequested or AttemptStatus.Uncertain;
+            AttemptStatus.CancellationRequested or AttemptStatus.Uncertain or AttemptStatus.Waiting;
         if (!active)
         {
             if (attempt.CleanupPending) await CleanupAsync(work, token);
@@ -91,16 +91,19 @@ public sealed class ExecutionCoordinator
         }
         using (IServiceScope scope = _scopes.CreateScope())
         {
-            long decisionId = observation.Kind == ObservationKind.InputRequired
+            long decisionId = observation.Kind is ObservationKind.InputRequired or ObservationKind.Paused
                 ? await scope.ServiceProvider.GetRequiredService<IdentityStore>().NextEventAsync(token) : 0;
             await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(work.Id, current =>
             {
                 ExecutionAttempt? a = current.CurrentAttempt;
-                if (a is null || a.Id != attempt.Id || a.OwnerId != attempt.OwnerId ||
+                if (a is null || a.Id != attempt.Id || a.OwnerId != attempt.OwnerId || observation.TurnNumber != a.TurnNumber ||
                     a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled) return;
+                if (a.Status == AttemptStatus.Waiting && observation.Kind is ObservationKind.Paused or ObservationKind.InputRequired or ObservationKind.Pending) return;
                 DateTimeOffset now = DateTimeOffset.UtcNow;
                 if (a.StartedAt is null && observation.Session is not null)
                     current.ExecutionStarted(a.Id, a.OwnerId!.Value, observation.Session, now);
+                if (observation.CheckpointId is not null)
+                    current.SaveWorkspace(a.Id, a.OwnerId!.Value, observation.CheckpointId, now);
                 switch (observation.Kind)
                 {
                     case ObservationKind.Running:
@@ -112,6 +115,13 @@ public sealed class ExecutionCoordinator
                         current.ProposeResult(a.Id, a.OwnerId!.Value, observation.Text!, now);
                         if (observation.ArtifactReference is not null)
                             current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
+                        break;
+                    case ObservationKind.WorkspaceRequired:
+                        current.RequireRepositoryExecution(a.Id, a.OwnerId!.Value, now);
+                        break;
+                    case ObservationKind.Paused:
+                        current.PauseForInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, observation.ReleaseWorkspace, now);
+                        if (observation.ReleaseWorkspace) current.RequireCleanup(a.Id, a.OwnerId.Value, now);
                         break;
                     case ObservationKind.InputRequired:
                         current.RequestInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, now);
@@ -138,8 +148,10 @@ public sealed class ExecutionCoordinator
                     current.RequireCleanup(a.Id, a.OwnerId!.Value, now);
             }, token);
         }
-        if (observation.Kind is ObservationKind.Result or ObservationKind.InputRequired or ObservationKind.Failed or ObservationKind.Stopped)
+        if (observation.Kind is ObservationKind.Result or ObservationKind.InputRequired or ObservationKind.Failed or ObservationKind.Stopped ||
+            observation.Kind == ObservationKind.Paused && observation.ReleaseWorkspace)
             await CleanupAsync(work, token);
+        if (observation.Kind == ObservationKind.WorkspaceRequired) await _host.CleanupAsync(work, token);
     }
 
     private async Task CleanupAsync(WorkSnapshot work, CancellationToken token)
@@ -158,7 +170,7 @@ public sealed class ExecutionCoordinator
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch
         {
-            await _failures.RecordAsync(new(work.Id, attempt.Id, FailureKind.CleanupFailed, Cleanup: true), CancellationToken.None);
+            await _failures.RecordAsync(new(work.Id, attempt.Id, FailureKind.CleanupFailed, Cleanup: true, TurnNumber: attempt.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }
@@ -171,11 +183,11 @@ public sealed class ExecutionCoordinator
             await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(failure.WorkId, work =>
             {
                 ExecutionAttempt? a = work.CurrentAttempt;
-                if (a is null || a.Id != failure.AttemptId) return;
-                if (a.CleanupPending && a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled)
+                if (a is null || a.Id != failure.AttemptId || (failure.TurnNumber != 0 && failure.TurnNumber != a.TurnNumber)) return;
+                if (a.CleanupPending && a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled or AttemptStatus.Waiting)
                     work.ReportCleanupFailure(a.Id, a.OwnerId!.Value, DateTimeOffset.UtcNow);
                 else if (a.Status == AttemptStatus.Queued) work.DispatchFailed(a.Id, failure.Failure, DateTimeOffset.UtcNow);
-                else if (a.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested)
+                else if (a.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested or AttemptStatus.Waiting)
                     work.ExecutionUncertain(a.Id, a.OwnerId!.Value, failure.Failure, DateTimeOffset.UtcNow);
             }, token);
             await _failures.RemoveAsync(failure.AttemptId, token);
@@ -230,8 +242,8 @@ public sealed class WorkRecovery : BackgroundService
                     try
                     {
                         if (attempt.Status == "Queued")
-                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(attempt.WorkId, attempt.Id));
-                        else await _coordinator.ReconcileAsync(new(attempt.WorkId, attempt.Id), stoppingToken);
+                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(attempt.WorkId, attempt.Id, attempt.TurnNumber));
+                        else await _coordinator.ReconcileAsync(new(attempt.WorkId, attempt.Id, attempt.TurnNumber), stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
                     catch { /* One unavailable host must not hide other Work. */ }

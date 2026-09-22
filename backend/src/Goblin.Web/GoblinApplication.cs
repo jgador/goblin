@@ -9,8 +9,10 @@ using System.Threading.Tasks;
 using Goblin.Application;
 using Goblin.Application.Repositories;
 using Goblin.Application.Work;
+using Goblin.Application.Workspaces;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
+using Goblin.Core.Work;
 using Goblin.Execution;
 using Goblin.Integrations.Codex;
 using Goblin.Integrations.GitHub;
@@ -100,8 +102,18 @@ public static class GoblinApplication
         if (options.EnableWork)
         {
             if (string.IsNullOrWhiteSpace(databaseConnection)) throw new InvalidOperationException("Durable Work requires PostgreSQL.");
-            builder.Host.UseWolverine(messaging => ApplicationServices.ConfigureMessaging(messaging, databaseConnection));
+            builder.Host.UseWolverine(messaging => ApplicationServices.ConfigureMessaging(messaging, databaseConnection, !string.IsNullOrWhiteSpace(executionNamespace)));
             builder.Services.AddWorkApplication();
+            var workspaceLimits = new WorkspaceLimits(
+                builder.Configuration.GetValue("GOBLIN_MAX_SANDBOXES", 2),
+                builder.Configuration.GetValue<long>("GOBLIN_MAX_CHECKPOINT_BYTES", 134217728),
+                builder.Configuration.GetValue<long>("GOBLIN_MAX_WORKSPACE_STORAGE_BYTES", 2147483648),
+                builder.Configuration.GetValue("GOBLIN_MAX_CACHED_WORKSPACES", 4));
+            if (workspaceLimits.MaxSandboxes < 1 || workspaceLimits.MaxArchiveBytes < 1 || workspaceLimits.MaxStorageBytes < workspaceLimits.MaxArchiveBytes || workspaceLimits.MaxCachedVolumes < 1)
+                throw new InvalidOperationException("Invalid workspace capacity configuration.");
+            builder.Services.AddSingleton(workspaceLimits);
+            builder.Services.AddSingleton<WorkspaceArchive>();
+            builder.Services.AddSingleton<IWorkspaceArchive>(services => services.GetRequiredService<WorkspaceArchive>());
             IExecutionHost executionHost = new LocalTextHost(new(
                 Path.Combine(workspace.DataDirectory, "executions"), workspace.CodexHome, runtimeOptions.Command,
                 typeof(GoblinApplication).Assembly.Location));
@@ -115,9 +127,19 @@ public static class GoblinApplication
                     builder.Configuration["GOBLIN_KUBERNETES_TOKEN_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token",
                     builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
                 builder.Services.AddSingleton(kubernetes);
-                builder.Services.AddSingleton<IExecutionHost>(services => options.ExecutionHost ?? new SandboxHost(kubernetes, new(executionNamespace,
+                var sandboxOptions = new SandboxOptions(executionNamespace,
                     builder.Configuration["GOBLIN_EXECUTION_IMAGE"] ?? "goblin-auth:0.1.0", workspace.CodexHome,
-                    "http://goblin-repository.goblin.svc:8788"), executionHost, services.GetRequiredService<IRepositoryBroker>()));
+                    builder.Configuration["GOBLIN_REPOSITORY_URL"] ?? "http://goblin-repository.goblin.svc:8788")
+                {
+                    CpuLimit = builder.Configuration["GOBLIN_SANDBOX_CPU_LIMIT"] ?? "2",
+                    MemoryLimit = builder.Configuration["GOBLIN_SANDBOX_MEMORY_LIMIT"] ?? "2Gi"
+                };
+                builder.Services.AddSingleton(sandboxOptions);
+                builder.Services.AddSingleton<IInspectionHost, InspectionHost>();
+                builder.Services.AddSingleton<InspectionCoordinator>();
+                builder.Services.AddHostedService(services => services.GetRequiredService<InspectionCoordinator>());
+                builder.Services.AddSingleton<IExecutionHost>(services => options.ExecutionHost ?? new SandboxHost(kubernetes, sandboxOptions,
+                    executionHost, services.GetRequiredService<IRepositoryBroker>(), services.GetRequiredService<IWorkspaceArchive>(), workspaceLimits));
             }
             else builder.Services.AddSingleton(options.ExecutionHost ?? executionHost);
             builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(Path.Combine(workspace.DataDirectory, "dispatch-failures")));
@@ -159,10 +181,12 @@ public static class GoblinApplication
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
             ("/work/presentation.js", "work/presentation.js", "text/javascript; charset=utf-8"),
             ("/work/surface.js", "work/surface.js", "text/javascript; charset=utf-8"),
+            ("/work/workspace.js", "work/workspace.js", "text/javascript; charset=utf-8"),
             ("/work/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/assets/branding/icon.svg", "assets/branding/icon.svg", "image/svg+xml")
         }) staticFiles.Add(path, (await File.ReadAllBytesAsync(Path.Combine(options.AssetDirectory, file)), type));
 
+        app.UseWebSockets();
         app.Use(async (context, next) =>
         {
             HttpResponse response = context.Response;
@@ -175,13 +199,19 @@ public static class GoblinApplication
             {
                 HttpRequest request = context.Request;
                 string path = request.Path.Value ?? "/";
+                if (path.StartsWith("/internal/workspaces/", StringComparison.Ordinal))
+                {
+                    if (!repositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin") || !HttpMethods.IsGet(request.Method))
+                        throw new PublicError("not_found", "This endpoint does not exist.", 404);
+                    await next(context); return;
+                }
                 if (path.StartsWith("/internal/repository/", StringComparison.Ordinal))
                 {
                     if (!repositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin"))
                         throw new PublicError("not_found", "This endpoint does not exist.", 404);
                     string[] segments = path.Split('/');
                     if (segments.Length < 5 || !long.TryParse(segments[3], out long attemptId)) throw new PublicError("not_found", "This endpoint does not exist.", 404);
-                    await context.RequestServices.GetRequiredService<RepositoryBroker>().AuthorizeAsync(attemptId, request.Headers["X-Goblin-Repository"].ToString(), true, request.HttpContext.RequestAborted);
+                    await context.RequestServices.GetRequiredService<RepositoryBroker>().AuthorizeAsync(attemptId, request.Headers["X-Goblin-Repository"].ToString(), !path.EndsWith("/current", StringComparison.Ordinal), request.HttpContext.RequestAborted);
                     await next(context); return;
                 }
                 if (repositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);
@@ -302,6 +332,46 @@ public static class GoblinApplication
                 Results.Json(await broker.EnqueueAsync(attemptId, operationId, kind, context.Request.Body, context.RequestAborted)));
             app.MapGet("/internal/repository/{attemptId:long}/operations/{operationId:guid}", async (long attemptId, Guid operationId, RepositoryBroker broker, CancellationToken token) =>
                 Results.Json(await broker.StatusAsync(attemptId, operationId, token)));
+            app.MapGet("/internal/repository/{attemptId:long}/current", async (long attemptId, RepositoryBroker broker, CancellationToken token) =>
+                Results.Json(await broker.CurrentAsync(attemptId, token), ExecutionFiles.Json));
+            app.MapPost("/internal/repository/{attemptId:long}/checkpoint", async (long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceArchive archive) =>
+                Results.Json(await archive.SaveAsync(attemptId, int.Parse(context.Request.Headers["X-Goblin-Turn"].ToString(), System.Globalization.CultureInfo.InvariantCulture),
+                    context.Request.Headers["X-Goblin-Commit"].ToString(), context.Request.Body, broker, context.RequestAborted), ExecutionFiles.Json));
+            app.MapGet("/internal/repository/{attemptId:long}/restore", async (long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceArchive archive, CancellationToken token) =>
+            {
+                WorkSnapshot work = await broker.CurrentAsync(attemptId, token);
+                WorkspaceCheckpoint? saved = await archive.LatestAsync(work.Id, work.Attempts[^1].Target.Repository!.Repository, token);
+                if (saved is null) return Results.NoContent();
+                context.Response.Headers["X-Goblin-Checkpoint"] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(saved, ExecutionFiles.Json)));
+                return Results.File(await archive.ReadAsync(work.Id, saved.Id, token), "application/gzip");
+            });
+            app.MapGet("/internal/workspaces/{id:guid}", async (Guid id, HttpContext context, InspectionStore sessions, WorkspaceArchive archive, CancellationToken token) =>
+            {
+                InspectionAllocation session = await sessions.AuthorizeRestoreAsync(id, context.Request.Headers["X-Goblin-Inspection"].ToString(), token);
+                return Results.File(await archive.ReadAsync(session.WorkId, session.CheckpointId!.Value, token), "application/gzip");
+            });
+            app.MapGet("/api/work/{id:long}/workspace", async (long id, WorkspaceArchive archive, InspectionStore sessions, WorkStore store, CancellationToken token) =>
+            {
+                await store.GetAsync(id, token);
+                return WorkResponse(new { checkpoints = await archive.ListAsync(id, token), sessions = await sessions.ListAsync(id, token), terminalAvailable = repositoryListener });
+            });
+            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:guid}/files", async (long id, Guid checkpoint, string? path, WorkspaceArchive archive, CancellationToken token) =>
+                Results.Json(WorkspaceArchive.Inspect(await archive.ReadAsync(id, checkpoint, token), path)));
+            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:guid}/download", async (long id, Guid checkpoint, WorkspaceArchive archive, CancellationToken token) =>
+                Results.File(await archive.ReadAsync(id, checkpoint, token), "application/gzip", "work-" + id + "-workspace.tar.gz"));
+            if (repositoryListener)
+            {
+                app.MapPost("/api/work/{id:long}/workspace/sessions", async (long id, HttpContext context, InspectionStore sessions) =>
+                {
+                    var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
+                    InspectionRequest request = JsonSerializer.Deserialize<InspectionRequest>(JsonSerializer.Serialize(body), WorkStore.Json)!;
+                    return WorkResponse(await sessions.OpenAsync(id, request.Id, request.AttemptId, request.CheckpointId, CancellationToken.None));
+                });
+                app.MapPost("/api/work/{id:long}/workspace/sessions/{session:guid}/stop", async (long id, Guid session, InspectionStore sessions) =>
+                { await sessions.StopAsync(id, session, CancellationToken.None); return Results.NoContent(); });
+                app.MapGet("/api/work/{id:long}/workspace/sessions/{session:guid}/terminal", async (long id, Guid session, HttpContext context, InspectionStore sessions, KubernetesApi api) =>
+                    await WorkspaceTerminal.ConnectAsync(context, id, session, executionNamespace!, sessions, api, workspace));
+            }
             app.MapGet("/api/conversations", async (ConversationStore store, CancellationToken token) => WorkResponse(await store.ListAsync(token)));
             app.MapPost("/api/conversations/commands", async (HttpContext context, ConversationStore store) =>
             {
@@ -416,3 +486,5 @@ public static class GoblinApplication
         }
     }
 }
+
+public sealed record InspectionRequest(Guid Id, long AttemptId, Guid? CheckpointId);

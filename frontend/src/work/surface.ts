@@ -136,7 +136,7 @@ export function renderOutputs(w: Work) {
             icon: "activity",
             title: `${a.target.runtime} · ${label(a.status)}`,
             type: "Execution",
-            body: `<dl class="execution-properties"><dt>Attempt</dt><dd>${e(a.id)}</dd><dt>Agent</dt><dd>${e(a.agentId ?? "Not recorded")}</dd><dt>Runtime</dt><dd>${e(a.target.runtime)}</dd><dt>Model</dt><dd>${e(a.session?.model ?? "Model not reported")}</dd><dt>Started</dt><dd>${e(timestamp(a.startedAt))}</dd><dt>Finished</dt><dd>${e(timestamp(a.finishedAt))}</dd>${a.environmentReference ? `<dt>Environment</dt><dd>${e(a.environmentReference)}</dd>` : ""}${a.target.repository ? `<dt>Repository</dt><dd>${e(a.target.repository.repository)}${a.target.repository.grant ? ` · ${e(a.target.repository.grant.branch)} · @${e(a.target.repository.grant.login)}` : ""}</dd>` : ""}${a.failure ? `<dt>Failure</dt><dd>${e(label(a.failure))}</dd>` : ""}${a.cleanupPending ? "<dt>Cleanup</dt><dd>Pending</dd>" : ""}</dl>${
+            body: `<dl class="execution-properties"><dt>Attempt</dt><dd>${e(a.id)}</dd><dt>Runtime turn</dt><dd>${a.turnNumber ?? 1}</dd><dt>Agent</dt><dd>${e(a.agentId ?? "Not recorded")}</dd><dt>Runtime</dt><dd>${e(a.target.runtime)}</dd><dt>Model</dt><dd>${e(a.session?.model ?? "Model not reported")}</dd><dt>Started</dt><dd>${e(timestamp(a.startedAt))}</dd><dt>Finished</dt><dd>${e(timestamp(a.finishedAt))}</dd>${a.environmentReference ? `<dt>Environment</dt><dd>${e(a.environmentReference)}</dd>` : ""}${a.target.repository ? `<dt>Repository</dt><dd>${e(a.target.repository.repository)}${a.target.repository.grant ? ` · ${e(a.target.repository.grant.branch)} · @${e(a.target.repository.grant.login)}` : ""}</dd>` : ""}${a.failure ? `<dt>Failure</dt><dd>${e(label(a.failure))}</dd>` : ""}${a.cleanupPending ? "<dt>Cleanup</dt><dd>Pending</dd>" : ""}</dl>${a.priorTurns?.length ? `<details class="execution-events"><summary>Previous runtime turns (${a.priorTurns.length})</summary>${a.priorTurns.map((t) => `<p class="inspection-meta">Turn ${t.number} · ${e(t.session?.model ?? "Model not reported")} · ${e(timestamp(t.startedAt))}${t.checkpointId ? " · Checkpoint saved" : ""}</p>`).join("")}</details>` : ""}${
                 w.history.filter((h) => h.attemptId === a.id).length
                     ? `<details class="execution-events" id="execution-events-${e(a.id)}"><summary>Execution history</summary>${w.history
                           .filter((h) => h.attemptId === a.id)
@@ -175,6 +175,9 @@ const eventNames: Record<string, string> = {
     ExecutionStopped: "Execution stopped",
     RetryRequested: "Retry requested",
     InputRequested: "Input requested",
+    ExecutionContinued: "Execution continued",
+    WorkspaceSaved: "Workspace saved",
+    WorkspaceReleased: "Workspace released",
     InputProvided: "Input provided",
     ResultProposed: "Result proposed",
     ChangesRequested: "Changes requested",
@@ -203,6 +206,8 @@ const conversationEvents = new Set([
     "ChangesRequested",
     "ResultProposed",
     "InputRequested",
+    "ExecutionContinued",
+    "WorkspaceReleased",
 ]);
 
 export function renderActivity(w?: Work) {

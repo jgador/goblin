@@ -1,3 +1,4 @@
+import { WorkWorkspace } from "./workspace.js";
 import { Settings } from "../settings/settings.js";
 import { SystemResources } from "../settings/system.js";
 import type { Repository } from "../settings/github.js";
@@ -84,6 +85,7 @@ let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const system = new SystemResources();
 const settings = new Settings(system);
+const workWorkspace = new WorkWorkspace();
 window.addEventListener("goblin-workspace-locked", () => {
     authenticated = false;
     forgetWorkspace();
@@ -145,6 +147,7 @@ function forgetWorkspace() {
     loaded = false;
     system.reset();
     settings.reset();
+    workWorkspace.reset();
 }
 async function refresh(preserveError = false) {
     if (loading || sending) return;
@@ -615,7 +618,7 @@ function renderDetail() {
         <section class="work-section" aria-labelledby="goal-heading"><div class="section-heading"><h3 id="goal-heading">Goal</h3><button class="text-button" data-action="discuss-goal">Discuss goal${icon("arrow")}</button></div><p class="goal-text preserve-lines">${e(w.objective)}</p></section>
         <section class="work-section" aria-labelledby="progress-heading"><div class="section-heading"><h3 id="progress-heading">Progress</h3><span>Work lifecycle</span></div>${renderProgress(item)}${w.attention?.reason === "ResultReview" && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</section>
         <section class="work-section" aria-labelledby="decisions-heading"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span>${w.decisions.length || ""}</span></div>${renderDecisions(w)}</section>
-        <section class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-heading"><h3 id="outputs-heading">Recent outputs</h3></div>${renderOutputs(w)}</section></div>
+        <section class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-heading"><h3 id="outputs-heading">Recent outputs</h3></div>${renderOutputs(w)}${w.attempts.some((a) => a.target.repository) ? '<button class="secondary" data-action="open-workspace">Open workspace</button>' : ""}</section></div>
         <div class="work-composer"><div class="composer-heading"><h3>Ask Goblin about this work</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation">${icon("chat")}${conversationExpanded ? "Hide conversation" : "Conversation"}</button></div><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? renderConversation(w) : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === "InputRequired" ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
 }
 function controls(w: Work) {
@@ -695,6 +698,10 @@ document.addEventListener("click", async (event) => {
                     ? "codex"
                     : "connections",
         );
+        return;
+    }
+    if (action === "open-workspace" && current()) {
+        await workWorkspace.open(current()!.work);
         return;
     }
     if (action === "refresh") {

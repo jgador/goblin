@@ -57,6 +57,13 @@ presentation of durable state). The Web host explicitly serves the new surface
 module through its existing static asset allowlist. No core, application store,
 runtime, or database changes are part of this increment.
 
+## Workspace inspection and continuation
+
+The [workspace lifecycle](workspace-lifecycle.md) adds Open workspace beside Recent
+outputs, saved file/diff inspection, historical checkpoints, and a browser terminal
+in a read-only inspection session. Backend checkpoint, continuation, and capacity
+state now back these controls. The broader domain gaps below remain independent.
+
 ## Backend and schema gaps
 
 These are follow-up requirements, not local browser state or fabricated data.

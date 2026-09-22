@@ -108,10 +108,10 @@ public sealed class ExecutionHostTests
             do
             {
                 observed = await host.ObserveAsync(work, false, timeout.Token);
-                Assert.Contains(observed.Kind, new[] { ObservationKind.Pending, ObservationKind.Running, ObservationKind.InputRequired });
-                if (observed.Kind != ObservationKind.InputRequired) await Task.Delay(5, timeout.Token);
-            } while (observed.Kind != ObservationKind.InputRequired);
-            Assert.Equal(ObservationKind.InputRequired, observed.Kind);
+                Assert.Contains(observed.Kind, new[] { ObservationKind.Pending, ObservationKind.Running, ObservationKind.Paused });
+                if (observed.Kind != ObservationKind.Paused) await Task.Delay(5, timeout.Token);
+            } while (observed.Kind != ObservationKind.Paused);
+            Assert.Equal(ObservationKind.Paused, observed.Kind);
             Assert.Equal("Which outcome matters?", observed.Text);
             Assert.Equal("test-model", observed.Session!.Model);
             await host.CleanupAsync(work, default);

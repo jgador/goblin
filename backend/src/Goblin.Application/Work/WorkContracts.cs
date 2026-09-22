@@ -11,8 +11,8 @@ public sealed record WorkView(long Version, DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt, WorkSnapshot Work);
 public sealed record AgentView(long Id, string Name, long ConnectionId, string? Model);
 public sealed record ConnectionView(long Id, string Runtime, string Name, string Availability);
-public sealed record DispatchWork(long WorkId, long AttemptId);
-public sealed record ReconcileWork(long WorkId, long AttemptId);
+public sealed record DispatchWork(long WorkId, long AttemptId, int TurnNumber = 1);
+public sealed record ReconcileWork(long WorkId, long AttemptId, int TurnNumber = 0);
 public sealed class ApplicationFailure : Exception
 {
     public ApplicationFailure(string code) : base(code) => Code = code;

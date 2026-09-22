@@ -40,6 +40,14 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         await _github.GitAsync(git, ["symbolic-ref", "HEAD", "refs/heads/" + repository.Grant.Branch], token);
         await _github.GitAsync(git, ["bundle", "create", Path.Combine(directory, "input.bundle"), "--all"], token);
     }
+    public async Task PrepareCheckpointAsync(RepositoryChange repository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token)
+    {
+        await PrepareAsync(repository, directory, checkpoint.Branch, token);
+        string actual = (await _github.GitAsync(GitDirectory(directory), ["rev-parse", "--verify", "refs/heads/" + checkpoint.Branch + "^{commit}"], token)).Trim();
+        if (actual != checkpoint.CommitSha) throw new GitHubFailure();
+        if (repository.Grant!.Branch == checkpoint.Branch)
+            await File.WriteAllTextAsync(Path.Combine(directory, "published-head"), checkpoint.CommitSha, token);
+    }
     public async Task<string> InspectBundleAsync(RepositoryChange repository, string directory, string bundle, CancellationToken token)
     {
         string git = GitDirectory(directory);

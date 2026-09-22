@@ -53,7 +53,7 @@ public static class ExecutionWorker
             catch { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.HostUnavailable); }
         }
         // Only publish a stopped outcome after the runtime and its children have retired.
-        await ExecutionFiles.WriteAsync(Path.Combine(directory, "result.json"), outcome);
+        await ExecutionFiles.WriteAsync(Path.Combine(directory, "result.json"), outcome with { TurnNumber = input.Work.Attempts[^1].TurnNumber });
         return 0;
     }
 }

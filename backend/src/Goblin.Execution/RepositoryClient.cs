@@ -1,11 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 
 namespace Goblin.Execution;
@@ -60,6 +62,41 @@ public static class RepositoryClient
             }
         }
         finally { File.Delete(bundle); }
+    }
+    public static async Task<WorkSnapshot?> CurrentAsync(long attemptId)
+    {
+        using HttpClient client = await ClientAsync();
+        return await client.GetFromJsonAsync<WorkSnapshot>($"/internal/repository/{attemptId}/current", ExecutionFiles.Json);
+    }
+    public static async Task<WorkspaceCheckpoint?> RestoreAsync(WorkSnapshot work, string root)
+    {
+        using HttpClient client = await ClientAsync();
+        long attemptId = work.Attempts[^1].Id;
+        using HttpResponseMessage response = await client.GetAsync($"/internal/repository/{attemptId}/restore", HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        if (response.StatusCode == System.Net.HttpStatusCode.NoContent) return null;
+        WorkspaceCheckpoint checkpoint = JsonSerializer.Deserialize<WorkspaceCheckpoint>(
+            System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(response.Headers.GetValues("X-Goblin-Checkpoint").Single())), ExecutionFiles.Json)!;
+        string archive = Path.Combine("/tmp", Guid.NewGuid().ToString("N") + ".tar.gz");
+        try
+        {
+            await using (FileStream file = File.Create(archive)) await response.Content.CopyToAsync(file);
+            WorkspaceFiles.Unpack(archive, root);
+            return checkpoint;
+        }
+        finally { File.Delete(archive); }
+    }
+    public static async Task<WorkspaceCheckpoint> SaveAsync(WorkSnapshot work, string commit, string archive)
+    {
+        using HttpClient client = await ClientAsync();
+        client.Timeout = TimeSpan.FromMinutes(5);
+        client.DefaultRequestHeaders.Add("X-Goblin-Turn", work.Attempts[^1].TurnNumber.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        client.DefaultRequestHeaders.Add("X-Goblin-Commit", commit);
+        await using FileStream stream = File.OpenRead(archive);
+        using var content = new StreamContent(stream);
+        using HttpResponseMessage response = await client.PostAsync($"/internal/repository/{work.Attempts[^1].Id}/checkpoint", content);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<WorkspaceCheckpoint>(ExecutionFiles.Json))!;
     }
     public static async Task<int> RunAsync(string[] arguments)
     {

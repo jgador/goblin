@@ -9,7 +9,7 @@ public sealed partial class WorkItem
     public void RequireCleanup(long attemptId, long ownerId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
-        Require(attempt.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled,
+        Require(attempt.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled or AttemptStatus.Waiting,
             WorkRule.InvalidTransition);
         if (attempt.CleanupPending) return;
         attempt.CleanupPending = true;
@@ -50,5 +50,6 @@ public sealed partial class WorkItem
             }
         }
         Record(WorkEventKind.CleanupCompleted, now, attemptId);
+        if (attempt.CheckpointId is not null) Record(WorkEventKind.WorkspaceReleased, now, attemptId);
     }
 }

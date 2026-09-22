@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -25,11 +26,13 @@ public sealed class WorkStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _dbFactory;
     private readonly WorkOutboxFactory _outboxes;
+    private readonly WorkspaceLimits _limits;
 
-    public WorkStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkOutboxFactory outboxes)
+    public WorkStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkOutboxFactory outboxes, WorkspaceLimits? limits = null)
     {
         _dbFactory = dbFactory;
         _outboxes = outboxes;
+        _limits = limits ?? new();
     }
 
     public static readonly long DefaultAgentId = 1;
@@ -128,6 +131,8 @@ public sealed class WorkStore
                 break;
             case WorkAction.Answer:
                 work.AnswerDecision(command.DecisionId ?? 0, command.Text ?? "", now);
+                if (work.CurrentAttempt is { Status: AttemptStatus.Queued } continuation)
+                    await outbox.PublishAsync(new DispatchWork(work.Id, continuation.Id, continuation.TurnNumber));
                 break;
             case WorkAction.RequestChanges:
                 work.RequestChanges(command.AttemptId ?? 0, command.Text ?? "", now);
@@ -170,7 +175,7 @@ public sealed class WorkStore
         Row? row = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == command.WorkId, token);
         if (row is null) return null;
         WorkItem work = Restore(row);
-        if (work.CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != command.AttemptId) return null;
+        if (work.CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != command.AttemptId || attempt.TurnNumber != command.TurnNumber) return null;
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == attempt.Target.ConnectionId, token);
         if (connection.Availability is "Changing" or "Verifying") return null;
@@ -179,15 +184,23 @@ public sealed class WorkStore
         if (attempt.Target.Repository?.Grant is { } grant && !await db.GithubConnections.AnyAsync(x =>
             x.Id == grant.ConnectionId && x.Generation == grant.Generation && x.AccountId == grant.AccountId && x.Availability == "Connected", token))
             failure = FailureKind.ConnectionUnavailable;
-        if (failure is null && await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == connection.Id &&
-            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending), token))
+        if (failure is null && attempt.Target.Repository is not null && !attempt.ReasoningOnly)
+        {
+            int occupied = await db.ExecutionAttempts.CountAsync(x => x.Id != attempt.Id && x.GithubConnectionId != null &&
+                (x.Status == "Starting" || x.Status == "Running" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
+            occupied += await db.WorkspaceSessions.CountAsync(x => x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention", token);
+            long used = await db.WorkspaceCheckpoints.SumAsync(x => (long)x.Archive.Length, token);
+            if (occupied >= _limits.MaxSandboxes || used >= _limits.MaxStorageBytes) return null;
+        }
+        if (failure is null && await db.ExecutionAttempts.AnyAsync(x => x.Id != attempt.Id && x.ConnectionId == connection.Id &&
+            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token))
         {
             // Capacity waiting is not a failed runtime operation. A periodic
             // queue scan will deliver this same unclaimed attempt when free.
             return null;
         }
         if (failure is not null) work.DispatchFailed(attempt.Id, failure.Value, now);
-        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), environment, now)) return null;
+        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), attempt.ReasoningOnly ? "text/" + attempt.Id + "/turn/" + attempt.TurnNumber : environment, now)) return null;
         await SaveAsync(db, row, work, now, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return failure is null ? work.Snapshot() : null;
@@ -201,9 +214,12 @@ public sealed class WorkStore
         Row row = await db.WorkItems.SingleAsync(x => x.Id == workId, token);
         WorkItem work = Restore(row);
         long before = work.History.Count;
+        int turnBefore = work.CurrentAttempt?.TurnNumber ?? 0;
         transition(work);
         if (before == work.History.Count) return;
         await SaveAsync(db, row, work, DateTimeOffset.UtcNow, token);
+        if (work.CurrentAttempt is { Status: AttemptStatus.Queued } queued && queued.TurnNumber != turnBefore)
+            await outbox.PublishAsync(new DispatchWork(work.Id, queued.Id, queued.TurnNumber));
         await outbox.SaveChangesAndFlushMessagesAsync(token);
     }
 
@@ -212,7 +228,7 @@ public sealed class WorkStore
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         return await db.ExecutionAttempts.AsNoTracking()
             .Where(x => x.Status == "Queued" || x.Status == "Starting" || x.Status == "Running" ||
-                x.Status == "CancellationRequested" || x.Status == "Uncertain" || (x.CleanupPending && !x.CleanupFailed))
+                x.Status == "CancellationRequested" || x.Status == "Uncertain" || (x.CleanupPending && !x.CleanupFailed) || x.WorkspaceRetained)
             .OrderBy(x => x.QueuedAt).ToArrayAsync(token);
     }
 
@@ -221,7 +237,7 @@ public sealed class WorkStore
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
         if (requireIdle && await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
-            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending), token))
+            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token))
             throw new ApplicationFailure("connection_in_use");
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == "Changing")
@@ -243,7 +259,7 @@ public sealed class WorkStore
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == "Verifying") throw new ApplicationFailure("prompt_in_progress");
         if (row.Availability == "Changing" || await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
-            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending), token))
+            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token))
             throw new ApplicationFailure("connection_in_use");
         row.Availability = "Verifying";
         row.ChangedAt = DateTime.UtcNow;
@@ -311,6 +327,8 @@ public sealed class WorkStore
                 db.ExecutionAttempts.Add(saved);
             }
             saved.Status = attempt.Status.ToString();
+            saved.TurnNumber = attempt.TurnNumber;
+            saved.WorkspaceRetained = (attempt.Status is AttemptStatus.Waiting or AttemptStatus.Queued) && !attempt.ReleaseWorkspace;
             saved.OwnerId = attempt.OwnerId;
             saved.EnvironmentReference = attempt.EnvironmentReference;
             saved.CleanupPending = attempt.CleanupPending;
