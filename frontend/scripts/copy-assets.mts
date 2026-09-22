@@ -2,15 +2,20 @@ import { copyFile, cp, mkdir, readFile, writeFile } from "node:fs/promises";
 
 const root = new URL("../", import.meta.url);
 const output = new URL("dist/", root);
+const controls = await readFile(new URL("src/controls.css", root), "utf8");
 await cp(new URL("public/", root), output, { recursive: true });
 for (const page of ["connection", "work"]) {
     await mkdir(new URL(`${page}/`, output), { recursive: true });
-    for (const name of ["index.html", "styles.css"]) {
-        await copyFile(
-            new URL(`src/${page}/${name}`, root),
-            new URL(`${page}/${name}`, output),
-        );
-    }
+    await copyFile(
+        new URL(`src/${page}/index.html`, root),
+        new URL(`${page}/index.html`, output),
+    );
+    await writeFile(
+        new URL(`${page}/styles.css`, output),
+        controls +
+            "\n" +
+            (await readFile(new URL(`src/${page}/styles.css`, root), "utf8")),
+    );
 }
 
 // First-time setup and Settings render the same Codex markup and controller.

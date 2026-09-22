@@ -32,7 +32,7 @@ export class Settings {
         this.system = system;
         this.dialog.className = "settings-dialog";
         this.dialog.setAttribute("aria-labelledby", "settings-title");
-        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close" aria-label="Close settings">×</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
+        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
         document.body.append(this.dialog);
         const systemButton = document.createElement("button");
         systemButton.dataset.provider = "system";
@@ -75,6 +75,7 @@ export class Settings {
             );
     }
     private select(provider: string) {
+        this.dialog.querySelector(".settings-content")!.scrollTop = 0;
         this.dialog
             .querySelectorAll<HTMLElement>("[data-provider-panel]")
             .forEach(
@@ -185,8 +186,8 @@ export class Settings {
             if (generation !== this.generation) dispose?.();
             else this.codexDispose = dispose;
         } catch {
-            panel.textContent =
-                "Codex settings could not be loaded. Refresh Goblin and try again.";
+            panel.innerHTML =
+                '<p class="settings-notice" role="alert">Codex settings could not be loaded. Return to AI connections and try again.</p>';
             this.codexMounted = false;
         }
     }

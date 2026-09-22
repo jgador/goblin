@@ -1,0 +1,133 @@
+/* Shared by Work, workspace access, and the embedded connection panel. */
+:root {
+    --control-surface: #fffefb;
+    --control-border: #d5ddca;
+    --control-focus: #668849;
+    --control-muted: #78836e;
+    --control-accent: #e8eedf;
+    --control-radius: 8px;
+    --scrollbar-thumb: #bdc8b2;
+}
+
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background-color: #97aa87; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+.field-control {
+    appearance: none;
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    margin: 0;
+    border: 1px solid var(--control-border);
+    border-radius: var(--control-radius);
+    padding: 10px 12px;
+    background-color: var(--control-surface);
+    color: #243d2c;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    box-shadow: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.field-control::placeholder { color: var(--control-muted); opacity: 1; }
+.field-control:hover:not(:disabled):not(:focus) { border-color: #99ae87; }
+.field-control:focus {
+    outline: none;
+    border-color: var(--control-focus);
+    box-shadow: 0 0 0 1px var(--control-focus);
+}
+.field-control:disabled {
+    cursor: not-allowed;
+    background-color: #f0f2e9;
+    color: var(--control-muted);
+    opacity: .65;
+}
+.field-control[readonly] { background-color: #f0f2e9; color: #65765a; }
+.field-control[aria-invalid=true] { border-color: #a15e3d; }
+.field-error { color: #8b4e32; font-size: 12px; margin-top: 6px; line-height: 1.5; }
+
+.select-control {
+    cursor: pointer;
+    padding-right: 36px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* CSS chevron also works under Goblin's strict, same-origin CSP. */
+    background-image: linear-gradient(45deg, transparent 50%, #65765a 50%), linear-gradient(135deg, #65765a 50%, transparent 50%);
+    background-position: right 17px center, right 12px center;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+}
+
+/* Keep native keyboard and mobile selection; enhance the popup where supported. */
+@supports (appearance: base-select) {
+    .select-control, .select-control::picker(select) { appearance: base-select; }
+    .select-control::picker-icon { display: none; }
+    .select-control > button {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: start;
+        cursor: inherit;
+    }
+    .select-control selectedcontent {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .select-control::picker(select) {
+        box-sizing: border-box;
+        width: anchor-size(width);
+        max-width: calc(100vw - 32px);
+        margin-block: 5px;
+        padding: 4px;
+        border: 1px solid var(--control-border);
+        border-radius: var(--control-radius);
+        background: var(--control-surface);
+        color: #243d2c;
+        box-shadow: 0 4px 12px #243d2c12;
+        max-height: min(320px, 50dvh);
+        overflow-y: auto;
+        font: inherit;
+    }
+    .select-control option {
+        min-height: 36px;
+        padding: 8px 10px;
+        border-radius: 4px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        cursor: pointer;
+    }
+    .select-control option:checked { background: #f0f2e9; }
+    .select-control option:hover, .select-control option:focus {
+        background: var(--control-accent);
+        outline: none;
+    }
+}
+
+@media (max-width: 760px) {
+    /* Prevent mobile browsers from zooming the page while entering text. */
+    .field-control { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .field-control { transition: none; }
+}
+@media (forced-colors: active) {
+    * { scrollbar-color: auto; scrollbar-width: auto; }
+    .field-control:focus { outline: 2px solid Highlight; outline-offset: 2px; }
+    .select-control { appearance: auto; background-image: none; }
+    .select-control::picker(select) { appearance: auto; }
+}

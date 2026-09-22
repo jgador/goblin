@@ -45,9 +45,7 @@ summary span{font-size:17px;font-weight:400}
 details[open] summary{margin-bottom:18px}
 details[open] summary span{transform:rotate(45deg)}
 label{display:block;font-size:12px;font-weight:550;margin-bottom:7px}
-input{width:100%;padding:11px 12px;border:1px solid #d7decf;border-radius:7px;background:#fff;color:#243d2c;font-size:14px;outline:none;margin-bottom:13px}
-input:focus{border-color:#7d9a63;box-shadow:0 0 0 3px #e7efd9}
-input::placeholder{color:#a0a99a}
+.field-control{margin-bottom:13px}
 .below-card{font-size:11px;color:#929b8b;text-align:center;margin:18px 0 0}
 .device-code-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f2f5eb;border:1px solid #e0e7d6;padding:16px;border-radius:9px;margin:22px 0 15px}
 #device-code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:23px;letter-spacing:2px;color:#345234;overflow-wrap:anywhere}
