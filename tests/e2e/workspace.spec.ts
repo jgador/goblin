@@ -99,7 +99,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     page,
 }) => {
     const commands = await workspace(page, false);
-    await page.goto("/");
+    await page.goto("/?new=work");
     await expect(
         page.getByRole("heading", { name: "What should we work on?" }),
     ).toBeVisible();
@@ -141,87 +141,65 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     expect(commands).toEqual([]);
 });
 
-test("search, attention filters, and persistent details share one main work area", async ({
+test("Work state is primary, Activity stays beside it, and inspection preserves drafts", async ({
     page,
 }) => {
     const commands = await workspace(page);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/");
-    await expect(
-        page.getByRole("heading", { name: "What should we work on?" }),
-    ).toBeVisible();
-    await page.screenshot({ path: "test-results/workspace-home.png" });
-    const search = page.getByRole("searchbox");
-    await search.fill("repository");
-    await expect(
-        page
-            .getByRole("navigation", { name: "Recent work" })
-            .getByRole("button"),
-    ).toHaveCount(1);
-    await search.fill("");
-    await page.getByRole("button", { name: "Needs you", exact: true }).click();
-    await expect(
-        page
-            .getByRole("navigation", { name: "Recent work" })
-            .getByRole("button"),
-    ).toHaveCount(1);
-    await page.getByRole("button", { name: /Polish the welcome page/ }).click();
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
     );
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(page.locator(".work-section h3")).toHaveText([
+        "Goal",
+        "Progress",
+        "Ready for your review",
+        "Decisions",
+        "Recent outputs",
+    ]);
+    await expect(
+        page.getByRole("complementary", { name: "Activity" }),
+    ).toBeVisible();
     await expect(
         page.getByRole("button", { name: "Approve & complete" }),
     ).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Details", exact: true }),
-    ).toHaveCount(0);
-    await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
-    await expect(page.locator(".detail-properties span")).toHaveText([
-        "Goblin",
-        "Work 1",
-        "codex · fixture-model",
-    ]);
-    await expect(
-        page.getByText("owner/project · goblin/1/1", { exact: true }),
-    ).toBeVisible();
-    await page.reload();
-    await expect(page.getByRole("tab", { name: "Conversation" })).toBeVisible();
-    await expect(
-        page.getByRole("tabpanel", { name: "Conversation" }),
-    ).toBeVisible();
-    await page.screenshot({ path: "test-results/workspace-work.png" });
+    const center = (await page.locator(".main-shell").boundingBox())!;
+    const activity = (await page.locator(".activity-panel").boundingBox())!;
+    const navigation = (await page.locator(".sidebar").boundingBox())!;
+    expect(center.width).toBeGreaterThan(activity.width * 2);
+    expect(center.x).toBe(navigation.width);
+    expect(activity.x).toBe(center.x + center.width);
+    await expect(page.locator("#work-conversation")).toBeHidden();
+    const draft = page.getByPlaceholder("Add context to this work…");
+    await draft.fill("Keep the review draft");
+    await page.getByRole("button", { name: "Read proposed result" }).click();
+    await expect(page.locator("#result-1")).toHaveAttribute("open", "");
     await page
-        .getByPlaceholder("Add context to this work…")
-        .fill("Keep the review draft");
-    await page.getByRole("tab", { name: "Activity" }).click();
+        .getByRole("button", { name: "Conversation", exact: true })
+        .click();
     await expect(
-        page.getByRole("heading", { name: "Executions", exact: true }),
-    ).toBeVisible();
+        page.getByRole("region", { name: "Conversation about this Work" }),
+    ).toContainText("The welcome page is ready for review");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(page.getByRole("tab", { name: "Activity" })).toHaveAttribute(
-        "aria-selected",
-        "true",
-    );
+    await expect(page.locator("#result-1")).toHaveAttribute("open", "");
+    await expect(draft).toHaveValue("Keep the review draft");
     await expect(
-        page.getByRole("tabpanel", { name: "Activity" }),
-    ).toBeVisible();
-    await page.getByRole("tab", { name: "Activity" }).press("ArrowRight");
-    await expect(page.getByRole("tab", { name: "Outputs" })).toBeFocused();
-    await expect(page.getByRole("tabpanel", { name: "Outputs" })).toBeVisible();
-    await page.getByRole("tab", { name: "Conversation" }).click();
-    await expect(
-        page.getByPlaceholder("Add context to this work…"),
-    ).toHaveValue("Keep the review draft");
+        page.getByRole("button", { name: "Hide conversation" }),
+    ).toHaveAttribute("aria-expanded", "true");
+    await page.getByRole("button", { name: "Hide conversation" }).click();
+    await page.locator(".detail-body").evaluate((el) => {
+        el.scrollTop = 0;
+    });
+    await page.screenshot({ path: "test-results/workspace-work.png" });
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await page
         .getByPlaceholder("Describe the intended outcome…")
         .fill("A second idea");
     await page.getByRole("button", { name: /Polish the welcome page/ }).click();
-    await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
-    await expect(
-        page.getByPlaceholder("Add context to this work…"),
-    ).toHaveValue("Keep the review draft");
+    await expect(draft).toHaveValue("Keep the review draft");
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await expect(
         page.getByPlaceholder("Describe the intended outcome…"),
@@ -230,47 +208,324 @@ test("search, attention filters, and persistent details share one main work area
     expect(errors).toEqual([]);
 });
 
-test("mobile navigation restores focus and leaves the selected work at full width", async ({
+test("search finds output content and filters keep selection independent from browsing", async ({
     page,
 }) => {
     await workspace(page);
-    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    await expect(
-        page.getByRole("heading", { name: "What should we work on?" }),
-    ).toBeVisible();
-    await page.screenshot({ path: "test-results/workspace-home-mobile.png" });
-    const show = page.getByRole("button", {
-        name: "Show sidebar",
-        exact: true,
+    await expect(page.locator(".detail h2")).toHaveText(
+        "Polish the welcome page",
+    );
+    const search = page.getByRole("searchbox");
+    await search.fill("repository clones");
+    const list = page.getByRole("navigation", { name: "Recent work" });
+    await expect(list.getByRole("button")).toHaveCount(1);
+    await search.fill("shorter"); // Result text, not a Work title.
+    await expect(list.getByRole("button")).toHaveCount(3);
+    await search.fill("");
+    await page.getByRole("button", { name: /^Needs Attention/ }).click();
+    await expect(list.getByRole("button")).toHaveCount(1);
+    await expect(page.locator(".detail h2")).toHaveText(
+        "Polish the welcome page",
+    );
+    await page.getByRole("button", { name: /^Completed/ }).click();
+    await expect(list.getByRole("button")).toHaveCount(1);
+    await page.getByRole("button", { name: /Write the release notes/ }).click();
+    await expect(page.locator(".detail .status-pill")).toHaveText("Completed");
+    await page.getByRole("button", { name: /Assigned to Goblin/ }).click();
+    await expect(list.getByRole("button")).toHaveCount(2);
+    await search.fill("release notes");
+    await expect(list.getByRole("button")).toHaveCount(1);
+    await expect(list.getByRole("button")).toContainText(
+        "Write the release notes",
+    );
+});
+
+for (const width of [1024, 390, 320]) {
+    test(`Activity collapses before navigation at ${width}px with keyboard focus and full width Work`, async ({
+        page,
+    }) => {
+        await workspace(page);
+        await page.setViewportSize({ width, height: 844 });
+        await page.goto("/work?item=1");
+        const toggle = page.getByRole("button", {
+            name: "Activity",
+            exact: true,
+        });
+        await expect(toggle).toBeVisible();
+        await expect(page.locator(".activity-panel")).not.toBeVisible();
+        await toggle.click();
+        const panel = page.getByRole("dialog", {
+            name: "Activity",
+            exact: true,
+        });
+        await expect(panel).toBeVisible();
+        const close = page.getByRole("button", {
+            name: "Close activity",
+            exact: true,
+        });
+        await expect(close).toBeFocused();
+        await close.press("Shift+Tab");
+        await expect(panel.locator("summary").last()).toBeFocused();
+        await page.keyboard.press("Tab");
+        await expect(close).toBeFocused();
+        await page.keyboard.press("Escape");
+        await expect(toggle).toBeFocused();
+        if (width <= 760) {
+            const show = page.getByRole("button", {
+                name: "Show sidebar",
+                exact: true,
+            });
+            await show.click();
+            await expect(
+                page.getByRole("dialog", { name: "Workspace", exact: true }),
+            ).toBeVisible();
+            await page.keyboard.press("Escape");
+            await expect(show).toBeFocused();
+            await show.click();
+            await page
+                .getByRole("button", {
+                    name: /Investigate slow repository clones/,
+                })
+                .click();
+            await expect(page.locator(".detail h2")).toBeFocused();
+            await expect(
+                page.getByRole("dialog", { name: "Workspace" }),
+            ).toHaveCount(0);
+            // Search remains usable while the navigation drawer is closed.
+            await page.getByRole("searchbox").fill("Polish");
+            await page
+                .getByRole("region", { name: "Search results" })
+                .getByRole("button", { name: "Polish the welcome page" })
+                .click();
+            await expect(page.locator(".detail h2")).toHaveText(
+                "Polish the welcome page",
+            );
+            await expect(page.getByRole("searchbox")).toHaveValue("");
+        } else
+            await expect(
+                page.getByRole("complementary", { name: "Workspace" }),
+            ).toBeVisible();
+        expect(
+            await page.evaluate(
+                () => document.documentElement.scrollWidth <= innerWidth,
+            ),
+        ).toBe(true);
+        await expect(
+            page.getByPlaceholder("Add context to this work…"),
+        ).toBeInViewport();
+        expect(
+            await page.locator(".workspace-header").evaluate((header) => {
+                const bounds = header.getBoundingClientRect();
+                return Array.from(
+                    header.querySelectorAll(".header-actions, .global-search"),
+                ).every(
+                    (child) =>
+                        child.getBoundingClientRect().bottom <= bounds.bottom,
+                );
+            }),
+        ).toBe(true);
+        await page.screenshot({
+            path: `test-results/workspace-work-${width}.png`,
+        });
     });
-    await show.click();
-    const nav = page.getByRole("dialog", { name: "Workspace", exact: true });
-    await expect(nav).toBeVisible();
+}
+
+test("global Ask Goblin has its own draft and leaves Work context scoped", async ({
+    page,
+}) => {
+    const commands = await workspace(page);
+    await page.goto("/work?item=1");
     await page
-        .getByRole("button", { name: "Hide sidebar", exact: true })
-        .focus();
-    await page.keyboard.press("Escape");
-    await expect(show).toBeFocused();
-    await show.click();
+        .getByPlaceholder("Add context to this work…")
+        .fill("Check the introduction again");
+    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
+    await expect(page.getByPlaceholder("Add to the conversation…")).toHaveValue(
+        "",
+    );
+    await page
+        .getByPlaceholder("Add to the conversation…")
+        .fill("An unrelated idea");
     await page.getByRole("button", { name: /Polish the welcome page/ }).click();
-    await expect(nav).not.toBeVisible();
-    await expect(page.locator(".detail h2")).toBeFocused();
     await expect(
-        page.getByRole("button", { name: "Details", exact: true }),
+        page.getByPlaceholder("Add context to this work…"),
+    ).toHaveValue("Check the introduction again");
+    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
+    await expect(page.getByPlaceholder("Add to the conversation…")).toHaveValue(
+        "An unrelated idea",
+    );
+    expect(commands).toEqual([]);
+});
+
+test("uncertain execution stays unresolved, and runtime details never become milestones or Activity", async ({
+    page,
+}) => {
+    await workspace(page);
+    const unsafe = '<img src=x onerror="alert(1)">';
+    const now = "2026-09-23T00:00:00Z";
+    await page.route("**/api/work", (route) =>
+        route.fulfill({
+            json: [
+                {
+                    version: "6",
+                    createdAt: now,
+                    updatedAt: now,
+                    work: {
+                        id: "1",
+                        objective: "Validate the release",
+                        status: "NeedsAttention",
+                        attention: { reason: "UncertainExecution" },
+                        agentId: "1",
+                        attempts: [
+                            {
+                                id: "1",
+                                agentId: "4",
+                                status: "Succeeded",
+                                target: { runtime: "codex" },
+                            },
+                            {
+                                id: "2",
+                                agentId: "5",
+                                status: "Uncertain",
+                                target: { runtime: "codex" },
+                                session: { model: "historical-model" },
+                                queuedAt: now,
+                            },
+                        ],
+                        results: [
+                            {
+                                attemptId: "1",
+                                text: "Earlier proposal",
+                                requestedChanges: "Recheck the rollout",
+                            },
+                        ],
+                        decisions: [
+                            {
+                                id: "8",
+                                attemptId: "1",
+                                question: "Which rollout?",
+                                answer: unsafe,
+                                requestedAt: now,
+                                answeredAt: now,
+                            },
+                        ],
+                        artifacts: [
+                            {
+                                name: "Unsafe reference",
+                                reference: "javascript:alert(1)",
+                                attemptId: "1",
+                            },
+                        ],
+                        history: [
+                            {
+                                sequence: "1",
+                                kind: "Created",
+                                text: "Validate the release",
+                                occurredAt: now,
+                            },
+                            {
+                                sequence: "2",
+                                kind: "ExecutionClaimed",
+                                attemptId: "2",
+                                occurredAt: now,
+                            },
+                            {
+                                sequence: "3",
+                                kind: "ProgressReported",
+                                text: "Read a file",
+                                attemptId: "2",
+                                occurredAt: now,
+                            },
+                            {
+                                sequence: "4",
+                                kind: "ExecutionUncertain",
+                                attemptId: "2",
+                                occurredAt: now,
+                            },
+                        ],
+                    },
+                },
+            ],
+        }),
+    );
+    await page.goto("/work?item=1");
+    await expect(
+        page.locator("#progress-execution .milestone-icon"),
+    ).not.toHaveClass(/complete/);
+    await expect(page.locator("#progress-review .row-meta")).toHaveText(
+        "Not complete",
+    );
+    await expect(
+        page.getByRole("button", { name: "Reconcile execution", exact: true }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Retry work", exact: true }),
     ).toHaveCount(0);
-    await expect(page.getByRole("tab", { name: "Activity" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Outputs" })).toBeVisible();
+    await expect(page.locator(".activity-item")).toHaveCount(2);
+    await expect(page.locator(".activity-panel")).not.toContainText(
+        "Read a file",
+    );
+    await page.locator("#decision-8 summary").click();
+    await expect(page.locator("#decision-8 .inspection")).toContainText(unsafe);
+    await expect(page.locator('img[src="x"]')).toHaveCount(0);
+    await page.locator("#progress-execution summary").click();
+    await page
+        .getByRole("button", { name: "Inspect execution", exact: true })
+        .click();
+    await expect(page.locator("#execution-2")).toHaveAttribute("open", "");
     await expect(
-        page.getByText("owner/project · goblin/1/1", { exact: true }),
-    ).toBeVisible();
+        page.locator("#execution-2 .execution-properties"),
+    ).toContainText("historical-model");
     await expect(
-        page.getByRole("button", { name: "Approve & complete" }),
+        page.locator("#execution-2 .execution-properties"),
+    ).toContainText("5");
+    await page.locator("#execution-events-2 summary").click();
+    await expect(page.locator("#execution-events-2")).toContainText(
+        "Read a file",
+    );
+    await expect(page.locator('a[href^="javascript:"]')).toHaveCount(0);
+});
+
+test("the scoped composer retains command identity and draft until the selected Work save is confirmed", async ({
+    page,
+}) => {
+    await workspace(page);
+    const commands: Record<string, unknown>[] = [];
+    await page.route("**/api/identities", (route) =>
+        route.fulfill({ json: { ids: ["9007199254740993"] } }),
+    );
+    await page.route("**/api/work/commands", (route) => {
+        commands.push(route.request().postDataJSON());
+        return commands.length === 1
+            ? route.fulfill({
+                  status: 503,
+                  json: { error: { message: "Save unconfirmed" } },
+              })
+            : route.fulfill({ json: {} });
+    });
+    await page.goto("/work?item=2");
+    const draft = page.getByPlaceholder("Add context to this work…");
+    await draft.fill("Check connection pooling");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await expect(
+        page.getByRole("button", { name: "Resend command" }),
     ).toBeVisible();
-    expect(
-        await page.evaluate(
-            () => document.documentElement.scrollWidth <= innerWidth,
-        ),
-    ).toBe(true);
-    await page.screenshot({ path: "test-results/workspace-work-mobile.png" });
+    await expect(draft).toHaveValue("Check connection pooling");
+    await expect(
+        page.getByRole("button", { name: "Send message" }),
+    ).toBeDisabled();
+    await expect(page.locator(".activity-panel")).not.toContainText(
+        "Check connection pooling",
+    );
+    await page.getByRole("button", { name: "Resend command" }).click();
+    await expect(draft).toHaveValue("");
+    expect(commands).toHaveLength(2);
+    expect(commands[0]).toMatchObject({
+        workId: "2",
+        expectedVersion: "1",
+        action: "AddContext",
+        text: "Check connection pooling",
+        commandId: "9007199254740993",
+    });
+    expect(commands[1]).toEqual(commands[0]);
 });

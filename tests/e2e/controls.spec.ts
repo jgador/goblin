@@ -140,7 +140,10 @@ test("repository setup validates locally and keeps the branch and Git identity t
     await expect(page.locator(".field-error:visible")).toHaveCount(0);
     expect(commands).toEqual([]);
     await page.setViewportSize({ width: 390, height: 844 });
-    await start.evaluate((element) => element.scrollIntoView());
+    await expect(
+        page.getByRole("button", { name: "Show sidebar", exact: true }),
+    ).toBeVisible();
+    await start.scrollIntoViewIfNeeded();
     await expect(start).toBeInViewport();
     expect(
         await page.evaluate(
