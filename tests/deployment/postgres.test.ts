@@ -48,6 +48,10 @@ const secret = (name, values) => {
 if (args[0] === 'get') {
   if (process.env.GOBLIN_POSTGRES_SETUP_DENY === 'true') process.exit(1);
   const names = args.slice(2, args.indexOf('-n'));
+  if (args[1] === 'sandbox' && args.includes('json')) {
+    process.stdout.write(fs.readFileSync(file(names[0]), 'utf8'));
+    process.exit(0);
+  }
   if (args.includes('json')) {
     const items = names.map(name => {
       const value = JSON.parse(fs.readFileSync(file(name), 'utf8'));
@@ -102,6 +106,62 @@ else if (args[0] === 'apply' && args[1] === '-k') fs.writeFileSync(file('goblin-
             .map((line) => JSON.parse(line));
     return { root, run, calls };
 }
+
+test("database repair targets the app Sandbox", async (t) => {
+    const name = "app";
+    const { root, run, calls } = await fixture();
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await writeFile(
+        join(root, name),
+        JSON.stringify({
+            metadata: { name },
+            spec: {
+                podTemplate: {
+                    spec: {
+                        containers: [
+                            {
+                                name: "auth",
+                                image: "keep-image",
+                                volumeMounts: [],
+                            },
+                        ],
+                        volumes: [],
+                    },
+                },
+            },
+        }),
+    );
+    run();
+    const requests = await calls();
+    assert.ok(
+        requests.some((args) => args[0] === "get" && args[1] === "sandbox"),
+    );
+    assert.ok(
+        requests
+            .filter((args) => args[1] === "sandbox")
+            .every((args) => args[2] === name),
+    );
+    assert.ok(
+        requests.some(
+            (args) =>
+                args[0] === "patch" &&
+                args[1] === "sandbox" &&
+                args[2] === name,
+        ),
+    );
+    assert.ok(
+        requests.some(
+            (args) => args[0] === "wait" && args.includes(`sandbox/${name}`),
+        ),
+    );
+    assert.ok(
+        !requests.some(
+            (args) =>
+                args[0] === "delete" &&
+                ["namespace", "sandbox", "pvc"].includes(args[1]!),
+        ),
+    );
+});
 
 test("certificate setup removes passwords, protects exported keys, and preserves identities/data on rerun", async (t) => {
     const { root, run, calls } = await fixture();

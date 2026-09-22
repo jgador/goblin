@@ -50,7 +50,7 @@ public sealed class SystemMonitorTests
     {
         JsonObject summary = Summary();
         summary["node"]!["cpu"]!.AsObject().Remove("usageNanoCores");
-        JsonObject pending = JsonNode.Parse("""{"metadata":{"name":"agent","namespace":"goblin-executions","uid":"pending"},"status":{"phase":"Pending"}}""")!.AsObject();
+        JsonObject pending = JsonNode.Parse("""{"metadata":{"name":"agent","namespace":"agents","uid":"pending"},"status":{"phase":"Pending"}}""")!.AsObject();
         JsonObject completed = JsonNode.Parse("""{"metadata":{"name":"finished"},"status":{"phase":"Succeeded"}}""")!.AsObject();
         MachineSnapshot view = KubernetesSystemSource.Project(Node(), summary, [pending, completed], Now);
         Assert.Null(view.Cpu.Used);
@@ -121,7 +121,7 @@ public sealed class SystemMonitorTests
     [Fact]
     public async Task MissingClusterCredentialsDoNotPreventStartupOrExposePaths()
     {
-        using var source = new KubernetesSystemSource(null, "vm", "goblin", "goblin-executions", "/missing/private-token", "/missing/private-ca");
+        using var source = new KubernetesSystemSource(null, "vm", "goblin", "agents", "/missing/private-token", "/missing/private-ca");
         using var monitor = new SystemMonitor(source);
         await monitor.CollectAsync(CancellationToken.None);
         Assert.Equal("unavailable", monitor.Current.Status);

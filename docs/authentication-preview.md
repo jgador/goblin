@@ -223,9 +223,7 @@ The manifest requires the `goblin-owner-password` Secret in `goblin`; see the
 provisioned with an older template, redeploy the updated template to install both
 the password and application automatically instead of following these manual steps.
 
-For an existing installation in `goblin-preview`, follow the
-[namespace migration guidance](#migrate-from-earlier-deployment-names) before
-applying the new manifest.
+See [Kubernetes names](kubernetes-names.md) for the pod and namespace layout.
 
 Build the image on a Docker-enabled machine for the VM's Linux architecture
 (the default Azure VM is amd64), then export it:
@@ -241,7 +239,7 @@ your existing SSH access. On the VM, import and deploy them:
 ```bash
 sudo k3s ctr images import goblin-auth.tar
 sudo k3s kubectl apply -f sandbox.yaml
-sudo k3s kubectl wait --for=condition=Ready sandbox/goblin-auth \
+sudo k3s kubectl wait --for=condition=Ready sandbox/app \
   -n goblin --timeout=180s
 sudo k3s kubectl port-forward -n goblin svc/goblin-auth 8787:8787
 ```
@@ -276,26 +274,6 @@ repository sandboxes; the execution pods never receive that service-account
 token or the application database certificate. The verification endpoint remains
 restricted. See [execution hosting](execution-hosting.md) for durable Work,
 connection reservations, sandbox isolation, and deployment configuration.
-
-### Migrate from earlier deployment names
-
-Earlier versions used `deploy/auth-preview/sandbox.yaml`, the `goblin-preview`
-namespace, and the `goblin-auth-preview` image and service. The current manifest
-is `deploy/auth/sandbox.yaml`, with namespace `goblin` and image and service
-`goblin-auth`. Kubernetes cannot rename a namespace. Applying the new manifest
-creates separate resources; it does not move the existing password Secret or PVC.
-
-Redeploy the updated Azure template to create `goblin-owner-password` in
-`goblin`. Build and import the image under its new name. For a fresh installation,
-apply the new manifest and connect your account again.
-
-To preserve a saved connection, back up the existing data volume and stop the
-old Sandbox workload before transferring its contents into the new namespace's
-`goblin-auth-data` PVC. Keep the new workload stopped until the transfer is
-complete, and preserve ownership by UID/GID 1000 and the private file permissions.
-Volume migration depends on the cluster's storage class. Keep the old namespace
-and PVC until access and persistence in `goblin` have been verified; deleting
-them can delete the original data.
 
 ## Configuration and storage
 

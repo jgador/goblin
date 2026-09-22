@@ -62,7 +62,8 @@ let work: View[] = [],
     agents: Agent[] = [],
     connections: Connection[] = [];
 let runtimes: { runtime: string; repositoryExecution: boolean }[] = [],
-    connectionsLoading = false;
+    connectionsLoading = false,
+    connectionsLoaded = false;
 const query = new URLSearchParams(location.search);
 let selected =
         query.get("item") ??
@@ -167,6 +168,7 @@ function forgetWorkspace() {
     conversations = [];
     agents = [];
     connections = [];
+    connectionsLoaded = false;
     repositories = [];
     github = null;
     draft = "";
@@ -232,7 +234,7 @@ async function refresh(preserveError = false) {
     } finally {
         if (!authenticated) forgetWorkspace();
         loading = false;
-        render();
+        render(true);
     }
 }
 async function refreshConnections() {
@@ -258,7 +260,8 @@ async function refreshConnections() {
         github = { ...github, notice: "GitHub status could not be refreshed." };
     if (enabled.status === "fulfilled") repositories = enabled.value;
     connectionsLoading = false;
-    render();
+    connectionsLoaded = true;
+    render(true);
 }
 async function send(
     path: string,
@@ -397,9 +400,30 @@ function renderHome() {
     const disconnected =
         !connections.length ||
         connections.every((c) => c.availability === "Disconnected");
-    return `<section class="home"><div class="home-content"><img class="home-portrait" src="/assets/branding/icon.svg" alt=""><h1>What should we work on?</h1><p class="home-description">A little help for your next big thing.</p>${composer("new", "Describe the intended outcome…")}${!available && !connectionsLoading ? `<div class="connection-nudge"><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div>` : ""}</div></section>`;
+    return `<section class="home"><div class="home-content"><img class="home-portrait" src="/assets/branding/icon.svg" alt=""><h1>What should we work on?</h1><p class="home-description">A little help for your next big thing.</p>${composer("new", "Describe the intended outcome…")}<div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
 }
-function render() {
+function refreshHome(html: string) {
+    const next = document.createElement("template");
+    next.innerHTML = html;
+    // Keep the home, portrait, composer and header mounted. Only server-backed
+    // regions that actually changed need replacing during a refresh.
+    for (const selector of [
+        ".sidebar",
+        ".workspace-notices",
+        ".connection-choice",
+        ".connection-nudge",
+    ]) {
+        const existing = root.querySelector(selector)!;
+        const updated = next.content.querySelector(selector)!;
+        if (!existing.isEqualNode(updated)) existing.replaceWith(updated);
+    }
+    const reply = root.querySelector<HTMLTextAreaElement>("#reply")!;
+    if (reply.value !== draft) reply.value = draft;
+    reply.disabled = sending;
+    root.querySelector<HTMLButtonElement>(".send")!.disabled =
+        sending || !!pending || workUnavailable;
+}
+function render(preserveHome = false) {
     const active =
         document.activeElement instanceof HTMLElement &&
         root.contains(document.activeElement)
@@ -462,10 +486,18 @@ function render() {
     if (!authenticated) {
         root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
-        root.innerHTML = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${mobile.matches && !sidebarCollapsed ? "inert" : ""}>
+        const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${mobile.matches && !sidebarCollapsed ? "inert" : ""}>
             <header class="workspace-header"><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button><span class="workspace-name">${view === "chat" ? "Conversation" : "Goblin"}</span></div><div class="header-actions"><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button></div></header>
-            ${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}
+            <div class="workspace-notices">${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
             ${view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main></div>`;
+        if (
+            preserveHome &&
+            sameContext &&
+            view === "new" &&
+            root.querySelector(".home")
+        )
+            refreshHome(html);
+        else root.innerHTML = html;
     }
     for (const [id, value] of preserved) {
         const field = document.getElementById(id) as

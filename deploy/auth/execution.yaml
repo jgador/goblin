@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: goblin-executions
+  name: agents
   labels:
     pod-security.kubernetes.io/enforce: restricted
 ---
@@ -15,7 +15,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: goblin-execution-controller
-  namespace: goblin-executions
+  namespace: agents
 rules:
   - apiGroups: [agents.x-k8s.io]
     resources: [sandboxes]
@@ -31,7 +31,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: goblin-execution-controller
-  namespace: goblin-executions
+  namespace: agents
 subjects:
   - kind: ServiceAccount
     name: goblin-execution-controller
@@ -92,7 +92,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: goblin-execution-isolation
-  namespace: goblin-executions
+  namespace: agents
 spec:
   podSelector: {}
   policyTypes: [Ingress, Egress]

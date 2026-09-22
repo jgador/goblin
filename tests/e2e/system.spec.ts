@@ -27,7 +27,7 @@ async function fixture(page: Page) {
             warnings: [] as string[],
             services: [
                 {
-                    name: "goblin-auth",
+                    name: "app",
                     namespace: "goblin",
                     phase: "Running",
                     ready: true,
@@ -128,8 +128,8 @@ test("System supports mobile, pending sandboxes, unavailable metrics, and lock c
         "Some Goblin services or agent sandboxes are not ready.",
     ];
     state.machine.services.push({
-        name: "goblin-execution-123456789123456789",
-        namespace: "goblin-executions",
+        name: "run-123456789123456789-1",
+        namespace: "agents",
         phase: "Pending",
         ready: false,
         restarts: 0,
@@ -140,6 +140,12 @@ test("System supports mobile, pending sandboxes, unavailable metrics, and lock c
     await page.goto("/?settings=system");
     const dialog = page.getByRole("dialog", { name: "Settings" });
     const panel = page.getByRole("region", { name: "System resources" });
+    await expect(
+        panel.getByText("run-123456789123456789-1", { exact: true }),
+    ).toBeVisible();
+    await expect(
+        panel.getByText("Agent sandbox", { exact: true }),
+    ).toBeVisible();
     await expect(panel.getByText("Pending", { exact: true })).toBeVisible();
     await expect(panel.getByText("1 / 2 ready", { exact: true })).toBeVisible();
     expect(

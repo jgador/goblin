@@ -228,6 +228,7 @@ def main():
         with zipfile.ZipFile(Path(__file__).parent) as bundle:
             for name in (
                 "installer.sh",
+                "sandbox-kustomization.yaml",
                 "install-app.sh",
                 "goblin-setup.service",
                 "goblin-installer.service",

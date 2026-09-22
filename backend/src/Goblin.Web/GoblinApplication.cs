@@ -82,7 +82,7 @@ public static class GoblinApplication
                 string caFile = builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
                 return new KubernetesSystemSource(builder.Configuration["GOBLIN_KUBERNETES_URL"],
                     nodeName, builder.Configuration["GOBLIN_NAMESPACE"] ?? "goblin",
-                    builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"] ?? "goblin-executions", tokenFile, caFile);
+                    builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"] ?? "agents", tokenFile, caFile);
             });
         builder.Services.AddSingleton(services => new SystemMonitor(services.GetService<ISystemSource>()));
         builder.Services.AddHostedService(services => services.GetRequiredService<SystemMonitor>());

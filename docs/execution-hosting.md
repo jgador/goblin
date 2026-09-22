@@ -16,7 +16,13 @@ Repository execution selects a repository enabled under **Settings → GitHub**.
 The agent's Git author name/email remain separate from the connected GitHub account.
 Each attempt records the GitHub account identity and connection generation,
 repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>` branch.
-It gets a fresh Agent Sandbox and private PVC in `goblin-executions`.
+It gets a fresh Agent Sandbox and private PVC named
+`run-<work-id>-<attempt-number>` in `agents`. The suffix starts at 1 for each Work
+and advances with each new execution; the global attempt ID remains unchanged.
+The pod uses the Sandbox's name. Environment references record the namespace,
+Work ID, and global attempt ID (`k8s/agents/run-<work-id>/<attempt-id>`), with the
+pod suffix derived from the durable attempt history. See
+[Kubernetes names](kubernetes-names.md) for the deployment layout.
 
 The sandbox receives repository content as a Git bundle and an attempt capability.
 It never receives the GitHub token. A trusted repository broker in the Goblin

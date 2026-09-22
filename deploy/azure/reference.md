@@ -51,11 +51,6 @@ The preview manifest mounts the Secret read-only and configures
 its verifier is invalid, Goblin refuses to start. Workspace login uses only the
 configured password.
 
-Existing installations in `goblin-preview` require a
-[namespace migration](../../docs/authentication-preview.md#migrate-from-earlier-deployment-names).
-Updating the template creates the password Secret in `goblin`; it does not move
-the old application's persistent data.
-
 For an existing Azure installation, redeploy the updated template with the same
 resource names and Goblin password. The background worker builds/imports the application,
 configures its public route, and replaces the pod to load the image, origin, and
@@ -147,7 +142,7 @@ Once Kubernetes exists, additional diagnostics are available:
 ```bash
 k3s kubectl get nodes -o wide
 k3s kubectl get deployments -n cert-manager
-k3s kubectl get deployment -n agent-sandbox-system agent-sandbox-controller
+k3s kubectl get deployment -n sandbox sandbox
 k3s kubectl get sandbox,pods,svc,ingress -n goblin
 journalctl -u k3s --no-pager -n 100
 ```
@@ -165,7 +160,7 @@ The independent systemd worker installs and checks:
 
 1. K3s `v1.36.4+k3s1`: ready API, registered node, and ready node.
 2. Cert-manager `v1.21.2`: all CRDs, controllers, and admission webhook.
-3. The Goblin owner password Secret and Agent Sandbox `v1.0.2`.
+3. The Goblin owner password Secret and Agent Sandbox `v1.0.3`.
 4. The Goblin image, built with Docker and imported into K3s.
 5. Certificate-authenticated PostgreSQL and schema migrations.
 6. The Goblin workload, execution namespace, and internal Traefik route.
@@ -184,6 +179,59 @@ Upstream installer/manifests use pinned versions and verified SHA-256 digests.
 Outbound internet access is required for downloads and image pulls. The Ubuntu
 24.04 LTS image uses Azure's latest revision. Agent Sandbox extensions are not
 installed. Existing K3s services are reused rather than automatically upgraded.
+
+### Agent Sandbox v1.0.3 upgrade
+
+The [v1.0.3 release](https://github.com/kubernetes-sigs/agent-sandbox/releases/tag/v1.0.3)
+requires no Goblin API or data migration from v1.0.2. Comparing the published
+core manifests shows only the controller image update and commented TLS options;
+the `agents.x-k8s.io/v1beta1` CRD and RBAC are unchanged.
+
+- Keep the core-only `sandbox.yaml`; extensions, the Python SDK, `sandbox-router`,
+  and `sandboxd` are not used by Goblin. The `sandboxd` process-group cleanup fix
+  therefore does not change Goblin's worker cancellation behavior.
+- Controller metrics TLS is opt-in; existing HTTP metrics remain unchanged.
+  Enabling it separately requires `--metrics-secure-serving`, matching scrape
+  scheme/port and trust settings, and mounted certificates if using
+  `--metrics-cert-dir`. TLS-profile flags without secure serving prevent startup.
+- The namespace-termination reconciliation fix is included automatically.
+  The new lifecycle guidance needs no worker change: repository attempts already
+  use `restartPolicy: Never`, a deadline, and explicit suspension with retained
+  identity/PVCs. Do not add automatic retries or TTL deletion of those fences.
+- Fleet, credential, and network-policy blueprints are optional examples, not
+  prerequisites; existing network and credential isolation stays in place.
+
+Fresh Azure/local installations use the new pin. Completed installations retain
+their installed controller; changing the checkout, rebuilding Goblin's image, or
+starting the local runner does not upgrade it. The commands below use the
+[short names](../../docs/kubernetes-names.md) and apply to installations already
+using them. Recreate test installations using earlier names; there is no naming
+migration or compatibility layer. From the repository checkout on the VM/WSL host,
+run the following in Bash as root after active repository attempts finish.
+This updates the controller in place without deleting Sandboxes or PVCs.
+
+```bash
+set -euo pipefail
+sandbox_upgrade_dir=$(mktemp -d /tmp/goblin-sandbox-upgrade.XXXXXX)
+curl --fail --silent --show-error --location \
+  https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.3/sandbox.yaml \
+  --output "$sandbox_upgrade_dir/sandbox.yaml"
+printf '725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96  %s\n' \
+  "$sandbox_upgrade_dir/sandbox.yaml" | sha256sum --check
+cp deploy/azure/setup/sandbox-kustomization.yaml "$sandbox_upgrade_dir/kustomization.yaml"
+k3s kubectl apply --server-side --dry-run=server --field-manager=goblin-bootstrap -k "$sandbox_upgrade_dir"
+k3s kubectl apply --server-side --field-manager=goblin-bootstrap -k "$sandbox_upgrade_dir"
+k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
+k3s kubectl rollout status deployment/sandbox -n sandbox --timeout=300s
+k3s kubectl get deployment sandbox -n sandbox -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+k3s kubectl get sandboxes,pods -n goblin
+k3s kubectl get sandboxes,pods -n agents
+```
+
+Stop and inspect any apply conflict instead of forcing ownership. Confirm the
+image ends in `:v1.0.3`, Goblin is ready, and a new repository attempt can execute
+and be cancelled/cleaned up while preserving its workspace and identity fence.
+A dry run validates API acceptance, not image pulls or controller/runtime behavior.
 
 ## Status UI and public URL handoff
 
@@ -233,6 +281,13 @@ archive into K3s. Before a new Docker installation starts, it enables
 `ip-forward-no-drop` in Docker's daemon configuration, preserving existing settings
 and avoiding a default forwarding drop policy that could interrupt K3s networking.
 K3s continues to use its existing containerd runtime to run the application.
+The installer targets `unix:///var/run/docker.sock` and maintains its own private
+Docker client configuration at
+`/var/lib/goblin/install/private/work/docker-config`. Public base images are pulled
+anonymously, subject to registry rate limits. Personal Docker credentials,
+credential helpers, contexts, TLS settings, and selected builders are not inherited
+or modified. The temporary client configuration is removed on successful setup;
+the local engine's images and build cache are retained.
 The archive's SHA-256 is used as the local image tag and saved in
 `/var/lib/goblin/application-source-sha256`; it identifies the downloaded content,
 not an independent verification of its publisher. Use a commit SHA for
