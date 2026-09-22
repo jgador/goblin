@@ -47,7 +47,7 @@ async function home(page: Page) {
         };
         await route.fulfill({ json: data[path] ?? [] });
     });
-    await page.goto("/");
+    await page.goto("/?new=work");
     await expect(page.locator(".work-title")).toHaveText(state.objective);
     await expect(page.locator(".connection-nudge")).toBeVisible();
     return state;

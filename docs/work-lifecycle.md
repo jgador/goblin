@@ -5,6 +5,9 @@ application. `Goblin.Application` persists its versioned snapshots, commands,
 conversations, and attempt projections in PostgreSQL and dispatches through
 Wolverine. Runtime adapters and the UI consume Goblin-owned contracts.
 
+The [Work-centered workspace](work-centered-ui.md) documents the UI hierarchy,
+its projections of these contracts, and deferred backend/schema capabilities.
+
 ## Product identities
 
 Goblin identities are positive C# `long` / PostgreSQL `bigint` values. The browser

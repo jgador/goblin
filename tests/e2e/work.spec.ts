@@ -79,17 +79,24 @@ test.describe("durable Work", () => {
         );
         await page.reload();
         await page.getByRole("button", { name: new RegExp(objective) }).click();
-        await page.getByRole("tab", { name: "Outputs" }).click();
         await expect(
-            page.getByRole("heading", { name: "Approved result" }),
+            page
+                .locator(".output-row summary")
+                .filter({ hasText: "Approved result" }),
         ).toBeVisible();
-        await page.getByRole("tab", { name: "Activity" }).click();
         await expect(
-            page.getByRole("heading", { name: "Result Approved" }),
+            page
+                .locator(".activity-title")
+                .filter({ hasText: "Result approved" }),
         ).toBeVisible();
-        await expect(page.locator(".detail-body")).toContainText(
-            "fixture-model",
-        );
+        await page
+            .locator(".output-row summary")
+            .filter({ hasText: "codex" })
+            .first()
+            .click();
+        await expect(
+            page.locator(".execution-properties").first(),
+        ).toContainText("fixture-model");
         const context = await browser.newContext();
         const other = await context.newPage();
         await unlock(other);
@@ -154,9 +161,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: text, exact: false })
             .first()
             .click();
-        await expect(page.locator(".detail .message-text").first()).toHaveText(
-            text,
-        );
+        await expect(page.locator(".goal-text")).toHaveText(text);
         await expect(page.locator('img[src="x"]')).toHaveCount(0);
         await page.screenshot({
             path: test.info().outputPath("desktop-work.png"),
