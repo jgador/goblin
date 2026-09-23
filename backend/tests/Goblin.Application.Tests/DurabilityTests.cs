@@ -42,6 +42,27 @@ public sealed class DurabilityTests
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [DatabaseFact]
+    public async Task MemoryRetrievesOnlyApprovedOtherWorkWithProvenance()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        WorkView source = await fixture.StartWork();
+        long id = source.Work.Id, attempt = source.Work.Attempts.Single().Id;
+        fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Use an indexed PostgreSQL search for Goblin memory.");
+        await fixture.Reconcile(id, attempt);
+        source = await fixture.Get(id);
+        long next = NextId();
+        WorkView current = await fixture.Apply(new(next, next, WorkAction.Create, Text: "Test durable execution memory search"));
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        WorkMemoryRetriever memory = scope.ServiceProvider.GetRequiredService<WorkMemoryRetriever>();
+        Assert.Empty(await memory.SearchAsync(current.Work));
+        source = await fixture.Apply(new(NextId(), id, WorkAction.Approve, source.Version, AttemptId: attempt));
+        WorkMemory hit = Assert.Single(await memory.SearchAsync(current.Work));
+        Assert.Equal(id, hit.WorkId);
+        Assert.Equal("Use an indexed PostgreSQL search for Goblin memory.", hit.Outcome);
+        Assert.Empty(await memory.SearchAsync(source.Work));
+    }
+
+    [DatabaseFact]
     public async Task MultiTurnPauseRetainsAttemptAndRejectsStaleDispatchAfterRestart()
     {
         await using Fixture fixture = await Fixture.CreateAsync();

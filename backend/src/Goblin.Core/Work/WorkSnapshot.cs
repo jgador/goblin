@@ -7,7 +7,14 @@ namespace Goblin.Core.Work;
 public sealed record WorkSnapshot(int SchemaVersion, long Id, string Objective,
     long? AgentId, WorkStatus Status, WorkAttention? Attention,
     AttemptSnapshot[] Attempts, WorkEvent[] History, WorkDecision[] Decisions,
-    WorkResult[] Results, WorkMessage[] Messages, WorkArtifact[] Artifacts);
+    WorkResult[] Results, WorkMessage[] Messages, WorkArtifact[] Artifacts)
+{
+    // Retrieved at dispatch, not part of the durable Work snapshot. Each entry
+    // cites a completed Work item and is context, never an instruction.
+    public WorkMemory[] RetrievedMemory { get; init; } = [];
+}
+
+public sealed record WorkMemory(long WorkId, string Objective, string Outcome);
 
 public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
     ExecutionTarget Target, DateTimeOffset QueuedAt, AttemptStatus Status,

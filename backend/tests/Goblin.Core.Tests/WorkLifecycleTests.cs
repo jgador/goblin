@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Goblin.Core.Work;
 using Xunit;
 
@@ -12,6 +13,19 @@ public sealed class WorkLifecycleTests
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     private static readonly DateTimeOffset Now = new(2026, 9, 19, 8, 0, 0, TimeSpan.Zero);
+
+    [Fact]
+    public void RetrievedMemoryTravelsWithExecutionButDoesNotBecomeWorkHistory()
+    {
+        var work = new WorkItem(NextId(), "Remember this", Now);
+        WorkSnapshot input = work.Snapshot() with
+        {
+            RetrievedMemory = [new(42, "Earlier task", "Approved answer")]
+        };
+        WorkSnapshot delivered = JsonSerializer.Deserialize<WorkSnapshot>(JsonSerializer.Serialize(input))!;
+        Assert.Equal(42, Assert.Single(delivered.RetrievedMemory).WorkId);
+        Assert.Empty(WorkItem.Restore(delivered).Snapshot().RetrievedMemory);
+    }
 
     [Theory]
     [InlineData(0L)]

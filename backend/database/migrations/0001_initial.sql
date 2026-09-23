@@ -32,6 +32,8 @@ CREATE TABLE public.work_items (
     updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX work_items_updated ON public.work_items(updated_at DESC, id);
+CREATE INDEX work_items_memory_search ON public.work_items USING gin (to_tsvector('english', objective))
+    WHERE status = 'Completed';
 
 -- Projection used for capacity, ownership, and recovery queries. The immutable
 -- attempt data and ordered product history also live in the Work snapshot.

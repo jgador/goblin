@@ -37,6 +37,11 @@ public sealed class ExecutionCoordinator
                 target => _host.Capabilities.Any(x => x.Runtime == target.Runtime &&
                     (target.Repository is null ? x.TextExecution : x.RepositoryExecution)), token);
             if (claimed is null) return;
+            claimed = claimed with
+            {
+                RetrievedMemory = await scope.ServiceProvider.GetRequiredService<WorkMemoryRetriever>()
+                    .SearchAsync(claimed, token)
+            };
             await _host.StartAsync(claimed, token);
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)

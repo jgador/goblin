@@ -37,6 +37,7 @@ public static class ApplicationServices
         services.AddScoped<WorkOutboxFactory>();
         services.AddScoped<IdentityStore>();
         services.AddScoped<WorkStore>();
+        services.AddScoped<WorkMemoryRetriever>();
         services.AddScoped<InspectionStore>();
         services.AddScoped<GitHubStore>();
         services.AddScoped<ConversationStore>();
