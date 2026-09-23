@@ -11,6 +11,7 @@ using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Execution;
 using Xunit;
+using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Application.Tests;
 
@@ -38,7 +39,7 @@ public sealed class BoundaryTests
         work.QueueExecution(NextId(), new("codex", NextId(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "http://goblin-repository:8788"), new UnusedHost(), new UnusedBroker());
-        JsonObject manifest = host.Manifest(work.Snapshot(), false);
+        JsonObject manifest = JsonSerializer.SerializeToNode(host.Manifest(work.Snapshot(), false), K.KubernetesJson.Options)!.AsObject();
         JsonNode spec = manifest["spec"]!["podTemplate"]!["spec"]!;
         Assert.False(spec["automountServiceAccountToken"]!.GetValue<bool>());
         Assert.Equal("Never", spec["restartPolicy"]!.GetValue<string>());
@@ -48,7 +49,7 @@ public sealed class BoundaryTests
         Assert.DoesNotContain("hostPath", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("/private/", json, StringComparison.Ordinal);
         Assert.DoesNotContain("owner-password", json, StringComparison.Ordinal);
-        Assert.Equal("Suspended", host.Manifest(work.Snapshot(), true)["spec"]!["operatingMode"]!.GetValue<string>());
+        Assert.Equal("Suspended", JsonSerializer.SerializeToNode(host.Manifest(work.Snapshot(), true), K.KubernetesJson.Options)!["spec"]!["operatingMode"]!.GetValue<string>());
     }
 
     private sealed class UnusedHost : IExecutionHost

@@ -20,7 +20,8 @@ backend/
   tools/Goblin.Database/  SQL migration runner and EF tooling host
   tests/                  .NET tests and the test-only application host
   schemas/codex/           Checked-in inputs to protocol generation
-  scripts/                Protocol generator
+  schemas/kubernetes/      Pinned schemas and selected execution fields
+  scripts/                 Python protocol generator and C# Kubernetes file-based generator
   Goblin.slnx              .NET solution
   Directory.Build.props   Shared .NET build settings
 frontend/
@@ -81,6 +82,8 @@ to TypeScript would require generating and checking the packaged JavaScript.
 | `npm run test:codex` | Build and check the pinned Codex binary with isolated test credentials |
 | `npm run protocol:generate` | Regenerate C# models from the checked-in schemas |
 | `npm run protocol:check` | Verify that generated models match the schemas |
+| `npm run kubernetes:generate` | Regenerate selected Kubernetes and Agent Sandbox models |
+| `npm run kubernetes:check` | Verify those models match the pinned schemas and selection |
 
 After building frontend assets, publish with:
 
