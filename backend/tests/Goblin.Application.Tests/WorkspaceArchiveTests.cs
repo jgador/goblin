@@ -2,6 +2,7 @@ using System;
 using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Goblin.Application.Workspaces;
 using Goblin.Execution;
@@ -54,7 +55,7 @@ public sealed class WorkspaceArchiveTests
     {
         using var api = new KubernetesApi("http://localhost");
         var host = new InspectionHost(api, new("agents", "image", "unused", "http://broker"));
-        JsonObject manifest = host.Manifest(new(Guid.NewGuid(), 1, 1, Guid.NewGuid(), "run-1-1"), false);
+        JsonObject manifest = JsonSerializer.SerializeToNode(host.Manifest(new(Guid.NewGuid(), 1, 1, Guid.NewGuid(), "run-1-1"), false), Goblin.Execution.Kubernetes.KubernetesJson.Options)!.AsObject();
         JsonNode spec = manifest["spec"]!["podTemplate"]!["spec"]!;
         Assert.True(spec["containers"]![0]!["volumeMounts"]![0]!["readOnly"]!.GetValue<bool>());
         Assert.DoesNotContain("restore", spec["containers"]![0]!["volumeMounts"]!.ToJsonString());

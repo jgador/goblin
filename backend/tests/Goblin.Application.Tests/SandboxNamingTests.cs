@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Application.Tests;
 
@@ -36,14 +38,14 @@ public sealed class SandboxNamingTests
             if (context.Request.Method == "POST") context.Response.StatusCode = 409;
             else if (context.Request.Path.Value!.EndsWith("/pods", StringComparison.Ordinal))
                 await context.Response.WriteAsync("{\"items\":[]}");
-            else await context.Response.WriteAsync("{\"spec\":{\"operatingMode\":\"Suspended\"}}");
+            else await context.Response.WriteAsync("{\"spec\":{\"operatingMode\":\"Suspended\",\"podTemplate\":{\"spec\":{\"containers\":[]}}}}");
         });
         await server.StartAsync();
         using var api = new KubernetesApi(server.Urls.Single());
         var broker = new Broker();
         var host = new SandboxHost(api, new("new-default", "worker-image", "/missing/credentials", "http://repository"), new TextHost(), broker);
         WorkSnapshot work = Work(reference);
-        JsonObject manifest = host.Manifest(work, false);
+        JsonObject manifest = Json(host.Manifest(work, false));
         Assert.Equal(expectedNamespace, manifest["metadata"]!["namespace"]!.GetValue<string>());
         Assert.Equal(name, manifest["metadata"]!["name"]!.GetValue<string>());
         Assert.Equal(name, manifest["spec"]!["podTemplate"]!["spec"]!["volumes"]![0]!["persistentVolumeClaim"]!["claimName"]!.GetValue<string>());
@@ -76,7 +78,7 @@ public sealed class SandboxNamingTests
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new(executionNamespace, "image", "/private", "http://repository"), new TextHost(), new Broker());
         Assert.Equal("k8s/" + executionNamespace + "/run-101/12", host.EnvironmentFor(101, 12));
-        JsonObject manifest = host.Manifest(Work(host.EnvironmentFor(101, 12)), false);
+        JsonObject manifest = Json(host.Manifest(Work(host.EnvironmentFor(101, 12)), false));
         Assert.Equal(executionNamespace, manifest["metadata"]!["namespace"]!.GetValue<string>());
         Assert.Equal("run-101-1", manifest["metadata"]!["name"]!.GetValue<string>());
     }
@@ -88,7 +90,7 @@ public sealed class SandboxNamingTests
         var host = new SandboxHost(api, new("agents", "image", "/private", "http://repository"), new TextHost(), new Broker());
         var work = WorkItem.Restore(Work(host.EnvironmentFor(101, 12)));
         WorkSnapshot first = work.Snapshot();
-        Assert.Equal("run-101-1", host.Manifest(first, false)["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("run-101-1", Json(host.Manifest(first, false))["metadata"]!["name"]!.GetValue<string>());
 
         work.ExecutionFailed(12, 1, FailureKind.ExecutionFailed, DateTimeOffset.UtcNow);
         work.RequireCleanup(12, 1, DateTimeOffset.UtcNow);
@@ -97,11 +99,11 @@ public sealed class SandboxNamingTests
         work.RetryExecution(907, first.Attempts[0].Target, DateTimeOffset.UtcNow);
         Assert.True(work.TryClaimExecution(907, 2, host.EnvironmentFor(101, 907), DateTimeOffset.UtcNow));
         WorkSnapshot second = WorkItem.Restore(work.Snapshot()).Snapshot();
-        JsonObject manifest = host.Manifest(second, false);
+        JsonObject manifest = Json(host.Manifest(second, false));
         Assert.Equal("run-101-2", manifest["metadata"]!["name"]!.GetValue<string>());
         Assert.Equal("907", manifest["metadata"]!["labels"]!["goblin-attempt"]!.GetValue<string>());
         Assert.Equal("run-101-2", manifest["spec"]!["podTemplate"]!["spec"]!["volumes"]![0]!["persistentVolumeClaim"]!["claimName"]!.GetValue<string>());
-        Assert.Equal("run-101-1", host.Manifest(first, true)["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("run-101-1", Json(host.Manifest(first, true))["metadata"]!["name"]!.GetValue<string>());
 
         // Requested revisions are also new executions, not a restart of run 2.
         work.ProposeResult(907, 2, "Proposed change", DateTimeOffset.UtcNow);
@@ -110,9 +112,9 @@ public sealed class SandboxNamingTests
         work.RequestChanges(907, "Revise it", DateTimeOffset.UtcNow);
         work.QueueExecution(3001, first.Attempts[0].Target, DateTimeOffset.UtcNow);
         Assert.True(work.TryClaimExecution(3001, 3, host.EnvironmentFor(101, 3001), DateTimeOffset.UtcNow));
-        Assert.Equal("run-101-3", host.Manifest(work.Snapshot(), false)["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("run-101-3", Json(host.Manifest(work.Snapshot(), false))["metadata"]!["name"]!.GetValue<string>());
         Assert.Equal(new long[] { 12, 907, 3001 }, work.Attempts.Select(attempt => attempt.Id));
-        Assert.Equal("run-202-1", host.Manifest(Work(host.EnvironmentFor(202, 4000), 202, 4000), false)["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("run-202-1", Json(host.Manifest(Work(host.EnvironmentFor(202, 4000), 202, 4000), false))["metadata"]!["name"]!.GetValue<string>());
     }
 
     [Theory]
@@ -141,6 +143,8 @@ public sealed class SandboxNamingTests
         Assert.True(work.TryClaimExecution(attemptId, 1, reference, DateTimeOffset.UtcNow));
         return work.Snapshot();
     }
+
+    private static JsonObject Json(K.Sandbox manifest) => JsonSerializer.SerializeToNode(manifest, K.KubernetesJson.Options)!.AsObject();
 
     private sealed class Broker : IRepositoryBroker
     {

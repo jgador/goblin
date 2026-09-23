@@ -8,9 +8,11 @@ using System.Net.Security;
 using System.Net.WebSockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Execution.Kubernetes;
 
 namespace Goblin.Execution;
 
@@ -46,18 +48,25 @@ public sealed class KubernetesApi : IDisposable
         string? text = await SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
         return text is null ? null : JsonNode.Parse(text)!.AsObject();
     }
+    public async Task<T?> GetAsync<T>(string path, CancellationToken token) where T : class
+    {
+        string? text = await SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
+        return text is null ? null : JsonSerializer.Deserialize<T>(text, KubernetesJson.Options)
+            ?? throw new IOException("Execution control plane returned an empty resource.");
+    }
     public Task<string?> LogsAsync(string path, CancellationToken token) => SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
-    public async Task<bool> CreateAsync(string path, JsonObject body, CancellationToken token) =>
-        await SendAsync(HttpMethod.Post, path, body, token, allowConflict: true) is not null;
-    public Task<string?> PatchAsync(string path, JsonObject body, CancellationToken token) => SendAsync(HttpMethod.Patch, path, body, token);
+    public async Task<bool> CreateAsync<T>(string path, T body, CancellationToken token) where T : class =>
+        await SendAsync(HttpMethod.Post, path, JsonSerializer.Serialize(body, KubernetesJson.Options), token, allowConflict: true) is not null;
+    public Task<string?> PatchAsync<T>(string path, T body, CancellationToken token) where T : class =>
+        SendAsync(HttpMethod.Patch, path, JsonSerializer.Serialize(body, KubernetesJson.Options), token);
     public Task<string?> DeleteAsync(string path, CancellationToken token) => SendAsync(HttpMethod.Delete, path,
-        new JsonObject { ["propagationPolicy"] = "Foreground" }, token, allowMissing: true);
-    private async Task<string?> SendAsync(HttpMethod method, string path, JsonObject? body,
+        JsonSerializer.Serialize(new DeleteOptions { PropagationPolicy = "Foreground" }, KubernetesJson.Options), token, allowMissing: true);
+    private async Task<string?> SendAsync(HttpMethod method, string path, string? body,
         CancellationToken token, bool allowMissing = false, bool allowConflict = false)
     {
         using var request = new HttpRequestMessage(method, path);
         if (_tokenFile is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", (await File.ReadAllTextAsync(_tokenFile, token)).Trim());
-        if (body is not null) request.Content = new StringContent(body.ToJsonString(), Encoding.UTF8,
+        if (body is not null) request.Content = new StringContent(body, Encoding.UTF8,
             method == HttpMethod.Patch ? "application/merge-patch+json" : "application/json");
         using HttpResponseMessage response = await _client.SendAsync(request, token);
         if ((allowMissing && response.StatusCode == HttpStatusCode.NotFound) ||

@@ -1,0 +1,113 @@
+{
+  "sources": {
+    "agentSandbox": {
+      "version": "v1.0.3",
+      "file": "sandbox-v1beta1.json",
+      "sha256": "9cb46ae1317deccb41617fb0a83ad1ca407cd141aec32c0c85fd594689a767af"
+    },
+    "kubernetes": {
+      "version": "v1.36.4",
+      "file": "kubernetes-v1.36.4-swagger.json.gz",
+      "sha256": "00fb8cb898782cc8fbdf6c2660969db220f97ce9c20175d31c6cd6e830b01926",
+      "rawSha256": "dcede2063da1d7ad62ecb5af8adb6d7fabd0b52385a7fa0048afb491dac90450"
+    }
+  },
+  "overrides": {
+    "Sandbox.metadata": "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+  },
+  "roots": {
+    "Sandbox": {
+      "source": "agentSandbox",
+      "fields": [
+        "apiVersion", "kind", "metadata.name", "metadata.namespace", "metadata.labels",
+        "spec.operatingMode", "spec.shutdownPolicy", "spec.service",
+        "spec.podTemplate.metadata.labels",
+        "spec.podTemplate.spec.activeDeadlineSeconds",
+        "spec.podTemplate.spec.automountServiceAccountToken",
+        "spec.podTemplate.spec.restartPolicy",
+        "spec.podTemplate.spec.terminationGracePeriodSeconds",
+        "spec.podTemplate.spec.securityContext.runAsNonRoot",
+        "spec.podTemplate.spec.securityContext.runAsUser",
+        "spec.podTemplate.spec.securityContext.runAsGroup",
+        "spec.podTemplate.spec.securityContext.fsGroup",
+        "spec.podTemplate.spec.securityContext.seccompProfile.type",
+        "spec.podTemplate.spec.containers.name",
+        "spec.podTemplate.spec.containers.image",
+        "spec.podTemplate.spec.containers.command",
+        "spec.podTemplate.spec.containers.workingDir",
+        "spec.podTemplate.spec.containers.securityContext.allowPrivilegeEscalation",
+        "spec.podTemplate.spec.containers.securityContext.readOnlyRootFilesystem",
+        "spec.podTemplate.spec.containers.securityContext.capabilities.drop",
+        "spec.podTemplate.spec.containers.resources.requests",
+        "spec.podTemplate.spec.containers.resources.limits",
+        "spec.podTemplate.spec.containers.volumeMounts.name",
+        "spec.podTemplate.spec.containers.volumeMounts.mountPath",
+        "spec.podTemplate.spec.containers.volumeMounts.readOnly",
+        "spec.podTemplate.spec.initContainers.name",
+        "spec.podTemplate.spec.initContainers.image",
+        "spec.podTemplate.spec.initContainers.command",
+        "spec.podTemplate.spec.initContainers.securityContext.allowPrivilegeEscalation",
+        "spec.podTemplate.spec.initContainers.securityContext.readOnlyRootFilesystem",
+        "spec.podTemplate.spec.initContainers.securityContext.capabilities.drop",
+        "spec.podTemplate.spec.initContainers.resources.requests",
+        "spec.podTemplate.spec.initContainers.resources.limits",
+        "spec.podTemplate.spec.initContainers.volumeMounts.name",
+        "spec.podTemplate.spec.initContainers.volumeMounts.mountPath",
+        "spec.podTemplate.spec.initContainers.volumeMounts.readOnly",
+        "spec.podTemplate.spec.volumes.name",
+        "spec.podTemplate.spec.volumes.persistentVolumeClaim.claimName",
+        "spec.podTemplate.spec.volumes.persistentVolumeClaim.readOnly",
+        "spec.podTemplate.spec.volumes.emptyDir.sizeLimit",
+        "spec.podTemplate.spec.volumes.secret.secretName",
+        "spec.podTemplate.spec.volumes.secret.defaultMode",
+        "spec.podTemplate.spec.volumes.configMap.name"
+      ]
+    },
+    "SandboxSuspendPatch": {
+      "source": "agentSandbox",
+      "partial": true,
+      "fields": ["spec.operatingMode"]
+    },
+    "Pod": {
+      "source": "kubernetes",
+      "definition": "io.k8s.api.core.v1.Pod",
+      "fields": [
+        "metadata.name", "spec.volumes.persistentVolumeClaim.claimName",
+        "status.phase", "status.initContainerStatuses.state.terminated.exitCode"
+      ]
+    },
+    "PodList": {
+      "source": "kubernetes",
+      "definition": "io.k8s.api.core.v1.PodList",
+      "fields": ["items"]
+    },
+    "Secret": {
+      "source": "kubernetes",
+      "definition": "io.k8s.api.core.v1.Secret",
+      "fields": ["apiVersion", "kind", "metadata.name", "metadata.labels", "type", "stringData"]
+    },
+    "ConfigMap": {
+      "source": "kubernetes",
+      "definition": "io.k8s.api.core.v1.ConfigMap",
+      "fields": ["apiVersion", "kind", "metadata.name", "metadata.labels", "data"]
+    },
+    "PersistentVolumeClaim": {
+      "source": "kubernetes",
+      "definition": "io.k8s.api.core.v1.PersistentVolumeClaim",
+      "fields": [
+        "apiVersion", "kind", "metadata.name", "metadata.labels",
+        "spec.accessModes", "spec.resources.requests"
+      ]
+    },
+    "PersistentVolumeClaimList": {
+      "source": "kubernetes",
+      "definition": "io.k8s.api.core.v1.PersistentVolumeClaimList",
+      "fields": ["items"]
+    },
+    "DeleteOptions": {
+      "source": "kubernetes",
+      "definition": "io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions",
+      "fields": ["propagationPolicy"]
+    }
+  }
+}

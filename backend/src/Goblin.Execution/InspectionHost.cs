@@ -1,10 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
-using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
+using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Execution;
 
@@ -22,88 +23,151 @@ public sealed class InspectionHost : IInspectionHost
         if (!await _api.CreateAsync(Sandboxes, Manifest(session, false), token)) return;
         if (session.CheckpointId is null)
         {
-            if (await _api.GetAsync(Core + "/persistentvolumeclaims/" + session.SourceVolume, token) is null)
+            if (await _api.GetAsync<K.PersistentVolumeClaim>(Core + "/persistentvolumeclaims/" + session.SourceVolume, token) is null)
                 throw new IOException("Saved workspace is unavailable.");
             return;
         }
-        await _api.CreateAsync(Core + "/secrets", new JsonObject
+        await _api.CreateAsync(Core + "/secrets", new K.Secret
         {
-            ["apiVersion"] = "v1",
-            ["kind"] = "Secret",
-            ["metadata"] = new JsonObject { ["name"] = name },
-            ["stringData"] = new JsonObject { ["capability"] = capability, ["url"] = _options.RepositoryUrl + "/internal/workspaces/" + session.Id }
+            ApiVersion = "v1",
+            Kind = "Secret",
+            Metadata = new() { Name = name },
+            StringData = new() { ["capability"] = capability, ["url"] = _options.RepositoryUrl + "/internal/workspaces/" + session.Id }
         }, token);
         // A concurrent Stop creates/patches the same identity, so it fences delayed starts.
-        JsonObject? saved = await _api.GetAsync(Sandboxes + "/" + name, token);
-        if (saved?["spec"]?["operatingMode"]?.GetValue<string>() == "Suspended") await _api.DeleteAsync(Core + "/secrets/" + name, token);
+        K.Sandbox? saved = await _api.GetAsync<K.Sandbox>(Sandboxes + "/" + name, token);
+        if (saved?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Suspended) await _api.DeleteAsync(Core + "/secrets/" + name, token);
     }
     public async Task<string> ObserveAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
-        JsonObject? pod = await _api.GetAsync(Core + "/pods/" + name, token);
+        K.Pod? pod = await _api.GetAsync<K.Pod>(Core + "/pods/" + name, token);
         if (pod is null)
         {
-            JsonObject? sandbox = await _api.GetAsync(Sandboxes + "/" + name, token);
-            return sandbox?["spec"]?["operatingMode"]?.GetValue<string>() == "Running" ? "Pending" : "Missing";
+            K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(Sandboxes + "/" + name, token);
+            return sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Running ? "Pending" : "Missing";
         }
-        string phase = pod["status"]?["phase"]?.GetValue<string>() ?? "Pending";
+        string phase = pod.Status?.Phase ?? "Pending";
         if (phase == "Running")
         {
             await _api.DeleteAsync(Core + "/secrets/" + name, token);
             return "Running";
         }
         if (phase is "Failed" or "Succeeded") return "Failed";
-        JsonArray? statuses = pod["status"]?["initContainerStatuses"]?.AsArray();
-        if (statuses is not null)
-            foreach (JsonNode? status in statuses)
-                if (status?["state"]?["terminated"]?["exitCode"]?.GetValue<int>() is > 0) return "Failed";
+        if (pod.Status?.InitContainerStatuses is { } statuses)
+            foreach (K.ContainerStatus status in statuses)
+                if (status.State?.Terminated?.ExitCode is > 0) return "Failed";
         return "Pending";
     }
     public async Task StopAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
         await _api.CreateAsync(Sandboxes, Manifest(session, true), token);
-        await _api.PatchAsync(Sandboxes + "/" + name, new JsonObject { ["spec"] = new JsonObject { ["operatingMode"] = "Suspended" } }, token);
+        await _api.PatchAsync(Sandboxes + "/" + name, SuspendPatch(), token);
         await _api.DeleteAsync(Core + "/secrets/" + name, token);
     }
-    public JsonObject Manifest(InspectionAllocation session, bool suspended)
+    public K.Sandbox Manifest(InspectionAllocation session, bool suspended)
     {
         string name = Name(session.Id);
-        JsonObject pod = JsonNode.Parse("""
-        {"metadata":{"labels":{"app":"goblin-inspection"}},"spec":{
-          "automountServiceAccountToken":false,"restartPolicy":"Never","terminationGracePeriodSeconds":2,
-          "securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"seccompProfile":{"type":"RuntimeDefault"}},
-          "containers":[{"name":"inspect","image":"","command":["sleep","infinity"],"workingDir":"/workspace/repository",
-            "securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},
-            "resources":{"requests":{"cpu":"10m","memory":"32Mi"},"limits":{"cpu":"500m","memory":"256Mi"}},
-            "volumeMounts":[{"name":"workspace","mountPath":"/workspace","readOnly":true},{"name":"temporary","mountPath":"/tmp"}]}],
-          "volumes":[{"name":"workspace"},{"name":"temporary","emptyDir":{"sizeLimit":"128Mi"}}]}}
-        """)!.AsObject();
-        pod["spec"]!["containers"]![0]!["image"] = _options.Image;
-        if (session.CheckpointId is null)
-            pod["spec"]!["volumes"]![0]!["persistentVolumeClaim"] = new JsonObject { ["claimName"] = session.SourceVolume, ["readOnly"] = true };
-        else
+        bool restore = session.CheckpointId is not null;
+        var volumes = new List<K.SandboxSpecPodTemplateSpecVolumesItem>
         {
-            pod["spec"]!["securityContext"]!["fsGroup"] = 1000;
-            pod["spec"]!["volumes"]![0]!["emptyDir"] = new JsonObject { ["sizeLimit"] = "4Gi" };
-            pod["spec"]!["volumes"]!.AsArray().Add(new JsonObject { ["name"] = "restore", ["secret"] = new JsonObject { ["secretName"] = name } });
-            JsonObject init = pod["spec"]!["containers"]![0]!.DeepClone().AsObject();
-            init["name"] = "restore";
-            init.Remove("workingDir");
-            init["command"] = new JsonArray("dotnet", "Goblin.Web.dll", "--inspection-restore");
-            init["volumeMounts"]![0]!["readOnly"] = false;
-            init["volumeMounts"]!.AsArray().Add(new JsonObject { ["name"] = "restore", ["mountPath"] = "/run/restore", ["readOnly"] = true });
-            init["resources"]!["limits"]!["memory"] = "512Mi";
-            pod["spec"]!["initContainers"] = new JsonArray(init);
-        }
-        return new JsonObject
+            new()
+            {
+                Name = "workspace",
+                PersistentVolumeClaim = restore ? null : new() { ClaimName = session.SourceVolume, ReadOnly = true },
+                EmptyDir = restore ? new() { SizeLimit = "4Gi" } : null
+            },
+            new() { Name = "temporary", EmptyDir = new() { SizeLimit = "128Mi" } }
+        };
+        if (restore) volumes.Add(new() { Name = "restore", Secret = new() { SecretName = name } });
+
+        List<K.SandboxSpecPodTemplateSpecInitContainersItem>? initContainers = restore ?
+        [
+            new()
+            {
+                Name = "restore", Image = _options.Image,
+                Command = ["dotnet", "Goblin.Web.dll", "--inspection-restore"],
+                SecurityContext = new()
+                {
+                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
+                    Capabilities = new() { Drop = ["ALL"] }
+                },
+                Resources = new()
+                {
+                    Requests = new() { ["cpu"] = "10m", ["memory"] = "32Mi" },
+                    Limits = new() { ["cpu"] = "500m", ["memory"] = "512Mi" }
+                },
+                VolumeMounts =
+                [
+                    new() { Name = "workspace", MountPath = "/workspace", ReadOnly = false },
+                    new() { Name = "temporary", MountPath = "/tmp" },
+                    new() { Name = "restore", MountPath = "/run/restore", ReadOnly = true }
+                ]
+            }
+        ] : null;
+
+        return new K.Sandbox
         {
-            ["apiVersion"] = "agents.x-k8s.io/v1beta1",
-            ["kind"] = "Sandbox",
-            ["metadata"] = new JsonObject { ["name"] = name, ["namespace"] = _options.Namespace },
-            ["spec"] = new JsonObject { ["operatingMode"] = suspended ? "Suspended" : "Running", ["shutdownPolicy"] = "Retain", ["service"] = false, ["podTemplate"] = pod }
+            ApiVersion = "agents.x-k8s.io/v1beta1",
+            Kind = "Sandbox",
+            Metadata = new() { Name = name, Namespace = _options.Namespace },
+            Spec = new()
+            {
+                OperatingMode = suspended ? K.SandboxSpecOperatingMode.Suspended : K.SandboxSpecOperatingMode.Running,
+                ShutdownPolicy = K.SandboxSpecShutdownPolicy.Retain,
+                Service = false,
+                PodTemplate = new()
+                {
+                    Metadata = new() { Labels = new() { ["app"] = "goblin-inspection" } },
+                    Spec = new()
+                    {
+                        AutomountServiceAccountToken = false,
+                        RestartPolicy = "Never",
+                        TerminationGracePeriodSeconds = 2,
+                        SecurityContext = new()
+                        {
+                            RunAsNonRoot = true,
+                            RunAsUser = 1000,
+                            RunAsGroup = 1000,
+                            FsGroup = restore ? 1000 : null,
+                            SeccompProfile = new() { Type = "RuntimeDefault" }
+                        },
+                        Containers =
+                        [
+                            new()
+                            {
+                                Name = "inspect", Image = _options.Image,
+                                Command = ["sleep", "infinity"], WorkingDir = "/workspace/repository",
+                                SecurityContext = new()
+                                {
+                                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
+                                    Capabilities = new() { Drop = ["ALL"] }
+                                },
+                                Resources = new()
+                                {
+                                    Requests = new() { ["cpu"] = "10m", ["memory"] = "32Mi" },
+                                    Limits = new() { ["cpu"] = "500m", ["memory"] = "256Mi" }
+                                },
+                                VolumeMounts =
+                                [
+                                    new() { Name = "workspace", MountPath = "/workspace", ReadOnly = true },
+                                    new() { Name = "temporary", MountPath = "/tmp" }
+                                ]
+                            }
+                        ],
+                        InitContainers = initContainers,
+                        Volumes = volumes
+                    }
+                }
+            }
         };
     }
+
+    private static K.SandboxSuspendPatch SuspendPatch() => new()
+    {
+        Spec = new() { OperatingMode = K.SandboxSuspendPatchSpecOperatingMode.Suspended }
+    };
     public static async Task<int> RestoreAsync()
     {
         try
