@@ -137,11 +137,11 @@ test(
             200,
         );
         const allocation = await request("/api/identities", {
-            kinds: ["Work", "Command", "Command"],
+            kinds: ["Work", "Command", "Command", "Inspection"],
         });
         assert.equal(allocation.status, 200);
         const ids = allocation.body.ids as string[];
-        assert.equal(ids.length, 3);
+        assert.equal(ids.length, 4);
         for (const id of ids) {
             assert.equal(typeof id, "string");
             assert.ok(BigInt(id) > 0n);

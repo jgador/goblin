@@ -4,13 +4,13 @@ namespace Goblin.Core.Work;
 
 public sealed partial class WorkItem
 {
-    public void SaveWorkspace(long attemptId, long ownerId, string checkpointId, DateTimeOffset now)
+    public void SaveWorkspace(long attemptId, long ownerId, long checkpointId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = CompletableAttempt(attemptId, ownerId);
-        Require(Guid.TryParse(checkpointId, out _), WorkRule.InvalidValue);
+        Require(checkpointId > 0, WorkRule.InvalidValue);
         if (attempt.CheckpointId == checkpointId) return;
         attempt.CheckpointId = checkpointId;
-        Record(WorkEventKind.WorkspaceSaved, now, attemptId, text: checkpointId);
+        Record(WorkEventKind.WorkspaceSaved, now, attemptId, text: checkpointId.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public void PauseForInput(long attemptId, long ownerId, long decisionId, string question,

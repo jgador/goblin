@@ -102,6 +102,18 @@ test(
             404,
         );
         assert.equal(
+            (await request("/internal/repository/1/setup-memory")).status,
+            404,
+        );
+        assert.equal(
+            (await request("/internal/repository/1/setup-memory", {})).status,
+            404,
+        );
+        assert.equal(
+            (await request("/internal/repository/1/operation-id", {})).status,
+            404,
+        );
+        assert.equal(
             (await request("/api/github/cancel", {})).body.status,
             "Disconnected",
         );

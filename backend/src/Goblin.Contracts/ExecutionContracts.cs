@@ -1,6 +1,8 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Core.Repositories;
 using Goblin.Core.Work;
 
 namespace Goblin.Contracts.Runtime;
@@ -13,7 +15,9 @@ public sealed record ExecutionObservation(ObservationKind Kind, ExecutionSession
 {
     public int TurnNumber { get; init; } = 1;
     public bool ReleaseWorkspace { get; init; } = true;
-    public string? CheckpointId { get; init; }
+    public long? CheckpointId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RepositorySetup[]? Setup { get; init; }
 }
 
 // The host chooses the environment for the requested capability. Work itself

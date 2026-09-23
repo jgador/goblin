@@ -147,11 +147,11 @@ public sealed class ExecutionAttempt
     public int TurnNumber { get; internal set; } = 1;
     public int WorkspaceNumber { get; internal set; } = 1;
     public bool ReleaseWorkspace { get; internal set; } = true;
-    public string? CheckpointId { get; internal set; }
+    public long? CheckpointId { get; internal set; }
     public ExecutionTurnRecord[] PriorTurns { get; internal set; } = [];
 }
 
 // Runtime turns and physical allocations do not replace the logical attempt.
 public sealed record ExecutionTurnRecord(int Number, int WorkspaceNumber, long? OwnerId,
     string? EnvironmentReference, ExecutionSession? Session, DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt, string? CheckpointId);
+    DateTimeOffset? FinishedAt, long? CheckpointId);

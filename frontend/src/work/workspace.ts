@@ -35,6 +35,7 @@ export class WorkWorkspace {
     private generation = 0;
     private opener?: HTMLElement;
     private pending?: { id: string; attemptId: string; checkpointId?: string };
+    private opening = false;
     constructor() {
         this.dialog.className = "settings-dialog work-workspace";
         this.dialog.setAttribute("aria-labelledby", "workspace-title");
@@ -101,7 +102,9 @@ export class WorkWorkspace {
     }
     private async request<T>(path: string, body?: unknown): Promise<T> {
         const response = await fetch(
-            `/api/work/${this.work!.id}/workspace${path}`,
+            path.startsWith("/api/")
+                ? path
+                : `/api/work/${this.work!.id}/workspace${path}`,
             body === undefined
                 ? { cache: "no-store" }
                 : {
@@ -233,24 +236,43 @@ export class WorkWorkspace {
                 ].includes(s.state),
             );
             if (action === "start") {
-                const checkpoint = this.data.checkpoints.find(
-                    (c) => c.id === this.selected,
-                );
-                const attemptId =
-                    checkpoint?.attemptId ??
-                    this.work!.attempts.filter((a) => a.target.repository).at(
-                        -1,
-                    )?.id;
-                if (!attemptId)
-                    throw new Error("This Work has no repository workspace.");
-                this.pending ??= {
-                    id: crypto.randomUUID(),
-                    attemptId,
-                    checkpointId: checkpoint?.id,
-                };
-                await this.request("/sessions", this.pending);
-                this.pending = undefined;
-                await this.refresh();
+                if (this.opening) return;
+                this.opening = true;
+                const generation = this.generation;
+                try {
+                    const checkpoint = this.data.checkpoints.find(
+                        (c) => c.id === this.selected,
+                    );
+                    const attemptId =
+                        checkpoint?.attemptId ??
+                        this.work!.attempts.filter(
+                            (a) => a.target.repository,
+                        ).at(-1)?.id;
+                    if (!attemptId)
+                        throw new Error(
+                            "This Work has no repository workspace.",
+                        );
+                    if (!this.pending) {
+                        const { ids } = await this.request<{ ids: string[] }>(
+                            "/api/identities",
+                            { kinds: ["Inspection"] },
+                        );
+                        if (generation !== this.generation || !this.dialog.open)
+                            return;
+                        this.pending = {
+                            id: ids[0]!,
+                            attemptId,
+                            checkpointId: checkpoint?.id,
+                        };
+                    }
+                    await this.request("/sessions", this.pending);
+                    if (generation !== this.generation || !this.dialog.open)
+                        return;
+                    this.pending = undefined;
+                    await this.refresh();
+                } finally {
+                    this.opening = false;
+                }
             }
             if (action === "stop" && session) {
                 this.socket?.close();

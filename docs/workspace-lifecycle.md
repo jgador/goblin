@@ -70,6 +70,10 @@ editable human handoff, and app previews are outside this increment.
 
 ## Capacity and storage
 
+[Repository setup memory](repository-setup-memory.md) preserves preparation
+knowledge across Work items independently of these workspace files. It does not
+keep a container running or share a mutable workspace between Work items.
+
 The database serializes admission with execution claims and inspection reservations.
 Additional sessions queue when capacity is occupied. Failed inspection allocations
 retain reservations until explicitly stopped. Each repository pod also has CPU,

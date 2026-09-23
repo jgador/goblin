@@ -29,4 +29,7 @@ public partial class GithubRepository
     [ForeignKey("ConnectionId")]
     [InverseProperty("GithubRepositories")]
     public virtual GithubConnection Connection { get; set; } = null!;
+
+    [InverseProperty("Repository")]
+    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
 }

@@ -11,7 +11,7 @@ public partial class RepositoryOperation
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("attempt_id")]
     public long AttemptId { get; set; }

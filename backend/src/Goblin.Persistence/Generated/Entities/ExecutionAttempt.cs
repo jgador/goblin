@@ -71,6 +71,9 @@ public partial class ExecutionAttempt
     [InverseProperty("Attempt")]
     public virtual RepositoryOperation? RepositoryOperation { get; set; }
 
+    [InverseProperty("Attempt")]
+    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
+
     [ForeignKey("WorkId")]
     [InverseProperty("ExecutionAttempts")]
     public virtual WorkItem Work { get; set; } = null!;

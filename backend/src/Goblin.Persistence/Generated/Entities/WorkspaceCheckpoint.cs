@@ -12,7 +12,7 @@ public partial class WorkspaceCheckpoint
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("work_id")]
     public long WorkId { get; set; }
@@ -47,6 +47,9 @@ public partial class WorkspaceCheckpoint
     [ForeignKey("AttemptId")]
     [InverseProperty("WorkspaceCheckpoints")]
     public virtual ExecutionAttempt Attempt { get; set; } = null!;
+
+    [InverseProperty("Checkpoint")]
+    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
 
     [ForeignKey("WorkId")]
     [InverseProperty("WorkspaceCheckpoints")]

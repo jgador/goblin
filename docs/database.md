@@ -3,9 +3,20 @@
 SQL files define Goblin's database. EF Core reverse engineers that database into
 checked-in C# classes. PostgreSQL uses unquoted `snake_case` names; C# uses
 `PascalCase`, with attributes preserving the mapping. Work, conversations, connections, attempts, and command receipts are durable.
+All Goblin-owned tables use `id bigint`, including the migration journal,
+repository operations, workspace checkpoints, inspection sessions, and setup
+memories. Their foreign keys use `bigint` too. PostgreSQL identity sequences
+allocate local IDs; GitHub repository IDs retain their upstream bigint values.
+Public HTTP represents bigint IDs as decimal strings to preserve JavaScript
+precision. Inspection requests reserve their ID before posting, and isolated
+workers reserve repository-operation IDs through the broker before submission.
+Replaying a request retains its original ID.
+
 All tables use PostgreSQL's default `public` schema. Wolverine's inbox/outbox
 tables keep their `wolverine_` prefix, and `public.schema_migrations` records
 schema history. EF scaffolding selects application tables explicitly.
+Wolverine-owned key types are dictated by the pinned messaging library and are
+the exception to Goblin's bigint convention.
 
 ## Set up certificate authentication in k3s
 

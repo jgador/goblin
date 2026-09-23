@@ -10,7 +10,7 @@ namespace Goblin.Web;
 
 public static class WorkspaceTerminal
 {
-    public static async Task ConnectAsync(HttpContext context, long workId, Guid sessionId, string ns,
+    public static async Task ConnectAsync(HttpContext context, long workId, long sessionId, string ns,
         InspectionStore store, KubernetesApi kubernetes, Workspace access)
     {
         access.ValidateOrigin(context.Request);

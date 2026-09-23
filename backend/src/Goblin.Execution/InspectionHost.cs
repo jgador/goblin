@@ -14,7 +14,7 @@ public sealed class InspectionHost : IInspectionHost
     private readonly KubernetesApi _api;
     private readonly SandboxOptions _options;
     public InspectionHost(KubernetesApi api, SandboxOptions options) { _api = api; _options = options; }
-    public static string Name(Guid id) => "inspect-" + id.ToString("N");
+    public static string Name(long id) => "inspect-" + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private string Core => "/api/v1/namespaces/" + _options.Namespace;
     private string Sandboxes => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + _options.Namespace + "/sandboxes";
     public async Task StartAsync(InspectionAllocation session, string capability, CancellationToken token)

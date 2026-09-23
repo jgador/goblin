@@ -103,7 +103,7 @@ public sealed class ExecutionCoordinator
                 if (a.StartedAt is null && observation.Session is not null)
                     current.ExecutionStarted(a.Id, a.OwnerId!.Value, observation.Session, now);
                 if (observation.CheckpointId is not null)
-                    current.SaveWorkspace(a.Id, a.OwnerId!.Value, observation.CheckpointId, now);
+                    current.SaveWorkspace(a.Id, a.OwnerId!.Value, observation.CheckpointId.Value, now);
                 switch (observation.Kind)
                 {
                     case ObservationKind.Running:
