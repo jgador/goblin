@@ -28,6 +28,8 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<RepositoryOperation> RepositoryOperations { get; set; }
 
+    public virtual DbSet<RepositorySetupMemory> RepositorySetupMemories { get; set; }
+
     public virtual DbSet<WorkCommand> WorkCommands { get; set; }
 
     public virtual DbSet<WorkItem> WorkItems { get; set; }
@@ -127,13 +129,39 @@ public partial class GoblinDbContext : DbContext
                 .IsUnique()
                 .HasFilter("(state = ANY (ARRAY['Queued'::text, 'Running'::text, 'Uncertain'::text]))");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
             entity.HasOne(d => d.Attempt).WithOne(p => p.RepositoryOperation)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_operations_attempt_id_fkey");
+        });
+
+        modelBuilder.Entity<RepositorySetupMemory>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("repository_setup_memories_pkey");
+
+            entity.Property(e => e.VerifiedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Attempt).WithMany(p => p.RepositorySetupMemories)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("repository_setup_memories_attempt_id_fkey");
+
+            entity.HasOne(d => d.Checkpoint).WithMany(p => p.RepositorySetupMemories)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("repository_setup_memories_checkpoint_id_fkey");
+
+            entity.HasOne(d => d.GithubConnection).WithMany(p => p.RepositorySetupMemories)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("repository_setup_memories_github_connection_id_fkey");
+
+            entity.HasOne(d => d.Repository).WithMany(p => p.RepositorySetupMemories)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("repository_setup_memories_repository_id_fkey");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.RepositorySetupMemories)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("repository_setup_memories_work_id_fkey");
         });
 
         modelBuilder.Entity<WorkCommand>(entity =>
@@ -163,7 +191,6 @@ public partial class GoblinDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("workspace_checkpoints_pkey");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
 
             entity.HasOne(d => d.Attempt).WithMany(p => p.WorkspaceCheckpoints)
@@ -183,7 +210,6 @@ public partial class GoblinDbContext : DbContext
                 .IsUnique()
                 .HasFilter("(state = ANY (ARRAY['Queued'::text, 'Starting'::text, 'Available'::text, 'Stopping'::text]))");
 
-            entity.Property(e => e.Id).ValueGeneratedNever();
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 

@@ -35,7 +35,7 @@ public sealed class WorkspaceArchive : IWorkspaceArchive
                 x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt)).FirstOrDefaultAsync(token);
         return row;
     }
-    public async Task<bool> VerifiedAsync(Guid id, long attemptId, int turnNumber, CancellationToken token)
+    public async Task<bool> VerifiedAsync(long id, long attemptId, int turnNumber, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.WorkspaceCheckpoints.AnyAsync(x => x.Id == id && x.AttemptId == attemptId && x.TurnNumber == turnNumber, token);
@@ -90,7 +90,6 @@ public sealed class WorkspaceArchive : IWorkspaceArchive
         if (used + archive.Length > _limits.MaxStorageBytes) throw new ApplicationFailure("workspace_storage_full");
         var row = new Persistence.Entities.WorkspaceCheckpoint
         {
-            Id = Guid.NewGuid(),
             WorkId = work.Id,
             AttemptId = attemptId,
             TurnNumber = turn,
@@ -112,7 +111,7 @@ public sealed class WorkspaceArchive : IWorkspaceArchive
         return await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.WorkId == workId).OrderByDescending(x => x.CreatedAt)
             .Select(x => new WorkspaceCheckpoint(x.Id, x.WorkId, x.AttemptId, x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt)).ToArrayAsync(token);
     }
-    public async Task<byte[]> ReadAsync(long workId, Guid id, CancellationToken token)
+    public async Task<byte[]> ReadAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         var row = await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.Id == id && x.WorkId == workId)

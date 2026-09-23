@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
+using Goblin.Core.Repositories;
 using Goblin.Core.Work;
 using Goblin.Integrations.Codex;
 
@@ -68,6 +69,10 @@ public static class SandboxWorker
                     await GitAsync(checkout, environment, "config", "user.email", repository.GitAuthorEmail);
                 }
                 string baseline = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
+                stage = "Setup memory";
+                string setupEnvironment = RepositorySetupWorkspace.EnvironmentIdentity(input.SandboxImage ?? "unknown");
+                var setupWorkspace = new RepositorySetupWorkspace(checkout, environment);
+                RepositorySetupMemory[] memories = await setupWorkspace.SelectAsync(await RepositoryClient.SetupMemoryAsync(attempt.Id), setupEnvironment, CancellationToken.None);
                 stage = "Runtime";
                 await using (var codex = new CodexClient(new() { Home = home, CodexHome = codexHome, Workspace = checkout, Command = "codex", RepositoryExecution = true }))
                 {
@@ -76,8 +81,13 @@ public static class SandboxWorker
                         session = value.Session ?? session;
                         Console.WriteLine("GOBLIN_PROGRESS " + JsonSerializer.Serialize(value with { TurnNumber = attempt.TurnNumber }, ExecutionFiles.Json));
                         return Task.CompletedTask;
-                    }, CancellationToken.None);
+                    }, CancellationToken.None, memories);
                 }
+                stage = "Setup verification";
+                VerifiedRepositorySetup[] observations = await setupWorkspace.VerifyAsync(outcome.Setup ?? [], CancellationToken.None);
+                // Candidate commands are private worker data, not Work messages,
+                // Kubernetes logs, or runtime progress exposed to the user.
+                outcome = outcome with { Setup = null };
                 stage = "Checkpoint";
                 WorkspaceFiles.EnsureQuiescent();
                 await GitAsync(checkout, environment, "add", "--all");
@@ -92,7 +102,12 @@ public static class SandboxWorker
                 WorkspaceCheckpoint saved;
                 try { WorkspaceFiles.Pack(root, archive); saved = await RepositoryClient.SaveAsync(work, commit, archive); }
                 finally { File.Delete(archive); }
-                outcome = outcome with { CheckpointId = saved.Id.ToString(), ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
+                if (observations.Length > 0)
+                {
+                    stage = "Save setup memory";
+                    await RepositoryClient.SaveSetupMemoryAsync(attempt.Id, new(attempt.TurnNumber, saved.Id, setupEnvironment, observations));
+                }
+                outcome = outcome with { CheckpointId = saved.Id, ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
             }
             catch (TimeoutException) { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.TimedOut); }
             catch { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.ExecutionFailed); }

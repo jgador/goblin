@@ -112,6 +112,16 @@ public sealed class PostgresTests
         await using TestDatabase database = await TestDatabase.CreateAsync();
         await using var admin = new NpgsqlConnection(database.AdminConnection);
         await admin.OpenAsync();
+        await using (var keys = new NpgsqlCommand("""
+            SELECT count(*) FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            JOIN pg_index i ON i.indrelid = c.oid AND i.indisprimary
+            WHERE n.nspname = 'public' AND c.relname NOT LIKE 'wolverine_%'
+              AND (i.indnatts <> 1 OR NOT EXISTS (
+                SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid
+                  AND a.attnum = ANY(i.indkey) AND a.attname = 'id' AND a.atttypid = 'int8'::regtype))
+            """, admin))
+            Assert.Equal(0L, await keys.ExecuteScalarAsync());
         await using (var schemas = new NpgsqlCommand("SELECT array_agg(DISTINCT schemaname::text) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema');", admin))
             Assert.Equal(new[] { "public" }, (string[])(await schemas.ExecuteScalarAsync())!);
 

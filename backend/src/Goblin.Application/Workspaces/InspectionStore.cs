@@ -15,9 +15,9 @@ using Wolverine.EntityFrameworkCore;
 
 namespace Goblin.Application.Workspaces;
 
-public sealed record StartInspection(Guid Id);
-public sealed record StopInspection(Guid Id);
-public sealed record InspectionView(Guid Id, long WorkId, long AttemptId, Guid? CheckpointId, string State);
+public sealed record StartInspection(long Id);
+public sealed record StopInspection(long Id);
+public sealed record InspectionView(long Id, long WorkId, long AttemptId, long? CheckpointId, string State);
 public sealed class InspectionStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
@@ -31,8 +31,9 @@ public sealed class InspectionStore
         return await db.WorkspaceSessions.AsNoTracking().Where(x => x.WorkId == workId).OrderByDescending(x => x.CreatedAt)
             .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, x.CheckpointId, x.State)).ToArrayAsync(token);
     }
-    public async Task<InspectionView> OpenAsync(long workId, Guid id, long attemptId, Guid? checkpointId, CancellationToken token)
+    public async Task<InspectionView> OpenAsync(long workId, long id, long attemptId, long? checkpointId, CancellationToken token)
     {
+        if (id <= 0 || checkpointId <= 0) throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
         WorkspaceSession? row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id, token);
@@ -68,7 +69,7 @@ public sealed class InspectionStore
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return View(row);
     }
-    public async Task StopAsync(long workId, Guid id, CancellationToken token)
+    public async Task StopAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
@@ -79,7 +80,7 @@ public sealed class InspectionStore
         await outbox.PublishAsync(new StopInspection(id));
         await outbox.SaveChangesAndFlushMessagesAsync(token);
     }
-    public async Task<InspectionAllocation?> ClaimAsync(Guid id, string capability, CancellationToken token)
+    public async Task<InspectionAllocation?> ClaimAsync(long id, string capability, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
@@ -93,19 +94,19 @@ public sealed class InspectionStore
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
         return Allocation(row);
     }
-    public async Task<InspectionAllocation> GetAsync(Guid id, CancellationToken token)
+    public async Task<InspectionAllocation> GetAsync(long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return Allocation(await db.WorkspaceSessions.AsNoTracking().SingleAsync(x => x.Id == id, token));
     }
-    public async Task<InspectionView> RequireAvailableAsync(long workId, Guid id, CancellationToken token)
+    public async Task<InspectionView> RequireAvailableAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         WorkspaceSession row = await db.WorkspaceSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.WorkId == workId && x.State == "Available", token)
             ?? throw new ApplicationFailure("workspace_unavailable");
         return View(row);
     }
-    public async Task<InspectionAllocation> AuthorizeRestoreAsync(Guid id, string capability, CancellationToken token)
+    public async Task<InspectionAllocation> AuthorizeRestoreAsync(long id, string capability, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         WorkspaceSession? row = await db.WorkspaceSessions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Starting", token);
@@ -113,7 +114,7 @@ public sealed class InspectionStore
             throw new ApplicationFailure("workspace_unavailable");
         return Allocation(row);
     }
-    public async Task ObserveAsync(Guid id, string observed, CancellationToken token)
+    public async Task ObserveAsync(long id, string observed, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);

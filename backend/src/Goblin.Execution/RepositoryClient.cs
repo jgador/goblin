@@ -36,8 +36,11 @@ public static class RepositoryClient
     public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, string kind)
     {
         if (kind is not ("publish" or "pull-request" or "fetch")) throw new IOException("Unsupported repository operation.");
-        Guid id = Guid.NewGuid();
-        string bundle = Path.Combine("/workspace", id.ToString("N") + ".bundle");
+        using HttpClient client = await ClientAsync();
+        using HttpResponseMessage reservation = await client.PostAsync($"/internal/repository/{attemptId}/operation-id", null);
+        reservation.EnsureSuccessStatusCode();
+        long id = await reservation.Content.ReadFromJsonAsync<long>();
+        string bundle = Path.Combine("/workspace", id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".bundle");
         var start = new ProcessStartInfo("git") { UseShellExecute = false, WorkingDirectory = checkout, RedirectStandardOutput = true, RedirectStandardError = true };
         foreach (string argument in new[] { "-c", "core.hooksPath=/dev/null", "bundle", "create", bundle, "refs/heads/" + branch }) start.ArgumentList.Add(argument);
         using Process git = Process.Start(start)!;
@@ -46,7 +49,6 @@ public static class RepositoryClient
         if (git.ExitCode != 0) throw new IOException("Could not prepare repository changes.");
         try
         {
-            using HttpClient client = await ClientAsync();
             await using FileStream stream = File.OpenRead(bundle);
             using var content = new StreamContent(stream);
             using HttpResponseMessage accepted = await client.PostAsync($"/internal/repository/{attemptId}/{id}/{kind}", content);
@@ -67,6 +69,17 @@ public static class RepositoryClient
     {
         using HttpClient client = await ClientAsync();
         return await client.GetFromJsonAsync<WorkSnapshot>($"/internal/repository/{attemptId}/current", ExecutionFiles.Json);
+    }
+    public static async Task<RepositorySetupMemory[]> SetupMemoryAsync(long attemptId)
+    {
+        using HttpClient client = await ClientAsync();
+        return await client.GetFromJsonAsync<RepositorySetupMemory[]>($"/internal/repository/{attemptId}/setup-memory", ExecutionFiles.Json) ?? [];
+    }
+    public static async Task SaveSetupMemoryAsync(long attemptId, SetupMemoryWrite request)
+    {
+        using HttpClient client = await ClientAsync();
+        using HttpResponseMessage response = await client.PostAsJsonAsync($"/internal/repository/{attemptId}/setup-memory", request, ExecutionFiles.Json);
+        response.EnsureSuccessStatusCode();
     }
     public static async Task<WorkspaceCheckpoint?> RestoreAsync(WorkSnapshot work, string root)
     {

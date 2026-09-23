@@ -11,7 +11,7 @@ public partial class WorkspaceSession
 {
     [Key]
     [Column("id")]
-    public Guid Id { get; set; }
+    public long Id { get; set; }
 
     [Column("work_id")]
     public long WorkId { get; set; }
@@ -20,7 +20,7 @@ public partial class WorkspaceSession
     public long AttemptId { get; set; }
 
     [Column("checkpoint_id")]
-    public Guid? CheckpointId { get; set; }
+    public long? CheckpointId { get; set; }
 
     [Column("source_volume")]
     public string SourceVolume { get; set; } = null!;

@@ -48,7 +48,7 @@ public sealed class WorkspaceTests
     public void ReleasedWorkspaceContinuesWithReasoningBeforeAllocatingRepositoryCompute()
     {
         WorkItem work = Running();
-        string checkpoint = Guid.NewGuid().ToString();
+        long checkpoint = 9007199254740993;
         work.SaveWorkspace(1, 10, checkpoint, Now);
         work.PauseForInput(1, 10, 11, "Which database?", true, Now);
         work.RequireCleanup(1, 10, Now);
@@ -64,6 +64,15 @@ public sealed class WorkspaceTests
         Assert.Equal(2, work.CurrentAttempt.WorkspaceNumber);
         Assert.Single(work.Attempts);
         Assert.Equal(checkpoint, work.CurrentAttempt.CheckpointId);
+    }
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void CheckpointIdentityMustBePositive(long checkpoint)
+    {
+        WorkItem work = Running();
+        Assert.Throws<WorkRuleException>(() => work.SaveWorkspace(1, 10, checkpoint, Now));
+        Assert.Null(work.CurrentAttempt!.CheckpointId);
     }
     [Fact]
     public void CancellingARetainedWorkspaceRequiresHostConfirmation()

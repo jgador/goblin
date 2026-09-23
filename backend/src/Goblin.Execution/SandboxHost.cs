@@ -110,7 +110,7 @@ public sealed class SandboxHost : IExecutionHost
             ApiVersion = "v1",
             Kind = "ConfigMap",
             Metadata = Metadata(name, work),
-            Data = new() { ["input.json"] = JsonSerializer.Serialize(new WorkerInput(work, "/run/codex", "codex"), ExecutionFiles.Json) }
+            Data = new() { ["input.json"] = JsonSerializer.Serialize(new WorkerInput(work, "/run/codex", "codex") { SandboxImage = _options.Image }, ExecutionFiles.Json) }
         };
         await _api.CreateAsync(address.Core + "/configmaps", input, token);
         var volume = new K.PersistentVolumeClaim
@@ -165,7 +165,7 @@ public sealed class SandboxHost : IExecutionHost
                     ExecutionObservation observation = JsonSerializer.Deserialize<ExecutionObservation>(result[14..], ExecutionFiles.Json)!;
                     if (observation.TurnNumber == work.Attempts[^1].TurnNumber && !(stop && observation.Kind == ObservationKind.Paused))
                     {
-                        if (observation.CheckpointId is not null && (_archives is null || !Guid.TryParse(observation.CheckpointId, out Guid checkpoint) ||
+                        if (observation.CheckpointId is long checkpoint && (_archives is null || checkpoint <= 0 ||
                             !await _archives.VerifiedAsync(checkpoint, work.Attempts[^1].Id, observation.TurnNumber, token)))
                             return new(ObservationKind.Uncertain, Failure: FailureKind.StorageUnavailable) { TurnNumber = work.Attempts[^1].TurnNumber };
                         return observation;

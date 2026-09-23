@@ -534,7 +534,7 @@ test("saved workspace inspection needs no compute and renders files as text", as
     page,
 }) => {
     await workspace(page);
-    const checkpoint = "a1761716-c9f5-47c5-bcae-f41c4da61f64";
+    const checkpoint = "9007199254740993";
     const posts: string[] = [];
     await page.route("**/api/work/1/workspace**", (route) => {
         const url = new URL(route.request().url());
@@ -584,4 +584,77 @@ test("saved workspace inspection needs no compute and renders files as text", as
     await expect(
         page.getByRole("button", { name: "Open workspace", exact: true }),
     ).toBeFocused();
+});
+
+test("inspection reserves a bigint ID and reuses it after an unconfirmed open", async ({
+    page,
+}) => {
+    await workspace(page);
+    const checkpoint = "9007199254740993",
+        session = "9007199254740995";
+    let reservations = 0;
+    const opens: Record<string, unknown>[] = [];
+    await page.route("**/api/identities", (route) => {
+        expect(route.request().postDataJSON()).toEqual({
+            kinds: ["Inspection"],
+        });
+        reservations++;
+        return route.fulfill({ json: { ids: [session] } });
+    });
+    await page.route("**/api/work/1/workspace**", (route) => {
+        const url = new URL(route.request().url());
+        if (route.request().method() === "POST") {
+            opens.push(route.request().postDataJSON());
+            return opens.length === 1
+                ? route.fulfill({
+                      status: 503,
+                      json: { error: { message: "Open unconfirmed" } },
+                  })
+                : route.fulfill({ json: {} });
+        }
+        if (url.pathname.endsWith("/files")) {
+            expect(url.pathname).toContain(`/${checkpoint}/files`);
+            return route.fulfill({ json: { files: [], truncated: false } });
+        }
+        return route.fulfill({
+            json: {
+                checkpoints: [
+                    {
+                        id: checkpoint,
+                        attemptId: "1",
+                        turnNumber: 1,
+                        branch: "goblin/1/1",
+                        commitSha: "a".repeat(40),
+                        createdAt: "2026-09-23T00:00:00Z",
+                    },
+                ],
+                sessions:
+                    opens.length > 1
+                        ? [
+                              {
+                                  id: session,
+                                  attemptId: "1",
+                                  checkpointId: checkpoint,
+                                  state: "Queued",
+                              },
+                          ]
+                        : [],
+                terminalAvailable: true,
+            },
+        });
+    });
+    await page.goto("/work?item=1");
+    await page
+        .getByRole("button", { name: "Open workspace", exact: true })
+        .click();
+    const dialog = page.getByRole("dialog", { name: "Workspace", exact: true });
+    await dialog.getByRole("button", { name: "Start inspection" }).click();
+    await expect(dialog.getByRole("alert")).toHaveText("Open unconfirmed");
+    await dialog.getByRole("button", { name: "Resend open request" }).click();
+    await expect(dialog).toContainText("Waiting for capacity");
+    expect(reservations).toBe(1);
+    expect(opens).toEqual([
+        { id: session, attemptId: "1", checkpointId: checkpoint },
+        { id: session, attemptId: "1", checkpointId: checkpoint },
+    ]);
 });

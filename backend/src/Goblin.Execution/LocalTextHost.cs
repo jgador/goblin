@@ -12,7 +12,10 @@ namespace Goblin.Execution;
 
 public sealed record TextHostOptions(string Directory, string CodexHome, string CodexCommand,
     string WorkerAssembly, string DotnetCommand = "dotnet");
-public sealed record WorkerInput(WorkSnapshot Work, string CodexHome, string CodexCommand);
+public sealed record WorkerInput(WorkSnapshot Work, string CodexHome, string CodexCommand)
+{
+    public string? SandboxImage { get; init; }
+}
 
 // No agent sandbox is allocated for text-only work. This independent worker has
 // tools disabled and receives an allowlisted environment, never DB credentials.

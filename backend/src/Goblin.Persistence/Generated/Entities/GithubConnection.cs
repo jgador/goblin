@@ -30,4 +30,7 @@ public partial class GithubConnection
 
     [InverseProperty("Connection")]
     public virtual ICollection<GithubRepository> GithubRepositories { get; set; } = [];
+
+    [InverseProperty("GithubConnection")]
+    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
 }

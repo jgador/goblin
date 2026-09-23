@@ -19,8 +19,8 @@ using Wolverine.EntityFrameworkCore;
 namespace Goblin.Application.Repositories;
 
 public sealed record RepositoryBrokerOptions(string Directory);
-public sealed record PublishRepository(Guid Id);
-public sealed record RepositoryOperationView(Guid Id, string State, string? Url);
+public sealed record PublishRepository(long Id);
+public sealed record RepositoryOperationView(long Id, string State, string? Url);
 
 public sealed class RepositoryBroker : IRepositoryBroker
 {
@@ -51,7 +51,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         _key = File.ReadAllBytes(key);
     }
     private string DirectoryFor(long attemptId) => Path.Combine(_directory, attemptId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-    private string BundleFor(long attemptId, Guid id) => Path.Combine(DirectoryFor(attemptId), id.ToString("N") + ".bundle");
+    private string BundleFor(long attemptId, long id) => Path.Combine(DirectoryFor(attemptId), id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".bundle");
     private string Capability(WorkSnapshot work)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
@@ -105,8 +105,18 @@ public sealed class RepositoryBroker : IRepositoryBroker
     }
     public string InputPath(long attemptId) => Path.Combine(DirectoryFor(attemptId), "input.bundle");
 
-    public async Task<RepositoryOperationView> EnqueueAsync(long attemptId, Guid id, string kind, Stream input, CancellationToken token)
+    public async Task<long> ReserveOperationIdAsync(long attemptId, CancellationToken token)
     {
+        WorkSnapshot work = await WorkAsync(attemptId, token);
+        if (work.Attempts[^1].Status is not (AttemptStatus.Starting or AttemptStatus.Running))
+            throw new ApplicationFailure("repository_operation_unavailable");
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        return await IdentityStore.NextAsync(db, IdentityKind.RepositoryOperation, token);
+    }
+
+    public async Task<RepositoryOperationView> EnqueueAsync(long attemptId, long id, string kind, Stream input, CancellationToken token)
+    {
+        if (id <= 0) throw new ApplicationFailure("repository_operation_unavailable");
         WorkSnapshot work = await WorkAsync(attemptId, token);
         RepositoryChange repository = work.Attempts[^1].Target.Repository!;
         repository.Grant!.Authorize(work.Id, attemptId, repository.Repository, repository.Repository, repository.Grant.Branch, kind);
@@ -148,24 +158,24 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         finally { File.Delete(temporary); }
     }
-    public async Task<RepositoryOperationView> StatusAsync(long attemptId, Guid id, CancellationToken token)
+    public async Task<RepositoryOperationView> StatusAsync(long attemptId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         RepositoryOperation operation = await db.RepositoryOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AttemptId == attemptId, token)
             ?? throw new ApplicationFailure("repository_operation_unavailable");
         return new(id, operation.State, operation.ResultUrl);
     }
-    public async Task ExecuteAsync(Guid id, CancellationToken token)
+    public async Task ExecuteAsync(long id, CancellationToken token)
     {
         try { await ExecuteCoreAsync(id, token); }
         catch
         {
             // Preserve failed dispatch evidence through a database outage. Never replay it.
-            await File.WriteAllTextAsync(Path.Combine(_directory, id.ToString("N") + ".failed"), "failed", CancellationToken.None);
+            await File.WriteAllTextAsync(Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed"), "failed", CancellationToken.None);
             throw;
         }
     }
-    private async Task ExecuteCoreAsync(Guid id, CancellationToken token)
+    private async Task ExecuteCoreAsync(long id, CancellationToken token)
     {
         long attemptId;
         await using (GoblinDbContext db = await _factory.CreateDbContextAsync(token))
@@ -194,7 +204,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
             string commit = row.Kind == "fetch" ? "read" : await _remote.InspectBundleAsync(repository, DirectoryFor(attemptId), BundleFor(attemptId, id), cancellation.Token);
             row.CommitSha = commit; row.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellation.Token);
-            await File.WriteAllLinesAsync(Path.Combine(_directory, id.ToString("N") + ".external"),
+            await File.WriteAllLinesAsync(Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external"),
                 [File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim(), File.ReadAllText("/proc/uptime").Split(' ')[0]], cancellation.Token);
             external = true;
             RepositoryOperationResult result = await _remote.ExecuteAsync(repository, DirectoryFor(attemptId), row.Kind, commit, cancellation.Token);
@@ -216,7 +226,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         if (rows.Length == 0) return null;
         foreach (RepositoryOperation? row in rows)
         {
-            string evidence = Path.Combine(_directory, row.Id.ToString("N") + ".failed");
+            string evidence = Path.Combine(_directory, row.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed");
             if (File.Exists(evidence))
             {
                 row.State = row.CommitSha is null ? "Failed" : "Uncertain";
@@ -251,9 +261,9 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         return rows.All(x => x.State == "Succeeded") ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
     }
-    private bool ExternalProcessStopped(Guid id)
+    private bool ExternalProcessStopped(long id)
     {
-        string marker = Path.Combine(_directory, id.ToString("N") + ".external");
+        string marker = Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external");
         if (!File.Exists(marker)) return true; // The external launch was never authorized.
         if (!OperatingSystem.IsLinux()) return false;
         string[] lifetime = File.ReadAllLines(marker);

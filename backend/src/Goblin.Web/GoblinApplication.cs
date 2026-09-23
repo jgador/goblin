@@ -328,12 +328,21 @@ public static class GoblinApplication
                 return WorkResponse(await store.RepositoriesAsync());
             });
             app.MapGet("/internal/repository/{attemptId:long}/input", (long attemptId, RepositoryBroker broker) => Results.File(broker.InputPath(attemptId), "application/octet-stream"));
-            app.MapPost("/internal/repository/{attemptId:long}/{operationId:guid}/{kind}", async (long attemptId, Guid operationId, string kind, HttpContext context, RepositoryBroker broker) =>
+            app.MapPost("/internal/repository/{attemptId:long}/operation-id", async (long attemptId, RepositoryBroker broker, CancellationToken token) =>
+                Results.Json(await broker.ReserveOperationIdAsync(attemptId, token)));
+            app.MapPost("/internal/repository/{attemptId:long}/{operationId:long}/{kind}", async (long attemptId, long operationId, string kind, HttpContext context, RepositoryBroker broker) =>
                 Results.Json(await broker.EnqueueAsync(attemptId, operationId, kind, context.Request.Body, context.RequestAborted)));
-            app.MapGet("/internal/repository/{attemptId:long}/operations/{operationId:guid}", async (long attemptId, Guid operationId, RepositoryBroker broker, CancellationToken token) =>
+            app.MapGet("/internal/repository/{attemptId:long}/operations/{operationId:long}", async (long attemptId, long operationId, RepositoryBroker broker, CancellationToken token) =>
                 Results.Json(await broker.StatusAsync(attemptId, operationId, token)));
             app.MapGet("/internal/repository/{attemptId:long}/current", async (long attemptId, RepositoryBroker broker, CancellationToken token) =>
                 Results.Json(await broker.CurrentAsync(attemptId, token), ExecutionFiles.Json));
+            app.MapGet("/internal/repository/{attemptId:long}/setup-memory", async (long attemptId, RepositorySetupStore store, CancellationToken token) =>
+                Results.Json(await store.ReadAsync(attemptId, token), ExecutionFiles.Json));
+            app.MapPost("/internal/repository/{attemptId:long}/setup-memory", async (long attemptId, HttpContext context, RepositorySetupStore store) =>
+            {
+                await store.SaveAsync(attemptId, context.Request.Body, context.RequestAborted);
+                return Results.NoContent();
+            });
             app.MapPost("/internal/repository/{attemptId:long}/checkpoint", async (long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceArchive archive) =>
                 Results.Json(await archive.SaveAsync(attemptId, int.Parse(context.Request.Headers["X-Goblin-Turn"].ToString(), System.Globalization.CultureInfo.InvariantCulture),
                     context.Request.Headers["X-Goblin-Commit"].ToString(), context.Request.Body, broker, context.RequestAborted), ExecutionFiles.Json));
@@ -345,7 +354,7 @@ public static class GoblinApplication
                 context.Response.Headers["X-Goblin-Checkpoint"] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(saved, ExecutionFiles.Json)));
                 return Results.File(await archive.ReadAsync(work.Id, saved.Id, token), "application/gzip");
             });
-            app.MapGet("/internal/workspaces/{id:guid}", async (Guid id, HttpContext context, InspectionStore sessions, WorkspaceArchive archive, CancellationToken token) =>
+            app.MapGet("/internal/workspaces/{id:long}", async (long id, HttpContext context, InspectionStore sessions, WorkspaceArchive archive, CancellationToken token) =>
             {
                 InspectionAllocation session = await sessions.AuthorizeRestoreAsync(id, context.Request.Headers["X-Goblin-Inspection"].ToString(), token);
                 return Results.File(await archive.ReadAsync(session.WorkId, session.CheckpointId!.Value, token), "application/gzip");
@@ -355,9 +364,9 @@ public static class GoblinApplication
                 await store.GetAsync(id, token);
                 return WorkResponse(new { checkpoints = await archive.ListAsync(id, token), sessions = await sessions.ListAsync(id, token), terminalAvailable = repositoryListener });
             });
-            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:guid}/files", async (long id, Guid checkpoint, string? path, WorkspaceArchive archive, CancellationToken token) =>
+            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:long}/files", async (long id, long checkpoint, string? path, WorkspaceArchive archive, CancellationToken token) =>
                 Results.Json(WorkspaceArchive.Inspect(await archive.ReadAsync(id, checkpoint, token), path)));
-            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:guid}/download", async (long id, Guid checkpoint, WorkspaceArchive archive, CancellationToken token) =>
+            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:long}/download", async (long id, long checkpoint, WorkspaceArchive archive, CancellationToken token) =>
                 Results.File(await archive.ReadAsync(id, checkpoint, token), "application/gzip", "work-" + id + "-workspace.tar.gz"));
             if (repositoryListener)
             {
@@ -367,9 +376,9 @@ public static class GoblinApplication
                     InspectionRequest request = JsonSerializer.Deserialize<InspectionRequest>(JsonSerializer.Serialize(body), WorkStore.Json)!;
                     return WorkResponse(await sessions.OpenAsync(id, request.Id, request.AttemptId, request.CheckpointId, CancellationToken.None));
                 });
-                app.MapPost("/api/work/{id:long}/workspace/sessions/{session:guid}/stop", async (long id, Guid session, InspectionStore sessions) =>
+                app.MapPost("/api/work/{id:long}/workspace/sessions/{session:long}/stop", async (long id, long session, InspectionStore sessions) =>
                 { await sessions.StopAsync(id, session, CancellationToken.None); return Results.NoContent(); });
-                app.MapGet("/api/work/{id:long}/workspace/sessions/{session:guid}/terminal", async (long id, Guid session, HttpContext context, InspectionStore sessions, KubernetesApi api) =>
+                app.MapGet("/api/work/{id:long}/workspace/sessions/{session:long}/terminal", async (long id, long session, HttpContext context, InspectionStore sessions, KubernetesApi api) =>
                     await WorkspaceTerminal.ConnectAsync(context, id, session, executionNamespace!, sessions, api, workspace));
             }
             app.MapGet("/api/conversations", async (ConversationStore store, CancellationToken token) => WorkResponse(await store.ListAsync(token)));
@@ -487,4 +496,4 @@ public static class GoblinApplication
     }
 }
 
-public sealed record InspectionRequest(Guid Id, long AttemptId, Guid? CheckpointId);
+public sealed record InspectionRequest(long Id, long AttemptId, long? CheckpointId);

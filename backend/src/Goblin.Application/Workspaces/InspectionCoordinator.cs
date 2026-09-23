@@ -14,7 +14,7 @@ public sealed class InspectionCoordinator : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly IInspectionHost _host;
     public InspectionCoordinator(IServiceScopeFactory scopes, IInspectionHost host) { _scopes = scopes; _host = host; }
-    public async Task StartAsync(Guid id, CancellationToken token)
+    public async Task StartAsync(long id, CancellationToken token)
     {
         using IServiceScope scope = _scopes.CreateScope();
         InspectionStore store = scope.ServiceProvider.GetRequiredService<InspectionStore>();
@@ -24,7 +24,7 @@ public sealed class InspectionCoordinator : BackgroundService
         try { await _host.StartAsync(allocation, capability, token); }
         catch { await store.ObserveAsync(id, "Failed", CancellationToken.None); }
     }
-    public async Task StopAsync(Guid id, CancellationToken token)
+    public async Task StopAsync(long id, CancellationToken token)
     {
         using IServiceScope scope = _scopes.CreateScope();
         InspectionStore store = scope.ServiceProvider.GetRequiredService<InspectionStore>();

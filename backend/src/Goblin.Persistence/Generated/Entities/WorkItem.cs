@@ -46,6 +46,9 @@ public partial class WorkItem
     public virtual ICollection<ExecutionAttempt> ExecutionAttempts { get; set; } = [];
 
     [InverseProperty("Work")]
+    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
+
+    [InverseProperty("Work")]
     public virtual ICollection<WorkCommand> WorkCommands { get; set; } = [];
 
     [InverseProperty("Work")]

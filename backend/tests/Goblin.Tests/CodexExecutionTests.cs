@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
+using Goblin.Core.Repositories;
 using Goblin.Core.Work;
+using Goblin.Execution;
 using Goblin.Integrations.Codex;
 using Goblin.Protocol;
 using Microsoft.AspNetCore.Builder;
@@ -37,6 +40,11 @@ public sealed class CodexExecutionTests
         await using WebApplication model = builder.Build();
         model.Urls.Add("http://127.0.0.1:0");
         string? toolOutput = null;
+        string requests = "";
+        var setup = new RepositorySetup("fixture-tools", "The repository needs this fixture tool", ["fixture 1.0"],
+            ["install-fixture"], ["package.json"], [new("test -f command-marker.txt", "")]);
+        var memory = new RepositorySetupMemory(9007199254740993, 11, 12, 1, "older-work", new string('a', 40), "fixture-image",
+            DateTimeOffset.UtcNow, new(setup, [new("package.json", new string('b', 64))], new string('c', 64)));
         int calls = 0;
         // A local model fixture drives the real runtime's nested command tool.
         // No user credentials or paid model requests are needed. command/exec
@@ -45,6 +53,7 @@ public sealed class CodexExecutionTests
         model.MapPost("/responses", async context =>
         {
             using JsonDocument request = await JsonDocument.ParseAsync(context.Request.Body);
+            requests += request.RootElement.GetRawText();
             JsonElement output = request.RootElement.GetProperty("input").EnumerateArray()
                 .LastOrDefault(item => item.GetProperty("type").GetString() == "custom_tool_call_output");
             if (output.ValueKind != JsonValueKind.Undefined) toolOutput = output.GetProperty("output").ToString();
@@ -63,7 +72,9 @@ public sealed class CodexExecutionTests
                     id = "message-probe",
                     role = "assistant",
                     status = "completed",
-                    content = new[] { new { type = "output_text", text = "{\"kind\":\"result\",\"text\":\"Command probe finished.\"}" } }
+                    content = new[] { new { type = "output_text", text = repositoryExecution
+                        ? JsonSerializer.Serialize(new { kind = "result", text = "Command probe finished.", releaseWorkspace = true, setup = new[] { setup } }, ExecutionFiles.Json)
+                        : "{\"kind\":\"result\",\"text\":\"Command probe finished.\",\"releaseWorkspace\":true}" } }
                 };
             object[] events = [
                 new { type = "response.created", response = new { id = "response-probe", status = "in_progress", output = Array.Empty<object>() } },
@@ -113,7 +124,7 @@ public sealed class CodexExecutionTests
             try
             {
                 result = await new CodexWorkRunner(client).RunAsync(work.Snapshot(), repositoryExecution,
-                    _ => Task.CompletedTask, timeout.Token);
+                    _ => Task.CompletedTask, timeout.Token, [memory]);
             }
             catch (IntegrationFailure)
             {
@@ -128,11 +139,22 @@ public sealed class CodexExecutionTests
             {
                 Assert.DoesNotContain("code-mode host is disabled", toolOutput);
                 Assert.Equal("command-host-ready", (await File.ReadAllTextAsync(marker)).Trim());
+                Assert.Contains("RepositorySetupMemory", requests);
+                Assert.Contains("fixture-tools", requests);
+                Assert.Contains("prior observations", requests);
+                Assert.Equal(setup.Topic, Assert.Single(result.Setup!).Topic);
+                await File.WriteAllTextAsync(Path.Combine(workspace, "package.json"), "{}");
+                using Process git = Process.Start(new ProcessStartInfo("git") { WorkingDirectory = workspace, ArgumentList = { "init", "--quiet" } })!;
+                await git.WaitForExitAsync();
+                var verifier = new RepositorySetupWorkspace(workspace, new Dictionary<string, string> { ["PATH"] = Environment.GetEnvironmentVariable("PATH")! });
+                Assert.Single(await verifier.VerifyAsync(result.Setup!, timeout.Token));
             }
             else
             {
                 Assert.Contains("code-mode host is disabled", toolOutput);
                 Assert.False(File.Exists(marker));
+                Assert.DoesNotContain("RepositorySetupMemory", requests);
+                Assert.Null(result.Setup);
             }
         }
         finally

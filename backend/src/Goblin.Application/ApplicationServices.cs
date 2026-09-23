@@ -39,6 +39,7 @@ public static class ApplicationServices
         services.AddScoped<WorkStore>();
         services.AddScoped<InspectionStore>();
         services.AddScoped<GitHubStore>();
+        services.AddScoped<RepositorySetupStore>();
         services.AddScoped<ConversationStore>();
         services.AddSingleton<ExecutionCoordinator>();
         services.AddHostedService<WorkRecovery>();

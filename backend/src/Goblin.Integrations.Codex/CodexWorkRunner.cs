@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
+using Goblin.Core.Repositories;
 using Goblin.Core.Work;
 using Goblin.Protocol;
 
@@ -19,7 +20,7 @@ public sealed class CodexWorkRunner
     public CodexWorkRunner(CodexClient codex) => _codex = codex;
 
     public async Task<ExecutionObservation> RunAsync(WorkSnapshot work, bool repositoryChanges,
-        Func<ExecutionObservation, Task> progress, CancellationToken token)
+        Func<ExecutionObservation, Task> progress, CancellationToken token, RepositorySetupMemory[]? setupMemory = null)
     {
         object gate = new();
         string? threadId = null, turnId = null;
@@ -89,7 +90,7 @@ public sealed class CodexWorkRunner
                     "Set releaseWorkspace based on whether this conversation still needs repository compute. " +
                     "Use false when continuing interactive investigation needs the existing workspace, true when waiting for review, longer human input, or no further file access. " +
                     "A release request is only intent; Goblin verifies and saves a recoverable checkpoint before releasing compute. Respect an explicit request to keep the workspace open. " +
-                    (repositoryChanges ? "Work only on the assigned repository and branch in this isolated environment. " +
+                    (repositoryChanges ? RepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
                         "Commit locally and use goblin-github publish to publish the branch; use goblin-github pull-request to open its draft PR after publishing. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
@@ -97,18 +98,29 @@ public sealed class CodexWorkRunner
                         (work.Attempts[^1].ReasoningOnly ? "If the latest request requires inspecting or changing repository files, return kind workspace with a short reason. Otherwise answer or ask clarifying questions using the saved Work context. " : ""))
             }, token);
             lock (gate) threadId = thread.Thread.Id;
-            string context = JsonSerializer.Serialize(new { work.Objective, work.Messages, work.Decisions, work.Results, work.Artifacts });
+            var contextFields = new Dictionary<string, object?>
+            {
+                ["Objective"] = work.Objective,
+                ["Messages"] = work.Messages,
+                ["Decisions"] = work.Decisions,
+                ["Results"] = work.Results,
+                ["Artifacts"] = work.Artifacts
+            };
+            if (repositoryChanges) contextFields["RepositorySetupMemory"] = setupMemory ?? [];
+            string context = JsonSerializer.Serialize(contextFields);
+            var properties = new Dictionary<string, object>
+            {
+                ["kind"] = new { type = "string", @enum = work.Attempts[^1].ReasoningOnly ? new[] { "result", "input", "workspace" } : ["result", "input"] },
+                ["text"] = new { type = "string" },
+                ["releaseWorkspace"] = new { type = "boolean" }
+            };
+            if (repositoryChanges) properties["setup"] = RepositorySetupInstructions.Schema();
             JsonElement schema = JsonSerializer.SerializeToElement(new
             {
                 type = "object",
                 additionalProperties = false,
-                required = new[] { "kind", "text", "releaseWorkspace" },
-                properties = new
-                {
-                    kind = new { type = "string", @enum = work.Attempts[^1].ReasoningOnly ? new[] { "result", "input", "workspace" } : ["result", "input"] },
-                    text = new { type = "string" },
-                    releaseWorkspace = new { type = "boolean" }
-                }
+                required = properties.Keys.ToArray(),
+                properties
             });
             TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
@@ -146,8 +158,16 @@ public sealed class CodexWorkRunner
             string? body = output.RootElement.GetProperty("text").GetString();
             if (string.IsNullOrWhiteSpace(body) || (kind is not ("result" or "input") && !(kind == "workspace" && work.Attempts[^1].ReasoningOnly)))
                 throw new IntegrationFailure("invalid_work_result", "The runtime returned an invalid result.");
+            RepositorySetup[]? setups = null;
+            if (repositoryChanges && output.RootElement.TryGetProperty("setup", out JsonElement setup))
+            {
+                setups = setup.Deserialize<RepositorySetup[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                if (setups is null || setups.Length > RepositorySetupRules.MaxObservations || !setups.All(RepositorySetupRules.Valid))
+                    throw new IntegrationFailure("invalid_work_result", "The runtime returned invalid setup observations.");
+            }
             return new(kind == "workspace" ? ObservationKind.WorkspaceRequired : kind == "input" ? ObservationKind.Paused : ObservationKind.Result, session, body)
             {
+                Setup = setups,
                 TurnNumber = work.Attempts[^1].TurnNumber,
                 ReleaseWorkspace = !repositoryChanges || kind == "result" ||
                     !output.RootElement.TryGetProperty("releaseWorkspace", out JsonElement release) || release.GetBoolean()

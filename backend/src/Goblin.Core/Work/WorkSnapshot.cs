@@ -20,7 +20,7 @@ public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
     public int TurnNumber { get; init; } = 1;
     public int WorkspaceNumber { get; init; } = 1;
     public bool ReleaseWorkspace { get; init; } = true;
-    public string? CheckpointId { get; init; }
+    public long? CheckpointId { get; init; }
     public ExecutionTurnRecord[] PriorTurns { get; init; } = [];
 }
 
