@@ -119,7 +119,7 @@ public sealed class CodexExecutionTests
                 new ApiKeyLoginAccountParams { ApiKey = "sk-goblin-command-test-not-a-real-key" }, timeout.Token);
             var work = new WorkItem(1, "Exercise the command host", DateTimeOffset.UtcNow);
             work.Assign(1, DateTimeOffset.UtcNow);
-            work.QueueExecution(1, new("codex", 1, "gpt-5.6-sol"), DateTimeOffset.UtcNow);
+            work.QueueExecution(1, new("codex", 1, "gpt-5.6-sol", requestedEffort: "high"), DateTimeOffset.UtcNow);
             ExecutionObservation result;
             try
             {
@@ -133,6 +133,7 @@ public sealed class CodexExecutionTests
             }
             Assert.Equal(ObservationKind.Result, result.Kind);
             Assert.Equal(2, calls);
+            Assert.Contains("\"effort\":\"high\"", requests);
             Assert.NotNull(toolOutput);
             string marker = Path.Combine(workspace, "command-marker.txt");
             if (repositoryExecution)

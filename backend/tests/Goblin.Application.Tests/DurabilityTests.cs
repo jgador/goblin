@@ -43,6 +43,82 @@ public sealed class DurabilityTests
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [DatabaseFact]
+    public async Task ModelCatalogSurvivesRefreshFailureAndSelectedEffortBelongsToTheAttempt()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var source = new CatalogSource();
+        IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
+        var catalogs = new ModelCatalogStore(factory, source);
+        await catalogs.GetAsync(1, 3, null);
+        ModelCatalogView first = await UntilCatalog(catalogs, x => !x.Refreshing && x.Models.Length == 3);
+        Assert.True(first.HasMore);
+        Assert.Equal("gpt-test-0", first.DefaultModel);
+        Assert.Equal(10, (await catalogs.GetAsync(1, 10, "gpt-test-11")).Models.Length);
+        Assert.Equal("gpt-test-11", (await catalogs.GetAsync(1, 3, "gpt-test-11")).Models[0].Model);
+
+        long id = NextId();
+        WorkView created = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Use the selected model"));
+        WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, created.Version, AgentId: 1));
+        WorkView queued = await fixture.Apply(new(NextId(), id, WorkAction.Execute, assigned.Version,
+            Model: "gpt-test-1", ReasoningEffort: "high", ModelSelectionProvided: true));
+        Assert.Equal("gpt-test-1", queued.Work.Attempts[^1].Target.RequestedModel);
+        Assert.Equal("high", queued.Work.Attempts[^1].Target.RequestedEffort);
+        Assert.Equal("high", (await fixture.Get(id)).Work.Attempts[^1].Target.RequestedEffort);
+
+        long rejectedId = NextId();
+        WorkView other = await fixture.Apply(new(NextId(), rejectedId, WorkAction.Create, Text: "Reject unsupported effort"));
+        other = await fixture.Apply(new(NextId(), rejectedId, WorkAction.Assign, other.Version, AgentId: 1));
+        ApplicationFailure rejected = await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(
+            NextId(), rejectedId, WorkAction.Execute, other.Version, Model: "gpt-test-1",
+            ReasoningEffort: "unsupported", ModelSelectionProvided: true)));
+        Assert.Equal("reasoning_effort_unavailable", rejected.Code);
+        Assert.Empty((await fixture.Get(rejectedId)).Work.Attempts);
+
+        source.Stamp = "v2";
+        source.Fail = true;
+        await catalogs.GetAsync(1, 3, null);
+        ModelCatalogView stale = await UntilCatalog(catalogs, x => !x.Refreshing && x.Stale);
+        Assert.Equal(3, stale.Models.Length);
+        Assert.Equal(2, source.Calls);
+        await catalogs.GetAsync(1, 3, null);
+        Assert.Equal(2, source.Calls); // Failure cooldown prevents another upstream request.
+
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(1, "Available", false,
+            observeAccount: true, accountSignature: "new-account");
+        ModelCatalogView changed = await catalogs.GetAsync(1, 3, null);
+        Assert.Empty(changed.Models); // A different account never sees the old catalog.
+    }
+
+    private static async Task<ModelCatalogView> UntilCatalog(ModelCatalogStore catalogs, Func<ModelCatalogView, bool> ready)
+    {
+        for (int i = 0; i < 100; i++)
+        {
+            ModelCatalogView view = await catalogs.GetAsync(1, 3, null);
+            if (ready(view)) return view;
+            await Task.Delay(25);
+        }
+        throw new TimeoutException("The model catalog did not settle.");
+    }
+
+    private sealed class CatalogSource : IModelCatalogSource
+    {
+        private int _calls;
+        public string Runtime => "codex";
+        public string Stamp { get; set; } = "v1";
+        public bool Fail { get; set; }
+        public int Calls => Volatile.Read(ref _calls);
+        public string ExecutableStamp() => Stamp;
+        public Task<RuntimeModel[]> ListAsync(CancellationToken token)
+        {
+            Interlocked.Increment(ref _calls);
+            if (Fail) throw new InvalidOperationException("private upstream failure");
+            return Task.FromResult(Enumerable.Range(0, 12).Select(i => new RuntimeModel(
+                $"id-{i}", $"gpt-test-{i}", $"Test model {i}", "medium", ["low", "medium", "high"], i == 0)).ToArray());
+        }
+    }
+
+    [DatabaseFact]
     public async Task SetupMemorySurvivesRestartIsScopedAndRequiresTheCurrentSavedTurn()
     {
         await using Fixture fixture = await Fixture.CreateAsync();

@@ -59,16 +59,20 @@ public sealed record ExecutionTarget
     public string Runtime { get; }
     public long ConnectionId { get; }
     public string? RequestedModel { get; }
+    public string? RequestedEffort { get; }
     public RepositoryChange? Repository { get; }
 
-    public ExecutionTarget(string runtime, long connectionId, string? requestedModel = null, RepositoryChange? repository = null)
+    public ExecutionTarget(string runtime, long connectionId, string? requestedModel = null,
+        RepositoryChange? repository = null, string? requestedEffort = null)
     {
         if (string.IsNullOrWhiteSpace(runtime) || connectionId <= 0 ||
-            (requestedModel is not null && string.IsNullOrWhiteSpace(requestedModel)))
+            (requestedModel is not null && string.IsNullOrWhiteSpace(requestedModel)) ||
+            (requestedEffort is not null && string.IsNullOrWhiteSpace(requestedEffort)))
             throw new WorkRuleException(WorkRule.InvalidValue);
         Runtime = runtime.Trim();
         ConnectionId = connectionId;
         RequestedModel = requestedModel?.Trim();
+        RequestedEffort = requestedEffort?.Trim();
         Repository = repository;
     }
 }

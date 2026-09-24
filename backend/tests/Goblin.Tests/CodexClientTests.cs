@@ -23,6 +23,41 @@ public sealed class CodexClientTests
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [Fact]
+    public async Task ModelCatalogPaginatesAndFiltersHiddenOptions()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync("models");
+        RuntimeModel[] models = await new CodexModelCatalogSource(fixture.Client).ListAsync(default);
+        Assert.Equal(["gpt-test-1", "gpt-test-2"], models.Select(x => x.Model));
+        Assert.True(models[0].IsDefault);
+        Assert.Equal(["low", "high"], models[0].SupportedReasoningEfforts);
+        string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
+        var calls = new List<JsonElement>();
+        foreach (string line in requests)
+        {
+            using JsonDocument request = JsonDocument.Parse(line);
+            if (request.RootElement.GetProperty("method").GetString() == "model/list")
+                calls.Add(request.RootElement.GetProperty("params").Clone());
+        }
+        Assert.Equal(2, calls.Count);
+        Assert.False(calls[0].GetProperty("includeHidden").GetBoolean());
+        Assert.Equal("page-2", calls[1].GetProperty("cursor").GetString());
+    }
+
+    [Fact]
+    public async Task ModelCatalogDoesNotStampAnOldProcessAsAReplacedExecutable()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        await using Fixture fixture = await Fixture.CreateAsync("models", commandWrapper: true);
+        var source = new CodexModelCatalogSource(fixture.Client);
+        Assert.Equal(2, (await source.ListAsync(default)).Length);
+        string original = source.ExecutableStamp();
+        await File.AppendAllTextAsync(fixture.Client.Options.Command, "\n# updated CLI\n");
+        Assert.NotEqual(original, source.ExecutableStamp());
+        IntegrationFailure failure = await Assert.ThrowsAsync<IntegrationFailure>(() => source.ListAsync(default));
+        Assert.Equal("runtime_unavailable", failure.Code);
+    }
+
+    [Fact]
     public async Task ConcurrentStartsPerformExactlyOneHandshakeAndIsolateConfiguration()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
@@ -208,7 +243,8 @@ public sealed class CodexClientTests
             Client.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false }, cancellationToken);
         public async Task<int> PidAsync() => int.Parse(await File.ReadAllTextAsync(Path.Combine(Workspace.CodexHome, "pid")));
 
-        public static async Task<Fixture> CreateAsync(string scenario = "manual", TimeSpan? timeout = null)
+        public static async Task<Fixture> CreateAsync(string scenario = "manual", TimeSpan? timeout = null,
+            bool commandWrapper = false)
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "backend/schemas/codex"))) root = root.Parent;
@@ -218,12 +254,20 @@ public sealed class CodexClientTests
             byte[] digest = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes("codex-client-test"), salt, 600_000, HashAlgorithmName.SHA256, 32);
             await File.WriteAllTextAsync(passwordFile, $"pbkdf2-sha256$600000${Convert.ToBase64String(salt)}${Convert.ToBase64String(digest)}\n");
             Workspace workspace = await Workspace.OpenAsync(data, "http://localhost:8787", passwordFile);
+            string command = "node";
+            if (commandWrapper)
+            {
+                if (OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
+                command = Path.Combine(data, "codex-wrapper");
+                await File.WriteAllTextAsync(command, "#!/bin/sh\nexec node \"$@\"\n");
+                File.SetUnixFileMode(command, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
             return new(workspace, new(new()
             {
                 CodexHome = workspace.CodexHome,
                 Home = workspace.Home,
                 Workspace = workspace.WorkingDirectory,
-                Command = "node",
+                Command = command,
                 Arguments = [Path.Combine(root!.FullName, "tests/fixtures/fake-codex.mts"), scenario],
                 RequestTimeout = timeout ?? TimeSpan.FromSeconds(3),
                 ShutdownTimeout = TimeSpan.FromMilliseconds(150),

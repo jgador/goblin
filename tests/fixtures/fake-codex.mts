@@ -90,6 +90,39 @@ for await (const line of createInterface({ input: process.stdin })) {
                 message: "Initialization handshake missing",
             },
         });
+    } else if (method === "model/list") {
+        const model = (name: string, hidden = false, isDefault = false) => ({
+            id: name,
+            model: name,
+            displayName: name.toUpperCase(),
+            description: "Fixture model",
+            hidden,
+            isDefault,
+            defaultReasoningEffort: "medium",
+            supportedReasoningEfforts: [
+                { reasoningEffort: "low", description: "Low" },
+                { reasoningEffort: "high", description: "High" },
+            ],
+        });
+        result(
+            id,
+            scenario === "models"
+                ? params.cursor
+                    ? { data: [model("gpt-test-2")], nextCursor: null }
+                    : {
+                          data: [
+                              model("gpt-test-1", false, true),
+                              model("hidden", true),
+                          ],
+                          nextCursor: "page-2",
+                      }
+                : {
+                      data: Array.from({ length: 12 }, (_, i) =>
+                          model(`gpt-test-${i}`, false, i === 0),
+                      ),
+                      nextCursor: null,
+                  },
+        );
     } else if (method === "account/read") {
         if (scenario === "hang" || scenario === "stubborn") continue;
         if (scenario === "crash") process.exit(7);

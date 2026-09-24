@@ -43,6 +43,11 @@ public sealed class PublicError : Exception
             "work_changed" => "This work changed. Refresh it before submitting another action.",
             "command_id_reused" => "That command identifier was already used for another action.",
             "connection_in_use" => "This connection is in use. Stop or reconcile its execution before changing accounts.",
+            "connection_not_found" => "This AI connection could not be found.",
+            "models_unavailable" => "Model choices are unavailable for this connection. Refresh models or use the runtime default.",
+            "model_unavailable" => "The selected model is no longer listed. Refresh models and choose another.",
+            "reasoning_effort_unavailable" => "The selected reasoning effort is unavailable for this model.",
+            "invalid_model_selection" => "Choose a listed model and reasoning effort.",
             "github_connection_in_use" => "GitHub is in use. Open Work to cancel or reconcile queued, active, or cleanup-pending repository work before changing this connection.",
             "repository_unavailable" => "Enable this repository in Settings and check its GitHub connection before starting work.",
             "repository_operation_unavailable" => "This repository operation is unavailable. Inspect Work and reconcile its execution.",
@@ -50,7 +55,8 @@ public sealed class PublicError : Exception
             "work_not_found" => "This work could not be found.",
             "agent_required" => "Assign an agent before starting work.",
             _ => "This command could not be accepted. Refresh the work and check the requested action."
-        }, failure.Code == "work_not_found" ? 404 : 409),
+        }, failure.Code is "work_not_found" or "connection_not_found" ? 404 :
+            failure.Code == "invalid_model_selection" ? 400 : 409),
         WorkRuleException failure => new("work_rule_" + failure.Rule, failure.Rule == WorkRule.ReconciliationRequired
             ? "Reconcile the previous execution before retrying."
             : "This action is not available in the current work state.", 409),

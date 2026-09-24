@@ -28,6 +28,12 @@ public sealed partial class CodexClient : IAsyncDisposable
 
     public CodexOptions Options { get; }
     public bool Ready { get { lock (_gate) return _ready; } }
+    public string? StartedExecutableStamp
+    {
+        get { lock (_gate) return field; }
+
+        private set;
+    }
     public event Action<ServerNotification>? Notification;
     public event Action? Disconnected;
 
@@ -58,8 +64,10 @@ public sealed partial class CodexClient : IAsyncDisposable
             child = new Process { StartInfo = Options.CreateStartInfo() };
             try
             {
+                string stamp = Options.ExecutableStamp();
                 if (!child.Start()) throw IntegrationFailure.RuntimeUnavailable();
                 _process = child;
+                StartedExecutableStamp = stamp;
             }
             catch { child.Dispose(); throw IntegrationFailure.RuntimeUnavailable(); }
         }
@@ -235,6 +243,7 @@ public sealed partial class CodexClient : IAsyncDisposable
             if (_process != child) return;
             _process = null;
             _ready = false;
+            StartedExecutableStamp = null;
             _retiring = RetireAsync(child);
             foreach ((RequestId id, Pending? request) in _pending)
                 if (_pending.TryRemove(id, out _)) request.Completion.TrySetException(IntegrationFailure.RuntimeUnavailable());

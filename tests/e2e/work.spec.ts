@@ -42,6 +42,125 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Assign agent", exact: true })
             .click();
     }
+    test("model and reasoning choices are saved on the execution attempt", async ({
+        page,
+    }) => {
+        await unlock(page);
+        const objective = "Choose a model " + Date.now();
+        await page
+            .getByRole("button", { name: "New work", exact: true })
+            .first()
+            .click();
+        await expect(
+            page.locator("#work-model option[value='gpt-test-0']"),
+        ).toHaveCount(1);
+        await expect(page.locator("#work-model option")).toHaveCount(4); // Default plus three quick choices.
+        await page
+            .getByRole("button", { name: "Show more models (up to 10)" })
+            .click();
+        await expect(
+            page.locator("#work-model option[value='gpt-test-9']"),
+        ).toHaveCount(1);
+        await expect(page.locator("#work-model option")).toHaveCount(11);
+        await page.locator("#work-model").selectOption("gpt-test-9");
+        await page.locator("#work-effort").selectOption("high");
+        await page.screenshot({
+            path: test.info().outputPath("new-work-model-picker.png"),
+            fullPage: true,
+        });
+        await page
+            .getByRole("textbox", { name: "Describe the intended outcome…" })
+            .fill(objective);
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .click();
+        await expect(page.locator(".detail h2")).toHaveText(objective);
+        await expect(page.locator("#work-model")).toHaveValue("gpt-test-9");
+        await expect(page.locator("#work-effort")).toHaveValue("high");
+        await page.reload();
+        await expect(page.locator("#work-model")).toHaveValue("gpt-test-9");
+        await page
+            .getByRole("button", { name: "Assign agent", exact: true })
+            .click();
+        await expect(
+            page.getByRole("button", { name: "Start work", exact: true }),
+        ).toBeVisible();
+        await expect(page.locator("#work-model")).toHaveValue("gpt-test-9");
+        await expect(page.locator("#work-effort")).toHaveValue("high");
+        await page.screenshot({
+            path: test.info().outputPath("model-picker.png"),
+            fullPage: true,
+        });
+        await page
+            .getByRole("button", { name: "Start work", exact: true })
+            .click();
+        const id = new URL(page.url()).searchParams.get("item");
+        await expect
+            .poll(
+                async () =>
+                    (
+                        await (await page.request.get(`/api/work/${id}`)).json()
+                    ).work.attempts.at(-1)?.target,
+            )
+            .toMatchObject({
+                requestedModel: "gpt-test-9",
+                requestedEffort: "high",
+            });
+        await page.reload();
+        await page
+            .locator(".output-row summary")
+            .filter({ hasText: "codex" })
+            .first()
+            .click();
+        await expect(
+            page.locator(".execution-properties").first(),
+        ).toContainText("gpt-test-9");
+        await expect(
+            page.locator(".execution-properties").first(),
+        ).toContainText("High");
+        await expect(page.locator("#work-model")).toBeVisible();
+    });
+    test("conversation model choice follows tracked work", async ({ page }) => {
+        await unlock(page);
+        await page
+            .getByRole("button", { name: "New conversation", exact: true })
+            .click();
+        await expect(
+            page.locator("#work-model option[value='gpt-test-0']"),
+        ).toHaveCount(1);
+        await page.locator("#work-model").selectOption("gpt-test-0");
+        await page.locator("#work-effort").selectOption("high");
+        await page.getByRole("textbox").fill("Plan a release " + Date.now());
+        await page.getByRole("button", { name: "Send message" }).click();
+        await page
+            .getByRole("button", { name: "Track this work", exact: true })
+            .click();
+        await expect(page.locator(".detail h2")).toContainText(
+            "Plan a release",
+        );
+        await expect(page.locator("#work-model")).toHaveValue("gpt-test-0");
+        await expect(page.locator("#work-effort")).toHaveValue("high");
+        await page.reload();
+        await expect(page.locator("#work-model")).toHaveValue("gpt-test-0");
+        await page
+            .getByRole("button", { name: "Assign agent", exact: true })
+            .click();
+        await page
+            .getByRole("button", { name: "Start work", exact: true })
+            .click();
+        const id = new URL(page.url()).searchParams.get("item");
+        await expect
+            .poll(
+                async () =>
+                    (
+                        await (await page.request.get(`/api/work/${id}`)).json()
+                    ).work.attempts.at(-1)?.target,
+            )
+            .toMatchObject({
+                requestedModel: "gpt-test-0",
+                requestedEffort: "high",
+            });
+    });
     test("decisions, revisions, provenance, and approval survive refresh and another browser", async ({
         page,
         browser,
@@ -59,6 +178,11 @@ test.describe("durable Work", () => {
         ).toBeVisible({ timeout: 15000 });
         await page.getByRole("textbox").fill("Prioritize a small release.");
         await page.getByRole("button", { name: "Send message" }).click();
+        // The fixture releases compute after asking for input. Answering saves
+        // context; the owner explicitly starts the next attempt.
+        await page
+            .getByRole("button", { name: "Start work", exact: true })
+            .click();
         await expect(
             page.getByRole("button", { name: "Approve & complete" }),
         ).toBeVisible({ timeout: 15000 });

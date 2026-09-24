@@ -75,6 +75,10 @@ public sealed class WorkStore
         if (command.CommandId <= 0 || command.WorkId <= 0 || !Enum.IsDefined(command.Action))
             throw new ApplicationFailure("invalid_command");
         if (command.Text?.Length > 4000) throw new ApplicationFailure("text_too_long");
+        if (command.Model?.Length > 128 || command.ReasoningEffort?.Length > 32 ||
+            (command.Action is not (WorkAction.Execute or WorkAction.Retry) &&
+                (command.Model is not null || command.ReasoningEffort is not null || command.ModelSelectionProvided)))
+            throw new ApplicationFailure("invalid_model_selection");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
@@ -119,7 +123,14 @@ public sealed class WorkStore
                 long attemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
                 RepositoryChange? repository = command.Repository ?? work.CurrentAttempt?.Target.Repository;
                 if (repository is not null) repository = await GitHubStore.BindAsync(db, repository, work.Id, attemptId, token);
-                var target = new ExecutionTarget(connection.Runtime, connection.Id, agent.Model, repository);
+                string? model = command.ModelSelectionProvided ? command.Model :
+                    command.Model ?? (command.Action == WorkAction.Retry ? work.CurrentAttempt?.Target.RequestedModel : agent.Model);
+                string? effort = command.ModelSelectionProvided ? command.ReasoningEffort :
+                    command.ReasoningEffort ?? (command.Action == WorkAction.Retry && command.Model is null
+                        ? work.CurrentAttempt?.Target.RequestedEffort : null);
+                if (command.ModelSelectionProvided || command.Model is not null || command.ReasoningEffort is not null)
+                    await ModelCatalogStore.ValidateSelectionAsync(db, connection, model, effort, token);
+                var target = new ExecutionTarget(connection.Runtime, connection.Id, model, repository, effort);
                 if (command.Action == WorkAction.Retry) work.RetryExecution(attemptId, target, now);
                 else work.QueueExecution(attemptId, target, now);
                 await outbox.PublishAsync(new DispatchWork(work.Id, attemptId));
@@ -232,7 +243,9 @@ public sealed class WorkStore
             .OrderBy(x => x.QueuedAt).ToArrayAsync(token);
     }
 
-    public async Task SetConnectionAsync(long id, string availability, bool requireIdle, CancellationToken token = default, bool completeChange = false)
+    public async Task<bool> SetConnectionAsync(long id, string availability, bool requireIdle,
+        CancellationToken token = default, bool completeChange = false,
+        bool observeAccount = false, string? accountSignature = null)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
@@ -243,13 +256,21 @@ public sealed class WorkStore
         if (row.Availability == "Changing")
         {
             if (requireIdle) throw new ApplicationFailure("connection_in_use");
-            if (!completeChange) return;
+            if (!completeChange) return false;
         }
-        if (row.Availability == "Verifying" && !requireIdle && !completeChange) return;
+        if (row.Availability == "Verifying" && !requireIdle && !completeChange) return false;
+        bool changedAccount = (observeAccount && row.AccountSignature != accountSignature) || completeChange;
+        if (changedAccount)
+        {
+            row.AuthGeneration++;
+            row.AccountSignature = accountSignature;
+            await db.ConnectionModelCatalogs.Where(x => x.ConnectionId == id).ExecuteDeleteAsync(token);
+        }
         row.Availability = availability;
         row.ChangedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
+        return changedAccount;
     }
 
     public async Task BeginVerificationAsync(long id, CancellationToken token = default)
