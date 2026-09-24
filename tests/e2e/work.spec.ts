@@ -51,19 +51,30 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
+        await page.locator(".model-picker-trigger").click();
+        const popover = page.getByRole("dialog", {
+            name: "Model and reasoning effort",
+        });
+        await popover.locator(".model-row").click();
         await expect(
-            page.locator("#work-model option[value='gpt-test-0']"),
+            popover.locator(".model-option[data-value='gpt-test-0']"),
         ).toHaveCount(1);
-        await expect(page.locator("#work-model option")).toHaveCount(4); // Default plus three quick choices.
+        await expect(
+            popover.locator(".model-option[data-action='select-model']"),
+        ).toHaveCount(4); // Default plus three quick choices.
         await page
             .getByRole("button", { name: "Show more models (up to 10)" })
             .click();
         await expect(
-            page.locator("#work-model option[value='gpt-test-9']"),
+            popover.locator(".model-option[data-value='gpt-test-9']"),
         ).toHaveCount(1);
-        await expect(page.locator("#work-model option")).toHaveCount(11);
-        await page.locator("#work-model").selectOption("gpt-test-9");
-        await page.locator("#work-effort").selectOption("high");
+        await expect(
+            popover.locator(".model-option[data-action='select-model']"),
+        ).toHaveCount(11);
+        await popover.locator(".model-option[data-value='gpt-test-9']").click();
+        await popover
+            .getByRole("button", { name: "High", exact: true })
+            .click();
         await page.screenshot({
             path: test.info().outputPath("new-work-model-picker.png"),
             fullPage: true,
@@ -75,18 +86,25 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Create work", exact: true })
             .click();
         await expect(page.locator(".detail h2")).toHaveText(objective);
-        await expect(page.locator("#work-model")).toHaveValue("gpt-test-9");
-        await expect(page.locator("#work-effort")).toHaveValue("high");
+        await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
+            "aria-label",
+            "Model: GPT-TEST-9, reasoning effort: High",
+        );
         await page.reload();
-        await expect(page.locator("#work-model")).toHaveValue("gpt-test-9");
+        await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
+            "aria-label",
+            "Model: GPT-TEST-9, reasoning effort: High",
+        );
         await page
             .getByRole("button", { name: "Assign agent", exact: true })
             .click();
         await expect(
             page.getByRole("button", { name: "Start work", exact: true }),
         ).toBeVisible();
-        await expect(page.locator("#work-model")).toHaveValue("gpt-test-9");
-        await expect(page.locator("#work-effort")).toHaveValue("high");
+        await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
+            "aria-label",
+            "Model: GPT-TEST-9, reasoning effort: High",
+        );
         await page.screenshot({
             path: test.info().outputPath("model-picker.png"),
             fullPage: true,
@@ -118,18 +136,25 @@ test.describe("durable Work", () => {
         await expect(
             page.locator(".execution-properties").first(),
         ).toContainText("High");
-        await expect(page.locator("#work-model")).toBeVisible();
+        await expect(page.locator(".model-picker-trigger")).toBeVisible();
     });
     test("conversation model choice follows tracked work", async ({ page }) => {
         await unlock(page);
         await page
             .getByRole("button", { name: "New conversation", exact: true })
             .click();
+        await page.locator(".model-picker-trigger").click();
+        const popover = page.getByRole("dialog", {
+            name: "Model and reasoning effort",
+        });
+        await popover.locator(".model-row").click();
         await expect(
-            page.locator("#work-model option[value='gpt-test-0']"),
+            popover.locator(".model-option[data-value='gpt-test-0']"),
         ).toHaveCount(1);
-        await page.locator("#work-model").selectOption("gpt-test-0");
-        await page.locator("#work-effort").selectOption("high");
+        await popover.locator(".model-option[data-value='gpt-test-0']").click();
+        await popover
+            .getByRole("button", { name: "High", exact: true })
+            .click();
         await page.getByRole("textbox").fill("Plan a release " + Date.now());
         await page.getByRole("button", { name: "Send message" }).click();
         await page
@@ -138,10 +163,15 @@ test.describe("durable Work", () => {
         await expect(page.locator(".detail h2")).toContainText(
             "Plan a release",
         );
-        await expect(page.locator("#work-model")).toHaveValue("gpt-test-0");
-        await expect(page.locator("#work-effort")).toHaveValue("high");
+        await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
+            "aria-label",
+            "Model: GPT-TEST-0, reasoning effort: High",
+        );
         await page.reload();
-        await expect(page.locator("#work-model")).toHaveValue("gpt-test-0");
+        await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
+            "aria-label",
+            "Model: GPT-TEST-0, reasoning effort: High",
+        );
         await page
             .getByRole("button", { name: "Assign agent", exact: true })
             .click();

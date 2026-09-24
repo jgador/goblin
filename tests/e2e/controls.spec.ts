@@ -10,12 +10,18 @@ async function setup(page: Page, assigned = true) {
         const data: Record<string, unknown> = {
             "/api/session": { authenticated: true },
             "/api/agents": [
-                { id: "1", name: "Goblin" },
-                { id: "2", name: "Release reviewer" },
+                { id: "1", name: "Goblin", connectionId: "1" },
+                { id: "2", name: "Release reviewer", connectionId: "1" },
             ],
             "/api/runtimes": [{ runtime: "codex", repositoryExecution: true }],
+            "/api/identities": { ids: ["900"] },
             "/api/connections": [
-                { id: "1", name: "Codex", availability: "Available" },
+                {
+                    id: "1",
+                    runtime: "codex",
+                    name: "Codex",
+                    availability: "Available",
+                },
             ],
             "/api/github": {
                 configured: true,
@@ -56,6 +62,43 @@ async function setup(page: Page, assigned = true) {
                 },
             ],
         };
+        if (path === "/api/connections/1/models") {
+            const models = Array.from({ length: 12 }, (_, index) => ({
+                id: `model-${index}`,
+                model:
+                    index === 0
+                        ? "gpt-6-sol"
+                        : index === 1
+                          ? "gpt-6-luna"
+                          : `gpt-test-${index}`,
+                displayName:
+                    index === 0
+                        ? "GPT-6 Sol"
+                        : index === 1
+                          ? "GPT-6 Luna"
+                          : `GPT Test ${index}`,
+                defaultReasoningEffort: index === 1 ? "high" : "medium",
+                supportedReasoningEfforts:
+                    index === 1
+                        ? ["low", "high"]
+                        : ["low", "medium", "high", "xhigh"],
+                isDefault: index === 0,
+                isNew: false,
+            }));
+            const limit = Number(
+                new URL(route.request().url()).searchParams.get("limit") ?? "3",
+            );
+            return route.fulfill({
+                json: {
+                    models: models.slice(0, limit),
+                    hasMore: true,
+                    defaultModel: "gpt-6-sol",
+                    stale: false,
+                    refreshing: false,
+                    unavailable: false,
+                },
+            });
+        }
         return route.fulfill({ json: data[path] ?? [] });
     });
     await page.goto("/work?item=1");
@@ -64,6 +107,140 @@ async function setup(page: Page, assigned = true) {
     );
     return commands;
 }
+
+test("compact model picker snaps the slider and keeps the choice across composers", async ({
+    page,
+}) => {
+    const commands = await setup(page);
+    const picker = page.locator(".model-picker-trigger");
+    await expect(picker).toHaveAttribute(
+        "aria-label",
+        "Model: GPT-6 Sol, reasoning effort: Medium",
+    );
+    await picker.click();
+    const popover = page.getByRole("dialog", {
+        name: "Model and reasoning effort",
+    });
+    await expect(popover).toBeVisible();
+    await expect(popover).toBeInViewport({ ratio: 1 });
+    await page.screenshot({
+        path: test.info().outputPath("compact-model-picker.png"),
+        fullPage: true,
+    });
+    await expect(popover.locator(".model-row")).toContainText("GPT-6 Sol");
+    const slider = popover.getByRole("slider", { name: "Reasoning effort" });
+    await expect(slider).toHaveValue("1");
+    await expect(popover.locator(".model-effort-visual")).toHaveAttribute(
+        "data-level",
+        "1",
+    );
+    await slider.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(picker).toHaveAttribute(
+        "aria-label",
+        "Model: GPT-6 Sol, reasoning effort: High",
+    );
+    const track = await slider.boundingBox();
+    expect(track).not.toBeNull();
+    await page.mouse.move(
+        track!.x + track!.width / 2,
+        track!.y + track!.height / 2,
+    );
+    await page.mouse.down();
+    await page.mouse.move(
+        track!.x + track!.width - 8,
+        track!.y + track!.height / 2,
+        { steps: 5 },
+    );
+    await page.mouse.up();
+    await expect(slider).toHaveValue("3");
+    await expect(slider).toHaveAttribute("aria-valuetext", "Extra High");
+    await expect(popover.locator(".model-effort-visual")).toHaveAttribute(
+        "data-level",
+        "3",
+    );
+    expect(
+        await popover
+            .locator(".model-effort-fill")
+            .evaluate((fill) =>
+                Math.round(
+                    fill.getBoundingClientRect().width /
+                        fill.parentElement!.getBoundingClientRect().width,
+                ),
+            ),
+    ).toBe(1);
+    await expect(picker).toHaveAttribute(
+        "aria-label",
+        "Model: GPT-6 Sol, reasoning effort: Extra High",
+    );
+    await popover.locator(".model-row").click();
+    await expect(
+        popover.locator(".model-option[data-action='select-model']"),
+    ).toHaveCount(4);
+    await popover
+        .getByRole("button", { name: "Show more models (up to 10)" })
+        .click();
+    await expect(
+        popover.locator(".model-option[data-action='select-model']"),
+    ).toHaveCount(11);
+    await popover.getByRole("button", { name: "GPT-6 Luna" }).click();
+    await expect(slider).toHaveValue("2");
+    await expect(
+        popover.getByRole("button", { name: "Extra High" }),
+    ).toBeDisabled();
+    await popover.getByRole("button", { name: "Low", exact: true }).click();
+    await expect(picker).toHaveAttribute(
+        "aria-label",
+        "Model: GPT-6 Luna, reasoning effort: Low",
+    );
+    await slider.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(slider).toHaveValue("2");
+    await expect(picker).toHaveAttribute(
+        "aria-label",
+        "Model: GPT-6 Luna, reasoning effort: High",
+    );
+    await popover.getByRole("button", { name: "Low", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(popover).toHaveCount(0);
+    await expect(picker).toBeFocused();
+    await page.reload();
+    await expect(picker).toHaveAttribute(
+        "aria-label",
+        "Model: GPT-6 Luna, reasoning effort: Low",
+    );
+    await page.getByRole("button", { name: "Start work", exact: true }).click();
+    await expect
+        .poll(() =>
+            commands.find(
+                (command) =>
+                    (command as { action?: string }).action === "Execute",
+            ),
+        )
+        .toMatchObject({
+            action: "Execute",
+            model: "gpt-6-luna",
+            reasoningEffort: "low",
+            modelSelectionProvided: true,
+        });
+    await page
+        .getByRole("button", { name: "New work", exact: true })
+        .first()
+        .click();
+    await expect(picker).toBeVisible();
+    await page
+        .getByRole("button", { name: "New conversation", exact: true })
+        .click();
+    await expect(picker).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await picker.click();
+    await expect(popover).toBeInViewport({ ratio: 1 });
+    expect(
+        await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+    ).toBe(true);
+});
 
 test("agent picker stays open across background refresh and retains its selection", async ({
     page,
