@@ -386,7 +386,7 @@ public static class GoblinApplication
                 app.MapPost("/api/work/{id:long}/workspace/sessions/{session:long}/stop", async (long id, long session, InspectionStore sessions) =>
                 { await sessions.StopAsync(id, session, CancellationToken.None); return Results.NoContent(); });
                 app.MapGet("/api/work/{id:long}/workspace/sessions/{session:long}/terminal", async (long id, long session, HttpContext context, InspectionStore sessions, KubernetesApi api) =>
-                    await WorkspaceTerminal.ConnectAsync(context, id, session, executionNamespace!, sessions, api, workspace));
+                    await WorkspaceTerminal.ConnectAsync(context, id, session, sessions, api, workspace));
             }
             app.MapGet("/api/conversations", async (ConversationStore store, CancellationToken token) => WorkResponse(await store.ListAsync(token)));
             app.MapPost("/api/conversations/commands", async (HttpContext context, ConversationStore store) =>

@@ -45,19 +45,27 @@ public sealed class InspectionStore
         if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == workId && (x.State == "Queued" || x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention"), token))
             throw new ApplicationFailure("workspace_session_exists");
         Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
-        WorkSnapshot work = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(workRow.State!, WorkStore.Json)!;
+        WorkSnapshot work = WorkStore.Restore(workRow).Snapshot();
         AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.Repository is not null) ?? throw new ApplicationFailure("workspace_not_found");
-        if (checkpointId is null) WorkspaceSessionRules.RequireOpenable(attempt.Status);
+        WorkWorkspace workspace = work.Workspace ?? throw new ApplicationFailure("workspace_not_found");
+        if (checkpointId is null)
+        {
+            WorkspaceSessionRules.RequireOpenable(attempt.Status);
+            if (workspace.AttemptId != attemptId) throw new ApplicationFailure("workspace_not_found");
+            WorkspaceSessionRules.RequireOpenable(work.Attempts[^1].Status);
+            if (work.Attempts[^1].CleanupPending ||
+                (work.Attempts[^1].Status is AttemptStatus.Waiting or AttemptStatus.Queued && !work.Attempts[^1].ReleaseWorkspace))
+                throw new ApplicationFailure("workspace_unavailable");
+        }
         if (checkpointId is not null && !await db.WorkspaceCheckpoints.AnyAsync(x => x.Id == checkpointId && x.WorkId == workId && x.AttemptId == attemptId, token))
             throw new ApplicationFailure("workspace_not_found");
-        int index = Array.FindIndex(work.Attempts, x => x.Id == attemptId) + 1;
         row = new()
         {
             Id = id,
             WorkId = workId,
             AttemptId = attemptId,
             CheckpointId = checkpointId,
-            SourceVolume = "run-" + workId + "-" + index + (attempt.WorkspaceNumber == 1 ? "" : "-s" + attempt.WorkspaceNumber),
+            SourceVolume = workspace.EnvironmentReference,
             State = "Queued",
             CapabilityHash = "",
             CreatedAt = DateTime.UtcNow,
@@ -86,8 +94,10 @@ public sealed class InspectionStore
         await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
         if (row.State != "Queued") return null;
+        if (row.CheckpointId is null && await db.ExecutionAttempts.AnyAsync(x => x.WorkId == row.WorkId && x.GithubConnectionId != null &&
+            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token)) return null;
         int occupied = await db.ExecutionAttempts.CountAsync(x => x.GithubConnectionId != null &&
-            (x.Status == "Starting" || x.Status == "Running" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
+            (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
         occupied += await db.WorkspaceSessions.CountAsync(x => x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention", token);
         if (occupied >= _limits.MaxSandboxes) return null;
         row.State = "Starting"; row.CapabilityHash = Hash(capability); row.UpdatedAt = DateTime.UtcNow;

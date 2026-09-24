@@ -7,19 +7,14 @@ hash and unique suffix to Deployment pods; do not remove those identity suffixes
 | --- | --- | --- |
 | Agent Sandbox controller | `sandbox` | `sandbox-<hash>-<suffix>` |
 | Goblin application | `goblin` | `app` |
-| Repository execution | `agents` | `run-<work-id>-<attempt-number>` |
+| Repository execution | `agents` | `work-<work-id>` |
 
-For Work `123`, its first execution is `run-123-1`; an explicit retry is
-`run-123-2`. The final number is the one-based position in that Work's durable
-attempt history, not the global attempt ID. A requested revision or continuation
-also advances this number. Internal attempt IDs and labels remain unchanged.
+Work `123` retains Sandbox/PVC `work-123` across turns, retries, and revisions.
+Each attempt keeps its own identity, repository branch and permissions. Each
+compute allocation receives Secret and ConfigMap `input-<work-id>-<attempt-id>-<allocation-number>`.
+Suspension removes the pod and temporary inputs while retaining the Sandbox/PVC.
 
-An **attempt** is the internal record of one execution, including the first run;
-it does not mean a failure has already happened. Each new attempt gets a matching
-Sandbox, workspace PVC, Secret, and ConfigMap. Cleanup
-removes the pod and temporary inputs, but keeps the suspended Sandbox and PVC.
-
-This changes names, not namespace separation or permissions. PostgreSQL,
+Namespace separation remains unchanged. PostgreSQL,
 Headlamp, Kubernetes system components, Service names, security labels, image
 names, and persistent application/database volume names are unchanged. The
 application still uses the `goblin-auth` Service and `app=goblin-auth` label.
@@ -30,23 +25,23 @@ The overlay shortens the Deployment name and moves its namespaced resources and
 ServiceAccount binding to `sandbox`. It does not rewrite the controller image,
 CRD/API name, or cluster-role permissions.
 
-Environment references use `k8s/<namespace>/run-<work-id>/<global-attempt-id>`.
-The claimed namespace remains part of execution provenance even if the default
-configuration changes later. The adapter derives the pod suffix from the
-persisted Work history.
+Environment references use `k8s/<namespace>/work-<work-id>`. The recorded namespace
+remains in use even when the configured default changes.
 
 ## Local test installations
 
-This is an unreleased, breaking naming change. There is no migration or fallback
-for earlier resource names or execution references. Recreate local test
-installations instead of preserving resources under earlier names:
+Goblin is unreleased. Recreate local test installations when the workspace or
+database format changes:
 
 ```bash
 npm run install:local -- reset --yes
 npm run install:local -- start
 ```
 
-Reset deletes the local Goblin cluster and its test data, including saved
-connections, Work history, and workspaces. Set a new password and reconnect
-accounts after installation. Editing this checkout alone does not change a
-running installation.
+Reset deletes the local cluster and its persistent data. Use the repository's
+`$clean-slate` skill for a full reset that also removes local test credentials
+and the shared password verifier.
+
+The installation includes the application and execution RBAC together; PVC
+label updates require `patch` on `persistentvolumeclaims`. Editing the checkout
+alone does not change a running installation.

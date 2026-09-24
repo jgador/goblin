@@ -21,4 +21,8 @@ public sealed class ObjectMeta
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Namespace { get; init; }
 
+    [JsonPropertyName("resourceVersion")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ResourceVersion { get; init; }
+
 }

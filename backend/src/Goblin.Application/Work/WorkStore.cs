@@ -197,8 +197,10 @@ public sealed class WorkStore
             failure = FailureKind.ConnectionUnavailable;
         if (failure is null && attempt.Target.Repository is not null && !attempt.ReasoningOnly)
         {
+            if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id && x.CheckpointId == null &&
+                (x.State == "Queued" || x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention"), token)) return null;
             int occupied = await db.ExecutionAttempts.CountAsync(x => x.Id != attempt.Id && x.GithubConnectionId != null &&
-                (x.Status == "Starting" || x.Status == "Running" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
+                (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
             occupied += await db.WorkspaceSessions.CountAsync(x => x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention", token);
             long used = await db.WorkspaceCheckpoints.SumAsync(x => (long)x.Archive.Length, token);
             if (occupied >= _limits.MaxSandboxes || used >= _limits.MaxStorageBytes) return null;
@@ -358,7 +360,7 @@ public sealed class WorkStore
         }
     }
 
-    private static WorkItem Restore(Row row) => row.State is null
+    internal static WorkItem Restore(Row row) => row.State is null
         ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
         : WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State, Json)!);
     private static WorkView View(Row row) => new(row.Version, new(row.CreatedAt, TimeSpan.Zero),

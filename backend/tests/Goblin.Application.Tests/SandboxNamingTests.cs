@@ -20,8 +20,8 @@ namespace Goblin.Application.Tests;
 public sealed class SandboxNamingTests
 {
     [Theory]
-    [InlineData("k8s/agents/run-101/12", "agents", "run-101-1")]
-    [InlineData("k8s/custom-agents/run-101/12", "custom-agents", "run-101-1")]
+    [InlineData("k8s/agents/work-101", "agents", "work-101")]
+    [InlineData("k8s/custom-agents/work-101", "custom-agents", "work-101")]
     public async Task StartObservationAndCleanupUseThePersistedAddress(string reference, string expectedNamespace, string name)
     {
         var requests = new List<(string Method, string Path, JsonNode? Body)>();
@@ -36,9 +36,26 @@ public sealed class SandboxNamingTests
             // An existing identity must short-circuit Start before credentials or
             // repository setup.
             if (context.Request.Method == "POST") context.Response.StatusCode = 409;
+            else if (context.Request.Path.Value!.Contains("/pods/", StringComparison.Ordinal)) context.Response.StatusCode = 404;
             else if (context.Request.Path.Value!.EndsWith("/pods", StringComparison.Ordinal))
                 await context.Response.WriteAsync("{\"items\":[]}");
-            else await context.Response.WriteAsync("{\"spec\":{\"operatingMode\":\"Suspended\",\"podTemplate\":{\"spec\":{\"containers\":[]}}}}");
+            else await context.Response.WriteAsJsonAsync(new
+            {
+                metadata = new { resourceVersion = "1", labels = new Dictionary<string, string> { ["goblin-work"] = "101", ["goblin-attempt"] = "12", ["goblin-workspace"] = "1", ["goblin-phase"] = "stopping" } },
+                spec = new
+                {
+                    operatingMode = "Suspended",
+                    podTemplate = new
+                    {
+                        spec = new
+                        {
+                            containers = Array.Empty<object>(),
+                            volumes = new object[] {
+                    new { name = "credentials", secret = new { secretName = "input-101-12-1" } }, new { name = "input", configMap = new { name = "input-101-12-1" } } }
+                        }
+                    }
+                }
+            });
         });
         await server.StartAsync();
         using var api = new KubernetesApi(server.Urls.Single());
@@ -57,14 +74,14 @@ public sealed class SandboxNamingTests
         await host.CleanupAsync(work, CancellationToken.None);
 
         Assert.All(requests, request => Assert.Contains("/namespaces/" + expectedNamespace + "/", request.Path));
-        Assert.Single(requests, request => request.Method == "POST");
+        Assert.DoesNotContain(requests, request => request.Method == "POST");
         Assert.All(requests.Where(request => request.Method == "PATCH"), request =>
         {
             Assert.EndsWith("/sandboxes/" + name, request.Path);
             Assert.Equal("Suspended", request.Body!["spec"]!["operatingMode"]!.GetValue<string>());
         });
-        Assert.Equal(new[] { "/api/v1/namespaces/" + expectedNamespace + "/secrets/" + name,
-            "/api/v1/namespaces/" + expectedNamespace + "/configmaps/" + name },
+        Assert.Equal(new[] { "/api/v1/namespaces/" + expectedNamespace + "/secrets/input-101-12-1",
+            "/api/v1/namespaces/" + expectedNamespace + "/configmaps/input-101-12-1" },
             requests.Where(request => request.Method == "DELETE").Select(request => request.Path));
         Assert.Equal(2, broker.Stops);
         Assert.Equal(1, broker.Releases);
@@ -73,24 +90,24 @@ public sealed class SandboxNamingTests
     [Theory]
     [InlineData("agents")]
     [InlineData("custom-agents")]
-    public void AttemptsUseRunNamesInTheConfiguredNamespace(string executionNamespace)
+    public void WorkspacesUseWorkNamesInTheConfiguredNamespace(string executionNamespace)
     {
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new(executionNamespace, "image", "/private", "http://repository"), new TextHost(), new Broker());
-        Assert.Equal("k8s/" + executionNamespace + "/run-101/12", host.EnvironmentFor(101, 12));
+        Assert.Equal("k8s/" + executionNamespace + "/work-101", host.EnvironmentFor(101, 12));
         JsonObject manifest = Json(host.Manifest(Work(host.EnvironmentFor(101, 12)), false));
         Assert.Equal(executionNamespace, manifest["metadata"]!["namespace"]!.GetValue<string>());
-        Assert.Equal("run-101-1", manifest["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("work-101", manifest["metadata"]!["name"]!.GetValue<string>());
     }
 
     [Fact]
-    public void RunSuffixCountsExecutionsOfTheWorkInsteadOfGlobalAttemptIds()
+    public void AttemptsAndRevisionsKeepTheWorkSandboxAndVolume()
     {
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new("agents", "image", "/private", "http://repository"), new TextHost(), new Broker());
         var work = WorkItem.Restore(Work(host.EnvironmentFor(101, 12)));
         WorkSnapshot first = work.Snapshot();
-        Assert.Equal("run-101-1", Json(host.Manifest(first, false))["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("work-101", Json(host.Manifest(first, false))["metadata"]!["name"]!.GetValue<string>());
 
         work.ExecutionFailed(12, 1, FailureKind.ExecutionFailed, DateTimeOffset.UtcNow);
         work.RequireCleanup(12, 1, DateTimeOffset.UtcNow);
@@ -100,28 +117,28 @@ public sealed class SandboxNamingTests
         Assert.True(work.TryClaimExecution(907, 2, host.EnvironmentFor(101, 907), DateTimeOffset.UtcNow));
         WorkSnapshot second = WorkItem.Restore(work.Snapshot()).Snapshot();
         JsonObject manifest = Json(host.Manifest(second, false));
-        Assert.Equal("run-101-2", manifest["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("work-101", manifest["metadata"]!["name"]!.GetValue<string>());
         Assert.Equal("907", manifest["metadata"]!["labels"]!["goblin-attempt"]!.GetValue<string>());
-        Assert.Equal("run-101-2", manifest["spec"]!["podTemplate"]!["spec"]!["volumes"]![0]!["persistentVolumeClaim"]!["claimName"]!.GetValue<string>());
-        Assert.Equal("run-101-1", Json(host.Manifest(first, true))["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("work-101", manifest["spec"]!["podTemplate"]!["spec"]!["volumes"]![0]!["persistentVolumeClaim"]!["claimName"]!.GetValue<string>());
+        Assert.Equal("work-101", Json(host.Manifest(first, true))["metadata"]!["name"]!.GetValue<string>());
 
-        // Requested revisions are also new executions, not a restart of run 2.
+        // Requested revisions use a new attempt in the same Work workspace.
         work.ProposeResult(907, 2, "Proposed change", DateTimeOffset.UtcNow);
         work.RequireCleanup(907, 2, DateTimeOffset.UtcNow);
         work.ConfirmCleanup(907, 2, DateTimeOffset.UtcNow);
         work.RequestChanges(907, "Revise it", DateTimeOffset.UtcNow);
         work.QueueExecution(3001, first.Attempts[0].Target, DateTimeOffset.UtcNow);
         Assert.True(work.TryClaimExecution(3001, 3, host.EnvironmentFor(101, 3001), DateTimeOffset.UtcNow));
-        Assert.Equal("run-101-3", Json(host.Manifest(work.Snapshot(), false))["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("work-101", Json(host.Manifest(work.Snapshot(), false))["metadata"]!["name"]!.GetValue<string>());
         Assert.Equal(new long[] { 12, 907, 3001 }, work.Attempts.Select(attempt => attempt.Id));
-        Assert.Equal("run-202-1", Json(host.Manifest(Work(host.EnvironmentFor(202, 4000), 202, 4000), false))["metadata"]!["name"]!.GetValue<string>());
+        Assert.Equal("work-202", Json(host.Manifest(Work(host.EnvironmentFor(202, 4000), 202, 4000), false))["metadata"]!["name"]!.GetValue<string>());
     }
 
     [Theory]
-    [InlineData("k8s/agents/run-102/12")]
-    [InlineData("k8s/agents/run-101/13")]
-    [InlineData("k8s/../run-101/12")]
-    [InlineData("k8s/agents/run-101-1/12")]
+    [InlineData("k8s/agents/work-102")]
+    [InlineData("k8s/agents/work-101/12")]
+    [InlineData("k8s/../work-101")]
+    [InlineData("k8s/agents/other-101")]
     [InlineData("unknown/12")]
     public async Task InvalidReferencesCannotFallBackToANewExecution(string reference)
     {

@@ -91,6 +91,7 @@ public sealed class CodexWorkRunner
                     "Use false when continuing interactive investigation needs the existing workspace, true when waiting for review, longer human input, or no further file access. " +
                     "A release request is only intent; Goblin verifies and saves a recoverable checkpoint before releasing compute. Respect an explicit request to keep the workspace open. " +
                     (repositoryChanges ? RepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
+                        "This Work's workspace can contain edits and local commits from earlier attempts. Inspect git status and git diff before editing; preserve unfinished changes and use the supplied Work context to continue. " +
                         "Commit locally and use goblin-github publish to publish the branch; use goblin-github pull-request to open its draft PR after publishing. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :

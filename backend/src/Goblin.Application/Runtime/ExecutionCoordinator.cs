@@ -163,7 +163,8 @@ public sealed class ExecutionCoordinator
             using IServiceScope scope = _scopes.CreateScope();
             await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(work.Id, current =>
             {
-                if (current.CurrentAttempt?.Id == attempt.Id)
+                if (current.CurrentAttempt is { } currentAttempt && currentAttempt.Id == attempt.Id &&
+                    currentAttempt.OwnerId == attempt.OwnerId && currentAttempt.TurnNumber == attempt.TurnNumber)
                     current.ConfirmCleanup(attempt.Id, attempt.OwnerId!.Value, DateTimeOffset.UtcNow);
             }, token);
         }

@@ -84,4 +84,42 @@ public sealed class WorkspaceTests
         work.ConfirmExecutionStopped(1, 10, Now);
         Assert.Equal(WorkStatus.Cancelled, work.Status);
     }
+
+    [Fact]
+    public void RetryKeepsWorkWorkspaceButRequiresConfirmedCleanupAndNewOwnership()
+    {
+        WorkItem work = Running();
+        WorkWorkspace original = work.Workspace!;
+        work.ExecutionFailed(1, 10, FailureKind.RuntimeDisconnected, Now);
+        work.RequireCleanup(1, 10, Now);
+        work.ReportCleanupFailure(1, 10, Now);
+        Assert.Throws<WorkRuleException>(() => work.RetryExecution(2, work.CurrentAttempt!.Target, Now));
+        Assert.False(work.CanDiscardWorkspace(1, 1));
+        work.ConfirmCleanup(1, 10, Now);
+        work.RetryExecution(2, work.CurrentAttempt!.Target, Now);
+        work.TryClaimExecution(2, 20, "another-host", Now);
+        WorkItem restored = WorkItem.Restore(work.Snapshot());
+        Assert.Equal(original.EnvironmentReference, restored.Workspace!.EnvironmentReference);
+        Assert.Equal(original.EnvironmentReference, restored.CurrentAttempt!.EnvironmentReference);
+        Assert.Equal(2, restored.Workspace.AttemptId);
+        Assert.Throws<WorkRuleException>(() => restored.ConfirmCleanup(1, 10, Now));
+        Assert.False(restored.CanDiscardWorkspace(2, 1));
+        restored.ProposeResult(2, 20, "Ready", Now);
+        restored.RequireCleanup(2, 20, Now);
+        Assert.Throws<WorkRuleException>(() => restored.ApproveResult(2, Now));
+        restored.ConfirmCleanup(2, 20, Now);
+        Assert.False(restored.CanDiscardWorkspace(2, 1));
+        restored.ApproveResult(2, Now);
+        Assert.True(restored.CanDiscardWorkspace(2, 1));
+        Assert.False(restored.CanDiscardWorkspace(1, 1));
+    }
+
+    [Fact]
+    public void AWorkCannotReuseItsWorkspaceForAnotherRepository()
+    {
+        WorkItem work = Running();
+        work.ExecutionFailed(1, 10, FailureKind.ExecutionFailed, Now);
+        Assert.Throws<WorkRuleException>(() => work.RetryExecution(2,
+            new("codex", 1, repository: new("owner/other", "Goblin", "agent@example.com")), Now));
+    }
 }

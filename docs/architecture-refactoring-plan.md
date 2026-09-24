@@ -169,8 +169,9 @@ without provisioning one. An explicit request to change a known repository uses
 a new isolated agent sandbox, brokered GitHub access from Goblin sign-in, and the
 Goblin agent's Git author identity. The first implementation used a fresh sandbox per repository attempt and a saved
 branch as the continuation checkpoint. The user-approved workspace lifecycle now
-allows multiple runtime turns per attempt, semantic AI keep/release decisions,
-and verified code-plus-file checkpoints before discarding an allocation. A
+uses one persistent Sandbox/PVC per Work, multiple runtime turns per attempt,
+semantic AI keep/suspend decisions, and verified code-plus-file checkpoints
+before reclaiming a completed Work volume. A
 conversation message does not itself allocate a sandbox. See
 [workspace lifecycle](workspace-lifecycle.md).
 
