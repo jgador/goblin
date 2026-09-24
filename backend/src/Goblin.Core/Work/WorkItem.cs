@@ -103,6 +103,11 @@ public sealed partial class WorkItem
         string environment = RequireText(environmentReference);
         if (CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != attemptId ||
             Status != WorkStatus.Queued) return false;
+        if (attempt.Target.Repository is { } repository && !attempt.ReasoningOnly)
+        {
+            environment = Workspace?.EnvironmentReference ?? environment;
+            Workspace = new(repository.Repository, environment, attempt.Id, attempt.WorkspaceNumber, attempt.TurnNumber);
+        }
         attempt.Status = AttemptStatus.Starting;
         attempt.OwnerId = ownerId;
         attempt.EnvironmentReference = environment;
@@ -276,6 +281,8 @@ public sealed partial class WorkItem
         ArgumentNullException.ThrowIfNull(target);
         Require(AgentId is not null, WorkRule.AgentRequired);
         Require(!_attempts.Exists(x => x.Id == attemptId), WorkRule.AttemptAlreadyExists);
+        Require(Workspace is null || target.Repository is null ||
+            string.Equals(Workspace.Repository, target.Repository.Repository, StringComparison.OrdinalIgnoreCase), WorkRule.OwnershipMismatch);
     }
 
     private void Queue(long attemptId, ExecutionTarget target, DateTimeOffset now)

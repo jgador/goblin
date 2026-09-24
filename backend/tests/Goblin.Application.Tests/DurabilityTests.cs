@@ -5,6 +5,7 @@ using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application;
@@ -217,7 +218,7 @@ public sealed class DurabilityTests
             WorkId = work.Work.Id,
             AttemptId = work.Work.Attempts[0].Id,
             State = "Queued",
-            SourceVolume = "retained-test-volume",
+            SourceVolume = $"k8s/agents/work-{work.Work.Id}",
             CapabilityHash = "",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -313,6 +314,49 @@ public sealed class DurabilityTests
         var reopened = new WorkspaceArchive(restartedScope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>(),
             fixture.Host.Services.GetRequiredService<IServiceScopeFactory>(), new());
         Assert.Equal(archive, await reopened.ReadAsync(id, saved.Id, default));
+        Assert.Equal(work.Work.Workspace, (await fixture.Get(id)).Work.Workspace);
+        fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
+        await fixture.Reconcile(id, attempt);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
+        Assert.False(await reopened.CanDiscardAsync(attempt, 1, default));
+        await fixture.Apply(new(NextId(), id, WorkAction.Approve, work.Version, AttemptId: attempt));
+        Assert.True(await reopened.CanDiscardAsync(attempt, 1, default));
+    }
+
+    [DatabaseFact]
+    public async Task PersistentWorkspaceAndAttemptHistorySurviveFailureAndExplicitRetry()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        fixture.Runtime.RepositoryExecution = true;
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
+        await settings.ObserveAsync(new("first", "42", "owner"), "Connected");
+        await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
+        long id = NextId();
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Continue surviving edits"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        await fixture.Apply(new(NextId(), id, WorkAction.Execute, work.Version, Repository: new("owner/repo", "Goblin", "agent@example.com")));
+        work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        long first = work.Work.Attempts[^1].Id;
+        string reference = work.Work.Workspace!.EnvironmentReference;
+        fixture.Runtime.FailCleanup = true;
+        fixture.Runtime.Observations[first] = new(ObservationKind.Failed, Failure: FailureKind.RuntimeDisconnected);
+        await fixture.Reconcile(id, first);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.CleanupRequired);
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Retry, work.Version)));
+        fixture.Runtime.FailCleanup = false;
+        await fixture.Reconcile(id, first);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.Failure && !x.Work.Attempts[^1].CleanupPending);
+        await fixture.RestartAsync();
+        work = await fixture.Get(id);
+        Assert.Equal(reference, work.Work.Workspace!.EnvironmentReference);
+        await fixture.Apply(new(NextId(), id, WorkAction.Retry, work.Version));
+        work = await fixture.Until(id, x => x.Work.Attempts.Length == 2 && x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        Assert.Equal(reference, work.Work.Workspace!.EnvironmentReference);
+        Assert.Equal(reference, work.Work.Attempts[^1].EnvironmentReference);
+        Assert.NotEqual(first, work.Work.Workspace.AttemptId);
+        Assert.Equal(AttemptStatus.Failed, work.Work.Attempts[0].Status);
+        Assert.NotEqual(work.Work.Attempts[0].Target.Repository!.Grant!.Branch, work.Work.Attempts[1].Target.Repository!.Grant!.Branch);
     }
 
     [DatabaseFact]

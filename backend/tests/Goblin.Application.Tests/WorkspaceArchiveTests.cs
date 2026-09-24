@@ -55,7 +55,7 @@ public sealed class WorkspaceArchiveTests
     {
         using var api = new KubernetesApi("http://localhost");
         var host = new InspectionHost(api, new("agents", "image", "unused", "http://broker"));
-        JsonObject manifest = JsonSerializer.SerializeToNode(host.Manifest(new(9007199254740993, 1, 1, 9007199254740994, "run-1-1"), false), Goblin.Execution.Kubernetes.KubernetesJson.Options)!.AsObject();
+        JsonObject manifest = JsonSerializer.SerializeToNode(host.Manifest(new(9007199254740993, 1, 1, 9007199254740994, "k8s/agents/work-1"), false), Goblin.Execution.Kubernetes.KubernetesJson.Options)!.AsObject();
         JsonNode spec = manifest["spec"]!["podTemplate"]!["spec"]!;
         Assert.True(spec["containers"]![0]!["volumeMounts"]![0]!["readOnly"]!.GetValue<bool>());
         Assert.DoesNotContain("restore", spec["containers"]![0]!["volumeMounts"]!.ToJsonString());

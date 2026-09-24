@@ -45,16 +45,9 @@ public sealed class WorkspaceArchive : IWorkspaceArchive
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         Persistence.Entities.ExecutionAttempt? attempt = await db.ExecutionAttempts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == attemptId, token);
         if (attempt is null) return false;
-        string? state = await db.WorkItems.Where(x => x.Id == attempt.WorkId).Select(x => x.State).SingleAsync(token);
-        WorkSnapshot work = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(state!, WorkStore.Json)!;
-        AttemptSnapshot execution = work.Attempts.Single(x => x.Id == attemptId);
-        int latestTurn;
-        if (execution.WorkspaceNumber == workspaceNumber)
-        {
-            if (attempt.Status is "Starting" or "Running" or "Uncertain" or "CancellationRequested" || attempt.CleanupPending || attempt.WorkspaceRetained) return false;
-            latestTurn = execution.TurnNumber;
-        }
-        else latestTurn = execution.PriorTurns.Where(x => x.WorkspaceNumber == workspaceNumber).Select(x => x.Number).DefaultIfEmpty(0).Max();
+        WorkItem work = WorkStore.Restore(await db.WorkItems.AsNoTracking().SingleAsync(x => x.Id == attempt.WorkId, token));
+        if (!work.CanDiscardWorkspace(attemptId, workspaceNumber)) return false;
+        int latestTurn = work.Workspace!.TurnNumber;
         // An older checkpoint never authorizes discarding newer unsaved changes.
         return latestTurn > 0 && await db.WorkspaceCheckpoints.AnyAsync(x => x.AttemptId == attemptId && x.WorkspaceNumber == workspaceNumber && x.TurnNumber == latestTurn, token);
     }

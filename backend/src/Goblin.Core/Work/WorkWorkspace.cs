@@ -2,8 +2,25 @@ using System;
 
 namespace Goblin.Core.Work;
 
+// A Work owns the durable workspace. The opaque location outlives attempts and
+// compute allocations; the last writer identifies the checkpoint needed to discard it.
+public sealed record WorkWorkspace(string Repository, string EnvironmentReference,
+    long AttemptId, int WorkspaceNumber, int TurnNumber);
+
 public sealed partial class WorkItem
 {
+    public WorkWorkspace? Workspace { get; private set; }
+
+    public bool CanDiscardWorkspace(long attemptId, int workspaceNumber)
+    {
+        if (Status != WorkStatus.Completed) return false;
+        foreach (ExecutionAttempt attempt in _attempts)
+            if (attempt.CleanupPending || attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or
+                AttemptStatus.Uncertain or AttemptStatus.CancellationRequested or AttemptStatus.Waiting or AttemptStatus.Queued)
+                return false;
+        return Workspace is { } workspace && workspace.AttemptId == attemptId && workspace.WorkspaceNumber == workspaceNumber;
+    }
+
     public void SaveWorkspace(long attemptId, long ownerId, long checkpointId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = CompletableAttempt(attemptId, ownerId);

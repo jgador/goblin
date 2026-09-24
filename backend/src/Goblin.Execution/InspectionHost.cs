@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
@@ -15,19 +16,28 @@ public sealed class InspectionHost : IInspectionHost
     private readonly SandboxOptions _options;
     public InspectionHost(KubernetesApi api, SandboxOptions options) { _api = api; _options = options; }
     public static string Name(long id) => "inspect-" + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    private string Core => "/api/v1/namespaces/" + _options.Namespace;
-    private string Sandboxes => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + _options.Namespace + "/sandboxes";
+    public static string NamespaceFor(InspectionAllocation session) => Source(session).Namespace;
+    private static (string Namespace, string Volume) Source(InspectionAllocation session)
+    {
+        string[] parts = session.SourceVolume.Split('/');
+        if (parts.Length == 3 && parts[0] == "k8s" && ValidName(parts[1]) &&
+            parts[2] == "work-" + session.WorkId.ToString(System.Globalization.CultureInfo.InvariantCulture)) return (parts[1], parts[2]);
+        throw new IOException("Unrecognized workspace reference.");
+    }
+    private static bool ValidName(string name) => Regex.IsMatch(name, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
+    private string Core(InspectionAllocation session) => "/api/v1/namespaces/" + NamespaceFor(session);
+    private string Sandboxes(InspectionAllocation session) => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + NamespaceFor(session) + "/sandboxes";
     public async Task StartAsync(InspectionAllocation session, string capability, CancellationToken token)
     {
         string name = Name(session.Id);
-        if (!await _api.CreateAsync(Sandboxes, Manifest(session, false), token)) return;
+        if (!await _api.CreateAsync(Sandboxes(session), Manifest(session, false), token)) return;
         if (session.CheckpointId is null)
         {
-            if (await _api.GetAsync<K.PersistentVolumeClaim>(Core + "/persistentvolumeclaims/" + session.SourceVolume, token) is null)
+            if (await _api.GetAsync<K.PersistentVolumeClaim>(Core(session) + "/persistentvolumeclaims/" + Source(session).Volume, token) is null)
                 throw new IOException("Saved workspace is unavailable.");
             return;
         }
-        await _api.CreateAsync(Core + "/secrets", new K.Secret
+        await _api.CreateAsync(Core(session) + "/secrets", new K.Secret
         {
             ApiVersion = "v1",
             Kind = "Secret",
@@ -35,22 +45,22 @@ public sealed class InspectionHost : IInspectionHost
             StringData = new() { ["capability"] = capability, ["url"] = _options.RepositoryUrl + "/internal/workspaces/" + session.Id }
         }, token);
         // A concurrent Stop creates/patches the same identity, so it fences delayed starts.
-        K.Sandbox? saved = await _api.GetAsync<K.Sandbox>(Sandboxes + "/" + name, token);
-        if (saved?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Suspended) await _api.DeleteAsync(Core + "/secrets/" + name, token);
+        K.Sandbox? saved = await _api.GetAsync<K.Sandbox>(Sandboxes(session) + "/" + name, token);
+        if (saved?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Suspended) await _api.DeleteAsync(Core(session) + "/secrets/" + name, token);
     }
     public async Task<string> ObserveAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
-        K.Pod? pod = await _api.GetAsync<K.Pod>(Core + "/pods/" + name, token);
+        K.Pod? pod = await _api.GetAsync<K.Pod>(Core(session) + "/pods/" + name, token);
         if (pod is null)
         {
-            K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(Sandboxes + "/" + name, token);
+            K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(Sandboxes(session) + "/" + name, token);
             return sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Running ? "Pending" : "Missing";
         }
         string phase = pod.Status?.Phase ?? "Pending";
         if (phase == "Running")
         {
-            await _api.DeleteAsync(Core + "/secrets/" + name, token);
+            await _api.DeleteAsync(Core(session) + "/secrets/" + name, token);
             return "Running";
         }
         if (phase is "Failed" or "Succeeded") return "Failed";
@@ -62,9 +72,9 @@ public sealed class InspectionHost : IInspectionHost
     public async Task StopAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
-        await _api.CreateAsync(Sandboxes, Manifest(session, true), token);
-        await _api.PatchAsync(Sandboxes + "/" + name, SuspendPatch(), token);
-        await _api.DeleteAsync(Core + "/secrets/" + name, token);
+        await _api.CreateAsync(Sandboxes(session), Manifest(session, true), token);
+        await _api.PatchAsync(Sandboxes(session) + "/" + name, SuspendPatch(), token);
+        await _api.DeleteAsync(Core(session) + "/secrets/" + name, token);
     }
     public K.Sandbox Manifest(InspectionAllocation session, bool suspended)
     {
@@ -75,7 +85,7 @@ public sealed class InspectionHost : IInspectionHost
             new()
             {
                 Name = "workspace",
-                PersistentVolumeClaim = restore ? null : new() { ClaimName = session.SourceVolume, ReadOnly = true },
+                PersistentVolumeClaim = restore ? null : new() { ClaimName = Source(session).Volume, ReadOnly = true },
                 EmptyDir = restore ? new() { SizeLimit = "4Gi" } : null
             },
             new() { Name = "temporary", EmptyDir = new() { SizeLimit = "128Mi" } }
@@ -111,7 +121,7 @@ public sealed class InspectionHost : IInspectionHost
         {
             ApiVersion = "agents.x-k8s.io/v1beta1",
             Kind = "Sandbox",
-            Metadata = new() { Name = name, Namespace = _options.Namespace },
+            Metadata = new() { Name = name, Namespace = NamespaceFor(session) },
             Spec = new()
             {
                 OperatingMode = suspended ? K.SandboxSpecOperatingMode.Suspended : K.SandboxSpecOperatingMode.Running,
