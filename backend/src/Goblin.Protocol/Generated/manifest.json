@@ -1,18 +1,36 @@
 {
   "schemaSha256": "c62942ad06b25fffc76ebe6f2b4f1885cc466e5bf30d9c563d03d5f30329c93e",
+  "selectionSha256": "9e3e327ac6052c4b72839843be7809ee8c70843638666303af72459ea85d76aa",
   "schemaFiles": 312,
   "namedDefinitions": 708,
-  "generatedTypes": 1145,
+  "selectedRoots": [
+    "CancelLoginAccountParams",
+    "CancelLoginAccountResponse",
+    "GetAccountParams",
+    "GetAccountResponse",
+    "InitializeParams",
+    "InitializeResponse",
+    "JSONRPCError",
+    "JSONRPCNotification",
+    "JSONRPCRequest",
+    "JSONRPCResponse",
+    "LoginAccountParams",
+    "LoginAccountResponse",
+    "LogoutAccountResponse",
+    "ModelListParams",
+    "ModelListResponse",
+    "ServerNotification",
+    "ThreadStartParams",
+    "ThreadStartResponse",
+    "ThreadUnsubscribeParams",
+    "ThreadUnsubscribeResponse",
+    "TurnInterruptParams",
+    "TurnInterruptResponse",
+    "TurnStartParams",
+    "TurnStartResponse"
+  ],
+  "generatedTypes": 105,
   "primitiveAliases": {
-    "AbsolutePathBuf": "string",
-    "AgentPath": "string",
-    "CollaborationModeMaskReasoningEffort": "string?",
-    "LegacyAppPathString": "string",
-    "NullableGetAccountRateLimitsParams": "GetAccountRateLimitsParams?",
-    "NullableGetAccountTokenUsageParams": "GetAccountTokenUsageParams?",
-    "PathUri": "string",
-    "ReasoningEffort": "string",
-    "ThreadId": "string",
-    "ThreadSource": "string"
+    "ReasoningEffort": "string"
   }
 }

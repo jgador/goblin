@@ -10,16 +10,16 @@ public sealed class ProtocolSerializationTests
     private static string Write<T>(T value) => JsonSerializer.Serialize(value, ProtocolJson.Options);
 
     [Fact]
-    public void InitializationPreservesNamesAndExplicitFalseWhileOmittingUnspecifiedOptions()
+    public void InitializationPreservesNamesWhileOmittingUnspecifiedOptions()
     {
         var request = new InitializeParams
         {
             ClientInfo = new ClientInfo { Name = "goblin", Version = "1.0" },
-            Capabilities = new InitializeCapabilities { ExperimentalApi = false },
         };
 
-        Assert.Equal("{\"capabilities\":{\"experimentalApi\":false},\"clientInfo\":{\"name\":\"goblin\",\"version\":\"1.0\"}}", Write(request));
-        Assert.False(Read<InitializeParams>(Write(request)).Capabilities!.ExperimentalApi);
+        Assert.Equal("{\"clientInfo\":{\"name\":\"goblin\",\"version\":\"1.0\"}}", Write(request));
+        Assert.Equal("goblin", Read<InitializeParams>(Write(request)).ClientInfo.Name);
+        Assert.Equal("{\"refreshToken\":false}", Write(new GetAccountParams { RefreshToken = false }));
     }
 
     [Fact]
@@ -63,9 +63,9 @@ public sealed class ProtocolSerializationTests
         var turn = new TurnStartParams
         {
             ThreadId = "thread-1",
-            Input = [new TextUserInput { Text = "hello", TextElements = [] }],
+            Input = [new TextUserInput { Text = "hello" }],
         };
-        Assert.Equal("{\"input\":[{\"text\":\"hello\",\"text_elements\":[],\"type\":\"text\"}],\"threadId\":\"thread-1\"}", Write(turn));
+        Assert.Equal("{\"input\":[{\"text\":\"hello\",\"type\":\"text\"}],\"threadId\":\"thread-1\"}", Write(turn));
         var thread = new ThreadStartParams { Ephemeral = true, ApprovalPolicy = AskForApproval.Never, Sandbox = SandboxMode.ReadOnly };
         Assert.Equal("{\"approvalPolicy\":\"never\",\"ephemeral\":true,\"sandbox\":\"read-only\"}", Write(thread));
     }
@@ -90,6 +90,7 @@ public sealed class ProtocolSerializationTests
         Assert.True(ServerNotification.IsKnownMethod("account/login/completed"));
         Assert.True(ServerNotification.IsKnownMethod("turn/completed"));
         Assert.False(ServerNotification.IsKnownMethod("future/notification"));
+        Assert.False(ServerNotification.IsKnownMethod("thread/status/changed"));
         Assert.False(ServerNotification.IsKnownMethod("Item/Completed"));
         Assert.False(ServerNotification.IsKnownMethod("thread/start"));
     }
@@ -103,6 +104,15 @@ public sealed class ProtocolSerializationTests
         HttpConnectionFailedCodexErrorInfo error = Assert.IsType<HttpConnectionFailedCodexErrorInfo>(notification.Turn.Error!.CodexErrorInfo);
         Assert.Equal((ushort)503, error.HttpConnectionFailed.HttpStatusCode);
         Assert.Equal("disconnected", notification.Turn.Error.Message);
+    }
+
+    [Fact]
+    public void OtherStructuredCodexErrorsStillDeserialize()
+    {
+        const string json = """{"message":"busy","codexErrorInfo":{"activeTurnNotSteerable":{"turnKind":"review"}}}""";
+        TurnError error = Read<TurnError>(json);
+        ActiveTurnNotSteerableCodexErrorInfo details = Assert.IsType<ActiveTurnNotSteerableCodexErrorInfo>(error.CodexErrorInfo);
+        Assert.Equal(NonSteerableTurnKind.Review, details.ActiveTurnNotSteerable.TurnKind);
     }
 
     [Theory]
@@ -163,9 +173,7 @@ public sealed class ProtocolSerializationTests
         Assert.Equal(new RequestId(7), response.Id);
         Assert.True(result.RequiresOpenaiAuth);
         Assert.IsType<ApiKeyAccount>(result.Account);
-        JSONRPCMessage message = Read<JSONRPCMessage>(json);
-        Assert.IsType<JSONRPCResponseMessage>(message);
-        Assert.Equal(json, Write(message));
+        Assert.Equal(json, Write(response));
     }
 
     [Fact]
@@ -182,16 +190,24 @@ public sealed class ProtocolSerializationTests
     }
 
     [Fact]
-    public void ShortenedExecpolicyPayloadKeepsItsNestedWireNames()
+    public void SelectedResponsesIgnoreFieldsOutsideTheAdapterContract()
     {
-        const string json = """{"acceptWithExecpolicyAmendment":{"execpolicy_amendment":["git","status"]}}""";
-        AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision decision = Assert.IsType<AcceptWithExecpolicyAmendmentCommandExecutionApprovalDecision>(
-            Read<CommandExecutionApprovalDecision>(json));
-        AcceptWithExecpolicyAmendmentDetails payload = decision.AcceptWithExecpolicyAmendment;
+        const string json = """{"approvalPolicy":"never","cwd":"/unused","model":"gpt-test","modelProvider":"openai","sandbox":{"type":"readOnly","networkAccess":false},"thread":{"ephemeral":true,"id":"thread-1","preview":"unused","turns":[]}}""";
+        ThreadStartResponse response = Read<ThreadStartResponse>(json);
+        Assert.Equal("thread-1", response.Thread.Id);
+        Assert.True(response.Thread.Ephemeral);
+        using JsonDocument selected = JsonDocument.Parse(Write(response));
+        Assert.False(selected.RootElement.TryGetProperty("cwd", out _));
+        Assert.False(selected.RootElement.GetProperty("thread").TryGetProperty("preview", out _));
+    }
 
-        Assert.Equal(["git", "status"], payload.ExecpolicyAmendment);
-        Assert.Equal(json, Write(decision));
-        Assert.Equal(json, Write<CommandExecutionApprovalDecision>(decision));
+    [Fact]
+    public void UnusedTurnItemKindsDoNotBreakACompletedTurn()
+    {
+        const string json = """{"threadId":"thread-1","turn":{"id":"turn-1","items":[{"type":"commandExecution","id":"command-1","command":"git status"},{"type":"agentMessage","id":"message-1","text":"done"}],"status":"completed"}}""";
+        TurnCompletedNotification notification = Read<TurnCompletedNotification>(json);
+        Assert.IsType<CommandExecutionThreadItem>(notification.Turn.Items[0]);
+        Assert.Equal("done", Assert.IsType<AgentMessageThreadItem>(notification.Turn.Items[1]).Text);
     }
 
     [Theory]
@@ -221,11 +237,11 @@ public sealed class ProtocolSerializationTests
         => Assert.Throws<JsonException>(() => Read<AskForApproval>("""{"granular":{"mcp_elicitations":false,"rules":true,"sandbox_approval":false},"unexpected":true}"""));
 
     [Fact]
-    public void UnconstrainedExtensionValuesSurviveSerialization()
+    public void UnconstrainedEnvelopePayloadSurvivesSerialization()
     {
-        const string json = """{"enabled":true,"futureSetting":{"nested":[1,"two",null]}}""";
-        AnalyticsConfig config = Read<AnalyticsConfig>(json);
-        Assert.True(config.Enabled);
-        Assert.Equal(json, Write(config));
+        const string json = """{"id":7,"result":{"futureSetting":{"nested":[1,"two",null]}}}""";
+        JSONRPCResponse response = Read<JSONRPCResponse>(json);
+        Assert.Equal(JsonValueKind.Object, response.Result.ValueKind);
+        Assert.Equal(json, Write(response));
     }
 }
