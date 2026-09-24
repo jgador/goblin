@@ -33,8 +33,8 @@ they do not produce unselected C# fields. The generator is a .NET 10 C#
 file-based app. Normal .NET builds do not run it or download schemas.
 
 ```sh
-dotnet run --file backend/scripts/generate-kubernetes.cs
-dotnet run --file backend/scripts/generate-kubernetes.cs -- --self-test --check
+dotnet run --file backend/scripts/GenerateKubernetes.cs
+dotnet run --file backend/scripts/GenerateKubernetes.cs -- --self-test --check
 dotnet test backend/tests/Goblin.Application.Tests
 ```
 

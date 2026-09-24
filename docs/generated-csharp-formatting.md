@@ -2,11 +2,12 @@
 
 ## Current generator status
 
-The constructor refactor applies the protocol generator follow-up described
-below and emits regular constructors for all generated wrapper classes.
-Protocol regeneration now preserves the audited formatting. EF scaffolding also
-formats its output with the repository's current settings, which prefer regular
-constructors. The historical primary-constructor change below is superseded.
+The C# file-based [`GenerateProtocol.cs`](../backend/scripts/GenerateProtocol.cs)
+replaces the Python generator discussed below. It retains the audited union and
+request ID formatting, uses regular constructors for generated wrappers, and
+generates only the types in the Codex selection. EF scaffolding also formats its
+output with the repository's current settings, which prefer regular constructors.
+The historical primary-constructor change below is superseded.
 
 ## Original audit
 
@@ -43,11 +44,9 @@ and throw expression on one line.
 
 ## Generator follow-up
 
-The protocol changes belong in
-[`generate-protocol.py`](../backend/scripts/generate-protocol.py), specifically
-`union()` and `request_id()`. A trial edit to those two methods reproduced all
-1,145 formatted protocol files byte for byte and left `manifest.json` unchanged.
-The trial patch was prepared for review; it has not been applied to the generator.
+The union and request ID formatting changes from this audit are implemented in
+[`GenerateProtocol.cs`](../backend/scripts/GenerateProtocol.cs). The generator
+now emits the selected protocol models and passes the drift check.
 
 The EF output comes from `dotnet ef dbcontext scaffold`, invoked by
 [`scaffold-database.sh`](../backend/scripts/scaffold-database.sh). Its existing
@@ -56,9 +55,7 @@ templates are external to this repository. Custom T4 scaffolding templates would
 produce these styles directly; a formatter step scoped to generated output is
 another option. Neither approach requires database or SQL changes.
 
-The checked-in generator and scaffolding script remain unchanged for this audit.
-Regenerating now would undo these style edits. `npm run protocol:check` therefore
-reports drift in the 17 protocol files until the protocol generator is updated.
+The generator changes described above were made after this historical audit.
 
 ## Verification method
 

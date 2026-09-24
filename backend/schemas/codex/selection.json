@@ -1,0 +1,112 @@
+{
+  "roots": [
+    "JSONRPCRequest", "JSONRPCNotification", "JSONRPCResponse", "JSONRPCError",
+    "InitializeParams", "InitializeResponse",
+    "GetAccountParams", "GetAccountResponse",
+    "LoginAccountParams", "LoginAccountResponse",
+    "CancelLoginAccountParams", "CancelLoginAccountResponse", "LogoutAccountResponse",
+    "ModelListParams", "ModelListResponse",
+    "ThreadStartParams", "ThreadStartResponse",
+    "TurnStartParams", "TurnStartResponse",
+    "TurnInterruptParams", "TurnInterruptResponse",
+    "ThreadUnsubscribeParams", "ThreadUnsubscribeResponse",
+    "ServerNotification"
+  ],
+  "types": {
+    "JSONRPCRequest": ["id", "method", "params"],
+    "JSONRPCNotification": ["method", "params"],
+    "JSONRPCResponse": ["id", "result"],
+    "JSONRPCError": ["error", "id"],
+    "JSONRPCErrorError": ["code", "message"],
+    "InitializeParams": ["clientInfo"],
+    "ClientInfo": ["name", "title", "version"],
+    "InitializeResponse": [],
+    "GetAccountParams": ["refreshToken"],
+    "GetAccountResponse": ["account", "requiresOpenaiAuth"],
+    "Account": {
+      "variants": {
+        "*": [],
+        "chatgpt": ["email", "planType"]
+      }
+    },
+    "LoginAccountParams": {
+      "variants": {
+        "apiKey": ["apiKey"],
+        "chatgptDeviceCode": []
+      }
+    },
+    "LoginAccountResponse": {
+      "variants": {
+        "*": [],
+        "chatgptDeviceCode": ["loginId", "userCode", "verificationUrl"]
+      }
+    },
+    "CancelLoginAccountParams": ["loginId"],
+    "CancelLoginAccountResponse": [],
+    "LogoutAccountResponse": [],
+    "ModelListParams": ["cursor", "includeHidden", "limit"],
+    "ModelListResponse": ["data", "nextCursor"],
+    "Model": ["defaultReasoningEffort", "displayName", "hidden", "id", "isDefault", "model", "supportedReasoningEfforts"],
+    "ReasoningEffortOption": ["reasoningEffort"],
+    "ThreadStartParams": ["approvalPolicy", "baseInstructions", "cwd", "ephemeral", "model", "sandbox"],
+    "ThreadStartResponse": ["approvalPolicy", "model", "modelProvider", "sandbox", "thread"],
+    "Thread": ["ephemeral", "id"],
+    "AskForApproval": {
+      "variants": {
+        "*": [],
+        "GranularAskForApproval": ["granular.mcp_elicitations", "granular.rules", "granular.sandbox_approval"]
+      }
+    },
+    "SandboxPolicy": {
+      "variants": {
+        "*": [],
+        "readOnly": ["networkAccess"],
+        "externalSandbox": ["networkAccess"]
+      }
+    },
+    "TurnStartParams": ["approvalPolicy", "effort", "input", "outputSchema", "sandboxPolicy", "threadId"],
+    "UserInput": {
+      "variants": {
+        "text": ["text"]
+      }
+    },
+    "TurnStartResponse": ["turn"],
+    "Turn": ["error", "id", "items", "status"],
+    "TurnError": ["codexErrorInfo", "message"],
+    "CodexErrorInfo": {
+      "variants": {
+        "*": [],
+        "HttpConnectionFailedCodexErrorInfo": ["httpConnectionFailed.httpStatusCode"],
+        "ResponseStreamConnectionFailedCodexErrorInfo": ["responseStreamConnectionFailed.httpStatusCode"],
+        "ResponseStreamDisconnectedCodexErrorInfo": ["responseStreamDisconnected.httpStatusCode"],
+        "ResponseTooManyFailedAttemptsCodexErrorInfo": ["responseTooManyFailedAttempts.httpStatusCode"],
+        "ActiveTurnNotSteerableCodexErrorInfo": ["activeTurnNotSteerable.turnKind"]
+      }
+    },
+    "ThreadItem": {
+      "variants": {
+        "*": [],
+        "agentMessage": ["id", "phase", "text"]
+      }
+    },
+    "TurnInterruptParams": ["threadId", "turnId"],
+    "TurnInterruptResponse": [],
+    "ThreadUnsubscribeParams": ["threadId"],
+    "ThreadUnsubscribeResponse": [],
+    "ServerNotification": {
+      "variants": {
+        "error": ["params"],
+        "turn/started": ["params"],
+        "turn/completed": ["params"],
+        "item/completed": ["params"],
+        "account/updated": [],
+        "account/login/completed": ["params"]
+      }
+    },
+    "ErrorNotification": ["threadId", "turnId"],
+    "TurnStartedNotification": ["threadId", "turn"],
+    "TurnCompletedNotification": ["threadId", "turn"],
+    "ItemCompletedNotification": ["item", "threadId", "turnId"],
+    "AccountLoginCompletedNotification": ["loginId", "success"]
+  }
+}
