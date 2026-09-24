@@ -201,7 +201,7 @@ public sealed class WorkLifecycleTests
         ExecutionAttempt original = work.CurrentAttempt!;
         ExecutionTarget originalTarget = original.Target;
         work.ExecutionFailed(attempt, owner, FailureKind.ExecutionFailed, Now);
-        var replacementTarget = new ExecutionTarget("codex", NextId(), "different-requested-model");
+        var replacementTarget = new ExecutionTarget("codex", NextId(), "different-requested-model", requestedEffort: "high");
         work.RetryExecution(NextId(), replacementTarget, Now);
         Assert.Equal(originalTarget, original.Target);
         Assert.Equal("actual-model", original.Session!.Model);
@@ -211,6 +211,7 @@ public sealed class WorkLifecycleTests
         Assert.Null(work.CurrentAttempt.Session);
         Assert.Equal(original.AgentId, work.CurrentAttempt.AgentId);
         Assert.NotEqual(original.Id, work.CurrentAttempt.Id);
+        Assert.Equal("high", WorkItem.Restore(work.Snapshot()).CurrentAttempt!.Target.RequestedEffort);
     }
 
     [Fact]

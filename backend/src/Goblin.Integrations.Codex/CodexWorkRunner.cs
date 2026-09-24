@@ -126,6 +126,7 @@ public sealed class CodexWorkRunner
             {
                 ThreadId = threadId,
                 Input = [new TextUserInput { Text = context }],
+                Effort = work.Attempts[^1].Target.RequestedEffort,
                 ApprovalPolicy = AskForApproval.Never,
                 OutputSchema = schema,
                 SandboxPolicy = repositoryChanges ? new ExternalSandboxSandboxPolicy { NetworkAccess = NetworkAccess.Enabled }

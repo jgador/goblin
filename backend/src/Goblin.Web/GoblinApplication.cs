@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -154,6 +156,11 @@ public static class GoblinApplication
         });
         builder.Services.AddSingleton(workspace);
         builder.Services.AddSingleton(_ => new CodexClient(runtimeOptions));
+        if (options.EnableWork)
+        {
+            builder.Services.AddSingleton<IModelCatalogSource, CodexModelCatalogSource>();
+            builder.Services.AddSingleton<ModelCatalogStore>();
+        }
         builder.Services.AddSingleton(_ => ApiKeyVerifier.CreateClient());
         builder.Services.AddSingleton<ApiKeyVerifier>();
         builder.Services.AddSingleton(services => new Authentication(services.GetRequiredService<CodexClient>(),
@@ -404,6 +411,15 @@ public static class GoblinApplication
                 try { await ConnectionAsync(context, false, auth.StatusAsync); } catch (IntegrationFailure) { }
                 return WorkResponse(await store.ConnectionsAsync(token));
             });
+            app.MapGet("/api/connections/{id:long}/models", async (long id, int? limit, string? selected,
+                ModelCatalogStore catalogs, CancellationToken token) =>
+                WorkResponse(await catalogs.GetAsync(id, limit ?? 3, selected, token)));
+            app.MapPost("/api/connections/{id:long}/models/refresh", async (long id,
+                ModelCatalogStore catalogs, CancellationToken token) =>
+            {
+                catalogs.ScheduleRefresh(id, force: true);
+                return WorkResponse(await catalogs.GetAsync(id, 3, null, token));
+            });
             app.MapGet("/api/runtimes", (IExecutionHost host) => host.Capabilities);
             app.MapPost("/api/work/commands", async (HttpContext context, WorkStore store) =>
             {
@@ -425,8 +441,22 @@ public static class GoblinApplication
             try
             {
                 AuthenticationState state = await action();
-                if (store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId,
-                    state.Account is not null && state.RuntimeReady ? "Available" : "Disconnected", requireIdle: false, completeChange: changing);
+                if (store is not null)
+                {
+                    bool available = state.Account is not null && state.RuntimeReady;
+                    bool changed = await store.SetConnectionAsync(WorkStore.DefaultAgentId,
+                        available ? "Available" : "Disconnected", requireIdle: false,
+                        completeChange: changing, observeAccount: true,
+                        accountSignature: AccountSignature(state.Account));
+                    if (available)
+                    {
+                        ModelCatalogStore catalogs = context.RequestServices.GetRequiredService<ModelCatalogStore>();
+                        if (changed) catalogs.ScheduleRefresh(WorkStore.DefaultAgentId);
+                        else
+                            try { await catalogs.ObserveExecutableAsync(WorkStore.DefaultAgentId, context.RequestAborted); }
+                            catch { /* Discovery cannot change the connection result. */ }
+                    }
+                }
                 return state;
             }
             catch
@@ -435,6 +465,18 @@ public static class GoblinApplication
                 throw;
             }
         }
+    }
+
+    private static string? AccountSignature(AccountView? account)
+    {
+        if (account is null) return null;
+        string identity = account switch
+        {
+            ChatgptAccountView chatgpt => "chatgpt:" + chatgpt.Email?.Trim().ToLowerInvariant(),
+            ApiKeyAccountView => "apiKey",
+            _ => account.GetType().Name
+        };
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
     }
 
     private static string? StringField(HttpContext context, string name)

@@ -8,6 +8,8 @@ export type Attempt = {
     finishedAt?: string;
     target: {
         runtime: string;
+        requestedModel?: string;
+        requestedEffort?: string;
         repository?: {
             repository: string;
             grant?: { login: string; branch: string };

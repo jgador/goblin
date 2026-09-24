@@ -15,6 +15,7 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --namespace Goblin.Persistence.Entities \
   --table public.agents \
   --table public.connections \
+  --table public.connection_model_catalogs \
   --table public.conversation_messages \
   --table public.conversations \
   --table public.execution_attempts \

@@ -22,6 +22,19 @@ public sealed record CodexOptions
     public TimeSpan ShutdownTimeout { get; init; } = TimeSpan.FromSeconds(2);
     public bool RepositoryExecution { get; init; }
 
+    // File metadata is a cheap local revision check for the installed CLI.
+    // A running app-server keeps its startup revision until it is restarted.
+    public string ExecutableStamp()
+    {
+        string? path = File.Exists(Command) ? Path.GetFullPath(Command) :
+            (System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+                .Select(directory => Path.Combine(directory, Command + (OperatingSystem.IsWindows() ? ".exe" : "")))
+                .FirstOrDefault(File.Exists);
+        if (path is null) return Command;
+        var file = new FileInfo(path);
+        return $"{file.FullName}:{file.Length}:{file.LastWriteTimeUtc.Ticks}";
+    }
+
     // npm distributes the official Rust binary. Prefer the pinned local package,
     // including on Windows where a .cmd shim cannot be spawned without a shell.
     public static string FindCommand()

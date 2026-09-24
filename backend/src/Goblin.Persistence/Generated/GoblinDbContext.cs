@@ -16,6 +16,8 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<Connection> Connections { get; set; }
 
+    public virtual DbSet<ConnectionModelCatalog> ConnectionModelCatalogs { get; set; }
+
     public virtual DbSet<Conversation> Conversations { get; set; }
 
     public virtual DbSet<ConversationMessage> ConversationMessages { get; set; }
@@ -55,6 +57,15 @@ public partial class GoblinDbContext : DbContext
 
             entity.Property(e => e.Availability).HasDefaultValueSql("'Disconnected'::text");
             entity.Property(e => e.ChangedAt).HasDefaultValueSql("now()");
+        });
+
+        modelBuilder.Entity<ConnectionModelCatalog>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("connection_model_catalogs_pkey");
+
+            entity.HasOne(d => d.Connection).WithOne(p => p.ConnectionModelCatalog)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("connection_model_catalogs_connection_id_fkey");
         });
 
         modelBuilder.Entity<Conversation>(entity =>
