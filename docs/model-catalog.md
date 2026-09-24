@@ -1,15 +1,17 @@
 # Codex model selection
 
-The composer on New Work, saved conversations, and Work shows the Codex default
-plus three visible models. **Show more** loads up to ten. It offers only the
-reasoning efforts reported for the chosen model. A choice made before Work exists
-follows the new or tracked Work through agent assignment. Conversation messages
-save context; they do not run a model. If the assigned agent uses another
-connection, the picker resets and asks for a new choice. Before an attempt starts,
-choices are browser-tab drafts in session storage. Start and Retry record the
-requested model and effort on the new attempt in PostgreSQL; later agent or
-catalog changes do not rewrite that attempt. The execution view shows both the
-requested model and the model Codex reported.
+The composer on New Work, saved conversations, and Work has a compact model
+button. Its popover shows the current model and reasoning effort, with a slider
+for Low, Medium, High, and Extra High. Unsupported stops are disabled for the
+chosen model. The model row opens a list with the Codex default plus three
+visible models; **Show more** loads up to ten. A choice made before
+Work exists follows the new or tracked Work through agent assignment.
+Conversation messages save context; they do not run a model. If the assigned
+agent uses another connection, the picker resets and asks for a new choice.
+Before an attempt starts, choices are browser-tab drafts in session storage.
+Start and Retry record the requested model and effort on the new attempt in
+PostgreSQL; later agent or catalog changes do not rewrite that attempt. The
+execution view shows both the requested model and the model Codex reported.
 
 The controller uses Codex App Server `model/list`, follows its pagination cursor,
 and discards hidden models. The complete visible catalog is stored as one JSONB

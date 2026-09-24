@@ -112,6 +112,15 @@ try {
 const modelLoading = new Set<string>();
 const modelErrors = new Map<string, string>();
 let modelEpoch = 0;
+let modelPickerOpen = false,
+    modelListOpen = false,
+    modelSliderDragging = false;
+const effortStops = [
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Medium" },
+    { value: "high", label: "High" },
+    { value: "xhigh", label: "Extra High" },
+] as const;
 const draftKey = () =>
     view === "work"
         ? `work:${selected}`
@@ -379,6 +388,7 @@ function ensureModels() {
 const time = (value: string) => new Date(value).toLocaleString();
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const effortLabel = (value: string) =>
+    effortStops.find((stop) => stop.value === value)?.label ??
     value.slice(0, 1).toUpperCase() + value.slice(1);
 const attention = (w: Work) => w.status === "NeedsAttention";
 const statusClass = (w: Work) =>
@@ -439,6 +449,9 @@ function forgetWorkspace() {
     sessionStorage.removeItem("goblin.modelSelections");
     modelErrors.clear();
     modelLoading.clear();
+    modelPickerOpen = false;
+    modelListOpen = false;
+    modelSliderDragging = false;
     loaded = false;
     system.reset();
     settings.reset();
@@ -631,7 +644,7 @@ function connectionButton() {
     return `<button class="connection-choice" type="button" data-action="settings" title="Manage AI connections">${icon("spark")}${e(connection?.name ?? "AI connections")}${icon("chevron")}</button>`;
 }
 function composer(kind: string, placeholder: string) {
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea>${modelControls(composerWork())}<div class="composer-footer">${kind === "new" ? connectionButton() : `<span class="composer-note">${kind === "chat" ? "Saved as a conversation · Track as Work to start Goblin" : changing ? "Requests changes to the current result" : current()?.work.attention?.reason === "InputRequired" ? "Answers the pending question" : current()?.work.status === "Ready" ? "Saves context for this work · Start work when ready" : "Saves context with this work"}</span>`}<button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div></form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
+    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${modelControls(composerWork())}${kind === "new" ? connectionButton() : `<span class="composer-note">${kind === "chat" ? "Saved as a conversation · Track as Work to start Goblin" : changing ? "Requests changes to the current result" : current()?.work.attention?.reason === "InputRequired" ? "Answers the pending question" : current()?.work.status === "Ready" ? "Saves context for this work · Start work when ready" : "Saves context with this work"}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div></form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
 }
 function rememberWork() {
     sessionStorage.setItem("goblin.selectedWork", selected);
@@ -660,6 +673,8 @@ function navigate(next: typeof view, id = "") {
     changing = false;
     conversationExpanded = false;
     activityOpen = false;
+    modelPickerOpen = false;
+    modelListOpen = false;
     if (mobile.matches) sidebarCollapsed = true;
 }
 function renderSidebar() {
@@ -798,10 +813,14 @@ function render(preserveHome = false, forceSelect = false) {
     const buttonData = activeButton ? { ...activeButton.dataset } : null;
     const context = draftKey();
     const sameContext = context === renderedContext;
+    if (!sameContext) {
+        modelPickerOpen = false;
+        modelListOpen = false;
+    }
     // Keep the native picker and its keyboard interaction alive during polling.
     // Loaded state is applied on the next render after the user leaves the select.
     if (
-        active?.closest("select") &&
+        (active?.closest("select") || modelSliderDragging) &&
         sameContext &&
         authenticated &&
         !sending &&
@@ -971,19 +990,21 @@ function modelControls(w?: Work) {
         (choice.model ? undefined : models.find((m) => m.isDefault));
     const waitingForSelection =
         !!choice.model && !models.some((m) => m.model === choice.model);
-    const modelOptions = models
-        .map(
-            (m) =>
-                `<option value="${e(m.model)}" ${choice.model === m.model ? "selected" : ""}>${e(m.displayName)}${m.isDefault ? " · Default" : ""}${m.isNew ? " · New" : ""}</option>`,
-        )
-        .join("");
-    const effortOptions =
-        selectedModel?.supportedReasoningEfforts
-            .map(
-                (effort) =>
-                    `<option value="${e(effort)}" ${choice.effort === effort ? "selected" : ""}>${e(effortLabel(effort))}</option>`,
-            )
-            .join("") ?? "";
+    const modelName =
+        selectedModel?.displayName ??
+        (choice.model || (unsupported ? "Runtime default" : "Codex default"));
+    const currentEffort =
+        choice.effort || selectedModel?.defaultReasoningEffort || "";
+    const currentEffortLabel = currentEffort
+        ? effortLabel(currentEffort)
+        : "Default";
+    const activeIndex = Math.max(
+        0,
+        effortStops.findIndex((stop) => stop.value === currentEffort),
+    );
+    const supportedEfforts = new Set(
+        selectedModel?.supportedReasoningEfforts ?? [],
+    );
     const statusText = unsupported
         ? "This agent does not offer Codex model choices."
         : !connectionId
@@ -1017,7 +1038,17 @@ function modelControls(w?: Work) {
                         w.attention?.reason === "InputRequired")
                   ? "The current attempt keeps its model. This choice is for a later attempt."
                   : "This choice applies when this Work starts or retries.";
-    return `<div class="model-picker composer-model-picker"><div class="model-picker-heading"><strong>${w ? "Model for next attempt" : "Model when Work starts"}</strong><button type="button" class="text-button" data-action="refresh-models" ${!connectionId || unsupported || modelLoading.has(connectionId) ? "disabled" : ""}>Refresh models</button></div><div class="model-picker-fields">${sourcePicker}<div class="model-picker-field"><label for="work-model">Model</label><select class="field-control select-control" id="work-model" name="work-model" ${connectionId && !unsupported ? "" : "disabled"}><button type="button"><selectedcontent></selectedcontent></button><option value="" ${!choice.model ? "selected" : ""}>${unsupported ? "Runtime default" : "Codex default"}${defaultName ? ` (${e(defaultName)})` : ""}</option>${waitingForSelection ? `<option value="${e(choice.model)}" selected disabled>${e(choice.model)} · Checking availability</option>` : ""}${modelOptions}</select></div><div class="model-picker-field"><label for="work-effort">Reasoning effort</label><select class="field-control select-control" id="work-effort" name="work-effort" ${selectedModel && !unsupported ? "" : "disabled"}><button type="button"><selectedcontent></selectedcontent></button><option value="" ${!choice.effort ? "selected" : ""}>Model default${selectedModel?.defaultReasoningEffort ? ` (${e(effortLabel(selectedModel.defaultReasoningEffort))})` : ""}</option>${effortOptions}</select></div></div><div class="model-picker-meta">${catalog?.hasMore && !choice.expanded ? '<button type="button" class="text-button model-more" data-action="show-more-models">Show more models (up to 10)</button>' : ""}${choice.expanded && catalog?.hasMore ? '<span class="field-hint">Showing 10 models.</span>' : ""}</div><p class="field-hint">${hint}</p>${statusText ? `<p class="field-hint" role="status">${e(statusText)}</p>` : ""}${choice.notice ? `<p class="field-hint" role="status">${e(choice.notice)}</p>` : ""}</div>`;
+    const status = `${statusText ? `<p class="model-status" role="status">${e(statusText)}</p>` : ""}${choice.notice ? `<p class="model-status" role="status">${e(choice.notice)}</p>` : ""}`;
+    const modelRows = `<button type="button" class="model-option" data-action="select-model" data-value="" aria-pressed="${!choice.model}"><span>Codex default${defaultName ? `<small>${e(defaultName)}</small>` : ""}</span>${!choice.model ? icon("check") : ""}</button>${waitingForSelection ? `<span class="model-option model-option-pending">${e(choice.model)} · Checking availability</span>` : ""}${models
+        .map(
+            (model) =>
+                `<button type="button" class="model-option" data-action="select-model" data-value="${e(model.model)}" aria-pressed="${choice.model === model.model}"><span>${e(model.displayName)}${model.isNew ? " <small>New</small>" : ""}</span>${choice.model === model.model ? icon("check") : ""}</button>`,
+        )
+        .join("")}`;
+    const menu = `<div class="model-menu"><button type="button" class="model-menu-back" data-action="model-menu-back">${icon("back")}Models</button>${sourcePicker}<div class="model-options" aria-label="Available models">${modelRows}</div>${catalog?.hasMore && !choice.expanded ? '<button type="button" class="text-button model-more" data-action="show-more-models">Show more models (up to 10)</button>' : ""}<button type="button" class="text-button model-refresh" data-action="refresh-models" ${!connectionId || unsupported || modelLoading.has(connectionId) ? "disabled" : ""}>${icon("refresh")}Refresh models</button>${status}</div>`;
+    const slider = `<div class="model-effort-control"><label for="work-effort">Reasoning effort</label><div class="model-effort-track"><div class="model-effort-visual" data-level="${activeIndex}" aria-hidden="true"><div class="model-effort-rail"><span class="model-effort-fill"></span></div><div class="model-effort-stops">${effortStops.map((stop) => `<span class="${supportedEfforts.has(stop.value) ? "" : "is-unavailable"}"></span>`).join("")}</div><span class="model-effort-thumb"></span></div><input id="work-effort" type="range" min="0" max="3" step="1" value="${activeIndex}" aria-label="Reasoning effort" aria-valuetext="${e(currentEffortLabel)}" ${supportedEfforts.size && !unsupported ? "" : "disabled"}></div><div class="model-effort-labels">${effortStops.map((stop) => `<button type="button" data-action="set-effort" data-value="${stop.value}" aria-pressed="${currentEffort === stop.value}" ${supportedEfforts.has(stop.value) && !unsupported ? "" : "disabled"}>${stop.label}</button>`).join("")}</div></div>`;
+    const main = `<button type="button" class="model-row" data-action="open-model-menu" ${connectionId && !unsupported ? "" : "disabled"}><span class="model-row-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button>${slider}${status}`;
+    return `<div class="model-picker"><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Model: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">${icon("spark")}<span class="model-picker-trigger-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
 }
 function controls(w: Work) {
     if (w.attention?.reason === "CleanupRequired")
@@ -1077,13 +1108,112 @@ function renderChat() {
     const c = conversations.find((x) => x.id === activeChat);
     return `<section class="chat-workspace"><div class="detail-body" data-scroll="chat"><div class="thread-content">${c ? `<h1 class="conversation-title">${e(c.title)}</h1>` + c.messages.map((m) => message("You", m.text, m.createdAt)).join("") + (c.workId ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>` : `<div class="decision"><h3>Ready to take this forward?</h3><p>Track this conversation as Work when you want Goblin to execute it.</p>${button("track", "Track this work", true)}</div>`) : `<div class="conversation-empty"><h1>A little room to think</h1><p>Save ideas and context here. Track them as Work when you’re ready to start an agent.</p></div>`}</div></div>${composer("chat", "Add to the conversation…")}</section>`;
 }
+function setModelEffort(value: string, updateOnly = false) {
+    const w = composerWork();
+    const choice = modelSelection(w);
+    const catalog = modelCatalogs.get(choice.connectionId);
+    const model = catalog?.models.find((item) =>
+        choice.model ? item.model === choice.model : item.isDefault,
+    );
+    if (!model?.supportedReasoningEfforts.includes(value)) return;
+    choice.effort = value;
+    choice.touched = true;
+    saveModelSelections();
+    if (!updateOnly) {
+        render(false, true);
+        return;
+    }
+    const effort = effortLabel(value);
+    const trigger = root.querySelector<HTMLButtonElement>(
+        ".model-picker-trigger",
+    );
+    const modelName = root.querySelector<HTMLElement>(
+        ".model-picker-trigger-name",
+    )?.textContent;
+    if (trigger && modelName)
+        trigger.setAttribute(
+            "aria-label",
+            `Model: ${modelName}, reasoning effort: ${effort}`,
+        );
+    for (const element of root.querySelectorAll<HTMLElement>(".model-effort"))
+        element.textContent = effort;
+    for (const button of root.querySelectorAll<HTMLButtonElement>(
+        ".model-effort-labels button",
+    ))
+        button.setAttribute(
+            "aria-pressed",
+            String(button.dataset.value === value),
+        );
+    const range = root.querySelector<HTMLInputElement>("#work-effort");
+    if (range) {
+        const index = effortStops.findIndex((stop) => stop.value === value);
+        range.value = String(index);
+        range.setAttribute("aria-valuetext", effort);
+        const visual = root.querySelector<HTMLElement>(".model-effort-visual");
+        if (visual) visual.dataset.level = String(index);
+    }
+    for (const action of ["execute", "retry"]) {
+        const button = root.querySelector<HTMLButtonElement>(
+            `[data-action="${action}"]`,
+        );
+        if (button) button.disabled = !w || !modelCanSubmit(w);
+    }
+    const repositoryButton =
+        root.querySelector<HTMLButtonElement>("#start-repository");
+    if (repositoryButton)
+        repositoryButton.disabled =
+            !w || !modelCanSubmit(w) || sending || !!pending;
+}
 document.addEventListener("click", async (event) => {
     if (!(event.target instanceof Element)) return;
+    if (modelPickerOpen && !event.target.closest(".model-picker")) {
+        modelPickerOpen = false;
+        modelListOpen = false;
+        root.querySelector("#model-popover")?.remove();
+        root.querySelector(".model-picker-trigger")?.setAttribute(
+            "aria-expanded",
+            "false",
+        );
+    }
     const target = event.target.closest<HTMLElement>("[data-action]");
     if (!target) return;
     if (target instanceof HTMLAnchorElement) event.preventDefault();
     const action = target.dataset.action,
         value = target.dataset.value;
+    if (action === "toggle-model-picker") {
+        modelPickerOpen = !modelPickerOpen;
+        modelListOpen = false;
+        render(false, true);
+        return;
+    }
+    if (action === "open-model-menu") {
+        modelListOpen = true;
+        render(false, true);
+        root.querySelector<HTMLElement>(".model-menu-back")?.focus();
+        return;
+    }
+    if (action === "model-menu-back") {
+        modelListOpen = false;
+        render(false, true);
+        root.querySelector<HTMLElement>(".model-row")?.focus();
+        return;
+    }
+    if (action === "select-model") {
+        const choice = modelSelection(composerWork());
+        choice.model = value ?? "";
+        choice.effort = "";
+        choice.touched = true;
+        choice.notice = "";
+        modelListOpen = false;
+        saveModelSelections();
+        render(false, true);
+        root.querySelector<HTMLElement>(".model-row")?.focus();
+        return;
+    }
+    if (action === "set-effort") {
+        if (value) setModelEffort(value);
+        return;
+    }
     if (
         action === "settings" ||
         action === "settings-codex" ||
@@ -1117,6 +1247,7 @@ document.addEventListener("click", async (event) => {
         saveModelSelections();
         if (connectionId) void loadModels(connectionId, 10, choice.model);
         render();
+        root.querySelector<HTMLElement>(".model-menu-back")?.focus();
         return;
     }
     if (action === "refresh-models") {
@@ -1382,6 +1513,33 @@ document.addEventListener("submit", async (event) => {
 document.addEventListener("input", (event) => {
     if (
         event.target instanceof HTMLInputElement &&
+        event.target.id === "work-effort"
+    ) {
+        const choice = modelSelection(composerWork());
+        const model = modelCatalogs
+            .get(choice.connectionId)
+            ?.models.find((item) =>
+                choice.model ? item.model === choice.model : item.isDefault,
+            );
+        const available = effortStops
+            .map((stop, index) => ({ ...stop, index }))
+            .filter((stop) =>
+                model?.supportedReasoningEfforts.includes(stop.value),
+            );
+        if (available.length) {
+            const requested = Number(event.target.value);
+            const nearest = available.reduce((best, stop) =>
+                Math.abs(stop.index - requested) <
+                Math.abs(best.index - requested)
+                    ? stop
+                    : best,
+            );
+            setModelEffort(nearest.value, true);
+        }
+        return;
+    }
+    if (
+        event.target instanceof HTMLInputElement &&
         event.target.closest(".work-setup")
     ) {
         const errors = setupErrors.get(renderedContext);
@@ -1403,28 +1561,23 @@ document.addEventListener("input", (event) => {
 });
 document.addEventListener("change", (event) => {
     if (
+        event.target instanceof HTMLInputElement &&
+        event.target.id === "work-effort"
+    ) {
+        if (!modelSliderDragging) render(false, true);
+        return;
+    }
+    if (
         event.target instanceof HTMLSelectElement &&
-        ["work-model", "work-effort", "model-connection"].includes(
-            event.target.id,
-        )
+        event.target.id === "model-connection"
     ) {
         const choice = modelSelection(composerWork());
-        if (event.target.id === "work-model") {
-            choice.model = event.target.value;
-            choice.effort = "";
-            choice.touched = true;
-            choice.notice = "";
-        } else if (event.target.id === "work-effort") {
-            choice.effort = event.target.value;
-            choice.touched = true;
-        } else {
-            choice.connectionId = event.target.value;
-            choice.model = "";
-            choice.effort = "";
-            choice.touched = false;
-            choice.expanded = false;
-            choice.notice = "";
-        }
+        choice.connectionId = event.target.value;
+        choice.model = "";
+        choice.effort = "";
+        choice.touched = false;
+        choice.expanded = false;
+        choice.notice = "";
         saveModelSelections();
         render(false, true);
         return;
@@ -1442,13 +1595,39 @@ document.addEventListener("change", (event) => {
 document.addEventListener("focusout", (event) => {
     if (
         event.target instanceof HTMLSelectElement &&
-        ["work-model", "work-effort", "model-connection"].includes(
-            event.target.id,
-        )
+        event.target.id === "model-connection"
     )
         queueMicrotask(() => {
             if (authenticated && root.contains(event.target as Node)) render();
         });
+});
+document.addEventListener("pointerdown", (event) => {
+    if (
+        event.target instanceof HTMLInputElement &&
+        event.target.id === "work-effort"
+    )
+        modelSliderDragging = true;
+});
+document.addEventListener("pointerup", () => {
+    modelSliderDragging = false;
+});
+document.addEventListener("pointercancel", () => {
+    modelSliderDragging = false;
+});
+document.addEventListener("focusin", (event) => {
+    if (
+        modelPickerOpen &&
+        event.target instanceof Element &&
+        !event.target.closest(".model-picker")
+    ) {
+        modelPickerOpen = false;
+        modelListOpen = false;
+        root.querySelector("#model-popover")?.remove();
+        root.querySelector(".model-picker-trigger")?.setAttribute(
+            "aria-expanded",
+            "false",
+        );
+    }
 });
 function trapFocus(event: KeyboardEvent, selector: string) {
     const targets = Array.from(
@@ -1469,6 +1648,56 @@ function trapFocus(event: KeyboardEvent, selector: string) {
 }
 document.addEventListener("keydown", (event) => {
     if (settings.isOpen) return;
+    if (
+        event.target instanceof HTMLInputElement &&
+        event.target.id === "work-effort" &&
+        [
+            "ArrowLeft",
+            "ArrowDown",
+            "ArrowRight",
+            "ArrowUp",
+            "Home",
+            "End",
+        ].includes(event.key)
+    ) {
+        const choice = modelSelection(composerWork());
+        const model = modelCatalogs
+            .get(choice.connectionId)
+            ?.models.find((item) =>
+                choice.model ? item.model === choice.model : item.isDefault,
+            );
+        const available = effortStops
+            .map((stop, index) => ({ ...stop, index }))
+            .filter((stop) =>
+                model?.supportedReasoningEfforts.includes(stop.value),
+            );
+        if (available.length) {
+            event.preventDefault();
+            const currentIndex = Number(event.target.value);
+            const next =
+                event.key === "Home"
+                    ? available[0]
+                    : event.key === "End"
+                      ? available.at(-1)!
+                      : ["ArrowRight", "ArrowUp"].includes(event.key)
+                        ? (available.find(
+                              (stop) => stop.index > currentIndex,
+                          ) ?? available.at(-1)!)
+                        : (available.findLast(
+                              (stop) => stop.index < currentIndex,
+                          ) ?? available[0]);
+            setModelEffort(next.value, true);
+        }
+        return;
+    }
+    if (event.key === "Escape" && modelPickerOpen) {
+        event.preventDefault();
+        modelPickerOpen = false;
+        modelListOpen = false;
+        render(false, true);
+        root.querySelector<HTMLElement>(".model-picker-trigger")?.focus();
+        return;
+    }
     if (
         event.key === "Escape" &&
         search &&
