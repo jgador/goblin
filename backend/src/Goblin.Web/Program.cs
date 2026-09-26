@@ -7,9 +7,9 @@ if (args.Length > 0 && args[0] == "--execute")
     Environment.ExitCode = await Goblin.Execution.ExecutionWorker.RunAsync(args[1..]);
     return;
 }
-if (args.Length == 1 && args[0] == "--inspection-restore")
+if (args.Length is 1 or 2 && args[0] == "--workspace-files")
 {
-    Environment.ExitCode = await Goblin.Execution.InspectionHost.RestoreAsync();
+    Environment.ExitCode = Goblin.Execution.WorkspaceFiles.Run(args.Length == 2 ? args[1] : null);
     return;
 }
 if (args.Length == 1 && args[0] == "--sandbox-execute")

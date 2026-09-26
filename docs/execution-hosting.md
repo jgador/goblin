@@ -7,7 +7,8 @@ protocol. Agent, Work, attempt, connection, and native session IDs stay distinct
 
 The [workspace lifecycle](workspace-lifecycle.md) supersedes the original
 one-interaction-per-attempt behavior: questions can pause an attempt, runtime turns
-have distinct ownership, and an AI release decision is gated by verified archives.
+have distinct ownership. An AI release decision suspends compute and retains the
+Work PVC; no filesystem archive is required.
 
 ## Choosing an environment
 
@@ -34,7 +35,8 @@ objects in its own bare repository; agent Git configuration and hooks never ente
 that repository. `goblin-github publish` publishes commits to the exact assigned
 branch. `goblin-github pull-request` opens its draft PR (later branch publications
 update the same PR). `goblin-github fetch` refreshes the sandbox's origin references.
-The completed interaction also publishes a checkpoint automatically. Merging,
+The completed interaction also publishes a Git checkpoint automatically. Only
+commit metadata is recorded in PostgreSQL; workspace files stay on the PVC. Merging,
 auto-merge, other branches, tags, and repository administration are unavailable.
 
 Publication commands are persisted with Wolverine dispatch intent. Repeated command

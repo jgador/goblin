@@ -55,18 +55,9 @@ public static class SandboxWorker
                 string branch = repository.Grant!.Branch;
                 if (!Directory.Exists(checkout))
                 {
-                    WorkspaceCheckpoint? restored = await RepositoryClient.RestoreAsync(work, root);
-                    if (restored is null)
-                    {
-                        string bundle = Path.Combine(state, "input.bundle");
-                        await RepositoryClient.DownloadAsync(attempt.Id, bundle);
-                        await GitAsync(root, environment, "clone", "--branch", branch, "--", bundle, checkout);
-                    }
-                    else
-                    {
-                        if ((await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim() != restored.CommitSha) throw new IOException("Checkpoint mismatch.");
-                        await GitAsync(checkout, environment, "checkout", "-B", branch, restored.CommitSha);
-                    }
+                    string bundle = Path.Combine(state, "input.bundle");
+                    await RepositoryClient.DownloadAsync(attempt.Id, bundle);
+                    await GitAsync(root, environment, "clone", "--branch", branch, "--", bundle, checkout);
                 }
                 await PrepareCheckoutAsync(checkout, environment, repository);
                 string baseline = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
@@ -98,11 +89,8 @@ public static class SandboxWorker
                 await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, "publish");
                 string commit = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
                 await File.WriteAllTextAsync(Path.Combine(state, "changes.patch"), await GitAsync(checkout, environment, "diff", baseline, commit));
-                string archive = Path.Combine("/tmp", Guid.NewGuid().ToString("N") + ".tar.gz");
-                stage = "Archive";
-                WorkspaceCheckpoint saved;
-                try { WorkspaceFiles.Pack(root, archive); saved = await RepositoryClient.SaveAsync(work, commit, archive); }
-                finally { File.Delete(archive); }
+                stage = "Git checkpoint";
+                WorkspaceCheckpoint saved = await RepositoryClient.SaveCheckpointAsync(work, commit);
                 if (observations.Length > 0)
                 {
                     stage = "Save setup memory";

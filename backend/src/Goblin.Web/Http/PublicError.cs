@@ -33,11 +33,10 @@ public sealed class PublicError : Exception
         }),
         ApplicationFailure failure => new(failure.Code, failure.Code switch
         {
-            "workspace_storage_full" => "Workspace storage is full. The local files have been retained; free capacity before continuing.",
             "workspace_checkpoint_unconfirmed" => "The checkpoint could not be confirmed on GitHub. The local workspace is retained.",
-            "workspace_unavailable" => "This workspace is unavailable. Check its inspection session and saved checkpoint.",
+            "workspace_unavailable" => "This workspace is unavailable. Check its retained volume and inspection session.",
             "workspace_session_exists" => "A workspace session is already open for this Work.",
-            "workspace_file_too_large" => "This file is too large to preview. Download the saved workspace to inspect it.",
+            "workspace_file_too_large" => "This file is too large to preview. Use the workspace terminal to inspect it.",
             "workspace_not_found" => "This saved workspace or file could not be found.",
             "workspace_changed" => "The workspace changed. Refresh before continuing.",
             "work_changed" => "This work changed. Refresh it before submitting another action.",

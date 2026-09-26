@@ -99,6 +99,24 @@ public sealed class PersistentSandboxTests
     }
 
     [Fact]
+    public async Task CompletedWorkVolumeIsNotDeletedToMakeRoomForAnotherWork()
+    {
+        await using ControlPlane plane = await ControlPlane.StartAsync();
+        WorkItem work = Running(1, 10, plane.Host);
+        await plane.Host.StartAsync(work.Snapshot(), default);
+        string volume = plane.VolumeUid;
+        work.SaveWorkspace(10, 100, 1, Now);
+        work.ProposeResult(10, 100, "Ready", Now);
+        work.RequireCleanup(10, 100, Now);
+        await plane.Host.CleanupAsync(work.Snapshot(), default);
+        work.ConfirmCleanup(10, 100, Now);
+        work.ApproveResult(10, Now);
+        await Assert.ThrowsAsync<IOException>(() => plane.Host.StartAsync(Running(2, 20, plane.Host).Snapshot(), default));
+        Assert.Equal(volume, plane.VolumeUid);
+        Assert.Single(plane.Resources.Keys, x => x.Contains("/persistentvolumeclaims/", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ConcurrentVersionChangePreventsActivationAndRemovesItsCredentials()
     {
         await using ControlPlane plane = await ControlPlane.StartAsync();
@@ -182,7 +200,7 @@ public sealed class PersistentSandboxTests
             _server = server; _auth = Path.Combine(Path.GetTempPath(), "goblin-sandbox-test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_auth); File.WriteAllText(Path.Combine(_auth, "auth.json"), "{}");
             _api = new(server.Urls.Single());
-            Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Archives(), new(MaxCachedVolumes: 1));
+            Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Checkpoints(), new(MaxCachedVolumes: 1));
         }
         public static async Task<ControlPlane> StartAsync()
         {
@@ -248,11 +266,10 @@ public sealed class PersistentSandboxTests
         public Task StopAsync(WorkSnapshot work, CancellationToken token) { Stops++; return Task.CompletedTask; }
         public Task ReleaseAsync(WorkSnapshot work, CancellationToken token) => Task.CompletedTask;
     }
-    private sealed class Archives : IWorkspaceArchive
+    private sealed class Checkpoints : IWorkspaceCheckpoints
     {
         public Task<WorkspaceCheckpoint?> LatestAsync(long workId, string repository, CancellationToken token) => Task.FromResult<WorkspaceCheckpoint?>(null);
         public Task<bool> VerifiedAsync(long id, long attemptId, int turnNumber, CancellationToken token) => Task.FromResult(true);
-        public Task<bool> CanDiscardAsync(long attemptId, int workspaceNumber, CancellationToken token) => Task.FromResult(false);
     }
     private sealed class TextHost : IExecutionHost
     {

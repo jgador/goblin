@@ -70,11 +70,23 @@ public sealed class WorkStore
             .Select(x => new ConnectionView(x.Id, x.Runtime, x.Name, x.Availability)).ToArrayAsync(token);
     }
 
+    public async Task<string[]> RepositorySuggestionsAsync(WorkSnapshot work, CancellationToken token = default)
+    {
+        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
+        return await RepositorySuggestionsAsync(db, work, null, token);
+    }
+
+    private static async Task<string[]> RepositorySuggestionsAsync(GoblinDbContext db, WorkSnapshot work,
+        string? answer, CancellationToken token) => RepositoryReferences.Find(work,
+            await db.GithubRepositories.Where(x => x.Enabled).Select(x => x.Name).ToArrayAsync(token), answer);
+
     public async Task<WorkView> ApplyAsync(WorkCommand command, CancellationToken token = default)
     {
         if (command.CommandId <= 0 || command.WorkId <= 0 || !Enum.IsDefined(command.Action))
             throw new ApplicationFailure("invalid_command");
         if (command.Text?.Length > 4000) throw new ApplicationFailure("text_too_long");
+        if (command.Repository is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.AuthorizeRepository))
+            throw new ApplicationFailure("invalid_command");
         if (command.Model?.Length > 128 || command.ReasoningEffort?.Length > 32 ||
             (command.Action is not (WorkAction.Execute or WorkAction.Retry) &&
                 (command.Model is not null || command.ReasoningEffort is not null || command.ModelSelectionProvided)))
@@ -131,9 +143,28 @@ public sealed class WorkStore
                 if (command.ModelSelectionProvided || command.Model is not null || command.ReasoningEffort is not null)
                     await ModelCatalogStore.ValidateSelectionAsync(db, connection, model, effort, token);
                 var target = new ExecutionTarget(connection.Runtime, connection.Id, model, repository, effort);
+                if (command.Action == WorkAction.Execute && repository is null)
+                {
+                    string[] suggestions = await RepositorySuggestionsAsync(db, work.Snapshot(), null, token);
+                    if (suggestions.Length > 0)
+                    {
+                        work.RequestRepositorySetup(target, suggestions, now);
+                        break;
+                    }
+                }
                 if (command.Action == WorkAction.Retry) work.RetryExecution(attemptId, target, now);
                 else work.QueueExecution(attemptId, target, now);
                 await outbox.PublishAsync(new DispatchWork(work.Id, attemptId));
+                break;
+            case WorkAction.AuthorizeRepository:
+                ExecutionTarget previous = work.RepositoryRequest?.Target ?? work.CurrentAttempt?.Target
+                    ?? throw new ApplicationFailure("invalid_command");
+                long repositoryAttemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
+                RepositoryChange authorized = await GitHubStore.BindAsync(db,
+                    command.Repository ?? throw new ApplicationFailure("repository_required"), work.Id, repositoryAttemptId, token);
+                work.AuthorizeRepository(repositoryAttemptId, new(previous.Runtime, previous.ConnectionId,
+                    previous.RequestedModel, authorized, previous.RequestedEffort), now);
+                await outbox.PublishAsync(new DispatchWork(work.Id, repositoryAttemptId));
                 break;
             case WorkAction.Cancel:
                 work.RequestCancellation(now);
@@ -141,6 +172,15 @@ public sealed class WorkStore
                     await outbox.PublishAsync(new ReconcileWork(work.Id, cancelled.Id));
                 break;
             case WorkAction.Answer:
+                if (work.CurrentAttempt?.Target.Repository is null)
+                {
+                    string[] suggestions = await RepositorySuggestionsAsync(db, work.Snapshot(), command.Text, token);
+                    if (suggestions.Length > 0)
+                    {
+                        work.RequestRepositorySetupForAnswer(command.DecisionId ?? 0, command.Text ?? "", suggestions, now);
+                        break;
+                    }
+                }
                 work.AnswerDecision(command.DecisionId ?? 0, command.Text ?? "", now);
                 if (work.CurrentAttempt is { Status: AttemptStatus.Queued } continuation)
                     await outbox.PublishAsync(new DispatchWork(work.Id, continuation.Id, continuation.TurnNumber));
@@ -177,7 +217,11 @@ public sealed class WorkStore
 
     // A successful claim is committed before the caller can contact the host.
     // Returning null means this delivery has no permission to start execution.
-    public async Task<WorkSnapshot?> ClaimAsync(DispatchWork command, string environment,
+    public Task<WorkSnapshot?> ClaimAsync(DispatchWork command, string environment,
+        Func<ExecutionTarget, bool> supportsRuntime, CancellationToken token = default) =>
+        ClaimAsync(command, _ => environment, supportsRuntime, token);
+
+    public async Task<WorkSnapshot?> ClaimAsync(DispatchWork command, Func<WorkSnapshot, string> environmentFor,
         Func<ExecutionTarget, bool> supportsRuntime, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
@@ -197,13 +241,12 @@ public sealed class WorkStore
             failure = FailureKind.ConnectionUnavailable;
         if (failure is null && attempt.Target.Repository is not null && !attempt.ReasoningOnly)
         {
-            if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id && x.CheckpointId == null &&
+            if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id &&
                 (x.State == "Queued" || x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention"), token)) return null;
             int occupied = await db.ExecutionAttempts.CountAsync(x => x.Id != attempt.Id && x.GithubConnectionId != null &&
                 (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token);
             occupied += await db.WorkspaceSessions.CountAsync(x => x.State == "Starting" || x.State == "Available" || x.State == "Stopping" || x.State == "NeedsAttention", token);
-            long used = await db.WorkspaceCheckpoints.SumAsync(x => (long)x.Archive.Length, token);
-            if (occupied >= _limits.MaxSandboxes || used >= _limits.MaxStorageBytes) return null;
+            if (occupied >= _limits.MaxSandboxes) return null;
         }
         if (failure is null && await db.ExecutionAttempts.AnyAsync(x => x.Id != attempt.Id && x.ConnectionId == connection.Id &&
             (x.Status == "Starting" || x.Status == "Running" || x.Status == "CancellationRequested" || x.Status == "Uncertain" || x.CleanupPending || x.WorkspaceRetained), token))
@@ -213,7 +256,7 @@ public sealed class WorkStore
             return null;
         }
         if (failure is not null) work.DispatchFailed(attempt.Id, failure.Value, now);
-        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), attempt.ReasoningOnly ? "text/" + attempt.Id + "/turn/" + attempt.TurnNumber : environment, now)) return null;
+        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), environmentFor(work.Snapshot()), now)) return null;
         await SaveAsync(db, row, work, now, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return failure is null ? work.Snapshot() : null;

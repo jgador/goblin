@@ -27,11 +27,11 @@ public sealed class SandboxHost : IExecutionHost
     private readonly SandboxOptions _options;
     private readonly IExecutionHost _textHost;
     private readonly IRepositoryBroker _repositories;
-    private readonly IWorkspaceArchive? _archives;
+    private readonly IWorkspaceCheckpoints? _checkpoints;
     private readonly WorkspaceLimits _limits;
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _workLocks = new();
 
-    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories, IWorkspaceArchive? archives = null, WorkspaceLimits? limits = null)
+    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories, IWorkspaceCheckpoints? checkpoints = null, WorkspaceLimits? limits = null)
     {
         if (!ValidNamespace(options.Namespace))
             throw new ArgumentException("Invalid execution namespace.", nameof(options));
@@ -39,13 +39,15 @@ public sealed class SandboxHost : IExecutionHost
         _options = options;
         _textHost = textHost;
         _repositories = repositories;
-        _archives = archives;
+        _checkpoints = checkpoints;
         _limits = limits ?? new();
     }
 
     public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
     public string EnvironmentFor(long workId, long attemptId) => "k8s/" + _options.Namespace + "/work-" +
         workId.ToString(CultureInfo.InvariantCulture);
+    public string EnvironmentFor(WorkSnapshot work) => work.Attempts[^1] is { Target.Repository: null } or { ReasoningOnly: true }
+        ? _textHost.EnvironmentFor(work) : EnvironmentFor(work.Id, work.Attempts[^1].Id);
 
     private static bool ValidNamespace(string value) => Regex.IsMatch(value, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
 
@@ -138,7 +140,7 @@ public sealed class SandboxHost : IExecutionHost
                 if (requiresVolume || (existing is null && (attempt.WorkspaceNumber > 1 || attempt.TurnNumber > 1 ||
                     work.Attempts.SkipLast(1).Any(a => a.Target.Repository is not null && a.EnvironmentReference is not null))))
                     throw new IOException("Retained workspace storage is missing.");
-                await ReclaimAsync(address, token);
+                await RequireVolumeCapacityAsync(address, token);
                 if (!await _api.CreateAsync(address.Core + "/persistentvolumeclaims", new K.PersistentVolumeClaim
                 {
                     ApiVersion = "v1",
@@ -246,8 +248,8 @@ public sealed class SandboxHost : IExecutionHost
                     if (observation.TurnNumber == work.Attempts[^1].TurnNumber &&
                         !(stop && observation.Kind is ObservationKind.Paused or ObservationKind.Uncertain))
                     {
-                        if (observation.CheckpointId is long checkpoint && (_archives is null || checkpoint <= 0 ||
-                            !await _archives.VerifiedAsync(checkpoint, work.Attempts[^1].Id, observation.TurnNumber, token)))
+                        if (observation.CheckpointId is long checkpoint && (_checkpoints is null || checkpoint <= 0 ||
+                            !await _checkpoints.VerifiedAsync(checkpoint, work.Attempts[^1].Id, observation.TurnNumber, token)))
                             return new(ObservationKind.Uncertain, Failure: FailureKind.StorageUnavailable) { TurnNumber = work.Attempts[^1].TurnNumber };
                         return observation;
                     }
@@ -321,26 +323,13 @@ public sealed class SandboxHost : IExecutionHost
             spec = new { operatingMode = "Suspended" }
         }, token);
 
-    private async Task ReclaimAsync(SandboxAddress address, CancellationToken token)
+    private async Task RequireVolumeCapacityAsync(SandboxAddress address, CancellationToken token)
     {
-        if (_archives is null) return;
         K.PersistentVolumeClaimList? volumes = await _api.GetAsync<K.PersistentVolumeClaimList>(address.Core + "/persistentvolumeclaims?labelSelector=app%3Dgoblin-execution", token);
-        K.PersistentVolumeClaim[] candidates = volumes?.Items.ToArray() ?? [];
-        int retained = candidates.Length;
-        if (retained < _limits.MaxCachedVolumes) return;
-        K.PodList? pods = await _api.GetAsync<K.PodList>(address.Core + "/pods", token);
-        foreach (K.PersistentVolumeClaim volume in candidates)
-        {
-            if (retained < _limits.MaxCachedVolumes) break;
-            string name = volume.Metadata?.Name ?? throw new IOException("Workspace volume has no name.");
-            if (pods?.Items.Any(p => p.Spec?.Volumes?.Any(v => v.PersistentVolumeClaim?.ClaimName == name) == true) == true) continue;
-            if (!long.TryParse(volume.Metadata?.Labels?.GetValueOrDefault("goblin-attempt"), out long attemptId)) continue;
-            if (!int.TryParse(volume.Metadata?.Labels?.GetValueOrDefault("goblin-workspace"), out int number)) continue;
-            if (!await _archives.CanDiscardAsync(attemptId, number, token)) continue;
-            await _api.DeleteAsync(address.Core + "/persistentvolumeclaims/" + name, token);
-            retained--;
-        }
-        if (retained >= _limits.MaxCachedVolumes) throw new IOException("Workspace storage needs attention before another allocation.");
+        // Git checkpoints do not preserve ignored/untracked files. No automatic
+        // volume deletion is safe without a separately approved retention policy.
+        if ((volumes?.Items.Count ?? 0) >= _limits.MaxCachedVolumes)
+            throw new IOException("Workspace storage needs attention before another allocation.");
     }
 
     public K.Sandbox Manifest(WorkSnapshot work, bool suspended, string? resourceVersion = null, string? phase = null)
