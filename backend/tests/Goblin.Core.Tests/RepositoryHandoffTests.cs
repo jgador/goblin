@@ -36,6 +36,7 @@ public sealed class RepositoryHandoffTests
         Assert.Empty(work.Attempts);
         Assert.Null(work.Workspace);
         Assert.Equal(Text, work.RepositoryRequest!.Target);
+        work.PrepareRepositoryAuthorization(11, Repository(11), false, false, Now);
         work.AuthorizeRepository(11, Repository(11), Now);
         Assert.Equal(WorkStatus.Queued, work.Status);
         Assert.Null(work.RepositoryRequest);
@@ -53,6 +54,7 @@ public sealed class RepositoryHandoffTests
         work = WorkItem.Restore(work.Snapshot());
         work.ConfirmCleanup(10, 100, Now);
         Assert.Equal(AttentionReason.RepositoryRequired, work.Attention!.Reason);
+        work.PrepareRepositoryAuthorization(11, Repository(11), false, false, Now);
         work.AuthorizeRepository(11, Repository(11), Now);
         Assert.Equal(2, work.Attempts.Count);
         Assert.Equal(AttemptStatus.Succeeded, work.Attempts[0].Status);
@@ -72,6 +74,7 @@ public sealed class RepositoryHandoffTests
         WorkItem work = Running();
         work.PauseForInput(10, 100, 101, "Provide repository contents", true, Now);
         if (answerFirst) work.RequestRepositorySetupForAnswer(101, "Clone owner/repo", ["owner/repo"], Now);
+        work.PrepareRepositoryAuthorization(11, Repository(11), false, false, Now);
         work.AuthorizeRepository(11, Repository(11), Now);
         Assert.NotNull(Assert.Single(work.Decisions).Answer);
         Assert.Equal(1, work.Attempts[0].TurnNumber);
@@ -91,10 +94,10 @@ public sealed class RepositoryHandoffTests
 
         work = Ready();
         work.RequestRepositorySetup(Text, [], Now);
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11,
-            new("another-runtime", 2, repository: Repository(11).Repository), Now));
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11,
-            new("codex", 1, "chosen-model", new("owner/repo", "Goblin", "agent@example.com"), "high"), Now));
+        Assert.Throws<WorkRuleException>(() => work.PrepareRepositoryAuthorization(11,
+            new("another-runtime", 2, repository: Repository(11).Repository), false, false, Now));
+        Assert.Throws<WorkRuleException>(() => work.PrepareRepositoryAuthorization(11,
+            new("codex", 1, "chosen-model", new("owner/repo", "Goblin", "agent@example.com"), "high"), false, false, Now));
         Assert.Empty(work.Attempts);
     }
 }

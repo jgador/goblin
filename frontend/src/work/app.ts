@@ -80,7 +80,7 @@ let initialSettings = query.get("settings");
 const drafts = new Map<string, string>();
 const setupDrafts = new Map<
     string,
-    { values: [string, string][]; open: boolean }
+    { values: [string, string][]; open: boolean; approval: string }
 >();
 const setupErrors = new Map<string, Record<string, string>>();
 const modelCatalogs = new Map<string, ModelCatalog>();
@@ -814,6 +814,14 @@ function render(preserveHome = false, forceSelect = false) {
     const buttonData = activeButton ? { ...activeButton.dataset } : null;
     const context = draftKey();
     const sameContext = context === renderedContext;
+    const authorization = current()?.work.repositoryAuthorization;
+    const approvalKey = authorization
+        ? `${authorization.id}:${authorization.status}`
+        : "";
+    const previousApproval =
+        root.querySelector<HTMLElement>("#repository-options")?.dataset
+            .approval ?? "";
+    const repositoryChanged = sameContext && approvalKey !== previousApproval;
     if (!sameContext) {
         modelPickerOpen = false;
         modelListOpen = false;
@@ -825,7 +833,8 @@ function render(preserveHome = false, forceSelect = false) {
         sameContext &&
         authenticated &&
         !sending &&
-        !forceSelect
+        !forceSelect &&
+        !repositoryChanged
     )
         return;
     if (
@@ -834,6 +843,7 @@ function render(preserveHome = false, forceSelect = false) {
         root.querySelector(".work-setup")
     )
         setupDrafts.set(renderedContext, {
+            approval: previousApproval,
             values: Array.from(
                 root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
                     ".work-setup input:not([readonly]),.work-setup select",
@@ -851,6 +861,10 @@ function render(preserveHome = false, forceSelect = false) {
           )
               .filter(
                   (x) =>
+                      !(
+                          repositoryChanged &&
+                          x.closest('[data-form="repository"]')
+                      ) &&
                       ![
                           "work-model",
                           "work-effort",
@@ -908,7 +922,8 @@ function render(preserveHome = false, forceSelect = false) {
         const detail = document.getElementById(id) as HTMLDetailsElement | null;
         if (detail) detail.open = true;
     }
-    const setup = setupDrafts.get(context);
+    const savedSetup = setupDrafts.get(context);
+    const setup = savedSetup?.approval === approvalKey ? savedSetup : undefined;
     for (const [id, value] of setup?.values ?? []) {
         const field = document.getElementById(id) as
             HTMLInputElement | HTMLSelectElement | null;
@@ -918,7 +933,6 @@ function render(preserveHome = false, forceSelect = false) {
         "#repository-options",
     );
     if (repositoryOptions && setup?.open) repositoryOptions.open = true;
-    updateRepositoryBranch();
     showSetupErrors();
     if (focus?.id && sameContext) {
         const replacement = document.getElementById(focus.id) as
@@ -1054,16 +1068,72 @@ function modelControls(w?: Work) {
     return `<div class="model-picker"><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Model: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">${icon("spark")}<span class="model-picker-trigger-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
 }
 function repositorySetup(w: Work, required = false) {
-    const handoff =
-        w.attention?.reason === "RepositoryRequired" ||
-        w.attention?.reason === "InputRequired";
+    const handoff = ["RepositoryRequired", "InputRequired"].includes(
+        w.attention?.reason ?? "",
+    );
+    const approval = w.repositoryAuthorization;
+    const proposed = approval?.target.repository;
+    const grant =
+        approval?.status === "Invalidated" ? undefined : proposed?.grant;
+    const pendingApproval = approval?.status === "Pending";
     const suggestions = w.repositoryRequest?.repositories ?? [];
-    return `<details id="repository-options" ${required ? "open" : ""}><summary>${icon("chevron")}Repository access</summary><p>Choose a repository for this Work. Authorize Goblin to fetch it and publish changes to its own branch using your GitHub connection.</p>${suggestions.length ? `<p class="field-hint">Referenced in this Work: ${e(suggestions.join(", "))}.</p>` : ""}<form class="work-setup" data-form="repository" novalidate><label for="repository">Repository</label><select class="field-control select-control" id="repository" name="repository" required aria-describedby="repository-error"><button type="button"><selectedcontent></selectedcontent></button><option value="">${repositories.some((r) => r.enabled) ? "Choose an enabled repository" : connectionsLoading ? "Loading repositories…" : "No repositories enabled"}</option>${repositories
-        .filter((r) => r.enabled)
-        .map((r) => `<option value="${e(r.name)}">${e(r.name)}</option>`)
-        .join(
-            "",
-        )}</select><p class="field-error" id="repository-error" hidden></p><button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button><label for="repository-branch">Default branch</label><input class="field-control" id="repository-branch" readonly placeholder="Choose a repository first" aria-describedby="branch-hint"><p id="branch-hint" class="field-hint">New attempts start from the repository’s default branch. Follow-up attempts use the saved checkpoint. Changes are saved to a separate Goblin branch.</p><div class="identity-fields"><div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="Goblin" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div><div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" placeholder="goblin@example.com" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div></div><p class="field-hint">Used as the author identity for this agent’s commits.</p>${runtimes.some((r) => r.repositoryExecution) ? `<button id="start-repository" type="submit" class="primary" ${sending || pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>${handoff ? "Authorize & continue" : "Start repository work"}</button>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}</form></details>`;
+    const name =
+        proposed?.repository ??
+        (suggestions.length === 1 ? suggestions[0] : "");
+    const preview =
+        pendingApproval && grant
+            ? `<section class="repository-authorization" aria-label="GitHub authorization">
+                <header><h3>Authorize GitHub access</h3><p>Review the repository and Git actions for this Work.</p></header>
+                <dl class="execution-properties repository-authorization-details">
+                    <dt>Repository</dt><dd>${e(proposed?.repository)}</dd>
+                    <dt>GitHub account</dt><dd>${e(grant.login)}</dd>
+                    <dt>Base branch</dt><dd>${e(grant.baseBranch)}</dd>
+                    <dt>Work branch</dt><dd>${e(grant.branch)}</dd>
+                    <dt>Git author</dt><dd>${e(proposed?.gitAuthorName)} &lt;${e(proposed?.gitAuthorEmail)}&gt;</dd>
+                </dl>
+                <div class="repository-permissions"><h4>Git actions</h4><ul>
+                    <li>Fetch repository and create a local work branch.</li>
+                    <li>${grant.allowPush ? "Push changes to the work branch." : "Keep changes in this Work without pushing."}</li>
+                    <li>${grant.allowPullRequest ? "Open a draft pull request." : "No pull request."}</li>
+                </ul></div>
+                ${approval.enableRepository ? '<p class="repository-authorization-note">This also enables the repository in Goblin for future requests. Each Work still requires authorization.</p>' : ""}
+                <div class="repository-actions">${button("authorize-repository", approval.enableRepository ? "Enable repository & authorize this Work" : "Authorize this Work", true)}${button("deny-repository", "Decline")}</div>
+            </section>`
+            : approval?.status === "Invalidated"
+              ? "<p>Context changed. Review repository access again.</p>"
+              : approval?.status === "Denied"
+                ? "<p>Repository access was declined. You can review a different request.</p>"
+                : "";
+    return `${preview}<details id="repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
+        <summary>${icon("chevron")}${pendingApproval ? "Change repository or actions" : "Repository access"}</summary>
+        <p>Review the repository and Git actions before this Work uses your GitHub connection.</p>
+        ${suggestions.length > 1 ? `<p class="field-hint">Several repositories match: ${e(suggestions.join(", "))}. Choose the full name.</p>` : ""}
+        <form class="work-setup repository-form" data-form="repository" novalidate>
+            <div><label for="repository">Repository</label>
+                <input class="field-control" id="repository" name="repository" list="known-repositories" value="${e(name)}" placeholder="owner/repository or GitHub URL" required aria-describedby="repository-error">
+                <datalist id="known-repositories">${repositories.map((r) => `<option value="${e(r.name)}">${r.enabled ? "Enabled" : "Requires enablement"}</option>`).join("")}</datalist>
+                <p class="field-error" id="repository-error" hidden></p>
+                <button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button>
+            </div>
+            <div><label for="repository-branch">Base branch</label>
+                <input class="field-control" id="repository-branch" name="base-branch" value="${e(grant?.baseBranch ?? "")}" placeholder="From your request or repository default">
+            </div>
+            <div><label for="delivery-policy">Git actions</label>
+                <select class="field-control select-control" id="delivery-policy" name="delivery-policy">
+                    <button type="button"><selectedcontent></selectedcontent></button>
+                    <option value="message" ${!grant ? "selected" : ""}>Use the actions in my request</option>
+                    <option value="local" ${grant && !grant.allowPush ? "selected" : ""}>Keep changes local</option>
+                    <option value="push" ${grant?.allowPush && !grant.allowPullRequest ? "selected" : ""}>Push changes</option>
+                    <option value="pr" ${grant?.allowPullRequest ? "selected" : ""}>Push and open a draft PR</option>
+                </select>
+            </div>
+            <div class="identity-fields">
+                <div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="${e(proposed?.gitAuthorName ?? "Goblin")}" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div>
+                <div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "goblin@localhost")}" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
+            </div>
+            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="repository-actions"><button id="start-repository" type="submit" class="primary" ${sending || pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Review repository access</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
+        </form>
+    </details>`;
 }
 function controls(w: Work) {
     if (w.attention?.reason === "CleanupRequired")
@@ -1083,7 +1153,7 @@ function controls(w: Work) {
     if (w.attention?.reason === "InputRequired")
         content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? repositorySetup(w) : ""}`;
     if (w.attention?.reason === "RepositoryRequired")
-        content = `<h3>Repository access needed</h3><p>Select an enabled repository and the agent’s Git identity to continue this Work.</p>${repositorySetup(w, true)}`;
+        content = `${w.repositoryAuthorization?.status === "Pending" ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${repositorySetup(w, true)}`;
     if (w.attention?.reason === "Failure")
         content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${button("retry", "Retry work", true, !modelCanSubmit(w))}`;
     if (w.attention?.reason === "UncertainExecution")
@@ -1093,23 +1163,6 @@ function controls(w: Work) {
     if (!["Completed", "Cancelled", "Cancelling"].includes(w.status))
         content += button("cancel", "Cancel work");
     return content ? `<div class="decision">${content}</div>` : "";
-}
-function updateRepositoryBranch() {
-    const repository = root.querySelector<HTMLSelectElement>("#repository");
-    const branch = root.querySelector<HTMLInputElement>("#repository-branch");
-    const suggestions = current()?.work.repositoryRequest?.repositories ?? [];
-    if (repository && !repository.value && suggestions.length === 1) {
-        const match = repositories.find(
-            (r) =>
-                r.enabled &&
-                r.name.toLowerCase() === suggestions[0].toLowerCase(),
-        );
-        if (match) repository.value = match.name;
-    }
-    if (branch)
-        branch.value =
-            repositories.find((r) => r.name === repository?.value)
-                ?.defaultBranch ?? "";
 }
 function showSetupErrors() {
     const errors = setupErrors.get(renderedContext) ?? {};
@@ -1389,6 +1442,15 @@ document.addEventListener("click", async (event) => {
         await command("Execute", modelPayload(current()!.work));
     if (action === "retry" && current())
         await command("Retry", modelPayload(current()!.work));
+    if (action === "authorize-repository" || action === "deny-repository")
+        await command(
+            action === "authorize-repository"
+                ? "AuthorizeRepository"
+                : "DenyRepository",
+            {
+                authorizationId: current()?.work.repositoryAuthorization?.id,
+            },
+        );
     if (action === "reconcile") await command("Reconcile");
     if (action === "cancel") await command("Cancel");
     if (action === "approve")
@@ -1442,11 +1504,17 @@ document.addEventListener("submit", async (event) => {
         return;
     }
     if (kind === "repository") {
-        const repository = String(data.get("repository") ?? "");
+        let repository = String(data.get("repository") ?? "").trim();
+        const url = repository.match(
+            /^(?:https?:\/\/)?github\.com\/([^/]+\/[^/]+)/i,
+        );
+        if (url) repository = url[1].replace(/\.git$/, "");
         const gitAuthorName = String(data.get("git-name") ?? "").trim();
         const gitAuthorEmail = String(data.get("git-email") ?? "").trim();
         const errors: Record<string, string> = {};
-        if (!repository) errors.repository = "Choose an enabled repository.";
+        if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repository))
+            errors.repository =
+                "Enter the full owner/repository name or GitHub URL.";
         if (!gitAuthorName)
             errors["git-name"] = "Enter a name for the agent’s commits.";
         const email =
@@ -1464,7 +1532,25 @@ document.addEventListener("submit", async (event) => {
         const handoff = ["RepositoryRequired", "InputRequired"].includes(
             w.attention?.reason ?? "",
         );
-        await command(handoff ? "AuthorizeRepository" : "Execute", {
+        const policy = String(data.get("delivery-policy") ?? "message");
+        const baseBranch = String(data.get("base-branch") ?? "").trim() || null;
+        if (policy === "message" && baseBranch) {
+            errors.repository =
+                "Choose Git actions when specifying a base branch.";
+            setupErrors.set(renderedContext, errors);
+            showSetupErrors();
+            return;
+        }
+        await command(handoff ? "PrepareRepository" : "Execute", {
+            ...(policy === "message"
+                ? {}
+                : {
+                      delivery: {
+                          baseBranch,
+                          push: policy === "push" || policy === "pr",
+                          openPullRequest: policy === "pr",
+                      },
+                  }),
             repository: { repository, gitAuthorName, gitAuthorEmail },
             ...(handoff ? {} : modelPayload(w)),
         });
@@ -1605,12 +1691,11 @@ document.addEventListener("change", (event) => {
         return;
     }
     if (
-        event.target instanceof HTMLSelectElement &&
+        event.target instanceof HTMLInputElement &&
         event.target.id === "repository"
     ) {
         const errors = setupErrors.get(renderedContext);
         if (errors) delete errors.repository;
-        updateRepositoryBranch();
         showSetupErrors();
     }
 });
@@ -1772,7 +1857,7 @@ function updateResponsiveLayout() {
     wasMobile = mobile.matches;
     wasCompact = compact.matches;
     activityOpen = false;
-    render();
+    render(false, true);
 }
 compact.addEventListener("change", updateResponsiveLayout);
 mobile.addEventListener("change", updateResponsiveLayout);

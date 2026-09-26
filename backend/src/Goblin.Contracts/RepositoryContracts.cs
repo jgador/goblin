@@ -8,6 +8,14 @@ public sealed record RepositoryAccount(string Generation, string AccountId, stri
 public sealed record RepositoryInfo(long Id, string Name, string DefaultBranch, bool CanPush);
 public sealed record RepositoryOperationResult(string? Commit, string? Url);
 
+// Trusted application-side discovery. Workers never receive this connection.
+public interface IRepositoryCatalog
+{
+    Task<RepositoryAccount?> GetAccountAsync(CancellationToken token);
+    Task<RepositoryInfo> RepositoryAsync(string name, CancellationToken token);
+    Task<RepositoryInfo[]> RepositoriesAsync(int page, CancellationToken token);
+}
+
 public interface IRepositoryRemote
 {
     Task PrepareCheckpointAsync(RepositoryChange repository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token) =>

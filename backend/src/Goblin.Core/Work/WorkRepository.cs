@@ -31,35 +31,42 @@ public sealed partial class WorkItem
 
     public void RequestRepositorySetupForAnswer(long decisionId, string answer, string[] repositories, DateTimeOffset now)
     {
-        Require(CurrentAttempt is { Target.Repository: null }, WorkRule.InvalidTransition);
+        Require(CurrentAttempt is not null, WorkRule.InvalidTransition);
         RecordAnswer(decisionId, answer, now);
         SetRepositoryRequest(CurrentAttempt!.Target, repositories, now);
+        if (CurrentAttempt is { Target.Repository: not null, ReleaseWorkspace: false, OwnerId: { } owner } attempt)
+        {
+            attempt.ReleaseWorkspace = true;
+            RequireCleanup(attempt.Id, owner, now);
+        }
     }
 
     public void AuthorizeRepository(long attemptId, ExecutionTarget target, DateTimeOffset now)
     {
+        RepositoryAuthorization approval = RequireRepositoryAuthorization(attemptId);
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
-        Require(Status == WorkStatus.NeedsAttention &&
-            (Attention?.Reason == AttentionReason.RepositoryRequired ||
-             Attention?.Reason == AttentionReason.InputRequired && CurrentAttempt?.Target.Repository is null),
+        Require(Status == WorkStatus.NeedsAttention && Attention?.Reason == AttentionReason.RepositoryRequired,
             WorkRule.InvalidTransition);
-        ExecutionTarget previous = RepositoryRequest?.Target ?? CurrentAttempt!.Target;
-        Require(target.Repository?.Grant is not null && previous.Repository is null &&
-            previous.Runtime == target.Runtime && previous.ConnectionId == target.ConnectionId &&
-            previous.RequestedModel == target.RequestedModel && previous.RequestedEffort == target.RequestedEffort,
-            WorkRule.OwnershipMismatch);
+        Require(target == approval.Target, WorkRule.OwnershipMismatch);
         ValidateNewAttempt(attemptId, target);
-        if (CurrentAttempt is { } prior)
+        if (approval.Retry)
         {
-            Require(prior.Status is AttemptStatus.Waiting or AttemptStatus.Succeeded,
-                WorkRule.InvalidTransition);
+            Require(CurrentAttempt?.Status == AttemptStatus.Failed, WorkRule.InvalidTransition);
+            Record(WorkEventKind.RetryRequested, now, CurrentAttempt!.Id);
+        }
+        if (!approval.Retry && CurrentAttempt is { Status: AttemptStatus.Waiting } prior)
+        {
             if (_decisions.Count > 0 && _decisions[^1].AttemptId == prior.Id && _decisions[^1].Answer is null)
+            {
+                Status = WorkStatus.NeedsAttention; Attention = new(AttentionReason.InputRequired);
                 RecordAnswer(_decisions[^1].Id, "Use " + target.Repository!.Repository + " for this Work.", now);
+            }
             // The conversation interaction ended; its immutable target and
             // runtime references remain on that attempt for provenance.
             prior.Status = AttemptStatus.Succeeded;
             prior.FinishedAt ??= now;
         }
+        RepositoryAuthorization = approval with { Status = RepositoryAuthorizationStatus.Authorized, AnsweredAt = now };
         RepositoryRequest = null;
         Record(WorkEventKind.RepositoryAuthorized, now, attemptId, text: target.Repository!.Repository);
         Queue(attemptId, target, now);
@@ -71,6 +78,6 @@ public sealed partial class WorkItem
         Status = WorkStatus.NeedsAttention;
         Attention = new(AttentionReason.RepositoryRequired);
         Record(WorkEventKind.RepositoryRequested, now, CurrentAttempt?.Id,
-            text: "Choose an enabled repository and authorize GitHub access for this Work.");
+            text: "Choose a repository and review GitHub access for this Work.");
     }
 }

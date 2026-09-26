@@ -57,7 +57,7 @@ public sealed class GitHubStore
         await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
         await RequireIdleAsync(db, token);
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
-        if (connection.Generation != generation || connection.Availability != "Connected" || (enabled && !repository.CanPush))
+        if (connection.Generation != generation || connection.Availability != "Connected")
             throw new ApplicationFailure("repository_unavailable");
         GithubRepository? row = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == repository.Id, token);
         if (row is null) { row = new() { Id = repository.Id, ConnectionId = 1 }; db.GithubRepositories.Add(row); }
@@ -65,21 +65,35 @@ public sealed class GitHubStore
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
-    internal static async Task<RepositoryChange> BindAsync(GoblinDbContext db, RepositoryChange requested, long workId, long attemptId, CancellationToken token)
+    internal static async Task AcceptAsync(GoblinDbContext db, RepositoryAuthorization approval, CancellationToken token)
     {
-        GithubRepository repository = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Name.ToLower() == requested.Repository.ToLower() && x.Enabled, token)
-            ?? throw new ApplicationFailure("repository_unavailable");
-        GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == repository.ConnectionId, token);
-        if (connection.Availability != "Connected" || connection.Generation is null || connection.AccountId is null || connection.Login is null)
-            throw new ApplicationFailure("repository_unavailable");
-        return new(repository.Name, requested.GitAuthorName, requested.GitAuthorEmail,
-            new(connection.Id, connection.Generation, connection.AccountId, connection.Login, repository.Id,
-                repository.DefaultBranch, $"goblin/{workId}/{attemptId}"));
+        RepositoryChange requested = approval.Target.Repository!;
+        RepositoryGrant grant = requested.Grant!;
+        GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == grant.ConnectionId, token);
+        if (connection.Availability != "Connected" || connection.Generation != grant.Generation ||
+            connection.AccountId != grant.AccountId || connection.Login != grant.Login)
+            throw new ApplicationFailure("repository_authorization_changed");
+        GithubRepository? repository = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == grant.RepositoryId, token);
+        if (repository is not null && (repository.ConnectionId != grant.ConnectionId ||
+            !repository.Name.Equals(requested.Repository, StringComparison.OrdinalIgnoreCase)))
+            throw new ApplicationFailure("repository_authorization_changed");
+        if (repository?.Enabled != true)
+        {
+            if (!approval.EnableRepository) throw new ApplicationFailure("repository_authorization_changed");
+            await RequireIdleAsync(db, token);
+            if (repository is null)
+            {
+                repository = new() { Id = grant.RepositoryId, ConnectionId = grant.ConnectionId, Name = requested.Repository };
+                db.GithubRepositories.Add(repository);
+            }
+            repository.DefaultBranch = approval.DefaultBranch ?? grant.BaseBranch;
+            repository.Enabled = true;
+        }
     }
     private static async Task RequireIdleAsync(GoblinDbContext db, CancellationToken token)
     {
         if (await db.ExecutionAttempts.AnyAsync(x => x.GithubConnectionId == 1 &&
-            (x.Status == "Queued" || x.Status == "Starting" || x.Status == "Running" || x.Status == "Uncertain" || x.Status == "CancellationRequested" || x.CleanupPending), token))
+            (x.Status == "Queued" || x.Status == "Starting" || x.Status == "Running" || x.Status == "Uncertain" || x.Status == "CancellationRequested" || x.CleanupPending || x.WorkspaceRetained), token))
             throw new ApplicationFailure("github_connection_in_use");
     }
 }

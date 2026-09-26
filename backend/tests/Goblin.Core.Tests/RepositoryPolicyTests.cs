@@ -5,7 +5,7 @@ namespace Goblin.Core.Tests;
 
 public sealed class RepositoryPolicyTests
 {
-    private static readonly RepositoryGrant Grant = new(1, "generation", "42", "owner", 22, "main", "goblin/10/20");
+    private static readonly RepositoryGrant Grant = new(1, "generation", "42", "owner", 22, "main", "goblin/10/20", AllowPush: true, AllowPullRequest: true);
     [Theory]
     [InlineData("publish")]
     [InlineData("pull-request")]

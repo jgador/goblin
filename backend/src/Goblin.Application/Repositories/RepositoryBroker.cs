@@ -66,6 +66,13 @@ public sealed class RepositoryBroker : IRepositoryBroker
         WorkSnapshot work = (await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(attempt.WorkId, token)).Work;
         if (work.Attempts[^1].Id != attemptId || work.Attempts[^1].Target.Repository?.Grant is null)
             throw new ApplicationFailure("repository_operation_unavailable");
+        RepositoryGrant grant = work.Attempts[^1].Target.Repository!.Grant!;
+        if (grant.PolicyVersion == 2 && (work.RepositoryAuthorization is not { Status: RepositoryAuthorizationStatus.Authorized } approved ||
+            approved.Id != attemptId || approved.Target != work.Attempts[^1].Target) ||
+            !await db.GithubRepositories.AnyAsync(x => x.Id == grant.RepositoryId && x.Enabled &&
+                x.ConnectionId == grant.ConnectionId && x.Connection.Generation == grant.Generation &&
+                x.Connection.AccountId == grant.AccountId && x.Connection.Availability == "Connected", token))
+            throw new ApplicationFailure("repository_operation_unavailable");
         return work;
     }
     public Task<WorkSnapshot> CurrentAsync(long attemptId, CancellationToken token) => WorkAsync(attemptId, token);
@@ -75,8 +82,8 @@ public sealed class RepositoryBroker : IRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         if (string.IsNullOrEmpty(commit) || commit.Length != 40 || !commit.All(Uri.IsHexDigit)) throw new ApplicationFailure("workspace_changed");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        if (!await db.RepositoryOperations.AnyAsync(x => x.AttemptId == attempt.Id && x.Kind == "publish" && x.State == "Succeeded" && x.CommitSha == commit, token) ||
-            await _remote.ReconcileAsync(attempt.Target.Repository!, DirectoryFor(attempt.Id), "publish", commit, token) is null)
+        if (!await db.RepositoryOperations.AnyAsync(x => x.AttemptId == attempt.Id && (x.Kind == "publish" || x.Kind == "checkpoint") && x.State == "Succeeded" && x.CommitSha == commit, token) ||
+            (attempt.Target.Repository!.Grant!.PolicyVersion == 1 || attempt.Target.Repository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.Repository!, DirectoryFor(attempt.Id), "publish", commit, token) is null)
             throw new ApplicationFailure("workspace_checkpoint_unconfirmed");
     }
     public async Task AuthorizeAsync(long attemptId, string capability, bool write, CancellationToken token)
@@ -95,12 +102,14 @@ public sealed class RepositoryBroker : IRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         RepositoryChange repository = attempt.Target.Repository!;
         if (repository.Grant is null) throw new ApplicationFailure("repository_unavailable");
-        repository.Grant.Authorize(work.Id, attempt.Id, repository.Repository, repository.Repository, repository.Grant.Branch, "publish");
+        repository.Grant.Authorize(work.Id, attempt.Id, repository.Repository, repository.Repository, repository.Grant.Branch, "fetch");
         string? checkpoint = work.Attempts.SkipLast(1).LastOrDefault(x => x.Target.Repository?.Repository == repository.Repository &&
             work.Artifacts.Any(a => a.AttemptId == x.Id))?.Target.Repository?.Grant?.Branch;
         Goblin.Contracts.Runtime.WorkspaceCheckpoint? saved = _checkpoints is null ? null : await _checkpoints.LatestAsync(work.Id, repository.Repository, token);
-        if (saved is not null) await _remote.PrepareCheckpointAsync(repository, DirectoryFor(attempt.Id), saved, token);
-        else await _remote.PrepareAsync(repository, DirectoryFor(attempt.Id), checkpoint, token);
+        bool published = saved is not null && work.Attempts.Any(x => x.Id == saved.AttemptId &&
+            (x.Target.Repository?.Grant?.PolicyVersion == 1 || x.Target.Repository?.Grant?.AllowPush == true));
+        if (saved is not null && published) await _remote.PrepareCheckpointAsync(repository, DirectoryFor(attempt.Id), saved, token);
+        else await _remote.PrepareAsync(repository, DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
         return Capability(work);
     }
     public string InputPath(long attemptId) => Path.Combine(DirectoryFor(attemptId), "input.bundle");
@@ -204,6 +213,12 @@ public sealed class RepositoryBroker : IRepositoryBroker
             string commit = row.Kind == "fetch" ? "read" : await _remote.InspectBundleAsync(repository, DirectoryFor(attemptId), BundleFor(attemptId, id), cancellation.Token);
             row.CommitSha = commit; row.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellation.Token);
+            if (row.Kind == "checkpoint")
+            {
+                row.State = "Succeeded";
+                await db.SaveChangesAsync(cancellation.Token);
+                return;
+            }
             await File.WriteAllLinesAsync(Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external"),
                 [File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim(), File.ReadAllText("/proc/uptime").Split(' ')[0]], cancellation.Token);
             external = true;
@@ -236,6 +251,10 @@ public sealed class RepositoryBroker : IRepositoryBroker
             if (_active.ContainsKey(attempt.Id) || row.State == "Queued") return new(ObservationKind.Pending);
             await db.Entry(row).ReloadAsync(token);
             if (row.State == "Succeeded") continue;
+            if (row.Kind == "checkpoint" && row.State is "Running" or "Uncertain")
+            {
+                row.State = "Failed"; await db.SaveChangesAsync(token); continue;
+            }
             if (row.State is "Running" or "Uncertain")
             {
                 row.State = "Uncertain";

@@ -47,8 +47,9 @@ automatically. Runtime session references never replace Goblin's durable history
 ## Files and Git checkpoints
 
 The worker retires the runtime and verifies that other processes have stopped.
-It commits intended repository changes and publishes the authorized branch
-through Goblin's GitHub broker. The controller verifies the published commit.
+It commits intended repository changes. When push is approved it publishes through
+Goblin's GitHub broker; otherwise it submits a Git object bundle for local verification.
+The controller verifies the Git commit without requiring publication.
 `workspace_checkpoints` records the Work, attempt, turn, allocation, repository,
 branch, commit SHA, and timestamp. This is Git provenance only: the table has no
 archive payload or archive digest. The internal checkpoint endpoint accepts a
@@ -63,7 +64,7 @@ files outside Git depend on the retained volume and any operator-managed backups
 
 ## Inspection
 
-Open workspace shows the latest published Git commit and recorded inspection
+Open workspace shows the latest verified Git commit and recorded inspection
 sessions. **Start inspection** creates a separate pod mounting the Work PVC
 read-only. Execution must have stopped and cleanup must be confirmed. Inspection
 and repository execution reserve capacity and exclude concurrent access to the

@@ -17,7 +17,8 @@ disabled. It does not allocate an Agent Sandbox or receive database credentials.
 This first text capability answers from supplied context; live research tools
 and a formal question/investigation taxonomy remain deferred.
 
-Repository execution selects a repository enabled under **Settings → GitHub**.
+Repository execution uses a repository enabled in Settings or explicitly enabled
+through a saved Work authorization preview in the conversation.
 The agent's Git author name/email remain separate from the connected GitHub account.
 Each attempt records the GitHub account identity and connection generation,
 repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>` branch.
@@ -35,7 +36,8 @@ objects in its own bare repository; agent Git configuration and hooks never ente
 that repository. `goblin-github publish` publishes commits to the exact assigned
 branch. `goblin-github pull-request` opens its draft PR (later branch publications
 update the same PR). `goblin-github fetch` refreshes the sandbox's origin references.
-The completed interaction also publishes a Git checkpoint automatically. Only
+The completed interaction publishes a Git checkpoint only when push is approved;
+otherwise the broker verifies a local Git checkpoint without publication. Only
 commit metadata is recorded in PostgreSQL; workspace files stay on the PVC. Merging,
 auto-merge, other branches, tags, and repository administration are unavailable.
 

@@ -26,7 +26,7 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         if (state.Status != "Connected" || state.Account?.Generation != grant.Generation || state.Account.AccountId != grant.AccountId)
             throw new GitHubFailure();
         RepositoryInfo info = await _github.RepositoryAsync(repository.Repository, token);
-        if (info.Id != grant.RepositoryId || !info.CanPush || info.DefaultBranch == grant.Branch) throw new GitHubFailure();
+        if (info.Id != grant.RepositoryId || ((grant.PolicyVersion == 1 || grant.AllowPush) && !info.CanPush) || info.DefaultBranch == grant.Branch) throw new GitHubFailure();
     }
     public async Task PrepareAsync(RepositoryChange repository, string directory, string? checkpoint, CancellationToken token)
     {
@@ -60,6 +60,9 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
     }
     public async Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token)
     {
+        RepositoryGrant grant = repository.Grant ?? throw new GitHubFailure();
+        if (grant.PolicyVersion == 2 && (operation == "publish" && !grant.AllowPush || operation == "pull-request" && (!grant.AllowPush || !grant.AllowPullRequest)))
+            throw new GitHubFailure();
         await VerifyAsync(repository, token);
         if (operation == "fetch")
         {

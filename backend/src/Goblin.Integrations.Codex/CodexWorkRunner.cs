@@ -92,7 +92,9 @@ public sealed class CodexWorkRunner
                     "A release request suspends compute while preserving files on this Work's persistent volume. PostgreSQL stores conversation and Git provenance, never workspace file archives. Respect an explicit request to keep the workspace open. " +
                     (repositoryChanges ? RepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
                         "This Work's workspace can contain edits and local commits from earlier attempts. Inspect git status and git diff before editing; preserve unfinished changes and use the supplied Work context to continue. " +
-                        "Commit locally and use goblin-github publish to publish the branch; use goblin-github pull-request to open its draft PR after publishing. " +
+                        "Commit locally. The approved repository grant controls publication: " +
+                        $"push allowed={work.Attempts[^1].Target.Repository?.Grant?.AllowPush}; draft PR allowed={work.Attempts[^1].Target.Repository?.Grant?.AllowPullRequest}. " +
+                        "Use goblin-github publish or goblin-github pull-request only when allowed. Goblin saves local checkpoints without publishing when push is not approved. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
                         "Use only the supplied context. Do not call tools, inspect files, browse, or run commands. " +

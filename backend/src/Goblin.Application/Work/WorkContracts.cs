@@ -3,11 +3,12 @@ using Goblin.Core.Work;
 
 namespace Goblin.Application.Work;
 
-public enum WorkAction { Create, Assign, Execute, Retry, Cancel, Answer, RequestChanges, Approve, AddContext, Reconcile, AuthorizeRepository }
+public enum WorkAction { Create, Assign, Execute, Retry, Cancel, Answer, RequestChanges, Approve, AddContext, Reconcile, PrepareRepository, AuthorizeRepository, DenyRepository }
 public sealed record WorkCommand(long CommandId, long WorkId, WorkAction Action,
     long? ExpectedVersion = null, string? Text = null, long? AgentId = null,
     long? AttemptId = null, long? DecisionId = null, RepositoryChange? Repository = null,
-    string? Model = null, string? ReasoningEffort = null, bool ModelSelectionProvided = false);
+    string? Model = null, string? ReasoningEffort = null, bool ModelSelectionProvided = false,
+    GitDeliveryIntent? Delivery = null, long? AuthorizationId = null);
 public sealed record WorkView(long Version, DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt, WorkSnapshot Work);
 public sealed record AgentView(long Id, string Name, long ConnectionId, string? Model);

@@ -118,6 +118,7 @@ public static class GoblinApplication
                 Path.Combine(workspace.DataDirectory, "executions"), workspace.CodexHome, runtimeOptions.Command,
                 typeof(GoblinApplication).Assembly.Location));
             builder.Services.AddSingleton<IRepositoryRemote, GitHubRepositoryRemote>();
+            builder.Services.AddSingleton<IRepositoryCatalog>(services => services.GetRequiredService<GitHubConnection>());
             builder.Services.AddSingleton(new RepositoryBrokerOptions(Path.Combine(workspace.DataDirectory, "repositories")));
             builder.Services.AddSingleton<RepositoryBroker>();
             builder.Services.AddSingleton<IRepositoryBroker>(services => services.GetRequiredService<RepositoryBroker>());

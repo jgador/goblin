@@ -21,7 +21,7 @@ public enum WorkEventKind
     InputRequested, InputProvided, ResultProposed, ChangesRequested, ResultApproved,
     CancellationRequested, Cancelled, ContextAdded, ProgressReported, ArtifactRecorded,
     CleanupRequired, CleanupFailed, CleanupCompleted, ExecutionContinued, WorkspaceSaved, WorkspaceReleased,
-    RepositoryRequested, RepositoryAuthorized
+    RepositoryRequested, RepositoryAuthorized, RepositoryDenied, RepositoryAuthorizationInvalidated
 }
 
 public enum WorkRule
@@ -106,14 +106,17 @@ public sealed record RepositoryChange
 
 // Immutable authority captured when an attempt is queued; enforced outside the agent.
 public sealed record RepositoryGrant(long ConnectionId, string Generation, string AccountId,
-    string Login, long RepositoryId, string BaseBranch, string Branch, int PolicyVersion = 1)
+    string Login, long RepositoryId, string BaseBranch, string Branch, int PolicyVersion = 2,
+    bool AllowPush = false, bool AllowPullRequest = false)
 {
     public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, string operation)
     {
-        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion != 1 ||
+        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion is not (1 or 2) ||
             Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
             !string.Equals(repository, requestedRepository, StringComparison.OrdinalIgnoreCase) ||
-            operation is not ("publish" or "pull-request" or "fetch"))
+            operation is not ("publish" or "pull-request" or "fetch" or "checkpoint") ||
+            PolicyVersion == 2 && (operation == "publish" && !AllowPush ||
+                operation == "pull-request" && (!AllowPush || !AllowPullRequest)))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }

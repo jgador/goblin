@@ -142,33 +142,30 @@ these integration checks or authenticated runtime validation.
 
 ## Repository authority
 
-An ordinary Start work request with an explicit GitHub URL or enabled
-`owner/repository` reference saves a repository setup request before dispatch.
-The reference suggests a repository; it does not grant access. Multiple matches
-remain a choice for the user. Other requests can begin as conversations: when
-the runtime needs repository files, it reports that requirement and Goblin
-presents the same setup step. This also supports repository references in an
-answer and a direct repository action on existing waiting conversations.
+Repository references in objectives, user context, and decision answers resolve
+into durable setup or authorization requests. Users can enable a repository in
+Settings or explicitly enable it when approving a Work request in the conversation.
+The saved preview identifies the GitHub account, repository, base/work branches,
+Git author, and push/PR permissions. Repository metadata lookup precedes the preview;
+checkout and execution wait for approval. See [repository intent](repository-intent.md).
 
-`AuthorizeRepository` checks current enablement and the GitHub connection,
-binds a fresh grant, and atomically queues a repository attempt for the same
-Work. It preserves the requested runtime/model and the earlier attempt's
-target, session, and decisions. Cleanup must be confirmed before this handoff;
-failures and uncertain execution still require their existing retry and
-reconciliation actions. Ordinary answers within an existing repository attempt
-continue that attempt as before. Repository setup state lives in the Work's
-PostgreSQL JSON snapshot; no separate database schema change is required.
+`PrepareRepository` records a preview without creating an attempt. `AuthorizeRepository`
+accepts only its saved request ID and checks current enablement and connection identity.
+If the preview includes enablement, that setting, the authorized attempt, the command
+receipt, and dispatch intent commit atomically. Decline, cancellation, and added context
+prevent reuse of a pending approval. Explicit retries require a fresh preview.
 
-This resolves the repository setup dead end in issue #9. General natural-language
-branch names, push policies, and PR delivery intent from issue #8 remain outside
-this handoff. Repository settings and the explicit authorization action remain
-the authority for access.
+Repository handoff preserves the same Work and earlier attempts' immutable runtime,
+model, session, and decision history. Cleanup must be confirmed before replacement;
+failures and uncertain execution retain their retry and reconciliation requirements.
+Ordinary answers within an authorized repository attempt continue it. A changed Git
+scope requires another preview and authorization before a replacement attempt.
 
-Repository attempts capture their GitHub connection generation, account identity,
-repository ID, branch and policy in `RepositoryGrant`. Work inherits enabled
-repository settings when queued; the request cannot choose its own grant. The
-core validates the exact Work/attempt branch and allowed operation. The trusted
-repository adapter enforces it without sharing the upstream token with the agent.
-Publication receipts and dispatch are durable; uncertain remote effects must be
-reconciled before replacement. Settings cannot change an account or repository
-policy while affected Work is queued, active, uncertain, or awaiting cleanup.
+Repository grants capture connection generation, account identity, repository ID,
+base/work branches, and publication permissions. The broker checks the exact branch
+and operation without sharing upstream credentials. Publication and local Git checkpoint
+receipts are durable. Local checkpoints never require publication; files stay on the
+Work PVC. Settings changes are blocked while affected execution retains capacity or
+requires cleanup. The shared application commands provide an integration boundary for
+future authenticated conversation adapters; Slack, Teams, and management MCP adapters
+remain unimplemented.
