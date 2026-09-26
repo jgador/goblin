@@ -90,7 +90,10 @@ Logs are stored directly in WSL:
 - `.goblin-local/bootstrap.log` (local command's bootstrap output)
 
 Kubernetes diagnostics are available through `sudo k3s kubectl` and
-`sudo journalctl -u k3s`. The installer provisions PostgreSQL and applies schema migrations before
+`sudo journalctl -u k3s`. The installer explicitly uses
+`/etc/rancher/k3s/k3s.yaml` for all Kubernetes operations, including database
+helpers invoked through a separately installed `kubectl`.
+The installer provisions PostgreSQL and applies schema migrations before
 starting Goblin. To repair or export local tooling credentials after installation,
 run `bash deploy/postgres/setup.sh` to enable
 [PostgreSQL certificate authentication](../../docs/database.md). For this runner,

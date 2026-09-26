@@ -41,6 +41,7 @@ async function bootstrap(
         passwordHashFile?: string;
         dockerInstalled?: boolean;
         dockerEnvironment?: NodeJS.ProcessEnv;
+        kubeconfig?: string;
         bootstrapOnly?: boolean;
         nativeDownload?: "failed" | "corrupt";
         resume?: boolean;
@@ -179,6 +180,14 @@ if (name === 'curl') {
   if (args[0] === 'cat' && !fs.existsSync(path.join(root, 'etc/systemd/system', args[1]))) process.exit(1);
 } else if (name === 'k3s' || name === 'kubectl') {
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args[0] === 'kubectl') {
+    const kubeconfig = process.env.KUBECONFIG ?? null;
+    fs.appendFileSync(path.join(root, 'kubernetes-contexts.jsonl'), JSON.stringify({ command: name, args, kubeconfig }) + '\\n');
+    if (name === 'kubectl' && kubeconfig !== path.join(root, 'etc/rancher/k3s/k3s.yaml')) {
+      process.stderr.write('Standalone kubectl is not configured for the installed k3s cluster\\n');
+      process.exit(1);
+    }
+  }
   if (args[1] === 'get' && args[2] === 'secret' && args.includes('json')) {
     process.stdout.write(JSON.stringify({ items: ['app', 'admin'].map(role => ({ metadata: { name: 'goblin-postgres-' + role + '-tls' }, data: Object.fromEntries(['tls.crt', 'tls.key', 'ca.crt'].map(key => [key, Buffer.from('test-certificate-' + role).toString('base64')])) })) }));
     process.exit(0);
@@ -360,6 +369,7 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
             ...process.env,
             ...application.dockerEnvironment,
             PATH: `${bin}:${application.dockerEnvironment?.PATH ?? process.env.PATH}`,
+            KUBECONFIG: application.kubeconfig,
             GOBLIN_BOOTSTRAP_TEST_DIR: root,
             GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD: application.nativeDownload ?? "",
             SERVICE_RESULT: application.recovery ? "signal" : "success",
@@ -637,6 +647,58 @@ test("installer installs the application and uses Azure's hostname for both rout
             downloads.some((args) => args.includes(`${hostname}:80:10.20.0.4`)),
             "the public probe selects a single IPv4 node address",
         );
+    }
+});
+
+test("installer targets its k3s cluster when standalone kubectl has no context or an unrelated kubeconfig", async (t) => {
+    for (const context of ["missing", "other-cluster"]) {
+        const root = await mkdtemp(join(tmpdir(), "goblin-kubeconfig-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        const kubeconfig =
+            context === "missing" ? undefined : join(root, "other-kubeconfig");
+        const otherConfig = "current-context: other-cluster\n";
+        if (kubeconfig) await writeFile(kubeconfig, otherConfig);
+
+        await bootstrap(root, fakePassword, "ready", { kubeconfig });
+
+        const status = JSON.parse(
+            await readFile(
+                join(root, "var/lib/goblin/install/status.json"),
+                "utf8",
+            ),
+        );
+        assert.equal(status.status, "ready");
+        const calls: {
+            command: string;
+            args: string[];
+            kubeconfig: string | null;
+        }[] = (await readFile(join(root, "kubernetes-contexts.jsonl"), "utf8"))
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line));
+        assert.ok(
+            calls.some(
+                ({ command, args }) =>
+                    command === "kubectl" &&
+                    args.includes("statefulset/goblin-postgres"),
+            ),
+            "database setup must run through the standalone kubectl",
+        );
+        assert.ok(
+            calls.some(
+                ({ command, args }) =>
+                    command === "kubectl" &&
+                    args.includes("job/goblin-test-migration"),
+            ),
+            "schema migration must run through the standalone kubectl",
+        );
+        for (const call of calls)
+            assert.equal(
+                call.kubeconfig,
+                join(root, "etc/rancher/k3s/k3s.yaml"),
+            );
+        if (kubeconfig)
+            assert.equal(await readFile(kubeconfig, "utf8"), otherConfig);
     }
 });
 

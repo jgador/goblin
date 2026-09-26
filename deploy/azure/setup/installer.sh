@@ -7,6 +7,9 @@ setup_dir=/opt/goblin/setup
 install_dir=/var/lib/goblin/install
 private_dir="$install_dir/private"
 export GOBLINCTL=/opt/goblin/bin/goblinctl
+# Installation and recovery target this host's k3s cluster, including embedded
+# database helpers that may invoke a separately installed kubectl.
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 state() { "$GOBLINCTL" internal state "$@"; }
 stage() { printf '[Goblin] %s\n' "$1"; state detail "$1"; }
 step() { state start "$1"; }
