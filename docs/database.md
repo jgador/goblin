@@ -157,8 +157,7 @@ kubectl -n goblin port-forward service/goblin-postgres 55432:5432
 To refresh local certificates/configuration without restarting any workloads:
 
 ```bash
-kubectl -n goblin get secret goblin-postgres-app-tls goblin-postgres-admin-tls -o json | \
-  python3 deploy/postgres/write-appsettings.py --port 55432
+goblinctl db credentials --port 55432
 ```
 
 Local builds copy settings beside the executable. For a web process outside
@@ -193,7 +192,7 @@ to issue certificates and read Secrets in the `goblin` namespace.
 | `backend/tools/Goblin.Database/` | SQL migration runner and isolated host for dotnet ef |
 | `backend/scripts/scaffold-database.sh` | Repeatable reverse-engineering command |
 
-Use .NET 10, Bash, Python 3, and a configured kubectl. EF Core and dotnet-ef are
+Use .NET 10, Bash, goblinctl, and a configured kubectl. EF Core and dotnet-ef are
 pinned to 10.0.12; the Npgsql EF provider is pinned to 10.0.3.
 
 ## Apply the SQL schema
@@ -363,18 +362,7 @@ Run the real PostgreSQL integration tests explicitly using the tooling's JSON
 configuration (keep the port-forward running):
 
 ```bash
-python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-import subprocess
-
-settings = json.loads(Path("backend/tools/Goblin.Database/appsettings.json").read_text())
-connections = settings["ConnectionStrings"]
-env = {**os.environ, "GOBLIN_TEST_POSTGRES_ADMIN": connections["GoblinAdmin"],
-       "GOBLIN_TEST_POSTGRES_APP": connections["Goblin"]}
-raise SystemExit(subprocess.call(["dotnet", "test", "backend/tests/Goblin.Persistence.Tests"], env=env))
-PY
+cargo xtask test-postgres
 ```
 
 The tests create and drop uniquely named databases. They cover EF insert/read/

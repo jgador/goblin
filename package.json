@@ -6,22 +6,23 @@
   "engines": {
     "node": ">=24"
   },
-  "workspaces": ["frontend"],
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "install:local": "python3 deploy/local/install.py",
-    "setup:password": "python3 deploy/local/password.py",
+    "install:local": "cargo run --locked -q -p goblinctl -- local",
+    "setup:password": "cargo run --locked -q -p goblinctl -- password set",
     "build:assets": "npm run build --workspace frontend",
     "build:tools": "node scripts/clean-output.mts && npm run typecheck:scripts && tsc -p tsconfig.json",
     "build:backend": "dotnet build backend/Goblin.slnx --nologo",
-    "build": "npm run build:assets && npm run build:tools && npm run build:backend",
+    "build": "npm run build:native && npm run build:assets && npm run build:tools && npm run build:backend",
     "typecheck": "npm run typecheck --workspace frontend && npm run typecheck:scripts && tsc -p tsconfig.json --noEmit && npm run build:backend",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "format:typescript": "prettier --write --ignore-path .gitignore \"**/*.{ts,tsx,mts,cts}\"",
-    "format:python": ".venv/bin/python scripts/format-python.py",
     "prestart": "npm run build",
-    "start": "python3 deploy/local/start.py",
+    "start": "cargo xtask dev",
     "pretest": "npm run build",
-    "test": "npm run protocol:check && npm run kubernetes:check && dotnet test backend/Goblin.slnx --no-build --nologo && node --test dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
+    "test": "npm run test:rust && npm run protocol:check && npm run kubernetes:check && dotnet test backend/Goblin.slnx --no-build --nologo && node --test dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
     "protocol:generate": "dotnet run --file backend/scripts/GenerateProtocol.cs",
     "protocol:check": "dotnet run --file backend/scripts/GenerateProtocol.cs -- --self-test --check",
     "kubernetes:generate": "dotnet run --file backend/scripts/GenerateKubernetes.cs",
@@ -36,7 +37,14 @@
     "pretest:headlamp": "npm run build",
     "test:headlamp": "node dist/scripts/check-headlamp.js",
     "pretest:browser": "npm run build",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "build:native": "just build --workspace",
+    "format:rust": "just fmt",
+    "format:rust:check": "just fmt-check",
+    "lint:rust": "just clippy --workspace --all-targets -- -D warnings",
+    "test:rust": "just test --workspace && just test-doc --workspace",
+    "deploy:generate": "cargo xtask azure",
+    "deploy:check": "cargo xtask azure --check"
   },
   "dependencies": {
     "@openai/codex": "0.155.1"

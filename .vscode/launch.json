@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug goblinctl",
+      "cargo": {
+        "cwd": "${workspaceFolder}",
+        "args": ["build", "--locked", "--package=goblinctl", "--bin=goblinctl"],
+        "env": { "CARGO_PROFILE_DEV_DEBUG": "full" },
+        "filter": { "name": "goblinctl", "kind": "bin" }
+      },
+      "cwd": "${workspaceFolder}",
+      "args": ["--help"],
+      "sourceLanguages": ["rust"]
+    },
+    {
+      "type": "lldb",
+      "request": "attach",
+      "name": "Attach to running goblinctl",
+      "pid": "${command:pickProcess}",
+      "sourceLanguages": ["rust"]
+    }
+  ]
+}

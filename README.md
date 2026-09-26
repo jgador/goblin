@@ -68,24 +68,32 @@ whole WSL or Azure Linux VM, including processes outside Kubernetes.
 To try authentication first:
 
 ```bash
-# Requires .NET 10 SDK, Node.js 24+, and Python 3.
+# Requires .NET 10 SDK, Node.js 24+, and the Ubuntu build prerequisites.
+bash scripts/setup-rust.sh
+source "$HOME/.cargo/env"
 npm ci
 npm start
 ```
 
+The [Rust development guide](docs/rust-development.md) documents the Codex-aligned
+toolchain, just commands, nextest runner, formatting, and editor/debugger setup.
+
 On first start, choose and confirm your password in the terminal. Open
 http://localhost:8787, enter that password, and click **Open workspace**.
-Both local launch paths use Azure's password hasher and the same application login.
+Both local launch paths use the shared Rust password implementation and the same application login.
 Only the verifier is saved locally; `.goblin-secrets/` is ignored except for its
 empty `.gitkeep`. Subsequent starts reuse it. See the [preview guide](docs/authentication-preview.md)
 for sign-in, persistence checks, and deployment to your VM.
+
+The permanent [goblinctl operator CLI](docs/goblinctl.md) ships as a separate native
+release; installed hosts do not require Python or a Rust compiler.
 
 The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official
 Rust `codex app-server`; the browser UI remains TypeScript. Protocol models are
 generated from the checked-in schemas using `System.Text.Json`.
 `npm start` builds the browser assets and .NET solution, then starts the C# host.
 Use `npm run typecheck` for TypeScript checks and a .NET build, or `npm test`
-for schema drift checks (Python 3), .NET tests, and HTTP integration tests.
+for schema drift checks (.NET), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for the current
 Codex integration, model regeneration, and direct .NET commands.
 
@@ -109,7 +117,7 @@ Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 `npm run secrets:history` to check existing commits before a push. See the
 [secret-scanning guide](docs/secret-scanning.md) for installation and scan scope.
 
-The repository-local Codex hook formats TypeScript, Python, and C# after each
+The repository-local Codex hook formats TypeScript, Rust, and C# after each
 completed turn. See [formatting setup](docs/formatting.md) for tool installation,
 manual commands, and the required hook trust step.
 

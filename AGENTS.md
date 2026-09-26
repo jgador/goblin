@@ -39,3 +39,12 @@ builds and runs protocol checks, .NET tests, HTTP tests, and deployment tests.
 Real PostgreSQL tests are opt-in; report skips rather than claiming persistence
 coverage. Run the relevant browser and real-runtime checks when integrating
 those boundaries.
+
+For Rust tooling under `tools/`, follow [the Rust development guide](docs/rust-development.md).
+Use the pinned toolchain and helper versions, `just fmt`, `just clippy -p <crate>`,
+and `just test -p <crate>`; `just test-doc --workspace` covers documentation tests.
+Keep the shared Clippy rules enabled, use inline format arguments and method
+references when clear, and prefer exhaustive matches. Avoid opaque boolean and
+`Option` arguments in new APIs. Keep operational tooling Python-free and keep
+developer tools out of production installations. Snapshot changes must be
+reviewed before accepting them with `cargo insta`.

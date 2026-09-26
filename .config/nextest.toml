@@ -1,0 +1,11 @@
+[profile.default]
+# Match Codex's test-runner defaults. This retries tests, never failed Work.
+slow-timeout = { period = "30s", terminate-after = 2 }
+retries = 1
+
+[profile.default.junit]
+path = "junit.xml"
+
+[profile.local]
+# nextest 0.9.103 automatically inherits custom profiles from default.
+# The explicit `inherits` key in Codex's config is unsupported by that version.

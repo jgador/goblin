@@ -1,0 +1,30 @@
+[package]
+name = "goblinctl"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+clap.workspace = true
+flate2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tar.workspace = true
+tempfile.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+fs2 = "0.4"
+libc = "0.2"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+rand = "0.8"
+rpassword = "7"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros"] }

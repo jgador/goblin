@@ -1,3 +1,4 @@
+import { goblinctl } from "./goblinctl.js";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -10,7 +11,7 @@ await mkdir(dataDir, { recursive: true, mode: 0o700 });
 const passwordHashFile = resolve(dataDir, "owner-password");
 await writeFile(
     passwordHashFile,
-    execFileSync("python3", ["deploy/azure/hash-password.py"], {
+    execFileSync(goblinctl, ["internal", "hash-password"], {
         input: "a", // Test-only password: confirm there is no minimum length.
     }),
     { mode: 0o600 },

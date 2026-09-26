@@ -19,15 +19,7 @@ if ! docker --version >/dev/null 2>&1 || ! dockerd --version >/dev/null 2>&1; th
   # Configure this before package installation can start Docker. Preserve any
   # existing settings, and let K3s keep forwarding traffic between its pods.
   install -d -m 0755 /etc/docker
-  python3 - <<'PYTHON'
-import json
-from pathlib import Path
-
-path = Path('/etc/docker/daemon.json')
-config = json.loads(path.read_text()) if path.exists() else {}
-config['ip-forward-no-drop'] = True
-path.write_text(json.dumps(config, indent=2) + '\n')
-PYTHON
+  "$GOBLINCTL" internal docker-config
   apt-get -o DPkg::Lock::Timeout=300 update
   DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y docker.io docker-buildx
 fi
@@ -64,8 +56,8 @@ stage 'Importing Goblin into Kubernetes'
 docker save --output "$bootstrap_dir/goblin-image.tar" "$goblin_image"
 k3s ctr --namespace k8s.io images import "$bootstrap_dir/goblin-image.tar"
 stage 'Configuring durable Work storage'
-GOBLIN_POSTGRES_CONFIGURE_APP=false bash "$goblin_source_dir/deploy/postgres/setup.sh"
-bash "$goblin_source_dir/deploy/postgres/migrate.sh" "$goblin_image"
+GOBLIN_POSTGRES_CONFIGURE_APP=false "$GOBLINCTL" --repo "$goblin_source_dir" db setup
+"$GOBLINCTL" db migrate "$goblin_image"
 
 done_step
 step deploy
@@ -74,14 +66,7 @@ stage 'Configuring the Goblin hostname'
 install -d -m 0750 /var/lib/goblin/deploy/auth /var/lib/goblin/deploy/azure/app
 cp "$goblin_source_dir/deploy/auth/"{sandbox,kustomization,execution,headlamp}.yaml /var/lib/goblin/deploy/auth/
 cp "$goblin_source_dir/deploy/azure/app/"{ingress,kustomization}.yaml /var/lib/goblin/deploy/azure/app/
-python3 - "$goblin_hostname" "$goblin_image" "$goblin_origin" <<'PYTHON'
-from pathlib import Path
-import sys
-
-for path in Path('/var/lib/goblin/deploy/azure/app').glob('*.yaml'):
-    path.write_text(path.read_text().replace('__GOBLIN_PUBLIC_HOSTNAME__', sys.argv[1])
-                    .replace('__GOBLIN_IMAGE__', sys.argv[2]).replace('http://' + sys.argv[1], sys.argv[3]))
-PYTHON
+"$GOBLINCTL" internal render-overlay /var/lib/goblin/deploy/azure/app "$goblin_hostname" "$goblin_image" "$goblin_origin"
 k3s kubectl apply -k /var/lib/goblin/deploy/azure/app
 # Sandbox recreates the pod from its template; replace it to load image/origin
 # changes and a new password verifier on reprovisioning. The PVC is retained.
@@ -103,13 +88,7 @@ check_app() {
   for ((attempt=0; attempt<60; attempt++)); do
     if curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 10 \
         "${route[@]}" "${url}/readyz" --output "$bootstrap_dir/goblin-ready.json" && \
-       python3 - "$bootstrap_dir/goblin-ready.json" <<'PYTHON'
-import json, sys
-try:
-    sys.exit(0 if json.load(open(sys.argv[1])).get('ready') is True else 1)
-except (ValueError, AttributeError):
-    sys.exit(1)
-PYTHON
+       "$GOBLINCTL" internal json-test "$bootstrap_dir/goblin-ready.json" ready true
     then
       if curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 10 \
           "${route[@]}" "${url}/" --output "$bootstrap_dir/goblin-page.html" && \

@@ -1,24 +1,17 @@
+import { goblinctl } from "./goblinctl.js";
 import { execFileSync, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 export async function startSetup() {
     const root = await mkdtemp(join(tmpdir(), "goblin-setup-ui-"));
-    const bundle = join(root, "goblin-setup.pyz");
     const path = join(root, "status.json");
-    await writeFile(
-        bundle,
-        Buffer.from(
-            await readFile("deploy/azure/setup-bundle.b64", "utf8"),
-            "base64",
-        ),
-    );
     const transition = (action: string, value = "") =>
-        execFileSync("python3", [
-            bundle,
+        execFileSync(goblinctl, [
+            "internal",
             "state",
             action,
             value,
@@ -27,9 +20,9 @@ export async function startSetup() {
         ]);
     transition("init");
     const child = spawn(
-        "python3",
+        goblinctl,
         [
-            bundle,
+            "internal",
             "serve",
             "--host",
             "127.0.0.1",

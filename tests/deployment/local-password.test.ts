@@ -1,221 +1,106 @@
+import { once } from "node:events";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { pbkdf2Sync } from "node:crypto";
+import {
+    access,
+    mkdir,
+    mkdtemp,
+    readFile,
+    readdir,
+    rm,
+    stat,
+    symlink,
+    writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { goblinctl } from "../support/goblinctl.js";
 
-const load = `
-import os, sys
-from pathlib import Path
-from unittest.mock import patch
-sys.path.insert(0, sys.argv[1])
-import password
-root = Path(sys.argv[2])
-path = root / '.goblin-secrets/owner-password'
-`;
-
-test("local password setup confirms hidden input, stores only a private verifier, and reuses it", async (t) => {
-    const root = await mkdtemp(join(tmpdir(), "goblin-password-setup-"));
+test("local credentials preserve password bytes, private permissions, and the verifier on rerun", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-password-"));
     t.after(() => rm(root, { recursive: true, force: true }));
-    execFileSync("python3", [
-        "-c",
-        load +
-            `
-import base64, hashlib
-chosen = " a-'quoted'-$HOME-π "
-with patch.dict(os.environ, {}, clear=True), patch('sys.stdin.isatty', return_value=True), \
-     patch('getpass.getpass', side_effect=[chosen, chosen]) as prompt:
-    assert password.ensure_password(path) == path
-    assert [call.args[0] for call in prompt.call_args_list] == ['Goblin password: ', 'Confirm Goblin password: ']
-verifier = password.read_verifier(path)
-assert chosen not in verifier and base64.b64encode(chosen.encode()).decode() not in verifier
-algorithm, iterations, salt, digest = verifier.strip().split('$')
-assert algorithm == 'pbkdf2-sha256' and iterations == '600000'
-assert hashlib.pbkdf2_hmac('sha256', chosen.encode(), base64.b64decode(salt), int(iterations), 32) == base64.b64decode(digest)
-assert path.stat().st_mode & 0o777 == 0o600
-assert path.parent.stat().st_mode & 0o777 == 0o700
-assert list(path.parent.iterdir()) == [path]
-with patch.dict(os.environ, {'GOBLIN_LOCAL_PASSWORD': 'must-not-replace'}), \
-     patch('getpass.getpass', side_effect=AssertionError('Must not prompt again')):
-    password.ensure_password(path)
-assert path.read_text() == verifier
-with patch.dict(os.environ, {}, clear=True), patch('sys.stdin.isatty', return_value=True), \
-     patch('getpass.getpass', side_effect=['new-password', 'mismatch']):
-    try:
-        password.ensure_password(path, replace=True)
-        raise AssertionError('A mismatch must preserve the previous password')
-    except RuntimeError:
-        pass
-assert path.read_text() == verifier
-with patch.dict(os.environ, {}, clear=True), patch('sys.stdin.isatty', return_value=True), \
-     patch('getpass.getpass', side_effect=['replacement-test', 'replacement-test']):
-    password.ensure_password(path, replace=True)
-assert password.read_verifier(path) != verifier
-assert path.stat().st_mode & 0o777 == 0o600
-`,
-        resolve("deploy/local"),
-        root,
-    ]);
-});
-
-test("invalid, mismatched, missing, and corrupt local credentials fail without a fallback or partial file", async (t) => {
-    const root = await mkdtemp(join(tmpdir(), "goblin-password-rejected-"));
-    t.after(() => rm(root, { recursive: true, force: true }));
-    execFileSync("python3", [
-        "-c",
-        load +
-            `
-for inputs in (['first', 'second'], ['', ''], ['   ', '   '], ['x' * 129] * 2, ['line\\nbreak'] * 2):
-    with patch.dict(os.environ, {}, clear=True), patch('sys.stdin.isatty', return_value=True), patch('getpass.getpass', side_effect=inputs):
-        try:
-            password.ensure_password(path)
-            raise AssertionError('Invalid password must fail')
-        except RuntimeError as error:
-            assert all(value not in str(error) for value in inputs if value.strip())
-    assert not path.exists() and not path.parent.exists()
-with patch.dict(os.environ, {}, clear=True), patch('sys.stdin.isatty', return_value=False):
-    try:
-        password.ensure_password(path)
-        raise AssertionError('Non-interactive setup must require an explicit password')
-    except RuntimeError as error:
-        assert 'setup:password' in str(error)
-path.parent.mkdir()
-path.write_text('broken-verifier')
-with patch.dict(os.environ, {'GOBLIN_LOCAL_PASSWORD': 'must-not-replace'}):
-    try:
-        password.ensure_password(path)
-        raise AssertionError('A corrupt verifier must not be replaced')
-    except RuntimeError as error:
-        assert 'invalid' in str(error)
-assert path.read_text() == 'broken-verifier'
-`,
-        resolve("deploy/local"),
-        root,
-    ]);
-});
-
-test("the local launcher passes the verifier to the real app without forwarding the original password", async (t) => {
-    const root = await mkdtemp(join(tmpdir(), "goblin-password-launch-"));
-    t.after(() => rm(root, { recursive: true, force: true }));
-    execFileSync("python3", [
-        "-c",
-        load +
-            `
-import start
-with patch.dict(os.environ, {'GOBLIN_LOCAL_PASSWORD': 'launcher-test'}, clear=True):
-    password.ensure_password(path)
-    with patch('start.ensure_password', return_value=path), patch('os.execvpe') as launch:
-        start.main()
-    command, args, environment = launch.call_args.args
-    assert command == 'dotnet' and args[1].endswith('Goblin.Web.dll')
-    assert environment['GOBLIN_PASSWORD_HASH_FILE'] == str(path)
-    assert 'GOBLIN_LOCAL_PASSWORD' not in environment
-    assert 'launcher-test' not in str(args)
-with patch.dict(os.environ, {'GOBLIN_PASSWORD_HASH_FILE': str(path)}, clear=True), \
-     patch('start.ensure_password', side_effect=AssertionError('Explicit configuration must win')), patch('os.execvpe') as launch:
-    start.main()
-    assert launch.call_args.args[2]['GOBLIN_PASSWORD_HASH_FILE'] == str(path)
-path.write_text('broken-verifier')
-with patch.dict(os.environ, {'GOBLIN_PASSWORD_HASH_FILE': str(path)}, clear=True), patch('os.execvpe') as launch:
-    try:
-        start.main()
-        raise AssertionError('Invalid configuration must prevent launch')
-    except RuntimeError:
-        pass
-    launch.assert_not_called()
-`,
-        resolve("deploy/local"),
-        root,
-    ]);
-});
-
-test("the full local installer imports retained verifiers and removes its legacy plaintext password", async (t) => {
-    const root = await mkdtemp(join(tmpdir(), "goblin-password-migrate-"));
-    t.after(() => rm(root, { recursive: true, force: true }));
-    execFileSync("python3", [
-        "-c",
-        load +
-            `
-import install
-install.STATE = root / 'state'
-install.INSTALL = root / 'vm'
-install.STATE.mkdir()
-password.PASSWORD_FILE = path
-retained = install.INSTALL / 'install/private/owner-password'
-retained.parent.mkdir(parents=True)
-verifier = password.hash_password('existing-local-test') + '\\n'
-retained.write_text(verifier)
-legacy = install.STATE / 'login-password'
-legacy.write_text('existing-local-test\\n')
-with patch('getpass.getpass', side_effect=AssertionError('Existing installation must keep its password')):
-    assert install.prepare_password() == path
-assert path.read_text() == verifier
-assert not legacy.exists()
-path.unlink()
-retained.unlink()
-legacy.write_text('partial-bootstrap-test\\n')
-install.prepare_password()
-assert password.read_verifier(path).startswith('pbkdf2-sha256$600000$')
-assert 'partial-bootstrap-test' not in path.read_text()
-assert not legacy.exists()
-`,
-        resolve("deploy/local"),
-        root,
-    ]);
-});
-
-test("a completed local installation loads a changed verifier without rebuilding or changing it again on resume", async (t) => {
-    const root = await mkdtemp(join(tmpdir(), "goblin-password-resume-"));
-    t.after(() => rm(root, { recursive: true, force: true }));
-    execFileSync(
-        "python3",
-        [
-            "-c",
-            load +
-                `
-import install, json
-from types import SimpleNamespace
-from contextlib import nullcontext
-install.STATE = root / 'state'
-install.INSTALL = root / 'vm'
-install.OWNER = install.INSTALL / 'local-test/config.json'
-install.SYSTEMD = root / 'systemd'
-install.SYSTEMD.mkdir()
-(install.SYSTEMD / 'k3s.service').touch()
-password.PASSWORD_FILE = path
-retained = install.INSTALL / 'install/private/owner-password'
-retained.parent.mkdir(parents=True)
-previous = password.hash_password('previous-test') + '\\n'
-retained.write_text(previous)
-(install.INSTALL / 'bootstrap-status').write_text('setup-ready\\n')
-config = {'http_port': 8788}
-with patch.dict(os.environ, {'GOBLIN_LOCAL_PASSWORD': 'replacement-test'}):
-    password.ensure_password(path)
-calls = []
-def run(args, **kwargs):
-    calls.append((args, kwargs))
-    return SimpleNamespace(stdout=json.dumps({'kind': 'Secret'}))
-with patch('install.preflight', return_value=config), patch('install.configure_forwarder'), \
-     patch('install.read_status', return_value={'status': 'ready'}), patch('install.run', side_effect=run), \
-     patch('urllib.request.urlopen', return_value=nullcontext(SimpleNamespace(status=200))):
-    install.start(SimpleNamespace(http_port=None))
-    assert retained.read_text() == path.read_text()
-    assert any(f'--from-file=owner-password={path}' in args for args, _ in calls)
-    assert any(args[:4] == ['k3s', 'kubectl', 'delete', 'pod'] for args, _ in calls)
-    assert all('replacement-test' not in str(args) for args, _ in calls)
-    calls.clear()
-    install.start(SimpleNamespace(http_port=None))
-    assert not any(args[0] == 'k3s' for args, _ in calls)
-`,
-            resolve("deploy/local"),
-            root,
-        ],
-        { stdio: ["pipe", "pipe", "pipe"] },
+    const path = join(root, ".goblin-secrets/owner-password");
+    const chosen = " a-'quoted'-$HOME-π ";
+    const run = (password: string, replace = false) =>
+        execFileSync(
+            goblinctl,
+            [
+                "password",
+                "set",
+                "--path",
+                path,
+                ...(replace ? ["--replace"] : []),
+            ],
+            {
+                env: { ...process.env, GOBLIN_LOCAL_PASSWORD: password },
+                stdio: "pipe",
+            },
+        );
+    run(chosen);
+    const verifier = await readFile(path, "utf8");
+    const [algorithm, iterations, salt, digest] = verifier.trim().split("$");
+    assert.equal(algorithm, "pbkdf2-sha256");
+    assert.equal(iterations, "600000");
+    assert.deepEqual(
+        pbkdf2Sync(chosen, Buffer.from(salt!, "base64"), 600000, 32, "sha256"),
+        Buffer.from(digest!, "base64"),
     );
+    assert.equal((await stat(path)).mode & 0o777, 0o600);
+    assert.equal(
+        (await stat(join(root, ".goblin-secrets"))).mode & 0o777,
+        0o700,
+    );
+    assert.deepEqual(await readdir(join(root, ".goblin-secrets")), [
+        "owner-password",
+    ]);
+    run("must-not-replace");
+    assert.equal(await readFile(path, "utf8"), verifier);
+    assert.throws(() => run("line\nbreak", true));
+    assert.equal(await readFile(path, "utf8"), verifier);
+    run("replacement-test", true);
+    assert.notEqual(await readFile(path, "utf8"), verifier);
 });
 
-test("Git includes only the empty secret directory placeholder", () => {
+test("invalid, missing, corrupt and symlinked credentials fail without fallback or partial writes", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-invalid-password-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const path = join(root, "private/owner-password");
+    const run = (password?: string) => {
+        const env = { ...process.env };
+        delete env.GOBLIN_LOCAL_PASSWORD;
+        if (password !== undefined) env.GOBLIN_LOCAL_PASSWORD = password;
+        return execFileSync(goblinctl, ["password", "set", "--path", path], {
+            env,
+            stdio: "pipe",
+        });
+    };
+    for (const password of [
+        undefined,
+        "",
+        "   ",
+        "x".repeat(129),
+        "line\nbreak",
+        "😀".repeat(65),
+    ]) {
+        assert.throws(() => run(password));
+        await assert.rejects(access(path));
+        await assert.rejects(access(join(root, "private")));
+    }
+    await mkdir(join(root, "private"));
+    await writeFile(path, "broken-verifier");
+    assert.throws(() => run("must-not-replace"), /invalid/);
+    assert.equal(await readFile(path, "utf8"), "broken-verifier");
+    await rm(path);
+    const target = join(root, "target");
+    await writeFile(target, "keep");
+    await symlink(target, path);
+    assert.throws(() => run("must-not-replace"), /symbolic/);
+    assert.equal(await readFile(target, "utf8"), "keep");
+});
+
+test("Git includes only the empty secret directory placeholder", async () => {
     const paths = [
         ".goblin-secrets/.gitkeep",
         ".goblin-secrets/owner-password",
@@ -230,11 +115,88 @@ test("Git includes only the empty secret directory placeholder", () => {
         .trim()
         .split("\n");
     assert.deepEqual(result, paths.slice(1));
-    assert.equal(
-        execFileSync("python3", [
-            "-c",
-            "from pathlib import Path; assert Path('.goblin-secrets/.gitkeep').read_bytes() == b''",
-        ]).length,
-        0,
+    assert.equal((await readFile(".goblin-secrets/.gitkeep")).length, 0);
+});
+
+test("development startup validates the configured verifier and removes plaintext from the app environment", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-dev-launch-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const bin = join(root, "bin");
+    await mkdir(bin);
+    const path = join(root, "private/owner-password");
+    execFileSync(goblinctl, ["password", "set", "--path", path], {
+        env: { ...process.env, GOBLIN_LOCAL_PASSWORD: "launcher-test" },
+    });
+    await writeFile(
+        join(bin, "dotnet"),
+        `#!${process.execPath}\nconsole.log(JSON.stringify({args:process.argv.slice(2),verifier:process.env.GOBLIN_PASSWORD_HASH_FILE,plaintext:process.env.GOBLIN_LOCAL_PASSWORD}));\n`,
+        { mode: 0o700 },
     );
+    const { resolve } = await import("node:path");
+    const run = () =>
+        execFileSync(resolve("target/debug/xtask"), ["dev"], {
+            encoding: "utf8",
+            stdio: "pipe",
+            env: {
+                ...process.env,
+                PATH: bin,
+                GOBLIN_PASSWORD_HASH_FILE: path,
+                GOBLIN_LOCAL_PASSWORD: "never-forward-test",
+            },
+        });
+    const output = JSON.parse(run());
+    assert.equal(output.verifier, path);
+    assert.equal(output.plaintext, undefined);
+    assert.match(output.args[0], /Goblin.Web\.dll$/);
+    await writeFile(path, "broken-verifier");
+    assert.throws(run, /invalid/);
+});
+
+test("interactive password confirmation is hidden and mismatch preserves existing credentials", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-password-tty-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const path = join(root, "private/owner-password");
+    execFileSync(goblinctl, ["password", "set", "--path", path], {
+        env: { ...process.env, GOBLIN_LOCAL_PASSWORD: "initial-test" },
+    });
+    const before = await readFile(path);
+    const { spawn } = await import("node:child_process");
+    const env = { ...process.env };
+    delete env.GOBLIN_LOCAL_PASSWORD;
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+    const child = spawn(
+        "script",
+        [
+            "--quiet",
+            "--return",
+            "--command",
+            `${quote(goblinctl)} password set --replace --path ${quote(path)}`,
+            "/dev/null",
+        ],
+        { env },
+    );
+    t.after(() => child.kill("SIGKILL"));
+    const exited = once(child, "exit");
+    let output = "";
+    let first = false;
+    let second = false;
+    child.stdout.setEncoding("utf8").on("data", (data) => {
+        output += data;
+        if (!first && output.includes("Goblin password:")) {
+            first = true;
+            setTimeout(() => child.stdin.write("hidden-first-test\n"), 30);
+        }
+        if (!second && output.includes("Confirm Goblin password:")) {
+            second = true;
+            setTimeout(() => child.stdin.write("hidden-mismatch-test\n"), 30);
+        }
+    });
+    const timer = setTimeout(() => child.kill("SIGKILL"), 10000);
+    const [code] = await exited;
+    clearTimeout(timer);
+    assert.equal(code, 1);
+    assert.ok(first && second);
+    assert.match(output, /do not match/);
+    assert.doesNotMatch(output, /hidden-first-test|hidden-mismatch-test/);
+    assert.deepEqual(await readFile(path), before);
 });

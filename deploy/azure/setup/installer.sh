@@ -6,7 +6,8 @@ umask 077
 setup_dir=/opt/goblin/setup
 install_dir=/var/lib/goblin/install
 private_dir="$install_dir/private"
-state() { python3 "$setup_dir/goblin-setup.pyz" state "$@"; }
+export GOBLINCTL=/opt/goblin/bin/goblinctl
+state() { "$GOBLINCTL" internal state "$@"; }
 stage() { printf '[Goblin] %s\n' "$1"; state detail "$1"; }
 step() { state start "$1"; }
 done_step() { state complete; }
@@ -92,10 +93,7 @@ if [[ "${1:-}" == recover ]]; then
 fi
 
 # A reboot between recording completion and disabling the unit is harmless.
-if python3 - "$install_dir/status.json" <<'PYTHON'
-import json, sys
-sys.exit(0 if json.load(open(sys.argv[1]))['status'] == 'ready' else 1)
-PYTHON
+if "$GOBLINCTL" internal json-test "$install_dir/status.json" status ready
 then
   systemctl disable goblin-setup.service goblin-installer.service
   systemctl stop goblin-setup.service
@@ -130,20 +128,7 @@ fi
 # Azure keeps its default origin; a root-owned systemd override supplies the
 # browser origin when testing behind such a forwarder.
 goblin_origin="${GOBLIN_PUBLIC_ORIGIN:-http://${goblin_hostname}}"
-goblin_authority=$(python3 - "$goblin_origin" "$goblin_hostname" <<'PYTHON'
-import sys
-from urllib.parse import urlsplit
-try:
-    origin = urlsplit(sys.argv[1])
-    if (origin.scheme != 'http' or origin.hostname != sys.argv[2] or origin.username or origin.password
-            or sys.argv[1] != 'http://' + origin.netloc
-            or origin.path or origin.query or origin.fragment or (origin.port is not None and origin.port < 1)
-            or origin.netloc != sys.argv[2] + ((':' + str(origin.port)) if origin.port is not None else '')):
-        raise ValueError()
-except ValueError:
-    sys.exit('Invalid public origin. Use the configured HTTP hostname and an optional port.')
-print(origin.netloc)
-PYTHON
+goblin_authority=$("$GOBLINCTL" internal origin "$goblin_origin" "$goblin_hostname"
 )
 printf '%s\n' "$goblin_origin" > /var/lib/goblin/public-url
 state public-url "$goblin_origin"
@@ -250,19 +235,12 @@ touch "$private_dir/handoff"
 state handoff
 systemctl stop goblin-setup.service
 set_ingress_mode LoadBalancer
-goblin_node_ip=$(k3s kubectl get nodes -o json | python3 -c '
-import ipaddress, json, sys
-addresses = json.load(sys.stdin)["items"][0]["status"]["addresses"]
-address = next((item["address"] for item in addresses if item["type"] == "InternalIP" and ipaddress.ip_address(item["address"]).version == 4), None)
-if not address:
-    sys.exit("The Kubernetes node has no IPv4 InternalIP for the Azure public route.")
-print(address)
-')
+goblin_node_ip=$(k3s kubectl get nodes -o json | "$GOBLINCTL" internal node-address)
 check_app "$goblin_node_ip"
 # Also require the assigned public hostname to resolve and serve the application.
 check_app ''
 done_step
-# Clean only transient downloads; retain the bundle, verifier, state and log.
+# Clean only transient downloads; retain the native CLI, verifier, state and log.
 rm -rf "$bootstrap_dir"
 rm -f "$private_dir/handoff"
 state ready
