@@ -52,7 +52,7 @@ requirements, escaping paths, and symbolic-link inputs. Checks are execution
 evidence from the worker, not a security attestation or proof that the recipe
 will reproduce the environment indefinitely.
 
-Only after all checks pass and a workspace checkpoint is saved does the worker
+Only after all checks pass and a Git checkpoint record is saved does the worker
 submit the observations. The controller rechecks the current attempt, turn,
 repository grant, and checkpoint under the same database concurrency lock used
 by Work. A batch is atomic; identical duplicate delivery does not change its
@@ -68,10 +68,11 @@ portable setup instructions when useful.
 
 ## Storage and scope
 
-PostgreSQL remembers preparation knowledge. PVCs and checkpoints retain eligible
-workspace files. Installs under `/runtime` or `/tmp` disappear on replacement;
-non-root tool installations can use writable workspace paths. Large dependency
-trees still count against checkpoint limits. Shared prepared environments and
+PostgreSQL remembers preparation knowledge and Git provenance. Workspace files
+and installed tools remain on the Work PVC; no filesystem archive is stored in
+PostgreSQL. Installs under `/runtime` or `/tmp` disappear on replacement; non-root
+tool installations can use writable workspace paths. Large dependency trees
+consume PVC storage. Shared prepared environments and
 cross-Work dependency caches are separate work; this feature reduces repeated
 discovery and does not guarantee that installation can be skipped.
 

@@ -42,6 +42,99 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Assign agent", exact: true })
             .click();
     }
+    for (const fromConversation of [false, true]) {
+        test(`repository authorization continues the same Work ${fromConversation ? "after a conversation" : "from its objective"}`, async ({
+            page,
+        }) => {
+            await page.route("**/api/github", (route) =>
+                route.fulfill({
+                    json: {
+                        configured: true,
+                        login: "owner",
+                        status: "Connected",
+                    },
+                }),
+            );
+            await unlock(page);
+            expect(
+                (
+                    await page.request.post("/fixture/repository", {
+                        headers: { Origin: "http://127.0.0.1:8798" },
+                        data: {},
+                    })
+                ).ok(),
+            ).toBe(true);
+            await page
+                .getByRole("button", { name: "Refresh", exact: true })
+                .click();
+            await create(
+                page,
+                fromConversation
+                    ? "Investigate repository handoff " + Date.now()
+                    : "https://github.com/owner/repo convert Python to Rust " +
+                          Date.now(),
+            );
+            await page
+                .getByRole("button", { name: "Start work", exact: true })
+                .click();
+            await expect(
+                page.getByRole("heading", { name: "Repository access needed" }),
+            ).toBeVisible();
+            const id = new URL(page.url()).searchParams.get("item");
+            const before = (
+                await (await page.request.get(`/api/work/${id}`)).json()
+            ).work;
+            expect(before.attempts).toHaveLength(fromConversation ? 1 : 0);
+            expect(before.workspace).toBeNull();
+            await page.reload();
+            await expect(
+                page.getByRole("heading", { name: "Repository access needed" }),
+            ).toBeVisible();
+            if (fromConversation)
+                await page
+                    .getByLabel("Repository", { exact: true })
+                    .selectOption("owner/repo");
+            else
+                await expect(
+                    page.getByLabel("Repository", { exact: true }),
+                ).toHaveValue("owner/repo");
+            await page.getByLabel("Agent Git email").fill("agent@example.com");
+            await page
+                .getByRole("button", {
+                    name: "Authorize & continue",
+                    exact: true,
+                })
+                .click();
+            await expect
+                .poll(
+                    async () =>
+                        (
+                            await (
+                                await page.request.get(`/api/work/${id}`)
+                            ).json()
+                        ).work.attempts.at(-1)?.target.repository?.repository,
+                )
+                .toBe("owner/repo");
+            const after = (
+                await (await page.request.get(`/api/work/${id}`)).json()
+            ).work;
+            expect(after.id).toBe(before.id);
+            expect(after.attempts).toHaveLength(fromConversation ? 2 : 1);
+            if (fromConversation) {
+                expect(after.attempts[0].id).toBe(before.attempts[0].id);
+                expect(after.attempts[0].target.repository).toBeNull();
+                expect(after.attempts[0].session.sessionReference).toBe(
+                    "conversation-session",
+                );
+            }
+            await expect(
+                page.getByRole("button", {
+                    name: "Approve & complete",
+                    exact: true,
+                }),
+            ).toBeVisible({ timeout: 15000 });
+        });
+    }
     test("model and reasoning choices are saved on the execution attempt", async ({
         page,
     }) => {

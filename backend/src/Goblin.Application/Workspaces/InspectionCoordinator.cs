@@ -1,5 +1,4 @@
 using System;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
@@ -18,10 +17,9 @@ public sealed class InspectionCoordinator : BackgroundService
     {
         using IServiceScope scope = _scopes.CreateScope();
         InspectionStore store = scope.ServiceProvider.GetRequiredService<InspectionStore>();
-        string capability = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        InspectionAllocation? allocation = await store.ClaimAsync(id, capability, token);
+        InspectionAllocation? allocation = await store.ClaimAsync(id, token);
         if (allocation is null) return;
-        try { await _host.StartAsync(allocation, capability, token); }
+        try { await _host.StartAsync(allocation, token); }
         catch { await store.ObserveAsync(id, "Failed", CancellationToken.None); }
     }
     public async Task StopAsync(long id, CancellationToken token)

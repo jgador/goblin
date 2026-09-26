@@ -195,7 +195,8 @@ function modelSelection(w?: Work): ModelSelection {
     let choice = modelSelections.get(key);
     const agent = w ? agents.find((a) => a.id === w.agentId) : undefined;
     if (!choice) {
-        const previous = w?.attempts.at(-1)?.target;
+        const previous =
+            w?.repositoryRequest?.target ?? w?.attempts.at(-1)?.target;
         const draftChoice =
             w && !agent ? modelSelections.get("draft") : undefined;
         choice = {
@@ -1035,7 +1036,9 @@ function modelControls(w?: Work) {
                     (["Queued", "InProgress", "Cancelling"].includes(
                         w.status,
                     ) ||
-                        w.attention?.reason === "InputRequired")
+                        ["InputRequired", "RepositoryRequired"].includes(
+                            w.attention?.reason ?? "",
+                        ))
                   ? "The current attempt keeps its model. This choice is for a later attempt."
                   : "This choice applies when this Work starts or retries.";
     const status = `${statusText ? `<p class="model-status" role="status">${e(statusText)}</p>` : ""}${choice.notice ? `<p class="model-status" role="status">${e(choice.notice)}</p>` : ""}`;
@@ -1050,6 +1053,18 @@ function modelControls(w?: Work) {
     const main = `<button type="button" class="model-row" data-action="open-model-menu" ${connectionId && !unsupported ? "" : "disabled"}><span class="model-row-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button>${slider}${status}`;
     return `<div class="model-picker"><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Model: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">${icon("spark")}<span class="model-picker-trigger-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
 }
+function repositorySetup(w: Work, required = false) {
+    const handoff =
+        w.attention?.reason === "RepositoryRequired" ||
+        w.attention?.reason === "InputRequired";
+    const suggestions = w.repositoryRequest?.repositories ?? [];
+    return `<details id="repository-options" ${required ? "open" : ""}><summary>${icon("chevron")}Repository access</summary><p>Choose a repository for this Work. Authorize Goblin to fetch it and publish changes to its own branch using your GitHub connection.</p>${suggestions.length ? `<p class="field-hint">Referenced in this Work: ${e(suggestions.join(", "))}.</p>` : ""}<form class="work-setup" data-form="repository" novalidate><label for="repository">Repository</label><select class="field-control select-control" id="repository" name="repository" required aria-describedby="repository-error"><button type="button"><selectedcontent></selectedcontent></button><option value="">${repositories.some((r) => r.enabled) ? "Choose an enabled repository" : connectionsLoading ? "Loading repositories…" : "No repositories enabled"}</option>${repositories
+        .filter((r) => r.enabled)
+        .map((r) => `<option value="${e(r.name)}">${e(r.name)}</option>`)
+        .join(
+            "",
+        )}</select><p class="field-error" id="repository-error" hidden></p><button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button><label for="repository-branch">Default branch</label><input class="field-control" id="repository-branch" readonly placeholder="Choose a repository first" aria-describedby="branch-hint"><p id="branch-hint" class="field-hint">New attempts start from the repository’s default branch. Follow-up attempts use the saved checkpoint. Changes are saved to a separate Goblin branch.</p><div class="identity-fields"><div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="Goblin" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div><div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" placeholder="goblin@example.com" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div></div><p class="field-hint">Used as the author identity for this agent’s commits.</p>${runtimes.some((r) => r.repositoryExecution) ? `<button id="start-repository" type="submit" class="primary" ${sending || pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>${handoff ? "Authorize & continue" : "Start repository work"}</button>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}</form></details>`;
+}
 function controls(w: Work) {
     if (w.attention?.reason === "CleanupRequired")
         return `<div class="decision"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</div>`;
@@ -1062,19 +1077,13 @@ function controls(w: Work) {
     if (w.status === "Ready")
         content = !w.agentId
             ? `<form class="work-setup" data-form="assign"><p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select class="field-control select-control" id="agent" name="agent" required ${agents.length ? "" : "disabled"}><button type="button"><selectedcontent></selectedcontent></button>${agents.map((a) => `<option value="${a.id}" ${a.id === preferredAgentId ? "selected" : ""}>${e(a.name)}</option>`).join("") || '<option value="">No agents available</option>'}</select>${agents.length ? `<button id="assign-agent" class="primary" type="submit" ${sending || pending ? "disabled" : ""}>Assign agent</button>` : '<p class="field-hint" role="status">No agents are available. Refresh to check again.</p>'}</form>`
-            : `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}<details id="repository-options"><summary>${icon("chevron")}Repository changes</summary><p>Use an isolated sandbox for changes to a known GitHub repository.</p><form class="work-setup" data-form="repository" novalidate><label for="repository">Repository</label><select class="field-control select-control" id="repository" name="repository" required aria-describedby="repository-error"><button type="button"><selectedcontent></selectedcontent></button><option value="">${repositories.some((r) => r.enabled) ? "Choose an enabled repository" : connectionsLoading ? "Loading repositories…" : "No repositories enabled"}</option>${repositories
-                  .filter((r) => r.enabled)
-                  .map(
-                      (r) =>
-                          `<option value="${e(r.name)}">${e(r.name)}</option>`,
-                  )
-                  .join(
-                      "",
-                  )}</select><p class="field-error" id="repository-error" hidden></p><button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button><label for="repository-branch">Default branch</label><input class="field-control" id="repository-branch" readonly placeholder="Choose a repository first" aria-describedby="branch-hint"><p id="branch-hint" class="field-hint">New attempts start from the repository’s default branch. Follow-up attempts use the saved checkpoint. Changes are saved to a separate Goblin branch.</p><div class="identity-fields"><div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="Goblin" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div><div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" placeholder="goblin@example.com" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div></div><p class="field-hint">Used as the author identity for this agent’s commits.</p>${runtimes.some((r) => r.repositoryExecution) ? `<button id="start-repository" type="submit" class="primary" ${sending || pending || !modelCanSubmit(w) ? "disabled" : ""}>Start repository work</button>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}</form></details>`;
+            : `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${repositorySetup(w)}`;
     if (w.attention?.reason === "ResultReview")
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
     if (w.attention?.reason === "InputRequired")
-        content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>`;
+        content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? repositorySetup(w) : ""}`;
+    if (w.attention?.reason === "RepositoryRequired")
+        content = `<h3>Repository access needed</h3><p>Select an enabled repository and the agent’s Git identity to continue this Work.</p>${repositorySetup(w, true)}`;
     if (w.attention?.reason === "Failure")
         content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${button("retry", "Retry work", true, !modelCanSubmit(w))}`;
     if (w.attention?.reason === "UncertainExecution")
@@ -1088,6 +1097,15 @@ function controls(w: Work) {
 function updateRepositoryBranch() {
     const repository = root.querySelector<HTMLSelectElement>("#repository");
     const branch = root.querySelector<HTMLInputElement>("#repository-branch");
+    const suggestions = current()?.work.repositoryRequest?.repositories ?? [];
+    if (repository && !repository.value && suggestions.length === 1) {
+        const match = repositories.find(
+            (r) =>
+                r.enabled &&
+                r.name.toLowerCase() === suggestions[0].toLowerCase(),
+        );
+        if (match) repository.value = match.name;
+    }
     if (branch)
         branch.value =
             repositories.find((r) => r.name === repository?.value)
@@ -1442,9 +1460,13 @@ document.addEventListener("submit", async (event) => {
             document.getElementById(Object.keys(errors)[0])?.focus();
             return;
         }
-        await command("Execute", {
+        const w = current()!.work;
+        const handoff = ["RepositoryRequired", "InputRequired"].includes(
+            w.attention?.reason ?? "",
+        );
+        await command(handoff ? "AuthorizeRepository" : "Execute", {
             repository: { repository, gitAuthorName, gitAuthorEmail },
-            ...modelPayload(current()!.work),
+            ...(handoff ? {} : modelPayload(w)),
         });
         return;
     }

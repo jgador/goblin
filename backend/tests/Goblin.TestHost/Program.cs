@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Goblin.Application.Work;
 using Goblin.Contracts;
 using Goblin.Integrations.Codex;
 using Goblin.Protocol;
 using Goblin.Web;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
 // Test-only executable; never included in the production publish/image.
@@ -49,6 +51,17 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
         return config.Verification;
     }
 });
+if (config.EnableWork)
+{
+    // Explicit browser-test setup, present only in this test executable. The
+    // normal Work APIs still bind grants and persist commands through PostgreSQL.
+    app.MapPost("/fixture/repository", async (GitHubStore store) =>
+    {
+        await store.ObserveAsync(new("browser-fixture", "42", "owner"), "Connected");
+        await store.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "browser-fixture");
+        return Results.Ok();
+    });
+}
 if (config.RealCodex)
 {
     CodexClient codex = app.Services.GetRequiredService<CodexClient>();

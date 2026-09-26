@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Formats.Tar;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application;
@@ -41,6 +40,105 @@ public sealed class DurabilityTests
 {
     private static long _nextId = int.MaxValue;
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
+
+    private static async Task EnableHandoffRepository(Fixture fixture)
+    {
+        fixture.Runtime.RepositoryExecution = true;
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
+        await settings.ObserveAsync(new("handoff", "42", "owner"), "Connected");
+        await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "handoff");
+    }
+
+    [DatabaseFact]
+    public async Task RepositoryIntentWaitsForAuthorizationAndSurvivesRestartAndDuplicateCommands()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffRepository(fixture);
+        long id = NextId();
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "https://github.com/owner/repo convert Python to Rust"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        var start = new WorkCommand(NextId(), id, WorkAction.Execute, work.Version);
+        work = await fixture.Apply(start);
+        Assert.Equal(AttentionReason.RepositoryRequired, work.Work.Attention!.Reason);
+        Assert.Empty(work.Work.Attempts);
+        Assert.Null(work.Work.Workspace);
+        Assert.Equal(work.Version, (await fixture.Apply(start)).Version);
+        await fixture.RestartAsync();
+        work = await fixture.Get(id);
+        Assert.Equal("owner/repo", Assert.Single(work.Work.RepositoryRequest!.Repositories));
+        ApplicationFailure rejected = await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id,
+            WorkAction.AuthorizeRepository, work.Version, Repository: new("unapproved/repo", "Goblin", "agent@example.com"))));
+        Assert.Equal("repository_unavailable", rejected.Code);
+        Assert.Empty((await fixture.Get(id)).Work.Attempts);
+        var authorize = new WorkCommand(NextId(), id, WorkAction.AuthorizeRepository, work.Version,
+            Repository: new("owner/repo", "Goblin", "agent@example.com"));
+        WorkView accepted = await fixture.Apply(authorize);
+        Assert.Equal(accepted.Version, (await fixture.Apply(authorize)).Version);
+        work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        Assert.Single(work.Work.Attempts);
+        Assert.Equal("handoff", work.Work.Attempts[0].Target.Repository!.Grant!.Generation);
+        Assert.Equal(1, fixture.Runtime.Starts[work.Work.Attempts[0].Id]);
+        Assert.NotNull(work.Work.Workspace);
+        Assert.Null(work.Work.RepositoryRequest);
+    }
+
+    [DatabaseFact]
+    public async Task RepositoryAnswerHandsOffTheSameWorkWithoutRewritingTheConversationAttempt()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffRepository(fixture);
+        WorkView work = await fixture.StartWork();
+        long id = work.Work.Id, original = work.Work.Attempts[^1].Id;
+        fixture.Runtime.Observations[original] = new(ObservationKind.Paused,
+            new("chosen", "conversation-session", "turn-1"), "Which repository?");
+        await fixture.Reconcile(id, original);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.InputRequired && !x.Work.Attempts[^1].CleanupPending);
+        var answer = new WorkCommand(NextId(), id, WorkAction.Answer, work.Version,
+            Text: "Clone https://github.com/owner/repo", DecisionId: work.Work.Decisions[^1].Id);
+        work = await fixture.Apply(answer);
+        Assert.Equal(AttentionReason.RepositoryRequired, work.Work.Attention!.Reason);
+        Assert.Single(work.Work.Attempts);
+        Assert.Equal(1, work.Work.Attempts[0].TurnNumber);
+        work = await fixture.Apply(new(NextId(), id, WorkAction.AuthorizeRepository, work.Version,
+            Repository: new("owner/repo", "Goblin", "agent@example.com")));
+        Assert.Equal(2, work.Work.Attempts.Length);
+        Assert.Equal(original, work.Work.Attempts[0].Id);
+        Assert.Equal("conversation-session", work.Work.Attempts[0].Session!.SessionReference);
+        Assert.Null(work.Work.Attempts[0].Target.Repository);
+        Assert.Equal(AttemptStatus.Succeeded, work.Work.Attempts[0].Status);
+        Assert.Contains("Clone", work.Work.Decisions[^1].Answer);
+        await fixture.Apply(answer); // Lost response cannot restart the old text turn.
+        Assert.Equal(2, (await fixture.Get(id)).Work.Attempts.Length);
+        Assert.Equal(1, fixture.Runtime.Starts[original]);
+    }
+
+    [DatabaseFact]
+    public async Task RuntimeRepositoryRequestRequiresSetupAndCleanupBeforeDispatch()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffRepository(fixture);
+        WorkView work = await fixture.StartWork();
+        long id = work.Work.Id, attempt = work.Work.Attempts[^1].Id;
+        fixture.Runtime.FailCleanup = true;
+        fixture.Runtime.Observations[attempt] = new(ObservationKind.WorkspaceRequired, Text: "Inspect repository files");
+        await fixture.Reconcile(id, attempt);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.CleanupRequired);
+        Assert.NotNull(work.Work.RepositoryRequest);
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id,
+            WorkAction.AuthorizeRepository, work.Version, Repository: new("owner/repo", "Goblin", "agent@example.com"))));
+        fixture.Runtime.FailCleanup = false;
+        await fixture.Reconcile(id, attempt);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.RepositoryRequired && !x.Work.Attempts[^1].CleanupPending);
+        Assert.Single(work.Work.Attempts);
+        Assert.Null(work.Work.Workspace);
+        await fixture.Reconcile(id, attempt); // Observing the same outcome does not dispatch or rewrite the request.
+        Assert.Equal(work.Version, (await fixture.Get(id)).Version);
+        await fixture.Apply(new(NextId(), id, WorkAction.Cancel, work.Version));
+        work = await fixture.Until(id, x => x.Work.Status == WorkStatus.Cancelled);
+        Assert.Single(work.Work.Attempts);
+        Assert.Null(work.Work.Workspace);
+    }
 
     [DatabaseFact]
     public async Task ModelCatalogSurvivesRefreshFailureAndSelectedEffortBelongsToTheAttempt()
@@ -217,8 +315,7 @@ public sealed class DurabilityTests
             WorkId = work.Work.Id,
             AttemptId = work.Work.Attempts[0].Id,
             State = "Queued",
-            SourceVolume = "retained-test-volume",
-            CapabilityHash = "",
+            SourceVolume = $"k8s/agents/work-{work.Work.Id}",
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
@@ -272,7 +369,7 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task CheckpointBytesCommitIdentityAndArchiveLimitAreDurable()
+    public async Task GitCheckpointMetadataSurvivesRestartWithoutAnyFileBytes()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         fixture.Runtime.RepositoryExecution = true;
@@ -293,26 +390,60 @@ public sealed class DurabilityTests
         await broker.EnqueueAsync(attempt, publication, "publish", new MemoryStream([1, 2, 3]), default);
         for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, publication, default)).State != "Succeeded"; i++) await Task.Delay(50);
         Assert.Equal("Succeeded", (await broker.StatusAsync(attempt, publication, default)).State);
-        using var bytes = new MemoryStream();
-        using (var gzip = new GZipStream(bytes, CompressionMode.Compress, true))
-        using (var tar = new TarWriter(gzip))
-            tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "repository/ignored-report.txt") { DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("preserve me")) });
-        byte[] archive = bytes.ToArray();
         IDbContextFactory<GoblinDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
-        IServiceScopeFactory scopes = fixture.Host.Services.GetRequiredService<IServiceScopeFactory>();
-        var store = new WorkspaceArchive(factory, scopes, new());
-        WorkspaceCheckpoint saved = await store.SaveAsync(attempt, 1, new string('a', 40), new MemoryStream(archive), broker, default);
+        var store = new WorkspaceCheckpoints(factory);
+        WorkspaceCheckpoint saved = await store.SaveAsync(attempt, 1, new string('a', 40), broker, default);
         Assert.Equal(saved.Id, (await store.LatestAsync(id, "owner/repo", default))!.Id);
-        Assert.Equal(archive, await store.ReadAsync(id, saved.Id, default));
+        Assert.Equal(saved.Id, (await store.SaveAsync(attempt, 1, new string('a', 40), broker, default)).Id);
+        await using (GoblinDbContext db = await factory.CreateDbContextAsync())
+            Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='workspace_checkpoints' AND data_type='bytea'").SingleAsync());
         Assert.True(await store.VerifiedAsync(saved.Id, attempt, 1, default));
         Assert.False(await store.VerifiedAsync(saved.Id, attempt, 2, default));
-        Assert.False(await store.CanDiscardAsync(attempt, 1, default));
-        await Assert.ThrowsAsync<ApplicationFailure>(() => new WorkspaceArchive(factory, scopes, new(MaxArchiveBytes: 1)).SaveAsync(attempt, 1, new string('a', 40), new MemoryStream(archive), broker, default));
         await fixture.RestartAsync();
         using IServiceScope restartedScope = fixture.Host.Services.CreateScope();
-        var reopened = new WorkspaceArchive(restartedScope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>(),
-            fixture.Host.Services.GetRequiredService<IServiceScopeFactory>(), new());
-        Assert.Equal(archive, await reopened.ReadAsync(id, saved.Id, default));
+        var reopened = new WorkspaceCheckpoints(restartedScope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
+        Assert.Equal(saved.Id, (await reopened.LatestAsync(id, "owner/repo", default))!.Id);
+        Assert.Equal(work.Work.Workspace, (await fixture.Get(id)).Work.Workspace);
+        fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
+        await fixture.Reconcile(id, attempt);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
+        await fixture.Apply(new(NextId(), id, WorkAction.Approve, work.Version, AttemptId: attempt));
+    }
+
+    [DatabaseFact]
+    public async Task PersistentWorkspaceAndAttemptHistorySurviveFailureAndExplicitRetry()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        fixture.Runtime.RepositoryExecution = true;
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
+        await settings.ObserveAsync(new("first", "42", "owner"), "Connected");
+        await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
+        long id = NextId();
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Continue surviving edits"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        await fixture.Apply(new(NextId(), id, WorkAction.Execute, work.Version, Repository: new("owner/repo", "Goblin", "agent@example.com")));
+        work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        long first = work.Work.Attempts[^1].Id;
+        string reference = work.Work.Workspace!.EnvironmentReference;
+        fixture.Runtime.FailCleanup = true;
+        fixture.Runtime.Observations[first] = new(ObservationKind.Failed, Failure: FailureKind.RuntimeDisconnected);
+        await fixture.Reconcile(id, first);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.CleanupRequired);
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Retry, work.Version)));
+        fixture.Runtime.FailCleanup = false;
+        await fixture.Reconcile(id, first);
+        work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.Failure && !x.Work.Attempts[^1].CleanupPending);
+        await fixture.RestartAsync();
+        work = await fixture.Get(id);
+        Assert.Equal(reference, work.Work.Workspace!.EnvironmentReference);
+        await fixture.Apply(new(NextId(), id, WorkAction.Retry, work.Version));
+        work = await fixture.Until(id, x => x.Work.Attempts.Length == 2 && x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        Assert.Equal(reference, work.Work.Workspace!.EnvironmentReference);
+        Assert.Equal(reference, work.Work.Attempts[^1].EnvironmentReference);
+        Assert.NotEqual(first, work.Work.Workspace.AttemptId);
+        Assert.Equal(AttemptStatus.Failed, work.Work.Attempts[0].Status);
+        Assert.NotEqual(work.Work.Attempts[0].Target.Repository!.Grant!.Branch, work.Work.Attempts[1].Target.Repository!.Grant!.Branch);
     }
 
     [DatabaseFact]
@@ -708,7 +839,7 @@ public sealed class DurabilityTests
     private sealed class InspectionRuntime : IInspectionHost
     {
         public ConcurrentDictionary<long, bool> Started { get; } = new();
-        public Task StartAsync(InspectionAllocation session, string capability, CancellationToken token)
+        public Task StartAsync(InspectionAllocation session, CancellationToken token)
         { Started[session.Id] = true; return Task.CompletedTask; }
         public Task StopAsync(InspectionAllocation session, CancellationToken token)
         { Started[session.Id] = false; return Task.CompletedTask; }
@@ -832,14 +963,9 @@ public sealed class DurabilityTests
             await broker.EnqueueAsync(attempt, publication, "publish", new MemoryStream([1, 2, 3]), default);
             for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, publication, default)).State != "Succeeded"; i++) await Task.Delay(50);
             Assert.Equal("Succeeded", (await broker.StatusAsync(attempt, publication, default)).State);
-            using var bytes = new MemoryStream();
-            using (var gzip = new GZipStream(bytes, CompressionMode.Compress, true))
-            using (var tar = new TarWriter(gzip))
-                tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, "repository/report.txt") { DataStream = new MemoryStream([1]) });
             using IServiceScope scope = Host.Services.CreateScope();
-            var store = new WorkspaceArchive(scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>(),
-                Host.Services.GetRequiredService<IServiceScopeFactory>(), new());
-            return await store.SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), new MemoryStream(bytes.ToArray()), broker, default);
+            var store = new WorkspaceCheckpoints(scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
+            return await store.SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), broker, default);
         }
         public async Task<WorkView> Until(long id, Func<WorkView, bool> ready)
         {

@@ -21,12 +21,12 @@ public sealed class KubernetesSerializationTests
     public void SelectedSandboxReadsKnownFieldsAndIgnoresUnselectedServerFields()
     {
         const string response = """
-            {"metadata":{"name":"run-1-1","resourceVersion":"8"},
+            {"metadata":{"name":"work-1","resourceVersion":"8"},
              "spec":{"operatingMode":"Suspended","podTemplate":{"spec":{"containers":[]}},"shutdownTime":"2030-01-01T00:00:00Z"},
              "status":{"conditions":[{"type":"Ready","status":"False"}]}}
             """;
         Sandbox sandbox = JsonSerializer.Deserialize<Sandbox>(response, KubernetesJson.Options)!;
-        Assert.Equal("run-1-1", sandbox.Metadata?.Name);
+        Assert.Equal("work-1", sandbox.Metadata?.Name);
         Assert.Equal(SandboxSpecOperatingMode.Suspended, sandbox.Spec.OperatingMode);
         Assert.Empty(sandbox.Spec.PodTemplate.Spec.Containers);
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Sandbox>(

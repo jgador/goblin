@@ -19,17 +19,11 @@ public partial class WorkspaceSession
     [Column("attempt_id")]
     public long AttemptId { get; set; }
 
-    [Column("checkpoint_id")]
-    public long? CheckpointId { get; set; }
-
     [Column("source_volume")]
     public string SourceVolume { get; set; } = null!;
 
     [Column("state")]
     public string State { get; set; } = null!;
-
-    [Column("capability_hash")]
-    public string CapabilityHash { get; set; } = null!;
 
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
@@ -40,10 +34,6 @@ public partial class WorkspaceSession
     [ForeignKey("AttemptId")]
     [InverseProperty("WorkspaceSessions")]
     public virtual ExecutionAttempt Attempt { get; set; } = null!;
-
-    [ForeignKey("CheckpointId")]
-    [InverseProperty("WorkspaceSessions")]
-    public virtual WorkspaceCheckpoint? Checkpoint { get; set; }
 
     [ForeignKey("WorkId")]
     [InverseProperty("WorkspaceSession")]

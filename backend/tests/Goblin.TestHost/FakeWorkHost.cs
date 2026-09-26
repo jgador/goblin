@@ -13,12 +13,15 @@ internal sealed class FakeWorkHost : IExecutionHost
 
     public FakeWorkHost(string root) => _root = root;
 
-    public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
+    public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
     public string EnvironmentFor(long workId, long attemptId) => "fixture/" + attemptId;
     private string PathFor(WorkSnapshot work) => Path.Combine(_root, work.Attempts[^1].Id + ".work-result");
     public Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
         bool question = work.Objective.Contains("decision", StringComparison.OrdinalIgnoreCase) && work.Decisions.Length == 0;
+        if (work.Objective.Contains("repository handoff", StringComparison.OrdinalIgnoreCase) && work.Attempts[^1].Target.Repository is null)
+            return ExecutionFiles.WriteAsync(PathFor(work), new ExecutionObservation(ObservationKind.WorkspaceRequired,
+                new("fixture-model", "conversation-session", "fixture-operation"), "Inspect the repository files."), token);
         return ExecutionFiles.WriteAsync(PathFor(work), new ExecutionObservation(
             work.Objective.Contains("failure", StringComparison.OrdinalIgnoreCase) ? ObservationKind.Failed : question ? ObservationKind.InputRequired : ObservationKind.Result,
             new("fixture-model", "fixture-session", "fixture-operation"), question ? "Which outcome should I prioritize?" : "Proposed result for: " + work.Objective,
