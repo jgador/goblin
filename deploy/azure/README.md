@@ -22,7 +22,8 @@ For SSH from Windows, see [Windows SSH private-key permissions](reference.md#win
 if the downloaded `.pem` file cannot be read or OpenSSH rejects its permissions.
 The guide includes PowerShell commands and **Properties → Security** steps.
 
-Azure provisioning finishes once the status page responds and the background
+Azure first downloads and verifies the pinned native [goblinctl release](../../docs/goblinctl.md).
+Provisioning finishes once the status page responds and the background
 installer has launched. Kubernetes and the application are installed afterward;
 this can take several minutes. The page shows each step as waiting, running,
 complete, or failed. Closing the browser does not interrupt installation.
@@ -34,7 +35,7 @@ working when Kubernetes takes over.
 The installer builds the application from this repository, imports it into K3s,
 and checks its internal route before transferring the public URL to Traefik.
 After a successful handoff, the setup UI and installer are disabled. A brief
-reconnection during the switch is normal. The small setup bundle, status, and
+reconnection during the switch is normal. The permanent native CLI, status, and
 logs remain on the VM for repair.
 
 After cert-manager is ready, the application installer provisions PostgreSQL with

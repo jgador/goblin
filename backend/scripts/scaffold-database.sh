@@ -31,15 +31,7 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --no-onconfiguring \
   --force
 
-python3 - <<'PY'
-from pathlib import Path
-
-for path in Path("backend/src/Goblin.Persistence/Generated").rglob("*.cs"):
-    # EF's templates include CRLF and a BOM on some platforms. Keep checked-in
-    # output consistent with the rest of the repository.
-    text = path.read_text(encoding="utf-8-sig")
-    path.write_text(text, encoding="utf-8", newline="\n")
-PY
+cargo xtask normalize-ef
 
 # Apply repository style preferences without converting regular constructors.
 dotnet format whitespace backend/src/Goblin.Persistence/Goblin.Persistence.csproj \

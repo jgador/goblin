@@ -1,3 +1,5 @@
+import { goblinctl } from "../support/goblinctl.js";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -21,12 +23,12 @@ import { startBackend } from "../support/backend.js";
 
 const publicHostname = "goblin-prod.southeastasia.cloudapp.azure.com";
 const origin = `http://${publicHostname}`;
-const hasherPath = resolve("deploy/azure/hash-password.py");
+const hasherArgs = ["internal", "hash-password"];
 const fakePassword =
     "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` café 🧌  ";
 
 // Exercise the real rendered bootstrap, replacing only infrastructure commands
-// and absolute system paths. Python hashing, shell quoting and secret creation
+// and absolute system paths. Native hashing, shell quoting and secret creation
 // all run; no Azure account, Kubernetes installation, or network is needed.
 async function bootstrap(
     root: string,
@@ -39,7 +41,9 @@ async function bootstrap(
         passwordHashFile?: string;
         dockerInstalled?: boolean;
         dockerEnvironment?: NodeJS.ProcessEnv;
+        kubeconfig?: string;
         bootstrapOnly?: boolean;
+        nativeDownload?: "failed" | "corrupt";
         resume?: boolean;
         recovery?: boolean;
         state?:
@@ -62,6 +66,13 @@ async function bootstrap(
     await cp("deploy/postgres", join(source, "deploy/postgres"), {
         recursive: true,
     });
+    // A retained application archive may contain obsolete provisioning helpers.
+    // Operational code must come from the installed CLI, independent of that source.
+    for (const name of ["setup.sh", "migrate.sh"])
+        await writeFile(
+            join(source, "deploy/postgres", name),
+            "#!/bin/sh\nprintf 'Obsolete source provisioning helper was executed.\\n' >&2\nexit 99\n",
+        );
     await mkdir(join(source, "backend/src/Goblin.Web"), { recursive: true });
     await mkdir(join(source, "backend/tools/Goblin.Database"), {
         recursive: true,
@@ -112,6 +123,10 @@ if (name === 'curl') {
   const output = args[args.indexOf('--output') + 1];
   if (args.some(arg => arg.startsWith('https://codeload.github.com/'))) {
     fs.copyFileSync(path.join(root, 'source.tar.gz'), output);
+  } else if (args.some(arg => arg.includes('/releases/download/goblinctl-v'))) {
+    if (process.env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD === 'failed') process.exit(22);
+    fs.copyFileSync(path.join(root, 'goblinctl.tar.gz'), output);
+    if (process.env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD === 'corrupt') fs.appendFileSync(output, 'corruption');
   } else if (args.includes('http://127.0.0.1/setup/healthz')) {
     fs.writeFileSync(output, JSON.stringify({ setup: true }));
   } else if (args.some(arg => arg.startsWith('http://'))) {
@@ -122,7 +137,15 @@ if (name === 'curl') {
     fs.writeFileSync(output, '#!/bin/sh\\nexit 0\\n');
   }
 } else if (name === 'sha256sum') {
-  if (args.includes('--check')) fs.appendFileSync(path.join(root, 'checksum-checks.jsonl'), JSON.stringify(fs.readFileSync(0, 'utf8')) + '\\n');
+  if (args.includes('--check')) {
+    const text = fs.readFileSync(0, 'utf8');
+    fs.appendFileSync(path.join(root, 'checksum-checks.jsonl'), JSON.stringify(text) + '\\n');
+    const [expected, file] = text.trim().split(/\\s+/, 2);
+    if (file.endsWith('/goblinctl.tar.gz')) {
+      const actual = require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      if (actual !== expected) { process.stderr.write('Native archive checksum mismatch'); process.exit(1); }
+    }
+  }
   else process.stdout.write(require('node:crypto').createHash('sha256').update(fs.readFileSync(args[0])).digest('hex') + '  ' + args[0]);
 } else if (name === 'docker' || name === 'dockerd') {
   fs.appendFileSync(path.join(root, 'docker-requests.jsonl'), JSON.stringify([name, ...args]) + '\\n');
@@ -157,6 +180,14 @@ if (name === 'curl') {
   if (args[0] === 'cat' && !fs.existsSync(path.join(root, 'etc/systemd/system', args[1]))) process.exit(1);
 } else if (name === 'k3s' || name === 'kubectl') {
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args[0] === 'kubectl') {
+    const kubeconfig = process.env.KUBECONFIG ?? null;
+    fs.appendFileSync(path.join(root, 'kubernetes-contexts.jsonl'), JSON.stringify({ command: name, args, kubeconfig }) + '\\n');
+    if (name === 'kubectl' && kubeconfig !== path.join(root, 'etc/rancher/k3s/k3s.yaml')) {
+      process.stderr.write('Standalone kubectl is not configured for the installed k3s cluster\\n');
+      process.exit(1);
+    }
+  }
   if (args[1] === 'get' && args[2] === 'secret' && args.includes('json')) {
     process.stdout.write(JSON.stringify({ items: ['app', 'admin'].map(role => ({ metadata: { name: 'goblin-postgres-' + role + '-tls' }, data: Object.fromEntries(['tls.crt', 'tls.key', 'ca.crt'].map(key => [key, Buffer.from('test-certificate-' + role).toString('base64')])) })) }));
     process.exit(0);
@@ -231,50 +262,85 @@ if (name === 'curl') {
             { mode: 0o700 },
         );
     }
-    const hasher = await readFile(hasherPath, "utf8");
     const paths = [
         "/var/lib/goblin",
         "/var/log/goblin-bootstrap.log",
         "/var/log/goblin-installer.log",
         "/etc/rancher/k3s",
         "/etc/docker",
-        "/opt/goblin/setup",
+        "/opt/goblin",
+        "/usr/local/bin",
+        "/run/goblin-setup",
         "/etc/systemd/system",
         "/var/lib/rancher/k3s",
     ];
     const remap = (script: string) =>
-        paths.reduce(
-            (text, path) => text.replaceAll(path, join(root, path.slice(1))),
-            script,
-        );
-    const bundle = execFileSync(
-        "python3",
-        [
-            "-c",
-            `
-import io, json, sys, zipfile
-source = zipfile.ZipFile(io.BytesIO(sys.stdin.buffer.read()))
-output = io.BytesIO()
-with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as target:
-    for name in source.namelist():
-        text = source.read(name).decode()
-        for path in json.loads(sys.argv[2]):
-            text = text.replace(path, sys.argv[1] + path)
-        target.writestr(name, text)
-sys.stdout.buffer.write(output.getvalue())
+        paths
+            .reduce(
+                (text, path) =>
+                    text.replaceAll(path, join(root, path.slice(1))),
+                script,
+            )
+            .replaceAll(
+                "export GOBLINCTL=" + join(root, "opt/goblin/bin/goblinctl"),
+                "export GOBLINCTL=" + join(bin, "goblinctl"),
+            )
+            .replace(
+                '"$bootstrap_dir/goblinctl" internal activate',
+                '"' + join(bin, "goblinctl") + '" internal activate',
+            );
+    // Redirect only host paths; every operation still executes native Rust code.
+    await writeFile(
+        join(bin, "goblinctl"),
+        `#!${process.execPath}
+const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const args = process.argv.slice(2);
+const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
+if (args[0] === 'internal' && args[1] === 'activate') args.push('--system-root', root);
+if (args[0] === 'internal' && args[1] === 'state' && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
+if (args[0] === 'internal' && args[1] === 'docker-config') args.push(path.join(root, 'etc/docker/daemon.json'));
+const result = spawnSync(${JSON.stringify(goblinctl)}, args, {stdio: 'inherit'});
+if (result.status !== 0) process.exit(result.status ?? 1);
+if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
+    const directory = args[1] === 'unpack' ? args[2] : path.join(root, 'opt/goblin/setup');
+    for (const name of fs.readdirSync(directory)) {
+        const file = path.join(directory, name);
+        let text = fs.readFileSync(file, 'utf8');
+        for (const prefix of ${JSON.stringify(paths)}) text = text.replaceAll(prefix, root + prefix);
+        text = text.replaceAll('export GOBLINCTL=' + root + '/opt/goblin/bin/goblinctl', 'export GOBLINCTL=' + root + '/bin/goblinctl');
+        fs.writeFileSync(file, text);
+    }
+}
 `,
-            root,
-            JSON.stringify(paths),
-        ],
-        {
-            input: Buffer.from(
-                await readFile("deploy/azure/setup-bundle.b64", "utf8"),
-                "base64",
-            ),
-        },
+        { mode: 0o700 },
     );
+    for (const name of ["setup.sh", "migrate.sh"]) {
+        const path = join(source, "deploy/postgres", name);
+        await writeFile(path, remap(await readFile(path, "utf8")));
+    }
+    // Repack the modified source, and stage a real native download archive.
+    execFileSync("tar", [
+        "-czf",
+        join(root, "source.tar.gz"),
+        "-C",
+        join(root, "archive"),
+        "goblin",
+    ]);
+    await mkdir(join(root, "native"), { recursive: true });
+    await cp(goblinctl, join(root, "native/goblinctl"));
+    execFileSync("tar", [
+        "-czf",
+        join(root, "goblinctl.tar.gz"),
+        "-C",
+        join(root, "native"),
+        "goblinctl",
+    ]);
+    const nativeChecksum = createHash("sha256")
+        .update(await readFile(join(root, "goblinctl.tar.gz")))
+        .digest("hex");
     let script = (await readFile("deploy/azure/bootstrap.sh", "utf8"))
-        .replace("__GOBLIN_PASSWORD_HASHER__", () => hasher)
         .replace(
             "__GOBLIN_HOSTNAME_BASE64__",
             Buffer.from(
@@ -290,8 +356,8 @@ sys.stdout.buffer.write(output.getvalue())
             "__GOBLIN_PASSWORD_BASE64__",
             Buffer.from(password).toString("base64"),
         )
-        .replace("__GOBLIN_SETUP_BUNDLE_BASE64__", bundle.toString("base64"))
-        .replace("__GOBLIN_SETUP_BUNDLE_SHA256__", "test-checksum");
+        .replace("__GOBLINCTL_VERSION__", "0.1.0")
+        .replace("__GOBLINCTL_SHA256__", nativeChecksum);
     script = remap(script);
     await mkdir(join(root, "var/log"), { recursive: true });
     await mkdir(join(root, "etc/systemd/system"), { recursive: true });
@@ -303,7 +369,9 @@ sys.stdout.buffer.write(output.getvalue())
             ...process.env,
             ...application.dockerEnvironment,
             PATH: `${bin}:${application.dockerEnvironment?.PATH ?? process.env.PATH}`,
+            KUBECONFIG: application.kubeconfig,
             GOBLIN_BOOTSTRAP_TEST_DIR: root,
+            GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD: application.nativeDownload ?? "",
             SERVICE_RESULT: application.recovery ? "signal" : "success",
             GOBLIN_PUBLIC_ORIGIN: application.publicOrigin ?? "",
             GOBLIN_PASSWORD_HASH_FILE: application.passwordHashFile ?? "",
@@ -579,6 +647,58 @@ test("installer installs the application and uses Azure's hostname for both rout
             downloads.some((args) => args.includes(`${hostname}:80:10.20.0.4`)),
             "the public probe selects a single IPv4 node address",
         );
+    }
+});
+
+test("installer targets its k3s cluster when standalone kubectl has no context or an unrelated kubeconfig", async (t) => {
+    for (const context of ["missing", "other-cluster"]) {
+        const root = await mkdtemp(join(tmpdir(), "goblin-kubeconfig-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        const kubeconfig =
+            context === "missing" ? undefined : join(root, "other-kubeconfig");
+        const otherConfig = "current-context: other-cluster\n";
+        if (kubeconfig) await writeFile(kubeconfig, otherConfig);
+
+        await bootstrap(root, fakePassword, "ready", { kubeconfig });
+
+        const status = JSON.parse(
+            await readFile(
+                join(root, "var/lib/goblin/install/status.json"),
+                "utf8",
+            ),
+        );
+        assert.equal(status.status, "ready");
+        const calls: {
+            command: string;
+            args: string[];
+            kubeconfig: string | null;
+        }[] = (await readFile(join(root, "kubernetes-contexts.jsonl"), "utf8"))
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line));
+        assert.ok(
+            calls.some(
+                ({ command, args }) =>
+                    command === "kubectl" &&
+                    args.includes("statefulset/goblin-postgres"),
+            ),
+            "database setup must run through the standalone kubectl",
+        );
+        assert.ok(
+            calls.some(
+                ({ command, args }) =>
+                    command === "kubectl" &&
+                    args.includes("job/goblin-test-migration"),
+            ),
+            "schema migration must run through the standalone kubectl",
+        );
+        for (const call of calls)
+            assert.equal(
+                call.kubeconfig,
+                join(root, "etc/rancher/k3s/k3s.yaml"),
+            );
+        if (kubeconfig)
+            assert.equal(await readFile(kubeconfig, "utf8"), otherConfig);
     }
 });
 
@@ -931,22 +1051,9 @@ test("the local repository verifier passes unchanged through Azure's bootstrap a
     );
     t.after(() => rm(root, { recursive: true, force: true }));
     const passwordHashFile = join(root, ".goblin-secrets/owner-password");
-    execFileSync(
-        "python3",
-        [
-            "-c",
-            `
-import sys
-from pathlib import Path
-sys.path.insert(0, sys.argv[1])
-from password import ensure_password
-ensure_password(Path(sys.argv[2]))
-`,
-            resolve("deploy/local"),
-            passwordHashFile,
-        ],
-        { env: { ...process.env, GOBLIN_LOCAL_PASSWORD: fakePassword } },
-    );
+    execFileSync(goblinctl, ["password", "set", "--path", passwordHashFile], {
+        env: { ...process.env, GOBLIN_LOCAL_PASSWORD: fakePassword },
+    });
     const verifier = await readFile(passwordHashFile, "utf8");
     const output = await bootstrap(root, "", "ready", {
         passwordHashFile,
@@ -983,7 +1090,7 @@ test("a configured password file must exist and contain a supported verifier", a
     const passwordHashFile = join(root, "owner-password");
     const dataDir = join(root, "data");
     await mkdir(dataDir);
-    const valid = execFileSync("python3", [hasherPath], {
+    const valid = execFileSync(goblinctl, hasherArgs, {
         input: fakePassword,
         encoding: "utf8",
     });
@@ -1017,7 +1124,7 @@ test("password provisioning accepts short passwords and never logs rejected pass
     ]) {
         assert.throws(
             () =>
-                execFileSync("python3", [hasherPath], {
+                execFileSync(goblinctl, hasherArgs, {
                     input: invalid,
                     stdio: ["pipe", "pipe", "pipe"],
                 }),
@@ -1026,7 +1133,7 @@ test("password provisioning accepts short passwords and never logs rejected pass
                 assert.equal(failure.stdout.length, 0);
                 assert.match(
                     failure.stderr.toString(),
-                    /^Goblin password is invalid\./,
+                    /^goblinctl: Enter a non-blank Goblin password/,
                 );
                 if (invalid)
                     assert.ok(!failure.stderr.toString().includes(invalid));
@@ -1042,11 +1149,11 @@ test("password provisioning accepts short passwords and never logs rejected pass
         "b".repeat(128),
         fakePassword,
     ]) {
-        const first = execFileSync("python3", [hasherPath], {
+        const first = execFileSync(goblinctl, hasherArgs, {
             input: valid,
             encoding: "utf8",
         });
-        const second = execFileSync("python3", [hasherPath], {
+        const second = execFileSync(goblinctl, hasherArgs, {
             input: valid,
             encoding: "utf8",
         });
@@ -1086,22 +1193,18 @@ test("Azure templates keep the password protected and the portal requires confir
         const template = JSON.parse(
             await readFile(`deploy/azure/${name}`, "utf8"),
         );
-        assert.ok(
-            JSON.stringify(template).includes(
-                (
-                    await readFile("deploy/azure/setup-bundle.b64", "utf8")
-                ).trim(),
-            ),
-            "ARM template must embed the current setup bundle",
+        const pin = JSON.parse(
+            await readFile("deploy/goblinctl-release.json", "utf8"),
         );
         assert.ok(
-            JSON.stringify(template).includes(
-                (
-                    await readFile("deploy/azure/setup-bundle.sha256", "utf8")
-                ).trim(),
-            ),
-            "ARM template must pin the current bundle checksum",
+            JSON.stringify(template).includes(pin.sha256),
+            "ARM must pin the native archive checksum",
         );
+        assert.ok(
+            JSON.stringify(template).includes("goblinctl-v"),
+            "ARM must download a versioned native release",
+        );
+        assert.ok(!JSON.stringify(template).includes("python3"));
         assert.equal(
             template.parameters.goblinPassword.type.toLowerCase(),
             "securestring",
@@ -1328,7 +1431,7 @@ test("a failed handoff restores private ingress and UI, then retry preserves cre
     await assert.rejects(
         access(join(root, "var/lib/goblin/install/private/work")),
     );
-    await access(join(root, "opt/goblin/setup/goblin-setup.pyz"));
+    await access(join(root, "opt/goblin/bin/goblinctl"));
     await access(join(root, "var/log/goblin-installer.log"));
     const requests: string[][] = (
         await readFile(join(root, "curl-requests.jsonl"), "utf8")
@@ -1344,36 +1447,27 @@ test("a failed handoff restores private ingress and UI, then retry preserves cre
     );
 });
 
-test("the embedded setup bundle is reproducible and fits Azure Custom Script limits", async () => {
-    execFileSync("python3", ["deploy/azure/build-setup-bundle.py", "--check"]);
-    const bundle = Buffer.from(
-        await readFile("deploy/azure/setup-bundle.b64", "utf8"),
-        "base64",
-    );
-    const { createHash } = await import("node:crypto");
-    assert.equal(
-        createHash("sha256").update(bundle).digest("hex"),
-        (await readFile("deploy/azure/setup-bundle.sha256", "utf8")).trim(),
-    );
-    const script = (await readFile("deploy/azure/bootstrap.sh", "utf8"))
-        .replace("__GOBLIN_SETUP_BUNDLE_BASE64__", bundle.toString("base64"))
-        .replace(
-            "__GOBLIN_PASSWORD_HASHER__",
-            await readFile(hasherPath, "utf8"),
-        );
-    assert.ok(
-        Buffer.byteLength(script) < 64 * 1024,
-        "Custom Script decoded script must fit in 64 KiB",
-    );
+test("the native downloader fits Azure Custom Script limits", async () => {
+    const script = await readFile("deploy/azure/bootstrap.sh", "utf8");
+    assert.ok(Buffer.byteLength(script) < 64 * 1024);
+    assert.doesNotMatch(script, /python3|cargo |rustc /);
+    assert.match(script, /sha256sum --check/);
+    execFileSync("bash", ["-n"], { input: script });
 });
 
 test("a killed worker's recovery restores the UI from its persisted handoff marker", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-killed-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     await bootstrap(root, fakePassword, "ready", { bootstrapOnly: true });
-    const bundle = join(root, "opt/goblin/setup/goblin-setup.pyz");
+    const statePath = join(root, "var/lib/goblin/install/status.json");
     for (const transition of [["begin"], ["start", "activate"], ["handoff"]])
-        execFileSync("python3", [bundle, "state", ...transition]);
+        execFileSync(goblinctl, [
+            "internal",
+            "state",
+            ...transition,
+            "--path",
+            statePath,
+        ]);
     await writeFile(join(root, "var/lib/goblin/install/private/handoff"), "");
     await writeFile(join(root, "ingress-mode"), "LoadBalancer");
     await bootstrap(root, fakePassword, "ready", {
@@ -1520,5 +1614,46 @@ test("invalid forwarded origins fail before installing cluster components", asyn
             { status: 1 },
         );
         await assert.rejects(access(join(root, "k3s-requests.jsonl")));
+    }
+});
+
+test("native download failure or corruption leaves the previous installer untouched", async (t) => {
+    for (const nativeDownload of ["failed", "corrupt"] as const) {
+        const root = await mkdtemp(join(tmpdir(), "goblin-native-failed-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        const previous = join(
+            root,
+            "etc/systemd/system/goblin-installer.service",
+        );
+        await mkdir(join(root, "etc/systemd/system"), { recursive: true });
+        await writeFile(previous, "previous installer");
+        await assert.rejects(
+            bootstrap(root, fakePassword, "ready", {
+                nativeDownload,
+                bootstrapOnly: true,
+            }),
+        );
+        assert.equal(await readFile(previous, "utf8"), "previous installer");
+        await assert.rejects(
+            access(join(root, "var/lib/goblin/install/private/owner-password")),
+        );
+        await assert.rejects(access(join(root, "systemctl-requests.jsonl")));
+        assert.equal(
+            (
+                await readFile(
+                    join(root, "var/lib/goblin/bootstrap-status"),
+                    "utf8",
+                )
+            ).trim(),
+            "failed",
+        );
+        assert.ok(
+            !(
+                await readFile(
+                    join(root, "var/log/goblin-bootstrap.log"),
+                    "utf8",
+                )
+            ).includes(fakePassword),
+        );
     }
 });
