@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "3872886944248470349"
+      "templateHash": "12946856735425042812"
     }
   },
   "parameters": {
@@ -266,7 +266,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.47.16.16243",
-              "templateHash": "9601656097779402387"
+              "templateHash": "1111898867419976723"
             }
           },
           "parameters": {
@@ -321,9 +321,9 @@
           "variables": {
             "$fxv#0": {
               "cargoLockSha256": "e57c70d52736e7797fdcb655b907c3ec36e150611166ed9647d34c187bf7ebcd",
-              "sha256": "bf59a7610f75202ec212b07b052da927466879bedbb3beb5420ef0188069d421",
-              "sourceDirty": true,
-              "sourceRevision": "bcab67101a0a3e1cff69718fcedcf0bba5af9fb4",
+              "sha256": "ba4615041cc530a59f73f0560b46cd25aa457ee48d8ebac4f7c770b4c715dd79",
+              "sourceDirty": false,
+              "sourceRevision": "934ad6a934eb37644e72386f525b47edd03bec46",
               "target": "x86_64-unknown-linux-musl",
               "version": "0.1.0"
             },
