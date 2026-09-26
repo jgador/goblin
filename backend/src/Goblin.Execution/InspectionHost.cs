@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,27 +26,13 @@ public sealed class InspectionHost : IInspectionHost
     private static bool ValidName(string name) => Regex.IsMatch(name, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
     private string Core(InspectionAllocation session) => "/api/v1/namespaces/" + NamespaceFor(session);
     private string Sandboxes(InspectionAllocation session) => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + NamespaceFor(session) + "/sandboxes";
-    public async Task StartAsync(InspectionAllocation session, string capability, CancellationToken token)
+    public async Task StartAsync(InspectionAllocation session, CancellationToken token)
     {
-        string name = Name(session.Id);
         if (!await _api.CreateAsync(Sandboxes(session), Manifest(session, false), token)) return;
-        if (session.CheckpointId is null)
-        {
-            if (await _api.GetAsync<K.PersistentVolumeClaim>(Core(session) + "/persistentvolumeclaims/" + Source(session).Volume, token) is null)
-                throw new IOException("Saved workspace is unavailable.");
-            return;
-        }
-        await _api.CreateAsync(Core(session) + "/secrets", new K.Secret
-        {
-            ApiVersion = "v1",
-            Kind = "Secret",
-            Metadata = new() { Name = name },
-            StringData = new() { ["capability"] = capability, ["url"] = _options.RepositoryUrl + "/internal/workspaces/" + session.Id }
-        }, token);
-        // A concurrent Stop creates/patches the same identity, so it fences delayed starts.
-        K.Sandbox? saved = await _api.GetAsync<K.Sandbox>(Sandboxes(session) + "/" + name, token);
-        if (saved?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Suspended) await _api.DeleteAsync(Core(session) + "/secrets/" + name, token);
+        if (await _api.GetAsync<K.PersistentVolumeClaim>(Core(session) + "/persistentvolumeclaims/" + Source(session).Volume, token) is null)
+            throw new IOException("Saved workspace is unavailable.");
     }
+
     public async Task<string> ObserveAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
@@ -58,11 +43,7 @@ public sealed class InspectionHost : IInspectionHost
             return sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Running ? "Pending" : "Missing";
         }
         string phase = pod.Status?.Phase ?? "Pending";
-        if (phase == "Running")
-        {
-            await _api.DeleteAsync(Core(session) + "/secrets/" + name, token);
-            return "Running";
-        }
+        if (phase == "Running") return "Running";
         if (phase is "Failed" or "Succeeded") return "Failed";
         if (pod.Status?.InitContainerStatuses is { } statuses)
             foreach (K.ContainerStatus status in statuses)
@@ -74,49 +55,19 @@ public sealed class InspectionHost : IInspectionHost
         string name = Name(session.Id);
         await _api.CreateAsync(Sandboxes(session), Manifest(session, true), token);
         await _api.PatchAsync(Sandboxes(session) + "/" + name, SuspendPatch(), token);
-        await _api.DeleteAsync(Core(session) + "/secrets/" + name, token);
     }
     public K.Sandbox Manifest(InspectionAllocation session, bool suspended)
     {
         string name = Name(session.Id);
-        bool restore = session.CheckpointId is not null;
         var volumes = new List<K.SandboxSpecPodTemplateSpecVolumesItem>
         {
             new()
             {
                 Name = "workspace",
-                PersistentVolumeClaim = restore ? null : new() { ClaimName = Source(session).Volume, ReadOnly = true },
-                EmptyDir = restore ? new() { SizeLimit = "4Gi" } : null
+                PersistentVolumeClaim = new() { ClaimName = Source(session).Volume, ReadOnly = true }
             },
             new() { Name = "temporary", EmptyDir = new() { SizeLimit = "128Mi" } }
         };
-        if (restore) volumes.Add(new() { Name = "restore", Secret = new() { SecretName = name } });
-
-        List<K.SandboxSpecPodTemplateSpecInitContainersItem>? initContainers = restore ?
-        [
-            new()
-            {
-                Name = "restore", Image = _options.Image,
-                Command = ["dotnet", "Goblin.Web.dll", "--inspection-restore"],
-                SecurityContext = new()
-                {
-                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
-                    Capabilities = new() { Drop = ["ALL"] }
-                },
-                Resources = new()
-                {
-                    Requests = new() { ["cpu"] = "10m", ["memory"] = "32Mi" },
-                    Limits = new() { ["cpu"] = "500m", ["memory"] = "512Mi" }
-                },
-                VolumeMounts =
-                [
-                    new() { Name = "workspace", MountPath = "/workspace", ReadOnly = false },
-                    new() { Name = "temporary", MountPath = "/tmp" },
-                    new() { Name = "restore", MountPath = "/run/restore", ReadOnly = true }
-                ]
-            }
-        ] : null;
-
         return new K.Sandbox
         {
             ApiVersion = "agents.x-k8s.io/v1beta1",
@@ -140,7 +91,6 @@ public sealed class InspectionHost : IInspectionHost
                             RunAsNonRoot = true,
                             RunAsUser = 1000,
                             RunAsGroup = 1000,
-                            FsGroup = restore ? 1000 : null,
                             SeccompProfile = new() { Type = "RuntimeDefault" }
                         },
                         Containers =
@@ -166,7 +116,6 @@ public sealed class InspectionHost : IInspectionHost
                                 ]
                             }
                         ],
-                        InitContainers = initContainers,
                         Volumes = volumes
                     }
                 }
@@ -178,19 +127,4 @@ public sealed class InspectionHost : IInspectionHost
     {
         Spec = new() { OperatingMode = K.SandboxSuspendPatchSpecOperatingMode.Suspended }
     };
-    public static async Task<int> RestoreAsync()
-    {
-        try
-        {
-            using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-            client.DefaultRequestHeaders.Add("X-Goblin-Inspection", (await File.ReadAllTextAsync("/run/restore/capability")).Trim());
-            using HttpResponseMessage response = await client.GetAsync((await File.ReadAllTextAsync("/run/restore/url")).Trim(), HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-            string file = "/tmp/workspace.tar.gz";
-            await using (FileStream output = File.Create(file)) await response.Content.CopyToAsync(output);
-            WorkspaceFiles.Unpack(file, "/workspace"); File.Delete(file);
-            return 0;
-        }
-        catch { Console.Error.WriteLine("Workspace restoration needs attention."); return 1; }
-    }
 }

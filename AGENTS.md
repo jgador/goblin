@@ -16,6 +16,9 @@ The implemented boundary and its current limitations are documented in
 - PostgreSQL owns durable history; Wolverine coordinates delivery. Commit state
   and dispatch intent atomically. Core claim checks require database concurrency
   enforcement and do not by themselves provide exactly-once external execution.
+- Workspace files remain on the Work PVC. Never store filesystem archives in
+  PostgreSQL; Git checkpoint records contain provenance metadata only. Suspending
+  compute does not require archiving or authorize deleting the PVC.
 - HTTP translates requests and failures; it must not own durable execution.
   Keep credentials and raw upstream errors out of public views and Work history.
 - Follow the four behavioral boundaries and their compatibility/recovery

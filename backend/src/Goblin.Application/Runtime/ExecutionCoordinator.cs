@@ -33,7 +33,7 @@ public sealed class ExecutionCoordinator
             if ((await _failures.ReadAsync(token)).Any(x => x.AttemptId == command.AttemptId)) return;
             using IServiceScope scope = _scopes.CreateScope();
             claimed = await scope.ServiceProvider.GetRequiredService<WorkStore>().ClaimAsync(command,
-                _host.EnvironmentFor(command.WorkId, command.AttemptId),
+                _host.EnvironmentFor,
                 target => _host.Capabilities.Any(x => x.Runtime == target.Runtime &&
                     (target.Repository is null ? x.TextExecution : x.RepositoryExecution)), token);
             if (claimed is null) return;
@@ -91,14 +91,17 @@ public sealed class ExecutionCoordinator
         }
         using (IServiceScope scope = _scopes.CreateScope())
         {
+            WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
+            string[] repositories = observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.Repository is null
+                ? await store.RepositorySuggestionsAsync(work, token) : [];
             long decisionId = observation.Kind is ObservationKind.InputRequired or ObservationKind.Paused
                 ? await scope.ServiceProvider.GetRequiredService<IdentityStore>().NextEventAsync(token) : 0;
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(work.Id, current =>
+            await store.MutateAsync(work.Id, current =>
             {
                 ExecutionAttempt? a = current.CurrentAttempt;
                 if (a is null || a.Id != attempt.Id || a.OwnerId != attempt.OwnerId || observation.TurnNumber != a.TurnNumber ||
                     a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled) return;
-                if (a.Status == AttemptStatus.Waiting && observation.Kind is ObservationKind.Paused or ObservationKind.InputRequired or ObservationKind.Pending) return;
+                if (a.Status == AttemptStatus.Waiting && observation.Kind is ObservationKind.Paused or ObservationKind.InputRequired or ObservationKind.Pending or ObservationKind.WorkspaceRequired) return;
                 DateTimeOffset now = DateTimeOffset.UtcNow;
                 if (a.StartedAt is null && observation.Session is not null)
                     current.ExecutionStarted(a.Id, a.OwnerId!.Value, observation.Session, now);
@@ -117,7 +120,11 @@ public sealed class ExecutionCoordinator
                             current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
                         break;
                     case ObservationKind.WorkspaceRequired:
-                        current.RequireRepositoryExecution(a.Id, a.OwnerId!.Value, now);
+                        if (a.Status == AttemptStatus.CancellationRequested && a.Target.Repository is null)
+                            current.ConfirmExecutionStopped(a.Id, a.OwnerId!.Value, now);
+                        else if (a.Target.Repository is null)
+                            current.RequestRepositorySetupFromExecution(a.Id, a.OwnerId!.Value, repositories, now);
+                        else current.RequireRepositoryExecution(a.Id, a.OwnerId!.Value, now);
                         break;
                     case ObservationKind.Paused:
                         current.PauseForInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, observation.ReleaseWorkspace, now);
@@ -149,9 +156,11 @@ public sealed class ExecutionCoordinator
             }, token);
         }
         if (observation.Kind is ObservationKind.Result or ObservationKind.InputRequired or ObservationKind.Failed or ObservationKind.Stopped ||
-            observation.Kind == ObservationKind.Paused && observation.ReleaseWorkspace)
+            observation.Kind == ObservationKind.Paused && observation.ReleaseWorkspace ||
+            observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.Repository is null)
             await CleanupAsync(work, token);
-        if (observation.Kind == ObservationKind.WorkspaceRequired) await _host.CleanupAsync(work, token);
+        if (observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.Repository is not null)
+            await _host.CleanupAsync(work, token);
     }
 
     private async Task CleanupAsync(WorkSnapshot work, CancellationToken token)

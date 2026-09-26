@@ -333,6 +333,14 @@ and build again. New tables need primary keys for normal tracked EF writes.
 To check reproducibility, scaffold twice against an unchanged database. The
 second pass should produce no additional diff in `Generated/`.
 
+## Workspace storage boundary
+
+PostgreSQL stores Work conversations, lifecycle history, Git commit metadata, and
+inspection records. `workspace_checkpoints` contains no filesystem payload or
+archive digest. Workspace files stay on the Work PVC, and inspection reads that
+volume. Never add workspace archive bytes to PostgreSQL. See
+[workspace lifecycle](workspace-lifecycle.md).
+
 ## Application configuration and verification
 
 `Goblin.Web` uses the application connection from its published configuration or

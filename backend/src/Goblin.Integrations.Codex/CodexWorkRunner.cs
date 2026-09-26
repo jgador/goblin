@@ -89,14 +89,17 @@ public sealed class CodexWorkRunner
                     "Do not claim approval or completion on behalf of the user. " +
                     "Set releaseWorkspace based on whether this conversation still needs repository compute. " +
                     "Use false when continuing interactive investigation needs the existing workspace, true when waiting for review, longer human input, or no further file access. " +
-                    "A release request is only intent; Goblin verifies and saves a recoverable checkpoint before releasing compute. Respect an explicit request to keep the workspace open. " +
+                    "A release request suspends compute while preserving files on this Work's persistent volume. PostgreSQL stores conversation and Git provenance, never workspace file archives. Respect an explicit request to keep the workspace open. " +
                     (repositoryChanges ? RepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
                         "This Work's workspace can contain edits and local commits from earlier attempts. Inspect git status and git diff before editing; preserve unfinished changes and use the supplied Work context to continue. " +
                         "Commit locally and use goblin-github publish to publish the branch; use goblin-github pull-request to open its draft PR after publishing. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
                         "Use only the supplied context. Do not call tools, inspect files, browse, or run commands. " +
-                        (work.Attempts[^1].ReasoningOnly ? "If the latest request requires inspecting or changing repository files, return kind workspace with a short reason. Otherwise answer or ask clarifying questions using the saved Work context. " : ""))
+                        "If the latest request requires cloning, inspecting, running, or changing repository files, return kind workspace with a short reason. " +
+                        "Goblin will collect repository selection, Git identity, and authorization, then provision the workspace. " +
+                        "Do not ask the user to attach a checkout, enable network access, or change filesystem permissions. " +
+                        "Otherwise answer or ask clarifying questions using the saved Work context.")
             }, token);
             lock (gate) threadId = thread.Thread.Id;
             var contextFields = new Dictionary<string, object?>
@@ -111,7 +114,7 @@ public sealed class CodexWorkRunner
             string context = JsonSerializer.Serialize(contextFields);
             var properties = new Dictionary<string, object>
             {
-                ["kind"] = new { type = "string", @enum = work.Attempts[^1].ReasoningOnly ? new[] { "result", "input", "workspace" } : ["result", "input"] },
+                ["kind"] = new { type = "string", @enum = !repositoryChanges ? new[] { "result", "input", "workspace" } : ["result", "input"] },
                 ["text"] = new { type = "string" },
                 ["releaseWorkspace"] = new { type = "boolean" }
             };
@@ -158,7 +161,7 @@ public sealed class CodexWorkRunner
             using JsonDocument output = JsonDocument.Parse(text);
             string? kind = output.RootElement.GetProperty("kind").GetString();
             string? body = output.RootElement.GetProperty("text").GetString();
-            if (string.IsNullOrWhiteSpace(body) || (kind is not ("result" or "input") && !(kind == "workspace" && work.Attempts[^1].ReasoningOnly)))
+            if (string.IsNullOrWhiteSpace(body) || (kind is not ("result" or "input") && !(kind == "workspace" && !repositoryChanges)))
                 throw new IntegrationFailure("invalid_work_result", "The runtime returned an invalid result.");
             RepositorySetup[]? setups = null;
             if (repositoryChanges && output.RootElement.TryGetProperty("setup", out JsonElement setup))

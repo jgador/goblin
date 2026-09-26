@@ -4,7 +4,7 @@ namespace Goblin.Core.Work;
 
 public enum WorkStatus { Ready, Queued, InProgress, Cancelling, NeedsAttention, Completed, Cancelled }
 public enum AttemptStatus { Queued, Starting, Running, CancellationRequested, Succeeded, Failed, Uncertain, Cancelled, Waiting }
-public enum AttentionReason { InputRequired, ResultReview, Failure, UncertainExecution, CleanupRequired }
+public enum AttentionReason { InputRequired, ResultReview, Failure, UncertainExecution, CleanupRequired, RepositoryRequired }
 
 // Integrations translate upstream errors into these categories. Raw exceptions,
 // response bodies, and credentials are not inputs to a failure transition.
@@ -20,7 +20,8 @@ public enum WorkEventKind
     ExecutionFailed, ExecutionUncertain, ExecutionStopped, RetryRequested,
     InputRequested, InputProvided, ResultProposed, ChangesRequested, ResultApproved,
     CancellationRequested, Cancelled, ContextAdded, ProgressReported, ArtifactRecorded,
-    CleanupRequired, CleanupFailed, CleanupCompleted, ExecutionContinued, WorkspaceSaved, WorkspaceReleased
+    CleanupRequired, CleanupFailed, CleanupCompleted, ExecutionContinued, WorkspaceSaved, WorkspaceReleased,
+    RepositoryRequested, RepositoryAuthorized
 }
 
 public enum WorkRule

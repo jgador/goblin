@@ -3,7 +3,7 @@ using Goblin.Core.Work;
 
 namespace Goblin.Application.Work;
 
-public enum WorkAction { Create, Assign, Execute, Retry, Cancel, Answer, RequestChanges, Approve, AddContext, Reconcile }
+public enum WorkAction { Create, Assign, Execute, Retry, Cancel, Answer, RequestChanges, Approve, AddContext, Reconcile, AuthorizeRepository }
 public sealed record WorkCommand(long CommandId, long WorkId, WorkAction Action,
     long? ExpectedVersion = null, string? Text = null, long? AgentId = null,
     long? AttemptId = null, long? DecisionId = null, RepositoryChange? Repository = null,

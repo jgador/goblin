@@ -6,7 +6,7 @@ conversations, and attempt projections in PostgreSQL and dispatches through
 Wolverine. Runtime adapters and the UI consume Goblin-owned contracts.
 
 The [workspace lifecycle](workspace-lifecycle.md) describes multi-turn attempts,
-verified checkpoints, restoration, and read-only inspection.
+Git checkpoint metadata, persistent PVCs, and read-only inspection.
 
 The [Work-centered workspace](work-centered-ui.md) documents the UI hierarchy,
 its projections of these contracts, and deferred backend/schema capabilities.
@@ -44,6 +44,7 @@ attention. Successful runtime execution also does not complete Work by itself.
 | Attention reason | What must happen next |
 | --- | --- |
 | `InputRequired` | Answer the recorded decision; a paused attempt queues its next runtime turn. Older completed interactions become Ready. |
+| `RepositoryRequired` | Select an enabled repository and Git author identity, then explicitly authorize repository access for this Work. No repository execution is dispatched before authorization. |
 | `ResultReview` | Approve the specific result or request changes. Approval completes Work. |
 | `Failure` | Explicitly request a retry, or cancel Work. A retry records a new attempt. |
 | `UncertainExecution` | Reconcile the existing execution before allowing a retry, or request cancellation and await confirmation. |
@@ -140,6 +141,28 @@ tests exercise persisted decisions and approvals. Aggregate tests do not replace
 these integration checks or authenticated runtime validation.
 
 ## Repository authority
+
+An ordinary Start work request with an explicit GitHub URL or enabled
+`owner/repository` reference saves a repository setup request before dispatch.
+The reference suggests a repository; it does not grant access. Multiple matches
+remain a choice for the user. Other requests can begin as conversations: when
+the runtime needs repository files, it reports that requirement and Goblin
+presents the same setup step. This also supports repository references in an
+answer and a direct repository action on existing waiting conversations.
+
+`AuthorizeRepository` checks current enablement and the GitHub connection,
+binds a fresh grant, and atomically queues a repository attempt for the same
+Work. It preserves the requested runtime/model and the earlier attempt's
+target, session, and decisions. Cleanup must be confirmed before this handoff;
+failures and uncertain execution still require their existing retry and
+reconciliation actions. Ordinary answers within an existing repository attempt
+continue that attempt as before. Repository setup state lives in the Work's
+PostgreSQL JSON snapshot; no separate database schema change is required.
+
+This resolves the repository setup dead end in issue #9. General natural-language
+branch names, push policies, and PR delivery intent from issue #8 remain outside
+this handoff. Repository settings and the explicit authorization action remain
+the authority for access.
 
 Repository attempts capture their GitHub connection generation, account identity,
 repository ID, branch and policy in `RepositoryGrant`. Work inherits enabled

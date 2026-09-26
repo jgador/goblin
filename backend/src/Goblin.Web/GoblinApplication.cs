@@ -108,14 +108,12 @@ public static class GoblinApplication
             builder.Services.AddWorkApplication();
             var workspaceLimits = new WorkspaceLimits(
                 builder.Configuration.GetValue("GOBLIN_MAX_SANDBOXES", 2),
-                builder.Configuration.GetValue<long>("GOBLIN_MAX_CHECKPOINT_BYTES", 134217728),
-                builder.Configuration.GetValue<long>("GOBLIN_MAX_WORKSPACE_STORAGE_BYTES", 2147483648),
                 builder.Configuration.GetValue("GOBLIN_MAX_CACHED_WORKSPACES", 4));
-            if (workspaceLimits.MaxSandboxes < 1 || workspaceLimits.MaxArchiveBytes < 1 || workspaceLimits.MaxStorageBytes < workspaceLimits.MaxArchiveBytes || workspaceLimits.MaxCachedVolumes < 1)
+            if (workspaceLimits.MaxSandboxes < 1 || workspaceLimits.MaxCachedVolumes < 1)
                 throw new InvalidOperationException("Invalid workspace capacity configuration.");
             builder.Services.AddSingleton(workspaceLimits);
-            builder.Services.AddSingleton<WorkspaceArchive>();
-            builder.Services.AddSingleton<IWorkspaceArchive>(services => services.GetRequiredService<WorkspaceArchive>());
+            builder.Services.AddSingleton<WorkspaceCheckpoints>();
+            builder.Services.AddSingleton<IWorkspaceCheckpoints>(services => services.GetRequiredService<WorkspaceCheckpoints>());
             IExecutionHost executionHost = new LocalTextHost(new(
                 Path.Combine(workspace.DataDirectory, "executions"), workspace.CodexHome, runtimeOptions.Command,
                 typeof(GoblinApplication).Assembly.Location));
@@ -141,7 +139,7 @@ public static class GoblinApplication
                 builder.Services.AddSingleton<InspectionCoordinator>();
                 builder.Services.AddHostedService(services => services.GetRequiredService<InspectionCoordinator>());
                 builder.Services.AddSingleton<IExecutionHost>(services => options.ExecutionHost ?? new SandboxHost(kubernetes, sandboxOptions,
-                    executionHost, services.GetRequiredService<IRepositoryBroker>(), services.GetRequiredService<IWorkspaceArchive>(), workspaceLimits));
+                    executionHost, services.GetRequiredService<IRepositoryBroker>(), services.GetRequiredService<IWorkspaceCheckpoints>(), workspaceLimits));
             }
             else builder.Services.AddSingleton(options.ExecutionHost ?? executionHost);
             builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(Path.Combine(workspace.DataDirectory, "dispatch-failures")));
@@ -206,12 +204,6 @@ public static class GoblinApplication
             {
                 HttpRequest request = context.Request;
                 string path = request.Path.Value ?? "/";
-                if (path.StartsWith("/internal/workspaces/", StringComparison.Ordinal))
-                {
-                    if (!repositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin") || !HttpMethods.IsGet(request.Method))
-                        throw new PublicError("not_found", "This endpoint does not exist.", 404);
-                    await next(context); return;
-                }
                 if (path.StartsWith("/internal/repository/", StringComparison.Ordinal))
                 {
                     if (!repositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin"))
@@ -350,41 +342,36 @@ public static class GoblinApplication
                 await store.SaveAsync(attemptId, context.Request.Body, context.RequestAborted);
                 return Results.NoContent();
             });
-            app.MapPost("/internal/repository/{attemptId:long}/checkpoint", async (long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceArchive archive) =>
-                Results.Json(await archive.SaveAsync(attemptId, int.Parse(context.Request.Headers["X-Goblin-Turn"].ToString(), System.Globalization.CultureInfo.InvariantCulture),
-                    context.Request.Headers["X-Goblin-Commit"].ToString(), context.Request.Body, broker, context.RequestAborted), ExecutionFiles.Json));
-            app.MapGet("/internal/repository/{attemptId:long}/restore", async (long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceArchive archive, CancellationToken token) =>
+            app.MapPost("/internal/repository/{attemptId:long}/checkpoint", async (long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceCheckpoints checkpoints) =>
             {
-                WorkSnapshot work = await broker.CurrentAsync(attemptId, token);
-                WorkspaceCheckpoint? saved = await archive.LatestAsync(work.Id, work.Attempts[^1].Target.Repository!.Repository, token);
-                if (saved is null) return Results.NoContent();
-                context.Response.Headers["X-Goblin-Checkpoint"] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(saved, ExecutionFiles.Json)));
-                return Results.File(await archive.ReadAsync(work.Id, saved.Id, token), "application/gzip");
+                Dictionary<string, JsonElement> body = await ReadBodyAsync(context.Request);
+                WorkspaceCheckpointWrite request = JsonSerializer.Deserialize<WorkspaceCheckpointWrite>(JsonSerializer.Serialize(body), ExecutionFiles.Json)
+                    ?? throw new ApplicationFailure("invalid_command");
+                return Results.Json(await checkpoints.SaveAsync(attemptId, request.TurnNumber, request.CommitSha, broker, context.RequestAborted), ExecutionFiles.Json);
             });
-            app.MapGet("/internal/workspaces/{id:long}", async (long id, HttpContext context, InspectionStore sessions, WorkspaceArchive archive, CancellationToken token) =>
-            {
-                InspectionAllocation session = await sessions.AuthorizeRestoreAsync(id, context.Request.Headers["X-Goblin-Inspection"].ToString(), token);
-                return Results.File(await archive.ReadAsync(session.WorkId, session.CheckpointId!.Value, token), "application/gzip");
-            });
-            app.MapGet("/api/work/{id:long}/workspace", async (long id, WorkspaceArchive archive, InspectionStore sessions, WorkStore store, CancellationToken token) =>
+            app.MapGet("/api/work/{id:long}/workspace", async (long id, WorkspaceCheckpoints checkpoints, InspectionStore sessions, WorkStore store, CancellationToken token) =>
             {
                 await store.GetAsync(id, token);
-                return WorkResponse(new { checkpoints = await archive.ListAsync(id, token), sessions = await sessions.ListAsync(id, token), terminalAvailable = repositoryListener });
+                return WorkResponse(new { checkpoints = await checkpoints.ListAsync(id, token), sessions = await sessions.ListAsync(id, token), terminalAvailable = repositoryListener });
             });
-            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:long}/files", async (long id, long checkpoint, string? path, WorkspaceArchive archive, CancellationToken token) =>
-                Results.Json(WorkspaceArchive.Inspect(await archive.ReadAsync(id, checkpoint, token), path)));
-            app.MapGet("/api/work/{id:long}/workspace/{checkpoint:long}/download", async (long id, long checkpoint, WorkspaceArchive archive, CancellationToken token) =>
-                Results.File(await archive.ReadAsync(id, checkpoint, token), "application/gzip", "work-" + id + "-workspace.tar.gz"));
             if (repositoryListener)
             {
                 app.MapPost("/api/work/{id:long}/workspace/sessions", async (long id, HttpContext context, InspectionStore sessions) =>
                 {
                     var body = (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
                     InspectionRequest request = JsonSerializer.Deserialize<InspectionRequest>(JsonSerializer.Serialize(body), WorkStore.Json)!;
-                    return WorkResponse(await sessions.OpenAsync(id, request.Id, request.AttemptId, request.CheckpointId, CancellationToken.None));
+                    return WorkResponse(await sessions.OpenAsync(id, request.Id, request.AttemptId, CancellationToken.None));
                 });
                 app.MapPost("/api/work/{id:long}/workspace/sessions/{session:long}/stop", async (long id, long session, InspectionStore sessions) =>
                 { await sessions.StopAsync(id, session, CancellationToken.None); return Results.NoContent(); });
+                app.MapGet("/api/work/{id:long}/workspace/sessions/{session:long}/files", async (long id, long session, string? path, InspectionStore sessions, KubernetesApi api, CancellationToken token) =>
+                {
+                    await sessions.RequireAvailableAsync(id, session, token);
+                    InspectionAllocation allocation = await sessions.GetAsync(session, token);
+                    JsonElement files = await InspectionFiles.ReadAsync(api, allocation, path, token);
+                    await sessions.RequireAvailableAsync(id, session, token);
+                    return Results.Json(files);
+                });
                 app.MapGet("/api/work/{id:long}/workspace/sessions/{session:long}/terminal", async (long id, long session, HttpContext context, InspectionStore sessions, KubernetesApi api) =>
                     await WorkspaceTerminal.ConnectAsync(context, id, session, sessions, api, workspace));
             }
@@ -538,4 +525,4 @@ public static class GoblinApplication
     }
 }
 
-public sealed record InspectionRequest(long Id, long AttemptId, long? CheckpointId);
+public sealed record InspectionRequest(long Id, long AttemptId);

@@ -101,6 +101,19 @@ public sealed class SandboxNamingTests
     }
 
     [Fact]
+    public void ConversationClaimsRecordTheTextHostUntilRepositoryAccessIsAuthorized()
+    {
+        using var api = new KubernetesApi("http://127.0.0.1:1");
+        var text = new LocalTextHost(new("/unused", "/unused", "codex", "/unused"));
+        var host = new SandboxHost(api, new("agents", "image", "/private", "http://repository"), text, new Broker());
+        var work = new WorkItem(101, "Discuss a change", DateTimeOffset.UtcNow);
+        work.Assign(1, DateTimeOffset.UtcNow);
+        work.QueueExecution(12, new("codex", 1), DateTimeOffset.UtcNow);
+        Assert.Equal("text/12", host.EnvironmentFor(work.Snapshot()));
+        Assert.Equal("k8s/agents/work-101", host.EnvironmentFor(Work("k8s/agents/work-101")));
+    }
+
+    [Fact]
     public void AttemptsAndRevisionsKeepTheWorkSandboxAndVolume()
     {
         using var api = new KubernetesApi("http://127.0.0.1:1");

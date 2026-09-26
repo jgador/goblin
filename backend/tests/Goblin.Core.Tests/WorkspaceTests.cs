@@ -18,11 +18,16 @@ public sealed class WorkspaceTests
         return work;
     }
     [Fact]
-    public void ReleaseRequiresASavedCheckpoint()
+    public void SuspensionRetainsWorkspaceWithoutAFileArchive()
     {
         WorkItem work = Running();
-        Assert.Throws<WorkRuleException>(() => work.PauseForInput(1, 10, 11, "Which database?", true, Now));
-        Assert.Equal(AttemptStatus.Running, work.CurrentAttempt!.Status);
+        WorkWorkspace workspace = work.Workspace!;
+        work.PauseForInput(1, 10, 11, "Which database?", true, Now);
+        work.RequireCleanup(1, 10, Now);
+        work.ConfirmCleanup(1, 10, Now);
+        Assert.Equal(AttemptStatus.Waiting, work.CurrentAttempt!.Status);
+        Assert.Null(work.CurrentAttempt.CheckpointId);
+        Assert.Equal(workspace, WorkItem.Restore(work.Snapshot()).Workspace);
     }
     [Fact]
     public void RetainedWorkspaceContinuesSameAttemptAndPreservesTurnOwnership()
@@ -94,7 +99,6 @@ public sealed class WorkspaceTests
         work.RequireCleanup(1, 10, Now);
         work.ReportCleanupFailure(1, 10, Now);
         Assert.Throws<WorkRuleException>(() => work.RetryExecution(2, work.CurrentAttempt!.Target, Now));
-        Assert.False(work.CanDiscardWorkspace(1, 1));
         work.ConfirmCleanup(1, 10, Now);
         work.RetryExecution(2, work.CurrentAttempt!.Target, Now);
         work.TryClaimExecution(2, 20, "another-host", Now);
@@ -103,15 +107,12 @@ public sealed class WorkspaceTests
         Assert.Equal(original.EnvironmentReference, restored.CurrentAttempt!.EnvironmentReference);
         Assert.Equal(2, restored.Workspace.AttemptId);
         Assert.Throws<WorkRuleException>(() => restored.ConfirmCleanup(1, 10, Now));
-        Assert.False(restored.CanDiscardWorkspace(2, 1));
         restored.ProposeResult(2, 20, "Ready", Now);
         restored.RequireCleanup(2, 20, Now);
         Assert.Throws<WorkRuleException>(() => restored.ApproveResult(2, Now));
         restored.ConfirmCleanup(2, 20, Now);
-        Assert.False(restored.CanDiscardWorkspace(2, 1));
         restored.ApproveResult(2, Now);
-        Assert.True(restored.CanDiscardWorkspace(2, 1));
-        Assert.False(restored.CanDiscardWorkspace(1, 1));
+        Assert.Equal(original.EnvironmentReference, restored.Workspace!.EnvironmentReference);
     }
 
     [Fact]

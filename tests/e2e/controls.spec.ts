@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // UI edge cases use fixtures; live Codex and repository journeys are checked separately.
-async function setup(page: Page, assigned = true) {
+async function setup(page: Page, assigned = true, waiting = false) {
     const commands: unknown[] = [];
     await page.route("**/api/**", (route) => {
         const path = new URL(route.request().url()).pathname;
@@ -51,11 +51,28 @@ async function setup(page: Page, assigned = true) {
                     work: {
                         id: "1",
                         objective: "Review the release checklist",
-                        status: "Ready",
+                        status: waiting ? "NeedsAttention" : "Ready",
+                        attention: waiting ? { reason: "InputRequired" } : null,
                         agentId: assigned ? "1" : null,
-                        attempts: [],
+                        attempts: waiting
+                            ? [
+                                  {
+                                      id: "10",
+                                      status: "Waiting",
+                                      target: { runtime: "codex" },
+                                  },
+                              ]
+                            : [],
                         history: [],
-                        decisions: [],
+                        decisions: waiting
+                            ? [
+                                  {
+                                      id: "20",
+                                      question:
+                                          "Please provide repository contents",
+                                  },
+                              ]
+                            : [],
                         results: [],
                         artifacts: [],
                     },
@@ -398,4 +415,32 @@ test("Settings keeps one content scroller and exposes repository loading without
     ).toBeInViewport();
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
+});
+
+test("a waiting conversation can authorize repository access without creating another Work", async ({
+    page,
+}) => {
+    const commands = await setup(page, true, true);
+    await page.locator("#repository-options summary").click();
+    await page
+        .getByLabel("Repository", { exact: true })
+        .selectOption("owner/project");
+    await page.getByLabel("Agent Git email").fill("agent@example.com");
+    await page
+        .getByRole("button", { name: "Authorize & continue", exact: true })
+        .click();
+    await expect
+        .poll(() => commands)
+        .toContainEqual(
+            expect.objectContaining({
+                action: "AuthorizeRepository",
+                workId: "1",
+                expectedVersion: "1",
+                repository: {
+                    repository: "owner/project",
+                    gitAuthorName: "Goblin",
+                    gitAuthorEmail: "agent@example.com",
+                },
+            }),
+        );
 });

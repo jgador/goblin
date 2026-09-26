@@ -208,6 +208,12 @@ public sealed partial class WorkItem
 
     public void AnswerDecision(long decisionId, string answer, DateTimeOffset now)
     {
+        RecordAnswer(decisionId, answer, now);
+        if (CurrentAttempt?.Status == AttemptStatus.Waiting) ContinueExecution(now);
+    }
+
+    private void RecordAnswer(long decisionId, string answer, DateTimeOffset now)
+    {
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         string input = RequireText(answer);
         Require(Status == WorkStatus.NeedsAttention && Attention?.Reason == AttentionReason.InputRequired,
@@ -217,7 +223,6 @@ public sealed partial class WorkItem
         _decisions[^1] = _decisions[^1] with { Answer = input, AnsweredAt = now };
         Status = WorkStatus.Ready;
         Attention = null;
-        if (CurrentAttempt?.Status == AttemptStatus.Waiting) ContinueExecution(now);
         Record(WorkEventKind.InputProvided, now, CurrentAttempt!.Id, decisionId: decisionId, text: input);
     }
 

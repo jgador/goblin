@@ -530,7 +530,7 @@ test("the scoped composer retains command identity and draft until the selected 
     expect(commands[1]).toEqual(commands[0]);
 });
 
-test("saved workspace inspection needs no compute and renders files as text", async ({
+test("retained workspace inspection reads files through an available session and renders text", async ({
     page,
 }) => {
     await workspace(page);
@@ -550,10 +550,11 @@ test("saved workspace inspection needs no compute and renders files as text", as
                     createdAt: "2026-09-23T00:00:00Z",
                 },
             ],
-            sessions: [],
+            sessions: [{ id: "42", attemptId: "1", state: "Available" }],
             terminalAvailable: true,
         };
-        if (url.pathname.endsWith("/files"))
+        if (url.pathname.endsWith("/files")) {
+            expect(url.pathname).toContain("/sessions/42/files");
             json = url.searchParams.has("path")
                 ? {
                       path: "repository/report.txt",
@@ -563,6 +564,7 @@ test("saved workspace inspection needs no compute and renders files as text", as
                       files: [{ path: "repository/report.txt", size: 80 }],
                       truncated: false,
                   };
+        }
         return route.fulfill({ json });
     });
     await page.goto("/work?item=1");
@@ -613,7 +615,7 @@ test("inspection reserves a bigint ID and reuses it after an unconfirmed open", 
                 : route.fulfill({ json: {} });
         }
         if (url.pathname.endsWith("/files")) {
-            expect(url.pathname).toContain(`/${checkpoint}/files`);
+            expect(url.pathname).toContain(`/sessions/${session}/files`);
             return route.fulfill({ json: { files: [], truncated: false } });
         }
         return route.fulfill({
@@ -634,7 +636,6 @@ test("inspection reserves a bigint ID and reuses it after an unconfirmed open", 
                               {
                                   id: session,
                                   attemptId: "1",
-                                  checkpointId: checkpoint,
                                   state: "Queued",
                               },
                           ]
@@ -654,7 +655,7 @@ test("inspection reserves a bigint ID and reuses it after an unconfirmed open", 
     await expect(dialog).toContainText("Waiting for capacity");
     expect(reservations).toBe(1);
     expect(opens).toEqual([
-        { id: session, attemptId: "1", checkpointId: checkpoint },
-        { id: session, attemptId: "1", checkpointId: checkpoint },
+        { id: session, attemptId: "1" },
+        { id: session, attemptId: "1" },
     ]);
 });

@@ -26,6 +26,7 @@ public interface IExecutionHost
 {
     RuntimeCapabilities[] Capabilities { get; }
     string EnvironmentFor(long workId, long attemptId);
+    string EnvironmentFor(WorkSnapshot work) => EnvironmentFor(work.Id, work.Attempts[^1].Id);
     Task StartAsync(WorkSnapshot work, CancellationToken token);
     Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token);
     Task CleanupAsync(WorkSnapshot work, CancellationToken token);
