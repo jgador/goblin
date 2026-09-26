@@ -12,7 +12,15 @@ export type Attempt = {
         requestedEffort?: string;
         repository?: {
             repository: string;
-            grant?: { login: string; branch: string };
+            gitAuthorName?: string;
+            gitAuthorEmail?: string;
+            grant?: {
+                login: string;
+                branch: string;
+                baseBranch: string;
+                allowPush: boolean;
+                allowPullRequest: boolean;
+            };
         };
     };
     session?: { model?: string };
@@ -41,6 +49,13 @@ export type Work = {
     repositoryRequest?: {
         repositories: string[];
         target: Attempt["target"];
+    };
+    repositoryAuthorization?: {
+        id: string;
+        status: "Pending" | "Authorized" | "Denied" | "Invalidated";
+        target: Attempt["target"];
+        enableRepository: boolean;
+        retry: boolean;
     };
     attempts: Attempt[];
     history: {

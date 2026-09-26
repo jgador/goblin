@@ -47,6 +47,7 @@ public sealed partial class WorkItem
         RequireId(messageId);
         Require(!_messages.Exists(x => x.Id == messageId), WorkRule.InvalidValue);
         string input = RequireText(text);
+        InvalidateRepositoryAuthorization(now);
         _messages.Add(new(messageId, input, now));
         Record(WorkEventKind.ContextAdded, now, text: input);
     }
@@ -80,7 +81,8 @@ public sealed partial class WorkItem
     {
         Require(Status == WorkStatus.Ready, WorkRule.InvalidTransition);
         ValidateNewAttempt(attemptId, target);
-        Queue(attemptId, target, now);
+        if (target.Repository?.Grant is not null) PrepareRepositoryAuthorization(attemptId, target, false, false, now);
+        else Queue(attemptId, target, now);
     }
 
     // Only an explicit retry command can leave failure attention. Temporary
@@ -91,8 +93,12 @@ public sealed partial class WorkItem
         Require(Status == WorkStatus.NeedsAttention && Attention?.Reason == AttentionReason.Failure &&
             CurrentAttempt?.Status == AttemptStatus.Failed, WorkRule.InvalidTransition);
         ValidateNewAttempt(attemptId, target);
-        Record(WorkEventKind.RetryRequested, now, CurrentAttempt!.Id);
-        Queue(attemptId, target, now);
+        if (target.Repository?.Grant is not null) PrepareRepositoryAuthorization(attemptId, target, false, true, now);
+        else
+        {
+            Record(WorkEventKind.RetryRequested, now, CurrentAttempt!.Id);
+            Queue(attemptId, target, now);
+        }
     }
 
     // Commit the successful claim before launching anything externally. Every
@@ -103,6 +109,9 @@ public sealed partial class WorkItem
         string environment = RequireText(environmentReference);
         if (CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != attemptId ||
             Status != WorkStatus.Queued) return false;
+        if (attempt.Target.Repository?.Grant is { PolicyVersion: 2 } &&
+            (RepositoryAuthorization is not { Status: RepositoryAuthorizationStatus.Authorized } approval ||
+             approval.Id != attempt.Id || approval.Target != attempt.Target)) return false;
         if (attempt.Target.Repository is { } repository && !attempt.ReasoningOnly)
         {
             environment = Workspace?.EnvironmentReference ?? environment;
@@ -250,6 +259,7 @@ public sealed partial class WorkItem
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         if (Status is WorkStatus.Cancelled or WorkStatus.Cancelling) return;
         Require(Status != WorkStatus.Completed, WorkRule.InvalidTransition);
+        InvalidateRepositoryAuthorization(now);
         ExecutionAttempt? attempt = CurrentAttempt;
         Record(WorkEventKind.CancellationRequested, now, attempt?.Id);
         if (attempt is not null && attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.Uncertain or AttemptStatus.Waiting)

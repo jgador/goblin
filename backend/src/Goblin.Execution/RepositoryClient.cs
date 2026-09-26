@@ -35,7 +35,7 @@ public static class RepositoryClient
     }
     public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, string kind)
     {
-        if (kind is not ("publish" or "pull-request" or "fetch")) throw new IOException("Unsupported repository operation.");
+        if (kind is not ("publish" or "pull-request" or "fetch" or "checkpoint")) throw new IOException("Unsupported repository operation.");
         using HttpClient client = await ClientAsync();
         using HttpResponseMessage reservation = await client.PostAsync($"/internal/repository/{attemptId}/operation-id", null);
         reservation.EnsureSuccessStatusCode();

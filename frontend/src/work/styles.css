@@ -157,6 +157,26 @@ h1, h2, h3, h4, p { margin: 0; }
 .work-setup .field-hint { font-size:12px; color:var(--muted); margin:8px 0; line-height:1.65; }
 .work-setup .field-error { margin:6px 0; }
 .work-setup .text-button { display:inline-flex; align-items:center; gap:6px; padding:4px 0; margin-top:6px; color:#415f32; font-size:12px; }
+.repository-authorization { display: grid; gap: 16px; min-width: 0; font-size: 12px; line-height: 1.7; }
+.repository-authorization header p { color: var(--muted); }
+.repository-authorization .repository-authorization-details { grid-template-columns: 100px minmax(0, 1fr); gap: 8px 16px; }
+.repository-authorization-details dd { color: #4e5c46; }
+.repository-permissions h4 { margin: 0 0 6px; color: #415635; font-size: 12px; font-weight: 600; }
+.repository-permissions ul { margin: 0; padding-left: 18px; }
+.repository-permissions li + li { margin-top: 4px; }
+.repository-authorization-note { padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); }
+.repository-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.repository-actions > button { min-height: 40px; max-width: 100%; margin: 0; overflow-wrap: anywhere; }
+.repository-form { display: grid; gap: 16px; margin: 16px 0 0; }
+.repository-form label { margin-top: 0; font-size: 12px; }
+.repository-form .identity-fields { gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+.repository-form > .repository-actions { padding-top: 4px; }
+@media (max-width: 480px) {
+    .repository-authorization .repository-authorization-details { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    .repository-authorization-details dd + dt { margin-top: 8px; }
+    .repository-actions { flex-direction: column; align-items: stretch; }
+    .repository-actions > button { min-height: 44px; }
+}
 .model-picker { position: relative; flex: none; }
 .model-picker-trigger { display: inline-flex; align-items: center; gap: 6px; max-width: min(250px, calc(100vw - 100px)); min-height: 32px; padding: 5px 9px; border: 1px solid #dbe1d2; border-radius: 9px; background: var(--paper); color: #415635; font-size: 11px; white-space: nowrap; }
 .model-picker-trigger:hover, .model-picker-trigger[aria-expanded="true"] { background: #f0f4e9; }

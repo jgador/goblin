@@ -19,7 +19,7 @@ public sealed class GitHubFailure : Exception
 }
 
 // A private CLI profile, never the host's credentials or configuration.
-public sealed class GitHubConnection : IDisposable
+public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
 {
     private readonly string _directory;
     private readonly string _command;
@@ -141,6 +141,8 @@ public sealed class GitHubConnection : IDisposable
         }
         return await StatusAsync();
     }
+    public async Task<RepositoryAccount?> GetAccountAsync(CancellationToken token) => (await StatusAsync()).Account;
+
     public async Task<RepositoryInfo[]> RepositoriesAsync(int page, CancellationToken token)
     {
         if (page is < 1 or > 1000) throw new GitHubFailure();

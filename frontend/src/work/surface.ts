@@ -181,6 +181,8 @@ const eventNames: Record<string, string> = {
     WorkspaceSaved: "Git checkpoint recorded",
     WorkspaceReleased: "Sandbox suspended",
     InputProvided: "Input provided",
+    RepositoryDenied: "Repository access declined",
+    RepositoryAuthorizationInvalidated: "Repository authorization needs review",
     RepositoryRequested: "Repository access requested",
     RepositoryAuthorized: "Repository access authorized",
     ResultProposed: "Result proposed",

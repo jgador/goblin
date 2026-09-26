@@ -150,7 +150,7 @@ export class WorkWorkspace {
             const toolbar = this.dialog.querySelector(".workspace-toolbar")!;
             if (!toolbar.children.length || changed || sessionChanged) {
                 const checkpoint = data.checkpoints[0];
-                toolbar.innerHTML = `<p>${checkpoint ? `Latest published commit: ${e(checkpoint.commitSha.slice(0, 8))}` : "No published Git checkpoint yet."} Files remain on this Work's volume.</p><button class="secondary" data-workspace="diff" ${selected ? "" : "disabled"}>View changes</button>`;
+                toolbar.innerHTML = `<p>${checkpoint ? `Latest Git checkpoint: ${e(checkpoint.commitSha.slice(0, 8))}` : "No verified Git checkpoint yet."} Files remain on this Work's volume.</p><button class="secondary" data-workspace="diff" ${selected ? "" : "disabled"}>View changes</button>`;
                 this.dialog
                     .querySelector(".workspace-file-list")!
                     .replaceChildren();

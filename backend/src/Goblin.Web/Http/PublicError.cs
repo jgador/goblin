@@ -33,7 +33,7 @@ public sealed class PublicError : Exception
         }),
         ApplicationFailure failure => new(failure.Code, failure.Code switch
         {
-            "workspace_checkpoint_unconfirmed" => "The checkpoint could not be confirmed on GitHub. The local workspace is retained.",
+            "workspace_checkpoint_unconfirmed" => "The Git checkpoint could not be verified. The local workspace is retained.",
             "workspace_unavailable" => "This workspace is unavailable. Check its retained volume and inspection session.",
             "workspace_session_exists" => "A workspace session is already open for this Work.",
             "workspace_file_too_large" => "This file is too large to preview. Use the workspace terminal to inspect it.",
@@ -48,7 +48,11 @@ public sealed class PublicError : Exception
             "reasoning_effort_unavailable" => "The selected reasoning effort is unavailable for this model.",
             "invalid_model_selection" => "Choose a listed model and reasoning effort.",
             "github_connection_in_use" => "GitHub is in use. Open Work to cancel or reconcile queued, active, or cleanup-pending repository work before changing this connection.",
-            "repository_unavailable" => "Enable this repository in Settings and check its GitHub connection before starting work.",
+            "repository_unavailable" => "Check the repository name and connected GitHub account, then review access again.",
+            "repository_requires_new_work" => "This Work already has a repository. Use its full name to continue, or start separate Work for another repository.",
+            "repository_ambiguous" => "More than one repository may match. Enter the full owner/repository name.",
+            "repository_intent_conflict" => "The Git actions conflict. Clarify whether to push or open a PR, and which base branch to use.",
+            "repository_authorization_changed" => "Repository access changed. Review a new authorization request before continuing.",
             "repository_operation_unavailable" => "This repository operation is unavailable. Inspect Work and reconcile its execution.",
             "prompt_in_progress" => "A verification prompt is already running.",
             "work_not_found" => "This work could not be found.",

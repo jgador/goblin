@@ -70,7 +70,7 @@ export function mountGitHub(root: HTMLElement) {
                           `<div class="repository-row"><span>${e(r.name)}</span><button data-github="disable" data-repository="${e(r.name)}" aria-label="Disable ${e(r.name)}">Disable</button></div>`,
                   )
                   .join("") || `<p>No repositories enabled yet.</p>`
-          }<button data-github="browse">Choose repositories</button>${browsing ? `<div class="repository-picker">${available.map((r) => `<div class="repository-row"><span>${e(r.name)}</span><button data-github="enable" data-repository="${e(r.name)}" ${!r.canPush || enabled.some((x) => x.id === r.id && x.enabled) ? "disabled" : ""}>${enabled.some((x) => x.id === r.id && x.enabled) ? "Enabled" : r.canPush ? "Enable" : "Read only"}</button></div>`).join("") || "No repositories available."}${more ? `<button data-github="more">Load more</button>` : ""}</div>` : ""}</div>`
+          }<button data-github="browse">Choose repositories</button>${browsing ? `<div class="repository-picker">${available.map((r) => `<div class="repository-row"><span>${e(r.name)}</span><button data-github="enable" data-repository="${e(r.name)}" ${enabled.some((x) => x.id === r.id && x.enabled) ? "disabled" : ""}>${enabled.some((x) => x.id === r.id && x.enabled) ? "Enabled" : "Enable"}</button></div>`).join("") || "No repositories available."}${more ? `<button data-github="more">Load more</button>` : ""}</div>` : ""}</div>`
                       : `<button class="settings-primary" data-github="connect">Connect GitHub</button><p class="settings-description">Sign in on GitHub with a one-time code. No app registration or token copying is needed.</p>`
           }`;
         root.setAttribute("aria-busy", String(busy));

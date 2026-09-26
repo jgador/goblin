@@ -11,6 +11,7 @@ public sealed record WorkSnapshot(int SchemaVersion, long Id, string Objective,
 {
     public WorkWorkspace? Workspace { get; init; }
     public WorkRepositoryRequest? RepositoryRequest { get; init; }
+    public RepositoryAuthorization? RepositoryAuthorization { get; init; }
 }
 
 public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
@@ -51,7 +52,7 @@ public sealed partial class WorkItem
         return new(2, Id, Objective, AgentId, Status, Attention, attempts,
             [.. _history], [.. _decisions], [.. _results],
             [.. _messages], [.. _artifacts])
-        { Workspace = Workspace, RepositoryRequest = RepositoryRequest };
+        { Workspace = Workspace, RepositoryRequest = RepositoryRequest, RepositoryAuthorization = RepositoryAuthorization };
     }
 
     public static WorkItem Restore(WorkSnapshot state)
@@ -65,7 +66,8 @@ public sealed partial class WorkItem
             Status = state.Status,
             Attention = state.Attention,
             Workspace = state.Workspace,
-            RepositoryRequest = state.RepositoryRequest
+            RepositoryRequest = state.RepositoryRequest,
+            RepositoryAuthorization = state.RepositoryAuthorization
         };
         work._history.Clear();
         for (int i = 0; i < state.History.Length; i++)

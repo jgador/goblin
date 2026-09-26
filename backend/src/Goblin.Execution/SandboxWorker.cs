@@ -85,8 +85,11 @@ public static class SandboxWorker
                 await GitAsync(checkout, environment, "add", "--all");
                 if (!string.IsNullOrWhiteSpace(await GitAsync(checkout, environment, "diff", "--cached", "--name-only")))
                     await GitAsync(checkout, environment, "commit", "-m", "Goblin Work " + work.Id.ToString(CultureInfo.InvariantCulture));
-                stage = "Publish";
-                await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, "publish");
+                bool publish = repository.Grant!.PolicyVersion == 1 || repository.Grant.AllowPush;
+                stage = publish ? "Publish" : "Verify local Git checkpoint";
+                string? artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? "publish" : "checkpoint");
+                if (repository.Grant.AllowPullRequest && outcome.Kind == ObservationKind.Result)
+                    artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, "pull-request");
                 string commit = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
                 await File.WriteAllTextAsync(Path.Combine(state, "changes.patch"), await GitAsync(checkout, environment, "diff", baseline, commit));
                 stage = "Git checkpoint";
@@ -96,7 +99,7 @@ public static class SandboxWorker
                     stage = "Save setup memory";
                     await RepositoryClient.SaveSetupMemoryAsync(attempt.Id, new(attempt.TurnNumber, saved.Id, setupEnvironment, observations));
                 }
-                outcome = outcome with { CheckpointId = saved.Id, ArtifactReference = "https://github.com/" + repository.Repository + "/tree/" + branch };
+                outcome = outcome with { CheckpointId = saved.Id, ArtifactReference = artifact };
             }
             catch (TimeoutException) { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.TimedOut); }
             catch { outcome = new(ObservationKind.Failed, session, Failure: FailureKind.ExecutionFailed); }

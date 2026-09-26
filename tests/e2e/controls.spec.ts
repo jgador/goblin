@@ -290,12 +290,15 @@ test("repository setup validates locally and keeps the branch and Git identity t
     const commands = await setup(page);
     await page.locator("#repository-options summary").click();
     const start = page.getByRole("button", {
-        name: "Start repository work",
+        name: "Review repository access",
         exact: true,
     });
+    await page.getByLabel("Agent Git email").fill("");
     await start.click();
     await expect(
-        page.getByText("Choose an enabled repository.", { exact: true }),
+        page.getByText("Enter the full owner/repository name or GitHub URL.", {
+            exact: true,
+        }),
     ).toBeVisible();
     await expect(
         page.getByText("Enter a valid email for the agent’s commits."),
@@ -303,8 +306,9 @@ test("repository setup validates locally and keeps the branch and Git identity t
     await expect(page.getByLabel("Repository", { exact: true })).toBeFocused();
     await page
         .getByLabel("Repository", { exact: true })
-        .selectOption("owner/another-project");
-    await expect(page.getByLabel("Default branch")).toHaveValue("develop");
+        .fill("owner/another-project");
+    await page.getByLabel("Base branch").fill("develop");
+    await page.getByLabel("Git actions").selectOption("local");
     await page.getByLabel("Agent Git name").fill(" ");
     await page.getByLabel("Agent Git email").fill("invalid");
     await start.click();
@@ -324,7 +328,7 @@ test("repository setup validates locally and keeps the branch and Git identity t
         "open",
         "",
     );
-    await expect(page.getByLabel("Default branch")).toHaveValue("develop");
+    await expect(page.getByLabel("Base branch")).toHaveValue("develop");
     await expect(page.getByLabel("Agent Git name")).toHaveValue(
         "Release reviewer",
     );
@@ -422,18 +426,16 @@ test("a waiting conversation can authorize repository access without creating an
 }) => {
     const commands = await setup(page, true, true);
     await page.locator("#repository-options summary").click();
-    await page
-        .getByLabel("Repository", { exact: true })
-        .selectOption("owner/project");
+    await page.getByLabel("Repository", { exact: true }).fill("owner/project");
     await page.getByLabel("Agent Git email").fill("agent@example.com");
     await page
-        .getByRole("button", { name: "Authorize & continue", exact: true })
+        .getByRole("button", { name: "Review repository access", exact: true })
         .click();
     await expect
         .poll(() => commands)
         .toContainEqual(
             expect.objectContaining({
-                action: "AuthorizeRepository",
+                action: "PrepareRepository",
                 workId: "1",
                 expectedVersion: "1",
                 repository: {
