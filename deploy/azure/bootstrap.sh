@@ -32,9 +32,9 @@ if command -v cloud-init >/dev/null; then
   cloud-init status --wait || cloud_init_result=$?
   if [[ "$cloud_init_result" != 0 && "$cloud_init_result" != 2 ]]; then exit "$cloud_init_result"; fi
 fi
-if ! command -v curl >/dev/null || ! command -v python3 >/dev/null; then
+if ! command -v curl >/dev/null || ! command -v tar >/dev/null; then
   apt-get -o DPkg::Lock::Timeout=300 update
-  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl python3
+  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl tar
 fi
 bootstrap_dir=$(mktemp -d /var/lib/goblin/bootstrap.XXXXXX)
 
@@ -46,26 +46,36 @@ if [[ "$goblin_hostname" != localhost && ! "$goblin_hostname" =~ ^([a-z0-9]([a-z
   printf 'Invalid public hostname or Goblin source ref.\n' >&2
   exit 1
 fi
+stage 'Preparing native Goblin administration tooling'
+goblinctl_version='__GOBLINCTL_VERSION__'
+goblinctl_sha256='__GOBLINCTL_SHA256__'
+if [[ "$(uname -m)" != x86_64 ]]; then printf 'Goblin requires an x86-64 host.\n' >&2; exit 1; fi
+if [[ -n "${GOBLINCTL_LOCAL_BINARY:-}" ]]; then
+  # Explicit developer input: never compiled or downloaded on the installed host.
+  [[ "${GOBLINCTL_LOCAL_SHA256:-}" =~ ^[a-f0-9]{64}$ ]]
+  install -m 0755 "$GOBLINCTL_LOCAL_BINARY" "$bootstrap_dir/goblinctl"
+  printf '%s  %s\n' "$GOBLINCTL_LOCAL_SHA256" "$bootstrap_dir/goblinctl" | sha256sum --check
+else
+  [[ "$goblinctl_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$goblinctl_sha256" =~ ^[a-f0-9]{64}$ ]]
+  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+    --retry 5 --connect-timeout 15 --max-time 300 \
+    "https://github.com/jgador/goblin/releases/download/goblinctl-v${goblinctl_version}/goblinctl-x86_64-unknown-linux-musl.tar.gz" \
+    --output "$bootstrap_dir/goblinctl.tar.gz"
+  printf '%s  %s\n' "$goblinctl_sha256" "$bootstrap_dir/goblinctl.tar.gz" | sha256sum --check
+  [[ "$(tar -tzf "$bootstrap_dir/goblinctl.tar.gz")" == goblinctl ]]
+  tar --extract --gzip --file "$bootstrap_dir/goblinctl.tar.gz" --directory "$bootstrap_dir" --no-same-owner --no-same-permissions goblinctl
+  chmod 0755 "$bootstrap_dir/goblinctl"
+fi
+[[ "$("$bootstrap_dir/goblinctl" --version)" == "goblinctl $goblinctl_version" ]]
+
 stage 'Preparing the Goblin password'
-cat > "$bootstrap_dir/hash-password.py" <<'PYTHON'
-__GOBLIN_PASSWORD_HASHER__
-PYTHON
-# Local provisioning supplies the verifier produced by the same hashing helper.
-# Azure supplies the password through the extension's protected settings.
 if [[ -n "${GOBLIN_PASSWORD_HASH_FILE:-}" ]]; then
+  "$bootstrap_dir/goblinctl" internal validate-password "$GOBLIN_PASSWORD_HASH_FILE"
   install -m 0600 "$GOBLIN_PASSWORD_HASH_FILE" "$bootstrap_dir/owner-password"
 else
   printf '%s' '__GOBLIN_PASSWORD_BASE64__' | base64 --decode | \
-    python3 "$bootstrap_dir/hash-password.py" > "$bootstrap_dir/owner-password"
+    "$bootstrap_dir/goblinctl" internal hash-password > "$bootstrap_dir/owner-password"
 fi
-
-stage 'Preparing the setup bundle'
-# The deterministic, prebuilt zipapp is included in this version of the template.
-# No SDK, application build, cluster or external bundle release is needed here.
-base64 --decode > "$bootstrap_dir/goblin-setup.pyz" <<'BUNDLE'
-__GOBLIN_SETUP_BUNDLE_BASE64__
-BUNDLE
-printf '%s  %s\n' '__GOBLIN_SETUP_BUNDLE_SHA256__' "$bootstrap_dir/goblin-setup.pyz" | sha256sum --check
 
 # Reprovisioning explicitly starts a new attempt and can update the owner password.
 # Stop the old worker (including recovery) before replacing its executable/config.
@@ -73,17 +83,14 @@ if systemctl cat goblin-installer.service >/dev/null 2>&1; then systemctl stop g
 exec 9>/var/lib/goblin/install/installer.lock
 flock -w 420 9
 if systemctl cat goblin-setup.service >/dev/null 2>&1; then systemctl stop goblin-setup.service; fi
-install -d -m 0755 /opt/goblin/setup
-install -m 0755 "$bootstrap_dir/goblin-setup.pyz" /opt/goblin/setup/goblin-setup.pyz
-python3 /opt/goblin/setup/goblin-setup.pyz unpack /opt/goblin/setup
-install -m 0644 /opt/goblin/setup/goblin-setup.service /etc/systemd/system/goblin-setup.service
-install -m 0644 /opt/goblin/setup/goblin-installer.service /etc/systemd/system/goblin-installer.service
+"$bootstrap_dir/goblinctl" internal activate --binary "$bootstrap_dir/goblinctl"
+export GOBLINCTL=/opt/goblin/bin/goblinctl
 install -m 0600 "$bootstrap_dir/owner-password" /var/lib/goblin/install/private/owner-password
 printf '%s\n' "$goblin_hostname" > /var/lib/goblin/install/private/hostname
 printf '%s\n' "$goblin_source_ref" > /var/lib/goblin/install/private/source-ref
 printf 'http://%s\n' "$goblin_hostname" > /var/lib/goblin/public-url
 rm -rf /var/lib/goblin/install/private/work
-python3 /opt/goblin/setup/goblin-setup.pyz state init
+"$GOBLINCTL" internal state init
 exec 9>&-
 
 stage 'Starting the installation status page'
@@ -93,10 +100,7 @@ setup_ready=false
 for ((attempt=0; attempt<30; attempt++)); do
   if curl --fail --silent --show-error --noproxy '*' --connect-timeout 2 --max-time 3 \
       --unix-socket /run/goblin-setup/health.sock http://127.0.0.1/setup/healthz --output "$bootstrap_dir/setup-health.json" && \
-      python3 - "$bootstrap_dir/setup-health.json" <<'PYTHON'
-import json, sys
-sys.exit(0 if json.load(open(sys.argv[1])).get('setup') is True else 1)
-PYTHON
+      "$GOBLINCTL" internal json-test "$bootstrap_dir/setup-health.json" setup true
   then setup_ready=true; break; fi
   sleep 1
 done

@@ -46,7 +46,7 @@ forwarder is only for testing and is not included in Azure provisioning.
 
 ## Requirements
 
-Use Ubuntu on x86-64 with systemd, Python 3, curl, and Git. Allow several GiB of
+Use Ubuntu on x86-64 with systemd, curl and Git (plus Rust when building from a checkout). Allow several GiB of
 free memory and disk space for Kubernetes, image downloads, and the application
 build. The installer needs Linux ports 80 and 443 and the chosen browser port.
 Windows port 80 can remain occupied; the Windows browser uses 8788.
@@ -90,7 +90,10 @@ Logs are stored directly in WSL:
 - `.goblin-local/bootstrap.log` (local command's bootstrap output)
 
 Kubernetes diagnostics are available through `sudo k3s kubectl` and
-`sudo journalctl -u k3s`. The installer provisions PostgreSQL and applies schema migrations before
+`sudo journalctl -u k3s`. The installer explicitly uses
+`/etc/rancher/k3s/k3s.yaml` for all Kubernetes operations, including database
+helpers invoked through a separately installed `kubectl`.
+The installer provisions PostgreSQL and applies schema migrations before
 starting Goblin. To repair or export local tooling credentials after installation,
 run `bash deploy/postgres/setup.sh` to enable
 [PostgreSQL certificate authentication](../../docs/database.md). For this runner,
@@ -141,7 +144,7 @@ npm run install:local -- start --http-port 8888
 
 ## Password storage
 
-Local setup uses the same `deploy/azure/hash-password.py` helper as Azure:
+Local setup uses the same the Rust `goblinctl::credentials` module helper as Azure:
 PBKDF2-SHA256, 600,000 iterations, and a random 16-byte salt. Only the verifier is
 saved to `.goblin-secrets/owner-password` in this checkout (file mode `0600`,
 directory mode `0700`). Git ignores everything in that folder except the empty

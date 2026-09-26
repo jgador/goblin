@@ -1,0 +1,82 @@
+name: goblinctl native release
+on:
+  push:
+    tags: ["goblinctl-v*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: ./.github/actions/setup-rust
+      - name: Install standalone Bicep
+        run: |
+          curl --fail --location --proto '=https' --proto-redir '=https' https://github.com/Azure/bicep/releases/download/v0.47.16/bicep-linux-x64 -o /tmp/bicep
+          printf '%s  %s\n' 64c345a58e0c3e48b1bc98a4e62d6b3adb1d238281297de3400aeafb2697aa5a /tmp/bicep | sha256sum --check
+          sudo install -m 0755 /tmp/bicep /usr/local/bin/bicep
+      - name: Install kubectl for offline manifest checks
+        run: |
+          curl --fail --location --proto '=https' --proto-redir '=https' https://dl.k8s.io/release/v1.36.4/bin/linux/amd64/kubectl -o /tmp/kubectl
+          printf '%s  %s\n' 8b8f088da2dab964f853b38464033b1be15ede2839eca751482357c45abdd05a /tmp/kubectl | sha256sum --check
+          sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+      - name: Verify source
+        run: |
+          just fmt-check
+          just clippy --workspace --all-targets -- -D warnings
+          cargo xtask azure --check
+          npm ci
+          npm test
+          npx playwright install --with-deps chromium
+          npx playwright test tests/e2e/setup.spec.ts
+      - name: Build and package musl binary
+        run: |
+          cargo build --locked --release --package goblinctl --target x86_64-unknown-linux-musl
+          cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl --output dist/goblinctl
+          mkdir -p dist/native-check
+          tar -xzf dist/goblinctl/goblinctl-x86_64-unknown-linux-musl.tar.gz -C dist/native-check
+          dist/native-check/goblinctl --help
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            [[ "$(dist/native-check/goblinctl --version)" == "goblinctl ${GITHUB_REF_NAME#goblinctl-v}" ]]
+          fi
+          GOBLINCTL_TEST_BINARY=dist/native-check/goblinctl node --test dist/tests/deployment/*.test.js dist/tests/integration/local-login.test.js
+          git diff --exit-code
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goblinctl-linux-musl
+          path: dist/goblinctl/*
+          if-no-files-found: error
+  publish:
+    if: startsWith(github.ref, 'refs/tags/goblinctl-v')
+    needs: linux
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: goblinctl-linux-musl
+          path: dist
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/goblinctl-x86_64-unknown-linux-musl.tar.gz
+      - name: Publish immutable versioned assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo 'This release already exists. Create a new version instead of replacing assets.' >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "$GITHUB_REF_NAME" --generate-notes

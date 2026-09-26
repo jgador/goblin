@@ -32,7 +32,7 @@ The header uses CSS sizing with automatic height to preserve the SVG's proportio
 and sharpness. The UI currently uses the light-background artwork only.
 
 The installation page uses the same official `svg/icon-light.svg` artwork for its
-header and favicon. `deploy/azure/build-setup-bundle.py` embeds the original file
+header and favicon. `goblinctl` embeds the original file
 directly in the standalone setup bundle, served at `/setup/icon.svg`, so branding
 is available before the application is built. Regenerate the setup bundle and
 Azure templates after changing its sources (see `deploy/azure/reference.md`).

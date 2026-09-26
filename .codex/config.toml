@@ -6,8 +6,12 @@ type = "command"
 command = '''
 set -e
 cd "$(git rev-parse --show-toplevel)"
+# Cargo and the pinned just helper are installed through the Rust setup script.
+if ! command -v cargo >/dev/null 2>&1 || ! command -v just >/dev/null 2>&1; then
+    export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+fi
 npm run format:typescript >&2
-npm run format:python >&2
+npm run format:rust >&2
 cd backend
 # Generated protocol types and EF mappings must stay reproducible.
 dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
@@ -15,4 +19,4 @@ dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 ID
 printf '{}\n'
 '''
 timeout = 600
-statusMessage = "Formatting TypeScript, Python, and .NET"
+statusMessage = "Formatting TypeScript, Rust, and .NET"

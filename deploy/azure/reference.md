@@ -149,12 +149,11 @@ journalctl -u k3s --no-pager -n 100
 
 ## What deployment success means
 
-The VM extension embeds a deterministic Python zipapp and its checksum. It waits
-only for base OS preparation, password hashing, the status service, and the
-background worker launch. Ubuntu's Python standard library runs the bundle; no
-SDK, cluster, Docker, application build, or external bundle release is needed
-before Azure returns. Per-VM settings and the password verifier are written
-locally and are never included in the reusable bundle.
+The VM extension downloads a versioned, checksum-pinned native goblinctl archive.
+It waits for cloud-init, binary verification, the status page's successful bind,
+and the independent worker launch. The download must succeed before Azure reports
+setup ready. The binary embeds the UI and operational assets; no Python, Rust,
+Cargo, cluster, Docker, or application build is needed to serve setup.
 
 The independent systemd worker installs and checks:
 
@@ -255,13 +254,13 @@ itself cannot respond, automatic network rollback may also fail; use SSH or Azur
 Run Command to inspect Traefik/ServiceLB. The next attempt retries recovery.
 
 After success both setup units are disabled. The UI stays stopped across reboot,
-and the worker exits. Temporary downloads are removed; the small bundle, status,
+and the worker exits. Temporary downloads are removed; the native CLI, status,
 verifier, and local logs remain. To repeat readiness checks and repair a completed
 installation, use these root commands (this briefly takes Goblin offline):
 
 ```bash
 sudo systemctl stop goblin-installer.service
-sudo flock /var/lib/goblin/install/installer.lock python3 /opt/goblin/setup/goblin-setup.pyz state init
+sudo flock /var/lib/goblin/install/installer.lock goblinctl internal state init
 sudo systemctl enable --now goblin-installer.service
 ```
 
@@ -514,25 +513,22 @@ artifacts. Keep the shared parameter defaults and naming rules in `main.bicep`
 and `portal.bicep` aligned:
 
 ```bash
-python3 deploy/azure/build-setup-bundle.py
-bicep build deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json
-bicep build deploy/azure/portal.bicep --outfile deploy/azure/azuredeploy.portal.json
+cargo xtask azure
 bash -n deploy/azure/bootstrap.sh deploy/azure/install-app.sh deploy/azure/setup/installer.sh
 sh -n deploy/azure/missing-ssh-key.sh
 npm test
 ```
 
-Setup changes are embedded in the regenerated templates; they need no separate
-bundle download or release. Application builds still download `master` by default,
-so application changes must reach the selected source ref before deployment. A
-CLI deployment can select a published commit using `goblinSourceRef`.
+Setup changes require a new native release. Publish and verify that release before
+updating `deploy/goblinctl-release.json` and regenerating ARM templates. See
+[Native administration and releases](../../docs/goblinctl.md) for the release order.
+Application builds still download `master` by default; source changes must reach
+the selected ref before deployment. Keep native and application versions compatible.
 
-Commit the generated `setup-bundle.b64`, `setup-bundle.sha256`, and ARM JSON together
-with their sources. `python3 deploy/azure/build-setup-bundle.py --check` verifies
-bundle freshness. The bundle is about 14 KiB, well within the Custom Script 64 KiB
-script limit after embedding; tests enforce this limit. Verify changes with a live
-portal deployment; compilation does not check image pulls, runtime behavior, or
-regional capacity. Update pinned versions and their digests together.
+Commit the release pin and both generated ARM JSON files together. Run
+`cargo xtask azure --check` for template drift. Tests enforce the Custom Script
+64 KiB limit on the downloader. Verify changes with a live portal deployment;
+compilation cannot check image pulls, runtime behavior, or regional capacity.
 
 Validate `createUiDefinition.json` against its published CreateUiDefinition schema
 and check that `parameters.outputs` maps exactly to `azuredeploy.portal.json`'s

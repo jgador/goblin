@@ -37,3 +37,16 @@ test-results
 **/*.pfx
 **/id_rsa
 **/id_ed25519
+
+# Native administration tooling is distributed independently of the application image.
+target
+tools
+.cargo
+Cargo.toml
+Cargo.lock
+rust-toolchain.toml
+clippy.toml
+justfile
+.config
+.vscode
+.venv

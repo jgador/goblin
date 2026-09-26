@@ -18,12 +18,10 @@ param sshSourceAddressPrefix string
 param virtualNetworkAddressPrefix string
 param subnetAddressPrefix string
 
+var goblinctlRelease = loadJsonContent('../../goblinctl-release.json')
 var bootstrapScript = replace(
-  replace(
-    replace(loadTextContent('../bootstrap.sh'), '__GOBLIN_PASSWORD_HASHER__', loadTextContent('../hash-password.py')),
-    '__GOBLIN_SETUP_BUNDLE_BASE64__', trim(loadTextContent('../setup-bundle.b64'))
-  ),
-  '__GOBLIN_SETUP_BUNDLE_SHA256__', trim(loadTextContent('../setup-bundle.sha256'))
+  replace(loadTextContent('../bootstrap.sh'), '__GOBLINCTL_VERSION__', goblinctlRelease.version),
+  '__GOBLINCTL_SHA256__', goblinctlRelease.sha256
 )
 var configuredBootstrap = replace(
   replace(bootstrapScript, '__GOBLIN_HOSTNAME_BASE64__', base64(publicIp.properties.dnsSettings.fqdn)),

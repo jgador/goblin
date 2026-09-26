@@ -3,6 +3,8 @@ set +x
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 umask 077
+goblinctl=${GOBLINCTL:-goblinctl}
+config_root=${GOBLIN_CONFIG_ROOT:-$PWD}
 port=5432
 if [[ $# == 2 && "$1" == --port && "$2" =~ ^[0-9]+$ && "$2" -ge 1 && "$2" -le 65535 ]]; then
   port=$2
@@ -19,14 +21,8 @@ fi
 # Only enable host access automatically when this checkout owns the local runner
 # and the selected kubectl context refers to that same cluster.
 local_port=''
-if [[ -f deploy/local/install.py && -f /var/lib/goblin/local-test/config.json ]]; then
-  local_port=$(python3 - <<'PYTHON'
-import json
-from pathlib import Path
-config = json.loads(Path('/var/lib/goblin/local-test/config.json').read_text())
-if config.get('mode') == 'direct' and config.get('repo') == str(Path.cwd()):
-    print(config.get('postgres_port', 55432))
-PYTHON
+if [[ -f /var/lib/goblin/local-test/config.json ]]; then
+  local_port=$("$goblinctl" --repo "$config_root" internal local-port
   )
   if [[ -n "$local_port" ]]; then
     if selected_uid=$("${goblin_kubectl[@]}" get namespace kube-system -o 'jsonpath={.metadata.uid}' --request-timeout=10s) && \
@@ -64,7 +60,7 @@ for certificate in server app admin; do
 done
 if [[ -z "$existing_admin" ]]; then
   # The image requires this only during initdb. Client connections never use it.
-  python3 deploy/postgres/write-appsettings.py --create-secret admin | "${goblin_kubectl[@]}" create -f -
+  "$goblinctl" internal admin-secret | "${goblin_kubectl[@]}" create -f -
 fi
 
 "${goblin_kubectl[@]}" apply -k deploy/postgres
@@ -77,7 +73,7 @@ fi
 "${goblin_kubectl[@]}" logs "$verification_job" -n goblin
 "${goblin_kubectl[@]}" delete "$verification_job" -n goblin --ignore-not-found=true --wait=true
 "${goblin_kubectl[@]}" get secret goblin-postgres-app-tls goblin-postgres-admin-tls -n goblin -o json | \
-  python3 deploy/postgres/write-appsettings.py --port "$port"
+  "$goblinctl" --repo "$config_root" internal db-export --port "$port"
 
 # Patch just the database configuration of an existing Goblin deployment, without
 # replacing its image, owner password, origin, storage, or other custom settings.
@@ -85,7 +81,7 @@ sandbox=$("${goblin_kubectl[@]}" get sandbox app -n goblin --ignore-not-found -o
 if [[ -n "$sandbox" && "${GOBLIN_POSTGRES_CONFIGURE_APP:-true}" == true ]]; then
   patch=$(mktemp)
   trap 'rm -f "$patch"' EXIT
-  "${goblin_kubectl[@]}" get sandbox app -n goblin -o json | python3 deploy/postgres/configure-app.py > "$patch"
+  "${goblin_kubectl[@]}" get sandbox app -n goblin -o json | "$goblinctl" --repo "$config_root" internal db-patch > "$patch"
   if [[ -s "$patch" ]]; then
     "${goblin_kubectl[@]}" patch sandbox app -n goblin --type=merge --patch-file "$patch"
     "${goblin_kubectl[@]}" delete pod -n goblin -l app=goblin-auth --ignore-not-found=true --wait=true
@@ -93,7 +89,7 @@ if [[ -n "$sandbox" && "${GOBLIN_POSTGRES_CONFIGURE_APP:-true}" == true ]]; then
   fi
 fi
 if [[ -n "$local_port" ]]; then
-  python3 deploy/local/install.py database --port "$port"
+  "$goblinctl" --repo "$config_root" db forward --port "$port"
 else
   printf 'Tooling expects a localhost:%s tunnel to PostgreSQL.\n' "$port"
 fi
