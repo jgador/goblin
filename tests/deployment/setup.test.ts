@@ -1,3 +1,4 @@
+import { goblinctl } from "../support/goblinctl.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { access, readFile, stat, writeFile } from "node:fs/promises";
@@ -45,7 +46,7 @@ test("the standalone UI serves only status and assets, with no mutation or file 
     }
     assert.equal(
         (await fetch(setup.url + "/setup/status", { method: "POST" })).status,
-        501,
+        405,
     );
     let response = await fetch(setup.url + "/setup/status");
     assert.equal(response.headers.get("cache-control"), "no-store");
@@ -84,9 +85,9 @@ test("local setup health cannot report ready when the public port is occupied", 
     assert.throws(
         () =>
             execFileSync(
-                "python3",
+                goblinctl,
                 [
-                    join(setup.root, "goblin-setup.pyz"),
+                    "internal",
                     "serve",
                     "--state",
                     setup.path,
@@ -99,7 +100,7 @@ test("local setup health cannot report ready when the public port is occupied", 
                 ],
                 { stdio: ["ignore", "pipe", "pipe"] },
             ),
-        /Address already in use/,
+        /Cannot bind setup listener/,
     );
     await assert.rejects(access(socket));
 });

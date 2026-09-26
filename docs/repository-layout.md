@@ -21,9 +21,15 @@ backend/
   tests/                  .NET tests and the test-only application host
   schemas/codex/           Checked-in inputs to protocol generation
   schemas/kubernetes/      Pinned schemas and selected execution fields
-  scripts/                 Python protocol generator and C# Kubernetes file-based generator
+  scripts/                 C# protocol and Kubernetes file-based generators
   Goblin.slnx              .NET solution
   Directory.Build.props   Shared .NET build settings
+tools/goblinctl/            Native operator CLI and shared installation code
+tools/xtask/               Developer and release tooling
+Cargo.toml                 Rust workspace; toolchain and dependencies are pinned
+justfile                   Rust development commands shared by local checks and CI
+.config/nextest.toml        Rust test-runner profiles
+.vscode/                   Rust/TOML editing and native debugging configuration
 frontend/
   src/connection/          Connection screen: HTML, TypeScript, and CSS
   src/work/                Persisted Work UI: HTML, TypeScript, and CSS
@@ -61,7 +67,7 @@ them; `npm run typecheck:scripts` performs that check as part of the full build
 and `npm run typecheck`.
 
 The installer page in `deploy/azure/setup/app.js` remains JavaScript because the
-Python-only setup bundler packages it directly for the browser. Moving its source
+native goblinctl setup server packages it directly for the browser. Moving its source
 to TypeScript would require generating and checking the packaged JavaScript.
 
 ## Build and test
@@ -69,7 +75,11 @@ to TypeScript would require generating and checking the packaged JavaScript.
 | Command | Purpose |
 | --- | --- |
 | `npm ci` | Install the locked workspace dependencies |
-| `npm run build` | Build frontend assets, test tooling, and the .NET solution |
+| `bash scripts/setup-rust.sh` | Install the pinned Rust development tools |
+| `just fmt` | Format Rust and the justfile using Codex conventions |
+| `just clippy --workspace --all-targets -- -D warnings` | Lint the Rust workspace |
+| `just test --workspace` | Run Rust tests with nextest |
+| `npm run build` | Build native tools, frontend assets, test tooling, and the .NET solution |
 | `npm start` | Build, provision the local password on first run, and start the application |
 | `npm run setup:password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
 | `npm run build:assets` | Build only the frontend |

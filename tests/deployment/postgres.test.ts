@@ -1,3 +1,4 @@
+import { goblinctl } from "../support/goblinctl.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -92,6 +93,7 @@ else if (args[0] === 'apply' && args[1] === '-k') fs.writeFileSync(file('goblin-
                     ...process.env,
                     PATH: `${bin}:${process.env.PATH}`,
                     GOBLIN_POSTGRES_SETUP_TEST: root,
+                    GOBLINCTL: goblinctl,
                     ...environment,
                 },
                 encoding: "utf8",
@@ -291,14 +293,10 @@ test("incomplete exported client credentials do not overwrite settings or keys",
     const file = join(root, "backend/tools/Goblin.Database/appsettings.json");
     const before = await readFile(file, "utf8");
     assert.throws(() =>
-        execFileSync(
-            "python3",
-            [join(root, "deploy/postgres/write-appsettings.py")],
-            {
-                input: JSON.stringify({ items: [] }),
-                stdio: ["pipe", "pipe", "pipe"],
-            },
-        ),
+        execFileSync(goblinctl, ["--repo", root, "internal", "db-export"], {
+            input: JSON.stringify({ items: [] }),
+            stdio: ["pipe", "pipe", "pipe"],
+        }),
     );
     assert.equal(await readFile(file, "utf8"), before);
     assert.equal(
@@ -331,14 +329,10 @@ test("connecting an existing Sandbox preserves its image, origin, storage and ot
         ],
     };
     const patch = (spec: object) =>
-        execFileSync(
-            "python3",
-            [join(root, "deploy/postgres/configure-app.py")],
-            {
-                input: JSON.stringify({ spec: { podTemplate: { spec } } }),
-                encoding: "utf8",
-            },
-        );
+        execFileSync(goblinctl, ["--repo", root, "internal", "db-patch"], {
+            input: JSON.stringify({ spec: { podTemplate: { spec } } }),
+            encoding: "utf8",
+        });
     const updated = JSON.parse(patch(original)).spec.podTemplate.spec;
     assert.deepEqual(updated.containers[0], original.containers[0]);
     assert.equal(updated.containers[1].image, "existing-image");

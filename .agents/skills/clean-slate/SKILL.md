@@ -38,12 +38,12 @@ This is a repository-local skill. Resolve the checkout with `git rev-parse
 
 Read the current implementations before relying on this inventory:
 
-- `deploy/local/README.md` and `deploy/local/install.py`: ownership, stop/reset,
+- `deploy/local/README.md` and `tools/goblinctl/src/local.rs`: ownership, stop/reset,
   preflight, systemd units, and ports.
-- `deploy/local/start.py`, `deploy/local/password.py`, and
+- `tools/goblinctl/src/credentials.rs` and
   `backend/src/Goblin.Web/Program.cs`: direct development startup and data overrides.
 - `deploy/azure/install-app.sh`: Docker image naming and build ownership.
-- If database artifacts exist, `deploy/postgres/write-appsettings.py` and
+- If database artifacts exist, `tools/goblinctl/src/database.rs` and
   `docs/database.md`: exported credentials and generated configuration.
 
 Record Git status before starting. Inventory only metadata needed for ownership;
@@ -232,10 +232,10 @@ After confirming the ownership file is absent, run the non-installing preflight
 from the repo root (with sufficient privileges for its port checks):
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -c 'import sys; sys.path.insert(0, "deploy/local"); import install; config = install.preflight(None); print("Fresh installation preflight passed:", install.origin(config))'
+cargo run --locked -q -p goblinctl -- internal preflight
 ```
 
-If a different port was requested, pass that port instead of `None`. Report a
+If a different port was requested, append `--port <port>`. Report a
 preflight failure as a remaining blocker; do not start installation to work around
 it. Leave `/run/goblin-local.lock` alone: it coordinates runner processes and is
 not persisted application data.

@@ -1,3 +1,4 @@
+import { goblinctl } from "../support/goblinctl.js";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -24,19 +25,8 @@ async function start(t: TestContext, options: Partial<BackendOptions> = {}) {
     // Exercise real local provisioning and the shared Azure hasher before .NET login.
     if (!options.passwordHashFile)
         execFileSync(
-            "python3",
-            [
-                "-c",
-                `
-import sys
-from pathlib import Path
-sys.path.insert(0, sys.argv[1])
-from password import ensure_password
-ensure_password(Path(sys.argv[2]))
-`,
-                resolve("deploy/local"),
-                passwordHashFile,
-            ],
+            goblinctl,
+            ["password", "set", "--path", passwordHashFile],
             { env: { ...process.env, GOBLIN_LOCAL_PASSWORD: localPassword } },
         );
     const app = await startBackend({

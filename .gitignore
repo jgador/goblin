@@ -11,6 +11,7 @@
 .goblin-local/
 .goblin-postgres/
 node_modules/
+target/
 .venv/
 .ruff_cache/
 dist/

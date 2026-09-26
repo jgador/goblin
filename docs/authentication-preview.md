@@ -20,7 +20,7 @@ Durable Work is enabled by default and requires the migrated PostgreSQL connecti
 in the [database guide](database.md). For an authentication-only development check,
 set `GOBLIN_WORK_ENABLED=false` before starting Goblin.
 
-Install the .NET 10 SDK, Node.js 24 or newer, and Python 3, then run from this checkout:
+Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run from this checkout:
 
 ```bash
 npm ci
@@ -30,7 +30,7 @@ npm start
 `npm start` builds the C# backend and TypeScript browser assets, provisions the
 local password if needed, then starts the ASP.NET Core Minimal API host. After
 editing sources, restart it to rebuild. To build separately, run `npm run build`,
-then launch with `python3 deploy/local/start.py`.
+then launch with `cargo xtask dev`.
 Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
 `obj/` output are ignored by Git.
 
@@ -321,7 +321,7 @@ npx playwright install --with-deps chromium
 npm run test:browser
 ```
 
-The test commands build first. `npm test` requires Python 3 for the deterministic
+The test commands build first. `npm test` uses the .NET generators for deterministic
 schema-generation check, then runs .NET serialization/transport tests and the HTTP
 integration tests against the C# host. Type checking also covers tests and scripts.
 Playwright loads its TypeScript configuration and browser tests directly. The browser module uses
