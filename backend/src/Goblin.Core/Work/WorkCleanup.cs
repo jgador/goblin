@@ -45,11 +45,12 @@ public sealed partial class WorkItem
                 Status = WorkStatus.NeedsAttention;
                 Attention = attempt.Status == AttemptStatus.Failed
                     ? new(AttentionReason.Failure, attempt.Failure)
+                    : RepositoryRequest is not null ? new(AttentionReason.RepositoryRequired)
                     : new(_decisions.Exists(x => x.AttemptId == attemptId && x.Answer is null)
                         ? AttentionReason.InputRequired : AttentionReason.ResultReview);
             }
         }
         Record(WorkEventKind.CleanupCompleted, now, attemptId);
-        if (attempt.CheckpointId is not null) Record(WorkEventKind.WorkspaceReleased, now, attemptId);
+        if (attempt.Target.Repository is not null && !attempt.ReasoningOnly) Record(WorkEventKind.WorkspaceReleased, now, attemptId);
     }
 }

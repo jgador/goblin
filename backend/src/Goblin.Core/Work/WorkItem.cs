@@ -103,6 +103,11 @@ public sealed partial class WorkItem
         string environment = RequireText(environmentReference);
         if (CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != attemptId ||
             Status != WorkStatus.Queued) return false;
+        if (attempt.Target.Repository is { } repository && !attempt.ReasoningOnly)
+        {
+            environment = Workspace?.EnvironmentReference ?? environment;
+            Workspace = new(repository.Repository, environment, attempt.Id, attempt.WorkspaceNumber, attempt.TurnNumber);
+        }
         attempt.Status = AttemptStatus.Starting;
         attempt.OwnerId = ownerId;
         attempt.EnvironmentReference = environment;
@@ -203,6 +208,12 @@ public sealed partial class WorkItem
 
     public void AnswerDecision(long decisionId, string answer, DateTimeOffset now)
     {
+        RecordAnswer(decisionId, answer, now);
+        if (CurrentAttempt?.Status == AttemptStatus.Waiting) ContinueExecution(now);
+    }
+
+    private void RecordAnswer(long decisionId, string answer, DateTimeOffset now)
+    {
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         string input = RequireText(answer);
         Require(Status == WorkStatus.NeedsAttention && Attention?.Reason == AttentionReason.InputRequired,
@@ -212,7 +223,6 @@ public sealed partial class WorkItem
         _decisions[^1] = _decisions[^1] with { Answer = input, AnsweredAt = now };
         Status = WorkStatus.Ready;
         Attention = null;
-        if (CurrentAttempt?.Status == AttemptStatus.Waiting) ContinueExecution(now);
         Record(WorkEventKind.InputProvided, now, CurrentAttempt!.Id, decisionId: decisionId, text: input);
     }
 
@@ -276,6 +286,8 @@ public sealed partial class WorkItem
         ArgumentNullException.ThrowIfNull(target);
         Require(AgentId is not null, WorkRule.AgentRequired);
         Require(!_attempts.Exists(x => x.Id == attemptId), WorkRule.AttemptAlreadyExists);
+        Require(Workspace is null || target.Repository is null ||
+            string.Equals(Workspace.Repository, target.Repository.Repository, StringComparison.OrdinalIgnoreCase), WorkRule.OwnershipMismatch);
     }
 
     private void Queue(long attemptId, ExecutionTarget target, DateTimeOffset now)

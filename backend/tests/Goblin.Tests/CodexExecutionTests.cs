@@ -22,9 +22,10 @@ namespace Goblin.Tests;
 public sealed class CodexExecutionTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task PinnedRuntimeExecutesModelCommandsOnlyForRepositoryWork(bool repositoryExecution)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task PinnedRuntimeExecutesModelCommandsOnlyForRepositoryWork(bool repositoryExecution, bool requestWorkspace)
     {
         string root = Path.Combine(Path.GetTempPath(), "goblin-command-test-" + Guid.NewGuid().ToString("N"));
         string home = Path.Combine(root, "home"), codexHome = Path.Combine(root, "codex"), workspace = Path.Combine(root, "workspace");
@@ -57,7 +58,7 @@ public sealed class CodexExecutionTests
             JsonElement output = request.RootElement.GetProperty("input").EnumerateArray()
                 .LastOrDefault(item => item.GetProperty("type").GetString() == "custom_tool_call_output");
             if (output.ValueKind != JsonValueKind.Undefined) toolOutput = output.GetProperty("output").ToString();
-            object item = ++calls == 1
+            object item = ++calls == 1 && !requestWorkspace
                 ? new
                 {
                     type = "custom_tool_call",
@@ -74,7 +75,7 @@ public sealed class CodexExecutionTests
                     status = "completed",
                     content = new[] { new { type = "output_text", text = repositoryExecution
                         ? JsonSerializer.Serialize(new { kind = "result", text = "Command probe finished.", releaseWorkspace = true, setup = new[] { setup } }, ExecutionFiles.Json)
-                        : "{\"kind\":\"result\",\"text\":\"Command probe finished.\",\"releaseWorkspace\":true}" } }
+                        : JsonSerializer.Serialize(new { kind = requestWorkspace ? "workspace" : "result", text = "Repository access is needed.", releaseWorkspace = true }) } }
                 };
             object[] events = [
                 new { type = "response.created", response = new { id = "response-probe", status = "in_progress", output = Array.Empty<object>() } },
@@ -131,10 +132,10 @@ public sealed class CodexExecutionTests
                 Assert.Fail($"Local model fixture failed after {calls} requests: {runtimeFailure}");
                 throw;
             }
-            Assert.Equal(ObservationKind.Result, result.Kind);
-            Assert.Equal(2, calls);
+            Assert.Equal(requestWorkspace ? ObservationKind.WorkspaceRequired : ObservationKind.Result, result.Kind);
+            Assert.Equal(requestWorkspace ? 1 : 2, calls);
             Assert.Contains("\"effort\":\"high\"", requests);
-            Assert.NotNull(toolOutput);
+            if (!requestWorkspace) Assert.NotNull(toolOutput);
             string marker = Path.Combine(workspace, "command-marker.txt");
             if (repositoryExecution)
             {
@@ -152,7 +153,8 @@ public sealed class CodexExecutionTests
             }
             else
             {
-                Assert.Contains("code-mode host is disabled", toolOutput);
+                if (!requestWorkspace) Assert.Contains("code-mode host is disabled", toolOutput);
+                Assert.Contains("collect repository selection", requests);
                 Assert.False(File.Exists(marker));
                 Assert.DoesNotContain("RepositorySetupMemory", requests);
                 Assert.Null(result.Setup);

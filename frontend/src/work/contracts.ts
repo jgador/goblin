@@ -38,6 +38,10 @@ export type Work = {
     status: string;
     agentId?: string;
     attention?: { reason: string; failure?: string };
+    repositoryRequest?: {
+        repositories: string[];
+        target: Attempt["target"];
+    };
     attempts: Attempt[];
     history: {
         sequence: string;

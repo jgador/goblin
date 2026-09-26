@@ -228,8 +228,6 @@ public partial class GoblinDbContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("workspace_sessions_attempt_id_fkey");
 
-            entity.HasOne(d => d.Checkpoint).WithMany(p => p.WorkspaceSessions).HasConstraintName("workspace_sessions_checkpoint_id_fkey");
-
             entity.HasOne(d => d.Work).WithOne(p => p.WorkspaceSession)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("workspace_sessions_work_id_fkey");

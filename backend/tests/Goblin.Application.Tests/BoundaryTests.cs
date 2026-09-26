@@ -39,6 +39,8 @@ public sealed class BoundaryTests
         work.QueueExecution(NextId(), new("codex", NextId(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "http://goblin-repository:8788"), new UnusedHost(), new UnusedBroker());
+        long attemptId = work.Attempts[^1].Id;
+        Assert.True(work.TryClaimExecution(attemptId, NextId(), host.EnvironmentFor(work.Id, attemptId), DateTimeOffset.UtcNow));
         JsonObject manifest = JsonSerializer.SerializeToNode(host.Manifest(work.Snapshot(), false), K.KubernetesJson.Options)!.AsObject();
         JsonNode spec = manifest["spec"]!["podTemplate"]!["spec"]!;
         Assert.False(spec["automountServiceAccountToken"]!.GetValue<bool>());

@@ -7,7 +7,11 @@ namespace Goblin.Core.Work;
 public sealed record WorkSnapshot(int SchemaVersion, long Id, string Objective,
     long? AgentId, WorkStatus Status, WorkAttention? Attention,
     AttemptSnapshot[] Attempts, WorkEvent[] History, WorkDecision[] Decisions,
-    WorkResult[] Results, WorkMessage[] Messages, WorkArtifact[] Artifacts);
+    WorkResult[] Results, WorkMessage[] Messages, WorkArtifact[] Artifacts)
+{
+    public WorkWorkspace? Workspace { get; init; }
+    public WorkRepositoryRequest? RepositoryRequest { get; init; }
+}
 
 public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
     ExecutionTarget Target, DateTimeOffset QueuedAt, AttemptStatus Status,
@@ -46,7 +50,8 @@ public sealed partial class WorkItem
         }
         return new(2, Id, Objective, AgentId, Status, Attention, attempts,
             [.. _history], [.. _decisions], [.. _results],
-            [.. _messages], [.. _artifacts]);
+            [.. _messages], [.. _artifacts])
+        { Workspace = Workspace, RepositoryRequest = RepositoryRequest };
     }
 
     public static WorkItem Restore(WorkSnapshot state)
@@ -58,7 +63,9 @@ public sealed partial class WorkItem
         {
             AgentId = state.AgentId,
             Status = state.Status,
-            Attention = state.Attention
+            Attention = state.Attention,
+            Workspace = state.Workspace,
+            RepositoryRequest = state.RepositoryRequest
         };
         work._history.Clear();
         for (int i = 0; i < state.History.Length; i++)

@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Workspaces;
+using Goblin.Contracts.Runtime;
 using Goblin.Execution;
 using Microsoft.AspNetCore.Http;
 
@@ -10,13 +11,15 @@ namespace Goblin.Web;
 
 public static class WorkspaceTerminal
 {
-    public static async Task ConnectAsync(HttpContext context, long workId, long sessionId, string ns,
+    public static async Task ConnectAsync(HttpContext context, long workId, long sessionId,
         InspectionStore store, KubernetesApi kubernetes, Workspace access)
     {
         access.ValidateOrigin(context.Request);
         await store.RequireAvailableAsync(workId, sessionId, context.RequestAborted);
         if (!context.WebSockets.IsWebSocketRequest) throw new PublicError("invalid_command", "Open a terminal connection.");
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        InspectionAllocation allocation = await store.GetAsync(sessionId, context.RequestAborted);
+        string ns = InspectionHost.NamespaceFor(allocation);
         using ClientWebSocket upstream = await kubernetes.ExecAsync(ns, InspectionHost.Name(sessionId), "inspect",
             ["env", "TERM=dumb", "HOME=/tmp", "HISTFILE=/dev/null", "/bin/bash", "--noprofile", "--norc", "-i"], true, stop.Token);
         using WebSocket browser = await context.WebSockets.AcceptWebSocketAsync();

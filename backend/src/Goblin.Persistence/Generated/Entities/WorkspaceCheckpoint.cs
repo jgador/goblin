@@ -35,12 +35,6 @@ public partial class WorkspaceCheckpoint
     [Column("commit_sha")]
     public string CommitSha { get; set; } = null!;
 
-    [Column("archive_sha256")]
-    public string ArchiveSha256 { get; set; } = null!;
-
-    [Column("archive")]
-    public byte[] Archive { get; set; } = null!;
-
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
 
@@ -54,7 +48,4 @@ public partial class WorkspaceCheckpoint
     [ForeignKey("WorkId")]
     [InverseProperty("WorkspaceCheckpoints")]
     public virtual WorkItem Work { get; set; } = null!;
-
-    [InverseProperty("Checkpoint")]
-    public virtual ICollection<WorkspaceSession> WorkspaceSessions { get; set; } = [];
 }

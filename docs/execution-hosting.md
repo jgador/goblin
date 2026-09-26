@@ -7,7 +7,8 @@ protocol. Agent, Work, attempt, connection, and native session IDs stay distinct
 
 The [workspace lifecycle](workspace-lifecycle.md) supersedes the original
 one-interaction-per-attempt behavior: questions can pause an attempt, runtime turns
-have distinct ownership, and an AI release decision is gated by verified archives.
+have distinct ownership. An AI release decision suspends compute and retains the
+Work PVC; no filesystem archive is required.
 
 ## Choosing an environment
 
@@ -20,15 +21,12 @@ Repository execution selects a repository enabled under **Settings → GitHub**.
 The agent's Git author name/email remain separate from the connected GitHub account.
 Each attempt records the GitHub account identity and connection generation,
 repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>` branch.
-Its first allocation gets an Agent Sandbox and private PVC named
-`run-<work-id>-<attempt-number>` in `agents`. The suffix starts at 1 for each Work
-and advances with each new execution; the global attempt ID remains unchanged.
-Released workspaces restore into a new allocation with an `-s<number>` suffix.
-Retained allocations serve subsequent turns through a claimed-input channel.
-The pod uses the Sandbox's name. Environment references record the namespace,
-Work ID, and global attempt ID (`k8s/agents/run-<work-id>/<attempt-id>`), with the
-pod suffix derived from the durable attempt history. See
-[Kubernetes names](kubernetes-names.md) for the deployment layout.
+The Work's first repository allocation provisions a Sandbox and private PVC named
+`work-<work-id>` in `agents`. Explicit retries and revisions reuse them with new
+attempt permissions. Suspended compute resumes as a fresh pod on that PVC;
+retained compute serves later turns through the claimed-input channel.
+Environment references record `k8s/<namespace>/work-<work-id>`.
+See [Kubernetes names](kubernetes-names.md).
 
 The sandbox receives repository content as a Git bundle and an attempt capability.
 It never receives the GitHub token. A trusted repository broker in the Goblin
@@ -37,7 +35,8 @@ objects in its own bare repository; agent Git configuration and hooks never ente
 that repository. `goblin-github publish` publishes commits to the exact assigned
 branch. `goblin-github pull-request` opens its draft PR (later branch publications
 update the same PR). `goblin-github fetch` refreshes the sandbox's origin references.
-The completed interaction also publishes a checkpoint automatically. Merging,
+The completed interaction also publishes a Git checkpoint automatically. Only
+commit metadata is recorded in PostgreSQL; workspace files stay on the PVC. Merging,
 auto-merge, other branches, tags, and repository administration are unavailable.
 
 Publication commands are persisted with Wolverine dispatch intent. Repeated command
@@ -74,9 +73,11 @@ runtime; it does not claim VM isolation or protection from a compromised kernel.
    before contacting the execution host. Redelivery of a claimed attempt cannot
    launch it again. One active or cleanup-pending attempt can use a connection.
 3. Text workers use a persistent reservation, a process start identity, and a
-   file gate. Sandboxes use deterministic, create-only identities and a PVC
-   execution fence. Reconciliation can create a suspended identity before a
-   delayed starter arrives. Replacement pods cannot repeat an uncertain attempt.
+   file gate. Each Work owns a stable Sandbox identity. Versioned ownership
+   changes, separate input mounts, and PVC claim files for each attempt/turn
+   prevent delayed operations from affecting a replacement allocation.
+   Reconciliation can create a suspended identity before a delayed starter arrives.
+   Replacement pods cannot repeat a claimed turn.
 4. Recovery observes the existing process/pod. Missing proof produces attention;
    it never launches a replacement. Failed delivery, runtime errors, cancellation
    errors, and storage failures have no automatic Work retry. A local durable
@@ -100,8 +101,9 @@ version; recovering those saved outcomes requires a separate explicit repair.
 
 Suspended Sandbox identities and workspace PVCs are retained. Do not delete
 identity fences while messages or controllers from those attempts could still
-arrive. Retention/archival automation is not implemented; an operator can inspect
-and archive stopped workspaces. The database remains the source of product
+arrive. Unfinished Work retains its volume. Under storage pressure, volumes of completed
+Work are eligible only after verified preservation of the latest files and
+confirmed cleanup. No age-based expiration is implemented. The database remains the source of product
 history; runtime logs and sessions are only execution evidence.
 
 Connection verification is separate from durable Work. Overlapping verification

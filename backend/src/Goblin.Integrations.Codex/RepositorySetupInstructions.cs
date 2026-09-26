@@ -9,7 +9,7 @@ internal static class RepositorySetupInstructions
         "Matching inputs do not prove tools are still installed or that this task needs them. Reassess when requirements change during the task, including adding a language. " +
         "Install only tools/dependencies needed for the task, using existing repository setup instructions when present. Prefer pinned versions and lockfiles; never silently update them just to prepare an environment. " +
         "The sandbox runs as a non-root user with a read-only image. Use writable workspace locations for tool installations when necessary. " +
-        "Files under /workspace can be checkpointed; /runtime and /tmp are temporary. Avoid placing credentials in saved files or learned setup. " +
+        "Files under /workspace persist on this Work's volume; /runtime and /tmp are temporary. Avoid placing credentials in saved files or learned setup. " +
         "Do not add setup files to the repository solely to teach Goblin. If portable instructions would help, make an occasional nonblocking suggestion in your response. " +
         "Return setup as an array of at most 8 successful repository setup observations, or [] when none were verified. " +
         "Each observation has topic (stable short name), reason (why this repository/task needs it and what changed), tools (names and exact versions), " +

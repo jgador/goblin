@@ -19,7 +19,7 @@
     "Sandbox": {
       "source": "agentSandbox",
       "fields": [
-        "apiVersion", "kind", "metadata.name", "metadata.namespace", "metadata.labels",
+        "apiVersion", "kind", "metadata.name", "metadata.namespace", "metadata.labels", "metadata.resourceVersion",
         "spec.operatingMode", "spec.shutdownPolicy", "spec.service",
         "spec.podTemplate.metadata.labels",
         "spec.podTemplate.spec.activeDeadlineSeconds",
