@@ -326,6 +326,18 @@ async function resolve(): Promise<void> {
         const merge = await api<{ object: { sha: string } }>(
             `git/ref/pull/${number}/merge`,
         );
+        const mergeCommit = await api<{ parents: { sha: string }[] }>(
+            `git/commits/${merge.object.sha}`,
+        );
+        if (
+            ![pull.head.sha, pull.base.sha].every((sha) =>
+                mergeCommit.parents.some((parent) => parent.sha === sha),
+            )
+        ) {
+            throw new Error(
+                "GitHub has not prepared the current merge commit yet, or the PR has conflicts. Update the branch and rerun validation.",
+            );
+        }
         context = {
             pr: number,
             head: pull.head.sha,
