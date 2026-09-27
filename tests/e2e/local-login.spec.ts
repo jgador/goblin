@@ -19,6 +19,14 @@ test("localhost requires the chosen password without prefilling it, including af
         listenUrl: origin,
     });
     try {
+        let ipRequests = 0;
+        await page.route("https://ipwho.is/**", (route) => {
+            ipRequests++;
+            return route.fulfill({
+                json: { success: true, timezone: { id: "Asia/Manila" } },
+                headers: { "access-control-allow-origin": "*" },
+            });
+        });
         const loginRequests: unknown[] = [];
         page.on("request", (request) => {
             if (
@@ -38,6 +46,7 @@ test("localhost requires the chosen password without prefilling it, including af
             ),
         ).toBeVisible();
         expect(loginRequests).toEqual([]);
+        expect(ipRequests).toBe(0);
         expect((await page.request.get(`${origin}/api/status`)).status()).toBe(
             401,
         );
@@ -58,6 +67,15 @@ test("localhost requires the chosen password without prefilling it, including af
         ).toBeVisible();
         await password.fill(chosenPassword);
         await open.click();
+        const timezone = page.getByRole("dialog", {
+            name: "Choose your timezone",
+        });
+        await expect(
+            timezone.getByLabel("Timezone", { exact: true }),
+        ).toHaveValue("Asia/Manila");
+        expect(ipRequests).toBe(1);
+        await timezone.getByRole("button", { name: "Use timezone" }).click();
+        await expect(timezone).not.toBeVisible();
         await expect(
             page.getByRole("heading", { name: "What should we work on?" }),
         ).toBeVisible();
@@ -66,6 +84,7 @@ test("localhost requires the chosen password without prefilling it, including af
             { password: chosenPassword },
         ]);
         await page.reload();
+        await expect(timezone).not.toBeVisible();
         await expect(
             page.getByRole("heading", { name: "What should we work on?" }),
         ).toBeVisible();

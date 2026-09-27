@@ -1,4 +1,5 @@
 import { escapeHtml as e, icon } from "../work/presentation.js";
+import { formatTimestamp } from "./timezone.js";
 
 type Usage = {
     total: number;
@@ -53,6 +54,9 @@ function uptime(seconds: number | null) {
 }
 
 export class SystemResources {
+    constructor() {
+        window.addEventListener("goblin-timezone-changed", () => this.update());
+    }
     private overview: Overview | null = null;
     private lastFetch = 0;
     private pending?: AbortController;
@@ -143,7 +147,7 @@ export class SystemResources {
             ${this.chart()}
             <div class="system-section-heading"><h4>Services & agent sandboxes</h4><span>${machine.services ? `${machine.services.filter((s) => s.ready).length} / ${machine.services.length} ready` : "Unavailable"}</span></div>
             ${machine.services?.length ? `<div class="system-services" role="list" aria-label="Services and agent sandboxes">${machine.services.map((service) => `<div class="system-service" role="listitem"><div><strong>${e(service.name)}</strong><small>${service.namespace === "agents" ? "Agent sandbox" : e(service.namespace)}${service.restarts ? ` · ${service.restarts} restart${service.restarts === 1 ? "" : "s"}` : ""}</small></div><div><span class="system-service-state ${service.ready ? "" : "warning"}">${service.ready ? "Ready" : e(service.phase === "Running" ? "Not ready" : service.phase || "Unknown")}</span><small>${e(cores(service.cpuCores))} CPU · ${e(bytes(service.memoryBytes))}</small></div></div>`).join("")}</div>` : `<p class="settings-description">${machine.services ? "No active Goblin services on this machine." : "Service health is temporarily unavailable."}</p>`}
-            <p class="system-footnote">Last reading: ${e(new Date(machine.observedAt).toLocaleTimeString())}. Completed pods are excluded.</p>
+            <p class="system-footnote">Last reading: ${e(formatTimestamp(machine.observedAt))}. Completed pods are excluded.</p>
             ${machine.environment === "WSL" ? '<p class="system-footnote">These are your WSL VM’s resources. Windows memory and the physical disk’s remaining space can impose additional limits.</p>' : '<p class="system-footnote">Disk shows the VM’s root filesystem. Separately mounted data disks are not included.</p>'}
             <button class="system-cluster-link" data-open-system-cluster>Open detailed cluster view ${icon("arrow")}</button>`;
     }

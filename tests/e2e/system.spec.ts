@@ -48,6 +48,8 @@ async function fixture(page: Page) {
         const path = new URL(route.request().url()).pathname;
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: !locked };
+        else if (path === "/api/preferences")
+            json = { timeZone: "Asia/Manila" };
         else if (path === "/api/session/lock") {
             locked = true;
             json = {};

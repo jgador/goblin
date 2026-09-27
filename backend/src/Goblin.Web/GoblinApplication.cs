@@ -98,7 +98,8 @@ public static class GoblinApplication
         if (!string.IsNullOrWhiteSpace(options.VictoriaLogsUrl))
         {
             builder.Services.AddHttpForwarder();
-            builder.Services.AddSingleton(services => new VictoriaLogsProxy(services.GetRequiredService<IHttpForwarder>(), options.VictoriaLogsUrl));
+            builder.Services.AddSingleton(services => new VictoriaLogsProxy(services.GetRequiredService<IHttpForwarder>(), options.VictoriaLogsUrl,
+                services.GetRequiredService<WorkspacePreferences>()));
         }
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
@@ -159,6 +160,7 @@ public static class GoblinApplication
             server.Limits.MaxRequestBodySize = null; // ReadBodyAsync enforces the limit even for chunked input.
         });
         builder.Services.AddSingleton(workspace);
+        builder.Services.AddSingleton(new WorkspacePreferences(workspace.DataDirectory));
         builder.Services.AddSingleton(_ => new CodexClient(runtimeOptions));
         if (options.EnableWork)
         {
@@ -187,6 +189,9 @@ public static class GoblinApplication
             ("/settings/settings.js", "settings/settings.js", "text/javascript; charset=utf-8"),
             ("/settings/github.js", "settings/github.js", "text/javascript; charset=utf-8"),
             ("/settings/system.js", "settings/system.js", "text/javascript; charset=utf-8"),
+            ("/settings/timezone.js", "settings/timezone.js", "text/javascript; charset=utf-8"),
+            ("/settings/timezone-places.js", "settings/timezone-places.js", "text/javascript; charset=utf-8"),
+            ("/settings/timezone-picker.js", "settings/timezone-picker.js", "text/javascript; charset=utf-8"),
             ("/settings/styles.css", "settings/styles.css", "text/css; charset=utf-8"),
             ("/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/work", "work/index.html", "text/html; charset=utf-8"),
@@ -206,7 +211,7 @@ public static class GoblinApplication
             response.Headers.XContentTypeOptions = "nosniff";
             response.Headers["Referrer-Policy"] = "no-referrer";
             response.Headers.XFrameOptions = "DENY";
-            response.Headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+            response.Headers.ContentSecurityPolicy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https://ipwho.is/; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
             try
             {
                 HttpRequest request = context.Request;
@@ -288,6 +293,19 @@ public static class GoblinApplication
         app.MapPost("/api/session/lock", (HttpContext context) => workspace.Lock((string)context.Items[SessionKey]!, context.Response));
         app.MapGet("/api/cluster", () => Results.Json(new { available = headlamp is not null }));
         app.MapGet("/api/logs", () => Results.Json(new { available = logs is not null }));
+        app.MapGet("/api/preferences", (WorkspacePreferences preferences, CancellationToken token) => preferences.ReadAsync(token));
+        app.MapGet("/api/preferences/timezones", () => Results.Json(WorkspacePreferences.TimeZones));
+        app.MapPost("/api/preferences/timezone", (HttpContext context, WorkspacePreferences preferences, CancellationToken token) =>
+            preferences.SetTimeZoneAsync(StringField(context, "timeZone"), StringField(context, "expectedTimeZone"), token));
+        app.MapGet("/api/preferences/logs.js", async (WorkspacePreferences preferences, CancellationToken token) =>
+        {
+            WorkspacePreferenceState state = await preferences.ReadAsync(token);
+            // This blocking, same-origin script runs before the pinned VLUI bundle.
+            // VLUI 1.52 stores values as {value: ...} with the VLUI: prefix.
+            return Results.Text("try { localStorage.setItem('VLUI:TIMEZONE', " +
+                JsonSerializer.Serialize(JsonSerializer.Serialize(new { value = state.TimeZone ?? "UTC" })) +
+                "); } catch {}", "text/javascript; charset=utf-8");
+        });
         app.MapGet("/api/system", (SystemMonitor monitor) => Results.Json(monitor.Current));
         app.MapGet("/api/status", (Delegate)((HttpContext context) => ConnectionAsync(context, false, auth.StatusAsync)));
         app.MapPost("/api/auth/chatgpt", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.LoginChatGptAsync)));

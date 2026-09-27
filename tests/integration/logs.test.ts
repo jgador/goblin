@@ -97,7 +97,15 @@ test("logs require Goblin login, proxy read APIs and streams, and exclude ingest
                 response.setHeader("Content-Type", "application/stream+json");
                 response.setHeader("Set-Cookie", "upstream=forbidden");
                 response.setHeader("Server", "private-upstream");
-                if (request.url!.includes("/tail")) {
+                if (request.url === "/logs/select/vmui/") {
+                    response.setHeader(
+                        "Content-Type",
+                        "text/html; charset=utf-8",
+                    );
+                    response.end(
+                        '<html><head><script type="module" src="./assets/app.js"></script></head><body>Logs</body></html>',
+                    );
+                } else if (request.url!.includes("/tail")) {
                     response.write('{"_msg":"first"}\n');
                     const timer = setTimeout(
                         () => response.end('{"_msg":"second"}\n'),
@@ -155,6 +163,25 @@ test("logs require Goblin login, proxy read APIs and streams, and exclude ingest
                     ";",
                 )[0],
             };
+            assert.equal(
+                (await send(app.url + "/logs/select/vmui/", authenticated))
+                    .headers.location,
+                "/?returnTo=logs",
+            );
+            assert.equal(
+                (
+                    await send(
+                        app.url + "/api/preferences/timezone",
+                        authenticated,
+                        "POST",
+                        JSON.stringify({
+                            timeZone: "Asia/Manila",
+                            expectedTimeZone: null,
+                        }),
+                    )
+                ).status,
+                200,
+            );
             assert.deepEqual(
                 JSON.parse(
                     (await send(app.url + "/api/logs", authenticated)).body,
@@ -165,6 +192,23 @@ test("logs require Goblin login, proxy read APIs and streams, and exclude ingest
                 (await send(app.url + "/logs/", authenticated)).headers
                     .location,
                 "/logs/select/vmui/",
+            );
+            const document = await send(app.url + "/logs/select/vmui/", {
+                ...authenticated,
+                "Accept-Encoding": "gzip, br",
+            });
+            assert.equal(document.status, 200);
+            assert.match(
+                document.body,
+                /<head><script src="\/api\/preferences\/logs.js"><\/script><script type="module"/,
+            );
+            assert.equal(
+                Number(document.headers["content-length"]),
+                Buffer.byteLength(document.body),
+            );
+            assert.equal(
+                observed.at(-1)!.headers["accept-encoding"],
+                undefined,
             );
             const form = "query=service%3Agoblin&limit=20";
             const query = await send(

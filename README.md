@@ -103,6 +103,10 @@ Codex integration, model regeneration, and direct .NET commands.
 The [workspace](docs/work-experience-preview.md) opens at http://localhost:8787.
 Start from the home composer, or select existing Work in the collapsible sidebar.
 AI connections, GitHub repository access, and Cluster are available in Settings.
+The first unlock suggests a [workspace timezone](docs/timezones.md) from IP location,
+with the browser timezone and then UTC as fallbacks. Search by country or city.
+Confirm it or choose another, then change it later under **Settings → Time & date**.
+The saved choice applies across browsers and devices, including displayed log times.
 Create and assign Work, execute with Codex, answer decisions, review outcomes,
 and approve completion. History and approvals are stored in PostgreSQL; failures
 require attention and explicit recovery.

@@ -41,7 +41,15 @@ try {
             allowInsecureHttp: true,
             listenUrl: `http://127.0.0.1:${port}`,
         });
-        const context = await browser.newContext();
+        const context = await browser.newContext({
+            timezoneId: "Asia/Manila",
+        });
+        await context.route("https://ipwho.is/**", (route) =>
+            route.fulfill({
+                json: { success: true, timezone: { id: "Asia/Manila" } },
+                headers: { "access-control-allow-origin": "*" },
+            }),
+        );
         const page = await context.newPage();
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));
@@ -59,10 +67,27 @@ try {
                 .getByLabel("Goblin password", { exact: true })
                 .fill("logging-browser-test");
             await page.getByRole("button", { name: "Open workspace" }).click();
+            const timezoneSetup = page.getByRole("dialog", {
+                name: "Choose your timezone",
+            });
+            await expect(
+                timezoneSetup.getByLabel("Timezone", { exact: true }),
+            ).toHaveValue("Asia/Manila");
+            await timezoneSetup
+                .getByRole("button", { name: "Use timezone" })
+                .click();
             await expect(page).toHaveURL(/\/logs\/select\/vmui\//);
             await expect(
                 page.getByRole("button", { name: /Execute/ }),
             ).toBeVisible({ timeout: 30_000 });
+            assert.equal(
+                await page.evaluate(
+                    () =>
+                        JSON.parse(localStorage.getItem("VLUI:TIMEZONE")!)
+                            .value,
+                ),
+                "Asia/Manila",
+            );
             const query = marker
                 ? `state.Marker:="${marker}"`
                 : "service:goblin";
@@ -84,8 +109,78 @@ try {
                 )
                 .toBe(query);
             const deepLink = page.url();
+            // A new device with its own browser timezone must use the saved
+            // workspace preference even when opening VMUI directly.
+            const other = await browser.newContext({
+                timezoneId: "Asia/Manila",
+            });
+            try {
+                await other.addCookies(await context.cookies());
+                // A stale browser preference must not override this workspace.
+                await other.addInitScript(() =>
+                    localStorage.setItem(
+                        "VLUI:TIMEZONE",
+                        JSON.stringify({ value: "UTC" }),
+                    ),
+                );
+                const second = await other.newPage();
+                await second.goto(deepLink);
+                await expect(
+                    second.getByRole("button", { name: /Execute/ }),
+                ).toBeVisible();
+                assert.equal(
+                    await second.evaluate(
+                        () =>
+                            JSON.parse(localStorage.getItem("VLUI:TIMEZONE")!)
+                                .value,
+                    ),
+                    "Asia/Manila",
+                );
+                const response = await second.evaluate(() =>
+                    fetch("/api/preferences/timezone", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            timeZone: "UTC",
+                            expectedTimeZone: "Asia/Manila",
+                        }),
+                    }).then((response) => response.status),
+                );
+                assert.equal(response, 200);
+            } finally {
+                await other.close();
+            }
             await page.reload();
             await expect(input).toHaveValue(query);
+            assert.equal(
+                await page.evaluate(
+                    () =>
+                        JSON.parse(localStorage.getItem("VLUI:TIMEZONE")!)
+                            .value,
+                ),
+                "UTC",
+            );
+            const restored = await page.evaluate(() =>
+                fetch("/api/preferences/timezone", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        timeZone: "Asia/Manila",
+                        expectedTimeZone: "UTC",
+                    }),
+                }).then((response) => response.status),
+            );
+            assert.equal(restored, 200);
+            await page.reload();
+            await expect(input).toHaveValue(query);
+            assert.equal(
+                await page.evaluate(
+                    () =>
+                        JSON.parse(localStorage.getItem("VLUI:TIMEZONE")!)
+                            .value,
+                ),
+                "Asia/Manila",
+            );
             if (marker)
                 await expect(
                     page
@@ -141,7 +236,7 @@ try {
             await page.getByRole("button", { name: "Open workspace" }).click();
             await expect(page.locator("textarea").first()).toHaveValue(query);
             console.log(
-                `PASS: ${hostname} — login, real VMUI search, subpath refresh, Settings link, CSP, ingestion denied, logout`,
+                `PASS: ${hostname} — timezone onboarding, shared preference on direct links and refresh, login, real VMUI search, Settings link, CSP, ingestion denied, logout`,
             );
         } finally {
             await context.close();

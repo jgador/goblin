@@ -9,6 +9,7 @@ async function setup(page: Page, assigned = true, waiting = false) {
             commands.push(route.request().postDataJSON());
         const data: Record<string, unknown> = {
             "/api/session": { authenticated: true },
+            "/api/preferences": { timeZone: "Asia/Manila" },
             "/api/agents": [
                 { id: "1", name: "Goblin", connectionId: "1" },
                 { id: "2", name: "Release reviewer", connectionId: "1" },
