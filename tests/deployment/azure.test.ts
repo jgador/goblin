@@ -52,6 +52,8 @@ async function bootstrap(
             | "build-failed"
             | "not-ready"
             | "headlamp-failed"
+            | "logs-failed"
+            | "collector-failed"
             | "ingress-failed"
             | "public-failed"
             | "sandbox-failed"
@@ -246,6 +248,10 @@ if (name === 'curl') {
   } else if (args[1] === 'wait' && args.includes('sandbox/app') && appState === 'not-ready') {
     process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/goblin-headlamp') && appState === 'headlamp-failed') {
+    process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('deployment/goblin-victorialogs') && appState === 'logs-failed') {
+    process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('daemonset/goblin-fluent-bit') && appState === 'collector-failed') {
     process.exit(1);
   } else if (args[1] === 'create' && args[2] === 'namespace') {
     process.stdout.write(JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: args[3] } }));
@@ -794,13 +800,15 @@ test("installer installs Docker without dropping K3s forwarding or replacing exi
     );
 });
 
-test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, or ingress fails", async (t) => {
+test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, logging, or ingress fails", async (t) => {
     for (const state of [
         "sandbox-failed",
         "docker-failed",
         "build-failed",
         "not-ready",
         "headlamp-failed",
+        "logs-failed",
+        "collector-failed",
         "ingress-failed",
     ] as const) {
         const root = await mkdtemp(join(tmpdir(), "goblin-app-failed-"));

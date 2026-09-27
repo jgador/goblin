@@ -32,7 +32,7 @@ export class Settings {
         this.system = system;
         this.dialog.className = "settings-dialog";
         this.dialog.setAttribute("aria-labelledby", "settings-title");
-        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
+        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button data-provider="logs">${icon("activity")}Logs</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section><section data-provider-panel="logs" aria-label="Logs" hidden></section></div></div>`;
         document.body.append(this.dialog);
         const systemButton = document.createElement("button");
         systemButton.dataset.provider = "system";
@@ -148,6 +148,30 @@ export class Settings {
             } catch {
                 panel.innerHTML =
                     '<h3>Cluster</h3><p class="settings-notice">Cluster access could not be loaded. Unlock Goblin and try again.</p>';
+            }
+            return;
+        }
+        if (provider === "logs") {
+            const panel = this.dialog.querySelector<HTMLElement>(
+                '[data-provider-panel="logs"]',
+            )!;
+            const generation = this.generation;
+            panel.innerHTML =
+                '<h3>Logs</h3><p class="settings-description">Loading log access…</p>';
+            try {
+                const response = await fetch("/api/logs");
+                if (!response.ok) throw new Error();
+                const logs = (await response.json()) as { available: boolean };
+                if (generation !== this.generation) return;
+                panel.innerHTML =
+                    '<h3>Logs</h3><p class="settings-description">Search saved Goblin logs and follow new events.</p>' +
+                    (logs.available
+                        ? '<p class="settings-description">Opens in a new tab using your Goblin login.</p><a class="settings-primary" href="/logs/" target="_blank" rel="noopener">Open logs</a>'
+                        : '<p class="settings-notice">Saved logs are available with Goblin’s Kubernetes installation.</p>');
+            } catch {
+                if (generation !== this.generation) return;
+                panel.innerHTML =
+                    '<h3>Logs</h3><p class="settings-notice">Log access could not be loaded. Unlock Goblin and try again.</p>';
             }
             return;
         }
