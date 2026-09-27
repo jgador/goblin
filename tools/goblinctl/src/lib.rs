@@ -6,4 +6,5 @@ pub mod files;
 pub mod install;
 pub mod local;
 pub mod operations;
+pub mod progress;
 pub mod setup;

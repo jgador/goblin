@@ -157,7 +157,29 @@ pub fn patch(sandbox: &Value, connection: &str) -> Result<Option<Value>> {
     })
 }
 pub fn migration_job(image: &str) -> Value {
-    json!({"apiVersion":"batch/v1","kind":"Job","metadata":{"generateName":"goblin-schema-","namespace":"goblin"},"spec":{"backoffLimit":0,"template":{"metadata":{"labels":{"goblin-database-access":"true"}},"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never","securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000},"containers":[{"name":"migrate","image":image,"imagePullPolicy":"IfNotPresent","command":["dotnet","/tools/database/Goblin.Database.dll","apply","/migrations"],"env":[{"name":"ConnectionStrings__GoblinAdmin","value":"Host=goblin-postgres;Database=goblin;Username=goblin_admin;SSL Mode=VerifyFull;Root Certificate=/etc/postgres/ca.crt;SSL Certificate=/etc/postgres/tls.crt;SSL Key=/etc/postgres/tls.key;GSS Encryption Mode=Disable"}],"securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"admin","mountPath":"/etc/postgres","readOnly":true},{"name":"tmp","mountPath":"/tmp"}]}],"volumes":[{"name":"admin","secret":{"secretName":"goblin-postgres-admin-tls","defaultMode":288}},{"name":"tmp","emptyDir":{}}]}}}})
+    json!({"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"goblin-schema","namespace":"goblin","labels":{"app.kubernetes.io/managed-by":"goblinctl"}},"spec":{"backoffLimit":0,"template":{"metadata":{"labels":{"goblin-database-access":"true"}},"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never","securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000},"containers":[{"name":"migrate","image":image,"imagePullPolicy":"IfNotPresent","command":["dotnet","/tools/database/Goblin.Database.dll","apply","/migrations"],"env":[{"name":"ConnectionStrings__GoblinAdmin","value":"Host=goblin-postgres;Database=goblin;Username=goblin_admin;SSL Mode=VerifyFull;Root Certificate=/etc/postgres/ca.crt;SSL Certificate=/etc/postgres/tls.crt;SSL Key=/etc/postgres/tls.key;GSS Encryption Mode=Disable"}],"securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"admin","mountPath":"/etc/postgres","readOnly":true},{"name":"tmp","mountPath":"/tmp"}]}],"volumes":[{"name":"admin","secret":{"secretName":"goblin-postgres-admin-tls","defaultMode":288}},{"name":"tmp","emptyDir":{}}]}}}})
+}
+
+/// Reconcile the owned migration job after interruption before another can run.
+pub fn migration_state(job: &Value, image: &str) -> Result<&'static str> {
+    ensure!(
+        job["metadata"]["name"] == "goblin-schema"
+            && job["metadata"]["labels"]["app.kubernetes.io/managed-by"] == "goblinctl"
+            && job["spec"]["template"]["spec"]["containers"][0]["image"] == image,
+        "Existing migration job needs administrator inspection; ownership or image differs"
+    );
+    if let Some(conditions) = job["status"]["conditions"].as_array() {
+        for condition in conditions {
+            if condition["status"] == "True" {
+                match condition["type"].as_str() {
+                    Some("Complete") => return Ok("complete"),
+                    Some("Failed") => return Ok("failed"),
+                    _ => (),
+                }
+            }
+        }
+    }
+    Ok("active")
 }
 
 /// Runtime scripts and manifests are embedded. Configuration exports stay at the requested destination.

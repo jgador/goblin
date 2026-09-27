@@ -60,10 +60,51 @@ retry. Stop is suspension; reset is explicit deletion of the owned test cluster.
 The native CLI remains installed after reset.
 
 The installer retains its existing root worker and unprivileged DynamicUser setup
-service as separate processes. Public setup exposes only static assets, status,
-and health. Its local health socket appears only after the public listener binds.
+service as separate processes. Public setup exposes static assets, status,
+health, and the read-only `/setup/events` progress stream. Its local health socket appears only after the public listener binds.
 The server bounds request sizes, connection count and timeouts. The existing
 handoff marker, installer lock, rollback, and retained-source retry rules remain.
+
+## Parallel installation and live progress
+
+After retaining and validating the source snapshot, the installer builds Goblin
+alongside k3s setup. It prefetches service images directly into k3s as soon as CRI
+is available. Certificate manager and Sandbox install concurrently after node
+readiness. PostgreSQL waits for both add-ons; image import waits for the build and
+k3s; migration waits for PostgreSQL and image import. Deployment waits for the
+migration and image downloads. Existing readiness and public handoff checks remain.
+The production Dockerfile keeps its original build stages and asset packaging.
+
+Four workers prefetch images by default. Set `GOBLIN_IMAGE_PULL_WORKERS=1` through
+`8` in a `goblin-installer.service` systemd environment override to tune smaller
+hosts. Each explicit pull has a ten-minute timeout. Kubernetes and BuildKit also
+perform their own pulls; this limit applies to Goblin's prefetch workers. Service
+references come from validated application manifests and the embedded PostgreSQL
+manifest; add-on references use the installer's pinned release versions.
+
+The setup page shows concurrent steps and a live installation log, including build
+stages, cache reuse, individual image downloads and database checks. The latest
+300 structured entries, with timestamps and attempt IDs, are retained in the
+atomic status document. Refreshing the page restores that tail. EventSource
+reconnects with an event ID between bounded SSE batches; status polling continues
+through the ingress handoff. “Follow latest” controls scrolling without pausing
+collection. Public messages are authored progress events and reconstructed
+BuildKit records; arbitrary package/compiler output, credentials and upstream
+errors remain in the private host log, available through `sudo goblinctl logs`.
+
+Each worker runs in an owned process group. A failure blocks dependent work and
+stops outstanding workers before recovery releases the attempt lock. State writes
+use a separate short file lock so concurrent updates cannot overwrite each other.
+Failed installations disable their boot unit and require `goblinctl install retry`;
+the setup page remains available. The retained source archive, password, completed
+Docker/k3s images, build cache, certificates and PVCs are reused and checked on retry.
+Saved step completion alone never causes infrastructure readiness checks to be skipped.
+
+The database migration command reconciles its named, owned job after interruption.
+An active job is observed, a completed job is collected, and a confirmed failed job
+can be replaced by an explicit invocation. A different image or owner requires
+inspection. PostgreSQL's advisory lock and transactional migration ledger remain
+authoritative for schema application. Installation failure never resets the database.
 
 ## Source and build boundaries
 

@@ -104,3 +104,38 @@ test("local setup health cannot report ready when the public port is occupied", 
     );
     await assert.rejects(access(socket));
 });
+
+test("setup streams retained progress and resumes by event ID without serving private logs", async (t) => {
+    const setup = await startSetup();
+    t.after(() => setup.close());
+    await writeFile(
+        join(setup.root, "goblin-installer.log"),
+        "secret-command-output",
+    );
+    setup.transition("begin");
+    setup.transition("start", "image");
+    setup.transition("detail", "Installing frontend dependencies");
+    const response = await fetch(setup.url + "/setup/events");
+    assert.equal(response.headers.get("content-type"), "text/event-stream");
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const batch = await response.text();
+    assert.match(batch, /Installing frontend dependencies/);
+    assert.ok(!batch.includes("secret-command-output"));
+    const id = batch.match(/^id: (.+)$/m)![1];
+    const heartbeat = await fetch(setup.url + "/setup/events", {
+        headers: { "Last-Event-ID": id },
+    });
+    assert.match(await heartbeat.text(), /keepalive/);
+    setup.transition("start", "k3s");
+    const resumed = await (
+        await fetch(setup.url + "/setup/events", {
+            headers: { "Last-Event-ID": id },
+        })
+    ).text();
+    assert.match(resumed, /Install Kubernetes started/);
+    assert.notEqual(resumed.match(/^id: (.+)$/m)![1], id);
+    assert.equal(
+        (await fetch(setup.url + "/setup/events", { method: "POST" })).status,
+        405,
+    );
+});

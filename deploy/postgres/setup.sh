@@ -4,6 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 umask 077
 goblinctl=${GOBLINCTL:-goblinctl}
+progress() {
+  if [[ "${GOBLIN_INSTALL_PROGRESS:-false}" == true ]]; then
+    "$goblinctl" internal state detail "$1" --step database --path "${GOBLIN_INSTALL_STATE:-/var/lib/goblin/install/status.json}"
+  fi
+}
 config_root=${GOBLIN_CONFIG_ROOT:-$PWD}
 port=5432
 if [[ $# == 2 && "$1" == --port && "$2" =~ ^[0-9]+$ && "$2" -ge 1 && "$2" -le 65535 ]]; then
@@ -35,6 +40,7 @@ if [[ -f /var/lib/goblin/local-test/config.json ]]; then
   fi
 fi
 # Fail before changing a database if certificate issuance is unavailable.
+progress 'Checking certificate manager before PostgreSQL setup'
 for deployment in cert-manager cert-manager-cainjector cert-manager-webhook; do
   "${goblin_kubectl[@]}" rollout status "deployment/$deployment" -n cert-manager --timeout=120s
 done
@@ -52,6 +58,7 @@ if [[ -z "$existing_admin" && -n "$existing_data" ]]; then
   exit 1
 fi
 
+progress 'Issuing and checking PostgreSQL certificates'
 "${goblin_kubectl[@]}" apply -f deploy/postgres/ca.yaml
 "${goblin_kubectl[@]}" wait --for=condition=Ready certificate/goblin-postgres-ca -n goblin --timeout=180s
 "${goblin_kubectl[@]}" apply -f deploy/postgres/certificates.yaml
@@ -63,8 +70,10 @@ if [[ -z "$existing_admin" ]]; then
   "$goblinctl" internal admin-secret | "${goblin_kubectl[@]}" create -f -
 fi
 
+progress 'Starting PostgreSQL with its retained data volume'
 "${goblin_kubectl[@]}" apply -k deploy/postgres
 "${goblin_kubectl[@]}" rollout status statefulset/goblin-postgres -n goblin --timeout=300s
+progress 'Verifying PostgreSQL TLS and client certificate authentication'
 verification_job=$("${goblin_kubectl[@]}" create -f deploy/postgres/verify.yaml -o name)
 if ! "${goblin_kubectl[@]}" wait --for=condition=Complete "$verification_job" -n goblin --timeout=150s; then
   "${goblin_kubectl[@]}" logs "$verification_job" -n goblin --all-containers=true || true
@@ -72,6 +81,7 @@ if ! "${goblin_kubectl[@]}" wait --for=condition=Complete "$verification_job" -n
 fi
 "${goblin_kubectl[@]}" logs "$verification_job" -n goblin
 "${goblin_kubectl[@]}" delete "$verification_job" -n goblin --ignore-not-found=true --wait=true
+progress 'Saving private database client configuration'
 "${goblin_kubectl[@]}" get secret goblin-postgres-app-tls goblin-postgres-admin-tls -n goblin -o json | \
   "$goblinctl" --repo "$config_root" internal db-export --port "$port"
 
