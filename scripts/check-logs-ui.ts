@@ -80,6 +80,13 @@ try {
             await expect(
                 page.getByRole("button", { name: /Execute/ }),
             ).toBeVisible({ timeout: 30_000 });
+            // VMUI initializes its time range in the URL after rendering the
+            // controls. Wait for that state before submitting a custom query.
+            await expect(page).toHaveURL((url) =>
+                new URLSearchParams(url.hash.split("?")[1]).has(
+                    "g0.range_input",
+                ),
+            );
             assert.equal(
                 await page.evaluate(
                     () =>
@@ -94,8 +101,12 @@ try {
             // The actual UI sends read requests with form-encoded POST bodies.
             const input = page.locator("textarea").first();
             await input.fill(query);
-            const requested = page.waitForResponse((response) =>
-                response.url().includes("/logs/select/logsql/query"),
+            const requested = page.waitForResponse(
+                (response) =>
+                    response.url().includes("/logs/select/logsql/query") &&
+                    new URLSearchParams(
+                        response.request().postData() ?? "",
+                    ).get("query") === query,
             );
             await page.getByRole("button", { name: /Execute/ }).click();
             const result = await requested;

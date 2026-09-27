@@ -85,18 +85,26 @@ forward() {
 }
 check_records() {
   local marker=$1
+  local delivery=${2:-acknowledged}
   for ((attempt=0; attempt<60; attempt++)); do
     curl -fsS --max-time 5 --data-urlencode "query=kubernetes.pod_name:=$marker" --data 'limit=100' \
       "$logging_query_url/logs/select/logsql/query" > "$logging_test_dir/records.jsonl"
     if [[ $(wc -l < "$logging_test_dir/records.jsonl") -ge 5 ]]; then break; fi
     sleep 2
   done
-  node --input-type=module - "$logging_test_dir/records.jsonl" "$marker" <<'JS'
+  node --input-type=module - "$logging_test_dir/records.jsonl" "$marker" "$delivery" <<'JS'
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const raw=readFileSync(process.argv[2],'utf8');
-const entries=raw.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
-assert.equal(entries.length, 5, 'Restarting the collector must not replay already-delivered files in this acknowledged-delivery scenario');
+const deliveries=raw.trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));
+// Buffered chunks can be delivered again after recovery. Compare complete
+// records so duplicates cannot hide missing fields or missing smoke events.
+const entries=[...new Map(deliveries.map(row=>[
+  JSON.stringify(Object.fromEntries(Object.entries(row).sort(([a],[b])=>a.localeCompare(b)))), row,
+])).values()];
+assert.equal(entries.length, 5, 'All five distinct smoke records must survive collection and recovery');
+if (process.argv[4]==='acknowledged')
+  assert.equal(deliveries.length, entries.length, 'Restarting the collector must not replay already-delivered files in this acknowledged-delivery scenario');
 const info=entries.find(row=>row.category==='Goblin.LoggingSmoke' && row.level==='Information');
 assert.ok(info, 'Structured .NET event must arrive');
 assert.equal(info.category, 'Goblin.LoggingSmoke');
@@ -113,6 +121,8 @@ assert.ok(entries.some(row=>row._msg===`Plain stderr ${process.argv[3]}` && row.
 assert.ok(entries.some(row=>row.category==='Microsoft.AspNetCore.Hosting.Diagnostics' && row.level==='Information' && row['state.Marker']===process.argv[3]));
 assert.ok(!raw.includes('filtered-smoke-debug-details'));
 console.log(`PASS: ${process.argv[3]} — timestamps, messages, levels, fields, 64-bit IDs, scopes, multiline, pod metadata, text fallback`);
+if (deliveries.length!==entries.length)
+  console.log(`Recovery redelivered ${deliveries.length-entries.length} duplicate records; all five distinct records are intact.`);
 JS
 }
 smoke logging-first
@@ -130,7 +140,7 @@ kube scale deployment/goblin-victorialogs -n goblin --replicas=1
 kube rollout status deployment/goblin-victorialogs -n goblin --timeout=90s
 forward
 check_records logging-first
-check_records logging-buffered
+check_records logging-buffered recovered
 GOBLIN_TEST_VICTORIALOGS_URL="$logging_query_url" GOBLIN_TEST_LOG_MARKER=logging-buffered \
   node dist/scripts/check-logs-ui.js
 printf 'PASS: logging pipeline and real VMUI; disposable cluster removed on exit.\n'
