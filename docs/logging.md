@@ -5,6 +5,12 @@ formatter, Fluent Bit, and VictoriaLogs. Open **Settings → Logs → Open logs*
 visit **`/logs/`** on the Goblin address. VictoriaLogs' built-in VMUI uses the Goblin
 login and opens in a new tab. No CLI, separate UI pod, or second password is needed.
 
+Displayed log times use the shared [workspace timezone](timezones.md), confirmed
+on first access and editable under **Settings → Time & date**. IP location
+suggests the initial timezone, with browser detection and UTC as fallbacks. Reopen
+or refresh log views after changing the preference. Stored logs and raw timestamps
+remain UTC.
+
 This change configures providers and delivery only. Application log statements
 and Work/Attempt instrumentation are deferred. Existing `Console.WriteLine` and
 `Console.Error.WriteLine` messages remain plain text.
