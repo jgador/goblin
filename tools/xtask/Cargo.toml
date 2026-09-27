@@ -18,3 +18,5 @@ sha2.workspace = true
 tar.workspace = true
 tempfile.workspace = true
 goblinctl = { path = "../goblinctl" }
+toml_edit = { version = "0.22", features = ["serde"] }
+regex = "1"

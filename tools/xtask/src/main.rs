@@ -15,6 +15,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+mod dependencies;
 mod release;
 
 #[derive(Parser)]
@@ -24,6 +25,11 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Task {
+    /// Resolve Docker images and verify Goblin's installer dependency.
+    Dependencies {
+        #[command(subcommand)]
+        command: dependencies::Task,
+    },
     /// Launch the development app after preparing credentials.
     Dev,
     /// Package an already-built native binary deterministically.
@@ -37,7 +43,7 @@ enum Task {
     },
     /// Download, authenticate and pin a compatible published release.
     PinRelease {
-        #[arg(long)]
+        #[arg(long, default_value = release::REPOSITORY)]
         repo: String,
         #[arg(long)]
         version: String,
@@ -49,7 +55,7 @@ enum Task {
     },
     /// Verify this source tree against the pinned published installer.
     ReleaseCheck {
-        #[arg(long)]
+        #[arg(long, default_value = release::REPOSITORY)]
         repo: String,
         #[arg(
             long,
@@ -93,6 +99,7 @@ fn execute() -> Result<()> {
         .context("Missing repository directory")?;
     std::env::set_current_dir(root)?;
     match Cli::parse().command {
+        Task::Dependencies { command } => dependencies::execute(root, command),
         Task::Dev => credentials::dev(root),
         Task::Package {
             binary,

@@ -172,6 +172,40 @@ test("pin updates reject stale candidate SHAs before writing", async () => {
     await assert.rejects(pinCommit, /changed while pinning/);
 });
 
+test("pin commits keep catalog and lock updates with the authenticated release outputs", async () => {
+    process.env.RELEASE_PR = "14";
+    process.env.RELEASE_SHA = head;
+    process.env.PIN_DIRECTORY = ".";
+    let committed: { path: string; content: string }[] = [];
+    mockApi((path, method, body) => {
+        if (path === "pulls/14") return candidate;
+        if (path === `git/commits/${head}`) return { tree: { sha: head } };
+        if (path === "git/trees") {
+            committed = body.tree as typeof committed;
+            return { sha };
+        }
+        if (path === "git/commits") return { sha };
+        if (path.includes("/comments?")) return [];
+        if (method === "PATCH") assert.equal(body.force, false);
+        return {};
+    });
+    await pinCommit();
+    assert.deepEqual(
+        committed.map((value) => value.path),
+        [
+            "dependencies.toml",
+            "dependencies.lock.json",
+            "deploy/goblinctl-release.json",
+            "deploy/azure/azuredeploy.json",
+            "deploy/azure/azuredeploy.portal.json",
+        ],
+    );
+    assert.equal(
+        committed[0].content,
+        readFileSync("dependencies.toml", "utf8"),
+    );
+});
+
 test("candidate metadata cannot supply shell expressions or unrelated PRs", () => {
     assert.equal(parseCandidate(candidate.body).parent, 13);
     assert.throws(() => parseCandidate("ordinary PR"));

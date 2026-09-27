@@ -76,6 +76,8 @@ jobs:
         with:
           name: goblinctl-pin-${{ inputs.pr }}
           path: |
+            dependencies.toml
+            dependencies.lock.json
             deploy/goblinctl-release.json
             deploy/azure/azuredeploy.json
             deploy/azure/azuredeploy.portal.json
@@ -98,7 +100,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: goblinctl-pin-${{ inputs.pr }}
-          path: pin/deploy
+          path: pin
       - run: node scripts/goblinctl-release.mts pin-commit
         env:
           GH_TOKEN: ${{ github.token }}

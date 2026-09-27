@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "catalogSha256": "5fd1a084dee8ec47f0009dcf7c8d24f2c04992583fdfde6d92449ff053f61397",
+  "platform": "linux/amd64",
+  "images": {
+    "fluent-bit": {
+      "reference": "cr.fluentbit.io/fluent/fluent-bit:5.1.2",
+      "digest": "sha256:d792375ca8e53be72fc25716c28f291f32c6fc6f4f31d12d0d14bc78cefe9226"
+    },
+    "headlamp": {
+      "reference": "ghcr.io/headlamp-k8s/headlamp:v0.45.0",
+      "digest": "sha256:db3f0e0fc58d358d41daa3fe7fc852437552c7ee873c3645470f7b86a8e0db49"
+    },
+    "postgres": {
+      "reference": "postgres:16.15-bookworm",
+      "digest": "sha256:efedf3595f1d6f415c08568ba171029bf54052e754cc9f030e3f2412b21f3d67"
+    },
+    "victorialogs": {
+      "reference": "victoriametrics/victoria-logs:v1.52.0",
+      "digest": "sha256:47b820890d64c4575a2a0a46415dcd8a4fd59a0f1fcd6a377693d7aea639442e"
+    }
+  },
+  "goblinctl": {
+    "repository": "jgador/goblin",
+    "sha256": "ba860ae78b63062ab3eec030b90d6d02d3819ecbb07f0f8c49cbbd200330e2ef",
+    "target": "x86_64-unknown-linux-musl",
+    "version": "0.1.1"
+  }
+}

@@ -83,6 +83,13 @@ review, including these gaps and credentials with unfamiliar formats.
 
 ## Handling a finding
 
+Release metadata contains a SHA-256 checksum for
+`tools/goblinctl/src/credentials.rs`. The filename can trigger Gitleaks'
+`generic-api-key` rule. A scoped exception accepts that exact field with a
+64-character lowercase hexadecimal value, alone on its JSON line, in
+`deploy/goblinctl-release.json` and the two generated `deploy/azure/azuredeploy*.json`
+templates. Other fields and credential rules remain active in those files.
+
 The PostgreSQL connection in `backend/src/Goblin.Web/appsettings.json` contains
 certificate paths, with private keys supplied at runtime. Database passwords no
 longer have a scanner exception. Exported client keys in `.goblin-postgres/` are
@@ -96,6 +103,7 @@ deleting the current file does not remove the old commit.
 
 Do not add blanket exclusions or a baseline merely to make the scan pass.
 Any justified false-positive exception in `.gitleaks.toml` should match a specific
-synthetic value and path, with a reason. The wrapper deliberately ignores
+synthetic value or narrowly defined generated metadata field and path, with a
+reason. The wrapper deliberately ignores
 `gitleaks:allow` comments and `.gitleaksignore` files so they cannot silently
 suppress a candidate.

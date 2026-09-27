@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod credentials;
 pub mod database;
+pub mod deployment;
 pub mod files;
 pub mod install;
 pub mod local;

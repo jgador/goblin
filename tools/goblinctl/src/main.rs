@@ -7,6 +7,7 @@ use clap::Subcommand;
 use goblinctl::assets;
 use goblinctl::credentials;
 use goblinctl::database;
+use goblinctl::deployment;
 use goblinctl::files;
 use goblinctl::install;
 use goblinctl::local::Local;
@@ -33,6 +34,18 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    /// Report the installer version and code-generated installation schema.
+    Metadata {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check installation inputs without changing the host.
+    ValidateInstall {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long, default_value = ".")]
+        source: PathBuf,
+    },
     /// Install on this Ubuntu host, or inspect/retry an installation.
     Install(InstallArgs),
     /// Inspect live services and application readiness (exit 1 when unhealthy).
@@ -147,6 +160,14 @@ enum DbCommand {
 }
 #[derive(Subcommand)]
 enum InternalCommand {
+    PrepareInstall {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        source: PathBuf,
+        #[arg(long)]
+        destination: PathBuf,
+    },
     Activate {
         #[arg(long)]
         binary: PathBuf,
@@ -260,6 +281,10 @@ fn execute(cli: Cli) -> Result<()> {
         }
     };
     match cli.command {
+        Commands::Metadata { json: _ } => print_json(&deployment::metadata()),
+        Commands::ValidateInstall { request, source } => {
+            deployment::InstallRequest::read(&request)?.validate(&source)
+        }
         Commands::Install(args) => match args.command {
             Some(InstallCommand::Status { json }) => operations::install_status(json),
             Some(InstallCommand::Retry) => {
@@ -326,6 +351,11 @@ fn execute(cli: Cli) -> Result<()> {
             DbCommand::Forward { port } => local_action(&repo, LocalCommand::Database { port }),
         },
         Commands::Internal { command } => match command {
+            InternalCommand::PrepareInstall {
+                request,
+                source,
+                destination,
+            } => deployment::InstallRequest::read(&request)?.prepare(&source, &destination),
             InternalCommand::Activate {
                 binary,
                 system_root,

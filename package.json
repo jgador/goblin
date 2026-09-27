@@ -21,7 +21,7 @@
     "format:typescript": "prettier --write --ignore-path .gitignore \"**/*.{ts,tsx,mts,cts}\"",
     "prestart": "npm run build",
     "start": "cargo xtask dev",
-    "pretest": "npm run build",
+    "pretest": "npm run dependencies:check && npm run build",
     "test": "npm run test:rust && npm run test:release && npm run protocol:check && npm run kubernetes:check && dotnet test backend/Goblin.slnx --no-build --nologo && node --test dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
     "test:release": "node --test scripts/goblinctl-release.test.mts",
     "protocol:generate": "dotnet run --file backend/scripts/GenerateProtocol.cs",
@@ -49,7 +49,9 @@
     "pretest:logs-ui": "npm run build",
     "test:logs-ui": "node dist/scripts/check-logs-ui.js",
     "pretest:logging": "npm run build",
-    "test:logging": "bash scripts/check-logging.sh"
+    "test:logging": "bash scripts/check-logging.sh",
+    "dependencies:check": "cargo xtask dependencies check --locked",
+    "dependencies:resolve": "cargo xtask dependencies resolve"
   },
   "dependencies": {
     "@openai/codex": "0.155.1"
