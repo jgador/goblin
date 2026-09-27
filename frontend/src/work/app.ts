@@ -1,6 +1,14 @@
 import { WorkWorkspace } from "./workspace.js";
 import { Settings } from "../settings/settings.js";
 import { SystemResources } from "../settings/system.js";
+import {
+    formatTimestamp as time,
+    loadTimeZone,
+    savedTimeZone,
+    resetTimeZone,
+    displayTimeZone,
+} from "../settings/timezone.js";
+import { TimeZoneSetup } from "../settings/timezone-picker.js";
 import type { Repository } from "../settings/github.js";
 import { icon, escapeHtml as e } from "./presentation.js";
 import type { Work, View, Conversation } from "./contracts.js";
@@ -76,6 +84,7 @@ let sidebarCollapsed =
     localStorage.getItem("goblin.sidebarCollapsed") === "true";
 let sessionChecked = false,
     workUnavailable = false;
+let timezoneError = "";
 let initialSettings = query.get("settings");
 const drafts = new Map<string, string>();
 const setupDrafts = new Map<
@@ -149,6 +158,8 @@ let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const system = new SystemResources();
 const settings = new Settings(system);
+const timezoneSetup = new TimeZoneSetup();
+window.addEventListener("goblin-timezone-changed", () => render(true));
 const workWorkspace = new WorkWorkspace();
 window.addEventListener("goblin-workspace-locked", () => {
     authenticated = false;
@@ -386,7 +397,6 @@ function ensureModels() {
     const choice = modelSelection(w);
     void loadModels(connectionId, choice.expanded ? 10 : 3, choice.model);
 }
-const time = (value: string) => new Date(value).toLocaleString();
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const effortLabel = (value: string) =>
     effortStops.find((stop) => stop.value === value)?.label ??
@@ -431,6 +441,9 @@ async function api<T>(path: string, body?: unknown): Promise<T> {
     return result as T;
 }
 function forgetWorkspace() {
+    timezoneSetup.reset();
+    resetTimeZone();
+    timezoneError = "";
     modelEpoch++;
     work = [];
     conversations = [];
@@ -469,6 +482,22 @@ async function refresh(preserveError = false) {
             forgetWorkspace();
             return;
         }
+        try {
+            await loadTimeZone(AbortSignal.timeout(6000));
+            timezoneError = "";
+        } catch {
+            timezoneError = `Workspace timezone could not be loaded. Displayed times currently use ${displayTimeZone()}. Open Time & date in Settings to try again.`;
+        }
+        if (savedTimeZone() === null) {
+            timezoneSetup.open(() => void refresh());
+            return;
+        }
+        timezoneSetup.reset();
+        if (query.get("returnTo") === "logs") {
+            if (timezoneError) return;
+            location.replace("/logs/select/vmui/" + location.hash);
+            return;
+        }
         if (query.get("returnTo") === "headlamp") {
             location.replace("/headlamp/");
             return;
@@ -478,7 +507,14 @@ async function refresh(preserveError = false) {
             const target = initialSettings;
             initialSettings = null;
             void settings.open(
-                ["codex", "github", "system", "cluster"].includes(target)
+                [
+                    "codex",
+                    "github",
+                    "system",
+                    "cluster",
+                    "logs",
+                    "timezone",
+                ].includes(target)
                     ? target
                     : "connections",
             );
@@ -902,7 +938,7 @@ function render(preserveHome = false, forceSelect = false) {
             (mobile.matches && !sidebarCollapsed) ||
             (compact.matches && activityOpen);
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
-            <div class="workspace-notices">${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
+            <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
             ${view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${compact.matches && activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&

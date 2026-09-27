@@ -65,6 +65,8 @@ stage 'Configuring the Goblin hostname'
 # Keep a rendered overlay on the VM for inspection and later HTTPS setup.
 install -d -m 0750 /var/lib/goblin/deploy/auth /var/lib/goblin/deploy/azure/app
 cp "$goblin_source_dir/deploy/auth/"{sandbox,kustomization,execution,headlamp}.yaml /var/lib/goblin/deploy/auth/
+install -d -m 0750 /var/lib/goblin/deploy/auth/logging
+cp "$goblin_source_dir/deploy/auth/logging/"{kustomization,workloads}.yaml "$goblin_source_dir/deploy/auth/logging/fluent-bit.conf" /var/lib/goblin/deploy/auth/logging/
 cp "$goblin_source_dir/deploy/azure/app/"{ingress,kustomization}.yaml /var/lib/goblin/deploy/azure/app/
 "$GOBLINCTL" internal render-overlay /var/lib/goblin/deploy/azure/app "$goblin_hostname" "$goblin_image" "$goblin_origin"
 k3s kubectl apply -k /var/lib/goblin/deploy/azure/app
@@ -77,6 +79,8 @@ step verify
 stage 'Checking Goblin readiness'
 k3s kubectl wait --for=condition=Ready sandbox/app -n goblin --timeout=300s
 k3s kubectl rollout status deployment/goblin-headlamp -n goblin --timeout=300s
+k3s kubectl rollout status deployment/goblin-victorialogs -n goblin --timeout=300s
+k3s kubectl rollout status daemonset/goblin-fluent-bit -n goblin --timeout=300s
 k3s kubectl rollout status deployment/traefik -n kube-system --timeout=300s
 check_app() {
   local address=$1 attempt url="$goblin_origin"

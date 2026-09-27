@@ -20,6 +20,8 @@ async function settingsFixture(page: Page) {
             path = new URL(request.url()).pathname;
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
+        else if (path === "/api/preferences")
+            json = { timeZone: "Asia/Manila" };
         else if (path === "/api/cluster") json = { available: true };
         else if (path === "/api/status")
             json = {

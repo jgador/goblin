@@ -26,6 +26,11 @@ const origin = `http://${publicHostname}`;
 const hasherArgs = ["internal", "hash-password"];
 const fakePassword =
     "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` café 🧌  ";
+const nativeVersionOutput = execFileSync(goblinctl, ["--version"], {
+    encoding: "utf8",
+}).trim();
+assert.match(nativeVersionOutput, /^goblinctl \d+\.\d+\.\d+$/);
+const nativeVersion = nativeVersionOutput.slice("goblinctl ".length);
 
 // Exercise the real rendered bootstrap, replacing only infrastructure commands
 // and absolute system paths. Native hashing, shell quoting and secret creation
@@ -43,7 +48,7 @@ async function bootstrap(
         dockerEnvironment?: NodeJS.ProcessEnv;
         kubeconfig?: string;
         bootstrapOnly?: boolean;
-        nativeDownload?: "failed" | "corrupt";
+        nativeDownload?: "failed" | "corrupt" | "wrong-version";
         resume?: boolean;
         recovery?: boolean;
         state?:
@@ -52,6 +57,8 @@ async function bootstrap(
             | "build-failed"
             | "not-ready"
             | "headlamp-failed"
+            | "logs-failed"
+            | "collector-failed"
             | "ingress-failed"
             | "public-failed"
             | "sandbox-failed"
@@ -247,6 +254,10 @@ if (name === 'curl') {
     process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/goblin-headlamp') && appState === 'headlamp-failed') {
     process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('deployment/goblin-victorialogs') && appState === 'logs-failed') {
+    process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('daemonset/goblin-fluent-bit') && appState === 'collector-failed') {
+    process.exit(1);
   } else if (args[1] === 'create' && args[2] === 'namespace') {
     process.stdout.write(JSON.stringify({ apiVersion: 'v1', kind: 'Namespace', metadata: { name: args[3] } }));
   } else if (args[1] === 'create' && args[2] === 'secret') {
@@ -356,7 +367,14 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
             "__GOBLIN_PASSWORD_BASE64__",
             Buffer.from(password).toString("base64"),
         )
-        .replace("__GOBLINCTL_VERSION__", "0.1.0")
+        .replace(
+            "__GOBLINCTL_VERSION__",
+            application.nativeDownload === "wrong-version"
+                ? nativeVersion === "0.0.0"
+                    ? "0.0.1"
+                    : "0.0.0"
+                : nativeVersion,
+        )
         .replace("__GOBLINCTL_SHA256__", nativeChecksum);
     script = remap(script);
     await mkdir(join(root, "var/log"), { recursive: true });
@@ -794,13 +812,15 @@ test("installer installs Docker without dropping K3s forwarding or replacing exi
     );
 });
 
-test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, or ingress fails", async (t) => {
+test("installer cannot report ready when Agent Sandbox, Docker, the application build, pod, Headlamp, logging, or ingress fails", async (t) => {
     for (const state of [
         "sandbox-failed",
         "docker-failed",
         "build-failed",
         "not-ready",
         "headlamp-failed",
+        "logs-failed",
+        "collector-failed",
         "ingress-failed",
     ] as const) {
         const root = await mkdtemp(join(tmpdir(), "goblin-app-failed-"));
@@ -1617,8 +1637,12 @@ test("invalid forwarded origins fail before installing cluster components", asyn
     }
 });
 
-test("native download failure or corruption leaves the previous installer untouched", async (t) => {
-    for (const nativeDownload of ["failed", "corrupt"] as const) {
+test("native download failure, corruption, or wrong version leaves the previous installer untouched", async (t) => {
+    for (const nativeDownload of [
+        "failed",
+        "corrupt",
+        "wrong-version",
+    ] as const) {
         const root = await mkdtemp(join(tmpdir(), "goblin-native-failed-"));
         t.after(() => rm(root, { recursive: true, force: true }));
         const previous = join(

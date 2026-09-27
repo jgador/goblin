@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -36,6 +36,10 @@ try {
         const publicOrigin = `http://${hostname}:${port}`;
         const passwordHashFile = join(dataDir, "owner-password");
         await writePasswordHash(passwordHashFile, "headlamp-runtime-test");
+        await writeFile(
+            join(dataDir, "workspace-preferences.json"),
+            JSON.stringify({ timeZone: "Asia/Manila" }),
+        );
         const app = await startBackend({
             dataDir,
             passwordHashFile,
@@ -44,7 +48,7 @@ try {
             allowInsecureHttp: true,
             listenUrl: `http://127.0.0.1:${port}`,
         });
-        const context = await browser.newContext();
+        const context = await browser.newContext({ timezoneId: "Asia/Manila" });
         const page = await context.newPage();
         const errors: string[] = [];
         page.on("pageerror", (error) => errors.push(error.message));

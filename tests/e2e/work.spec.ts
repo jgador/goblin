@@ -341,7 +341,7 @@ test.describe("durable Work", () => {
         await expect(
             page.locator(".execution-properties").first(),
         ).toContainText("fixture-model");
-        const context = await browser.newContext();
+        const context = await browser.newContext({ timezoneId: "Asia/Manila" });
         const other = await context.newPage();
         await unlock(other);
         await other

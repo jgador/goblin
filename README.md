@@ -57,6 +57,9 @@ Open **http://localhost:8788** in Windows to follow installation and enter Gobli
 at the same address when ready. On first start, choose and confirm a Goblin password
 in the terminal. Local runs share the verifier in `.goblin-secrets/owner-password`.
 
+Kubernetes installations include [saved logs](docs/logging.md) at `/logs/`,
+available through **Settings → Logs**, backed by Fluent Bit and VictoriaLogs.
+
 Kubernetes installations also include [Headlamp](docs/cluster-view.md) at
 `/headlamp/` on Goblin's address. **Settings → Cluster → Open cluster** opens a
 read-only view of workloads, logs, events, and storage using your Goblin login.
@@ -100,6 +103,10 @@ Codex integration, model regeneration, and direct .NET commands.
 The [workspace](docs/work-experience-preview.md) opens at http://localhost:8787.
 Start from the home composer, or select existing Work in the collapsible sidebar.
 AI connections, GitHub repository access, and Cluster are available in Settings.
+The first unlock suggests a [workspace timezone](docs/timezones.md) from IP location,
+with the browser timezone and then UTC as fallbacks. Search by country or city.
+Confirm it or choose another, then change it later under **Settings → Time & date**.
+The saved choice applies across browsers and devices, including displayed log times.
 Create and assign Work, execute with Codex, answer decisions, review outcomes,
 and approve completion. History and approvals are stored in PostgreSQL; failures
 require attention and explicit recovery.
@@ -117,9 +124,9 @@ Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
 `npm run secrets:history` to check existing commits before a push. See the
 [secret-scanning guide](docs/secret-scanning.md) for installation and scan scope.
 
-The repository-local Codex hook formats TypeScript, Rust, and C# after each
-completed turn. See [formatting setup](docs/formatting.md) for tool installation,
-manual commands, and the required hook trust step.
+The repository-local Codex hook formats changed languages (TypeScript, Rust, and
+C#) after each completed turn. See [formatting setup](docs/formatting.md) for tool
+installation, manual commands, and the required hook trust step.
 
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses

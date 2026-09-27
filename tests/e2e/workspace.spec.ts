@@ -55,6 +55,8 @@ async function workspace(page: Page, connected = true) {
         if (route.request().method() === "POST") commands.push(path);
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
+        else if (path === "/api/preferences")
+            json = { timeZone: "Asia/Manila" };
         if (path === "/api/work") json = items;
         if (path === "/api/agents") json = [{ id: "1", name: "Goblin" }];
         if (path === "/api/connections")

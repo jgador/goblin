@@ -1,0 +1,28 @@
+name: Goblin installer release automation
+on:
+  workflow_run:
+    workflows: [Goblin installer dependency]
+    types: [completed]
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+  actions: write
+concurrency:
+  group: goblinctl-release-prs
+  cancel-in-progress: false
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    steps:
+      # workflow_run uses the default branch. Never execute code from the checked PR.
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node scripts/goblinctl-release.mts notify
+        env:
+          GH_TOKEN: ${{ github.token }}

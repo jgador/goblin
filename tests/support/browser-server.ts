@@ -8,6 +8,12 @@ import { startBackend } from "./backend.js";
 const dataDir = resolve(".goblin-browser-test");
 await rm(dataDir, { recursive: true, force: true });
 await mkdir(dataDir, { recursive: true, mode: 0o700 });
+// Existing journeys start after timezone onboarding. The timezone journeys
+// exercise first access and updates explicitly.
+await writeFile(
+    resolve(dataDir, "workspace-preferences.json"),
+    JSON.stringify({ timeZone: "Asia/Manila" }),
+);
 const passwordHashFile = resolve(dataDir, "owner-password");
 await writeFile(
     passwordHashFile,

@@ -6,17 +6,42 @@ type = "command"
 command = '''
 set -e
 cd "$(git rev-parse --show-toplevel)"
-# Cargo and the pinned just helper are installed through the Rust setup script.
-if ! command -v cargo >/dev/null 2>&1 || ! command -v just >/dev/null 2>&1; then
-    export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+
+# Include staged, unstaged, and untracked files; deletions need no formatting.
+# Git pathspecs avoid parsing filenames and also support generated-file exclusions.
+has_changes() {
+    if ! git diff --quiet --diff-filter=d -- "$@" ||
+       ! git diff --cached --quiet --diff-filter=d -- "$@"; then
+        return 0
+    fi
+    [ -n "$(git ls-files --others --exclude-standard -- "$@")" ]
+}
+
+if has_changes '*.ts' '*.tsx' '*.mts' '*.cts'; then
+    if [ -x node_modules/.bin/prettier ]; then
+        npm run format:typescript >&2
+    else
+        printf '%s\n' 'Skipping TypeScript formatting: run npm ci to install Prettier.' >&2
+    fi
 fi
-npm run format:typescript >&2
-npm run format:rust >&2
-cd backend
-# Generated protocol types and EF mappings must stay reproducible.
-dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
-dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 IDE1006 --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
+
+if has_changes '*.rs' justfile; then
+    # Cargo and the pinned just helper are installed through the Rust setup script.
+    if ! command -v cargo >/dev/null 2>&1 || ! command -v just >/dev/null 2>&1; then
+        export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
+    fi
+    npm run format:rust >&2
+fi
+
+if has_changes '*.cs' \
+    ':(exclude)backend/src/Goblin.Protocol/Generated/**' \
+    ':(exclude)backend/src/Goblin.Persistence/Generated/**'; then
+    cd backend
+    # Generated protocol types and EF mappings must stay reproducible.
+    dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
+    dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 IDE1006 --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
+fi
 printf '{}\n'
 '''
 timeout = 600
-statusMessage = "Formatting TypeScript, Rust, and .NET"
+statusMessage = "Formatting languages with changed files"

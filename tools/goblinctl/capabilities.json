@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "capabilities": ["install.victorialogs.v1"],
+  "description": "Installer capabilities exercised by the deployment contract tests. Add a capability when Goblin starts depending on new installer behavior."
+}

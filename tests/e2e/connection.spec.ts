@@ -51,6 +51,9 @@ async function savedAccount(page: Page, account: Account = chatgpt) {
     await page.route("**/api/session", (route) =>
         route.fulfill({ json: { authenticated: true } }),
     );
+    await page.route("**/api/preferences", (route) =>
+        route.fulfill({ json: { timeZone: "Asia/Manila" } }),
+    );
     await page.route("**/api/status", (route) =>
         route.fulfill({ json: state }),
     );

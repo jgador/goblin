@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "capabilities": ["install.victorialogs.v1"],
+  "description": "Capabilities required by this Goblin source tree. The pinned published installer must provide all of them."
+}
