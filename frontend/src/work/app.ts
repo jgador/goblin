@@ -469,6 +469,10 @@ async function refresh(preserveError = false) {
             forgetWorkspace();
             return;
         }
+        if (query.get("returnTo") === "logs") {
+            location.replace("/logs/select/vmui/" + location.hash);
+            return;
+        }
         if (query.get("returnTo") === "headlamp") {
             location.replace("/headlamp/");
             return;
@@ -478,7 +482,9 @@ async function refresh(preserveError = false) {
             const target = initialSettings;
             initialSettings = null;
             void settings.open(
-                ["codex", "github", "system", "cluster"].includes(target)
+                ["codex", "github", "system", "cluster", "logs"].includes(
+                    target,
+                )
                     ? target
                     : "connections",
             );

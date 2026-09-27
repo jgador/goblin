@@ -1,0 +1,232 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: goblin-victorialogs-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: goblin-victorialogs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: goblin-victorialogs
+  template:
+    metadata:
+      labels:
+        app: goblin-victorialogs
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: victorialogs
+          image: victoriametrics/victoria-logs:v1.52.0@sha256:47b820890d64c4575a2a0a46415dcd8a4fd59a0f1fcd6a377693d7aea639442e
+          args:
+            - -storageDataPath=/storage
+            - -http.pathPrefix=/logs
+            - -retentionPeriod=7d
+            - -retention.maxDiskSpaceUsageBytes=8GiB
+            - -memory.allowedBytes=256MiB
+            - -search.maxConcurrentRequests=2
+            - -search.maxQueryDuration=30s
+            - -loggerFormat=json
+          env:
+            - name: GOMEMLIMIT
+              value: 768MiB
+          ports:
+            - name: http
+              containerPort: 9428
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: data
+              mountPath: /storage
+          startupProbe:
+            httpGet:
+              path: /logs/health
+              port: http
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /logs/health
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /logs/health
+              port: http
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: goblin-victorialogs-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: goblin-victorialogs
+spec:
+  type: ClusterIP
+  selector:
+    app: goblin-victorialogs
+  ports:
+    - name: http
+      port: 9428
+      targetPort: http
+---
+# No public ingestion, metrics or administrative endpoints. Goblin restricts the
+# browser to read APIs; Fluent Bit sends logs directly over this private service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goblin-victorialogs
+spec:
+  podSelector:
+    matchLabels:
+      app: goblin-victorialogs
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: goblin-auth
+        - podSelector:
+            matchLabels:
+              app: goblin-fluent-bit
+      ports:
+        - protocol: TCP
+          port: 9428
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: goblin-fluent-bit
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: goblin-fluent-bit
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: goblin-fluent-bit
+subjects:
+  - kind: ServiceAccount
+    name: goblin-fluent-bit
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: goblin-fluent-bit
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: goblin-fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: goblin-fluent-bit
+  template:
+    metadata:
+      labels:
+        app: goblin-fluent-bit
+    spec:
+      serviceAccountName: goblin-fluent-bit
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: fluent-bit
+          image: cr.fluentbit.io/fluent/fluent-bit:5.1.2@sha256:d792375ca8e53be72fc25716c28f291f32c6fc6f4f31d12d0d14bc78cefe9226
+          args: [-c, /fluent-bit/etc/goblin/fluent-bit.conf]
+          ports:
+            - name: http
+              containerPort: 2020
+          securityContext:
+            # Node log files and the offset/buffer directory are owned by root.
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /fluent-bit/etc/goblin
+              readOnly: true
+            - name: logs
+              mountPath: /var/log
+              readOnly: true
+            - name: buffers
+              mountPath: /buffers
+          readinessProbe:
+            httpGet:
+              path: /api/v1/metrics
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /api/v1/metrics
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: goblin-fluent-bit
+        - name: logs
+          hostPath:
+            path: /var/log
+            type: Directory
+        - name: buffers
+          hostPath:
+            path: /var/lib/goblin/fluent-bit
+            type: DirectoryOrCreate
+---
+# Kubelet probes still work; no other pod needs the collector's metrics port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: goblin-fluent-bit
+spec:
+  podSelector:
+    matchLabels:
+      app: goblin-fluent-bit
+  policyTypes: [Ingress]
+  ingress: []

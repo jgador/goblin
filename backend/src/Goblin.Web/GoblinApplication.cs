@@ -49,6 +49,7 @@ public sealed record ApplicationOptions
     public IExecutionHost? ExecutionHost { get; init; }
     public string GitHubCommand { get; init; } = "gh";
     public string? HeadlampUrl { get; init; }
+    public string? VictoriaLogsUrl { get; init; }
     public ISystemSource? SystemSource { get; init; }
 }
 
@@ -75,8 +76,7 @@ public static class GoblinApplication
             ApplicationName = typeof(GoblinApplication).Assembly.FullName,
             ContentRootPath = AppContext.BaseDirectory
         });
-        // Request and upstream details can contain credentials. Log only explicit safe startup messages.
-        builder.Logging.ClearProviders();
+        builder.Logging.AddGoblinJsonConsole();
         string? nodeName = builder.Configuration["GOBLIN_NODE_NAME"];
         if (options.SystemSource is not null) builder.Services.AddSingleton(options.SystemSource);
         else if (!string.IsNullOrWhiteSpace(nodeName))
@@ -94,6 +94,11 @@ public static class GoblinApplication
         {
             builder.Services.AddHttpForwarder();
             builder.Services.AddSingleton(services => new HeadlampProxy(services.GetRequiredService<IHttpForwarder>(), options.HeadlampUrl));
+        }
+        if (!string.IsNullOrWhiteSpace(options.VictoriaLogsUrl))
+        {
+            builder.Services.AddHttpForwarder();
+            builder.Services.AddSingleton(services => new VictoriaLogsProxy(services.GetRequiredService<IHttpForwarder>(), options.VictoriaLogsUrl));
         }
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
@@ -170,6 +175,7 @@ public static class GoblinApplication
         Authentication auth = app.Services.GetRequiredService<Authentication>();
         CodexClient codex = app.Services.GetRequiredService<CodexClient>();
         HeadlampProxy? headlamp = app.Services.GetService<HeadlampProxy>();
+        VictoriaLogsProxy? logs = app.Services.GetService<VictoriaLogsProxy>();
         var staticFiles = new Dictionary<string, (byte[] Body, string ContentType)>();
         foreach ((string? path, string? file, string? type) in new[]
         {
@@ -232,6 +238,17 @@ public static class GoblinApplication
                     }
                     await headlamp.SendAsync(context, workspace); return;
                 }
+                if (request.Path.StartsWithSegments("/logs", StringComparison.Ordinal))
+                {
+                    if (logs is null) throw new PublicError("logs_unavailable", "The log view requires Goblin's Kubernetes installation.", 404);
+                    if (workspace.SessionId(request) is null)
+                    {
+                        if (get && request.Headers.Accept.ToString().Contains("text/html", StringComparison.Ordinal))
+                        { response.Redirect("/?returnTo=logs"); return; }
+                        throw new PublicError("workspace_locked", "Unlock the workspace to continue.", 401);
+                    }
+                    await logs.SendAsync(context, workspace); return;
+                }
                 bool publicRequest = (get && staticFiles.ContainsKey(path)) || (path == "/api/session" && (get || post));
                 if (!publicRequest)
                     context.Items[SessionKey] = workspace.SessionId(request) ?? throw new PublicError("workspace_locked", "Unlock the workspace to continue.", 401);
@@ -270,6 +287,7 @@ public static class GoblinApplication
         app.MapPost("/api/session", (HttpContext context) => workspace.Unlock(StringField(context, "password"), context.Response));
         app.MapPost("/api/session/lock", (HttpContext context) => workspace.Lock((string)context.Items[SessionKey]!, context.Response));
         app.MapGet("/api/cluster", () => Results.Json(new { available = headlamp is not null }));
+        app.MapGet("/api/logs", () => Results.Json(new { available = logs is not null }));
         app.MapGet("/api/system", (SystemMonitor monitor) => Results.Json(monitor.Current));
         app.MapGet("/api/status", (Delegate)((HttpContext context) => ConnectionAsync(context, false, auth.StatusAsync)));
         app.MapPost("/api/auth/chatgpt", (Delegate)((HttpContext context) => ConnectionAsync(context, true, auth.LoginChatGptAsync)));

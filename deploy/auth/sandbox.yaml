@@ -53,6 +53,8 @@ spec:
               value: goblin-auth:0.1.0
             - name: GOBLIN_HEADLAMP_URL
               value: http://goblin-headlamp.goblin.svc:4466
+            - name: GOBLIN_VICTORIALOGS_URL
+              value: http://goblin-victorialogs.goblin.svc:9428
             - name: GOBLIN_NODE_NAME
               valueFrom:
                 fieldRef:

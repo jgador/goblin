@@ -51,6 +51,11 @@ storage using the same Goblin password. It uses the assigned VM hostname and
 the existing route, with read-only cluster access and no extra public port.
 See [the cluster view](../../docs/cluster-view.md) for permissions and checks.
 
+Saved application logs are available at **`<goblinUrl>/logs/`** through
+**Settings → Logs**, using the same Goblin login. Fluent Bit collects JSON console
+output into VictoriaLogs on a separate PVC. See [logging](../../docs/logging.md)
+for scope, retention, resource budgets, and verification.
+
 For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
 Enter your Goblin password to open the workspace. HTTPS and certificates remain
 a separate setup step; HTTP traffic, including passwords and sessions, is unencrypted.
