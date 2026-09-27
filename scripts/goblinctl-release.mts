@@ -533,6 +533,14 @@ export async function approveCandidate(): Promise<void> {
             throw new Error(
                 "Merge the latest parent changes into the candidate before publishing",
             );
+        const baseComparison = await api<{ status: string }>(
+            `compare/${parent.base.sha}...${sha}`,
+        );
+        if (!["ahead", "identical"].includes(baseComparison.status)) {
+            throw new Error(
+                "Update the candidate from master before publishing; its eventual merge must use the tested installer inputs",
+            );
+        }
     } else {
         if (pull.base.ref !== "master")
             throw new Error("Master repair must target master");
