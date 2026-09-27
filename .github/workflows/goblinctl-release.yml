@@ -81,6 +81,7 @@ jobs:
     environment: goblinctl-release
     permissions:
       contents: write
+      pull-requests: read
       id-token: write
       attestations: write
     steps:
