@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "description": "Shipping installer inputs. Rust compiler dependency files verify that embedded files are covered. Pin and generated ARM files deliberately stay outside this boundary.",
+  "files": [
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "tools/goblinctl/Cargo.toml",
+    "tools/goblinctl/release-inputs.json",
+    "tools/goblinctl/capabilities.json",
+    "scripts/build-goblinctl-release.sh",
+    "assets/branding/svg/icon-light.svg",
+    "deploy/azure/bootstrap.sh",
+    "deploy/azure/install-app.sh",
+    "deploy/local/postgres-service.yaml"
+  ],
+  "directories": [
+    ".cargo",
+    "tools/goblinctl/src",
+    "deploy/azure/setup",
+    "deploy/postgres"
+  ]
+}

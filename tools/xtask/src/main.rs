@@ -8,13 +8,14 @@ use flate2::GzBuilder;
 use goblinctl::credentials;
 use goblinctl::files;
 use goblinctl::install;
-use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+
+mod release;
 
 #[derive(Parser)]
 struct Cli {
@@ -34,8 +35,40 @@ enum Task {
         #[arg(long, default_value = ".artifacts/goblinctl")]
         output: PathBuf,
     },
-    /// Update the pinned release from a verified package's manifest.
-    PinRelease { manifest: PathBuf },
+    /// Download, authenticate and pin a compatible published release.
+    PinRelease {
+        #[arg(long)]
+        repo: String,
+        #[arg(long)]
+        version: String,
+    },
+    /// Build a clean release in a fresh target directory, then package it.
+    ReleaseBuild {
+        #[arg(long, default_value = ".artifacts/goblinctl")]
+        output: PathBuf,
+    },
+    /// Verify this source tree against the pinned published installer.
+    ReleaseCheck {
+        #[arg(long)]
+        repo: String,
+        #[arg(
+            long,
+            default_value = "target/x86_64-unknown-linux-musl/release/goblinctl.d"
+        )]
+        depfile: PathBuf,
+        #[arg(long, default_value = ".artifacts/goblinctl-check")]
+        artifacts: PathBuf,
+        #[arg(long, default_value = ".artifacts/goblinctl-check.json")]
+        report: PathBuf,
+    },
+    /// Validate the candidate's input coverage and capabilities without publication.
+    ReleaseCandidate {
+        #[arg(
+            long,
+            default_value = "target/x86_64-unknown-linux-musl/release/goblinctl.d"
+        )]
+        depfile: PathBuf,
+    },
     /// Rebuild the checked-in Azure ARM templates, or verify they have no drift.
     Azure {
         #[arg(long)]
@@ -66,35 +99,37 @@ fn execute() -> Result<()> {
             target,
             output,
         } => package(&binary, &target, &output),
-        Task::PinRelease { manifest } => {
-            let pin = files::json(&manifest)?;
+        Task::PinRelease { repo, version } => release::pin(root, &repo, &version),
+        Task::ReleaseBuild { output } => {
             ensure!(
-                pin["target"] == "x86_64-unknown-linux-musl",
-                "Unsupported deployment target"
+                files::output(Command::new("git").args(["status", "--porcelain"]))?
+                    .trim()
+                    .is_empty(),
+                "Commit release source before building a publishable package"
             );
-            let checksum = pin["sha256"].as_str().context("Missing checksum")?;
-            ensure!(
-                checksum.len() == 64 && checksum.bytes().all(|b| b.is_ascii_hexdigit()),
-                "Invalid checksum"
-            );
-            let version = pin["version"].as_str().context("Missing version")?;
-            ensure!(
-                version.split('.').count() == 3
-                    && version
-                        .split('.')
-                        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit())),
-                "Invalid release version"
-            );
-            let archive = manifest
-                .parent()
-                .context("Missing manifest directory")?
-                .join("goblinctl-x86_64-unknown-linux-musl.tar.gz");
-            ensure!(
-                install::checksum(&archive)? == checksum,
-                "Release archive checksum does not match its manifest"
-            );
-            files::write_json(Path::new("deploy/goblinctl-release.json"), &pin, 0o644)
+            let target = tempfile::tempdir()?;
+            files::run(
+                Command::new("bash")
+                    .arg("scripts/build-goblinctl-release.sh")
+                    .arg(target.path()),
+            )?;
+            let binary = target
+                .path()
+                .join(release::TARGET)
+                .join("release/goblinctl");
+            release::candidate(root, &binary.with_extension("d"))?;
+            package(&binary, release::TARGET, &output)
         }
+        Task::ReleaseCheck {
+            repo,
+            depfile,
+            artifacts,
+            report,
+        } => {
+            fs::create_dir_all(&artifacts)?;
+            release::check(root, &repo, &depfile, &artifacts, &report)
+        }
+        Task::ReleaseCandidate { depfile } => release::candidate(root, &depfile),
         Task::Azure { check } => azure(check),
         Task::NormalizeEf => normalize(Path::new("backend/src/Goblin.Persistence/Generated")),
         Task::TestPostgres => {
@@ -155,7 +190,16 @@ fn package(binary: &Path, target: &str, output: &Path) -> Result<()> {
         .is_empty();
     files::write_json(
         &output.join("release.json"),
-        &json!({"version":env!("CARGO_PKG_VERSION"),"target":target,"sha256":checksum,"sourceRevision":revision.trim(),"sourceDirty":dirty,"cargoLockSha256":install::checksum(Path::new("Cargo.lock"))?}),
+        &serde_json::to_value(release::Release {
+            schema_version: 1,
+            version: env!("CARGO_PKG_VERSION").into(),
+            target: target.into(),
+            sha256: checksum.clone(),
+            source_revision: revision.trim().into(),
+            source_dirty: dirty,
+            cargo_lock_sha256: install::checksum(Path::new("Cargo.lock"))?,
+            installer: release::inputs(Path::new("."))?,
+        })?,
         0o644,
     )?;
     println!("{}: sha256 {checksum}", output.join(name).display());
