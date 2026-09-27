@@ -21,6 +21,7 @@ async function home(page: Page) {
         }
         const data: Record<string, unknown> = {
             "/api/session": { authenticated: state.authenticated },
+            "/api/preferences": { timeZone: "Asia/Manila" },
             "/api/work": [
                 {
                     version: "1",

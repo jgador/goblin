@@ -1,11 +1,12 @@
 import type { Work, View, Conversation } from "./contracts.js";
 import { icon, escapeHtml as e } from "./presentation.js";
+import { formatTimestamp } from "../settings/timezone.js";
 
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const effortLabel = (value: string) =>
     value.slice(0, 1).toUpperCase() + value.slice(1);
 const timestamp = (value?: string) =>
-    value ? new Date(value).toLocaleString() : "Not recorded";
+    value ? formatTimestamp(value) : "Not recorded";
 export function relativeTime(value?: string) {
     if (!value || !Number.isFinite(Date.parse(value)))
         return "Update time unavailable";

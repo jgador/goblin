@@ -1,0 +1,107 @@
+name: Pin published goblinctl
+on:
+  workflow_call:
+    inputs:
+      pr:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      sha:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Companion release PR number
+        type: string
+        required: true
+      version:
+        description: Published MAJOR.MINOR.PATCH version
+        type: string
+        required: true
+      sha:
+        description: Expected PR SHA (blank uses its current head)
+        type: string
+permissions:
+  contents: read
+  pull-requests: read
+  attestations: read
+concurrency:
+  group: goblinctl-pin-${{ inputs.pr }}
+  cancel-in-progress: false
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - id: resolve
+        run: node scripts/goblinctl-release.mts resolve-pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ inputs.pr }}
+          RELEASE_SHA: ${{ inputs.sha }}
+          RELEASE_VERSION: ${{ inputs.version }}
+  verify:
+    needs: resolve
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/setup-deployment
+      - name: Verify publication, pin it, and regenerate ARM
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          bash scripts/build-goblinctl-release.sh target
+          cargo xtask release-candidate
+          cargo xtask pin-release --repo "$GH_REPO" --version "$RELEASE_VERSION"
+          cargo xtask azure
+          cargo xtask release-check --repo "$GH_REPO"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goblinctl-pin-${{ inputs.pr }}
+          path: |
+            deploy/goblinctl-release.json
+            deploy/azure/azuredeploy.json
+            deploy/azure/azuredeploy.portal.json
+          if-no-files-found: error
+  update:
+    needs: [resolve, verify]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@v4
+        with:
+          name: goblinctl-pin-${{ inputs.pr }}
+          path: pin/deploy
+      - run: node scripts/goblinctl-release.mts pin-commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_PR: ${{ inputs.pr }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+          PIN_DIRECTORY: pin

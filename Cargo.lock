@@ -362,7 +362,7 @@ dependencies = [
 
 [[package]]
 name = "goblinctl"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64",
@@ -1072,12 +1072,13 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",
  "flate2",
  "goblinctl",
+ "serde",
  "serde_json",
  "sha2",
  "tar",

@@ -18,6 +18,7 @@ export interface BackendOptions {
     enableWork?: boolean;
     gitHubCommand?: string;
     headlampUrl?: string;
+    victoriaLogsUrl?: string;
 }
 
 export async function writePasswordHash(path: string, password: string) {
@@ -66,8 +67,11 @@ export async function startBackend(options: BackendOptions) {
     let info: { url: string } | undefined;
     try {
         for await (const line of lines) {
-            info = JSON.parse(line) as typeof info;
-            break;
+            const candidate = JSON.parse(line) as { url?: string };
+            if (typeof candidate.url === "string") {
+                info = { url: candidate.url };
+                break;
+            }
         }
     } catch {
         child.kill();

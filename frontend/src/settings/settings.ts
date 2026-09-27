@@ -2,6 +2,7 @@ import { mountCodex } from "../connection/codex.js";
 import { mountGitHub } from "./github.js";
 import { icon } from "../work/presentation.js";
 import { SystemResources } from "./system.js";
+import { mountTimeZonePicker } from "./timezone-picker.js";
 
 export class Settings {
     private readonly dialog = document.createElement("dialog");
@@ -12,6 +13,7 @@ export class Settings {
     private generation = 0;
     private codexDispose?: () => void;
     private githubDispose?: () => void;
+    private timezoneDispose?: () => void;
     private readonly system: SystemResources;
     get isOpen() {
         return this.dialog.open;
@@ -21,6 +23,8 @@ export class Settings {
         this.dialog.close();
         this.codexDispose?.();
         this.githubDispose?.();
+        this.timezoneDispose?.();
+        this.timezoneDispose = undefined;
         this.codexDispose = this.githubDispose = undefined;
         this.codexMounted = this.githubMounted = false;
         for (const panel of this.dialog.querySelectorAll<HTMLElement>(
@@ -32,8 +36,19 @@ export class Settings {
         this.system = system;
         this.dialog.className = "settings-dialog";
         this.dialog.setAttribute("aria-labelledby", "settings-title");
-        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section></div></div>`;
+        this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button data-provider="logs">${icon("activity")}Logs</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section><section data-provider-panel="logs" aria-label="Logs" hidden></section></div></div>`;
         document.body.append(this.dialog);
+        const timezoneButton = document.createElement("button");
+        timezoneButton.dataset.provider = "timezone";
+        timezoneButton.innerHTML = `${icon("clock")}Time & date`;
+        this.dialog
+            .querySelector('[data-provider="connections"]')!
+            .before(timezoneButton);
+        const timezonePanel = document.createElement("section");
+        timezonePanel.dataset.providerPanel = "timezone";
+        timezonePanel.setAttribute("aria-label", "Time & date");
+        timezonePanel.hidden = true;
+        this.dialog.querySelector(".settings-content")!.append(timezonePanel);
         const systemButton = document.createElement("button");
         systemButton.dataset.provider = "system";
         systemButton.innerHTML = `${icon("activity")}System`;
@@ -57,6 +72,8 @@ export class Settings {
             .querySelector(".settings-close")!
             .addEventListener("click", () => this.dialog.close());
         this.dialog.addEventListener("close", () => {
+            this.timezoneDispose?.();
+            this.timezoneDispose = undefined;
             const replacement = Array.from(
                 document.querySelectorAll<HTMLElement>(
                     `[data-action="${this.openerAction}"]`,
@@ -75,6 +92,10 @@ export class Settings {
             );
     }
     private select(provider: string) {
+        if (provider !== "timezone") {
+            this.timezoneDispose?.();
+            this.timezoneDispose = undefined;
+        }
         this.dialog.querySelector(".settings-content")!.scrollTop = 0;
         this.dialog
             .querySelectorAll<HTMLElement>("[data-provider-panel]")
@@ -107,6 +128,16 @@ export class Settings {
         await this.mount(provider);
     }
     private async mount(provider: string) {
+        if (provider === "timezone") {
+            this.timezoneDispose?.();
+            this.timezoneDispose = mountTimeZonePicker(
+                this.dialog.querySelector<HTMLElement>(
+                    '[data-provider-panel="timezone"]',
+                )!,
+                "settings",
+            );
+            return;
+        }
         if (provider === "system") {
             this.system.mount(
                 this.dialog.querySelector<HTMLElement>(
@@ -148,6 +179,30 @@ export class Settings {
             } catch {
                 panel.innerHTML =
                     '<h3>Cluster</h3><p class="settings-notice">Cluster access could not be loaded. Unlock Goblin and try again.</p>';
+            }
+            return;
+        }
+        if (provider === "logs") {
+            const panel = this.dialog.querySelector<HTMLElement>(
+                '[data-provider-panel="logs"]',
+            )!;
+            const generation = this.generation;
+            panel.innerHTML =
+                '<h3>Logs</h3><p class="settings-description">Loading log access…</p>';
+            try {
+                const response = await fetch("/api/logs");
+                if (!response.ok) throw new Error();
+                const logs = (await response.json()) as { available: boolean };
+                if (generation !== this.generation) return;
+                panel.innerHTML =
+                    '<h3>Logs</h3><p class="settings-description">Search saved Goblin logs and follow new events.</p>' +
+                    (logs.available
+                        ? '<p class="settings-description">Opens in a new tab using your Goblin login.</p><a class="settings-primary" href="/logs/" target="_blank" rel="noopener">Open logs</a>'
+                        : '<p class="settings-notice">Saved logs are available with Goblin’s Kubernetes installation.</p>');
+            } catch {
+                if (generation !== this.generation) return;
+                panel.innerHTML =
+                    '<h3>Logs</h3><p class="settings-notice">Log access could not be loaded. Unlock Goblin and try again.</p>';
             }
             return;
         }
