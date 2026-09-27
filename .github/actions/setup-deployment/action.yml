@@ -1,0 +1,13 @@
+name: Set up deployment verification
+description: Install pinned Bicep and kubectl for offline deployment checks.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        curl --fail --location --proto '=https' --proto-redir '=https' https://github.com/Azure/bicep/releases/download/v0.47.16/bicep-linux-x64 -o /tmp/bicep
+        printf '%s  %s\n' 64c345a58e0c3e48b1bc98a4e62d6b3adb1d238281297de3400aeafb2697aa5a /tmp/bicep | sha256sum --check
+        sudo install -m 0755 /tmp/bicep /usr/local/bin/bicep
+        curl --fail --location --proto '=https' --proto-redir '=https' https://dl.k8s.io/release/v1.36.4/bin/linux/amd64/kubectl -o /tmp/kubectl
+        printf '%s  %s\n' 8b8f088da2dab964f853b38464033b1be15ede2839eca751482357c45abdd05a /tmp/kubectl | sha256sum --check
+        sudo install -m 0755 /tmp/kubectl /usr/local/bin/kubectl

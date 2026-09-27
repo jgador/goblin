@@ -99,24 +99,37 @@ host, database exports default to `/var/lib/goblin/config`.
 
 ## Release order
 
-`.github/workflows/goblinctl-release.yml` validates source and packages Linux musl.
-Tags use `goblinctl-vMAJOR.MINOR.PATCH` and must match the Cargo workspace version.
-Manual workflow runs produce review artifacts without publishing. Tag runs publish
-GitHub Release assets and provenance; existing versions are never overwritten.
+Goblin must pin a compatible **published** installer before merging to `master`.
+The [release automation guide](goblinctl-release-automation.md) describes the
+required check, companion PRs, publication approval, and initial repository setup.
 
-1. Commit compatible CLI/application changes, update the Cargo version and lockfile,
-   and create the matching release tag. Publish the binary first.
-2. Download that release's archive, `SHA256SUMS`, and `release.json`. Verify the
-   checksum (and GitHub provenance when available).
-3. Run `cargo xtask pin-release PATH/TO/release.json`. It verifies the adjacent
-   archive and updates `deploy/goblinctl-release.json`.
-4. Run `cargo xtask azure`, review and commit the pin plus both generated ARM
-   templates. Choose a compatible published application `goblinSourceRef`.
+1. The dependency check opens a companion release PR against the Goblin feature
+   branch when shipping installer inputs or required capabilities differ.
+2. Review the installer changes and proposed Cargo version. Dispatch
+   `.github/workflows/goblinctl-release.yml` from `master` with the companion PR
+   number and its exact reviewed head SHA. Candidate tests run independently of
+   the already-published dependency check, avoiding a circular dependency.
+3. Approve the `goblinctl-release` environment after the candidate tests pass.
+   The workflow builds from clean source in a fresh target directory, publishes
+   `goblinctl-vMAJOR.MINOR.PATCH`, and attests both archive and dependency metadata.
+   Existing tags/releases are never overwritten; pushing a tag does not publish.
+4. The pin workflow downloads and verifies those published artifacts, updates the
+   companion PR's pin and ARM templates, and explicitly dispatches compatibility
+   checks. Merge the companion into the feature branch, then merge the Goblin PR
+   once `goblinctl-release-ready` passes on its proposed merge result.
 
-The pin records native version, target, archive digest, source revision, dirty
-source indicator, and Cargo.lock digest. The initial working-tree package is a
-review artifact; before production deployment, replace its pin with the manifest
-from the committed tagged release. No GitHub release is implied by generated files.
+To repair a pin locally after publication:
+
+```bash
+cargo xtask pin-release --repo jgador/goblin --version MAJOR.MINOR.PATCH
+cargo xtask azure
+```
+
+Pinning requires the archive and manifest's GitHub provenance, clean source
+metadata, matching installer inputs, and all capabilities required by Goblin.
+The manifest records version, target, archive digest, source revision, dirty-source
+indicator, Cargo.lock digest, and a versioned per-file installer fingerprint.
+Local review packages cannot replace this publication verification.
 
 To build a review artifact locally:
 
@@ -125,6 +138,10 @@ rustup target add x86_64-unknown-linux-musl
 cargo build --locked --release -p goblinctl --target x86_64-unknown-linux-musl
 cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl
 ```
+
+`cargo xtask release-build` instead requires a clean checkout and compiles into a
+fresh temporary target directory before packaging. Release CI uses that command;
+`package` alone does not prove an arbitrary supplied binary came from this checkout.
 
 Local packages are written to `.artifacts/goblinctl/`, outside the test-output
 directory that `npm run build:tools` cleans.
