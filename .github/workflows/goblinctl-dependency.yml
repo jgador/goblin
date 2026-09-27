@@ -41,7 +41,7 @@ jobs:
           name: goblinctl-check-context
           path: ${{ runner.temp }}/release-context.json
   check:
-    name: goblinctl-release-ready
+    name: Installer source and release verification
     needs: resolve
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
@@ -101,3 +101,16 @@ jobs:
           name: goblinctl-release-report
           path: .artifacts/goblinctl-check.json
           if-no-files-found: warn
+  gate:
+    name: goblinctl-release-ready
+    needs: [resolve, check]
+    # Only this short final job is unconditional. Required checks must not turn
+    # green because a prerequisite failed, was skipped, or was cancelled.
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require completed release and compatibility checks
+        env:
+          RESOLUTION: ${{ needs.resolve.result }}
+          VERIFICATION: ${{ needs.check.result }}
+        run: '[[ "$RESOLUTION" == success && "$VERIFICATION" == success ]]'
