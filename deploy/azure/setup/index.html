@@ -19,6 +19,14 @@
       <span id="elapsed"></span>
     </div>
     <ol id="steps" aria-label="Installation steps"></ol>
+    <details class="installation-log" open>
+      <summary>Installation log</summary>
+      <div class="log-toolbar">
+        <span id="log-connection" role="status">Connecting…</span>
+        <label><input id="follow-log" type="checkbox" checked> Follow latest</label>
+      </div>
+      <div id="install-log" role="log" aria-label="Installation log" aria-live="off" tabindex="0"><p>Waiting for installation activity…</p></div>
+    </details>
     <p id="connection" class="connection" role="status"></p>
     <p id="recovery" hidden>Installation progress has been saved. Your administrator can review the installation log and retry using Azure Run Command or SSH.</p>
     <noscript>Enable JavaScript to see live installation progress.</noscript>

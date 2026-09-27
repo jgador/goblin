@@ -1,10 +1,14 @@
 const message = document.querySelector('#message');
 const connection = document.querySelector('#connection');
 const steps = document.querySelector('#steps');
+const log = document.querySelector('#install-log');
+const followLog = document.querySelector('#follow-log');
+const logConnection = document.querySelector('#log-connection');
 let latest;
 let failures = 0;
 
 function render(state) {
+  if (latest?.logGeneration === state.logGeneration && state.revision < latest.revision) return;
   latest = state;
   message.textContent = state.message;
   document.querySelector('#recovery').hidden = state.status !== 'failed';
@@ -26,7 +30,42 @@ function render(state) {
     return row;
   }));
   updateElapsed();
+  renderLog(state);
 }
+
+function renderLog(state) {
+  if (!Array.isArray(state.logs) || !state.logs.length) return;
+  const previousScroll = log.scrollTop;
+  log.replaceChildren(...state.logs.map(entry => {
+    const row = document.createElement('p');
+    const time = new Date(entry.timestamp).toLocaleTimeString([], { hour12: false });
+    row.textContent = `${time} · Attempt ${entry.attempt}${entry.step ? ` · ${entry.step}` : ''}\n${entry.message}`;
+    return row;
+  }));
+  log.scrollTop = followLog.checked ? log.scrollHeight : previousScroll;
+}
+log.addEventListener('scroll', () => {
+  if (log.scrollHeight - log.scrollTop - log.clientHeight > 20) followLog.checked = false;
+});
+followLog.addEventListener('change', () => {
+  if (followLog.checked) log.scrollTop = log.scrollHeight;
+});
+
+const events = new EventSource('/setup/events');
+events.addEventListener('progress', event => {
+  try {
+    const state = JSON.parse(event.data);
+    if (state.version !== 1 || !Array.isArray(state.steps)) return;
+    render(state);
+    logConnection.textContent = state.status === 'failed' ? 'Installation stopped' : state.status === 'ready' ? 'Complete' : 'Live';
+  } catch { logConnection.textContent = 'Reconnecting…'; }
+});
+events.addEventListener('error', () => {
+  // Bounded server batches close normally. Show a gap only when status also
+  // cannot be reached; EventSource resumes automatically with its last event ID.
+  if (failures) logConnection.textContent = 'Reconnecting…';
+});
+window.addEventListener('pagehide', () => events.close());
 
 function updateElapsed() {
   if (!latest) return;

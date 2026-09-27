@@ -1,4 +1,5 @@
 //! Code-defined installation input, shared by validation and deployment preparation.
+use crate::assets;
 use crate::files;
 use crate::install;
 use anyhow::Context;
@@ -132,9 +133,57 @@ pub fn metadata() -> serde_json::Value {
     })
 }
 
+/// The checked-in manifests use literal image fields. Read those exact refs so
+/// prefetching follows deployment pins without another dependency catalog.
+pub fn prefetch_images(source: &Path) -> Result<Vec<String>> {
+    let request = InstallRequest::read(&source.join("deploy/install-request.json"))?;
+    request.validate(source)?;
+    let mut manifests = Vec::new();
+    for resource in request.resources {
+        manifests.push(fs::read_to_string(source.join(resource.path))?);
+    }
+    for (name, bytes) in assets::DATABASE {
+        if *name == "deploy/postgres/postgres.yaml" {
+            manifests.push(std::str::from_utf8(bytes)?.to_owned());
+        }
+    }
+    let mut images = BTreeSet::new();
+    for manifest in manifests {
+        for line in manifest.lines() {
+            if let Some(image) = line.trim().strip_prefix("image:") {
+                let image = image.trim().trim_matches(['\'', '"']);
+                if image.starts_with("localhost/goblin-auth:") || image.starts_with("goblin-auth:")
+                {
+                    continue;
+                }
+                ensure!(
+                    !image.is_empty()
+                        && image.len() <= 512
+                        && image
+                            .bytes()
+                            .all(|c| c.is_ascii_alphanumeric() || b"./:_@-".contains(&c)),
+                    "Prefetch requires literal container image references"
+                );
+                images.insert(image.to_owned());
+            }
+        }
+    }
+    ensure!(!images.is_empty(), "No deployment images found");
+    Ok(images.into_iter().collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn prefetch_uses_service_manifests_and_excludes_the_locally_built_application() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let images = prefetch_images(&source).unwrap();
+        assert_eq!(images.len(), 4);
+        assert!(images.iter().any(|image| image.starts_with("postgres:")));
+        assert!(!images.iter().any(|image| image.contains("goblin-auth")));
+    }
 
     #[test]
     fn unknown_operations_and_fields_are_rejected_by_the_installer_parser() {

@@ -1,6 +1,44 @@
 import { test, expect } from "@playwright/test";
 import { startSetup } from "../support/setup.js";
 
+test("installation logs stream concurrent progress, survive refresh, and render output as text", async ({
+    page,
+}) => {
+    const setup = await startSetup();
+    try {
+        await page.goto(setup.url);
+        setup.transition("begin");
+        setup.transition("start", "k3s");
+        setup.transition("start", "image");
+        setup.transition("detail", "Downloading image 1/8");
+        await expect(page.locator('li[data-status="running"]')).toHaveCount(2);
+        const log = page.getByRole("log", { name: "Installation log" });
+        await expect(log).toContainText("Downloading image 1/8");
+        setup.transition("detail", "<img src=x onerror=alert(1)>");
+        await expect(log).toContainText("<img src=x onerror=alert(1)>");
+        await expect(log.locator("img")).toHaveCount(0);
+        await page.getByLabel("Follow latest").uncheck();
+        setup.transition("detail", "Download completed");
+        await expect(log).toContainText("Download completed");
+        await expect(page.getByLabel("Follow latest")).not.toBeChecked();
+        await page.reload();
+        await expect(log).toContainText("Downloading image 1/8");
+        await expect(log).toContainText("Download completed");
+        setup.transition("failed");
+        await expect(log).toContainText("Installation stopped");
+        setup.transition("begin");
+        await expect(log).toContainText("Installation attempt 2 started");
+        await page.setViewportSize({ width: 375, height: 800 });
+        expect(
+            await page
+                .locator("body")
+                .evaluate((element) => element.scrollWidth <= innerWidth),
+        ).toBe(true);
+    } finally {
+        await setup.close();
+    }
+});
+
 test("setup displays its bundled brand icon at desktop and mobile sizes", async ({
     page,
 }) => {
@@ -43,7 +81,7 @@ test("setup shows live progress, failure and a successful retry across refreshes
         await expect(
             page.getByRole("heading", { name: "Getting things ready." }),
         ).toBeVisible();
-        await expect(page.getByRole("listitem")).toHaveCount(8);
+        await expect(page.getByRole("listitem")).toHaveCount(12);
         setup.transition("begin");
         setup.transition("start", "k3s");
         await expect(page.locator('li[data-status="running"]')).toContainText(
@@ -125,7 +163,7 @@ test("a localhost visit moves to the configured origin and opens Goblin even if 
     try {
         const alias = setup.url.replace("127.0.0.1", "localhost");
         await page.goto(alias);
-        await expect(page.getByRole("listitem")).toHaveCount(8);
+        await expect(page.getByRole("listitem")).toHaveCount(12);
         setup.transition("begin");
         setup.transition("public-url", setup.url);
         await expect(page).toHaveURL(setup.url + "/");
