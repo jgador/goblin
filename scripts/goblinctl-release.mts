@@ -574,6 +574,8 @@ export async function pinCommit(): Promise<void> {
     const directory = requireValue(process.env.PIN_DIRECTORY, "PIN_DIRECTORY");
     const changes: Record<string, string> = {};
     for (const path of [
+        "dependencies.toml",
+        "dependencies.lock.json",
         "deploy/goblinctl-release.json",
         "deploy/azure/azuredeploy.json",
         "deploy/azure/azuredeploy.portal.json",

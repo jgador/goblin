@@ -51,6 +51,7 @@ goblin_image="localhost/goblin-auth:${goblin_source_sha}"
 )
 
 stage 'Building Goblin'
+"$GOBLINCTL" validate-install --request "$goblin_source_dir/deploy/install-request.json" --source "$goblin_source_dir"
 DOCKER_BUILDKIT=1 docker build --load --network=host --platform linux/amd64 --tag "$goblin_image" "$goblin_source_dir"
 stage 'Importing Goblin into Kubernetes'
 docker save --output "$bootstrap_dir/goblin-image.tar" "$goblin_image"
@@ -63,11 +64,7 @@ done_step
 step deploy
 stage 'Configuring the Goblin hostname'
 # Keep a rendered overlay on the VM for inspection and later HTTPS setup.
-install -d -m 0750 /var/lib/goblin/deploy/auth /var/lib/goblin/deploy/azure/app
-cp "$goblin_source_dir/deploy/auth/"{sandbox,kustomization,execution,headlamp}.yaml /var/lib/goblin/deploy/auth/
-install -d -m 0750 /var/lib/goblin/deploy/auth/logging
-cp "$goblin_source_dir/deploy/auth/logging/"{kustomization,workloads}.yaml "$goblin_source_dir/deploy/auth/logging/fluent-bit.conf" /var/lib/goblin/deploy/auth/logging/
-cp "$goblin_source_dir/deploy/azure/app/"{ingress,kustomization}.yaml /var/lib/goblin/deploy/azure/app/
+"$GOBLINCTL" internal prepare-install --request "$goblin_source_dir/deploy/install-request.json" --source "$goblin_source_dir" --destination /var/lib/goblin/deploy
 "$GOBLINCTL" internal render-overlay /var/lib/goblin/deploy/azure/app "$goblin_hostname" "$goblin_image" "$goblin_origin"
 k3s kubectl apply -k /var/lib/goblin/deploy/azure/app
 # Sandbox recreates the pod from its template; replace it to load image/origin

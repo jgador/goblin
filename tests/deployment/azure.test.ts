@@ -89,6 +89,10 @@ async function bootstrap(
         join(source, "backend/src/Goblin.Web/appsettings.json"),
     );
     await cp("deploy/auth", join(source, "deploy/auth"), { recursive: true });
+    await cp(
+        "deploy/install-request.json",
+        join(source, "deploy/install-request.json"),
+    );
     await cp("deploy/azure/app", join(source, "deploy/azure/app"), {
         recursive: true,
     });

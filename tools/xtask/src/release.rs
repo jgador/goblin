@@ -16,6 +16,8 @@ use std::path::Component;
 use std::path::Path;
 use std::process::Command;
 
+// goblinctl ships from Goblin's own repository, not a configurable dependency source.
+pub const REPOSITORY: &str = "jgador/goblin";
 pub const TARGET: &str = "x86_64-unknown-linux-musl";
 pub const ARCHIVE: &str = "goblinctl-x86_64-unknown-linux-musl.tar.gz";
 const PIN: &str = "deploy/goblinctl-release.json";
@@ -394,6 +396,8 @@ pub fn check(
 }
 
 fn check_inner(root: &Path, repo: &str, depfile: &Path, directory: &Path) -> Result<Report> {
+    crate::dependencies::check(root)?;
+    verify_repository(repo)?;
     let snapshot = inputs(root)?;
     coverage(root, depfile, &snapshot)?;
     let required = capabilities(&root.join("deploy/goblinctl-requirements.json"))?;
@@ -413,10 +417,29 @@ fn check_inner(root: &Path, repo: &str, depfile: &Path, directory: &Path) -> Res
         report.outcome = Outcome::PinRequired;
         report.message = "The release is compatible, but the checked-in pin differs from its published manifest. Refresh the pin and ARM templates.".into();
     }
+    if report.outcome == Outcome::Ready {
+        let executable = tempfile::tempdir()?;
+        files::run(
+            Command::new("tar")
+                .arg("-xzf")
+                .arg(directory.join(ARCHIVE))
+                .arg("-C")
+                .arg(executable.path()),
+        )?;
+        files::run(
+            Command::new(executable.path().join("goblinctl"))
+                .arg("validate-install")
+                .arg("--request")
+                .arg(root.join("deploy/install-request.json"))
+                .arg("--source")
+                .arg(root),
+        )?;
+    }
     Ok(report)
 }
 
 pub fn pin(root: &Path, repo: &str, version: &str) -> Result<()> {
+    verify_repository(repo)?;
     let directory = tempfile::tempdir()?;
     download(repo, version, directory.path())?;
     let release = verify_artifacts(repo, directory.path())?;
@@ -427,10 +450,22 @@ pub fn pin(root: &Path, repo: &str, version: &str) -> Result<()> {
         &capabilities(&root.join("deploy/goblinctl-requirements.json"))?,
     );
     ensure!(report.outcome == Outcome::Ready, "{}", report.message);
-    files::write_json(&root.join(PIN), &serde_json::to_value(release)?, 0o644)
+    files::write_json(&root.join(PIN), &serde_json::to_value(release)?, 0o644)?;
+    crate::dependencies::pin_release(root, version)
+}
+
+fn verify_repository(repository: &str) -> Result<()> {
+    ensure!(
+        repository == REPOSITORY,
+        "goblinctl releases must come from Goblin's repository: {REPOSITORY}"
+    );
+    Ok(())
 }
 
 pub fn candidate(root: &Path, depfile: &Path) -> Result<()> {
+    crate::dependencies::check(root)?;
+    goblinctl::deployment::InstallRequest::read(&root.join("deploy/install-request.json"))?
+        .validate(root)?;
     let snapshot = inputs(root)?;
     coverage(root, depfile, &snapshot)?;
     let required = capabilities(&root.join("deploy/goblinctl-requirements.json"))?;

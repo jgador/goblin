@@ -13,6 +13,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
+      - name: Check goblinctl and Docker image dependencies
+        run: cargo xtask dependencies check --locked
       - name: Check formatting
         run: just fmt-check
       - name: Lint Rust and tests

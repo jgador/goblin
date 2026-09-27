@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
     copyFileSync,
     mkdirSync,
@@ -80,6 +80,99 @@ function detected(
 const webSettingsPath = "backend/src/Goblin.Web/appsettings.json";
 const databaseConnection = (password: string) =>
     `Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;Password=${password}`;
+
+const releaseMetadataPaths = [
+    "deploy/goblinctl-release.json",
+    "deploy/azure/azuredeploy.json",
+    "deploy/azure/azuredeploy.portal.json",
+];
+const credentialsSourcePath = "tools/goblinctl/src/credentials.rs";
+
+test("source-file checksums in release metadata pass worktree, index, staged, and history scans", (t) => {
+    const repo = fixture(t);
+    const checksum = createHash("sha256")
+        .update("pub fn synthetic_release_input() {}\n")
+        .digest("hex");
+    for (const path of releaseMetadataPaths) {
+        repo.write(
+            path,
+            JSON.stringify(
+                { installer: { files: { [credentialsSourcePath]: checksum } } },
+                null,
+                2,
+            ) + "\n",
+        );
+    }
+    assert.equal(repo.scan().status, 0);
+    repo.git("add", ...releaseMetadataPaths);
+    assert.equal(repo.scan("staged").status, 0);
+    assert.equal(repo.scan().status, 0);
+    repo.git("commit", "--quiet", "-m", "Release source checksums");
+    assert.equal(repo.scan("history").status, 0);
+});
+
+test("release checksum exceptions do not hide other credentials in the same files or lines", (t) => {
+    for (const path of releaseMetadataPaths) {
+        const repo = fixture(t);
+        const apiKey = randomBytes(32).toString("hex");
+        const openaiKey = syntheticKey();
+        for (const indentation of [2, undefined]) {
+            repo.write(
+                path,
+                JSON.stringify(
+                    {
+                        [credentialsSourcePath]:
+                            randomBytes(32).toString("hex"),
+                        ApiKey: apiKey,
+                        OpenAI: { ApiKey: openaiKey },
+                    },
+                    null,
+                    indentation,
+                ) + "\n",
+            );
+            const result = repo.scan();
+            detected(result, apiKey, "worktree", "generic-api-key");
+            detected(result, openaiKey, "worktree");
+            repo.git("add", path);
+            const staged = repo.scan("staged");
+            detected(staged, apiKey, "staged", "generic-api-key");
+            detected(staged, openaiKey, "staged");
+        }
+    }
+});
+
+test("release checksum exceptions require the exact file, field, and hash shape", (t) => {
+    for (const [path, field, value, rule] of [
+        [
+            "deploy/azure/another.json",
+            credentialsSourcePath,
+            randomBytes(32).toString("hex"),
+            "generic-api-key",
+        ],
+        [
+            releaseMetadataPaths[0],
+            "credentials",
+            randomBytes(32).toString("hex"),
+            "generic-api-key",
+        ],
+        [
+            releaseMetadataPaths[0],
+            credentialsSourcePath,
+            randomBytes(31).toString("hex"),
+            "generic-api-key",
+        ],
+        [
+            releaseMetadataPaths[0],
+            credentialsSourcePath,
+            syntheticKey(),
+            "goblin-openai-key",
+        ],
+    ]) {
+        const repo = fixture(t);
+        repo.write(path, JSON.stringify({ [field]: value }, null, 2) + "\n");
+        detected(repo.scan(), value, "worktree", rule);
+    }
+});
 
 test("the certificate database connection passes worktree, staged, and history scans", (t) => {
     const repo = fixture(t);

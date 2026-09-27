@@ -114,7 +114,7 @@ required check, companion PRs, publication approval, and initial repository setu
    `goblinctl-vMAJOR.MINOR.PATCH`, and attests both archive and dependency metadata.
    Existing tags/releases are never overwritten; pushing a tag does not publish.
 4. The pin workflow downloads and verifies those published artifacts, updates the
-   companion PR's pin and ARM templates, and explicitly dispatches compatibility
+   companion PR's pin, deployment dependency catalog/lock, and ARM templates, and explicitly dispatches compatibility
    checks. Merge the companion into the feature branch, then merge the Goblin PR
    once `goblinctl-release-ready` passes on its proposed merge result.
 
