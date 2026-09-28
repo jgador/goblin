@@ -6,6 +6,11 @@ repository root, with the permanent operator CLI in `tools/goblinctl` and build
 tasks in `tools/xtask`. The .NET backend remains responsible for Work lifecycle
 rules and SQL migrations.
 
+Rust package versions live in the workspace and crate `Cargo.toml` files; tool
+versions use the files described below. The [deployment dependency
+catalog](dependencies.md) selects only the published goblinctl release and Docker
+images.
+
 ## Tool versions and installation
 
 | Tool | Version/source | Purpose |

@@ -11,9 +11,9 @@ export GOBLINCTL=/opt/goblin/bin/goblinctl
 # database helpers that may invoke a separately installed kubectl.
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 state() { "$GOBLINCTL" internal state "$@"; }
-stage() { printf '[Goblin] %s\n' "$1"; state detail "$1"; }
-step() { state start "$1"; }
-done_step() { state complete; }
+stage() { printf '[Goblin] %s\n' "$1"; state detail "$1" --step "${current_step:-prepare}"; }
+step() { current_step=$1; state start "$1"; }
+done_step() { state complete "$current_step"; }
 download() { curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 300 "$1" --output "$2"; }
 
 K3S_VERSION='v1.36.4+k3s1'
@@ -25,10 +25,9 @@ CERT_MANAGER_VERSION='v1.21.2'
 CERT_MANAGER_SHA256='e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f'
 traefik_config=/var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml
 
-# Serialize attempts, recovery and bootstrap configuration changes.
-exec 9>"$install_dir/installer.lock"
-flock -n 9 || exit 0
 
+bootstrap_dir="$private_dir/work"
+goblin_source_dir="$bootstrap_dir/source"
 write_ingress_mode() {
   install -d -m 0755 "$(dirname "$traefik_config")"
   # K3s owns traefik.yaml; a HelmChartConfig is the supported customization point.
@@ -87,59 +86,7 @@ recover_handoff() {
   systemctl enable --now goblin-setup.service
 }
 
-if [[ "${1:-}" == recover ]]; then
-  if [[ "${SERVICE_RESULT:-success}" != success ]]; then
-    state failed
-    recover_handoff
-  fi
-  exit 0
-fi
-
-# A reboot between recording completion and disabling the unit is harmless.
-if "$GOBLINCTL" internal json-test "$install_dir/status.json" status ready
-then
-  systemctl disable goblin-setup.service goblin-installer.service
-  systemctl stop goblin-setup.service
-  exit 0
-fi
-
-bootstrap_dir="$private_dir/work"
-finish() {
-  local result=$?
-  trap - EXIT TERM INT
-  if [[ "$result" != 0 ]]; then
-    printf '[Goblin] Installation failed (exit code %s). See the preceding local diagnostics.\n' "$result" >&2
-    state failed || true
-    recover_handoff || true
-  fi
-  exit "$result"
-}
-trap finish EXIT
-trap 'exit 143' TERM
-trap 'exit 130' INT
-
-state begin
-step prepare
-goblin_hostname=$(cat "$private_dir/hostname")
-goblin_source_ref=$(cat "$private_dir/source-ref")
-if [[ "$goblin_hostname" != localhost && ! "$goblin_hostname" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || \
-   [[ ! "$goblin_source_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]]; then
-  printf 'Invalid public hostname or Goblin source ref.\n' >&2
-  exit 1
-fi
-# Local tests forward a browser port to the installation's HTTP port 80.
-# Azure keeps its default origin; a root-owned systemd override supplies the
-# browser origin when testing behind such a forwarder.
-goblin_origin="${GOBLIN_PUBLIC_ORIGIN:-http://${goblin_hostname}}"
-goblin_authority=$("$GOBLINCTL" internal origin "$goblin_origin" "$goblin_hostname"
-)
-printf '%s\n' "$goblin_origin" > /var/lib/goblin/public-url
-state public-url "$goblin_origin"
-install -d -m 0700 "$bootstrap_dir"
-write_ingress_mode ClusterIP
-done_step
-
-step k3s
+k3s_task() {
 stage 'Installing Kubernetes'
 if [[ ! -f /etc/systemd/system/k3s.service ]]; then
   download "https://raw.githubusercontent.com/k3s-io/k3s/${K3S_VERSION}/install.sh" "$bootstrap_dir/install-k3s.sh"
@@ -176,9 +123,9 @@ touch "$private_dir/handoff"
 set_ingress_mode ClusterIP
 rm -f "$private_dir/handoff"
 systemctl enable --now goblin-setup.service
-done_step
+}
 
-step cert-manager
+cert_manager_task() {
 stage 'Installing certificate manager'
 download "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml" "$bootstrap_dir/cert-manager.yaml"
 printf '%s  %s\n' "$CERT_MANAGER_SHA256" "$bootstrap_dir/cert-manager.yaml" | sha256sum --check
@@ -209,9 +156,9 @@ for ((attempt=0; attempt<60; attempt++)); do
   sleep 3
 done
 if [[ "$webhook_ready" != true ]]; then printf 'Certificate manager webhook did not become ready.\n' >&2; exit 1; fi
-done_step
+}
 
-step sandbox
+sandbox_task() {
 stage 'Configuring the Goblin password'
 k3s kubectl create namespace goblin --dry-run=client -o json | k3s kubectl apply --server-side --field-manager=goblin-bootstrap -f -
 # Reuse the persisted verifier on retries; no fresh password or database credentials.
@@ -227,10 +174,216 @@ cp "$setup_dir/sandbox-kustomization.yaml" "$bootstrap_dir/kustomization.yaml"
 k3s kubectl apply --server-side --field-manager=goblin-bootstrap -k "$bootstrap_dir"
 k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
 k3s kubectl rollout status deployment/sandbox -n sandbox --timeout=300s
-done_step
+}
 
 # shellcheck source=deploy/azure/install-app.sh
 source "$setup_dir/install-app.sh"
+
+wait_for_worker() {
+  local pid result=0
+  (($#)) || return 127
+  # wait -n ignores children Bash has already reaped. Explicit wait retrieves
+  # their saved exit status, including a failure from a very fast cached task.
+  for pid in "$@"; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      finished=$pid
+      wait "$pid" || result=$?
+      return "$result"
+    fi
+  done
+  wait -n -p finished "$@" 2>/dev/null || result=$?
+  if [[ -z "${finished:-}" ]]; then
+    # All remaining children may finish between the check and wait -n.
+    finished=$1
+    result=0
+    wait "$finished" || result=$?
+  fi
+  return "$result"
+}
+
+prefetch_task() {
+  local attempt worker index image
+  local -a images workers=()
+  stage 'Waiting for the Kubernetes image store'
+  for ((attempt=0; attempt<150; attempt++)); do
+    if k3s crictl info >/dev/null 2>&1; then break; fi
+    sleep 2
+  done
+  if ((attempt == 150)); then return 1; fi
+  mapfile -t images < "$bootstrap_dir/prefetch-images"
+  images+=(
+    "quay.io/jetstack/cert-manager-cainjector:${CERT_MANAGER_VERSION}"
+    "quay.io/jetstack/cert-manager-controller:${CERT_MANAGER_VERSION}"
+    "quay.io/jetstack/cert-manager-webhook:${CERT_MANAGER_VERSION}"
+    "registry.k8s.io/agent-sandbox/agent-sandbox-controller:${SANDBOX_VERSION}"
+  )
+  stage "Downloading ${#images[@]} images with ${GOBLIN_IMAGE_PULL_WORKERS:-4} workers"
+  for ((worker=0; worker<${GOBLIN_IMAGE_PULL_WORKERS:-4}; worker++)); do
+    (
+      for ((index=worker; index<${#images[@]}; index+=${GOBLIN_IMAGE_PULL_WORKERS:-4})); do
+        image=${images[$index]}
+        if k3s crictl inspecti "$image" >/dev/null 2>&1; then
+          stage "Image $((index + 1))/${#images[@]} is already cached: ${image%%@*}"
+        else
+          stage "Pulling image $((index + 1))/${#images[@]}: ${image%%@*}"
+          timeout --foreground --kill-after=5s 600s k3s crictl pull "$image"
+          stage "Downloaded image $((index + 1))/${#images[@]}: ${image%%@*}"
+        fi
+      done
+    ) &
+    workers+=("$!")
+  done
+  while ((${#workers[@]})); do
+    local finished result=0
+    wait_for_worker "${workers[@]}" || result=$?
+    if ((result != 0)); then return "$result"; fi
+    local -a remaining=()
+    for worker in "${workers[@]}"; do [[ "$worker" == "$finished" ]] || remaining+=("$worker"); done
+    workers=("${remaining[@]}")
+  done
+}
+
+# Each worker has its own process group. Its installer-lock descriptor stays
+# inherited until it exits; recovery never races a background build or pull.
+if [[ "${1:-}" == worker ]]; then
+  current_step=${2:?Missing worker step}
+  case "$current_step" in
+    k3s|cert-manager|sandbox|image|prefetch|database|import|migrate|deploy|verify) ;;
+    *) exit 2 ;;
+  esac
+  # Called by EXIT/signal traps, including errors inside a pipeline.
+  # shellcheck disable=SC2317
+  worker_exit() {
+    local result=$?
+    trap - EXIT TERM INT
+    if ((result != 0)); then
+      # Persist the cause before the supervisor can cancel this process group.
+      state fail-step "$current_step" || true
+      touch "$bootstrap_dir/pipeline.failed"
+    fi
+    exit "$result"
+  }
+  trap worker_exit EXIT
+  trap 'exit 143' TERM
+  trap 'exit 130' INT
+  step "$current_step"
+  "${current_step//-/_}_task"
+  done_step
+  exit 0
+fi
+
+# Serialize attempts, recovery and bootstrap configuration changes.
+exec 9>"$install_dir/installer.lock"
+flock -n 9 || exit 0
+
+if [[ "${1:-}" == recover ]]; then
+  if [[ "${SERVICE_RESULT:-success}" != success ]]; then
+    state failed
+    systemctl disable goblin-installer.service || true
+    recover_handoff
+  fi
+  exit 0
+fi
+if "$GOBLINCTL" internal json-test "$install_dir/status.json" status ready; then
+  systemctl disable goblin-setup.service goblin-installer.service
+  systemctl stop goblin-setup.service
+  exit 0
+fi
+
+declare -A worker_steps=() completed=()
+stop_workers() {
+  local pid attempt alive
+  for pid in "${!worker_steps[@]}"; do kill -TERM -- "-$pid" 2>/dev/null || true; done
+  for ((attempt=0; attempt<50; attempt++)); do
+    alive=false
+    for pid in "${!worker_steps[@]}"; do
+      if kill -0 -- "-$pid" 2>/dev/null; then alive=true; fi
+    done
+    if [[ "$alive" == false ]]; then break; fi
+    sleep 0.1
+  done
+  for pid in "${!worker_steps[@]}"; do
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  done
+}
+finish() {
+  local result=$?
+  trap - EXIT TERM INT
+  if ((result != 0)); then
+    stop_workers
+    printf '[Goblin] Installation failed (exit code %s). See the preceding local diagnostics.\n' "$result" >&2
+    state failed || true
+    systemctl disable goblin-installer.service || true
+    recover_handoff || true
+  fi
+  exit "$result"
+}
+trap finish EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
+run_pipeline() {
+  local task dependency ready pid finished result
+  local -a tasks=(k3s image prefetch cert-manager sandbox database import migrate deploy verify)
+  local -A started=() dependencies=(
+    [cert-manager]='k3s' [sandbox]='k3s'
+    [database]='cert-manager sandbox' [import]='k3s image'
+    [migrate]='database import' [deploy]='migrate prefetch'
+    [verify]='deploy'
+  )
+  while ((${#completed[@]} < ${#tasks[@]})); do
+    for task in "${tasks[@]}"; do
+      [[ -z "${started[$task]:-}" ]] || continue
+      [[ ! -e "$bootstrap_dir/pipeline.failed" ]] || return 1
+      ready=true
+      for dependency in ${dependencies[$task]:-}; do
+        [[ "${completed[$dependency]:-}" == true ]] || ready=false
+      done
+      [[ "$ready" == true ]] || continue
+      setsid "$setup_dir/installer.sh" worker "$task" &
+      pid=$!
+      worker_steps[$pid]=$task
+      started[$task]=true
+    done
+    result=0
+    wait_for_worker "${!worker_steps[@]}" || result=$?
+    if ((result != 0)); then return "$result"; fi
+    completed[${worker_steps[$finished]}]=true
+    unset 'worker_steps[$finished]'
+  done
+}
+
+state begin
+step prepare
+goblin_hostname=$(cat "$private_dir/hostname")
+goblin_source_ref=$(cat "$private_dir/source-ref")
+if [[ "$goblin_hostname" != localhost && ! "$goblin_hostname" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || \
+   [[ ! "$goblin_source_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]]; then
+  printf 'Invalid public hostname or Goblin source ref.\n' >&2
+  exit 1
+fi
+# Local tests forward a browser port to the installation's HTTP port 80.
+# Azure keeps its default origin; a root-owned systemd override supplies the
+# browser origin when testing behind such a forwarder.
+goblin_origin="${GOBLIN_PUBLIC_ORIGIN:-http://${goblin_hostname}}"
+goblin_authority=$("$GOBLINCTL" internal origin "$goblin_origin" "$goblin_hostname"
+)
+printf '%s\n' "$goblin_origin" > /var/lib/goblin/public-url
+state public-url "$goblin_origin"
+install -d -m 0700 "$bootstrap_dir"
+if [[ ! "${GOBLIN_IMAGE_PULL_WORKERS:-4}" =~ ^[1-8]$ ]]; then
+  printf 'GOBLIN_IMAGE_PULL_WORKERS must be between 1 and 8.\n' >&2
+  exit 1
+fi
+rm -f "$bootstrap_dir/pipeline.failed"
+write_ingress_mode ClusterIP
+prepare_source
+configure_docker
+export goblin_hostname goblin_origin goblin_authority goblin_source_sha goblin_image
+# All workers use the same retained source and isolated Docker configuration.
+done_step
+run_pipeline
 
 step activate
 stage 'Activating public access'

@@ -52,6 +52,8 @@ jobs:
         with:
           global-json-file: global.json
       - uses: ./.github/actions/setup-rust
+      - name: Check goblinctl and Docker image dependencies
+        run: cargo xtask dependencies check --locked
       - uses: ./.github/actions/setup-deployment
       - name: Verify candidate source
         run: |

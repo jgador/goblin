@@ -51,6 +51,8 @@ async function bootstrap(
         nativeDownload?: "failed" | "corrupt" | "wrong-version";
         resume?: boolean;
         recovery?: boolean;
+        pullDelay?: number;
+        slowBuild?: boolean;
         state?:
             | "ready"
             | "docker-failed"
@@ -63,7 +65,8 @@ async function bootstrap(
             | "public-failed"
             | "sandbox-failed"
             | "cert-failed"
-            | "webhook-failed";
+            | "webhook-failed"
+            | "pull-failed";
     } = {},
 ) {
     const bin = join(root, "bin");
@@ -89,6 +92,10 @@ async function bootstrap(
         join(source, "backend/src/Goblin.Web/appsettings.json"),
     );
     await cp("deploy/auth", join(source, "deploy/auth"), { recursive: true });
+    await cp(
+        "deploy/install-request.json",
+        join(source, "deploy/install-request.json"),
+    );
     await cp("deploy/azure/app", join(source, "deploy/azure/app"), {
         recursive: true,
     });
@@ -169,11 +176,16 @@ if (name === 'curl') {
   if (process.env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED === 'false' && !fs.existsSync(path.join(root, 'docker-installed')))
     process.exit(127);
   if (args[0] === 'info' && appState === 'docker-failed') process.exit(1);
+  if (args[0] === 'image' && args[1] === 'inspect' && !fs.existsSync(path.join(root, 'built-image'))) process.exit(1);
   if (args[0] === 'build') {
+    fs.writeFileSync(path.join(root, 'build-pid'), String(process.pid));
+    if (process.env.GOBLIN_BOOTSTRAP_SLOW_BUILD === 'true') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60000);
     if (appState === 'build-failed') process.exit(1);
     fs.accessSync(path.join(args.at(-1), 'Dockerfile'));
     if ((fs.statSync(path.join(args.at(-1), 'frontend/src/connection/index.html')).mode & 0o044) !== 0o044)
       throw new Error('Source assets must remain readable in the non-root image');
+    process.stdout.write('#2 [assets 3/8] RUN npm ci\\n#2 1.0 password=do-not-stream\\n#2 DONE 2.0s\\n');
+    fs.writeFileSync(path.join(root, 'built-image'), 'true');
   } else if (args[0] === 'save') fs.writeFileSync(args[args.indexOf('--output') + 1], 'test image archive');
 } else if (name === 'apt-get') {
   fs.appendFileSync(path.join(root, 'apt-requests.jsonl'), JSON.stringify(args) + '\\n');
@@ -187,6 +199,13 @@ if (name === 'curl') {
   if (args[0] === 'cat' && !fs.existsSync(path.join(root, 'etc/systemd/system', args[1]))) process.exit(1);
 } else if (name === 'k3s' || name === 'kubectl') {
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
+  if (args[0] === 'crictl' && args[1] === 'inspecti') process.exit(1);
+  if (args[0] === 'crictl' && args[1] === 'pull') {
+    fs.appendFileSync(path.join(root, 'pull-events.jsonl'), JSON.stringify({ event: 'start', image: args[2] }) + '\\n');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.GOBLIN_BOOTSTRAP_PULL_DELAY));
+    if (appState === 'pull-failed') process.exit(1);
+    fs.appendFileSync(path.join(root, 'pull-events.jsonl'), JSON.stringify({ event: 'end', image: args[2] }) + '\\n');
+  }
   if (args[0] === 'kubectl') {
     const kubeconfig = process.env.KUBECONFIG ?? null;
     fs.appendFileSync(path.join(root, 'kubernetes-contexts.jsonl'), JSON.stringify({ command: name, args, kubeconfig }) + '\\n');
@@ -214,6 +233,13 @@ if (name === 'curl') {
     process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : fs.readFileSync(path.join(root, 'ingress-mode'), 'utf8'));
   } else if (args[1] === 'rollout' && args.includes('deployment/cert-manager-webhook') && appState === 'cert-failed') {
     process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('deployment/sandbox') && appState === 'cert-failed') {
+    // Finish a parallel worker while the certificate worker is recording its failure.
+    const deadline = Date.now() + 10000;
+    while (!fs.existsSync(path.join(root, 'cert-failure-reporting'))) {
+      if (Date.now() >= deadline) throw new Error('Certificate failure was not reported');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+    }
   } else if (args[1] === 'rollout' && args.includes('deployment/sandbox') && appState === 'sandbox-failed') {
     process.exit(1);
   } else if (args[1] === 'create' && args.includes('--dry-run=server') && appState === 'webhook-failed') {
@@ -310,8 +336,12 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
 if (args[0] === 'internal' && args[1] === 'activate') args.push('--system-root', root);
-if (args[0] === 'internal' && args[1] === 'state' && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
+if (args[0] === 'internal' && ['state', 'build-progress'].includes(args[1]) && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
 if (args[0] === 'internal' && args[1] === 'docker-config') args.push(path.join(root, 'etc/docker/daemon.json'));
+if (args[0] === 'internal' && args[1] === 'state' && args[2] === 'fail-step' && args[3] === 'cert-manager' && process.env.GOBLIN_BOOTSTRAP_APP_STATE === 'cert-failed') {
+    fs.writeFileSync(path.join(root, 'cert-failure-reporting'), 'true');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+}
 const result = spawnSync(${JSON.stringify(goblinctl)}, args, {stdio: 'inherit'});
 if (result.status !== 0) process.exit(result.status ?? 1);
 if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
@@ -395,6 +425,8 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
             GOBLIN_PASSWORD_HASH_FILE: application.passwordHashFile ?? "",
             GOBLIN_BOOTSTRAP_NODE_STATE: nodeState,
             GOBLIN_BOOTSTRAP_APP_STATE: application.state ?? "ready",
+            GOBLIN_BOOTSTRAP_PULL_DELAY: String(application.pullDelay ?? 0),
+            GOBLIN_BOOTSTRAP_SLOW_BUILD: String(application.slowBuild ?? false),
             GOBLIN_BOOTSTRAP_DOCKER_INSTALLED: String(
                 application.dockerInstalled ?? true,
             ),
@@ -434,6 +466,116 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
     }
     return output;
 }
+
+test("worker collection preserves exit statuses when children finish before the wait starts", async () => {
+    const installer = await readFile("deploy/azure/setup/installer.sh", "utf8");
+    const start = installer.indexOf("wait_for_worker() {");
+    assert.ok(start >= 0);
+    const helper = installer.slice(
+        start,
+        installer.indexOf("\n}\n", start) + 3,
+    );
+    execFileSync("bash", [
+        "-c",
+        helper +
+            `
+set -eu
+(exit 0) & first=$!
+(exit 7) & second=$!
+sleep 0.1
+result=0
+wait_for_worker "$first" "$second" || result=$?
+[[ "$finished" == "$first" && "$result" == 0 ]]
+result=0
+wait_for_worker "$second" || result=$?
+[[ "$finished" == "$second" && "$result" == 7 ]]
+`,
+    ]);
+});
+
+test("parallel installation bounds image pulls, overlaps independent steps, and joins before migration", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-concurrency-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await bootstrap(root, fakePassword, "ready", { pullDelay: 400 });
+    const progress = JSON.parse(
+        await readFile(
+            join(root, "var/lib/goblin/install/status.json"),
+            "utf8",
+        ),
+    );
+    const steps = Object.fromEntries(
+        progress.steps.map((step: { id: string }) => [step.id, step]),
+    );
+    const start = (id: string) => Date.parse(steps[id].startedAt);
+    const end = (id: string) => Date.parse(steps[id].finishedAt);
+    assert.ok(start("image") < end("k3s") && start("k3s") < end("image"));
+    assert.ok(
+        start("database") >= end("cert-manager") &&
+            start("database") >= end("sandbox"),
+    );
+    assert.ok(
+        start("migrate") >= end("import") &&
+            start("migrate") >= end("database"),
+    );
+    const pulls = (await readFile(join(root, "pull-events.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    let active = 0,
+        maximum = 0;
+    for (const event of pulls) {
+        active += event.event === "start" ? 1 : -1;
+        maximum = Math.max(maximum, active);
+    }
+    assert.equal(active, 0);
+    assert.equal(pulls.length, 16);
+    assert.ok(maximum > 1 && maximum <= 4);
+    assert.ok(!JSON.stringify(progress).includes("do-not-stream"));
+    assert.match(
+        JSON.stringify(progress),
+        /installing frontend and tool dependencies/,
+    );
+});
+
+test("a pull failure stops the owned build process before retry can deploy", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-pull-failure-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await assert.rejects(
+        bootstrap(root, fakePassword, "ready", {
+            state: "pull-failed",
+            slowBuild: true,
+            pullDelay: 1000,
+        }),
+        { status: 1 },
+    );
+    const pid = Number(await readFile(join(root, "build-pid"), "utf8"));
+    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+    const progress = JSON.parse(
+        await readFile(
+            join(root, "var/lib/goblin/install/status.json"),
+            "utf8",
+        ),
+    );
+    assert.equal(progress.status, "failed");
+    assert.equal(
+        progress.steps.find((step: { id: string }) => step.id === "deploy")
+            .status,
+        "waiting",
+    );
+    assert.equal(
+        progress.steps.find((step: { id: string }) => step.id === "prefetch")
+            .status,
+        "failed",
+    );
+    execFileSync("flock", [
+        "-n",
+        join(root, "var/lib/goblin/install/installer.lock"),
+        "true",
+    ]);
+    await access(
+        join(root, "var/lib/goblin/install/private/work/goblin-source.tar.gz"),
+    );
+});
 
 test("installer waits for node registration after API readiness, including transient list failures", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-node-delayed-"));
@@ -1355,7 +1497,9 @@ test("cert-manager readiness gates database setup and migrations before applicat
         if (state !== "cert-failed")
             assert.ok(calls.some((args) => args.includes("--dry-run=server")));
         assert.equal(
-            JSON.stringify(calls).includes("postgres"),
+            JSON.stringify(
+                calls.filter((args) => args[0] === "kubectl"),
+            ).includes("postgres"),
             state === "ready",
         );
         if (state === "ready") {
@@ -1381,10 +1525,14 @@ test("cert-manager readiness gates database setup and migrations before applicat
         );
         assert.equal(status.status, state === "ready" ? "ready" : "failed");
         if (state !== "ready") {
+            assert.equal(status.failedStep, "cert-manager");
             assert.equal(status.currentStep, "cert-manager");
             assert.ok(
                 !calls.some(
-                    (args) => args[1] === "create" && args[2] === "secret",
+                    (args) =>
+                        args[1] === "create" &&
+                        args[2] === "secret" &&
+                        args.includes("goblin-postgres-admin"),
                 ),
             );
         }
@@ -1423,7 +1571,12 @@ test("a failed handoff restores private ingress and UI, then retry preserves cre
         "--now",
         "goblin-setup.service",
     ]);
-    assert.ok(!services.some((args) => args[0] === "disable"));
+    assert.ok(
+        !services.some(
+            (args) =>
+                args[0] === "disable" && args.includes("goblin-setup.service"),
+        ),
+    );
     await bootstrap(root, fakePassword, "ready", { resume: true });
     state = JSON.parse(await readFile(statePath, "utf8"));
     assert.equal(state.status, "ready");
