@@ -10,7 +10,9 @@ outputs to follow progress; the same page opens Goblin when ready.
 Start with the **Deploy to Azure** button in the [root README](../../README.md).
 
 1. Select your subscription, a dedicated resource group (e.g. `rg-goblin-prod`),
-   and region. Keep the remaining defaults unless needed.
+   and region. Enter the full **Goblin commit to install** verified with the
+   installer pinned by this template. See [deployment verification](../../docs/goblinctl-releases.md#verify-before-deployment).
+   Development branches may contain unreleased installer changes.
 2. Enter and confirm a **Goblin password**. There is no minimum length or
    character-mix requirement. Save it in your password manager; use it to open
    Goblin.

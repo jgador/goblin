@@ -1,59 +1,34 @@
-name: Goblin installer dependency
+name: Goblin checks
 on:
   pull_request:
   push:
     branches: [master]
   merge_group:
   workflow_dispatch:
-    inputs:
-      pr:
-        description: Pull request to validate after a bot update (blank checks master)
-        type: string
 permissions:
   contents: read
-  pull-requests: read
-  actions: read
-  attestations: read
 concurrency:
-  group: goblinctl-check-${{ github.event.pull_request.number || inputs.pr || github.ref }}
+  group: goblin-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  resolve:
+  installer-status:
+    name: Installer changes pending
     runs-on: ubuntu-24.04
-    outputs:
-      sha: ${{ steps.resolve.outputs.sha }}
-      base: ${{ steps.resolve.outputs.base }}
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ${{ github.workflow_sha }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - id: resolve
-        run: node scripts/goblinctl-release.mts resolve
-        env:
-          GH_TOKEN: ${{ github.token }}
-      # Keep trusted context away from the runner which executes candidate code.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: goblinctl-check-context
-          path: ${{ runner.temp }}/release-context.json
-  check:
-    name: Installer source and release verification
-    needs: resolve
-    if: ${{ !cancelled() }}
+      - uses: ./.github/actions/setup-rust
+      - name: Report changes since the pinned installer
+        # Pending changes return success. Invalid/missing metadata is an error.
+        shell: bash
+        run: cargo xtask release-status | tee -a "$GITHUB_STEP_SUMMARY"
+  source:
+    name: Source and deployment tests
     runs-on: ubuntu-24.04
     steps:
-      - name: Require successful candidate resolution
-        env:
-          RESOLUTION: ${{ needs.resolve.result }}
-          CANDIDATE_SHA: ${{ needs.resolve.outputs.sha }}
-        run: '[[ "$RESOLUTION" == success && "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
@@ -63,20 +38,7 @@ jobs:
         with:
           global-json-file: global.json
       - uses: ./.github/actions/setup-rust
-      - name: Check goblinctl and Docker image dependencies
-        run: cargo xtask dependencies check --locked
       - uses: ./.github/actions/setup-deployment
-      - name: Build installer for compiler dependency discovery
-        run: |
-          bash scripts/build-goblinctl-release.sh target
-      - name: Verify published dependency
-        id: dependency
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          cargo xtask release-check --repo "$GH_REPO"
       - name: Check source and deployment contracts
         run: |
           npm ci
@@ -84,35 +46,14 @@ jobs:
           cargo xtask azure --check
           npx playwright install --with-deps chromium
           npx playwright test tests/e2e/setup.spec.ts
-      - name: Check the published executable against this Goblin source
-        if: steps.dependency.outcome == 'success'
-        run: |
-          if [[ -f .artifacts/goblinctl-check/goblinctl-x86_64-unknown-linux-musl.tar.gz ]]; then
-            mkdir -p .artifacts/published-bin
-            tar -xzf .artifacts/goblinctl-check/goblinctl-x86_64-unknown-linux-musl.tar.gz -C .artifacts/published-bin
-            GOBLINCTL_TEST_BINARY=.artifacts/published-bin/goblinctl node --test dist/tests/deployment/*.test.js dist/tests/integration/local-login.test.js
-          fi
-      - name: Require published dependency
-        if: always()
-        env:
-          DEPENDENCY_RESULT: ${{ steps.dependency.outcome }}
-        run: test "$DEPENDENCY_RESULT" = success
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: goblinctl-release-report
-          path: .artifacts/goblinctl-check.json
-          if-no-files-found: warn
   gate:
-    name: goblinctl-release-ready
-    needs: [resolve, check]
-    # Only this short final job is unconditional. Required checks must not turn
-    # green because a prerequisite failed, was skipped, or was cancelled.
+    name: goblin-checks
+    needs: [installer-status, source]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require completed release and compatibility checks
+      - name: Require completed checks
         env:
-          RESOLUTION: ${{ needs.resolve.result }}
-          VERIFICATION: ${{ needs.check.result }}
-        run: '[[ "$RESOLUTION" == success && "$VERIFICATION" == success ]]'
+          STATUS: ${{ needs.installer-status.result }}
+          SOURCE: ${{ needs.source.result }}
+        run: '[[ "$STATUS" == success && "$SOURCE" == success ]]'

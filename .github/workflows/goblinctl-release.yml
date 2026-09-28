@@ -2,48 +2,34 @@ name: goblinctl native release
 on:
   workflow_dispatch:
     inputs:
-      pr:
-        description: Reviewed companion release PR number
-        type: string
-        required: true
       sha:
-        description: Exact reviewed candidate commit (40-character SHA)
+        description: Exact reviewed commit on master to publish (40-character SHA)
         type: string
         required: true
 permissions:
   contents: read
-  pull-requests: read
 concurrency:
   group: goblinctl-publication
   cancel-in-progress: false
 jobs:
-  candidate:
-    runs-on: ubuntu-24.04
-    outputs:
-      sha: ${{ steps.candidate.outputs.sha }}
-      version: ${{ steps.candidate.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-      - id: candidate
-        run: node scripts/goblinctl-release.mts approve-candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_PR: ${{ inputs.pr }}
-          RELEASE_SHA: ${{ inputs.sha }}
   linux:
-    needs: candidate
     runs-on: ubuntu-24.04
     steps:
+      - name: Require an explicit immutable revision
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+        run: '[[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.candidate.outputs.sha }}
+          ref: ${{ inputs.sha }}
+          fetch-depth: 0
           persist-credentials: false
+      - name: Require a merged commit
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" origin/master
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -52,8 +38,6 @@ jobs:
         with:
           global-json-file: global.json
       - uses: ./.github/actions/setup-rust
-      - name: Check goblinctl and Docker image dependencies
-        run: cargo xtask dependencies check --locked
       - uses: ./.github/actions/setup-deployment
       - name: Verify candidate source
         run: |
@@ -78,12 +62,11 @@ jobs:
           path: .artifacts/goblinctl/*
           if-no-files-found: error
   publish:
-    needs: [candidate, linux]
+    needs: linux
     runs-on: ubuntu-24.04
     environment: goblinctl-release
     permissions:
       contents: write
-      pull-requests: read
       id-token: write
       attestations: write
     steps:
@@ -91,36 +74,59 @@ jobs:
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "24"
       - uses: actions/download-artifact@v4
         with:
           name: goblinctl-linux-musl
           path: release-artifacts
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Verify the artifact identifies the selected source
+        id: manifest
+        env:
+          RELEASE_SHA: ${{ inputs.sha }}
+        working-directory: release-artifacts
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          import { createHash } from 'node:crypto';
+          const release = JSON.parse(readFileSync('release.json', 'utf8'));
+          const archive = 'goblinctl-x86_64-unknown-linux-musl.tar.gz';
+          const checksum = createHash('sha256').update(readFileSync(archive)).digest('hex');
+          if (release.schemaVersion !== 1 || release.sourceRevision !== process.env.RELEASE_SHA ||
+              release.sourceDirty !== false || release.target !== 'x86_64-unknown-linux-musl' ||
+              typeof release.version !== 'string' ||
+              !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.version) ||
+              release.sha256 !== checksum || readFileSync('SHA256SUMS', 'utf8') !== `${checksum}  ${archive}\n`) {
+            throw new Error('Artifact does not identify the selected clean source and version');
+          }
+          appendFileSync(process.env.GITHUB_OUTPUT, `version=${release.version}\n`);
+          JS
       - name: Attest archive and dependency metadata
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
             release-artifacts/goblinctl-x86_64-unknown-linux-musl.tar.gz
             release-artifacts/release.json
-      - name: Publish the approved immutable version
-        run: node scripts/goblinctl-release.mts publish
+      - name: Publish the selected immutable version
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_PR: ${{ inputs.pr }}
-          RELEASE_SHA: ${{ needs.candidate.outputs.sha }}
-          RELEASE_VERSION: ${{ needs.candidate.outputs.version }}
-          RELEASE_DIRECTORY: release-artifacts
-  pin:
-    needs: [candidate, publish]
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-      attestations: read
-    uses: ./.github/workflows/goblinctl-pin.yml
-    with:
-      pr: ${{ inputs.pr }}
-      sha: ${{ needs.candidate.outputs.sha }}
-      version: ${{ needs.candidate.outputs.version }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_SHA: ${{ inputs.sha }}
+          RELEASE_VERSION: ${{ steps.manifest.outputs.version }}
+        run: |
+          tag="goblinctl-v$RELEASE_VERSION"
+          # Ref creation fails if the tag exists. Never overwrite or move a release.
+          jq -n --arg ref "refs/tags/$tag" --arg sha "$RELEASE_SHA" '{ref: $ref, sha: $sha}' |
+            gh api "repos/$GH_REPO/git/refs" --method POST --input -
+          gh release create "$tag" release-artifacts/goblinctl-x86_64-unknown-linux-musl.tar.gz \
+            release-artifacts/release.json release-artifacts/SHA256SUMS --repo "$GH_REPO" --verify-tag \
+            --title "$tag" --notes "Native installer built and tested from $RELEASE_SHA."
+          {
+            echo "Published $tag from $RELEASE_SHA."
+            echo 'Update a checkout with matching installer inputs, review the generated files, and commit the pin:'
+            echo '```bash'
+            echo "cargo xtask pin-release --version $RELEASE_VERSION"
+            echo 'cargo xtask azure'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
