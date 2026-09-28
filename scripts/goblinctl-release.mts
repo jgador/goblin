@@ -154,11 +154,18 @@ async function contents(path: string, ref: string): Promise<string> {
     return Buffer.from(value.content, "base64").toString("utf8");
 }
 
+async function branchHead(ref: string): Promise<string> {
+    const value = await api<{ object: { sha: string } }>(
+        `git/ref/heads/${encodeURIComponent(ref)}`,
+    );
+    return value.object.sha;
+}
+
 async function pulls(): Promise<Pull[]> {
     const result: Pull[] = [];
     for (let page = 1; ; page++) {
         const batch = await api<Pull[]>(
-            `pulls?state=open&per_page=100&page=${page}`,
+            `pulls?state=all&per_page=100&page=${page}`,
         );
         result.push(...batch);
         if (batch.length < 100) return result;
@@ -228,20 +235,43 @@ export async function prepare(
         );
         return;
     }
-    const existing = (await pulls()).filter((value) =>
-        value.head.ref.startsWith(botPrefix),
+    const history = (await pulls()).filter(
+        (value) =>
+            value.head.repo?.full_name === repository &&
+            value.head.ref.startsWith(botPrefix),
     );
-    const branch = `${botPrefix}${pr ? `pr-${pr.number}` : `master-${sha.slice(0, 12)}`}`;
-    const companion = existing.find((value) => value.head.ref === branch);
+    const existing = history.filter((value) => value.state === "open");
+    const baseBranch = `${botPrefix}${pr ? `pr-${pr.number}` : `master-${sha.slice(0, 12)}`}`;
+    const branchPattern = new RegExp(`^${baseBranch}(?:-[1-9][0-9]*)?$`);
+    const companion = existing.find(
+        (value) =>
+            branchPattern.test(value.head.ref) &&
+            value.base.ref === (pr?.head.ref ?? "master"),
+    );
     if (companion) {
         // Never overwrite a reviewed candidate or human changes. New parent changes require an explicit refresh.
         const candidate = parseCandidate(companion.body);
+        if (candidate.parent !== (pr?.number ?? null))
+            throw new Error("Companion candidate does not match its parent");
         if (pr)
             await comment(
                 pr.number,
                 `${report.message}\n\nRelease PR: ${companion.html_url}\n${candidate.source === sha ? "" : "The parent branch changed. Merge its latest changes into the companion branch, resolve any conflicts, then review and publish the new candidate SHA."}`,
             );
         return;
+    }
+    // Closed PR branches and branches left by interrupted preparation belong to
+    // earlier work. Reserve their names even if GitHub deleted the branch.
+    const refs = await api<{ ref: string }[]>(
+        `git/matching-refs/heads/${baseBranch}`,
+    );
+    const occupied = new Set([
+        ...history.map((value) => `refs/heads/${value.head.ref}`),
+        ...refs.map((value) => value.ref),
+    ]);
+    let branch = baseBranch;
+    for (let suffix = 2; occupied.has(`refs/heads/${branch}`); suffix++) {
+        branch = `${baseBranch}-${suffix}`;
     }
     const manifest = await contents("Cargo.toml", sha);
     const lock = await contents("Cargo.lock", sha);
@@ -308,7 +338,7 @@ export async function prepare(
     }
 }
 
-async function resolve(): Promise<void> {
+export async function resolve(): Promise<void> {
     const value = event<{
         pull_request?: Pull;
         inputs?: { pr?: string };
@@ -323,6 +353,8 @@ async function resolve(): Promise<void> {
             throw new Error("Invalid PR number");
         const pull = await api<Pull>(`pulls/${number}`);
         if (pull.state !== "open") throw new Error("PR is no longer open");
+        // PR base.sha can retain an older snapshot after its target branch moves.
+        const base = await branchHead(pull.base.ref);
         const merge = await api<{ object: { sha: string } }>(
             `git/ref/pull/${number}/merge`,
         );
@@ -330,7 +362,7 @@ async function resolve(): Promise<void> {
             `git/commits/${merge.object.sha}`,
         );
         if (
-            ![pull.head.sha, pull.base.sha].every((sha) =>
+            ![pull.head.sha, base].every((sha) =>
                 mergeCommit.parents.some((parent) => parent.sha === sha),
             )
         ) {
@@ -533,8 +565,9 @@ export async function approveCandidate(): Promise<void> {
             throw new Error(
                 "Merge the latest parent changes into the candidate before publishing",
             );
+        const base = await branchHead(parent.base.ref);
         const baseComparison = await api<{ status: string }>(
-            `compare/${parent.base.sha}...${sha}`,
+            `compare/${base}...${sha}`,
         );
         if (!["ahead", "identical"].includes(baseComparison.status)) {
             throw new Error(
