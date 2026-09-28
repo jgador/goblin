@@ -58,9 +58,14 @@ fail closed. A legacy release without dependency metadata requires a new release
 
 `goblinctl-automation.yml` consumes completed checks on a separate runner, executing
 only default-branch orchestration. It updates one PR comment and creates a companion
-branch `automation/goblinctl/pr-N` targeting the feature branch. Direct-push failures
-produce a repair PR targeting `master`. Fork PRs receive instructions for a maintainer
-to prepare a repository branch; fork code never receives publication credentials.
+branch `automation/goblinctl/pr-N` targeting the feature branch. If an earlier
+companion was closed or merged, or preparation left a branch without a PR, it
+chooses an unused numeric suffix such as `automation/goblinctl/pr-N-2`. Existing
+branches and names recorded by earlier PRs are preserved, including deleted
+branches. Later runs reuse an open companion with that suffix. Direct-push failures
+produce a repair PR targeting `master` with the same recovery behavior. Fork PRs
+receive instructions for a maintainer to prepare a repository branch; fork code
+never receives publication credentials.
 
 The version proposal considers published and open companion versions. Patch is a
 proposal for review, not automatic SemVer classification. PR creation is serialized,
@@ -97,6 +102,13 @@ and ARM templates in a read-only verification job. A separate writer commits onl
 those three output files, refusing to update a branch which moved while verification
 ran. Checks run again. Review and merge the companion into the feature branch;
 the original Goblin PR must then pass its own merge-result check.
+
+If a companion was merged with only its version bump, rerun the parent dependency
+check to prepare a replacement companion. Publish and pin the replacement before
+merging it. The replacement proposes the next patch version from the current
+source and reserved releases; a version bump alone does not satisfy the gate.
+Changes to the recovery script must reach `master` before this automation can use
+them, because the notification workflow executes default-branch orchestration.
 
 For a pin failure after successful publication, inspect the failure and dispatch
 `goblinctl-pin.yml` with the companion PR number and published version. It validates
