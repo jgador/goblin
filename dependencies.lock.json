@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "catalogSha256": "5fd1a084dee8ec47f0009dcf7c8d24f2c04992583fdfde6d92449ff053f61397",
+  "catalogSha256": "020122b28e504cd5cad86dd244a6ebedd1a3e2d7b396d573787d5a16b67754d3",
   "platform": "linux/amd64",
   "images": {
     "fluent-bit": {
@@ -22,8 +22,8 @@
   },
   "goblinctl": {
     "repository": "jgador/goblin",
-    "sha256": "ba860ae78b63062ab3eec030b90d6d02d3819ecbb07f0f8c49cbbd200330e2ef",
+    "sha256": "dfda8ed6c7ce76d6f74bdd010f4249654e06ade6b8b3ec39625e5123be415a0d",
     "target": "x86_64-unknown-linux-musl",
-    "version": "0.1.1"
+    "version": "0.1.3"
   }
 }
