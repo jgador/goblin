@@ -41,6 +41,12 @@ Its status always requires an already-published installer, including on companio
 branches. Candidate source validation must never produce a green release-readiness
 status that could later be reused on `master`.
 
+Candidate resolution reads the current target branch ref and requires the merge
+commit to contain that SHA and the PR head as parents. GitHub's PR `base.sha` can
+retain an older snapshot after the target branch advances. Publication also checks
+that the release candidate contains the current target branch head. A stale merge
+commit still blocks validation until GitHub prepares the updated merge.
+
 The checker downloads the pin's GitHub release and verifies the archive checksum,
 `SHA256SUMS`, clean release metadata, matching input fingerprint and capabilities,
 and GitHub attestations for **both** the archive and `release.json`. Provenance must
@@ -59,9 +65,14 @@ fail closed. A legacy release without dependency metadata requires a new release
 
 `goblinctl-automation.yml` consumes completed checks on a separate runner, executing
 only default-branch orchestration. It updates one PR comment and creates a companion
-branch `automation/goblinctl/pr-N` targeting the feature branch. Direct-push failures
-produce a repair PR targeting `master`. Fork PRs receive instructions for a maintainer
-to prepare a repository branch; fork code never receives publication credentials.
+branch `automation/goblinctl/pr-N` targeting the feature branch. If an earlier
+companion was closed or merged, or preparation left a branch without a PR, it
+chooses an unused numeric suffix such as `automation/goblinctl/pr-N-2`. Existing
+branches and names recorded by earlier PRs are preserved, including deleted
+branches. Later runs reuse an open companion with that suffix. Direct-push failures
+produce a repair PR targeting `master` with the same recovery behavior. Fork PRs
+receive instructions for a maintainer to prepare a repository branch; fork code
+never receives publication credentials.
 
 The version proposal considers published and open companion versions. Patch is a
 proposal for review, not automatic SemVer classification. PR creation is serialized,
@@ -99,6 +110,13 @@ the release pin, deployment dependency catalog and lock, and both ARM templates,
 refusing to update a branch which moved while verification
 ran. Checks run again. Review and merge the companion into the feature branch;
 the original Goblin PR must then pass its own merge-result check.
+
+If a companion was merged with only its version bump, rerun the parent dependency
+check to prepare a replacement companion. Publish and pin the replacement before
+merging it. The replacement proposes the next patch version from the current
+source and reserved releases; a version bump alone does not satisfy the gate.
+Changes to the recovery script must reach `master` before this automation can use
+them, because the notification workflow executes default-branch orchestration.
 
 For a pin failure after successful publication, inspect the failure and dispatch
 `goblinctl-pin.yml` with the companion PR number and published version. It validates

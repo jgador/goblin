@@ -32,6 +32,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let promptTimer: ReturnType<typeof setTimeout> | undefined;
 let threadNumber = 0;
 let reordered: (RequestId | undefined)[] = [];
+let pendingServerRequestRead: RequestId | undefined;
 await writeFile(join(root, "pid"), String(process.pid));
 await writeFile(
     join(root, "arguments.json"),
@@ -62,6 +63,14 @@ for await (const line of createInterface({ input: process.stdin })) {
     const { id, method, params = {} } = JSON.parse(line) as IncomingMessage;
     if (!method) {
         await appendFile(join(root, "server-responses.jsonl"), `${line}\n`);
+        if (pendingServerRequestRead !== undefined) {
+            // A completed account read tells the test the rejection is fully recorded.
+            result(pendingServerRequestRead, {
+                account: null,
+                requiresOpenaiAuth: true,
+            });
+            pendingServerRequestRead = undefined;
+        }
         continue;
     }
     await appendFile(join(root, "requests.jsonl"), `${line}\n`);
@@ -140,12 +149,15 @@ for await (const line of createInterface({ input: process.stdin })) {
         }
         if (scenario === "unknown-notification")
             send({ method: "future/notification", params: { anything: true } });
-        if (scenario === "server-request")
+        if (scenario === "server-request") {
+            pendingServerRequestRead = id;
             send({
                 id: "approval-42",
                 method: "item/commandExecution/requestApproval",
                 params: {},
             });
+            continue;
+        }
         if (scenario === "reordered") {
             reordered.push(id);
             if (reordered.length === 2) {
