@@ -7,11 +7,13 @@ use clap::Subcommand;
 use goblinctl::assets;
 use goblinctl::credentials;
 use goblinctl::database;
+use goblinctl::deployment;
 use goblinctl::files;
 use goblinctl::install;
 use goblinctl::local::Local;
 use goblinctl::local::{self};
 use goblinctl::operations;
+use goblinctl::progress;
 use goblinctl::setup;
 use serde_json::Value;
 use std::path::Path;
@@ -33,6 +35,18 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    /// Report the installer version and code-generated installation schema.
+    Metadata {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Check installation inputs without changing the host.
+    ValidateInstall {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long, default_value = ".")]
+        source: PathBuf,
+    },
     /// Install on this Ubuntu host, or inspect/retry an installation.
     Install(InstallArgs),
     /// Inspect live services and application readiness (exit 1 when unhealthy).
@@ -147,6 +161,14 @@ enum DbCommand {
 }
 #[derive(Subcommand)]
 enum InternalCommand {
+    PrepareInstall {
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        source: PathBuf,
+        #[arg(long)]
+        destination: PathBuf,
+    },
     Activate {
         #[arg(long)]
         binary: PathBuf,
@@ -173,6 +195,16 @@ enum InternalCommand {
         value: String,
         #[arg(long, default_value = setup::STATE)]
         path: PathBuf,
+        #[arg(long, default_value = "")]
+        step: String,
+    },
+    BuildProgress {
+        #[arg(long, default_value = setup::STATE)]
+        path: PathBuf,
+    },
+    PrefetchImages {
+        #[arg(long)]
+        source: PathBuf,
     },
     Unpack {
         destination: PathBuf,
@@ -204,6 +236,9 @@ enum InternalCommand {
     },
     DbPatch,
     MigrationJob {
+        image: String,
+    },
+    MigrationState {
         image: String,
     },
     LocalPort {
@@ -260,6 +295,10 @@ fn execute(cli: Cli) -> Result<()> {
         }
     };
     match cli.command {
+        Commands::Metadata { json: _ } => print_json(&deployment::metadata()),
+        Commands::ValidateInstall { request, source } => {
+            deployment::InstallRequest::read(&request)?.validate(&source)
+        }
         Commands::Install(args) => match args.command {
             Some(InstallCommand::Status { json }) => operations::install_status(json),
             Some(InstallCommand::Retry) => {
@@ -326,6 +365,11 @@ fn execute(cli: Cli) -> Result<()> {
             DbCommand::Forward { port } => local_action(&repo, LocalCommand::Database { port }),
         },
         Commands::Internal { command } => match command {
+            InternalCommand::PrepareInstall {
+                request,
+                source,
+                destination,
+            } => deployment::InstallRequest::read(&request)?.prepare(&source, &destination),
             InternalCommand::Activate {
                 binary,
                 system_root,
@@ -348,7 +392,15 @@ fn execute(cli: Cli) -> Result<()> {
                 action,
                 value,
                 path,
-            } => setup::update(&path, &action, &value),
+                step,
+            } => setup::update_scoped(&path, &action, &value, &step),
+            InternalCommand::BuildProgress { path } => progress::build_output(&path),
+            InternalCommand::PrefetchImages { source } => {
+                for image in deployment::prefetch_images(&source)? {
+                    println!("{image}");
+                }
+                Ok(())
+            }
             InternalCommand::Unpack { destination } => assets::unpack(&destination, assets::SETUP),
             InternalCommand::JsonTest { path, key, value } => {
                 let expected: Value = serde_json::from_str(&value).unwrap_or(Value::String(value));
@@ -385,6 +437,10 @@ fn execute(cli: Cli) -> Result<()> {
                 Ok(())
             }
             InternalCommand::MigrationJob { image } => print_json(&database::migration_job(&image)),
+            InternalCommand::MigrationState { image } => {
+                println!("{}", database::migration_state(&stdin_json()?, &image)?);
+                Ok(())
+            }
             InternalCommand::LocalPort { owner } => {
                 let config = files::json(&owner)?;
                 if config["mode"] == "direct" && config["repo"].as_str() == repo.to_str() {

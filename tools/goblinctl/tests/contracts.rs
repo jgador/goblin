@@ -1,4 +1,5 @@
 use goblinctl::credentials;
+use goblinctl::database;
 use goblinctl::files;
 use goblinctl::install;
 use goblinctl::local::Local;
@@ -9,6 +10,105 @@ use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
+
+#[test]
+fn concurrent_progress_preserves_every_update_and_completes_the_named_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("status.json");
+    setup::update(&path, "init", "").unwrap();
+    setup::update(&path, "begin", "").unwrap();
+    std::thread::scope(|scope| {
+        for id in ["k3s", "image", "prefetch", "sandbox"] {
+            let path = &path;
+            scope.spawn(move || {
+                setup::update(path, "start", id).unwrap();
+                for i in 0..10 {
+                    setup::update_scoped(path, "detail", &format!("{id} progress {i}"), id)
+                        .unwrap();
+                }
+                setup::update(path, "complete", id).unwrap();
+            });
+        }
+    });
+    let state = files::json(&path).unwrap();
+    assert_eq!(state["logs"].as_array().unwrap().len(), 49);
+    for id in ["k3s", "image", "prefetch", "sandbox"] {
+        assert_eq!(
+            state["steps"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|s| s["id"] == id)
+                .unwrap()["status"],
+            "complete"
+        );
+    }
+    setup::update(&path, "start", "database").unwrap();
+    setup::update(&path, "fail-step", "database").unwrap();
+    setup::update(&path, "fail-step", "prefetch").unwrap();
+    // A worker already being spawned may report its start after the first failure.
+    setup::update(&path, "start", "sandbox").unwrap();
+    setup::update(&path, "failed", "private failure payload").unwrap();
+    let state = files::json(&path).unwrap();
+    assert_eq!(state["currentStep"], "database");
+    assert!(!state.to_string().contains("private failure payload"));
+    setup::update(&path, "begin", "").unwrap();
+    let state = files::json(&path).unwrap();
+    assert!(state["failedStep"].is_null());
+    assert!(
+        state["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|step| step["startedAt"].is_null() && step["detail"].is_null())
+    );
+}
+
+#[test]
+fn public_log_tail_is_bounded_and_retains_attempt_identity() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("status.json");
+    setup::update(&path, "init", "").unwrap();
+    setup::update(&path, "begin", "").unwrap();
+    for i in 0..320 {
+        setup::update_scoped(&path, "detail", &format!("Image progress {i}"), "prefetch").unwrap();
+    }
+    setup::update(&path, "begin", "").unwrap();
+    let state = files::json(&path).unwrap();
+    let logs = state["logs"].as_array().unwrap();
+    assert_eq!(logs.len(), 300);
+    assert!(
+        logs.windows(2)
+            .all(|pair| pair[0]["id"].as_u64() < pair[1]["id"].as_u64())
+    );
+    assert_eq!(logs[0]["attempt"], 1);
+    assert_eq!(logs.last().unwrap()["attempt"], 2);
+    assert!(setup::update_scoped(&path, "detail", "bad\nmessage", "image").is_err());
+}
+
+#[test]
+fn interrupted_migration_is_reconciled_before_replacement() {
+    let mut job = database::migration_job("localhost/goblin-auth:test");
+    assert_eq!(
+        database::migration_state(&job, "localhost/goblin-auth:test").unwrap(),
+        "active"
+    );
+    job["status"] = json!({"conditions":[{"type":"Failed","status":"False"}]});
+    assert_eq!(
+        database::migration_state(&job, "localhost/goblin-auth:test").unwrap(),
+        "active"
+    );
+    for (condition, expected) in [("Complete", "complete"), ("Failed", "failed")] {
+        job["status"] = json!({"conditions":[{"type":condition,"status":"True"}]});
+        assert_eq!(
+            database::migration_state(&job, "localhost/goblin-auth:test").unwrap(),
+            expected
+        );
+    }
+    assert!(database::migration_state(&job, "localhost/goblin-auth:other").is_err());
+    job["metadata"]["labels"] = json!({});
+    assert!(database::migration_state(&job, "localhost/goblin-auth:test").is_err());
+}
 
 #[test]
 fn origin_validation_preserves_the_configured_authority() {

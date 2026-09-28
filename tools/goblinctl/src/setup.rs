@@ -5,6 +5,7 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use anyhow::ensure;
+use fs2::FileExt;
 use http_body_util::Full;
 use hyper::Method;
 use hyper::Request;
@@ -17,6 +18,8 @@ use hyper_util::rt::TokioTimer;
 use serde_json::Value;
 use serde_json::json;
 use std::fs;
+use std::fs::OpenOptions;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,17 +35,40 @@ const STEPS: &[(&str, &str)] = &[
     ("cert-manager", "Install certificate manager"),
     ("sandbox", "Install Agent Sandbox"),
     ("image", "Build Goblin"),
+    ("prefetch", "Download container images"),
+    ("database", "Prepare PostgreSQL"),
+    ("import", "Import Goblin image"),
+    ("migrate", "Apply database migrations"),
     ("deploy", "Deploy Goblin"),
     ("verify", "Check application readiness"),
     ("activate", "Open Goblin"),
 ];
 
-/// Callers hold installer.lock for the entire attempt, including initialization.
+/// Callers hold installer.lock for the attempt. Each update also takes a short
+/// file lock so parallel workers cannot overwrite each other's progress.
 pub fn update(path: &Path, action: &str, value: &str) -> Result<()> {
+    update_scoped(path, action, value, "")
+}
+
+pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Result<()> {
+    files::reject_symlinks(path)?;
+    if action == "init" {
+        fs::create_dir_all(path.parent().context("Missing state directory")?)?;
+    }
+    let lock_path = path.with_extension("lock");
+    files::reject_symlinks(&lock_path)?;
+    let lock = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .mode(0o600)
+        .open(lock_path)?;
+    lock.lock_exclusive()?;
     let timestamp = chrono::Utc::now().to_rfc3339();
     let mut state = if action == "init" {
         json!({"version":1,"status":"waiting","phase":"installing","startedAt":timestamp,"updatedAt":timestamp,
             "attempt":0,"currentStep":null,"message":"Waiting for installation to start.",
+            "logGeneration":timestamp,"revision":0,"logs":[],
             "steps":STEPS.iter().map(|(id,label)|json!({"id":id,"label":label,"status":"waiting","attempt":0})).collect::<Vec<_>>()})
     } else {
         files::json(path)?
@@ -51,6 +77,22 @@ pub fn update(path: &Path, action: &str, value: &str) -> Result<()> {
         state["version"] == 1,
         "Unsupported installation state version"
     );
+    // Upgrade retained v1 state when retrying with newer native tooling.
+    for (id, label) in STEPS {
+        if !state["steps"]
+            .as_array()
+            .context("Invalid steps")?
+            .iter()
+            .any(|s| s["id"] == *id)
+        {
+            state["steps"]
+                .as_array_mut()
+                .context("Invalid steps")?
+                .push(json!({"id":id,"label":label,"status":"waiting","attempt":0}));
+        }
+    }
+    let mut event_step = scope.to_owned();
+    let mut event = String::new();
     match action {
         "init" => (),
         "begin" => {
@@ -59,11 +101,25 @@ pub fn update(path: &Path, action: &str, value: &str) -> Result<()> {
             state["currentStep"] = Value::Null;
             state["attempt"] = json!(state["attempt"].as_u64().context("Invalid attempt")? + 1);
             state["message"] = json!("Checking installation progress.");
+            event = format!(
+                "Installation attempt {} started. Checking retained resources.",
+                state["attempt"]
+            );
+            state
+                .as_object_mut()
+                .context("Invalid state")?
+                .remove("finishedAt");
+            state
+                .as_object_mut()
+                .context("Invalid state")?
+                .remove("failedStep");
             for step in state["steps"].as_array_mut().context("Invalid steps")? {
                 step["status"] = json!("waiting");
                 let object = step.as_object_mut().context("Invalid step")?;
                 object.remove("finishedAt");
                 object.remove("error");
+                object.remove("startedAt");
+                object.remove("detail");
             }
         }
         "start" => {
@@ -72,45 +128,104 @@ pub fn update(path: &Path, action: &str, value: &str) -> Result<()> {
             step["startedAt"] = json!(timestamp);
             step["attempt"] = json!(step["attempt"].as_u64().context("Invalid step attempt")? + 1);
             let label = step["label"].clone();
+            event = format!("{} started.", label.as_str().context("Invalid step label")?);
+            event_step = value.to_owned();
             state["currentStep"] = json!(value);
             state["message"] = label;
         }
-        "detail" => state["message"] = json!(value),
+        "detail" => {
+            ensure!(
+                value.len() <= 512 && !value.chars().any(char::is_control),
+                "Invalid public progress message"
+            );
+            if !scope.is_empty() {
+                step(&mut state, scope)?["detail"] = json!(value);
+            }
+            state["message"] = json!(value);
+            event = value.to_owned();
+        }
         "public-url" => state["publicUrl"] = json!(value),
         "complete" => {
-            let id = state["currentStep"]
-                .as_str()
-                .context("No current step")?
-                .to_owned();
+            let id = if value.is_empty() {
+                state["currentStep"]
+                    .as_str()
+                    .context("No current step")?
+                    .to_owned()
+            } else {
+                value.to_owned()
+            };
             let step = step(&mut state, &id)?;
             step["status"] = json!("complete");
             step["finishedAt"] = json!(timestamp);
+            event = format!(
+                "{} completed.",
+                step["label"].as_str().context("Invalid step label")?
+            );
+            event_step = id;
+        }
+        "fail-step" => {
+            let step = step(&mut state, value)?;
+            step["status"] = json!("failed");
+            step["finishedAt"] = json!(timestamp);
+            event = format!(
+                "{} failed. Review the private installation log for diagnostics.",
+                step["label"].as_str().context("Invalid step label")?
+            );
+            step["error"] = json!(event);
+            event_step = value.to_owned();
+            if state["failedStep"].is_null() {
+                state["failedStep"] = json!(value);
+            }
+            state["currentStep"] = state["failedStep"].clone();
         }
         "handoff" => {
             state["phase"] = json!("activating");
             state["message"] = json!("Goblin is ready. Connecting to your workspace…");
+            event = "Opening Goblin. A brief connection gap is expected.".into();
         }
         "failed" => {
             state["status"] = json!("failed");
+            if !state["failedStep"].is_null() {
+                state["currentStep"] = state["failedStep"].clone();
+            }
             state["message"] =
                 json!("Installation stopped. An administrator can retry from the VM.");
-            if let Some(id) = state["currentStep"].as_str().map(str::to_owned) {
-                let step = step(&mut state, &id)?;
-                step["status"] = json!("failed");
-                step["finishedAt"] = json!(timestamp);
-                step["error"] =
-                    json!("This step did not finish. Review the installation log on the VM.");
+            for step in state["steps"].as_array_mut().context("Invalid steps")? {
+                if step["status"] == "running" {
+                    step["status"] = json!("failed");
+                    step["finishedAt"] = json!(timestamp);
+                    step["error"] =
+                        json!("Interrupted. Retained resources will be checked on retry.");
+                }
             }
+            event = "Installation stopped. Progress and existing data are retained for an administrator to retry.".into();
         }
         "ready" => {
             state["status"] = json!("ready");
             state["phase"] = json!("complete");
             state["message"] = json!("Goblin is ready.");
             state["finishedAt"] = json!(timestamp);
+            event = "Goblin is ready.".into();
         }
         _ => bail!("Unknown state transition"),
     }
     state["updatedAt"] = json!(timestamp);
+    if state["logGeneration"].is_null() {
+        state["logGeneration"] = json!(timestamp);
+    }
+    let revision = state["revision"].as_u64().unwrap_or(0) + 1;
+    state["revision"] = json!(revision);
+    if !event.is_empty() {
+        let entry = json!({"id":revision,"timestamp":timestamp,"attempt":state["attempt"],"step":event_step,"message":event});
+        if !state["logs"].is_array() {
+            state["logs"] = json!([]);
+        }
+        let logs = state["logs"].as_array_mut().context("Invalid logs")?;
+        logs.push(entry);
+        if logs.len() > 300 {
+            logs.drain(..logs.len() - 300);
+        }
+    }
     files::write_json(path, &state, 0o644)
 }
 fn step<'a>(state: &'a mut Value, id: &str) -> Result<&'a mut Value> {
@@ -193,6 +308,16 @@ async fn respond(
         (405, "text/plain", b"Method not allowed".to_vec())
     } else if path == "/setup/healthz" {
         (200, "application/json", b"{\"setup\":true}".to_vec())
+    } else if path == "/setup/events" {
+        let cursor = request
+            .headers()
+            .get("last-event-id")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        match event_batch(&state, cursor).await {
+            Ok(body) => (200, "text/event-stream", body.into_bytes()),
+            Err(_) => (503, "text/plain", b"Progress unavailable".to_vec()),
+        }
     } else if path == "/setup/status" {
         match fs::read(&state) {
             Ok(body) => (200, "application/json", body),
@@ -209,4 +334,26 @@ async fn respond(
         .header("X-Content-Type-Options", "nosniff").header("Referrer-Policy", "no-referrer")
         .header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         .body(Full::new(Bytes::from(body)))
+}
+
+// Finite SSE batches keep the existing connection/time/memory limits. EventSource
+// reconnects with Last-Event-ID; a refreshed page receives the retained log tail.
+// Only structured public state is read. The private command log is never served.
+async fn event_batch(path: &Path, cursor: &str) -> Result<String> {
+    for _ in 0..20 {
+        let state = files::json(path)?;
+        let id = format!(
+            "{}:{}",
+            state["logGeneration"].as_str().unwrap_or("legacy"),
+            state["revision"].as_u64().unwrap_or(0)
+        );
+        if cursor != id {
+            return Ok(format!(
+                "retry: 1000\nid: {id}\nevent: progress\ndata: {}\n\n",
+                serde_json::to_string(&state)?
+            ));
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    Ok("retry: 1000\n: keepalive\n\n".into())
 }

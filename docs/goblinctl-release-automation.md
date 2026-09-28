@@ -8,6 +8,7 @@ commands make the decision. An LLM, release label, or bot comment cannot overrid
 
 | File | Responsibility |
 | --- | --- |
+| `dependencies.toml` / `dependencies.lock.json` | Published goblinctl selection and direct Docker images; generated artifact hashes. |
 | `tools/goblinctl/release-inputs.json` | Shipping source and build inputs. Includes external embedded assets, Cargo manifests/lockfile, toolchain, Cargo configuration, and the native build recipe. |
 | `tools/goblinctl/capabilities.json` | Installer behavior provided by this source. |
 | `deploy/goblinctl-requirements.json` | Installer behavior this Goblin source requires. |
@@ -105,7 +106,8 @@ write credentials. The publishing job creates the immutable tag and release.
 
 `goblinctl-pin.yml` then verifies the published artifacts and regenerates the pin
 and ARM templates in a read-only verification job. A separate writer commits only
-those three output files, refusing to update a branch which moved while verification
+the release pin, deployment dependency catalog and lock, and both ARM templates,
+refusing to update a branch which moved while verification
 ran. Checks run again. Review and merge the companion into the feature branch;
 the original Goblin PR must then pass its own merge-result check.
 

@@ -1,0 +1,41 @@
+{
+  "format": "goblin.install.v1",
+  "resources": [
+    {
+      "path": "deploy/auth/execution.yaml",
+      "sha256": "188fe5de4d3b5f983c37e8944b04a08f0cd8e7e887fac4618442cd3a4567a31f"
+    },
+    {
+      "path": "deploy/auth/headlamp.yaml",
+      "sha256": "055d940e5d8f2a0e40f0146ad0af5649f6913e9254ca107853afa698e7ecc1f4"
+    },
+    {
+      "path": "deploy/auth/kustomization.yaml",
+      "sha256": "b8dfaee9cf3b527dc50d9228c1bc7100aa37e9d8f654a47730d16de4e37d1574"
+    },
+    {
+      "path": "deploy/auth/logging/fluent-bit.conf",
+      "sha256": "8e8937499dcbb6c238e6da53bfc9521ad0bee77e94fda8bbc28cfbd5e61ce81a"
+    },
+    {
+      "path": "deploy/auth/logging/kustomization.yaml",
+      "sha256": "a12c9dbed025887906ce0116a9bf1be6d8639c127b8b54312c459379dff07d30"
+    },
+    {
+      "path": "deploy/auth/logging/workloads.yaml",
+      "sha256": "f9c237324f1a5ace928ed03702e41f6b039087cc8fb18dfb683f8209f05e2a92"
+    },
+    {
+      "path": "deploy/auth/sandbox.yaml",
+      "sha256": "760f677bfa1a71447f2ea2270e53e54131ee570ecf5b809451b85fb3e578d0ca"
+    },
+    {
+      "path": "deploy/azure/app/ingress.yaml",
+      "sha256": "cd5ef41bac07a1624f95e0f282b8f09f665f7f013d35eb7738f238194473e1e3"
+    },
+    {
+      "path": "deploy/azure/app/kustomization.yaml",
+      "sha256": "6ba3b5c96ef856d99db2677a547a1d0fca578b9ff6fe9e2536abba21d8eeb84d"
+    }
+  ]
+}

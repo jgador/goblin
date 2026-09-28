@@ -4,6 +4,18 @@ minVersion = "v8.30.1"
 [extend]
 useDefault = true
 
+# Release fingerprints hash source files. The credentials.rs filename makes the
+# generic rule mistake its SHA-256 for a credential. Match this one JSON field
+# on a complete line, only in the release pin and its generated ARM copies.
+[[rules]]
+id = "generic-api-key"
+[[rules.allowlists]]
+description = "goblinctl credentials source-file checksum in release metadata"
+condition = "AND"
+paths = ['''(?:^|/)deploy/(?:goblinctl-release\.json|azure/azuredeploy(?:\.portal)?\.json)$''']
+regexTarget = "line"
+regexes = ['''^\s*"tools/goblinctl/src/credentials\.rs"[\t ]*:[\t ]*"[a-f0-9]{64}"[\t ]*,?\s*$''']
+
 # Keep all upstream rules. Catch newer OpenAI key shapes without depending on
 # the fixed lengths and embedded marker used by the upstream OpenAI rule.
 [[rules]]
