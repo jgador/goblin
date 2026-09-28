@@ -54,6 +54,17 @@
         }
       },
       {
+        "name": "goblinSourceRef",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Goblin commit to install",
+        "toolTip": "Enter the full commit SHA verified with this template's installer using Goblin deployment readiness. Development branches can contain installer changes that have not been released.",
+        "constraints": {
+          "required": true,
+          "regex": "^[0-9a-f]{40}$",
+          "validationMessage": "Enter a full 40-character lowercase Git commit SHA."
+        }
+      },
+      {
         "name": "goblinPassword",
         "type": "Microsoft.Common.PasswordBox",
         "label": {
@@ -329,7 +340,7 @@
       "goblinPassword": "[basics('goblinPassword')]",
       "location": "[location()]",
       "environment": "[basics('environment')]",
-      "goblinSourceRef": "master",
+      "goblinSourceRef": "[basics('goblinSourceRef')]",
       "adminUsername": "[basics('adminUsername')]",
       "adminSshPublicKey": "[basics('credentials').sshPublicKey]",
       "sshSourceAddressPrefix": "[if(steps('advanced').enableSshNow, steps('advanced').sshSourceAddressPrefix, '')]",

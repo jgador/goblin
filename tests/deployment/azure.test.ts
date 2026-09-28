@@ -1399,10 +1399,9 @@ test("Azure templates keep the password protected and the portal requires confir
         );
         assert.ok(!JSON.stringify(template.outputs).includes("goblinPassword"));
         assert.ok(!JSON.stringify(nested.outputs).includes("goblinPassword"));
-        assert.equal(
-            template.parameters.goblinSourceRef.defaultValue,
-            "master",
-        );
+        assert.ok(!("defaultValue" in template.parameters.goblinSourceRef));
+        assert.equal(template.parameters.goblinSourceRef.minLength, 40);
+        assert.equal(template.parameters.goblinSourceRef.maxLength, 40);
         assert.ok(template.outputs.goblinUrl.value.includes("http://"));
         assert.match(
             extension.properties.protectedSettings.script,
@@ -1418,6 +1417,31 @@ test("Azure templates keep the password protected and the portal requires confir
                 Object.keys(template.parameters).sort(),
             );
     }
+});
+
+test("Azure requires an explicit verified application revision", async () => {
+    const ui = JSON.parse(
+        await readFile("deploy/azure/createUiDefinition.json", "utf8"),
+    );
+    const field = ui.parameters.basics.find(
+        (item: { name: string }) => item.name === "goblinSourceRef",
+    );
+    assert.equal(field.constraints.required, true);
+    assert.ok(!("defaultValue" in field));
+    const policy = new RegExp(field.constraints.regex);
+    assert.ok(policy.test("a".repeat(40)));
+    for (const invalid of [
+        "",
+        "master",
+        "goblinctl-v0.1.3",
+        "abc1234",
+        "g".repeat(40),
+    ])
+        assert.ok(!policy.test(invalid));
+    assert.equal(
+        ui.parameters.outputs.goblinSourceRef,
+        "[basics('goblinSourceRef')]",
+    );
 });
 
 test("Azure provisioning returns with a status page before any cluster or application work", async (t) => {

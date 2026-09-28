@@ -53,6 +53,8 @@ enum Task {
         #[arg(long, default_value = ".artifacts/goblinctl")]
         output: PathBuf,
     },
+    /// Report unreleased installer inputs without downloading or requiring a release.
+    ReleaseStatus,
     /// Verify this source tree against the pinned published installer.
     ReleaseCheck {
         #[arg(long, default_value = release::REPOSITORY)]
@@ -87,7 +89,7 @@ enum Task {
 }
 fn main() {
     if let Err(e) = execute() {
-        eprintln!("xtask: {e}");
+        eprintln!("xtask: {e:#}");
         std::process::exit(1);
     }
 }
@@ -107,6 +109,13 @@ fn execute() -> Result<()> {
             output,
         } => package(&binary, &target, &output),
         Task::PinRelease { repo, version } => release::pin(root, &repo, &version),
+        Task::ReleaseStatus => {
+            println!(
+                "{}",
+                release::status(root).context("Unable to determine goblinctl release status")?
+            );
+            Ok(())
+        }
         Task::ReleaseBuild { output } => {
             ensure!(
                 files::output(Command::new("git").args(["status", "--porcelain"]))?
