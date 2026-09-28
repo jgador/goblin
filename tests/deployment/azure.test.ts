@@ -233,6 +233,13 @@ if (name === 'curl') {
     process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : fs.readFileSync(path.join(root, 'ingress-mode'), 'utf8'));
   } else if (args[1] === 'rollout' && args.includes('deployment/cert-manager-webhook') && appState === 'cert-failed') {
     process.exit(1);
+  } else if (args[1] === 'rollout' && args.includes('deployment/sandbox') && appState === 'cert-failed') {
+    // Finish a parallel worker while the certificate worker is recording its failure.
+    const deadline = Date.now() + 10000;
+    while (!fs.existsSync(path.join(root, 'cert-failure-reporting'))) {
+      if (Date.now() >= deadline) throw new Error('Certificate failure was not reported');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+    }
   } else if (args[1] === 'rollout' && args.includes('deployment/sandbox') && appState === 'sandbox-failed') {
     process.exit(1);
   } else if (args[1] === 'create' && args.includes('--dry-run=server') && appState === 'webhook-failed') {
@@ -331,6 +338,10 @@ const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
 if (args[0] === 'internal' && args[1] === 'activate') args.push('--system-root', root);
 if (args[0] === 'internal' && ['state', 'build-progress'].includes(args[1]) && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
 if (args[0] === 'internal' && args[1] === 'docker-config') args.push(path.join(root, 'etc/docker/daemon.json'));
+if (args[0] === 'internal' && args[1] === 'state' && args[2] === 'fail-step' && args[3] === 'cert-manager' && process.env.GOBLIN_BOOTSTRAP_APP_STATE === 'cert-failed') {
+    fs.writeFileSync(path.join(root, 'cert-failure-reporting'), 'true');
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+}
 const result = spawnSync(${JSON.stringify(goblinctl)}, args, {stdio: 'inherit'});
 if (result.status !== 0) process.exit(result.status ?? 1);
 if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
@@ -1514,6 +1525,7 @@ test("cert-manager readiness gates database setup and migrations before applicat
         );
         assert.equal(status.status, state === "ready" ? "ready" : "failed");
         if (state !== "ready") {
+            assert.equal(status.failedStep, "cert-manager");
             assert.equal(status.currentStep, "cert-manager");
             assert.ok(
                 !calls.some(

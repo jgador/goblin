@@ -257,8 +257,9 @@ if [[ "${1:-}" == worker ]]; then
     local result=$?
     trap - EXIT TERM INT
     if ((result != 0)); then
-      touch "$bootstrap_dir/pipeline.failed"
+      # Persist the cause before the supervisor can cancel this process group.
       state fail-step "$current_step" || true
+      touch "$bootstrap_dir/pipeline.failed"
     fi
     exit "$result"
   }
