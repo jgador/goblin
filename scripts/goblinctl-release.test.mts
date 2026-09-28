@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { afterEach, test } from "node:test";
+import {
+    existsSync,
+    mkdtempSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, test, type TestContext } from "node:test";
 import {
     approveCandidate,
     bumpVersion,
@@ -8,6 +16,7 @@ import {
     parseCandidate,
     pinCommit,
     prepare,
+    resolve,
 } from "./goblinctl-release.mts";
 
 const originalFetch = globalThis.fetch;
@@ -69,6 +78,94 @@ function mockApi(
             headers: { "content-type": "application/json" },
         });
     };
+}
+
+function workflowDirectory(context: TestContext): string {
+    const directory = mkdtempSync(join(tmpdir(), "goblin-release-test-"));
+    context.after(() => rmSync(directory, { recursive: true, force: true }));
+    process.env.RUNNER_TEMP = directory;
+    process.env.GITHUB_EVENT_PATH = join(directory, "event.json");
+    process.env.GITHUB_OUTPUT = join(directory, "output");
+    return directory;
+}
+
+const currentBase = "d".repeat(40);
+const mergeSha = "e".repeat(40);
+
+for (const trigger of ["workflow_dispatch", "pull_request"]) {
+    test(`resolution uses the current base ref with stale PR metadata: ${trigger}`, async (context) => {
+        const directory = workflowDirectory(context);
+        writeFileSync(
+            process.env.GITHUB_EVENT_PATH!,
+            JSON.stringify(
+                trigger === "workflow_dispatch"
+                    ? { inputs: { pr: "13" } }
+                    : { pull_request: parent },
+            ),
+        );
+        mockApi((path, method) => {
+            assert.equal(method, "GET");
+            if (path === "pulls/13") return parent;
+            if (path === "git/ref/heads/master")
+                return { object: { sha: currentBase } };
+            if (path === "git/ref/pull/13/merge")
+                return { object: { sha: mergeSha } };
+            if (path === `git/commits/${mergeSha}`)
+                return {
+                    parents: [{ sha: currentBase }, { sha: parent.head.sha }],
+                };
+            throw new Error(`Unexpected API request: ${path}`);
+        });
+        await resolve();
+        assert.deepEqual(
+            JSON.parse(
+                readFileSync(join(directory, "release-context.json"), "utf8"),
+            ),
+            {
+                pr: parent.number,
+                head: parent.head.sha,
+                merge: mergeSha,
+                base: "master",
+            },
+        );
+        assert.equal(
+            readFileSync(process.env.GITHUB_OUTPUT!, "utf8"),
+            `sha=${mergeSha}\nhead=${parent.head.sha}\npr=13\nbase=master\n`,
+        );
+    });
+}
+
+for (const scenario of [
+    {
+        name: "stale target branch",
+        parents: [parent.base.sha, parent.head.sha],
+    },
+    { name: "stale PR head", parents: [currentBase, head] },
+]) {
+    test(`resolution rejects a merge containing a ${scenario.name}`, async (context) => {
+        const directory = workflowDirectory(context);
+        writeFileSync(
+            process.env.GITHUB_EVENT_PATH!,
+            JSON.stringify({ inputs: { pr: "13" } }),
+        );
+        mockApi((path, method) => {
+            assert.equal(method, "GET");
+            if (path === "pulls/13") return parent;
+            if (path === "git/ref/heads/master")
+                return { object: { sha: currentBase } };
+            if (path === "git/ref/pull/13/merge")
+                return { object: { sha: mergeSha } };
+            if (path === `git/commits/${mergeSha}`)
+                return { parents: scenario.parents.map((sha) => ({ sha })) };
+            throw new Error(`Unexpected API request: ${path}`);
+        });
+        await assert.rejects(resolve, /not prepared the current merge commit/);
+        assert.equal(
+            existsSync(join(directory, "release-context.json")),
+            false,
+        );
+        assert.equal(existsSync(process.env.GITHUB_OUTPUT!), false);
+    });
 }
 
 test("version proposal accounts for published and reserved versions", () => {
@@ -247,6 +344,48 @@ test("publication rejects a moved candidate or an outdated parent", async () => 
     process.env.RELEASE_SHA = head;
     await assert.rejects(approveCandidate, /latest parent changes/);
 });
+
+for (const status of ["behind", "ahead"]) {
+    test(`publication checks the live master ref when the candidate is ${status}`, async (context) => {
+        workflowDirectory(context);
+        process.env.RELEASE_PR = "14";
+        process.env.RELEASE_SHA = head;
+        process.env.GITHUB_ACTOR = "maintainer";
+        mockApi((path, method) => {
+            assert.equal(method, "GET");
+            if (path.startsWith("collaborators/"))
+                return { permission: "admin" };
+            if (path === "pulls/14") return candidate;
+            if (path === "pulls/13") return parent;
+            if (path === `compare/${parent.head.sha}...${head}`)
+                return { status: "ahead" };
+            if (path === "git/ref/heads/master")
+                return { object: { sha: currentBase } };
+            if (path === `compare/${currentBase}...${head}`) return { status };
+            if (path === `contents/Cargo.toml?ref=${head}`)
+                return {
+                    encoding: "base64",
+                    content: Buffer.from(
+                        '[workspace.package]\nversion = "0.1.1"\n',
+                    ).toString("base64"),
+                };
+            throw new Error(`Unexpected API request: ${path}`);
+        });
+        if (status === "behind") {
+            await assert.rejects(
+                approveCandidate,
+                /Update the candidate from master/,
+            );
+            assert.equal(existsSync(process.env.GITHUB_OUTPUT!), false);
+        } else {
+            await approveCandidate();
+            assert.equal(
+                readFileSync(process.env.GITHUB_OUTPUT!, "utf8"),
+                `sha=${head}\nversion=0.1.1\npr=14\n`,
+            );
+        }
+    });
+}
 
 test("pin updates reject stale candidate SHAs before writing", async () => {
     process.env.RELEASE_PR = "14";
