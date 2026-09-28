@@ -53,6 +53,19 @@ const report = {
     message: "Embedded installer changed",
     changedInputs: ["deploy/azure/install-app.sh"],
 };
+const cargoManifestFixture = `[workspace.package]
+version = "0.1.2"
+`;
+const cargoLockFixture = `version = 4
+
+[[package]]
+name = "goblinctl"
+version = "0.1.2"
+
+[[package]]
+name = "xtask"
+version = "0.1.2"
+`;
 
 function mockApi(
     handler: (
@@ -250,11 +263,9 @@ for (const scenario of [
                 return {
                     encoding: "base64",
                     content: Buffer.from(
-                        readFileSync(
-                            path.includes("Cargo.lock")
-                                ? "Cargo.lock"
-                                : "Cargo.toml",
-                        ),
+                        path.includes("Cargo.lock")
+                            ? cargoLockFixture
+                            : cargoManifestFixture,
                     ).toString("base64"),
                 };
             if (path === `git/commits/${sha}`) return { tree: { sha } };
