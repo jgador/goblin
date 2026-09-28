@@ -111,8 +111,8 @@ public sealed class CodexClientTests
         await fixture.Client.StartAsync();
         await fixture.ReadAsync();
         string file = Path.Combine(fixture.Workspace.CodexHome, "server-responses.jsonl");
-        for (int i = 0; i < 100 && !File.Exists(file); i++) await Task.Delay(10);
-        JSONRPCError reply = JsonSerializer.Deserialize<JSONRPCError>((await File.ReadAllLinesAsync(file))[0], ProtocolJson.Options)!;
+        string response = Assert.Single(await File.ReadAllLinesAsync(file));
+        JSONRPCError reply = JsonSerializer.Deserialize<JSONRPCError>(response, ProtocolJson.Options)!;
         Assert.Equal(new RequestId("approval-42"), reply.Id);
         Assert.Equal(-32601, reply.Error.Code);
     }

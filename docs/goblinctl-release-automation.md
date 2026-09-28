@@ -40,6 +40,12 @@ Its status always requires an already-published installer, including on companio
 branches. Candidate source validation must never produce a green release-readiness
 status that could later be reused on `master`.
 
+Candidate resolution reads the current target branch ref and requires the merge
+commit to contain that SHA and the PR head as parents. GitHub's PR `base.sha` can
+retain an older snapshot after the target branch advances. Publication also checks
+that the release candidate contains the current target branch head. A stale merge
+commit still blocks validation until GitHub prepares the updated merge.
+
 The checker downloads the pin's GitHub release and verifies the archive checksum,
 `SHA256SUMS`, clean release metadata, matching input fingerprint and capabilities,
 and GitHub attestations for **both** the archive and `release.json`. Provenance must

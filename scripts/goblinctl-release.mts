@@ -154,6 +154,13 @@ async function contents(path: string, ref: string): Promise<string> {
     return Buffer.from(value.content, "base64").toString("utf8");
 }
 
+async function branchHead(ref: string): Promise<string> {
+    const value = await api<{ object: { sha: string } }>(
+        `git/ref/heads/${encodeURIComponent(ref)}`,
+    );
+    return value.object.sha;
+}
+
 async function pulls(): Promise<Pull[]> {
     const result: Pull[] = [];
     for (let page = 1; ; page++) {
@@ -331,7 +338,7 @@ export async function prepare(
     }
 }
 
-async function resolve(): Promise<void> {
+export async function resolve(): Promise<void> {
     const value = event<{
         pull_request?: Pull;
         inputs?: { pr?: string };
@@ -346,6 +353,8 @@ async function resolve(): Promise<void> {
             throw new Error("Invalid PR number");
         const pull = await api<Pull>(`pulls/${number}`);
         if (pull.state !== "open") throw new Error("PR is no longer open");
+        // PR base.sha can retain an older snapshot after its target branch moves.
+        const base = await branchHead(pull.base.ref);
         const merge = await api<{ object: { sha: string } }>(
             `git/ref/pull/${number}/merge`,
         );
@@ -353,7 +362,7 @@ async function resolve(): Promise<void> {
             `git/commits/${merge.object.sha}`,
         );
         if (
-            ![pull.head.sha, pull.base.sha].every((sha) =>
+            ![pull.head.sha, base].every((sha) =>
                 mergeCommit.parents.some((parent) => parent.sha === sha),
             )
         ) {
@@ -556,8 +565,9 @@ export async function approveCandidate(): Promise<void> {
             throw new Error(
                 "Merge the latest parent changes into the candidate before publishing",
             );
+        const base = await branchHead(parent.base.ref);
         const baseComparison = await api<{ status: string }>(
-            `compare/${parent.base.sha}...${sha}`,
+            `compare/${base}...${sha}`,
         );
         if (!["ahead", "identical"].includes(baseComparison.status)) {
             throw new Error(
