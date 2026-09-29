@@ -1,4 +1,4 @@
-//! Deterministic installer dependency checks. GitHub orchestration lives in scripts/.
+//! Advisory source status and explicit published-installer verification.
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
@@ -305,6 +305,33 @@ fn compare(current: &Inputs, published: &Inputs, required: &BTreeSet<String>) ->
     }
 }
 
+/// Compare with the committed release baseline, not the preceding commit or PR base.
+/// Pending changes are advisory; missing or invalid metadata is an error.
+pub fn status(root: &Path) -> Result<String> {
+    let pin: Release = json(&root.join(PIN))?;
+    validate(&pin)?;
+    let current = inputs(root)?;
+    let required = capabilities(&root.join("deploy/goblinctl-requirements.json"))?;
+    let report = compare(&current, &pin.installer, &required);
+    let mut lines = vec![format!("## goblinctl {}", pin.version)];
+    if report.outcome == Outcome::Ready {
+        lines.push("No unreleased installer changes.".into());
+    } else {
+        lines.push("Unreleased installer changes. Review before deploying; choose the version and release timing explicitly.".into());
+        for path in report.changed_inputs {
+            lines.push(format!("- Changed input: `{path}`"));
+        }
+        for capability in required.difference(&pin.installer.capabilities) {
+            lines.push(format!(
+                "- Required capability missing from the pinned installer: `{capability}`"
+            ));
+        }
+        lines.push("Source differences do not establish incompatibility. Ship a new binary to distribute installer changes; publish and pin required capabilities before deployment.".into());
+    }
+    lines.push("This offline report does not verify published artifacts or deployment compatibility. Use `cargo xtask release-check` for that verification.".into());
+    Ok(lines.join("\n\n"))
+}
+
 pub fn download(repo: &str, version: &str, destination: &Path) -> Result<()> {
     validate_version(version)?;
     ensure!(
@@ -389,7 +416,7 @@ pub fn check(
     }
     ensure!(
         report.outcome == Outcome::Ready,
-        "goblinctl-release-ready: {:?}",
+        "Published installer verification: {:?}",
         report.outcome
     );
     Ok(())
@@ -495,6 +522,120 @@ mod tests {
             files,
             capabilities: BTreeSet::from(["install.victorialogs.v1".into()]),
         }
+    }
+
+    fn status_fixture() -> tempfile::TempDir {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        for path in inputs(root).unwrap().files.keys() {
+            let destination = directory.path().join(path);
+            fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            fs::copy(root.join(path), destination).unwrap();
+        }
+        fs::copy(
+            root.join("deploy/goblinctl-requirements.json"),
+            directory.path().join("deploy/goblinctl-requirements.json"),
+        )
+        .unwrap();
+        record_status_baseline(directory.path());
+        directory
+    }
+
+    fn record_status_baseline(root: &Path) {
+        let installer = inputs(root).unwrap();
+        let pin = Release {
+            schema_version: 1,
+            version: "1.2.3".into(),
+            target: TARGET.into(),
+            sha256: "c".repeat(64),
+            source_revision: "d".repeat(40),
+            source_dirty: false,
+            cargo_lock_sha256: installer.files["Cargo.lock"].clone(),
+            installer,
+        };
+        fs::write(root.join(PIN), serde_json::to_vec(&pin).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn offline_status_ignores_application_and_generated_output_changes() {
+        let directory = status_fixture();
+        let root = directory.path();
+        let before = status(root).unwrap();
+        assert!(before.contains("No unreleased installer changes"));
+        for path in [
+            "README.md",
+            "deploy/azure/azuredeploy.json",
+            "dependencies.toml",
+        ] {
+            fs::write(root.join(path), "unrelated update").unwrap();
+        }
+        assert_eq!(status(root).unwrap(), before);
+    }
+
+    #[test]
+    fn offline_status_retains_pending_changes_until_the_baseline_is_updated() {
+        let directory = status_fixture();
+        let root = directory.path();
+        let pin_before = fs::read(root.join(PIN)).unwrap();
+        fs::write(root.join("deploy/azure/install-app.sh"), "changed asset").unwrap();
+        fs::write(root.join("tools/goblinctl/src/new.rs"), "// new input").unwrap();
+        fs::remove_file(root.join("tools/goblinctl/src/operations.rs")).unwrap();
+        let pending = status(root).unwrap();
+        assert!(pending.contains("Unreleased installer changes"));
+        for path in [
+            "deploy/azure/install-app.sh",
+            "tools/goblinctl/src/new.rs",
+            "tools/goblinctl/src/operations.rs",
+        ] {
+            assert!(pending.contains(path));
+        }
+        fs::write(root.join("README.md"), "a later application-only commit").unwrap();
+        assert_eq!(status(root).unwrap(), pending);
+        assert_eq!(fs::read(root.join(PIN)).unwrap(), pin_before);
+        record_status_baseline(root);
+        assert!(
+            status(root)
+                .unwrap()
+                .contains("No unreleased installer changes")
+        );
+    }
+
+    #[test]
+    fn offline_status_reports_missing_capabilities_without_blocking_development() {
+        let directory = status_fixture();
+        fs::write(
+            directory.path().join("deploy/goblinctl-requirements.json"),
+            r#"{"schemaVersion":1,"description":"New application requirement","capabilities":["install.future.v1"]}"#,
+        )
+        .unwrap();
+        let report = status(directory.path()).unwrap();
+        assert!(report.contains("Required capability missing"));
+        assert!(report.contains("install.future.v1"));
+        assert!(!report.contains("No unreleased installer changes"));
+    }
+
+    #[test]
+    fn offline_status_rejects_missing_or_corrupt_baselines() {
+        let directory = status_fixture();
+        let root = directory.path();
+        let original = fs::read(root.join(PIN)).unwrap();
+        fs::remove_file(root.join(PIN)).unwrap();
+        assert!(status(root).is_err());
+        for content in ["not json", "{}"] {
+            fs::write(root.join(PIN), content).unwrap();
+            assert!(status(root).is_err());
+        }
+        let mut pin: Release = serde_json::from_slice(&original).unwrap();
+        pin.installer.files.insert("forged".into(), "e".repeat(64));
+        fs::write(root.join(PIN), serde_json::to_vec(&pin).unwrap()).unwrap();
+        assert!(status(root).is_err());
+        fs::write(root.join(PIN), original).unwrap();
+        fs::write(root.join(INPUTS), "invalid input policy").unwrap();
+        assert!(status(root).is_err());
     }
 
     #[test]

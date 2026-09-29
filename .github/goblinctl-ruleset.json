@@ -1,5 +1,5 @@
 {
-  "name": "Goblin installer release dependency",
+  "name": "Goblin development checks",
   "target": "branch",
   "enforcement": "active",
   "bypass_actors": [],
@@ -25,7 +25,7 @@
         "strict_required_status_checks_policy": true,
         "do_not_enforce_on_create": false,
         "required_status_checks": [
-          { "context": "goblinctl-release-ready", "integration_id": 15368 }
+          { "context": "goblin-checks", "integration_id": 15368 }
         ]
       }
     }

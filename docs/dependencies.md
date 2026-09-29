@@ -64,7 +64,7 @@ than the lock. The `list` subcommand shows the installer version and resolved
 images. The `check --locked`
 subcommand verifies committed files without downloading or changing them.
 
-For a new published goblinctl release, use the existing authenticated pin workflow:
+For a new published goblinctl release, run the authenticated pin commands:
 
 ```bash
 cargo xtask pin-release --version X.Y.Z
@@ -95,18 +95,16 @@ prepares the deployment files. `goblinctl metadata --json` exposes the schema fr
 that same type. The authenticated release check invokes the published installer's
 actual validator, and deployment tests check installation behavior.
 
-The existing release fingerprint includes the installer code, scripts, and embedded
-PostgreSQL manifests. Changing those inputs requires a new goblinctl release.
+The release fingerprint includes installer code, scripts, and embedded PostgreSQL
+manifests. `cargo xtask release-status` reports changes since the pinned release.
+A new binary is needed to distribute installer changes, but those changes can
+merge and be batched before a maintainer chooses to release.
 Changing an application image such as Headlamp does not change installer inputs.
 Image digests establish artifact identity; behavioral compatibility still requires
 integration tests. Images inside upstream k3s, cert-manager, and Agent Sandbox
 releases remain managed by those upstream releases.
 
-CI runs `dependencies check --locked` and keeps the existing
-`goblinctl-release-ready` gate. Workflow ordering, credentials, and publication rules
-remain in GitHub Actions.
-
-The published 0.1.1 installer predates the typed installation request, so these
-changes still require a new goblinctl release. Until the updated pin workflow is
-on `master`, use the two local pin commands above after publication if automation
-copies only the old three outputs. All five outputs must be committed together.
+CI runs `dependencies check --locked`, source tests, and the advisory release-status
+report. It does not publish, bump versions, create PRs, or update release pins.
+The [release guide](goblinctl-releases.md) describes manual publication and explicit
+deployment verification. Commit all five outputs from the pin commands together.

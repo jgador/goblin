@@ -21,14 +21,16 @@ separate from VM SSH and AI provider credentials.
 Both ARM entry points require `goblinPassword` as a secure string without a
 default. The confirmation stays in the portal form; only the password is sent
 to the deployment. For CLI deployments, omit it from the parameter file and
-let Azure CLI prompt for the missing secure parameter:
+let Azure CLI prompt for the missing secure parameter. Supply the full Goblin
+commit SHA that passed deployment readiness with the installer in these templates:
 
 ```bash
 az deployment sub create \
   --name goblin \
   --location southeastasia \
   --template-file deploy/azure/main.bicep \
-  --parameters @deploy/azure/azuredeploy.parameters.example.json
+  --parameters @deploy/azure/azuredeploy.parameters.example.json \
+    goblinSourceRef=FULL_VERIFIED_COMMIT_SHA
 ```
 
 Avoid putting the password in command arguments or checked-in parameter files.
@@ -271,8 +273,8 @@ to the setup page once the background worker has made Traefik internal.
 
 ## Application source and public access
 
-The background installer downloads the `goblinSourceRef` branch, tag, or commit from
-`github.com/jgador/goblin` (default `master`) over HTTPS, then builds the repository's
+The background installer downloads the explicitly selected `goblinSourceRef` commit
+from `github.com/jgador/goblin` over HTTPS, then builds the repository's
 Dockerfile on the VM using Docker Engine and Buildx. There is no separate image
 registry to configure. The worker installs Ubuntu's `docker.io` and `docker-buildx`
 packages when needed, builds with host networking, and imports the `docker save`
@@ -289,8 +291,11 @@ or modified. The temporary client configuration is removed on successful setup;
 the local engine's images and build cache are retained.
 The archive's SHA-256 is used as the local image tag and saved in
 `/var/lib/goblin/application-source-sha256`; it identifies the downloaded content,
-not an independent verification of its publisher. Use a commit SHA for
-`goblinSourceRef` in CLI deployments when the installation must be repeatable.
+not an independent verification of its publisher. Both Azure entry points require
+an explicit full commit SHA; the portal also asks for it. Use templates from the
+same commit that passed [deployment verification](../../docs/goblinctl-releases.md#verify-before-deployment)
+and ensure the selected installer matches that verified pair. Development `master`
+can contain unreleased installer changes and is no longer a deployment default.
 The selected source must include the Dockerfile and deployment overlays. The
 setup worker itself comes from the bundle embedded in the Azure template.
 
