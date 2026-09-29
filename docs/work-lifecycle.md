@@ -126,6 +126,14 @@ This first Web refactor keeps Minimal APIs, the public contracts, and applicatio
 service ownership intact. Connection handlers still coordinate integration calls
 with request-scoped stores; Work lifecycle rules remain in Core.
 
+Public HTTP requests and responses use classes with explicit `JsonPropertyName`
+attributes. `Http/Contracts/` maps application and core records into those classes,
+including every nested Work snapshot, so C# property renames cannot silently rename
+JSON fields. Request classes map back to application commands before dispatch.
+Core records, persistence encodings, and internal repository transport remain
+independent of these public HTTP contracts. Contract tests pin the existing JSON
+names and verify mapping, account discriminators, request defaults, and bigint IDs.
+
 `Goblin.Core` has only .NET base-library dependencies. Product types must not
 reference ASP.NET, database entities, Wolverine, or runtime SDKs/protocols. The
 architecture test checks compiled dependencies and explicit project references.
