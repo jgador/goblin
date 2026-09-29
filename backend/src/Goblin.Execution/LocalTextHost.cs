@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 
@@ -28,7 +29,7 @@ public sealed class LocalTextHost : IExecutionHost
 
     public LocalTextHost(TextHostOptions options) => _options = options;
 
-    public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
+    public RuntimeCapabilities[] Capabilities => [new(RuntimeIds.Codex, true, false, true, false, false)];
     public string EnvironmentFor(long workId, long attemptId) => "text/" + attemptId.ToString(CultureInfo.InvariantCulture);
     private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture) + (work.Attempts[^1].TurnNumber == 1 ? "" : "-turn-" + work.Attempts[^1].TurnNumber));
 

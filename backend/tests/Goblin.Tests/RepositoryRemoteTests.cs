@@ -54,21 +54,21 @@ public sealed class RepositoryRemoteTests
             var local = new RepositoryChange(repository.Repository, repository.GitAuthorName, repository.GitAuthorEmail,
                 repository.Grant! with { AllowPush = false, AllowPullRequest = false });
             Assert.Equal(commit, await remote.InspectBundleAsync(local, broker, bundle, default));
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, "publish", commit, default));
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, "pull-request", commit, default));
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, RepositoryOperationKind.Publish, commit, default));
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, RepositoryOperationKind.PullRequest, commit, default));
             Assert.DoesNotContain("goblin/1/2", await Git(origin, "for-each-ref", "--format=%(refname)"));
-            await remote.ExecuteAsync(repository, broker, "publish", commit, default);
+            await remote.ExecuteAsync(repository, broker, RepositoryOperationKind.Publish, commit, default);
             Assert.Equal(initial, await Git(origin, "rev-parse", "main"));
             Assert.Equal(changed, await Git(origin, "rev-parse", "goblin/1/2"));
             Assert.False(File.Exists(Path.Combine(root, "hook-ran")));
-            Assert.NotNull(await remote.ReconcileAsync(repository, broker, "publish", commit, default));
+            Assert.NotNull(await remote.ReconcileAsync(repository, broker, RepositoryOperationKind.Publish, commit, default));
             // A resumed published attempt needs its confirmed remote head for the next lease.
             Directory.Delete(broker, true);
             await remote.PrepareCheckpointAsync(repository, broker,
                 new(1, 1, 2, 1, 1, repository.Repository, repository.Grant!.Branch, commit, DateTimeOffset.UtcNow), default);
             await remote.InspectBundleAsync(repository, broker, bundle, default);
-            await remote.ExecuteAsync(repository, broker, "publish", commit, default);
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(repository, broker, "merge", commit, default));
+            await remote.ExecuteAsync(repository, broker, RepositoryOperationKind.Publish, commit, default);
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(repository, broker, (RepositoryOperationKind)99, commit, default));
             await Git(sandbox, "checkout", "-b", "wrong-branch");
             await Git(sandbox, "bundle", "create", Path.Combine(root, "wrong.bundle"), "refs/heads/wrong-branch");
             await Assert.ThrowsAsync<GitHubFailure>(() => remote.InspectBundleAsync(repository, broker, Path.Combine(root, "wrong.bundle"), default));

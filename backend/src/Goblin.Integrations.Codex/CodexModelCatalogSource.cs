@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Protocol;
 
@@ -14,7 +15,7 @@ public sealed class CodexModelCatalogSource : IModelCatalogSource
 
     public CodexModelCatalogSource(CodexClient codex) => _codex = codex;
 
-    public string Runtime => "codex";
+    public string Runtime => RuntimeIds.Codex;
 
     public string ExecutableStamp() => _codex.Options.ExecutableStamp();
 

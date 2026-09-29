@@ -1,10 +1,19 @@
+import type {
+    AuthenticationMethod,
+    NoticeKind,
+    VerificationState,
+} from "./values.js";
 // Shared HTTP contracts. API keys and configured passwords have no response fields.
 export type Account =
-    | { type: "chatgpt"; email: string | null; planType: string | null }
-    | { type: "apiKey" };
+    | {
+          type: typeof import("./values.js").AuthenticationMethod.Chatgpt;
+          email: string | null;
+          planType: string | null;
+      }
+    | { type: typeof import("./values.js").AuthenticationMethod.ApiKey };
 
-export type Verification = "accepted" | "unverified";
-export type Notice = { kind: "error" | "info"; message: string };
+export type Verification = VerificationState;
+export type Notice = { kind: NoticeKind; message: string };
 export type DeviceLogin = {
     id: string;
     verificationUrl: string;
@@ -23,7 +32,7 @@ export interface PromptResult {
     reply: string;
     model: string;
     durationMs: number;
-    authType: Account["type"];
+    authType: AuthenticationMethod;
 }
 
 export interface SessionState {

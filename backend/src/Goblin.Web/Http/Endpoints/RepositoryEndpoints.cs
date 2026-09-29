@@ -6,6 +6,7 @@ using Goblin.Application.Repositories;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
 using Goblin.Contracts.Runtime;
+using Goblin.Core.Work;
 using Goblin.Execution;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -32,8 +33,11 @@ internal static class RepositoryEndpoints
     private static async Task<IResult> ReserveOperationIdAsync(long attemptId, RepositoryBroker broker, CancellationToken token) =>
         Results.Json(await broker.ReserveOperationIdAsync(attemptId, token));
 
-    private static async Task<IResult> EnqueueAsync(long attemptId, long operationId, string kind, HttpContext context, RepositoryBroker broker) =>
-        Results.Json(await broker.EnqueueAsync(attemptId, operationId, kind, context.Request.Body, context.RequestAborted));
+    private static async Task<IResult> EnqueueAsync(long attemptId, long operationId, string kind, HttpContext context, RepositoryBroker broker) {
+        if (!RepositoryOperationNames.TryParse(kind, out var operation))
+            throw new ApplicationFailure("repository_operation_unavailable");
+        return Results.Json(await broker.EnqueueAsync(attemptId, operationId, operation, context.Request.Body, context.RequestAborted));
+    }
 
     private static async Task<IResult> StatusAsync(long attemptId, long operationId, RepositoryBroker broker, CancellationToken token) =>
         Results.Json(await broker.StatusAsync(attemptId, operationId, token));

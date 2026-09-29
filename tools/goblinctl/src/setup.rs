@@ -1,9 +1,13 @@
 //! Read-only public setup UI. Privileged state writers are separate processes.
 use crate::assets;
+use crate::contract_values::SetupAction;
+use crate::contract_values::SetupPhase;
+use crate::contract_values::SetupStatus;
+use crate::contract_values::SetupStep;
+use crate::contract_values::SetupStepStatus;
 use crate::files;
 use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use anyhow::ensure;
 use fs2::FileExt;
 use http_body_util::Full;
@@ -29,30 +33,40 @@ use tokio::net::UnixListener;
 use tokio::sync::Semaphore;
 
 pub const STATE: &str = "/var/lib/goblin/install/status.json";
-const STEPS: &[(&str, &str)] = &[
-    ("prepare", "Prepare installation"),
-    ("k3s", "Install Kubernetes"),
-    ("cert-manager", "Install certificate manager"),
-    ("sandbox", "Install Agent Sandbox"),
-    ("image", "Build Goblin"),
-    ("prefetch", "Download container images"),
-    ("database", "Prepare PostgreSQL"),
-    ("import", "Import Goblin image"),
-    ("migrate", "Apply database migrations"),
-    ("deploy", "Deploy Goblin"),
-    ("verify", "Check application readiness"),
-    ("activate", "Open Goblin"),
+const STEPS: &[SetupStep] = &[
+    SetupStep::Prepare,
+    SetupStep::K3s,
+    SetupStep::CertManager,
+    SetupStep::Sandbox,
+    SetupStep::Image,
+    SetupStep::Prefetch,
+    SetupStep::Database,
+    SetupStep::Import,
+    SetupStep::Migrate,
+    SetupStep::Deploy,
+    SetupStep::Verify,
+    SetupStep::Activate,
 ];
 
 /// Callers hold installer.lock for the attempt. Each update also takes a short
 /// file lock so parallel workers cannot overwrite each other's progress.
-pub fn update(path: &Path, action: &str, value: &str) -> Result<()> {
-    update_scoped(path, action, value, "")
+pub fn update(path: &Path, action: SetupAction, value: &str) -> Result<()> {
+    update_scoped(path, action, value, None)
 }
 
-pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Result<()> {
+pub fn update_scoped(
+    path: &Path,
+    action: SetupAction,
+    value: &str,
+    scope: Option<SetupStep>,
+) -> Result<()> {
+    if matches!(action, SetupAction::Start | SetupAction::FailStep)
+        || action == SetupAction::Complete && !value.is_empty()
+    {
+        let _: SetupStep = value.parse()?;
+    }
     files::reject_symlinks(path)?;
-    if action == "init" {
+    if action == SetupAction::Init {
         fs::create_dir_all(path.parent().context("Missing state directory")?)?;
     }
     let lock_path = path.with_extension("lock");
@@ -65,11 +79,11 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
         .open(lock_path)?;
     lock.lock_exclusive()?;
     let timestamp = chrono::Utc::now().to_rfc3339();
-    let mut state = if action == "init" {
-        json!({"version":1,"status":"waiting","phase":"installing","startedAt":timestamp,"updatedAt":timestamp,
+    let mut state = if action == SetupAction::Init {
+        json!({"version":1,"status":SetupStatus::Waiting,"phase":SetupPhase::Installing,"startedAt":timestamp,"updatedAt":timestamp,
             "attempt":0,"currentStep":null,"message":"Waiting for installation to start.",
             "logGeneration":timestamp,"revision":0,"logs":[],
-            "steps":STEPS.iter().map(|(id,label)|json!({"id":id,"label":label,"status":"waiting","attempt":0})).collect::<Vec<_>>()})
+            "steps":STEPS.iter().map(|id|json!({"id":id,"label":id.label(),"status":SetupStepStatus::Waiting,"attempt":0})).collect::<Vec<_>>()})
     } else {
         files::json(path)?
     };
@@ -78,26 +92,26 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
         "Unsupported installation state version"
     );
     // Upgrade retained v1 state when retrying with newer native tooling.
-    for (id, label) in STEPS {
+    for id in STEPS {
         if !state["steps"]
             .as_array()
             .context("Invalid steps")?
             .iter()
-            .any(|s| s["id"] == *id)
+            .any(|s| s["id"] == id.as_str())
         {
             state["steps"]
                 .as_array_mut()
                 .context("Invalid steps")?
-                .push(json!({"id":id,"label":label,"status":"waiting","attempt":0}));
+                .push(json!({"id":id,"label":id.label(),"status":SetupStepStatus::Waiting,"attempt":0}));
         }
     }
-    let mut event_step = scope.to_owned();
+    let mut event_step = scope.map_or("", SetupStep::as_str).to_owned();
     let mut event = String::new();
     match action {
-        "init" => (),
-        "begin" => {
-            state["status"] = json!("running");
-            state["phase"] = json!("installing");
+        SetupAction::Init => (),
+        SetupAction::Begin => {
+            state["status"] = json!(SetupStatus::Running);
+            state["phase"] = json!(SetupPhase::Installing);
             state["currentStep"] = Value::Null;
             state["attempt"] = json!(state["attempt"].as_u64().context("Invalid attempt")? + 1);
             state["message"] = json!("Checking installation progress.");
@@ -114,7 +128,7 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
                 .context("Invalid state")?
                 .remove("failedStep");
             for step in state["steps"].as_array_mut().context("Invalid steps")? {
-                step["status"] = json!("waiting");
+                step["status"] = json!(SetupStepStatus::Waiting);
                 let object = step.as_object_mut().context("Invalid step")?;
                 object.remove("finishedAt");
                 object.remove("error");
@@ -122,9 +136,9 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
                 object.remove("detail");
             }
         }
-        "start" => {
-            let step = step(&mut state, value)?;
-            step["status"] = json!("running");
+        SetupAction::Start => {
+            let step = step(&mut state, value.parse()?)?;
+            step["status"] = json!(SetupStepStatus::Running);
             step["startedAt"] = json!(timestamp);
             step["attempt"] = json!(step["attempt"].as_u64().context("Invalid step attempt")? + 1);
             let label = step["label"].clone();
@@ -133,19 +147,19 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
             state["currentStep"] = json!(value);
             state["message"] = label;
         }
-        "detail" => {
+        SetupAction::Detail => {
             ensure!(
                 value.len() <= 512 && !value.chars().any(char::is_control),
                 "Invalid public progress message"
             );
-            if !scope.is_empty() {
+            if let Some(scope) = scope {
                 step(&mut state, scope)?["detail"] = json!(value);
             }
             state["message"] = json!(value);
             event = value.to_owned();
         }
-        "public-url" => state["publicUrl"] = json!(value),
-        "complete" => {
+        SetupAction::PublicUrl => state["publicUrl"] = json!(value),
+        SetupAction::Complete => {
             let id = if value.is_empty() {
                 state["currentStep"]
                     .as_str()
@@ -154,8 +168,8 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
             } else {
                 value.to_owned()
             };
-            let step = step(&mut state, &id)?;
-            step["status"] = json!("complete");
+            let step = step(&mut state, id.parse()?)?;
+            step["status"] = json!(SetupStepStatus::Complete);
             step["finishedAt"] = json!(timestamp);
             event = format!(
                 "{} completed.",
@@ -163,9 +177,9 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
             );
             event_step = id;
         }
-        "fail-step" => {
-            let step = step(&mut state, value)?;
-            step["status"] = json!("failed");
+        SetupAction::FailStep => {
+            let step = step(&mut state, value.parse()?)?;
+            step["status"] = json!(SetupStepStatus::Failed);
             step["finishedAt"] = json!(timestamp);
             event = format!(
                 "{} failed. Review the private installation log for diagnostics.",
@@ -178,21 +192,21 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
             }
             state["currentStep"] = state["failedStep"].clone();
         }
-        "handoff" => {
-            state["phase"] = json!("activating");
+        SetupAction::Handoff => {
+            state["phase"] = json!(SetupPhase::Activating);
             state["message"] = json!("Goblin is ready. Connecting to your workspace…");
             event = "Opening Goblin. A brief connection gap is expected.".into();
         }
-        "failed" => {
-            state["status"] = json!("failed");
+        SetupAction::Failed => {
+            state["status"] = json!(SetupStatus::Failed);
             if !state["failedStep"].is_null() {
                 state["currentStep"] = state["failedStep"].clone();
             }
             state["message"] =
                 json!("Installation stopped. An administrator can retry from the VM.");
             for step in state["steps"].as_array_mut().context("Invalid steps")? {
-                if step["status"] == "running" {
-                    step["status"] = json!("failed");
+                if step["status"] == SetupStepStatus::Running.as_str() {
+                    step["status"] = json!(SetupStepStatus::Failed);
                     step["finishedAt"] = json!(timestamp);
                     step["error"] =
                         json!("Interrupted. Retained resources will be checked on retry.");
@@ -200,14 +214,13 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
             }
             event = "Installation stopped. Progress and existing data are retained for an administrator to retry.".into();
         }
-        "ready" => {
-            state["status"] = json!("ready");
-            state["phase"] = json!("complete");
+        SetupAction::Ready => {
+            state["status"] = json!(SetupStatus::Ready);
+            state["phase"] = json!(SetupPhase::Complete);
             state["message"] = json!("Goblin is ready.");
             state["finishedAt"] = json!(timestamp);
             event = "Goblin is ready.".into();
         }
-        _ => bail!("Unknown state transition"),
     }
     state["updatedAt"] = json!(timestamp);
     if state["logGeneration"].is_null() {
@@ -228,12 +241,12 @@ pub fn update_scoped(path: &Path, action: &str, value: &str, scope: &str) -> Res
     }
     files::write_json(path, &state, 0o644)
 }
-fn step<'a>(state: &'a mut Value, id: &str) -> Result<&'a mut Value> {
+fn step(state: &mut Value, id: SetupStep) -> Result<&mut Value> {
     state["steps"]
         .as_array_mut()
         .context("Invalid steps")?
         .iter_mut()
-        .find(|s| s["id"] == id)
+        .find(|s| s["id"] == id.as_str())
         .context("Unknown installation step")
 }
 

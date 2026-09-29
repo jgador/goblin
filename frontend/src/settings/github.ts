@@ -1,3 +1,4 @@
+import { GitHubConnectionStatus } from "../api/values.js";
 import { escapeHtml as e } from "../work/presentation.js";
 export type GitHubState = {
     configured: boolean;
@@ -5,7 +6,7 @@ export type GitHubState = {
     userCode?: string;
     verificationUrl?: string;
     notice?: string;
-    status: string;
+    status: GitHubConnectionStatus;
 };
 export type Repository = {
     id: string;
@@ -58,7 +59,7 @@ export function mountGitHub(root: HTMLElement) {
           ${
               !state
                   ? '<p class="settings-description" role="status">Loading GitHub settings…</p>'
-                  : state.status === "Connecting"
+                  : state.status === GitHubConnectionStatus.Connecting
                     ? `<p>Authorize GitHub CLI using this one-time code.</p>${state.userCode ? `<div class="settings-code"><code>${e(state.userCode)}</code><button data-github="copy">Copy code</button></div><a class="settings-primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a>` : `<p role="status">Getting your sign-in code…</p>`}<p class="settings-description">Waiting for you to finish signing in. You can close Settings and return.</p><button data-github="cancel">Cancel sign-in</button>`
                     : state?.login
                       ? `<div class="settings-actions"><button data-github="check">Check connection</button><button data-github="disconnect">Disconnect GitHub</button></div><p class="settings-description">Disconnect removes Goblin’s saved access. You can revoke the GitHub CLI authorization from GitHub’s application settings.</p>

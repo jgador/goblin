@@ -50,7 +50,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
         if (config.Verification == "invalid" || key.Contains("invalid"))
             throw new PublicError("invalid_api_key", "OpenAI rejected this API key. Check the key and try again.");
         await File.WriteAllTextAsync(Path.Combine(config.DataDir, "verified-test-key"), key);
-        return config.Verification;
+        return Goblin.Contracts.ContractValue.Parse<Goblin.Contracts.VerificationState>(config.Verification == "accepted" ? "Accepted" : "Unverified");
     }
 });
 if (config.EnableWork)
@@ -59,7 +59,7 @@ if (config.EnableWork)
     // normal Work APIs still bind grants and persist commands through PostgreSQL.
     app.MapPost("/fixture/repository", async (GitHubStore store) =>
     {
-        await store.ObserveAsync(new("browser-fixture", "42", "owner"), "Connected");
+        await store.ObserveAsync(new("browser-fixture", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await store.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "browser-fixture");
         return Results.Ok();
     });

@@ -1,9 +1,9 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Goblin.Integrations.GitHub;
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using Xunit;
 
 namespace Goblin.Tests;
@@ -32,9 +32,9 @@ public sealed class GitHubConnectionTests
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(connection.Profile, "hosts.yml")));
             using var restarted = new GitHubConnection(Path.Combine(root, "profile"), cli);
             Assert.Equal(state.Account, (await restarted.StatusAsync()).Account);
-            Assert.Equal("Connected", (await restarted.CheckAsync()).Status);
+            Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Connected, (await restarted.CheckAsync()).Status);
             await File.WriteAllTextAsync(Path.Combine(root, "reject"), "reject");
-            Assert.Equal("Unavailable", (await restarted.CheckAsync()).Status);
+            Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Unavailable, (await restarted.CheckAsync()).Status);
             Assert.Null((await restarted.DisconnectAsync()).Account);
             Assert.False(Directory.Exists(restarted.Profile));
         }

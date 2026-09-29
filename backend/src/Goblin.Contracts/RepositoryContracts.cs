@@ -22,8 +22,8 @@ public interface IRepositoryRemote
         throw new System.NotSupportedException("Git checkpoint preparation is unavailable.");
     Task PrepareAsync(RepositoryChange repository, string directory, string? checkpoint, CancellationToken token);
     Task<string> InspectBundleAsync(RepositoryChange repository, string directory, string bundle, CancellationToken token);
-    Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token);
-    Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token);
+    Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token);
+    Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token);
 }
 
 public interface IRepositoryBroker

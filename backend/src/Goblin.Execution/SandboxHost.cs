@@ -1,3 +1,4 @@
+using K = Goblin.Execution.Kubernetes;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -8,10 +9,10 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Execution.Kubernetes;
-using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Execution;
 
@@ -43,7 +44,7 @@ public sealed class SandboxHost : IExecutionHost
         _limits = limits ?? new();
     }
 
-    public RuntimeCapabilities[] Capabilities => [new("codex", true, true, true, false, false)];
+    public RuntimeCapabilities[] Capabilities => [new(RuntimeIds.Codex, true, true, true, false, false)];
     public string EnvironmentFor(long workId, long attemptId) => "k8s/" + _options.Namespace + "/work-" +
         workId.ToString(CultureInfo.InvariantCulture);
     public string EnvironmentFor(WorkSnapshot work) => work.Attempts[^1] is { Target.Repository: null } or { ReasoningOnly: true }

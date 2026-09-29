@@ -1,3 +1,4 @@
+using Api = Goblin.Web.Http.Contracts;
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,8 +11,6 @@ using Goblin.Integrations.Codex;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-
-using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Web;
 
@@ -84,7 +83,7 @@ internal sealed class ConnectionEndpoints
     private async Task<Api.AuthenticationState> ConnectionAsync(HttpContext context, bool changing, Func<Task<AuthenticationState>> action)
     {
         WorkStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<WorkStore>() : null;
-        if (changing && store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", requireIdle: true);
+        if (changing && store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, ConnectionAvailability.Changing, requireIdle: true);
         try
         {
             AuthenticationState state = await action();
@@ -92,7 +91,7 @@ internal sealed class ConnectionEndpoints
             {
                 bool available = state.Account is not null && state.RuntimeReady;
                 bool changed = await store.SetConnectionAsync(WorkStore.DefaultAgentId,
-                    available ? "Available" : "Disconnected", requireIdle: false,
+                    available ? ConnectionAvailability.Available : ConnectionAvailability.Disconnected, requireIdle: false,
                     completeChange: changing, observeAccount: true,
                     accountSignature: AccountSignature(state.Account));
                 if (available)
@@ -108,7 +107,7 @@ internal sealed class ConnectionEndpoints
         }
         catch
         {
-            if (store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Unavailable", requireIdle: false, completeChange: changing);
+            if (store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, ConnectionAvailability.Unavailable, requireIdle: false, completeChange: changing);
             throw;
         }
     }
