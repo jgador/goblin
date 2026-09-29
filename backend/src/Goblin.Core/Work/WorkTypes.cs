@@ -109,14 +109,14 @@ public sealed record RepositoryGrant(long ConnectionId, string Generation, strin
     string Login, long RepositoryId, string BaseBranch, string Branch, int PolicyVersion = 2,
     bool AllowPush = false, bool AllowPullRequest = false)
 {
-    public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, string operation)
+    public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, RepositoryOperationKind operation)
     {
         if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion is not (1 or 2) ||
             Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
             !string.Equals(repository, requestedRepository, StringComparison.OrdinalIgnoreCase) ||
-            operation is not ("publish" or "pull-request" or "fetch" or "checkpoint") ||
-            PolicyVersion == 2 && (operation == "publish" && !AllowPush ||
-                operation == "pull-request" && (!AllowPush || !AllowPullRequest)))
+            !Enum.IsDefined(operation) ||
+            PolicyVersion == 2 && (operation == RepositoryOperationKind.Publish && !AllowPush ||
+                operation == RepositoryOperationKind.PullRequest && (!AllowPush || !AllowPullRequest)))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }

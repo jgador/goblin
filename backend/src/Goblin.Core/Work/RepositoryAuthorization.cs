@@ -29,7 +29,7 @@ public sealed partial class WorkItem
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         Require(target.Repository?.Grant is not null, WorkRule.InvalidValue);
         ValidateNewAttempt(id, target);
-        target.Repository!.Grant!.Authorize(Id, id, target.Repository.Repository, target.Repository.Repository, target.Repository.Grant.Branch, "fetch");
+        target.Repository!.Grant!.Authorize(Id, id, target.Repository.Repository, target.Repository.Repository, target.Repository.Grant.Branch, RepositoryOperationKind.Fetch);
         Require(CurrentAttempt?.Status != AttemptStatus.Failed || retry, WorkRule.InvalidTransition);
         if (retry)
             Require(Status == WorkStatus.NeedsAttention && (Attention?.Reason == AttentionReason.Failure || Attention?.Reason == AttentionReason.RepositoryRequired && RepositoryAuthorization?.Retry == true) &&

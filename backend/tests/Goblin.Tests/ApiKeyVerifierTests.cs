@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Integrations.Codex;
 using Goblin.Web;
 using Xunit;
@@ -14,13 +15,13 @@ public sealed class ApiKeyVerifierTests
     private const string Key = "sk-test-ONLY-A-FAKE-KEY-1234567890";
 
     [Theory]
-    [InlineData(200, "accepted")]
-    [InlineData(403, "unverified")]
-    [InlineData(429, "unverified")]
+    [InlineData(200, VerificationState.Accepted)]
+    [InlineData(403, VerificationState.Unverified)]
+    [InlineData(429, VerificationState.Unverified)]
     [InlineData(401, "invalid_api_key")]
     [InlineData(503, "verification_unavailable")]
     [InlineData(302, "verification_unavailable")]
-    public async Task ChecksModelsEndpointAndClassifiesResponses(int status, string expected)
+    public async Task ChecksModelsEndpointAndClassifiesResponses(int status, object expected)
     {
         using var handler = new Handler(request =>
         {

@@ -13,7 +13,7 @@ public static class ExecutionFiles
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
     };
     public static async Task WriteAsync<T>(string path, T value, CancellationToken token = default)
     {

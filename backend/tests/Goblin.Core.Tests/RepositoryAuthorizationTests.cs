@@ -87,11 +87,11 @@ public sealed class RepositoryAuthorizationTests
     public void LocalGrantRejectsPushAndPullRequestButAllowsFetchAndCheckpoint()
     {
         RepositoryGrant grant = Target(10).Repository!.Grant!;
-        foreach (string operation in new[] { "publish", "pull-request" })
+        foreach (var operation in new[] { RepositoryOperationKind.Publish, RepositoryOperationKind.PullRequest })
             Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, operation));
         foreach (string operation in new[] { "fetch", "checkpoint" })
-            grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, operation);
+            grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, RepositoryOperationNames.Parse(operation));
         grant = Target(10, true).Repository!.Grant!;
-        Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, "pull-request"));
+        Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, RepositoryOperationKind.PullRequest));
     }
 }

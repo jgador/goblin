@@ -190,13 +190,13 @@ enum InternalCommand {
         health_socket: Option<PathBuf>,
     },
     State {
-        action: String,
+        action: goblinctl::contract_values::SetupAction,
         #[arg(default_value = "")]
         value: String,
         #[arg(long, default_value = setup::STATE)]
         path: PathBuf,
-        #[arg(long, default_value = "")]
-        step: String,
+        #[arg(long)]
+        step: Option<goblinctl::contract_values::SetupStep>,
     },
     BuildProgress {
         #[arg(long, default_value = setup::STATE)]
@@ -393,7 +393,7 @@ fn execute(cli: Cli) -> Result<()> {
                 value,
                 path,
                 step,
-            } => setup::update_scoped(&path, &action, &value, &step),
+            } => setup::update_scoped(&path, action, &value, step),
             InternalCommand::BuildProgress { path } => progress::build_output(&path),
             InternalCommand::PrefetchImages { source } => {
                 for image in deployment::prefetch_images(&source)? {

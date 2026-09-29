@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Persistence;
@@ -23,11 +24,11 @@ public sealed class GitHubStore
         await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
         await RequireIdleAsync(db, token);
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
-        connection.Availability = "Changing";
+        connection.Availability = nameof(ConnectionAvailability.Changing);
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
-    public async Task ObserveAsync(RepositoryAccount? account, string status, CancellationToken token = default)
+    public async Task ObserveAsync(RepositoryAccount? account, GitHubConnectionStatus status, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
@@ -41,7 +42,7 @@ public sealed class GitHubStore
         connection.Generation = account?.Generation;
         connection.AccountId = account?.AccountId;
         connection.Login = account?.Login;
-        connection.Availability = status == "Connecting" ? "Changing" : status;
+        connection.Availability = status == GitHubConnectionStatus.Connecting ? nameof(ConnectionAvailability.Changing) : status.ToString();
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
@@ -57,7 +58,7 @@ public sealed class GitHubStore
         await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
         await RequireIdleAsync(db, token);
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
-        if (connection.Generation != generation || connection.Availability != "Connected")
+        if (connection.Generation != generation || connection.Availability != nameof(GitHubConnectionStatus.Connected))
             throw new ApplicationFailure("repository_unavailable");
         GithubRepository? row = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == repository.Id, token);
         if (row is null) { row = new() { Id = repository.Id, ConnectionId = 1 }; db.GithubRepositories.Add(row); }
@@ -70,7 +71,7 @@ public sealed class GitHubStore
         RepositoryChange requested = approval.Target.Repository!;
         RepositoryGrant grant = requested.Grant!;
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == grant.ConnectionId, token);
-        if (connection.Availability != "Connected" || connection.Generation != grant.Generation ||
+        if (connection.Availability != nameof(GitHubConnectionStatus.Connected) || connection.Generation != grant.Generation ||
             connection.AccountId != grant.AccountId || connection.Login != grant.Login)
             throw new ApplicationFailure("repository_authorization_changed");
         GithubRepository? repository = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == grant.RepositoryId, token);

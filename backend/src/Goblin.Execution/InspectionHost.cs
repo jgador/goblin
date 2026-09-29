@@ -1,3 +1,4 @@
+using K = Goblin.Execution.Kubernetes;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -5,7 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
-using K = Goblin.Execution.Kubernetes;
+using Goblin.Core.Work;
 
 namespace Goblin.Execution;
 
@@ -33,22 +34,22 @@ public sealed class InspectionHost : IInspectionHost
             throw new IOException("Saved workspace is unavailable.");
     }
 
-    public async Task<string> ObserveAsync(InspectionAllocation session, CancellationToken token)
+    public async Task<InspectionObservation> ObserveAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
         K.Pod? pod = await _api.GetAsync<K.Pod>(Core(session) + "/pods/" + name, token);
         if (pod is null)
         {
             K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(Sandboxes(session) + "/" + name, token);
-            return sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Running ? "Pending" : "Missing";
+            return sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Running ? InspectionObservation.Pending : InspectionObservation.Missing;
         }
         string phase = pod.Status?.Phase ?? "Pending";
-        if (phase == "Running") return "Running";
-        if (phase is "Failed" or "Succeeded") return "Failed";
+        if (phase == "Running") return InspectionObservation.Running;
+        if (phase is "Failed" or "Succeeded") return InspectionObservation.Failed;
         if (pod.Status?.InitContainerStatuses is { } statuses)
             foreach (K.ContainerStatus status in statuses)
-                if (status.State?.Terminated?.ExitCode is > 0) return "Failed";
-        return "Pending";
+                if (status.State?.Terminated?.ExitCode is > 0) return InspectionObservation.Failed;
+        return InspectionObservation.Pending;
     }
     public async Task StopAsync(InspectionAllocation session, CancellationToken token)
     {

@@ -1,4 +1,5 @@
 using System;
+using Goblin.Contracts;
 using Goblin.Core.Work;
 
 namespace Goblin.Application.Work;
@@ -12,7 +13,7 @@ public sealed record WorkCommand(long CommandId, long WorkId, WorkAction Action,
 public sealed record WorkView(long Version, DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt, WorkSnapshot Work);
 public sealed record AgentView(long Id, string Name, long ConnectionId, string? Model);
-public sealed record ConnectionView(long Id, string Runtime, string Name, string Availability);
+public sealed record ConnectionView(long Id, string Runtime, string Name, ConnectionAvailability Availability);
 public sealed record DispatchWork(long WorkId, long AttemptId, int TurnNumber = 1);
 public sealed record ReconcileWork(long WorkId, long AttemptId, int TurnNumber = 0);
 public sealed class ApplicationFailure : Exception

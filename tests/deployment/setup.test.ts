@@ -15,6 +15,20 @@ test("setup serves the official Goblin icon from its standalone bundle", async (
         /<img\b[^>]*class="brand-logo"[^>]*src="\/setup\/icon\.svg"/,
     );
     assert.match(html, /<link\b[^>]*rel="icon"[^>]*href="\/setup\/icon\.svg"/);
+    assert.match(
+        html,
+        /<script\b[^>]*src="\/setup\/app\.js"[^>]*type="module"/,
+    );
+    const contracts = await fetch(setup.url + "/setup/contract-values.js");
+    assert.equal(contracts.status, 200);
+    assert.equal(
+        contracts.headers.get("content-type"),
+        "text/javascript; charset=utf-8",
+    );
+    assert.deepEqual(
+        Buffer.from(await contracts.arrayBuffer()),
+        await readFile("deploy/azure/setup/contract-values.js"),
+    );
     const response = await fetch(setup.url + "/setup/icon.svg");
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("content-type"), "image/svg+xml");

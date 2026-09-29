@@ -57,3 +57,8 @@ references when clear, and prefer exhaustive matches. Avoid opaque boolean and
 `Option` arguments in new APIs. Keep operational tooling Python-free and keep
 developer tools out of production installations. Snapshot changes must be
 reviewed before accepting them with `cargo insta`.
+
+For closed behavior and shared contract values, follow [the ownership and
+generation guide](docs/contract-values.md). Use typed internal APIs and generated
+browser values; parse only at adapters and persistence boundaries. Run
+`npm run contracts:check` after changing an owning C# or Rust definition.
