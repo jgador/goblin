@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -36,12 +37,12 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
         RequestTimeout = TimeSpan.FromMilliseconds(config.TimeoutMs),
         Environment = new Dictionary<string, string?>
         {
-            ["PATH"] = Environment.GetEnvironmentVariable("PATH"),
-            ["OPENAI_API_KEY"] = "must-not-inherit",
-            ["CODEX_API_KEY"] = "must-not-inherit",
-            ["STACKIFY_AZURE_OPENAI_API_KEY"] = "must-not-inherit",
-            ["CODEX_HOME"] = "/must-not-use",
-            ["GOBLIN_SECRET"] = "must-not-inherit"
+            [Env.Path] = Environment.GetEnvironmentVariable(Env.Path),
+            [Env.OpenaiApiKey] = "must-not-inherit",
+            [Env.CodexApiKey] = "must-not-inherit",
+            [Env.StackifyAzureOpenaiApiKey] = "must-not-inherit",
+            [Env.CodexHome] = "/must-not-use",
+            [Env.GoblinSecret] = "must-not-inherit"
         }
     },
     VerifyApiKey = async key =>

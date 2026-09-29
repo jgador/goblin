@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { goblinctl } from "./goblinctl.js";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
@@ -25,7 +26,7 @@ await writeFile(
 const app = await startBackend({
     dataDir,
     passwordHashFile,
-    enableWork: !!process.env.GOBLIN_TEST_POSTGRES_APP,
+    enableWork: !!process.env[Env.GOBLIN_TEST_POSTGRES_APP.name],
     publicOrigin: "http://127.0.0.1:8798",
     listenUrl: "http://127.0.0.1:8798",
 });

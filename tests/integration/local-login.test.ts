@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { goblinctl } from "../support/goblinctl.js";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
@@ -27,7 +28,12 @@ async function start(t: TestContext, options: Partial<BackendOptions> = {}) {
         execFileSync(
             goblinctl,
             ["password", "set", "--path", passwordHashFile],
-            { env: { ...process.env, GOBLIN_LOCAL_PASSWORD: localPassword } },
+            {
+                env: {
+                    ...process.env,
+                    [Env.GOBLIN_LOCAL_PASSWORD.name]: localPassword,
+                },
+            },
         );
     const app = await startBackend({
         dataDir,

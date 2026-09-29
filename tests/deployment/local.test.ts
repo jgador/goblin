@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -99,7 +100,7 @@ test("native setup assets work outside a checkout and do not overwrite template 
     const before = await readFile("dependencies.lock.json");
     execFileSync(goblinctl, ["internal", "unpack", root], {
         cwd: root,
-        env: { PATH: "/nonexistent" },
+        env: { [Env.PATH.name]: "/nonexistent" },
     });
     for (const name of [
         "installer.sh",

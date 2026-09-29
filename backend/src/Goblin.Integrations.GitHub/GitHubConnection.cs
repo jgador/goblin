@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -167,9 +168,9 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         var info = new ProcessStartInfo(watchdog ? "/usr/bin/timeout" : command) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, WorkingDirectory = workingDirectory ?? profile };
         if (watchdog) foreach (string prefix in new[] { "--kill-after=5s", progress is null ? "120s" : "900s", command }) info.ArgumentList.Add(prefix);
         info.Environment.Clear();
-        foreach ((string, string) pair in new[] { ("PATH", Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin:/bin"), ("HOME", profile), ("GH_CONFIG_DIR", profile),
-            ("GH_PROMPT_DISABLED", "1"), ("GH_NO_UPDATE_NOTIFIER", "1"), ("NO_COLOR", "1"), ("LC_ALL", "C"),
-            ("GIT_TERMINAL_PROMPT", "0"), ("GIT_CONFIG_NOSYSTEM", "1"), ("GIT_CONFIG_GLOBAL", "/dev/null") }) info.Environment[pair.Item1] = pair.Item2;
+        foreach ((string, string) pair in new[] { (Env.Path, Environment.GetEnvironmentVariable(Env.Path) ?? "/usr/bin:/bin"), (Env.Home, profile), (Env.GhConfigDir, profile),
+            (Env.GhPromptDisabled, "1"), (Env.GhNoUpdateNotifier, "1"), (Env.NoColor, "1"), (Env.LcAll, "C"),
+            (Env.GitTerminalPrompt, "0"), (Env.GitConfigNosystem, "1"), (Env.GitConfigGlobal, "/dev/null") }) info.Environment[pair.Item1] = pair.Item2;
         foreach (string argument in arguments) info.ArgumentList.Add(argument);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(progress is null ? TimeSpan.FromMinutes(2) : TimeSpan.FromMinutes(15));

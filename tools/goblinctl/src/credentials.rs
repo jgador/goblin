@@ -1,3 +1,4 @@
+use crate::environment;
 use crate::files;
 use anyhow::Context;
 use anyhow::Result;
@@ -78,7 +79,7 @@ pub fn ensure(path: &Path, replace: bool) -> Result<PathBuf> {
         read(path)?;
         return Ok(path.to_owned());
     }
-    let password = match std::env::var("GOBLIN_LOCAL_PASSWORD") {
+    let password = match std::env::var(environment::GOBLIN_LOCAL_PASSWORD) {
         Ok(password) => password,
         Err(_) => {
             ensure!(
@@ -100,7 +101,7 @@ pub fn ensure(path: &Path, replace: bool) -> Result<PathBuf> {
 
 pub fn dev(repo: &Path) -> Result<()> {
     use std::os::unix::process::CommandExt;
-    let path = match std::env::var_os("GOBLIN_PASSWORD_HASH_FILE") {
+    let path = match std::env::var_os(environment::GOBLIN_PASSWORD_HASH_FILE) {
         Some(p) => {
             let p = PathBuf::from(p);
             read(&p)?;
@@ -110,8 +111,8 @@ pub fn dev(repo: &Path) -> Result<()> {
     };
     Err(std::process::Command::new("dotnet")
         .arg(repo.join("backend/src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll"))
-        .env("GOBLIN_PASSWORD_HASH_FILE", path)
-        .env_remove("GOBLIN_LOCAL_PASSWORD")
+        .env(environment::GOBLIN_PASSWORD_HASH_FILE, path)
+        .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
         .exec()
         .into())
 }

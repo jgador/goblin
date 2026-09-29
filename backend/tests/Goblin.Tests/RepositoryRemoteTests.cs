@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -77,7 +78,7 @@ public sealed class RepositoryRemoteTests
     private static async Task<string> Git(string directory, params string[] arguments)
     {
         var info = new ProcessStartInfo("git") { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true };
-        info.Environment["GIT_CONFIG_GLOBAL"] = "/dev/null"; info.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
+        info.Environment[Env.GitConfigGlobal] = "/dev/null"; info.Environment[Env.GitConfigNosystem] = "1";
         foreach (string value in arguments) info.ArgumentList.Add(value);
         using Process process = Process.Start(info)!;
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(), stderr = process.StandardError.ReadToEndAsync();

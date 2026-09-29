@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -71,7 +72,7 @@ public static class WorkspaceFiles
     {
         if (!OperatingSystem.IsLinux()) return;
         var start = new ProcessStartInfo("/usr/bin/stat") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        start.Environment["LC_ALL"] = "C";
+        start.Environment[Env.LcAll] = "C";
         start.ArgumentList.Add("--format=%F"); start.ArgumentList.Add("--"); start.ArgumentList.Add(path);
         using Process process = Process.Start(start)!;
         string kind = process.StandardOutput.ReadToEnd(); process.StandardError.ReadToEnd(); process.WaitForExit();

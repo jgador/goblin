@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -27,7 +28,7 @@ public sealed record CodexOptions
     public string ExecutableStamp()
     {
         string? path = File.Exists(Command) ? Path.GetFullPath(Command) :
-            (System.Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
+            (System.Environment.GetEnvironmentVariable(Env.Path) ?? "").Split(Path.PathSeparator)
                 .Select(directory => Path.Combine(directory, Command + (OperatingSystem.IsWindows() ? ".exe" : "")))
                 .FirstOrDefault(File.Exists);
         if (path is null) return Command;
@@ -67,14 +68,14 @@ public sealed record CodexOptions
             StandardOutputEncoding = new System.Text.UTF8Encoding(false, true)
         };
         info.Environment.Clear();
-        string[] allowed = ["PATH", "LANG", "LC_ALL", "TZ", "SSL_CERT_FILE", "SSL_CERT_DIR",
-            "NODE_EXTRA_CA_CERTS", "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY",
-            "SystemRoot", "WINDIR", "PATHEXT"];
+        string[] allowed = [Env.Path, Env.Lang, Env.LcAll, Env.Tz, Env.SslCertFile, Env.SslCertDir,
+            Env.NodeExtraCaCerts, Env.HttpsProxy, Env.HttpProxy, Env.NoProxy,
+            Env.SystemRoot, Env.Windir, Env.Pathext];
         foreach (string name in allowed)
             if (Environment.TryGetValue(name, out string? value) && value is not null) info.Environment[name] = value;
-        info.Environment["HOME"] = Home;
-        info.Environment["USERPROFILE"] = Home;
-        info.Environment["CODEX_HOME"] = CodexHome;
+        info.Environment[Env.Home] = Home;
+        info.Environment[Env.Userprofile] = Home;
+        info.Environment[Env.CodexHome] = CodexHome;
         foreach (string argument in Arguments) info.ArgumentList.Add(argument);
         info.ArgumentList.Add("app-server");
         void Config(string value) { info.ArgumentList.Add("-c"); info.ArgumentList.Add(value); }

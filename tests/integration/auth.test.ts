@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, stat, rm } from "node:fs/promises";
@@ -328,11 +329,11 @@ test("ChatGPT device flow completes through Codex notifications", async (t) => {
     const env = JSON.parse(
         await readFile(join(ctx.dataDir, "codex/environment.json"), "utf8"),
     );
-    assert.equal(env.OPENAI_API_KEY, undefined);
-    assert.equal(env.CODEX_API_KEY, undefined);
-    assert.equal(env.STACKIFY_AZURE_OPENAI_API_KEY, undefined);
-    assert.equal(env.GOBLIN_SECRET, undefined);
-    assert.equal(env.CODEX_HOME, join(ctx.dataDir, "codex"));
+    assert.equal(env[Env.OPENAI_API_KEY.name], undefined);
+    assert.equal(env[Env.CODEX_API_KEY.name], undefined);
+    assert.equal(env[Env.STACKIFY_AZURE_OPENAI_API_KEY.name], undefined);
+    assert.equal(env[Env.GOBLIN_SECRET.name], undefined);
+    assert.equal(env[Env.CODEX_HOME.name], join(ctx.dataDir, "codex"));
 });
 
 test("a pending login can be canceled, rejects overlapping logins, and can be retried", async (t) => {

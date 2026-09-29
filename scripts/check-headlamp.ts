@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../config/environment.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -11,7 +12,7 @@ import { startBackend, writePasswordHash } from "../tests/support/backend.js";
 // Opt-in integration: a real, pinned Headlamp backed by a real cluster. No saved
 // Goblin/OpenAI/GitHub credentials are used. The Azure hostname is resolved locally
 // to exercise the browser's actual Host/Origin behavior without Azure resources.
-const headlampUrl = process.env.GOBLIN_TEST_HEADLAMP_URL;
+const headlampUrl = process.env[Env.GOBLIN_TEST_HEADLAMP_URL.name];
 if (!headlampUrl)
     throw new Error(
         "Set GOBLIN_TEST_HEADLAMP_URL to the private Headlamp origin (for example a localhost port-forward).",

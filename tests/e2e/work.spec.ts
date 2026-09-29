@@ -1,8 +1,9 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { test, expect } from "@playwright/test";
 
 test.describe("durable Work", () => {
     test.skip(
-        !process.env.GOBLIN_TEST_POSTGRES_APP,
+        !process.env[Env.GOBLIN_TEST_POSTGRES_APP.name],
         "Real PostgreSQL is required for the Work browser journey.",
     );
     async function unlock(page: import("@playwright/test").Page) {
