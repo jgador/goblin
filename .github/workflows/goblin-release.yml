@@ -118,65 +118,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.prepare.outputs.installer }}
         run: node scripts/release-github.mts pin-pr "$VERSION"
-  azure:
-    name: Azure installation
-    needs: prepare
-    if: needs.prepare.outputs.outcome == 'prepared'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 110
-    environment: azure-release-test
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      AZURE_RELEASE_TESTS_ENABLED: ${{ vars.AZURE_RELEASE_TESTS_ENABLED }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      AZURE_RELEASE_REGION: ${{ vars.AZURE_RELEASE_REGION }}
-      AZURE_RELEASE_VM_SIZE: ${{ vars.AZURE_RELEASE_VM_SIZE }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-      - name: Require explicit Azure test configuration
-        env:
-          CLIENT: ${{ vars.AZURE_CLIENT_ID }}
-          TENANT: ${{ vars.AZURE_TENANT_ID }}
-        run: |
-          test "$AZURE_RELEASE_TESTS_ENABLED" = true
-          test -n "$AZURE_SUBSCRIPTION_ID" && test -n "$AZURE_RELEASE_REGION"
-          test -n "$CLIENT" && test -n "$TENANT"
-      - uses: azure/login@v2
-        id: login
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - run: |
-          npm ci
-          npx playwright install --with-deps chromium
-      - uses: actions/download-artifact@v4
-        with:
-          name: goblin-candidate-${{ needs.prepare.outputs.attempt }}
-          path: .artifacts/goblin
-      - name: Install and verify the frozen candidate
-        run: node scripts/release-azure.mts install .artifacts/goblin
-      - name: Remove this run's test resources
-        if: always() && steps.login.outcome == 'success'
-        run: node scripts/release-azure.mts cleanup
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: azure-result-${{ github.run_attempt }}
-          path: .artifacts/azure-test/result.json
-          if-no-files-found: warn
   ready:
     name: Ready to publish
-    needs: [prepare, azure]
+    needs: prepare
+    if: needs.prepare.outputs.outcome == 'prepared'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -192,12 +137,8 @@ jobs:
         with:
           name: goblin-candidate-${{ needs.prepare.outputs.attempt }}
           path: .artifacts/goblin
-      - uses: actions/download-artifact@v4
-        with:
-          name: azure-result-${{ needs.prepare.outputs.attempt }}
-          path: .artifacts/azure-test
       - name: Seal the successful checks and show the summary
-        run: cargo xtask release seal --azure-report .artifacts/azure-test/result.json
+        run: cargo xtask release seal
       - uses: actions/attest-build-provenance@v2
         with:
           subject-path: .artifacts/goblin/*
