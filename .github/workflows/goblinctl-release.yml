@@ -1,11 +1,10 @@
-name: goblinctl native release
+name: Publish goblinctl
 on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Exact reviewed commit on master to publish (40-character SHA)
+        description: Merged source SHA (blank uses this master commit; version comes from Cargo.toml)
         type: string
-        required: true
 permissions:
   contents: read
 concurrency:
@@ -13,44 +12,49 @@ concurrency:
   cancel-in-progress: false
 jobs:
   linux:
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
+    outputs:
+      source: ${{ steps.identity.outputs.source }}
+      version: ${{ steps.identity.outputs.version }}
+      attempt: ${{ steps.identity.outputs.attempt }}
     steps:
-      - name: Require an explicit immutable revision
+      - name: Validate source input
         env:
-          RELEASE_SHA: ${{ inputs.sha }}
-        run: '[[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]'
+          SOURCE: ${{ inputs.sha || github.sha }}
+        run: '[[ "$SOURCE" =~ ^[0-9a-f]{40}$ ]]'
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Require a merged commit
-        env:
-          RELEASE_SHA: ${{ inputs.sha }}
-        run: |
-          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
-          git merge-base --is-ancestor "$RELEASE_SHA" origin/master
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: '24'
           cache: npm
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
+      - name: Require a merged commit and record its identity
+        id: identity
+        run: |
+          git merge-base --is-ancestor HEAD origin/master
+          echo "source=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          echo "version=$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "goblinctl") | .version')" >> "$GITHUB_OUTPUT"
       - name: Verify candidate source
         run: |
           just fmt-check
           just clippy --workspace --all-targets -- -D warnings
-          cargo xtask azure --check
           npm ci
           npm test
           npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/setup.spec.ts
+          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
       - name: Build from clean source and test the packaged executable
         run: |
-          cargo xtask release-build --output .artifacts/goblinctl
+          cargo xtask release build-installer --output .artifacts/goblinctl
           mkdir -p .artifacts/native-check
           tar -xzf .artifacts/goblinctl/goblinctl-x86_64-unknown-linux-musl.tar.gz -C .artifacts/native-check
           .artifacts/native-check/goblinctl --help
@@ -58,7 +62,7 @@ jobs:
           git diff --exit-code
       - uses: actions/upload-artifact@v4
         with:
-          name: goblinctl-linux-musl
+          name: goblinctl-linux-musl-${{ github.run_attempt }}
           path: .artifacts/goblinctl/*
           if-no-files-found: error
   publish:
@@ -76,57 +80,42 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: goblinctl-linux-musl
-          path: release-artifacts
+          name: goblinctl-linux-musl-${{ needs.linux.outputs.attempt }}
+          path: .artifacts/goblinctl
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
-      - name: Verify the artifact identifies the selected source
-        id: manifest
-        env:
-          RELEASE_SHA: ${{ inputs.sha }}
-        working-directory: release-artifacts
-        run: |
-          node --input-type=module <<'JS'
-          import { readFileSync, appendFileSync } from 'node:fs';
-          import { createHash } from 'node:crypto';
-          const release = JSON.parse(readFileSync('release.json', 'utf8'));
-          const archive = 'goblinctl-x86_64-unknown-linux-musl.tar.gz';
-          const checksum = createHash('sha256').update(readFileSync(archive)).digest('hex');
-          if (release.schemaVersion !== 1 || release.sourceRevision !== process.env.RELEASE_SHA ||
-              release.sourceDirty !== false || release.target !== 'x86_64-unknown-linux-musl' ||
-              typeof release.version !== 'string' ||
-              !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(release.version) ||
-              release.sha256 !== checksum || readFileSync('SHA256SUMS', 'utf8') !== `${checksum}  ${archive}\n`) {
-            throw new Error('Artifact does not identify the selected clean source and version');
-          }
-          appendFileSync(process.env.GITHUB_OUTPUT, `version=${release.version}\n`);
-          JS
+          node-version: '24'
       - name: Attest archive and dependency metadata
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: |
-            release-artifacts/goblinctl-x86_64-unknown-linux-musl.tar.gz
-            release-artifacts/release.json
+            .artifacts/goblinctl/goblinctl-x86_64-unknown-linux-musl.tar.gz
+            .artifacts/goblinctl/release.json
       - name: Publish the selected immutable version
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_SHA: ${{ inputs.sha }}
-          RELEASE_VERSION: ${{ steps.manifest.outputs.version }}
+          RELEASE_SOURCE: ${{ needs.linux.outputs.source }}
+        run: node scripts/release-github.mts publish-installer .artifacts/goblinctl
+  pin:
+    needs: [linux, publish]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      attestations: read
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.linux.outputs.source }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: ./.github/actions/setup-rust
+      - name: Prepare the reviewed dependency update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.linux.outputs.version }}
         run: |
-          tag="goblinctl-v$RELEASE_VERSION"
-          # Ref creation fails if the tag exists. Never overwrite or move a release.
-          jq -n --arg ref "refs/tags/$tag" --arg sha "$RELEASE_SHA" '{ref: $ref, sha: $sha}' |
-            gh api "repos/$GH_REPO/git/refs" --method POST --input -
-          gh release create "$tag" release-artifacts/goblinctl-x86_64-unknown-linux-musl.tar.gz \
-            release-artifacts/release.json release-artifacts/SHA256SUMS --repo "$GH_REPO" --verify-tag \
-            --title "$tag" --notes "Native installer built and tested from $RELEASE_SHA."
-          {
-            echo "Published $tag from $RELEASE_SHA."
-            echo 'Update a checkout with matching installer inputs, review the generated files, and commit the pin:'
-            echo '```bash'
-            echo "cargo xtask pin-release --version $RELEASE_VERSION"
-            echo 'cargo xtask azure'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          cargo xtask release pin-installer --version "$VERSION"
+          node scripts/release-github.mts pin-pr "$VERSION"

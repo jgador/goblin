@@ -138,36 +138,15 @@ remain authoritative. Production shell helpers find the installed CLI via
 `--repo` selects the credential/settings destination. On a standalone installed
 host, database exports default to `/var/lib/goblin/config`.
 
-## Release order
+## Releases
 
-Use `cargo xtask release-status` to see changes since the pinned installer.
-Pending changes are advisory and may merge after source tests pass. The
-[release guide](goblinctl-releases.md) covers manual publication, deployment
-verification, and the one-time required-check migration.
+[Prepare Goblin release](releases.md) reports when a new installer is needed.
+Review and merge its Cargo version bump, run **Publish goblinctl**, then merge the
+generated dependency PR. Goblin and goblinctl keep independent versions.
 
-1. Review installer changes and choose the Cargo workspace version. Commit its
-   lockfile update in a normal PR and merge it into `master`.
-2. Dispatch `.github/workflows/goblinctl-release.yml` from `master` with the exact
-   merged commit's `sha`. Source and packaged-binary tests run before the existing
-   `goblinctl-release` environment approval.
-3. Approve publication of the tested archive and dependency metadata. The workflow
-   attests both files and creates `goblinctl-vMAJOR.MINOR.PATCH`; it does not edit
-   branches. Existing tags/releases are never overwritten.
-4. Explicitly pin the published release and commit the generated files through
-   a normal PR before deploying Goblin changes that require it.
-
-To update the pin after publication:
-
-```bash
-cargo xtask pin-release --repo jgador/goblin --version MAJOR.MINOR.PATCH
-cargo xtask azure
-```
-
-Pinning requires the archive and manifest's GitHub provenance, clean source
-metadata, matching installer inputs, and all capabilities required by Goblin.
-The manifest records version, target, archive digest, source revision, dirty-source
-indicator, Cargo.lock digest, and a versioned per-file installer fingerprint.
-Local review packages cannot replace this publication verification.
+Local pin recovery uses `cargo xtask release pin-installer --version X.Y.Z`.
+It authenticates the archive and manifest, verifies matching inputs/capabilities,
+and updates `dependencies.toml` and `dependencies.lock.json` together.
 
 To build a review artifact locally:
 
@@ -177,7 +156,7 @@ cargo build --locked --release -p goblinctl --target x86_64-unknown-linux-musl
 cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl
 ```
 
-`cargo xtask release-build` instead requires a clean checkout and compiles into a
+`cargo xtask release build-installer` instead requires a clean checkout and compiles into a
 fresh temporary target directory before packaging. Release CI uses that command;
 `package` alone does not prove an arbitrary supplied binary came from this checkout.
 

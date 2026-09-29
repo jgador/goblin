@@ -1,5 +1,5 @@
 # Edit image tags here, then run: cargo xtask dependencies resolve
-# Select an authenticated goblinctl release with: cargo xtask pin-release
+# Select an authenticated goblinctl release with: cargo xtask release pin-installer
 [goblinctl]
 version = "0.1.3"
 

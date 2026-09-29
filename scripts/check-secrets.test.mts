@@ -82,7 +82,7 @@ const databaseConnection = (password: string) =>
     `Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;Password=${password}`;
 
 const releaseMetadataPaths = [
-    "deploy/goblinctl-release.json",
+    "dependencies.lock.json",
     "deploy/azure/azuredeploy.json",
     "deploy/azure/azuredeploy.portal.json",
 ];

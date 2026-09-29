@@ -1,0 +1,51 @@
+name: Deliver Goblin installation site
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      recommend:
+        type: boolean
+        default: false
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  attestations: read
+concurrency:
+  group: goblin-installation-site
+  cancel-in-progress: false
+jobs:
+  site:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: ./.github/actions/setup-rust
+      - name: Build the catalog from authenticated published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
+        run: node scripts/release-github.mts site "$VERSION" "$RECOMMENDATION"
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .artifacts/pages
+      - uses: actions/deploy-pages@v4
+        id: deploy
+      - name: Verify the delivered installation links
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
+        run: node scripts/release-github.mts check-site "$VERSION" "$RECOMMENDATION"

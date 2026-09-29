@@ -48,7 +48,7 @@ The style pass excludes `IDE0130` and `IDE1006`, as recorded in the
 [generated C# formatting audit](generated-csharp-formatting.md).
 
 Formatting does not rebuild deployment artifacts. After editing a bootstrap or
-Bicep source, run `cargo xtask azure`; check drift with `cargo xtask azure --check`.
-These commands require the standalone Bicep CLI on PATH (version 0.47.16 is used in
+Bicep source, run `cargo xtask azure` to generate review assets in `.artifacts/azure`.
+Release preparation generates and verifies the assets it publishes. This requires the standalone Bicep CLI on PATH (version 0.47.16 is used in
 CI). Changes to embedded setup assets require a new goblinctl release and a pin
 update; see [native tooling](goblinctl.md). The hook does not run tests automatically.

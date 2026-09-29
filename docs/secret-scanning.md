@@ -87,8 +87,8 @@ Release metadata contains a SHA-256 checksum for
 `tools/goblinctl/src/credentials.rs`. The filename can trigger Gitleaks'
 `generic-api-key` rule. A scoped exception accepts that exact field with a
 64-character lowercase hexadecimal value, alone on its JSON line, in
-`deploy/goblinctl-release.json` and the two generated `deploy/azure/azuredeploy*.json`
-templates. Other fields and credential rules remain active in those files.
+`dependencies.lock.json`. The older release-pin and generated-template paths
+retain their scoped exception for history scans. Other fields and credential rules remain active in those files.
 
 The PostgreSQL connection in `backend/src/Goblin.Web/appsettings.json` contains
 certificate paths, with private keys supplied at runtime. Database passwords no
