@@ -40,6 +40,10 @@ Real PostgreSQL tests are opt-in; report skips rather than claiming persistence
 coverage. Run the relevant browser and real-runtime checks when integrating
 those boundaries.
 
+Azure installation is manual. Keep repository automation free of Azure login,
+live deployment tests, resource provisioning, and cloud cleanup. Preserve the
+templates, installer assets, and offline deployment checks for manual use.
+
 For Rust tooling under `tools/`, follow [the Rust development guide](docs/rust-development.md).
 Use the pinned toolchain and helper versions, `just fmt`, `just clippy -p <crate>`,
 and `just test -p <crate>`; `just test-doc --workspace` covers documentation tests.

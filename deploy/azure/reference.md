@@ -526,8 +526,8 @@ Embedded setup changes require a new native release and a dependency pin update.
 See [releases](../../docs/releases.md). `cargo xtask azure` writes local review
 assets into `.artifacts/azure/`; release preparation generates the assets it tests
 and publishes. Generated ARM JSON is not committed. Deployment tests enforce the
-Custom Script size limit; live verification covers installation behavior once
-Azure test access is configured.
+Custom Script size limit. Verify live installation behavior manually; repository
+automation does not connect to Azure or manage cloud resources.
 
 Validate `createUiDefinition.json` against its published CreateUiDefinition schema
 and check that `parameters.outputs` maps exactly to `azuredeploy.portal.json`'s

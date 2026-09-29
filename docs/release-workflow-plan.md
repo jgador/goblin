@@ -1,9 +1,9 @@
 # Goblin release workflow plan
 
-Status: implemented in the working tree, 2026-09-29. The [release guide](releases.md)
-documents operation and required repository setup. Live Azure verification was
-not run, at the maintainer's explicit request; the checks below describe the
-implemented workflow, not a claim of live deployment coverage.
+Status: implemented in the working tree, 2026-09-29, and updated to keep Azure
+installation manual at the maintainer's request. The [release guide](releases.md)
+documents operation and required repository setup. Repository automation does
+not authenticate to Azure, perform live installations, or manage cloud resources.
 
 ## Outcome
 
@@ -14,7 +14,7 @@ a summary such as:
 Goblin 0.1.0-preview.2
 Installer: goblinctl 0.1.3 — reused
 Deployment checks: passed
-Azure installation: passed
+Azure installation: manual
 Ready to publish
 ```
 
@@ -95,7 +95,7 @@ dispatch the source checks for automation-created commits, because pushes/PRs
 created with `GITHUB_TOKEN` do not normally trigger another workflow.
 
 Preparation that needs an installer or pin update stops with the required next
-step. It does not claim readiness or start the Azure installation check yet.
+step. It does not claim readiness.
 
 ### Review and publish
 
@@ -104,9 +104,9 @@ Goblin** behind a protected `goblin-release` environment in the same workflow ru
 
 GitHub's button for this is **Review deployments**, followed by approval of the
 environment. Explain in the run summary that this approval publishes the Goblin
-release; the Azure test has already finished. Configure a maintainer as reviewer
-and allow the initiating maintainer to approve their own release. Verify that the
-repository's GitHub plan supports the environment configuration during setup.
+release to GitHub. Azure installation remains manual. Configure a maintainer as
+reviewer and allow the initiating maintainer to approve their own release. Verify
+that the repository's GitHub plan supports the environment configuration during setup.
 
 This keeps the approval attached to the exact run and its artifacts. The
 maintainer does not copy commit hashes or artifact IDs into a second workflow.
@@ -146,8 +146,7 @@ The release record contains:
 - Installer version, source SHA, archive checksum and authenticated manifest
   identity. Its source SHA can be older than Goblin's.
 - Checksums of the Azure templates and UI definition.
-- Preparation run ID/attempt, check results, Azure test configuration, and links
-  to diagnostic evidence.
+- Preparation run ID/attempt and local deployment-check results.
 
 Keep the record and checksums permanently on the GitHub Release. Actions artifacts
 are temporary candidate storage and can expire. Expired or missing candidate
@@ -172,36 +171,21 @@ Reuse existing checks and their implementation. Consolidate duplicate runs withi
 the source CI workflow while retaining checks of the actual packaged/published
 executable at the release boundary.
 
-### Azure installation: passed
+### Azure installation: manual
 
-Add a real Azure smoke test for every prepared Goblin candidate, including when
-the installer is reused:
+Generate and validate the Azure templates and installer assets locally. The
+release workflow does not require Azure credentials or an installation report,
+and does not provision or clean up Azure resources. Remove the live installation
+job, its script, and the scheduled cleanup workflow.
 
-1. Authenticate using GitHub OIDC in a dedicated test subscription or suitably
-   isolated test scope. Use one documented region and VM configuration initially.
-2. Create resources owned by this run, deploy the generated template with a
-   disposable password, and use the pinned published installer through the normal
-   bootstrap path.
-3. Wait for the installation to complete. Azure resource provisioning success
-   alone is insufficient because installation continues in the background.
-4. Check PostgreSQL initialization and migrations, application readiness, the
-   progress-page handoff, successful login, and a small persisted application
-   operation. Verify persistence after an application restart.
-5. Collect sanitized diagnostics and delete the run's test resources. Bound the
-   run duration; include cleanup on failure and an expiry sweep for abandoned
-   resources after cancellation or runner loss.
+After publication, the maintainer deploys the selected release manually through
+the [Azure deployment guide](../deploy/azure/README.md). Publication approval
+does not initiate that deployment. Summaries and release notes describe Azure
+installation as manual and do not claim it passed an automated live check.
 
-The test owns only its dedicated resources. It does not modify existing user
-installations. Missing Azure configuration, an installation failure, or incomplete
-required verification prevents **Ready to publish**. Record cleanup failures
-explicitly and resolve them before approving the candidate.
-
-The pass describes this tested installation configuration. Existing opt-in
-PostgreSQL suites and authenticated runtime checks must report their own coverage
-and skips; an installation pass does not imply every external runtime journey was
-tested. Retain source-based application builds for this iteration, so the frozen
-source/installer/templates identify the release while upstream OS and image tags
-can still affect a later installation.
+Existing opt-in PostgreSQL suites and authenticated runtime checks report their
+own coverage and skips. The frozen source, installer, and templates identify the
+release; upstream OS and image tags can still affect a later manual installation.
 
 Apply the existing migration rule in `AGENTS.md`: the first real deployment is the
 boundary for making SQL migrations immutable. Record that boundary when the first
@@ -291,15 +275,15 @@ lifecycle and product boundaries described in the architecture plan intact.
    exact source capture, reuse/new-installer decisions, pin PR creation, the
    prepared record, and concise summaries. Make automation-created PR checks run
    explicitly. Keep installer publication deliberate.
-3. **Add the real Azure check.** Configure OIDC, test scope/region/VM, timeouts,
-   diagnostics, cleanup and expiry handling. Exercise one fresh installation and
-   one failing installation to verify readiness and cleanup behavior.
+3. **Keep Azure installation manual.** Preserve local template and installer
+   checks while removing live Azure authentication, deployment, cleanup, and
+   installation-evidence requirements from release automation.
 4. **Add gated publication.** Configure the release environment, publish the exact
    tested artifacts, and handle duplicate-version/partial-publication recovery.
 5. **Add installation defaults and promotion.** Build the static selector,
    release-specific Azure form, versioned asset delivery, and explicit
-   recommendation/rollback action. Verify the actual Azure Portal entry point as
-   well as the automated deployment path.
+   recommendation/rollback action. Check generated links and assets locally;
+   Azure Portal installation is verified manually.
 6. **Remove replaced tooling and finish the migration.** Consolidate CI, remove
    stale commands/files, replace operator docs, and update live GitHub rules only
    after their replacement checks exist. Verify actual repository permissions,
@@ -312,11 +296,14 @@ GitHub workflow orchestration thin.
 ## 7. Acceptance criteria
 
 - An application-only change can prepare a preview using the existing installer
-  and produce the agreed summary after the real Azure test passes.
+  and produce the agreed summary after the local release checks pass.
 - An installer input addition/change/deletion produces an accurate required
   release report; publishing and pinning that installer clears it without a loop.
 - A corrupt archive, incorrect provenance, missing capability, pin mismatch,
-  failed/omitted Azure check, or modified prepared artifact cannot reach publication.
+  failed/omitted deployment check, or modified prepared artifact cannot reach
+  publication.
+- Release preparation succeeds without Azure configuration or installation
+  evidence. No repository workflow authenticates to Azure or manages its resources.
 - Subsequent movement of `master` does not change a prepared or published release.
 - Preview/stable version calculation excludes goblinctl tags and rejects duplicate
   published versions. Existing matching publications can be recovered safely.
@@ -329,9 +316,9 @@ GitHub workflow orchestration thin.
 
 Verification uses focused release-decision and failure-path tests, existing
 deployment/authentication/browser tests, the required Rust checks, and `npm test`.
-Record live Azure and PostgreSQL/runtime coverage accurately. The final release
-exercise must demonstrate both the reused-installer path and the deliberate
-new-installer path.
+Record manual Azure verification and PostgreSQL/runtime coverage accurately. The
+final release exercise must demonstrate both the reused-installer path and the
+deliberate new-installer path.
 
 ## Implementation verification — 2026-09-29
 
@@ -354,5 +341,6 @@ new-installer path.
 - The existing GitHub source-check ruleset is disabled. Its desired replacement is
   `.github/goblin-ruleset.json`; activate it after merging the new checks workflow.
 - No live Azure installation or Azure Portal deployment was performed, as
-  explicitly requested. Azure test settings remain unconfigured and disabled.
+  explicitly requested. Live Azure automation was subsequently removed in favor
+  of manual installation.
   No release was published and no installation-site deployment was run.
