@@ -115,6 +115,17 @@ See [execution hosting](execution-hosting.md) for fencing and environment detail
 
 ## Boundaries and verification
 
+The Web entry point, `GoblinApplication.CreateAsync`, composes the host and maps
+feature endpoints. HTTP routes and named handlers live in
+`backend/src/Goblin.Web/Http/Endpoints/`; `Hosting/WebServices.cs` registers
+dependencies and `Hosting/CodexRecovery.cs` owns the existing runtime startup loop.
+`Http/WorkspaceMiddleware.cs` centralizes session, host/origin, repository-listener,
+proxy, and public-error handling. `Http/ApiRequest.cs` retains the JSON request
+limits, and `Http/WorkResponse.cs` retains string serialization of Work IDs.
+This first Web refactor keeps Minimal APIs, the public contracts, and application
+service ownership intact. Connection handlers still coordinate integration calls
+with request-scoped stores; Work lifecycle rules remain in Core.
+
 `Goblin.Core` has only .NET base-library dependencies. Product types must not
 reference ASP.NET, database entities, Wolverine, or runtime SDKs/protocols. The
 architecture test checks compiled dependencies and explicit project references.
