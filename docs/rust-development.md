@@ -73,7 +73,7 @@ dotslash --version
 | `just test --workspace` | Run all Rust tests with nextest |
 | `just test-doc --workspace` | Run Rust documentation tests, which nextest excludes |
 | `just release` | Build the musl CLI and create the deterministic review archive |
-| `cargo xtask release-status` | Report unreleased installer inputs against the committed pin; no release is required to merge |
+| `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
 
 `just fmt` passes `--config imports_granularity=Item` directly to rustfmt, exactly
 as Codex does. Keeping this option on the command line avoids the pinned stable
@@ -97,7 +97,7 @@ using `cargo insta accept`; the tool is installed for tests that need it.
 
 `npm test` builds the full application and runs nextest plus Rust documentation
 tests, generated-protocol checks, .NET tests, HTTP tests, and deployment tests.
-Real PostgreSQL checks remain opt-in. `.github/workflows/rust-ci.yml` runs the
+Real PostgreSQL checks remain opt-in. `.github/workflows/checks.yml` runs the
 Rust checks for pull requests and `master`; the release workflow uses the same
 toolchain/helper setup action.
 

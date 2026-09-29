@@ -15,7 +15,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+mod azure;
 mod dependencies;
+mod goblin_release;
 mod release;
 
 #[derive(Parser)]
@@ -41,46 +43,15 @@ enum Task {
         #[arg(long, default_value = ".artifacts/goblinctl")]
         output: PathBuf,
     },
-    /// Download, authenticate and pin a compatible published release.
-    PinRelease {
-        #[arg(long, default_value = release::REPOSITORY)]
-        repo: String,
-        #[arg(long)]
-        version: String,
+    /// Prepare, verify and publish immutable Goblin and installer releases.
+    Release {
+        #[command(subcommand)]
+        command: goblin_release::Task,
     },
-    /// Build a clean release in a fresh target directory, then package it.
-    ReleaseBuild {
-        #[arg(long, default_value = ".artifacts/goblinctl")]
-        output: PathBuf,
-    },
-    /// Report unreleased installer inputs without downloading or requiring a release.
-    ReleaseStatus,
-    /// Verify this source tree against the pinned published installer.
-    ReleaseCheck {
-        #[arg(long, default_value = release::REPOSITORY)]
-        repo: String,
-        #[arg(
-            long,
-            default_value = "target/x86_64-unknown-linux-musl/release/goblinctl.d"
-        )]
-        depfile: PathBuf,
-        #[arg(long, default_value = ".artifacts/goblinctl-check")]
-        artifacts: PathBuf,
-        #[arg(long, default_value = ".artifacts/goblinctl-check.json")]
-        report: PathBuf,
-    },
-    /// Validate the candidate's input coverage and capabilities without publication.
-    ReleaseCandidate {
-        #[arg(
-            long,
-            default_value = "target/x86_64-unknown-linux-musl/release/goblinctl.d"
-        )]
-        depfile: PathBuf,
-    },
-    /// Rebuild the checked-in Azure ARM templates, or verify they have no drift.
+    /// Generate Azure templates and a version-specific portal form.
     Azure {
-        #[arg(long)]
-        check: bool,
+        #[arg(long, default_value = ".artifacts/azure")]
+        output: PathBuf,
     },
     /// Normalize EF's generated C# line endings and UTF-8 BOM.
     NormalizeEf,
@@ -108,45 +79,11 @@ fn execute() -> Result<()> {
             target,
             output,
         } => package(&binary, &target, &output),
-        Task::PinRelease { repo, version } => release::pin(root, &repo, &version),
-        Task::ReleaseStatus => {
-            println!(
-                "{}",
-                release::status(root).context("Unable to determine goblinctl release status")?
-            );
-            Ok(())
+        Task::Release { command } => goblin_release::execute(root, command),
+        Task::Azure { output } => {
+            let source = files::output(Command::new("git").args(["rev-parse", "HEAD"]))?;
+            azure::generate(root, &output, "0.0.0-preview.1", source.trim())
         }
-        Task::ReleaseBuild { output } => {
-            ensure!(
-                files::output(Command::new("git").args(["status", "--porcelain"]))?
-                    .trim()
-                    .is_empty(),
-                "Commit release source before building a publishable package"
-            );
-            let target = tempfile::tempdir()?;
-            files::run(
-                Command::new("bash")
-                    .arg("scripts/build-goblinctl-release.sh")
-                    .arg(target.path()),
-            )?;
-            let binary = target
-                .path()
-                .join(release::TARGET)
-                .join("release/goblinctl");
-            release::candidate(root, &binary.with_extension("d"))?;
-            package(&binary, release::TARGET, &output)
-        }
-        Task::ReleaseCheck {
-            repo,
-            depfile,
-            artifacts,
-            report,
-        } => {
-            fs::create_dir_all(&artifacts)?;
-            release::check(root, &repo, &depfile, &artifacts, &report)
-        }
-        Task::ReleaseCandidate { depfile } => release::candidate(root, &depfile),
-        Task::Azure { check } => azure(check),
         Task::NormalizeEf => normalize(Path::new("backend/src/Goblin.Persistence/Generated")),
         Task::TestPostgres => {
             let settings =
@@ -242,37 +179,6 @@ fn verify_static_linux(bytes: &[u8]) -> Result<()> {
             u32::from_le_bytes(header.try_into()?) != 3,
             "Release binary requires a dynamic loader; build the musl target"
         );
-    }
-    Ok(())
-}
-fn azure(check: bool) -> Result<()> {
-    ensure!(
-        files::executable("bicep"),
-        "Install the standalone Bicep CLI before generating Azure templates"
-    );
-    let temp = tempfile::tempdir()?;
-    for (input, output) in [
-        ("main.bicep", "azuredeploy.json"),
-        ("portal.bicep", "azuredeploy.portal.json"),
-    ] {
-        let generated = temp.path().join(output);
-        files::run(
-            Command::new("bicep")
-                .arg("build")
-                .arg(Path::new("deploy/azure").join(input))
-                .arg("--outfile")
-                .arg(&generated),
-        )?;
-        let destination = Path::new("deploy/azure").join(output);
-        let content = fs::read(&generated)?;
-        if check {
-            ensure!(
-                fs::read(&destination).ok().as_ref() == Some(&content),
-                "Azure templates are stale; run cargo xtask azure"
-            );
-        } else {
-            fs::write(destination, content)?;
-        }
     }
     Ok(())
 }

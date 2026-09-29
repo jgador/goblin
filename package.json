@@ -21,9 +21,8 @@
     "format:typescript": "prettier --write --ignore-path .gitignore \"**/*.{ts,tsx,mts,cts}\"",
     "prestart": "npm run build",
     "start": "cargo xtask dev",
-    "pretest": "npm run dependencies:check && npm run build",
-    "test": "npm run test:rust && npm run protocol:check && npm run kubernetes:check && dotnet test backend/Goblin.slnx --no-build --nologo && node --test dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
-    "release:status": "cargo xtask release-status",
+    "pretest": "npm run dependencies:check && npm run build && npm run deploy:generate",
+    "test": "npm run test:rust && npm run test:release && npm run protocol:check && npm run kubernetes:check && dotnet test backend/Goblin.slnx --no-build --nologo && node --test dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
     "protocol:generate": "dotnet run --file backend/scripts/GenerateProtocol.cs",
     "protocol:check": "dotnet run --file backend/scripts/GenerateProtocol.cs -- --self-test --check",
     "kubernetes:generate": "dotnet run --file backend/scripts/GenerateKubernetes.cs",
@@ -45,13 +44,13 @@
     "lint:rust": "just clippy --workspace --all-targets -- -D warnings",
     "test:rust": "just test --workspace && just test-doc --workspace",
     "deploy:generate": "cargo xtask azure",
-    "deploy:check": "cargo xtask azure --check",
     "pretest:logs-ui": "npm run build",
     "test:logs-ui": "node dist/scripts/check-logs-ui.js",
     "pretest:logging": "npm run build",
     "test:logging": "bash scripts/check-logging.sh",
     "dependencies:check": "cargo xtask dependencies check --locked",
-    "dependencies:resolve": "cargo xtask dependencies resolve"
+    "dependencies:resolve": "cargo xtask dependencies resolve",
+    "test:release": "node --test scripts/release-*.test.mts"
   },
   "dependencies": {
     "@openai/codex": "0.155.1"

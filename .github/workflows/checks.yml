@@ -11,18 +11,6 @@ concurrency:
   group: goblin-checks-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  installer-status:
-    name: Installer changes pending
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/setup-rust
-      - name: Report changes since the pinned installer
-        # Pending changes return success. Invalid/missing metadata is an error.
-        shell: bash
-        run: cargo xtask release-status | tee -a "$GITHUB_STEP_SUMMARY"
   source:
     name: Source and deployment tests
     runs-on: ubuntu-24.04
@@ -32,28 +20,32 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version: '24'
           cache: npm
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
-      - name: Check source and deployment contracts
+      - name: Check formatting and Rust lints
+        run: |
+          just fmt-check
+          just clippy --workspace --all-targets -- -D warnings
+      - name: Test source and deployment contracts
         run: |
           npm ci
           npm test
-          cargo xtask azure --check
+          bash scripts/build-goblinctl-release.sh target
+          cargo xtask release check-installer
           npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/setup.spec.ts
+          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
+          git diff --exit-code
   gate:
     name: goblin-checks
-    needs: [installer-status, source]
+    needs: source
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require completed checks
-        env:
-          STATUS: ${{ needs.installer-status.result }}
-          SOURCE: ${{ needs.source.result }}
-        run: '[[ "$STATUS" == success && "$SOURCE" == success ]]'
+      - env:
+          RESULT: ${{ needs.source.result }}
+        run: '[[ "$RESULT" == success ]]'

@@ -108,24 +108,20 @@ fn read_lock(root: &Path) -> Result<Lock> {
     )
     .context("Invalid dependency lock")
 }
-fn pin(root: &Path, catalog: &Catalog) -> Result<Value> {
-    let pin = files::json(&root.join("deploy/goblinctl-release.json"))?;
+pub fn installer(root: &Path) -> Result<super::release::Release> {
+    let lock = read_lock(root)?;
+    ensure!(lock.schema == 2, "Unsupported dependency lock schema");
     ensure!(
-        pin["version"] == catalog.goblinctl.version,
-        "Catalog goblinctl version differs from the authenticated release pin; use cargo xtask pin-release"
+        lock.goblinctl["repository"] == super::release::REPOSITORY,
+        "Invalid installer repository"
     );
-    ensure!(
-        pin["target"] == super::release::TARGET,
-        "Unsupported goblinctl platform"
-    );
-    Ok(serde_json::json!({
-        "repository": super::release::REPOSITORY,
-        "version": pin["version"], "sha256": pin["sha256"], "target": pin["target"]
-    }))
+    let release = serde_json::from_value(lock.goblinctl["release"].clone())?;
+    super::release::validate(&release)?;
+    Ok(release)
 }
-fn verify_lock(root: &Path, catalog: &Catalog, lock: &Lock) -> Result<()> {
+fn verify_lock(_root: &Path, catalog: &Catalog, lock: &Lock) -> Result<()> {
     ensure!(
-        lock.schema == 1 && lock.catalog_sha256 == digest(&serde_json::to_vec(catalog)?),
+        lock.schema == 2 && lock.catalog_sha256 == digest(&serde_json::to_vec(catalog)?),
         "Dependency catalog changed; run cargo xtask dependencies resolve"
     );
     ensure!(
@@ -133,9 +129,11 @@ fn verify_lock(root: &Path, catalog: &Catalog, lock: &Lock) -> Result<()> {
         "Dependency lock must target {PLATFORM}; run cargo xtask dependencies resolve"
     );
     ensure!(
-        lock.goblinctl == pin(root, catalog)?,
-        "goblinctl lock differs from release pin"
+        lock.goblinctl["repository"] == super::release::REPOSITORY
+            && lock.goblinctl["release"]["version"] == catalog.goblinctl.version,
+        "Installer selection differs from lock; use cargo xtask release pin-installer"
     );
+    super::release::validate(&serde_json::from_value(lock.goblinctl["release"].clone())?)?;
     ensure!(
         lock.images.len() == catalog.images.len(),
         "Image lock is incomplete"
@@ -261,10 +259,10 @@ fn resolve(root: &Path, resolution: Resolution) -> Result<()> {
         Lock::default()
     };
     let mut lock = Lock {
-        schema: 1,
+        schema: 2,
         catalog_sha256: digest(&serde_json::to_vec(&catalog)?),
         platform: PLATFORM.into(),
-        goblinctl: pin(root, &catalog)?,
+        goblinctl: previous.goblinctl.clone(),
         ..Lock::default()
     };
     for (id, image) in &catalog.images {
@@ -472,14 +470,15 @@ fn outputs(root: &Path, previous: &Lock, lock: &Lock) -> Result<BTreeMap<String,
     Ok(outputs)
 }
 /// Pin automation updates only release-derived data; it never refreshes image tags.
-pub fn pin_release(root: &Path, version: &str) -> Result<()> {
+pub fn pin_release(root: &Path, release: &super::release::Release) -> Result<()> {
     let mut document: DocumentMut = fs::read_to_string(root.join(CATALOG))?.parse()?;
-    document["goblinctl"]["version"] = toml_edit::value(version);
+    document["goblinctl"]["version"] = toml_edit::value(&release.version);
     fs::write(root.join(CATALOG), document.to_string())?;
     let catalog = read_catalog(root)?;
     let mut lock = read_lock(root)?;
     lock.catalog_sha256 = digest(&serde_json::to_vec(&catalog)?);
-    lock.goblinctl = pin(root, &catalog)?;
+    lock.goblinctl =
+        serde_json::json!({"repository": super::release::REPOSITORY, "release": release});
     verify_lock(root, &catalog, &lock)?;
     fs::write(root.join(LOCK), json_bytes(&lock)?)?;
     Ok(())
@@ -500,13 +499,7 @@ mod tests {
         for name in ["deploy/auth", "deploy/postgres", "deploy/azure/app"] {
             paths.extend(walk(&source.join(name)).unwrap());
         }
-        for name in [
-            CATALOG,
-            LOCK,
-            "deploy/goblinctl-release.json",
-            "Dockerfile",
-            "scripts/check-logging.sh",
-        ] {
+        for name in [CATALOG, LOCK, "Dockerfile", "scripts/check-logging.sh"] {
             paths.push(source.join(name));
         }
         for path in paths {
@@ -616,18 +609,13 @@ mod tests {
         let temp = fixture();
         let root = temp.path();
         let before = read_lock(root).unwrap();
-        let mut release = files::json(&root.join("deploy/goblinctl-release.json")).unwrap();
-        release["version"] = "0.1.2".into();
-        fs::write(
-            root.join("deploy/goblinctl-release.json"),
-            json_bytes(&release).unwrap(),
-        )
-        .unwrap();
-        pin_release(root, "0.1.2").unwrap();
+        let mut release = installer(root).unwrap();
+        release.version = "0.1.2".into();
+        pin_release(root, &release).unwrap();
         let catalog = read_catalog(root).unwrap();
         let lock = read_lock(root).unwrap();
         assert_eq!(catalog.goblinctl.version, "0.1.2");
-        assert_eq!(lock.goblinctl["version"], "0.1.2");
+        assert_eq!(lock.goblinctl["release"]["version"], "0.1.2");
         assert_eq!(before.images, lock.images);
         verify_lock(root, &catalog, &lock).unwrap();
     }

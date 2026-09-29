@@ -19,7 +19,7 @@ original artwork in [`assets/`](assets/). See the
 
 Deploy Goblin to your own Linux VM in Azure:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2Fazuredeploy.portal.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgador%2Fgoblin%2Fmaster%2Fdeploy%2Fazure%2FcreateUiDefinition.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://jgador.github.io/goblin/)
 
 Deployment support for Google Cloud Platform, AWS, and other providers will follow later.
 
@@ -27,11 +27,10 @@ The [Azure deployment guide](deploy/azure/README.md) includes an ARM template wi
 customer-specific names, optional resource-name overrides, a static public IP,
 an Azure DNS hostname, single-node Kubernetes, cert-manager, and the Agent Sandbox controller.
 The guided installer uses Azure's native custom-template flow, with configuration
-and the intended SSH-key download inside Azure Portal. Select a full Goblin commit
-SHA verified with the template's pinned installer; development branches may contain
-unreleased installer changes. See [release and deployment verification](docs/goblinctl-releases.md).
-The new key-generation
-flow is awaiting live portal verification.
+and SSH-key download inside Azure Portal. Choose **Goblin version** on the
+installation page; the recommended release is selected by default. Azure opens
+with the matching source and installer already resolved. See the
+[release guide](docs/releases.md).
 
 If a downloaded SSH key fails on Windows with `Load key ...: Permission denied`
 or a warning that permissions are too open, see
