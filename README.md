@@ -27,7 +27,10 @@ The [Azure deployment guide](deploy/azure/README.md) includes an ARM template wi
 customer-specific names, optional resource-name overrides, a static public IP,
 an Azure DNS hostname, single-node Kubernetes, cert-manager, and the Agent Sandbox controller.
 The guided installer uses Azure's native custom-template flow, with configuration
-and the intended SSH-key download inside Azure Portal. The new key-generation
+and the intended SSH-key download inside Azure Portal. Select a full Goblin commit
+SHA verified with the template's pinned installer; development branches may contain
+unreleased installer changes. See [release and deployment verification](docs/goblinctl-releases.md).
+The new key-generation
 flow is awaiting live portal verification.
 
 If a downloaded SSH key fails on Windows with `Load key ...: Permission denied`

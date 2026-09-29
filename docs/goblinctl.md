@@ -140,26 +140,23 @@ host, database exports default to `/var/lib/goblin/config`.
 
 ## Release order
 
-Goblin must pin a compatible **published** installer before merging to `master`.
-The [release automation guide](goblinctl-release-automation.md) describes the
-required check, companion PRs, publication approval, and initial repository setup.
+Use `cargo xtask release-status` to see changes since the pinned installer.
+Pending changes are advisory and may merge after source tests pass. The
+[release guide](goblinctl-releases.md) covers manual publication, deployment
+verification, and the one-time required-check migration.
 
-1. The dependency check opens a companion release PR against the Goblin feature
-   branch when shipping installer inputs or required capabilities differ.
-2. Review the installer changes and proposed Cargo version. Dispatch
-   `.github/workflows/goblinctl-release.yml` from `master` with the companion PR
-   number and its exact reviewed head SHA. Candidate tests run independently of
-   the already-published dependency check, avoiding a circular dependency.
-3. Approve the `goblinctl-release` environment after the candidate tests pass.
-   The workflow builds from clean source in a fresh target directory, publishes
-   `goblinctl-vMAJOR.MINOR.PATCH`, and attests both archive and dependency metadata.
-   Existing tags/releases are never overwritten; pushing a tag does not publish.
-4. The pin workflow downloads and verifies those published artifacts, updates the
-   companion PR's pin, deployment dependency catalog/lock, and ARM templates, and explicitly dispatches compatibility
-   checks. Merge the companion into the feature branch, then merge the Goblin PR
-   once `goblinctl-release-ready` passes on its proposed merge result.
+1. Review installer changes and choose the Cargo workspace version. Commit its
+   lockfile update in a normal PR and merge it into `master`.
+2. Dispatch `.github/workflows/goblinctl-release.yml` from `master` with the exact
+   merged commit's `sha`. Source and packaged-binary tests run before the existing
+   `goblinctl-release` environment approval.
+3. Approve publication of the tested archive and dependency metadata. The workflow
+   attests both files and creates `goblinctl-vMAJOR.MINOR.PATCH`; it does not edit
+   branches. Existing tags/releases are never overwritten.
+4. Explicitly pin the published release and commit the generated files through
+   a normal PR before deploying Goblin changes that require it.
 
-To repair a pin locally after publication:
+To update the pin after publication:
 
 ```bash
 cargo xtask pin-release --repo jgador/goblin --version MAJOR.MINOR.PATCH

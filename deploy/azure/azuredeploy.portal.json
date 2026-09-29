@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.47.16.16243",
-      "templateHash": "8712913191077397700"
+      "templateHash": "11117302431819681049"
     }
   },
   "parameters": {
@@ -54,11 +54,10 @@
     },
     "goblinSourceRef": {
       "type": "string",
-      "defaultValue": "master",
-      "minLength": 1,
-      "maxLength": 128,
+      "minLength": 40,
+      "maxLength": 40,
       "metadata": {
-        "description": "Goblin branch, tag, or commit to build from github.com/jgador/goblin. Use a commit SHA for repeatable installations; master follows the current application."
+        "description": "Full 40-character Goblin commit SHA verified with the installer pinned by this template. Development branches may contain unreleased installer changes; use the deployment-readiness workflow before deployment."
       }
     },
     "adminUsername": {

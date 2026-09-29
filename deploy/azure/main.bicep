@@ -20,10 +20,10 @@ param location string = deployment().location
 @allowed(['dev', 'test', 'staging', 'prod'])
 param environment string = 'prod'
 
-@description('Goblin branch, tag, or commit to build from github.com/jgador/goblin. Use a commit SHA for repeatable installations; master follows the current application.')
-@minLength(1)
-@maxLength(128)
-param goblinSourceRef string = 'master'
+@description('Full 40-character Goblin commit SHA verified with the installer pinned by this template. Development branches may contain unreleased installer changes; use the deployment-readiness workflow before deployment.')
+@minLength(40)
+@maxLength(40)
+param goblinSourceRef string
 
 @description('Linux administrator username.')
 param adminUsername string = 'goblinadmin'
