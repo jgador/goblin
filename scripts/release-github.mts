@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../config/environment.mts";
 // GitHub orchestration; Rust owns candidate selection and release verification.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -83,8 +84,8 @@ function api(route: string, method = "GET", body?: unknown): any {
 }
 function summary(text: string) {
     console.log(text);
-    if (process.env.GITHUB_STEP_SUMMARY)
-        appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`);
+    const summaryPath = process.env[Env.GITHUB_STEP_SUMMARY.name];
+    if (summaryPath) appendFileSync(summaryPath, `${text}\n`);
 }
 function verify(directory: string) {
     run("cargo", ["xtask", "release", "verify", "--directory", directory]);
@@ -205,10 +206,10 @@ function pinPr(version: string) {
 function publish(directory: string) {
     verify(directory);
     const record = json(join(directory, "release.json"));
-    assert.equal(record.sourceRevision, process.env.RELEASE_SOURCE);
-    assert.equal(record.runId, process.env.GITHUB_RUN_ID);
+    assert.equal(record.sourceRevision, process.env[Env.RELEASE_SOURCE.name]);
+    assert.equal(record.runId, process.env[Env.GITHUB_RUN_ID.name]);
     // Publish may be retried; the expected preparation attempt is a job output.
-    assert.equal(record.runAttempt, process.env.PREPARED_ATTEMPT);
+    assert.equal(record.runAttempt, process.env[Env.PREPARED_ATTEMPT.name]);
     const tag = `goblin-v${validVersion(record.version)}`;
     publishAssets(
         directory,
@@ -225,7 +226,7 @@ function publishInstaller(directory: string) {
     const archive = "goblinctl-x86_64-unknown-linux-musl.tar.gz";
     assert.equal(record.schemaVersion, 1);
     assert.match(record.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
-    assert.equal(record.sourceRevision, process.env.RELEASE_SOURCE);
+    assert.equal(record.sourceRevision, process.env[Env.RELEASE_SOURCE.name]);
     assert.equal(record.sourceDirty, false);
     assert.equal(record.target, "x86_64-unknown-linux-musl");
     assert.equal(record.sha256, sha(join(directory, archive)));
@@ -382,7 +383,11 @@ function site(version: string, recommendation: string) {
             run("git", ["worktree", "add", "--detach", path, "HEAD"]);
             run(
                 "git",
-                ["checkout", "--orphan", `pages-${process.env.GITHUB_RUN_ID}`],
+                [
+                    "checkout",
+                    "--orphan",
+                    `pages-${process.env[Env.GITHUB_RUN_ID.name]}`,
+                ],
                 path,
             );
             run("git", ["rm", "-rf", "."], path);
@@ -489,7 +494,7 @@ async function checkSite(version: string, recommendation: string) {
 }
 async function main() {
     assert.equal(
-        process.env.GITHUB_REPOSITORY,
+        process.env[Env.GITHUB_REPOSITORY.name],
         repo,
         "Release operations run in the Goblin repository",
     );

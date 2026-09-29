@@ -17,6 +17,10 @@ tests live in [`tests/`](tests/), deployment files in [`deploy/`](deploy/), and
 original artwork in [`assets/`](assets/). See the
 [repository layout](docs/repository-layout.md) for ownership and build commands.
 
+The [environment variable guide](docs/environment-variables.md) points to the
+C#, Rust, and TypeScript definition catalogs and explains configuration boundaries,
+shared variables, and how to add new settings.
+
 Deploy Goblin to your own Linux VM in Azure:
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://jgador.github.io/goblin/)

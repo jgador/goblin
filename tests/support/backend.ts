@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { pbkdf2Sync, randomBytes } from "node:crypto";
@@ -49,10 +50,11 @@ export async function startBackend(options: BackendOptions) {
             stdio: ["pipe", "pipe", "pipe"],
             env: {
                 ...process.env,
-                ...(options.enableWork && process.env.GOBLIN_TEST_POSTGRES_APP
+                ...(options.enableWork &&
+                process.env[Env.GOBLIN_TEST_POSTGRES_APP.name]
                     ? {
-                          ConnectionStrings__Goblin:
-                              process.env.GOBLIN_TEST_POSTGRES_APP,
+                          [Env.ConnectionStrings__Goblin.name]:
+                              process.env[Env.GOBLIN_TEST_POSTGRES_APP.name],
                       }
                     : {}),
             },

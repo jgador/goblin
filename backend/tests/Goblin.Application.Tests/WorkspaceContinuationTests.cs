@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -43,7 +44,7 @@ public sealed class WorkspaceContinuationTests
             var repository = new RepositoryChange("owner/repo", "Goblin", "goblin@example.test",
                 new(1, "generation", "account", "owner", 1, "main", "goblin/1/2"));
             await SandboxWorker.PrepareCheckoutAsync(root, new Dictionary<string, string>
-            { ["PATH"] = Environment.GetEnvironmentVariable("PATH")!, ["GIT_CONFIG_GLOBAL"] = "/dev/null" }, repository);
+            { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)!, [Env.GitConfigGlobal] = "/dev/null" }, repository);
             Assert.Equal("goblin/1/2", await Git("branch", "--show-current"));
             Assert.Equal(head, await Git("rev-parse", "HEAD"));
             Assert.Equal(status, await Git("status", "--porcelain"));

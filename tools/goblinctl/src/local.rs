@@ -1,6 +1,7 @@
 //! Ownership-scoped administration of the dedicated Ubuntu/WSL installation.
 use crate::assets;
 use crate::credentials;
+use crate::environment;
 use crate::files;
 use crate::install;
 use crate::setup;
@@ -315,7 +316,7 @@ impl Local {
         )?;
         let dir = self.unit("goblin-installer.service.d");
         files::directory(&dir, 0o755)?;
-        files::atomic_write(&dir.join("local-test.conf"), format!("[Service]\nEnvironment=GOBLIN_PUBLIC_ORIGIN={}\nExecStartPre=/usr/bin/install -D -m 0600 /var/lib/goblin/local-test/source.tar.gz /var/lib/goblin/install/private/work/goblin-source.tar.gz\n", origin(config)?).as_bytes(), 0o644, false)?;
+        files::atomic_write(&dir.join("local-test.conf"), format!("[Service]\nEnvironment={public_origin}={}\nExecStartPre=/usr/bin/install -D -m 0600 /var/lib/goblin/local-test/source.tar.gz /var/lib/goblin/install/private/work/goblin-source.tar.gz\n", origin(config)?, public_origin = environment::GOBLIN_PUBLIC_ORIGIN).as_bytes(), 0o644, false)?;
         Ok(script)
     }
     pub fn start(&self, port: Option<u16>) -> Result<()> {
@@ -398,10 +399,13 @@ impl Local {
             let binary = std::env::current_exe()?;
             files::input(
                 Command::new("bash")
-                    .env("GOBLIN_PASSWORD_HASH_FILE", password)
-                    .env_remove("GOBLIN_LOCAL_PASSWORD")
-                    .env("GOBLINCTL_LOCAL_BINARY", &binary)
-                    .env("GOBLINCTL_LOCAL_SHA256", install::checksum(&binary)?)
+                    .env(environment::GOBLIN_PASSWORD_HASH_FILE, password)
+                    .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
+                    .env(environment::GOBLINCTL_LOCAL_BINARY, &binary)
+                    .env(
+                        environment::GOBLINCTL_LOCAL_SHA256,
+                        install::checksum(&binary)?,
+                    )
                     .stdout(log.try_clone()?)
                     .stderr(log),
                 script
@@ -425,7 +429,7 @@ impl Local {
                 ])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
-                .env_remove("GOBLIN_LOCAL_PASSWORD")
+                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
                 .status()
                 .is_ok_and(|s| s.success())
             {
@@ -547,7 +551,7 @@ impl Local {
             if Command::new("mountpoint")
                 .arg("--quiet")
                 .arg(&kubelet)
-                .env_remove("GOBLIN_LOCAL_PASSWORD")
+                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
                 .status()?
                 .success()
             {
@@ -560,7 +564,7 @@ impl Local {
                 .args(["reset-failed", name])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
-                .env_remove("GOBLIN_LOCAL_PASSWORD")
+                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
                 .status();
             files::remove_file(&self.unit(name))?;
         }
@@ -622,7 +626,7 @@ pub fn active(unit: &str) -> bool {
         .args(["is-active", "--quiet", unit])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
-        .env_remove("GOBLIN_LOCAL_PASSWORD")
+        .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
         .status()
         .is_ok_and(|s| s.success())
 }
@@ -660,7 +664,7 @@ pub fn snapshot_source(repo: &Path, destination: &Path) -> Result<()> {
             "--exclude-standard",
             "-z",
         ])
-        .env_remove("GOBLIN_LOCAL_PASSWORD")
+        .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
         .output()?;
     ensure!(inventory.status.success(), "Cannot read source inventory");
     use std::os::unix::ffi::OsStrExt;
