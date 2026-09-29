@@ -42,12 +42,10 @@ pub enum Task {
         )]
         depfile: PathBuf,
     },
-    /// Record successful deployment tests and the matching Azure installation evidence.
+    /// Record successful deployment tests and seal the candidate for publication.
     Seal {
         #[arg(long, default_value = ".artifacts/goblin")]
         directory: PathBuf,
-        #[arg(long)]
-        azure_report: PathBuf,
     },
     /// Verify all prepared bytes and evidence before publishing or serving them.
     Verify {
@@ -173,7 +171,6 @@ pub struct Record {
     pub run_attempt: String,
     pub assets: BTreeMap<String, String>,
     pub deployment_checks: Check,
-    pub azure_installation: Check,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -181,24 +178,6 @@ pub enum Check {
     Pending,
     Passed,
     Failed,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AzureReport {
-    pub schema_version: u32,
-    pub source_revision: String,
-    pub installer_version: String,
-    pub installer_sha256: String,
-    pub template_sha256: String,
-    pub run_id: String,
-    pub run_attempt: String,
-    pub region: String,
-    pub vm_size: String,
-    pub resource_group: String,
-    pub installation: Check,
-    pub cleanup: Check,
-    pub checks: BTreeMap<String, Check>,
 }
 
 fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
@@ -264,7 +243,7 @@ fn release_tags() -> Result<Vec<String>> {
         })
         .collect::<Result<Vec<_>>>()?;
     // A failed publication can leave a tag before its draft release exists.
-    // Reserve those versions too, before paying for another Azure installation.
+    // Reserve those versions too, before preparing another candidate.
     let refs =
         files::output(Command::new("git").args(["ls-remote", "--tags", "--refs", "origin"]))?;
     for line in refs.lines() {
@@ -287,10 +266,11 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
             output,
             depfile,
         } => prepare(root, channel, version.as_deref(), &output, &depfile),
-        Task::Seal {
-            directory,
-            azure_report,
-        } => seal(&directory, &azure_report),
+        Task::Seal { directory } => seal(
+            &directory,
+            &std::env::var("GITHUB_RUN_ID")?,
+            &std::env::var("GITHUB_RUN_ATTEMPT")?,
+        ),
         Task::Verify {
             directory,
             expected_source,
@@ -445,54 +425,16 @@ fn prepare(
         run_attempt: std::env::var("GITHUB_RUN_ATTEMPT")?,
         assets,
         deployment_checks: Check::Pending,
-        azure_installation: Check::Pending,
     };
     write(&directory.join("release.json"), &record)?;
     output("outcome", "prepared")?;
     output("installer", &record.installer.version)?;
     summary(&format!(
-        "## Goblin {version}\n\nInstaller: goblinctl {} — reused\n\nCandidate assets prepared. Deployment tests and Azure installation must pass before publication.",
+        "## Goblin {version}\n\nInstaller: goblinctl {} — reused\n\nCandidate assets prepared. Deployment tests must pass before publication. Azure installation is performed manually.",
         record.installer.version
     ))
 }
 
-fn validate_report(record: &Record, report: &AzureReport) -> Result<()> {
-    ensure!(
-        report.schema_version == 1
-            && report.source_revision == record.source_revision
-            && report.installer_version == record.installer.version
-            && report.installer_sha256 == record.installer.sha256
-            && Some(&report.template_sha256) == record.assets.get("azuredeploy.portal.json")
-            && report.run_id == record.run_id
-            && report.run_attempt == record.run_attempt,
-        "Azure evidence identifies another candidate"
-    );
-    ensure!(
-        report.installation == Check::Passed && report.cleanup == Check::Passed,
-        "Azure installation and cleanup must pass"
-    );
-    ensure!(
-        !report.region.is_empty()
-            && !report.vm_size.is_empty()
-            && report.resource_group.starts_with("goblin-release-"),
-        "Azure test configuration is missing"
-    );
-    for name in [
-        "postgres",
-        "migrations",
-        "ready",
-        "handoff",
-        "login",
-        "persistence",
-        "restart",
-    ] {
-        ensure!(
-            report.checks.get(name) == Some(&Check::Passed),
-            "Azure check did not pass: {name}"
-        );
-    }
-    Ok(())
-}
 fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
     ensure!(
         record.schema_version == 1,
@@ -520,7 +462,7 @@ fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
     release::validate(&record.installer)?;
     for name in record.assets.keys() {
         ensure!(
-            azure::ASSETS.contains(&name.as_str()) || name == "azure-result.json",
+            azure::ASSETS.contains(&name.as_str()),
             "Unexpected release asset"
         );
     }
@@ -556,23 +498,14 @@ fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
     );
     Ok(())
 }
-fn seal(directory: &Path, azure_report: &Path) -> Result<()> {
+fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<()> {
     let mut record: Record = read(&directory.join("release.json"))?;
     validate_assets(directory, &record)?;
     ensure!(
-        std::env::var("GITHUB_RUN_ID")? == record.run_id
-            && std::env::var("GITHUB_RUN_ATTEMPT")? == record.run_attempt,
+        run_id == record.run_id && run_attempt == record.run_attempt,
         "Seal must run in the preparation attempt"
     );
-    let report: AzureReport = read(azure_report)?;
-    validate_report(&record, &report)?;
-    write(&directory.join("azure-result.json"), &report)?;
-    record.assets.insert(
-        "azure-result.json".into(),
-        install::checksum(&directory.join("azure-result.json"))?,
-    );
     record.deployment_checks = Check::Passed;
-    record.azure_installation = Check::Passed;
     write(&directory.join("release.json"), &record)?;
     let mut checksums = record.assets.clone();
     checksums.insert(
@@ -588,7 +521,7 @@ fn seal(directory: &Path, azure_report: &Path) -> Result<()> {
     )?;
     verify(directory)?;
     summary(&format!(
-        "```text\nGoblin {}\nInstaller: goblinctl {} — reused\nDeployment checks: passed\nAzure installation: passed\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin**. Source: `{}`.",
+        "```text\nGoblin {}\nInstaller: goblinctl {} — reused\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin**. Source: `{}`.",
         record.version, record.installer.version, record.source_revision
     ))
 }
@@ -596,16 +529,9 @@ pub fn verify(directory: &Path) -> Result<Record> {
     let record: Record = read(&directory.join("release.json"))?;
     validate_assets(directory, &record)?;
     ensure!(
-        record.deployment_checks == Check::Passed && record.azure_installation == Check::Passed,
+        record.deployment_checks == Check::Passed,
         "Candidate has not passed all required checks"
     );
-    ensure!(
-        record.assets.len() == 4
-            && record.assets.get("azure-result.json")
-                == Some(&install::checksum(&directory.join("azure-result.json"))?),
-        "Azure evidence missing or modified"
-    );
-    validate_report(&record, &read(&directory.join("azure-result.json"))?)?;
     let mut checksums = record.assets.clone();
     checksums.insert(
         "release.json".into(),
@@ -660,7 +586,7 @@ mod tests {
             assert!(Version::parse(text).is_err(), "{text}");
         }
     }
-    fn record_fixture() -> (tempfile::TempDir, Record, AzureReport) {
+    fn record_fixture() -> (tempfile::TempDir, Record) {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
@@ -677,7 +603,6 @@ mod tests {
             run_attempt: "1".into(),
             assets: BTreeMap::new(),
             deployment_checks: Check::Passed,
-            azure_installation: Check::Passed,
         };
         for name in &azure::ASSETS[..2] {
             write(&directory.path().join(name), &json!({
@@ -694,41 +619,10 @@ mod tests {
                 install::checksum(&directory.path().join(name)).unwrap(),
             );
         }
-        let report = AzureReport {
-            schema_version: 1,
-            source_revision: record.source_revision.clone(),
-            installer_version: record.installer.version.clone(),
-            installer_sha256: record.installer.sha256.clone(),
-            template_sha256: record.assets["azuredeploy.portal.json"].clone(),
-            run_id: record.run_id.clone(),
-            run_attempt: record.run_attempt.clone(),
-            region: "southeastasia".into(),
-            vm_size: "Standard_D4s_v5".into(),
-            resource_group: "goblin-release-123-1".into(),
-            installation: Check::Passed,
-            cleanup: Check::Passed,
-            checks: [
-                "postgres",
-                "migrations",
-                "ready",
-                "handoff",
-                "login",
-                "persistence",
-                "restart",
-            ]
-            .into_iter()
-            .map(|name| (name.into(), Check::Passed))
-            .collect(),
-        };
-        save_fixture(directory.path(), &mut record, &report);
-        (directory, record, report)
+        save_fixture(directory.path(), &record);
+        (directory, record)
     }
-    fn save_fixture(directory: &Path, record: &mut Record, report: &AzureReport) {
-        write(&directory.join("azure-result.json"), report).unwrap();
-        record.assets.insert(
-            "azure-result.json".into(),
-            install::checksum(&directory.join("azure-result.json")).unwrap(),
-        );
+    fn save_fixture(directory: &Path, record: &Record) {
         write(&directory.join("release.json"), record).unwrap();
         let mut sums = record.assets.clone();
         sums.insert(
@@ -744,26 +638,16 @@ mod tests {
         .unwrap();
     }
     #[test]
-    fn publication_requires_unchanged_assets_and_complete_matching_evidence() {
-        let (directory, mut record, mut report) = record_fixture();
+    fn publication_requires_unchanged_assets_and_passed_deployment_checks() {
+        let (directory, mut record) = record_fixture();
         verify(directory.path()).unwrap();
-        report.cleanup = Check::Failed;
-        save_fixture(directory.path(), &mut record, &report);
-        assert!(verify(directory.path()).is_err());
-        report.cleanup = Check::Passed;
-        report.run_attempt = "2".into();
-        save_fixture(directory.path(), &mut record, &report);
-        assert!(verify(directory.path()).is_err());
-        report.run_attempt = "1".into();
-        report.checks.remove("persistence");
-        save_fixture(directory.path(), &mut record, &report);
-        assert!(verify(directory.path()).is_err());
-        report.checks.insert("persistence".into(), Check::Passed);
-        record.deployment_checks = Check::Pending;
-        save_fixture(directory.path(), &mut record, &report);
-        assert!(verify(directory.path()).is_err());
+        for check in [Check::Pending, Check::Failed] {
+            record.deployment_checks = check;
+            save_fixture(directory.path(), &record);
+            assert!(verify(directory.path()).is_err());
+        }
         record.deployment_checks = Check::Passed;
-        save_fixture(directory.path(), &mut record, &report);
+        save_fixture(directory.path(), &record);
         verify(directory.path()).unwrap();
         fs::write(
             directory.path().join("azuredeploy.json"),
@@ -773,8 +657,39 @@ mod tests {
         assert!(verify(directory.path()).is_err());
     }
     #[test]
+    fn seal_requires_the_preparation_attempt_without_azure_evidence() {
+        let (directory, mut record) = record_fixture();
+        record.deployment_checks = Check::Pending;
+        save_fixture(directory.path(), &record);
+        assert!(seal(directory.path(), "124", "1").is_err());
+        assert!(seal(directory.path(), "123", "2").is_err());
+        assert!(verify(directory.path()).is_err());
+        seal(directory.path(), "123", "1").unwrap();
+        let verified = verify(directory.path()).unwrap();
+        assert_eq!(verified.deployment_checks, Check::Passed);
+        assert_eq!(verified.assets.len(), azure::ASSETS.len());
+    }
+    #[test]
+    fn publication_rejects_missing_or_unexpected_assets_and_changed_checksums() {
+        let (directory, mut record) = record_fixture();
+        let hash = record.assets.remove("azuredeploy.json").unwrap();
+        save_fixture(directory.path(), &record);
+        assert!(verify(directory.path()).is_err());
+        record.assets.insert("azuredeploy.json".into(), hash);
+        record
+            .assets
+            .insert("unexpected.json".into(), "a".repeat(64));
+        save_fixture(directory.path(), &record);
+        assert!(verify(directory.path()).is_err());
+        record.assets.remove("unexpected.json");
+        save_fixture(directory.path(), &record);
+        verify(directory.path()).unwrap();
+        fs::write(directory.path().join("SHA256SUMS"), "changed").unwrap();
+        assert!(verify(directory.path()).is_err());
+    }
+    #[test]
     fn even_rehashed_assets_must_select_the_recorded_source() {
-        let (directory, mut record, report) = record_fixture();
+        let (directory, mut record) = record_fixture();
         let path = directory.path().join("createUiDefinition.json");
         let mut ui = files::json(&path).unwrap();
         ui["parameters"]["basics"][0]["constraints"]["allowedValues"][0]["value"] =
@@ -784,7 +699,7 @@ mod tests {
             "createUiDefinition.json".into(),
             install::checksum(&path).unwrap(),
         );
-        save_fixture(directory.path(), &mut record, &report);
+        save_fixture(directory.path(), &record);
         assert!(verify(directory.path()).is_err());
     }
 }

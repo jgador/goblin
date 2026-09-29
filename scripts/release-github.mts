@@ -21,7 +21,6 @@ export const releaseFiles = [
     "azuredeploy.json",
     "azuredeploy.portal.json",
     "createUiDefinition.json",
-    "azure-result.json",
     "release.json",
     "SHA256SUMS",
 ];
@@ -217,7 +216,7 @@ function publish(directory: string) {
         record.sourceRevision,
         record.channel === "preview",
         `Goblin ${record.version}`,
-        `Installer: goblinctl ${record.installer.version}\n\nSource: ${record.sourceRevision}\n\nDeployment checks and Azure installation passed.\n\n[Install Goblin ${record.version}](${siteUrl}/?version=${record.version})\n\n[Verification run](https://github.com/${repo}/actions/runs/${record.runId})`,
+        `Installer: goblinctl ${record.installer.version}\n\nSource: ${record.sourceRevision}\n\nDeployment checks passed. Azure installation is performed manually and was not verified by this workflow.\n\n[Install Goblin ${record.version}](${siteUrl}/?version=${record.version})\n\n[Verification run](https://github.com/${repo}/actions/runs/${record.runId})`,
         releaseFiles,
     );
 }
