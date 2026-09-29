@@ -22,7 +22,7 @@ param location string = resourceGroup().location
 @allowed(['dev', 'test', 'staging', 'prod'])
 param environment string = 'prod'
 
-@description('Full 40-character Goblin commit SHA verified with the installer pinned by this template. Development branches may contain unreleased installer changes; use the deployment-readiness workflow before deployment.')
+@description('Exact Goblin source revision. Release preparation fixes this to the selected Goblin version.')
 @minLength(40)
 @maxLength(40)
 param goblinSourceRef string

@@ -5,7 +5,7 @@ release Goblin uses and the separate service images it deploys:
 
 ```toml
 [goblinctl]
-version = "0.1.1"
+version = "0.1.3"
 
 [images]
 postgres = "postgres:16.15-bookworm"
@@ -54,7 +54,8 @@ refresh all tags deliberately. It does not pull image layers or run package
 managers. Commit the updated files together.
 
 `dependencies.lock.json` records resolved image digests and the selected goblinctl
-artifact. It declares `"platform": "linux/amd64"` once for all images. Each image
+release manifest under `goblinctl.release`, including its source, checksum, and
+shipping-input inventory. It declares `"platform": "linux/amd64"` once for all images. Each image
 keeps one digest: the immutable image index (or the manifest for a single-platform
 image). Resolution verifies that every image supports that platform; hashes for
 other architectures are not stored. For references using tags only, the digest is
@@ -67,12 +68,11 @@ subcommand verifies committed files without downloading or changing them.
 For a new published goblinctl release, run the authenticated pin commands:
 
 ```bash
-cargo xtask pin-release --version X.Y.Z
-cargo xtask azure
+cargo xtask release pin-installer --version X.Y.Z
 ```
 
-This updates the release selection, dependency lock, release pin, and ARM templates
-together. It does not refresh Docker image tags.
+This updates the release selection and dependency lock together. Azure assets are
+generated during release preparation. It does not refresh Docker image tags.
 
 ## Source files and compatibility
 
@@ -96,7 +96,7 @@ that same type. The authenticated release check invokes the published installer'
 actual validator, and deployment tests check installation behavior.
 
 The release fingerprint includes installer code, scripts, and embedded PostgreSQL
-manifests. `cargo xtask release-status` reports changes since the pinned release.
+manifests. **Prepare Goblin release** reports changes since the pinned release.
 A new binary is needed to distribute installer changes, but those changes can
 merge and be batched before a maintainer chooses to release.
 Changing an application image such as Headlamp does not change installer inputs.
@@ -104,7 +104,7 @@ Image digests establish artifact identity; behavioral compatibility still requir
 integration tests. Images inside upstream k3s, cert-manager, and Agent Sandbox
 releases remain managed by those upstream releases.
 
-CI runs `dependencies check --locked`, source tests, and the advisory release-status
-report. It does not publish, bump versions, create PRs, or update release pins.
-The [release guide](goblinctl-releases.md) describes manual publication and explicit
-deployment verification. Commit all five outputs from the pin commands together.
+CI runs `dependencies check --locked` and source tests. **Prepare Goblin release**
+checks the published installer and can open a reviewed pin PR. **Publish goblinctl**
+is an explicit maintainer action. The [release guide](releases.md) describes the
+complete routine and installation verification.

@@ -1332,7 +1332,7 @@ test("password provisioning accepts short passwords and never logs rejected pass
 
 test("Azure templates keep the password protected and the portal requires confirmation", async () => {
     const ui = JSON.parse(
-        await readFile("deploy/azure/createUiDefinition.json", "utf8"),
+        await readFile(".artifacts/azure/createUiDefinition.json", "utf8"),
     );
     const field = ui.parameters.basics.find(
         (item: { name: string }) => item.name === "goblinPassword",
@@ -1353,11 +1353,10 @@ test("Azure templates keep the password protected and the portal requires confir
         assert.ok(!policy.test(invalid));
     for (const name of ["azuredeploy.json", "azuredeploy.portal.json"]) {
         const template = JSON.parse(
-            await readFile(`deploy/azure/${name}`, "utf8"),
+            await readFile(`.artifacts/azure/${name}`, "utf8"),
         );
-        const pin = JSON.parse(
-            await readFile("deploy/goblinctl-release.json", "utf8"),
-        );
+        const pin = JSON.parse(await readFile("dependencies.lock.json", "utf8"))
+            .goblinctl.release;
         assert.ok(
             JSON.stringify(template).includes(pin.sha256),
             "ARM must pin the native archive checksum",
@@ -1399,7 +1398,13 @@ test("Azure templates keep the password protected and the portal requires confir
         );
         assert.ok(!JSON.stringify(template.outputs).includes("goblinPassword"));
         assert.ok(!JSON.stringify(nested.outputs).includes("goblinPassword"));
-        assert.ok(!("defaultValue" in template.parameters.goblinSourceRef));
+        assert.match(
+            template.parameters.goblinSourceRef.defaultValue,
+            /^[0-9a-f]{40}$/,
+        );
+        assert.deepEqual(template.parameters.goblinSourceRef.allowedValues, [
+            template.parameters.goblinSourceRef.defaultValue,
+        ]);
         assert.equal(template.parameters.goblinSourceRef.minLength, 40);
         assert.equal(template.parameters.goblinSourceRef.maxLength, 40);
         assert.ok(template.outputs.goblinUrl.value.includes("http://"));
@@ -1419,25 +1424,25 @@ test("Azure templates keep the password protected and the portal requires confir
     }
 });
 
-test("Azure requires an explicit verified application revision", async () => {
+test("Azure selects a Goblin version bound to the matching source", async () => {
     const ui = JSON.parse(
-        await readFile("deploy/azure/createUiDefinition.json", "utf8"),
+        await readFile(".artifacts/azure/createUiDefinition.json", "utf8"),
+    );
+    const template = JSON.parse(
+        await readFile(".artifacts/azure/azuredeploy.portal.json", "utf8"),
     );
     const field = ui.parameters.basics.find(
         (item: { name: string }) => item.name === "goblinSourceRef",
     );
-    assert.equal(field.constraints.required, true);
-    assert.ok(!("defaultValue" in field));
-    const policy = new RegExp(field.constraints.regex);
-    assert.ok(policy.test("a".repeat(40)));
-    for (const invalid of [
-        "",
-        "master",
-        "goblinctl-v0.1.3",
-        "abc1234",
-        "g".repeat(40),
-    ])
-        assert.ok(!policy.test(invalid));
+    assert.equal(field.type, "Microsoft.Common.DropDown");
+    assert.equal(field.label, "Goblin version");
+    assert.equal(field.defaultValue, template.metadata.goblin.version);
+    assert.deepEqual(field.constraints.allowedValues, [
+        {
+            label: template.metadata.goblin.version,
+            value: template.parameters.goblinSourceRef.defaultValue,
+        },
+    ]);
     assert.equal(
         ui.parameters.outputs.goblinSourceRef,
         "[basics('goblinSourceRef')]",

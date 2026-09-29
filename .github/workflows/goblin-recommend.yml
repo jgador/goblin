@@ -1,0 +1,24 @@
+name: Recommend Goblin release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published Goblin version to recommend or redeliver
+        type: string
+        required: true
+      recommend:
+        description: Make this version the installation default (uncheck to repair delivery only)
+        type: boolean
+        default: true
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  attestations: read
+jobs:
+  site:
+    if: github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/goblin-install-site.yml
+    with:
+      version: ${{ inputs.version }}
+      recommend: ${{ inputs.recommend }}
