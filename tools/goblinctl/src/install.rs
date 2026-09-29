@@ -1,4 +1,5 @@
 use crate::assets;
+use crate::environment;
 use crate::files;
 
 /// The caller stops the old worker/UI and holds installer.lock through activation.
@@ -86,7 +87,7 @@ pub fn bootstrap(hostname: &str, source_ref: &str) -> Result<()> {
     files::require_root()?;
     let binary = std::env::current_exe()?;
     let temporary_credentials = tempfile::tempdir()?;
-    let password_path = match std::env::var_os("GOBLIN_PASSWORD_HASH_FILE") {
+    let password_path = match std::env::var_os(environment::GOBLIN_PASSWORD_HASH_FILE) {
         Some(p) => {
             let p = std::path::PathBuf::from(p);
             crate::credentials::read(&p)?;
@@ -99,10 +100,10 @@ pub fn bootstrap(hostname: &str, source_ref: &str) -> Result<()> {
     let script = render_bootstrap(hostname, source_ref, env!("CARGO_PKG_VERSION"), "local")?;
     files::input(
         Command::new("bash")
-            .env("GOBLIN_PASSWORD_HASH_FILE", password_path)
-            .env_remove("GOBLIN_LOCAL_PASSWORD")
-            .env("GOBLINCTL_LOCAL_BINARY", &binary)
-            .env("GOBLINCTL_LOCAL_SHA256", checksum(&binary)?),
+            .env(environment::GOBLIN_PASSWORD_HASH_FILE, password_path)
+            .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
+            .env(environment::GOBLINCTL_LOCAL_BINARY, &binary)
+            .env(environment::GOBLINCTL_LOCAL_SHA256, checksum(&binary)?),
         script.as_bytes(),
     )
 }

@@ -6,6 +6,7 @@ use clap::Subcommand;
 use flate2::Compression;
 use flate2::GzBuilder;
 use goblinctl::credentials;
+use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
 use sha2::Digest;
@@ -92,13 +93,13 @@ fn execute() -> Result<()> {
                 Command::new("dotnet")
                     .args(["test", "backend/tests/Goblin.Persistence.Tests"])
                     .env(
-                        "GOBLIN_TEST_POSTGRES_ADMIN",
+                        environment::GOBLIN_TEST_POSTGRES_ADMIN,
                         settings["ConnectionStrings"]["GoblinAdmin"]
                             .as_str()
                             .context("Missing administrator connection")?,
                     )
                     .env(
-                        "GOBLIN_TEST_POSTGRES_APP",
+                        environment::GOBLIN_TEST_POSTGRES_APP,
                         settings["ConnectionStrings"]["Goblin"]
                             .as_str()
                             .context("Missing application connection")?,

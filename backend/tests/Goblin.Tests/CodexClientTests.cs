@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -66,10 +67,10 @@ public sealed class CodexClientTests
         string[] calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
         Assert.Equal(["initialize", "initialized", "account/read"], calls.Select(line => JsonSerializer.Deserialize<JSONRPCNotification>(line, ProtocolJson.Options)!.Method));
         Dictionary<string, string> environment = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "environment.json")))!;
-        Assert.False(environment.ContainsKey("OPENAI_API_KEY"));
-        Assert.False(environment.ContainsKey("GOBLIN_SECRET"));
-        Assert.Equal(fixture.Workspace.Home, environment["HOME"]);
-        Assert.Equal(fixture.Workspace.CodexHome, environment["CODEX_HOME"]);
+        Assert.False(environment.ContainsKey(Env.OpenaiApiKey));
+        Assert.False(environment.ContainsKey(Env.GoblinSecret));
+        Assert.Equal(fixture.Workspace.Home, environment[Env.Home]);
+        Assert.Equal(fixture.Workspace.CodexHome, environment[Env.CodexHome]);
         string args = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "arguments.json"));
         Assert.Contains("app-server", args);
         Assert.Contains("features.multi_agent=false", args);
@@ -273,9 +274,9 @@ public sealed class CodexClientTests
                 ShutdownTimeout = TimeSpan.FromMilliseconds(150),
                 Environment = new Dictionary<string, string?>
                 {
-                    ["PATH"] = Environment.GetEnvironmentVariable("PATH"),
-                    ["OPENAI_API_KEY"] = "must-not-inherit",
-                    ["GOBLIN_SECRET"] = "must-not-inherit"
+                    [Env.Path] = Environment.GetEnvironmentVariable(Env.Path),
+                    [Env.OpenaiApiKey] = "must-not-inherit",
+                    [Env.GoblinSecret] = "must-not-inherit"
                 }
             }));
         }

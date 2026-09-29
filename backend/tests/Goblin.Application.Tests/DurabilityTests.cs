@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -31,7 +32,7 @@ public sealed class DatabaseFactAttribute : FactAttribute
 {
     public DatabaseFactAttribute()
     {
-        if (Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN") is null || Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_APP") is null)
+        if (Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin) is null || Environment.GetEnvironmentVariable(Env.GoblinTestPostgresApp) is null)
             Skip = "Set PostgreSQL test connections to exercise real durable Work.";
     }
 }
@@ -991,8 +992,8 @@ public sealed class DurabilityTests
         public IHost Host { get; private set; } = null!;
         public static async Task<Fixture> CreateAsync(IRepositoryCatalog? catalog = null)
         {
-            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
-            var app = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_APP"));
+            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
+            var app = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresApp));
             string name = "goblin_work_test_" + Guid.NewGuid().ToString("N");
             await using (var db = new NpgsqlConnection(admin.ConnectionString))
             {
@@ -1041,7 +1042,7 @@ public sealed class DurabilityTests
         public async Task RestartAsync() { await Host.StopAsync(); Host.Dispose(); await StartAsync(); }
         public async Task RejectId(string table, long id)
         {
-            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN")) { Database = _name };
+            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin)) { Database = _name };
             await using var connection = new NpgsqlConnection(admin.ConnectionString);
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand($"ALTER TABLE public.{table} ADD CONSTRAINT rejected_test_id CHECK (id <> '{id}')", connection);
@@ -1049,7 +1050,7 @@ public sealed class DurabilityTests
         }
         public async Task SetDatabaseAvailable(bool available)
         {
-            await using var admin = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
+            await using var admin = new NpgsqlConnection(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
             await admin.OpenAsync();
             await new NpgsqlCommand("ALTER DATABASE " + _name + " ALLOW_CONNECTIONS " + (available ? "true" : "false"), admin).ExecuteNonQueryAsync();
             if (!available) await CloseApplicationSessions();
@@ -1115,7 +1116,7 @@ public sealed class DurabilityTests
             // as their application role, without granting the schema owner the
             // server-wide privilege to terminate another role's backends.
             await CloseApplicationSessions();
-            await using var db = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
+            await using var db = new NpgsqlConnection(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
             await db.OpenAsync();
             await new NpgsqlCommand("DROP DATABASE " + _name + " WITH (FORCE)", db).ExecuteNonQueryAsync();
             if (Directory.Exists(_directory)) Directory.Delete(_directory, true);

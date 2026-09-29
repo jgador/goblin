@@ -44,6 +44,11 @@ Azure installation is manual. Keep repository automation free of Azure login,
 live deployment tests, resource provisioning, and cloud cleanup. Preserve the
 templates, installer assets, and offline deployment checks for manual use.
 
+For environment variables, follow [the definition catalogs and contributor
+guide](docs/environment-variables.md). Reference named definitions for reads,
+sets, removals, and forwarding; keep parsing at adapter/configuration boundaries
+and keep the Work core independent of process configuration.
+
 For Rust tooling under `tools/`, follow [the Rust development guide](docs/rust-development.md).
 Use the pinned toolchain and helper versions, `just fmt`, `just clippy -p <crate>`,
 and `just test -p <crate>`; `just test-doc --workspace` covers documentation tests.

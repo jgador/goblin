@@ -6,7 +6,7 @@ Core application. Run the commands below from the repository root.
 ```text
 backend/
   src/Goblin.Core/         Work lifecycle rules and Goblin-owned execution types
-  src/Goblin.Contracts/   Public account and runtime capability contracts
+  src/Goblin.Contracts/   Public account/runtime contracts and environment names
   src/Goblin.Application/ Durable commands, conversations, dispatch, and recovery
   src/Goblin.Execution/   Text workers and isolated repository sandboxes
   src/Goblin.Integrations.Codex/   Codex account, transport, and Work adapter
@@ -44,11 +44,15 @@ tests/
   deployment/              Azure bootstrap and installation tests
   support/                 Backend launcher and browser test server
   fixtures/                Fake Codex process used by .NET and application tests
+config/environment.mts     Documented environment definitions for Node tooling
 deploy/                    Azure infrastructure and Kubernetes manifests
 assets/branding/           Original artwork, exports, and packaged fonts
 docs/                      Setup, architecture, and development documentation
 scripts/                   Repository checks and test-tool build helpers
 ```
+
+See [environment variables](environment-variables.md) for the C#, Rust, and
+TypeScript catalogs, shared semantics, and contributor guidance.
 
 The root `package.json` coordinates builds and application tests and pins the
 Codex runtime distribution. npm workspaces use one root `package-lock.json`;

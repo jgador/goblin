@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Threading.Tasks;
 using Goblin.Integrations.Codex;
@@ -23,7 +24,7 @@ public static class GoblinApplication
             ContentRootPath = AppContext.BaseDirectory
         });
         WebServices.Configure(builder, options, workspace, runtimeOptions);
-        bool repositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"]);
+        bool repositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(builder.Configuration[Env.GoblinExecutionNamespace]);
         builder.WebHost.UseUrls(repositoryListener ? [options.ListenUrl, "http://0.0.0.0:8788"] : [options.ListenUrl]);
 
         WebApplication app = builder.Build();
