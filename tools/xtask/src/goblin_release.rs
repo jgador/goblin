@@ -266,11 +266,17 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
             output,
             depfile,
         } => prepare(root, channel, version.as_deref(), &output, &depfile),
-        Task::Seal { directory } => seal(
-            &directory,
-            &std::env::var("GITHUB_RUN_ID")?,
-            &std::env::var("GITHUB_RUN_ATTEMPT")?,
-        ),
+        Task::Seal { directory } => {
+            let record = seal(
+                &directory,
+                &std::env::var("GITHUB_RUN_ID")?,
+                &std::env::var("GITHUB_RUN_ATTEMPT")?,
+            )?;
+            summary(&format!(
+                "```text\nGoblin {}\nInstaller: goblinctl {} — reused\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin**. Source: `{}`.",
+                record.version, record.installer.version, record.source_revision
+            ))
+        }
         Task::Verify {
             directory,
             expected_source,
@@ -498,7 +504,7 @@ fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
     );
     Ok(())
 }
-fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<()> {
+fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<Record> {
     let mut record: Record = read(&directory.join("release.json"))?;
     validate_assets(directory, &record)?;
     ensure!(
@@ -507,7 +513,7 @@ fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<()> {
     );
     record.deployment_checks = Check::Passed;
     write(&directory.join("release.json"), &record)?;
-    let mut checksums = record.assets.clone();
+    let mut checksums = record.assets;
     checksums.insert(
         "release.json".into(),
         install::checksum(&directory.join("release.json"))?,
@@ -519,11 +525,7 @@ fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<()> {
             .map(|(name, hash)| format!("{hash}  {name}\n"))
             .collect::<String>(),
     )?;
-    verify(directory)?;
-    summary(&format!(
-        "```text\nGoblin {}\nInstaller: goblinctl {} — reused\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin**. Source: `{}`.",
-        record.version, record.installer.version, record.source_revision
-    ))
+    verify(directory)
 }
 pub fn verify(directory: &Path) -> Result<Record> {
     let record: Record = read(&directory.join("release.json"))?;
