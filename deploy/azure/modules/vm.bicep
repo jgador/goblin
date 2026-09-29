@@ -18,7 +18,7 @@ param sshSourceAddressPrefix string
 param virtualNetworkAddressPrefix string
 param subnetAddressPrefix string
 
-var goblinctlRelease = loadJsonContent('../../goblinctl-release.json')
+var goblinctlRelease = loadJsonContent('../../../dependencies.lock.json').goblinctl.release
 var bootstrapScript = replace(
   replace(loadTextContent('../bootstrap.sh'), '__GOBLINCTL_VERSION__', goblinctlRelease.version),
   '__GOBLINCTL_SHA256__', goblinctlRelease.sha256

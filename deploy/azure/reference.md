@@ -21,16 +21,16 @@ separate from VM SSH and AI provider credentials.
 Both ARM entry points require `goblinPassword` as a secure string without a
 default. The confirmation stays in the portal form; only the password is sent
 to the deployment. For CLI deployments, omit it from the parameter file and
-let Azure CLI prompt for the missing secure parameter. Supply the full Goblin
-commit SHA that passed deployment readiness with the installer in these templates:
+let Azure CLI prompt for the missing secure parameter. Download `azuredeploy.json`
+from the chosen `goblin-v<version>` GitHub Release; it already fixes the source SHA
+and installer for that release:
 
 ```bash
 az deployment sub create \
   --name goblin \
   --location southeastasia \
-  --template-file deploy/azure/main.bicep \
-  --parameters @deploy/azure/azuredeploy.parameters.example.json \
-    goblinSourceRef=FULL_VERIFIED_COMMIT_SHA
+  --template-file azuredeploy.json \
+  --parameters @deploy/azure/azuredeploy.parameters.example.json
 ```
 
 Avoid putting the password in command arguments or checked-in parameter files.
@@ -291,13 +291,11 @@ or modified. The temporary client configuration is removed on successful setup;
 the local engine's images and build cache are retained.
 The archive's SHA-256 is used as the local image tag and saved in
 `/var/lib/goblin/application-source-sha256`; it identifies the downloaded content,
-not an independent verification of its publisher. Both Azure entry points require
-an explicit full commit SHA; the portal also asks for it. Use templates from the
-same commit that passed [deployment verification](../../docs/goblinctl-releases.md#verify-before-deployment)
-and ensure the selected installer matches that verified pair. Development `master`
-can contain unreleased installer changes and is no longer a deployment default.
-The selected source must include the Dockerfile and deployment overlays. The
-setup worker itself comes from the bundle embedded in the Azure template.
+not an independent verification of its publisher. Published Azure assets already
+fix the source SHA and installer for the selected Goblin version. See
+[release preparation](../../docs/releases.md). The source includes the Dockerfile
+and deployment overlays; installer behavior comes from the published goblinctl
+binary and its embedded assets.
 
 The public IP resource's `dnsSettings.fqdn` is passed into bootstrap; the VM's
 Linux hostname is not used to construct the URL. The worker renders
@@ -524,16 +522,12 @@ sh -n deploy/azure/missing-ssh-key.sh
 npm test
 ```
 
-Setup changes require a new native release. Publish and verify that release before
-updating `deploy/goblinctl-release.json` and regenerating ARM templates. See
-[Native administration and releases](../../docs/goblinctl.md) for the release order.
-Application builds still download `master` by default; source changes must reach
-the selected ref before deployment. Keep native and application versions compatible.
-
-Commit the release pin and both generated ARM JSON files together. Run
-`cargo xtask azure --check` for template drift. Tests enforce the Custom Script
-64 KiB limit on the downloader. Verify changes with a live portal deployment;
-compilation cannot check image pulls, runtime behavior, or regional capacity.
+Embedded setup changes require a new native release and a dependency pin update.
+See [releases](../../docs/releases.md). `cargo xtask azure` writes local review
+assets into `.artifacts/azure/`; release preparation generates the assets it tests
+and publishes. Generated ARM JSON is not committed. Deployment tests enforce the
+Custom Script size limit; live verification covers installation behavior once
+Azure test access is configured.
 
 Validate `createUiDefinition.json` against its published CreateUiDefinition schema
 and check that `parameters.outputs` maps exactly to `azuredeploy.portal.json`'s

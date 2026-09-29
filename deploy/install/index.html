@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Install Goblin</title>
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <img src="assets/icon.svg" alt="" width="56" height="56">
+    <h1>Install Goblin</h1>
+    <p>Your workspace, in your Azure account.</p>
+    <label for="version">Goblin version</label>
+    <select id="version" disabled aria-describedby="status"><option value="">Loading releases…</option></select>
+    <p id="status" role="status">Loading available versions.</p>
+    <a id="deploy" class="button" aria-disabled="true">Deploy to Azure</a>
+    <p class="note">Azure opens with your selected version. Choose a password during setup, then follow installation progress at the address Azure provides.</p>
+    <a id="notes" hidden>Release notes</a>
+  </main>
+</body>
+</html>

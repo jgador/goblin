@@ -96,7 +96,7 @@ test("source snapshots refuse files reached through symlinks", async (t) => {
 test("native setup assets work outside a checkout and do not overwrite template pins", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-local-assets-"));
     t.after(() => rm(root, { recursive: true, force: true }));
-    const before = await readFile("deploy/goblinctl-release.json");
+    const before = await readFile("dependencies.lock.json");
     execFileSync(goblinctl, ["internal", "unpack", root], {
         cwd: root,
         env: { PATH: "/nonexistent" },
@@ -113,5 +113,5 @@ test("native setup assets work outside a checkout and do not overwrite template 
         if (name.endsWith(".sh"))
             execFileSync("bash", ["-n", join(root, name)]);
     }
-    assert.deepEqual(await readFile("deploy/goblinctl-release.json"), before);
+    assert.deepEqual(await readFile("dependencies.lock.json"), before);
 });
