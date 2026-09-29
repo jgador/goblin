@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -103,7 +104,7 @@ public sealed class CodexExecutionTests
                 Workspace = workspace,
                 Command = "node",
                 Arguments = [cli],
-                Environment = new Dictionary<string, string?> { ["PATH"] = Environment.GetEnvironmentVariable("PATH") },
+                Environment = new Dictionary<string, string?> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path) },
                 RepositoryExecution = repositoryExecution
             });
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -148,7 +149,7 @@ public sealed class CodexExecutionTests
                 await File.WriteAllTextAsync(Path.Combine(workspace, "package.json"), "{}");
                 using Process git = Process.Start(new ProcessStartInfo("git") { WorkingDirectory = workspace, ArgumentList = { "init", "--quiet" } })!;
                 await git.WaitForExitAsync();
-                var verifier = new RepositorySetupWorkspace(workspace, new Dictionary<string, string> { ["PATH"] = Environment.GetEnvironmentVariable("PATH")! });
+                var verifier = new RepositorySetupWorkspace(workspace, new Dictionary<string, string> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)! });
                 Assert.Single(await verifier.VerifyAsync(result.Setup!, timeout.Token));
             }
             else

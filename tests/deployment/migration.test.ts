@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -23,11 +24,11 @@ test("migration retry observes an interrupted job and replaces only a terminal o
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
-const file = name => path.join(process.env.GOBLIN_MIGRATION_TEST, name);
+const file = name => path.join(process.env["${Env.GOBLIN_MIGRATION_TEST.name}"], name);
 fs.appendFileSync(file('calls'), JSON.stringify(args) + '\\n');
 if (args[0] === 'get' && fs.existsSync(file('job'))) process.stdout.write(fs.readFileSync(file('job')));
 if (args[0] === 'create') { fs.writeFileSync(file('job'), fs.readFileSync(0)); process.stdout.write('job/goblin-schema'); }
-if (args[0] === 'wait' && process.env.GOBLIN_MIGRATION_WAIT === 'fail') process.exit(1);
+if (args[0] === 'wait' && process.env["${Env.GOBLIN_MIGRATION_WAIT.name}"] === 'fail') process.exit(1);
 if (args[0] === 'delete') fs.unlinkSync(file('job'));
 `,
         { mode: 0o700 },
@@ -36,10 +37,10 @@ if (args[0] === 'delete') fs.unlinkSync(file('job'));
         execFileSync("bash", ["deploy/postgres/migrate.sh", image], {
             env: {
                 ...process.env,
-                PATH: `${bin}:${process.env.PATH}`,
-                GOBLINCTL: goblinctl,
-                GOBLIN_MIGRATION_TEST: root,
-                GOBLIN_MIGRATION_WAIT: wait,
+                [Env.PATH.name]: `${bin}:${process.env[Env.PATH.name]}`,
+                [Env.GOBLINCTL.name]: goblinctl,
+                [Env.GOBLIN_MIGRATION_TEST.name]: root,
+                [Env.GOBLIN_MIGRATION_WAIT.name]: wait,
             },
             stdio: ["ignore", "pipe", "pipe"],
         });

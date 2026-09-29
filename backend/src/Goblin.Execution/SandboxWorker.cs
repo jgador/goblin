@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -30,11 +31,11 @@ public static class SandboxWorker
         File.SetUnixFileMode(Path.Combine(codexHome, "auth.json"), UnixFileMode.UserRead | UnixFileMode.UserWrite);
         var environment = new Dictionary<string, string>
         {
-            ["HOME"] = home,
-            ["PATH"] = Environment.GetEnvironmentVariable("PATH") ?? "/usr/bin:/bin",
-            ["GIT_TERMINAL_PROMPT"] = "0",
-            ["GIT_CONFIG_NOSYSTEM"] = "1",
-            ["GIT_CONFIG_GLOBAL"] = "/dev/null"
+            [Env.Home] = home,
+            [Env.Path] = Environment.GetEnvironmentVariable(Env.Path) ?? "/usr/bin:/bin",
+            [Env.GitTerminalPrompt] = "0",
+            [Env.GitConfigNosystem] = "1",
+            [Env.GitConfigGlobal] = "/dev/null"
         };
         while (true)
         {

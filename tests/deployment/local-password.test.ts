@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { once } from "node:events";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -34,7 +35,10 @@ test("local credentials preserve password bytes, private permissions, and the ve
                 ...(replace ? ["--replace"] : []),
             ],
             {
-                env: { ...process.env, GOBLIN_LOCAL_PASSWORD: password },
+                env: {
+                    ...process.env,
+                    [Env.GOBLIN_LOCAL_PASSWORD.name]: password,
+                },
                 stdio: "pipe",
             },
         );
@@ -69,8 +73,9 @@ test("invalid, missing, corrupt and symlinked credentials fail without fallback 
     const path = join(root, "private/owner-password");
     const run = (password?: string) => {
         const env = { ...process.env };
-        delete env.GOBLIN_LOCAL_PASSWORD;
-        if (password !== undefined) env.GOBLIN_LOCAL_PASSWORD = password;
+        delete env[Env.GOBLIN_LOCAL_PASSWORD.name];
+        if (password !== undefined)
+            env[Env.GOBLIN_LOCAL_PASSWORD.name] = password;
         return execFileSync(goblinctl, ["password", "set", "--path", path], {
             env,
             stdio: "pipe",
@@ -125,11 +130,14 @@ test("development startup validates the configured verifier and removes plaintex
     await mkdir(bin);
     const path = join(root, "private/owner-password");
     execFileSync(goblinctl, ["password", "set", "--path", path], {
-        env: { ...process.env, GOBLIN_LOCAL_PASSWORD: "launcher-test" },
+        env: {
+            ...process.env,
+            [Env.GOBLIN_LOCAL_PASSWORD.name]: "launcher-test",
+        },
     });
     await writeFile(
         join(bin, "dotnet"),
-        `#!${process.execPath}\nconsole.log(JSON.stringify({args:process.argv.slice(2),verifier:process.env.GOBLIN_PASSWORD_HASH_FILE,plaintext:process.env.GOBLIN_LOCAL_PASSWORD}));\n`,
+        `#!${process.execPath}\nconsole.log(JSON.stringify({args:process.argv.slice(2),verifier:process.env["${Env.GOBLIN_PASSWORD_HASH_FILE.name}"],plaintext:process.env["${Env.GOBLIN_LOCAL_PASSWORD.name}"]}));\n`,
         { mode: 0o700 },
     );
     const { resolve } = await import("node:path");
@@ -139,9 +147,9 @@ test("development startup validates the configured verifier and removes plaintex
             stdio: "pipe",
             env: {
                 ...process.env,
-                PATH: bin,
-                GOBLIN_PASSWORD_HASH_FILE: path,
-                GOBLIN_LOCAL_PASSWORD: "never-forward-test",
+                [Env.PATH.name]: bin,
+                [Env.GOBLIN_PASSWORD_HASH_FILE.name]: path,
+                [Env.GOBLIN_LOCAL_PASSWORD.name]: "never-forward-test",
             },
         });
     const output = JSON.parse(run());
@@ -157,12 +165,15 @@ test("interactive password confirmation is hidden and mismatch preserves existin
     t.after(() => rm(root, { recursive: true, force: true }));
     const path = join(root, "private/owner-password");
     execFileSync(goblinctl, ["password", "set", "--path", path], {
-        env: { ...process.env, GOBLIN_LOCAL_PASSWORD: "initial-test" },
+        env: {
+            ...process.env,
+            [Env.GOBLIN_LOCAL_PASSWORD.name]: "initial-test",
+        },
     });
     const before = await readFile(path);
     const { spawn } = await import("node:child_process");
     const env = { ...process.env };
-    delete env.GOBLIN_LOCAL_PASSWORD;
+    delete env[Env.GOBLIN_LOCAL_PASSWORD.name];
     const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
     const child = spawn(
         "script",

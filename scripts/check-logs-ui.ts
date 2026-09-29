@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../config/environment.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,12 +10,12 @@ import { startBackend, writePasswordHash } from "../tests/support/backend.js";
 
 // A real VictoriaLogs, reached through isolated Goblin authentication. This
 // check reads synthetic log data; it never uses saved Goblin credentials.
-const victoriaLogsUrl = process.env.GOBLIN_TEST_VICTORIALOGS_URL;
+const victoriaLogsUrl = process.env[Env.GOBLIN_TEST_VICTORIALOGS_URL.name];
 if (!victoriaLogsUrl)
     throw new Error(
         "Set GOBLIN_TEST_VICTORIALOGS_URL to a private VictoriaLogs origin configured with -http.pathPrefix=/logs.",
     );
-const marker = process.env.GOBLIN_TEST_LOG_MARKER;
+const marker = process.env[Env.GOBLIN_TEST_LOG_MARKER.name];
 const azureHost = "goblin-logs-test.southeastasia.cloudapp.azure.com";
 const browser = await chromium.launch({
     args: [

@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -50,8 +51,8 @@ public sealed class LocalTextHost : IExecutionHost
             RedirectStandardError = true
         };
         start.Environment.Clear();
-        start.Environment["PATH"] = Environment.GetEnvironmentVariable("PATH");
-        start.Environment["LANG"] = "C.UTF-8";
+        start.Environment[Env.Path] = Environment.GetEnvironmentVariable(Env.Path);
+        start.Environment[Env.Lang] = "C.UTF-8";
         start.ArgumentList.Add(_options.WorkerAssembly);
         start.ArgumentList.Add("--execute");
         start.ArgumentList.Add(directory);

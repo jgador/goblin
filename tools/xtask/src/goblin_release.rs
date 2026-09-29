@@ -7,6 +7,7 @@ use anyhow::Result;
 use anyhow::ensure;
 use clap::Subcommand;
 use clap::ValueEnum;
+use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
 use serde::Deserialize;
@@ -190,7 +191,7 @@ fn write(path: &Path, value: &impl Serialize) -> Result<()> {
 }
 fn output(name: &str, value: &str) -> Result<()> {
     ensure!(!value.contains(['\n', '\r']), "Invalid Actions output");
-    if let Ok(path) = std::env::var("GITHUB_OUTPUT") {
+    if let Ok(path) = std::env::var(environment::GITHUB_OUTPUT) {
         writeln!(
             fs::OpenOptions::new().append(true).open(path)?,
             "{name}={value}"
@@ -200,7 +201,7 @@ fn output(name: &str, value: &str) -> Result<()> {
 }
 fn summary(message: &str) -> Result<()> {
     println!("{message}");
-    if let Ok(path) = std::env::var("GITHUB_STEP_SUMMARY") {
+    if let Ok(path) = std::env::var(environment::GITHUB_STEP_SUMMARY) {
         writeln!(fs::OpenOptions::new().append(true).open(path)?, "{message}")?;
     }
     Ok(())
@@ -269,8 +270,8 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
         Task::Seal { directory } => {
             let record = seal(
                 &directory,
-                &std::env::var("GITHUB_RUN_ID")?,
-                &std::env::var("GITHUB_RUN_ATTEMPT")?,
+                &std::env::var(environment::GITHUB_RUN_ID)?,
+                &std::env::var(environment::GITHUB_RUN_ATTEMPT)?,
             )?;
             summary(&format!(
                 "```text\nGoblin {}\nInstaller: goblinctl {} — reused\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin**. Source: `{}`.",
@@ -427,8 +428,9 @@ fn prepare(
         channel,
         source_revision: source,
         installer: pin,
-        run_id: std::env::var("GITHUB_RUN_ID").context("Prepare runs in GitHub Actions")?,
-        run_attempt: std::env::var("GITHUB_RUN_ATTEMPT")?,
+        run_id: std::env::var(environment::GITHUB_RUN_ID)
+            .context("Prepare runs in GitHub Actions")?,
+        run_attempt: std::env::var(environment::GITHUB_RUN_ATTEMPT)?,
         assets,
         deployment_checks: Check::Pending,
     };

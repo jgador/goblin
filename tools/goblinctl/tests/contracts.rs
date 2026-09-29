@@ -1,5 +1,6 @@
 use goblinctl::credentials;
 use goblinctl::database;
+use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
 use goblinctl::local::Local;
@@ -247,7 +248,7 @@ fn rendered_bootstrap_contains_native_pins_and_no_plaintext_password() {
             .unwrap();
     assert!(!script.contains("__GOBLIN"));
     assert!(!script.contains("python3"));
-    assert!(script.contains("GOBLIN_PASSWORD_HASH_FILE"));
+    assert!(script.contains(environment::GOBLIN_PASSWORD_HASH_FILE));
     assert!(script.contains(&"a".repeat(64)));
     let mut child = Command::new("bash")
         .arg("-n")
@@ -268,7 +269,7 @@ fn rendered_bootstrap_contains_native_pins_and_no_plaintext_password() {
 // mutations and no real host administration commands are possible through these mocks.
 #[test]
 fn local_services_preserve_connections_credentials_and_paused_data() {
-    let Ok(root) = std::env::var("GOBLIN_NATIVE_TEST_ROOT") else {
+    let Ok(root) = std::env::var(environment::GOBLIN_NATIVE_TEST_ROOT) else {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
         let bin = root.join("bin");
@@ -303,8 +304,11 @@ esac
                 "local_services_preserve_connections_credentials_and_paused_data",
                 "--nocapture",
             ])
-            .env("GOBLIN_NATIVE_TEST_ROOT", root)
-            .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+            .env(environment::GOBLIN_NATIVE_TEST_ROOT, root)
+            .env(
+                environment::PATH,
+                format!("{}:/usr/bin:/bin", bin.display()),
+            )
             .output()
             .unwrap();
         assert!(
@@ -425,7 +429,7 @@ fn native_activation_is_repeatable_and_preserves_installation_state() {
         install::activate_tooling(dir.path(), Path::new(env!("CARGO_BIN_EXE_goblinctl"))).unwrap();
         let output = Command::new(dir.path().join("usr/local/bin/goblinctl"))
             .arg("--version")
-            .env("PATH", "/nonexistent")
+            .env(environment::PATH, "/nonexistent")
             .output()
             .unwrap();
         assert!(output.status.success());

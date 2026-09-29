@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -30,7 +31,7 @@ internal static class WebServices
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
         builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
-        string? executionNamespace = builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"];
+        string? executionNamespace = builder.Configuration[Env.GoblinExecutionNamespace];
         builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
         if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, databaseConnection, executionNamespace);
         builder.WebHost.ConfigureKestrel(server =>
@@ -57,16 +58,16 @@ internal static class WebServices
 
     private static void ConfigureMonitoring(WebApplicationBuilder builder, ApplicationOptions options)
     {
-        string? nodeName = builder.Configuration["GOBLIN_NODE_NAME"];
+        string? nodeName = builder.Configuration[Env.GoblinNodeName];
         if (options.SystemSource is not null) builder.Services.AddSingleton(options.SystemSource);
         else if (!string.IsNullOrWhiteSpace(nodeName))
             builder.Services.AddSingleton<ISystemSource>(_ =>
             {
-                string tokenFile = builder.Configuration["GOBLIN_KUBERNETES_TOKEN_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token";
-                string caFile = builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
-                return new KubernetesSystemSource(builder.Configuration["GOBLIN_KUBERNETES_URL"],
-                    nodeName, builder.Configuration["GOBLIN_NAMESPACE"] ?? "goblin",
-                    builder.Configuration["GOBLIN_EXECUTION_NAMESPACE"] ?? "agents", tokenFile, caFile);
+                string tokenFile = builder.Configuration[Env.GoblinKubernetesTokenFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token";
+                string caFile = builder.Configuration[Env.GoblinKubernetesCaFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
+                return new KubernetesSystemSource(builder.Configuration[Env.GoblinKubernetesUrl],
+                    nodeName, builder.Configuration[Env.GoblinNamespace] ?? "goblin",
+                    builder.Configuration[Env.GoblinExecutionNamespace] ?? "agents", tokenFile, caFile);
             });
         builder.Services.AddSingleton(services => new SystemMonitor(services.GetService<ISystemSource>()));
         builder.Services.AddHostedService(services => services.GetRequiredService<SystemMonitor>());
@@ -94,8 +95,8 @@ internal static class WebServices
         builder.Host.UseWolverine(messaging => ApplicationServices.ConfigureMessaging(messaging, databaseConnection, !string.IsNullOrWhiteSpace(executionNamespace)));
         builder.Services.AddWorkApplication();
         var workspaceLimits = new WorkspaceLimits(
-            builder.Configuration.GetValue("GOBLIN_MAX_SANDBOXES", 2),
-            builder.Configuration.GetValue("GOBLIN_MAX_CACHED_WORKSPACES", 4));
+            builder.Configuration.GetValue(Env.GoblinMaxSandboxes, 2),
+            builder.Configuration.GetValue(Env.GoblinMaxCachedWorkspaces, 4));
         if (workspaceLimits.MaxSandboxes < 1 || workspaceLimits.MaxCachedVolumes < 1)
             throw new InvalidOperationException("Invalid workspace capacity configuration.");
         builder.Services.AddSingleton(workspaceLimits);
@@ -111,16 +112,16 @@ internal static class WebServices
         builder.Services.AddSingleton<IRepositoryBroker>(services => services.GetRequiredService<RepositoryBroker>());
         if (!string.IsNullOrWhiteSpace(executionNamespace))
         {
-            var kubernetes = new KubernetesApi(builder.Configuration["GOBLIN_KUBERNETES_URL"],
-                builder.Configuration["GOBLIN_KUBERNETES_TOKEN_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token",
-                builder.Configuration["GOBLIN_KUBERNETES_CA_FILE"] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
+            var kubernetes = new KubernetesApi(builder.Configuration[Env.GoblinKubernetesUrl],
+                builder.Configuration[Env.GoblinKubernetesTokenFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token",
+                builder.Configuration[Env.GoblinKubernetesCaFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
             builder.Services.AddSingleton(kubernetes);
             var sandboxOptions = new SandboxOptions(executionNamespace,
-                builder.Configuration["GOBLIN_EXECUTION_IMAGE"] ?? "goblin-auth:0.1.0", workspace.CodexHome,
-                builder.Configuration["GOBLIN_REPOSITORY_URL"] ?? "http://goblin-repository.goblin.svc:8788")
+                builder.Configuration[Env.GoblinExecutionImage] ?? "goblin-auth:0.1.0", workspace.CodexHome,
+                builder.Configuration[Env.GoblinRepositoryUrl] ?? "http://goblin-repository.goblin.svc:8788")
             {
-                CpuLimit = builder.Configuration["GOBLIN_SANDBOX_CPU_LIMIT"] ?? "2",
-                MemoryLimit = builder.Configuration["GOBLIN_SANDBOX_MEMORY_LIMIT"] ?? "2Gi"
+                CpuLimit = builder.Configuration[Env.GoblinSandboxCpuLimit] ?? "2",
+                MemoryLimit = builder.Configuration[Env.GoblinSandboxMemoryLimit] ?? "2Gi"
             };
             builder.Services.AddSingleton(sandboxOptions);
             builder.Services.AddSingleton<IInspectionHost, InspectionHost>();

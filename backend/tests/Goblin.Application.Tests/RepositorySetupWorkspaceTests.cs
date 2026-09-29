@@ -1,3 +1,4 @@
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -26,7 +27,7 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
         { WorkingDirectory = _root, ArgumentList = { "init", "--quiet" } })!;
         process.WaitForExit(); Assert.Equal(0, process.ExitCode);
         File.WriteAllText(Path.Combine(_root, "pyproject.toml"), "[project]\nname = 'fixture'\n");
-        _workspace = new(_root, new Dictionary<string, string> { ["PATH"] = Environment.GetEnvironmentVariable("PATH")! });
+        _workspace = new(_root, new Dictionary<string, string> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)! });
     }
 
     private static RepositorySetupMemory Memory(VerifiedRepositorySetup observation, string branch = "old-branch") =>

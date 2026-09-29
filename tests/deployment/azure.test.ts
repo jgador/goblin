@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { goblinctl } from "../support/goblinctl.js";
 import { createHash } from "node:crypto";
 import test from "node:test";
@@ -129,18 +130,18 @@ const path = require('node:path');
 const name = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
 if (name === 'kubectl') args.unshift('kubectl');
-const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
-const nodeState = process.env.GOBLIN_BOOTSTRAP_NODE_STATE;
-const appState = process.env.GOBLIN_BOOTSTRAP_APP_STATE;
+const root = process.env["${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}"];
+const nodeState = process.env["${Env.GOBLIN_BOOTSTRAP_NODE_STATE.name}"];
+const appState = process.env["${Env.GOBLIN_BOOTSTRAP_APP_STATE.name}"];
 if (name === 'curl') {
   fs.appendFileSync(path.join(root, 'curl-requests.jsonl'), JSON.stringify(args) + '\\n');
   const output = args[args.indexOf('--output') + 1];
   if (args.some(arg => arg.startsWith('https://codeload.github.com/'))) {
     fs.copyFileSync(path.join(root, 'source.tar.gz'), output);
   } else if (args.some(arg => arg.includes('/releases/download/goblinctl-v'))) {
-    if (process.env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD === 'failed') process.exit(22);
+    if (process.env["${Env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD.name}"] === 'failed') process.exit(22);
     fs.copyFileSync(path.join(root, 'goblinctl.tar.gz'), output);
-    if (process.env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD === 'corrupt') fs.appendFileSync(output, 'corruption');
+    if (process.env["${Env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD.name}"] === 'corrupt') fs.appendFileSync(output, 'corruption');
   } else if (args.includes('http://127.0.0.1/setup/healthz')) {
     fs.writeFileSync(output, JSON.stringify({ setup: true }));
   } else if (args.some(arg => arg.startsWith('http://'))) {
@@ -165,21 +166,21 @@ if (name === 'curl') {
   fs.appendFileSync(path.join(root, 'docker-requests.jsonl'), JSON.stringify([name, ...args]) + '\\n');
   if (name === 'docker') {
     const configDir = path.join(root, 'var/lib/goblin/install/private/work/docker-config');
-    if (process.env.DOCKER_CONFIG !== configDir || process.env.DOCKER_HOST !== 'unix:///var/run/docker.sock')
+    if (process.env["${Env.DOCKER_CONFIG.name}"] !== configDir || process.env["${Env.DOCKER_HOST.name}"] !== 'unix:///var/run/docker.sock')
       throw new Error('Installer must use its own Docker configuration and the native daemon');
-    for (const key of ['DOCKER_CONTEXT', 'DOCKER_TLS', 'DOCKER_TLS_VERIFY', 'DOCKER_CERT_PATH', 'BUILDX_CONFIG', 'BUILDX_BUILDER'])
+    for (const key of ["${Env.DOCKER_CONTEXT.name}", "${Env.DOCKER_TLS.name}", "${Env.DOCKER_TLS_VERIFY.name}", "${Env.DOCKER_CERT_PATH.name}", "${Env.BUILDX_CONFIG.name}", "${Env.BUILDX_BUILDER.name}"])
       if (key in process.env) throw new Error('Installer inherited ' + key);
     const config = JSON.parse(fs.readFileSync(path.join(configDir, 'config.json'), 'utf8'));
     if (JSON.stringify(config) !== JSON.stringify({ auths: { 'https://index.docker.io/v1/': {} } }))
       throw new Error('Installer must pull anonymously without a credential helper');
   }
-  if (process.env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED === 'false' && !fs.existsSync(path.join(root, 'docker-installed')))
+  if (process.env["${Env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED.name}"] === 'false' && !fs.existsSync(path.join(root, 'docker-installed')))
     process.exit(127);
   if (args[0] === 'info' && appState === 'docker-failed') process.exit(1);
   if (args[0] === 'image' && args[1] === 'inspect' && !fs.existsSync(path.join(root, 'built-image'))) process.exit(1);
   if (args[0] === 'build') {
     fs.writeFileSync(path.join(root, 'build-pid'), String(process.pid));
-    if (process.env.GOBLIN_BOOTSTRAP_SLOW_BUILD === 'true') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60000);
+    if (process.env["${Env.GOBLIN_BOOTSTRAP_SLOW_BUILD.name}"] === 'true') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60000);
     if (appState === 'build-failed') process.exit(1);
     fs.accessSync(path.join(args.at(-1), 'Dockerfile'));
     if ((fs.statSync(path.join(args.at(-1), 'frontend/src/connection/index.html')).mode & 0o044) !== 0o044)
@@ -202,12 +203,12 @@ if (name === 'curl') {
   if (args[0] === 'crictl' && args[1] === 'inspecti') process.exit(1);
   if (args[0] === 'crictl' && args[1] === 'pull') {
     fs.appendFileSync(path.join(root, 'pull-events.jsonl'), JSON.stringify({ event: 'start', image: args[2] }) + '\\n');
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.GOBLIN_BOOTSTRAP_PULL_DELAY));
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env["${Env.GOBLIN_BOOTSTRAP_PULL_DELAY.name}"]));
     if (appState === 'pull-failed') process.exit(1);
     fs.appendFileSync(path.join(root, 'pull-events.jsonl'), JSON.stringify({ event: 'end', image: args[2] }) + '\\n');
   }
   if (args[0] === 'kubectl') {
-    const kubeconfig = process.env.KUBECONFIG ?? null;
+    const kubeconfig = process.env["${Env.KUBECONFIG.name}"] ?? null;
     fs.appendFileSync(path.join(root, 'kubernetes-contexts.jsonl'), JSON.stringify({ command: name, args, kubeconfig }) + '\\n');
     if (name === 'kubectl' && kubeconfig !== path.join(root, 'etc/rancher/k3s/k3s.yaml')) {
       process.stderr.write('Standalone kubectl is not configured for the installed k3s cluster\\n');
@@ -334,11 +335,11 @@ const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 const args = process.argv.slice(2);
-const root = process.env.GOBLIN_BOOTSTRAP_TEST_DIR;
+const root = process.env["${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}"];
 if (args[0] === 'internal' && args[1] === 'activate') args.push('--system-root', root);
 if (args[0] === 'internal' && ['state', 'build-progress'].includes(args[1]) && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
 if (args[0] === 'internal' && args[1] === 'docker-config') args.push(path.join(root, 'etc/docker/daemon.json'));
-if (args[0] === 'internal' && args[1] === 'state' && args[2] === 'fail-step' && args[3] === 'cert-manager' && process.env.GOBLIN_BOOTSTRAP_APP_STATE === 'cert-failed') {
+if (args[0] === 'internal' && args[1] === 'state' && args[2] === 'fail-step' && args[3] === 'cert-manager' && process.env["${Env.GOBLIN_BOOTSTRAP_APP_STATE.name}"] === 'cert-failed') {
     fs.writeFileSync(path.join(root, 'cert-failure-reporting'), 'true');
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
 }
@@ -416,18 +417,27 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
         env: {
             ...process.env,
             ...application.dockerEnvironment,
-            PATH: `${bin}:${application.dockerEnvironment?.PATH ?? process.env.PATH}`,
-            KUBECONFIG: application.kubeconfig,
-            GOBLIN_BOOTSTRAP_TEST_DIR: root,
-            GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD: application.nativeDownload ?? "",
-            SERVICE_RESULT: application.recovery ? "signal" : "success",
-            GOBLIN_PUBLIC_ORIGIN: application.publicOrigin ?? "",
-            GOBLIN_PASSWORD_HASH_FILE: application.passwordHashFile ?? "",
-            GOBLIN_BOOTSTRAP_NODE_STATE: nodeState,
-            GOBLIN_BOOTSTRAP_APP_STATE: application.state ?? "ready",
-            GOBLIN_BOOTSTRAP_PULL_DELAY: String(application.pullDelay ?? 0),
-            GOBLIN_BOOTSTRAP_SLOW_BUILD: String(application.slowBuild ?? false),
-            GOBLIN_BOOTSTRAP_DOCKER_INSTALLED: String(
+            [Env.PATH.name]:
+                `${bin}:${application.dockerEnvironment?.[Env.PATH.name] ?? process.env[Env.PATH.name]}`,
+            [Env.KUBECONFIG.name]: application.kubeconfig,
+            [Env.GOBLIN_BOOTSTRAP_TEST_DIR.name]: root,
+            [Env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD.name]:
+                application.nativeDownload ?? "",
+            [Env.SERVICE_RESULT.name]: application.recovery
+                ? "signal"
+                : "success",
+            [Env.GOBLIN_PUBLIC_ORIGIN.name]: application.publicOrigin ?? "",
+            [Env.GOBLIN_PASSWORD_HASH_FILE.name]:
+                application.passwordHashFile ?? "",
+            [Env.GOBLIN_BOOTSTRAP_NODE_STATE.name]: nodeState,
+            [Env.GOBLIN_BOOTSTRAP_APP_STATE.name]: application.state ?? "ready",
+            [Env.GOBLIN_BOOTSTRAP_PULL_DELAY.name]: String(
+                application.pullDelay ?? 0,
+            ),
+            [Env.GOBLIN_BOOTSTRAP_SLOW_BUILD.name]: String(
+                application.slowBuild ?? false,
+            ),
+            [Env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED.name]: String(
                 application.dockerInstalled ?? true,
             ),
         },
@@ -874,15 +884,16 @@ test("installer isolates Docker configuration from Desktop credentials, contexts
     });
     await writeFile(join(personal, "config.json"), personalConfig);
     const dockerEnvironment = {
-        PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-        DOCKER_CONFIG: personal,
-        DOCKER_HOST: "tcp://desktop.invalid:2376",
-        DOCKER_CONTEXT: "desktop-linux",
-        DOCKER_TLS: "1",
-        DOCKER_TLS_VERIFY: "1",
-        DOCKER_CERT_PATH: join(personal, "certs"),
-        BUILDX_CONFIG: join(personal, "buildx"),
-        BUILDX_BUILDER: "personal-builder",
+        [Env.PATH.name]:
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        [Env.DOCKER_CONFIG.name]: personal,
+        [Env.DOCKER_HOST.name]: "tcp://desktop.invalid:2376",
+        [Env.DOCKER_CONTEXT.name]: "desktop-linux",
+        [Env.DOCKER_TLS.name]: "1",
+        [Env.DOCKER_TLS_VERIFY.name]: "1",
+        [Env.DOCKER_CERT_PATH.name]: join(personal, "certs"),
+        [Env.BUILDX_CONFIG.name]: join(personal, "buildx"),
+        [Env.BUILDX_BUILDER.name]: "personal-builder",
     };
     await assert.rejects(
         bootstrap(root, fakePassword, "ready", {
@@ -1214,7 +1225,7 @@ test("the local repository verifier passes unchanged through Azure's bootstrap a
     t.after(() => rm(root, { recursive: true, force: true }));
     const passwordHashFile = join(root, ".goblin-secrets/owner-password");
     execFileSync(goblinctl, ["password", "set", "--path", passwordHashFile], {
-        env: { ...process.env, GOBLIN_LOCAL_PASSWORD: fakePassword },
+        env: { ...process.env, [Env.GOBLIN_LOCAL_PASSWORD.name]: fakePassword },
     });
     const verifier = await readFile(passwordHashFile, "utf8");
     const output = await bootstrap(root, "", "ready", {
