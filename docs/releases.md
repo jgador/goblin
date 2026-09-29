@@ -14,21 +14,21 @@ merge. Release preparation decides whether the selected installer can be reused.
 3. If preparation requests an installer release, follow the installer steps below.
    If it creates a dependency PR, merge that PR and run Prepare again.
 4. Preparation verifies the published installer, runs source/deployment/browser
-   checks, generates the release assets, and performs a real Azure installation
-   in the configured test scope. It deletes its disposable resources afterward.
+   checks locally on the runner, and generates the release assets. Azure
+   installation is performed manually after publication.
 5. Review the summary:
 
    ```text
    Goblin 0.1.0-preview.2
    Installer: goblinctl 0.1.3 — reused
    Deployment checks: passed
-   Azure installation: passed
+   Azure installation: manual
    Ready to publish
    ```
 
 6. Select **Review deployments**, approve `goblin-release`, then choose
    **Approve and deploy**. The job named **Publish Goblin** publishes the prepared
-   release. This approval occurs after the Azure test.
+   release to GitHub. Azure deployment is a separate manual action.
 
 The workflow captures the source once. A later merge to `master` cannot change
 that candidate. Publication creates `goblin-v<version>` at the captured commit and
@@ -99,8 +99,9 @@ also remain permanently attached to GitHub Releases. The repository-wide GitHub
 
 The workflows require configured approval and hosting. On 2026-09-29, the
 `goblin-release` reviewer environment (restricted to `master`) and GitHub Pages
-Actions hosting were configured. PR automation was already enabled. Azure test
-variables remain unset. The existing source-check ruleset is disabled; activate
+Actions hosting were configured. PR automation was already enabled. Azure
+credentials and subscription settings are not required. The existing source-check
+ruleset is disabled; activate
 the desired configuration in [`.github/goblin-ruleset.json`](../.github/goblin-ruleset.json)
 after the replacement workflow is merged.
 
@@ -117,41 +118,24 @@ For a new repository, configure:
 - Keep `goblin-checks` as the required source check. The old standalone Rust,
   advisory installer-status, and deployment-readiness workflows were consolidated.
 
-### Azure test configuration
+### Manual Azure installation
 
-Azure verification is disabled until deliberately configured. Implementation was
-verified locally; no live Azure test was run, at the maintainer's request.
+Repository automation does not authenticate to Azure, deploy Goblin, or create or
+delete Azure resources. There is no live Azure release check or scheduled cloud
+cleanup. Release preparation and publication require only the local checks and
+GitHub configuration described above.
 
-Use a dedicated test subscription or equivalent isolated scope, with an identity
-that can create/delete the test resource groups and their resources. Configure
-GitHub OIDC for the `azure-release-test` environment with subject
-`repo:jgador/goblin:environment:azure-release-test`. Store these as **repository
-Actions variables**, not source files:
+After publication, choose a release on the installation page and follow the
+[manual Azure deployment guide](../deploy/azure/README.md). The templates and
+installer remain available for that process. The maintainer chooses the Azure
+subscription and manages the installation and its resources directly.
 
-| Variable | Value |
-| --- | --- |
-| `AZURE_CLIENT_ID` | OIDC application/managed identity client ID |
-| `AZURE_TENANT_ID` | Azure tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Dedicated test subscription ID |
-| `AZURE_RELEASE_REGION` | Test region with appropriate quota |
-| `AZURE_RELEASE_VM_SIZE` | Optional; defaults to `Standard_D4s_v5` |
-| `AZURE_RELEASE_TESTS_ENABLED` | Set to `true` only when this scope is ready for live tests |
-
-The installation job uses an ephemeral password and SSH key, waits for background
-installation, checks PostgreSQL/migration completion, logs in through the browser,
-creates an unstarted Work item, and verifies it survives an application restart.
-It never starts an agent or invokes an external model. Secret inputs stay outside
-uploaded artifacts. The durable report contains only candidate identity, test
-configuration, and check outcomes.
-
-Cleanup requires the `goblin-release-<run>-<attempt>` name and matching ownership
-tags. The job cleans up on success/failure, and the hourly expiry sweep handles
-abandoned resources. A failed or skipped installation/cleanup cannot produce the
-ready summary. Polling readiness does not restart a failed installation.
+The release record contains the source and installer identities, asset checksums,
+and deployment-check result. It does not claim live Azure installation coverage.
 
 `AGENTS.md` makes the first real deployment the SQL migration immutability
-boundary. Record that deployment when live verification is enabled; an announcement
-is a separate event. Local provisioning does not freeze the baseline.
+boundary. Record the first real manual deployment; an announcement is a separate
+event. Local provisioning does not freeze the baseline.
 
 ## Local verification and recovery
 
@@ -188,13 +172,17 @@ publication-only retry can reuse the original approved, sealed candidate while
 its artifacts exist. It may fill missing draft assets only when all existing
 assets and the tag already match. A published version is never overwritten.
 
+After changing release tooling or workflows, start a new **Prepare Goblin
+release** run from the updated `master`. Rerunning an older run keeps its original
+workflow and source, including any former Azure requirements.
+
 If publication succeeds and installation-site delivery fails, rerun delivery using
 **Recommend Goblin release**, choosing whether to preserve the recommendation.
 The published release remains available. If candidate artifacts have expired,
 prepare a new candidate/version rather than substituting new bytes into an
 existing release.
 
-The Azure pass covers the tested fresh-install configuration and the recorded
-source/installer/templates. The app is still built from source on the VM; upstream
-OS and image tags can affect later installs. Opt-in PostgreSQL suites and
-real-runtime journeys report their own coverage and skips.
+Automated release checks do not establish live Azure installation coverage. The
+app is built from source on the VM during manual installation; upstream OS and
+image tags can affect later installs. Opt-in PostgreSQL suites and real-runtime
+journeys report their own coverage and skips.

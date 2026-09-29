@@ -7,6 +7,9 @@ outputs to follow progress; the same page opens Goblin when ready.
 
 ## Deploy
 
+Azure installation is manual. Repository workflows publish installation assets
+without signing in to Azure or managing cloud resources.
+
 Start with the **Deploy to Azure** button in the [root README](../../README.md).
 
 1. Choose **Goblin version** on the installation page, then **Deploy to Azure**.
