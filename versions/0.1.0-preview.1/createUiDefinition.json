@@ -1,0 +1,371 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "parameters": {
+    "basics": [
+      {
+        "constraints": {
+          "regex": "^[A-Za-z][A-Za-z0-9 -]{0,22}[A-Za-z0-9]$",
+          "required": true,
+          "validationMessage": "Enter a valid value using the format described above."
+        },
+        "defaultValue": "Goblin",
+        "label": "Company or software name",
+        "name": "companyName",
+        "toolTip": "Keep Goblin or replace it with your company or software name. Use 2–24 letters, numbers, spaces or hyphens, starting with a letter.",
+        "type": "Microsoft.Common.TextBox"
+      },
+      {
+        "constraints": {
+          "allowedValues": [
+            {
+              "label": "Production",
+              "value": "prod"
+            },
+            {
+              "label": "Staging",
+              "value": "staging"
+            },
+            {
+              "label": "Test",
+              "value": "test"
+            },
+            {
+              "label": "Development",
+              "value": "dev"
+            }
+          ],
+          "required": true
+        },
+        "defaultValue": "Production",
+        "label": "Environment",
+        "name": "environment",
+        "type": "Microsoft.Common.DropDown"
+      },
+      {
+        "constraints": {
+          "allowedValues": [
+            {
+              "label": "0.1.0-preview.1",
+              "value": "36925cad590385ab2b04deb8b8b2d49e6b829b5e"
+            }
+          ],
+          "required": true
+        },
+        "defaultValue": "0.1.0-preview.1",
+        "label": "Goblin version",
+        "name": "goblinSourceRef",
+        "toolTip": "This installation uses the selected Goblin release and its verified installer. Choose another release from the Goblin installation page.",
+        "type": "Microsoft.Common.DropDown"
+      },
+      {
+        "constraints": {
+          "regex": "^(?=.*\\S)[^\\x00-\\x1F\\x7F]{0,128}(?![\\s\\S])",
+          "required": true,
+          "validationMessage": "Enter a password of up to 128 characters, including a non-space character, without tabs or line breaks."
+        },
+        "label": {
+          "confirmPassword": "Confirm Goblin password",
+          "password": "Goblin password"
+        },
+        "name": "goblinPassword",
+        "options": {
+          "hideConfirmation": false
+        },
+        "toolTip": "Choose a password for opening Goblin. There is no minimum length or character-mix requirement. Save it in your password manager.",
+        "type": "Microsoft.Common.PasswordBox"
+      },
+      {
+        "name": "installationInfo",
+        "options": {
+          "icon": "Info",
+          "text": "Open goblinUrl in the deployment outputs to follow installation progress. The page opens Goblin when ready; enter your Goblin password then. Installation continues after Azure provisioning succeeds. Goblin uses HTTP; HTTPS is configured separately."
+        },
+        "type": "Microsoft.Common.InfoBox"
+      },
+      {
+        "name": "saveKeyInfo",
+        "options": {
+          "icon": "Info",
+          "text": "Choose Generate new key pair to create your VM access key here. At the final Create step, Azure asks you to download the private key file. Save it for direct VM access later; it is not needed for everyday Goblin use. If you already have a key pair, you can use its public key instead."
+        },
+        "type": "Microsoft.Common.InfoBox"
+      },
+      {
+        "constraints": {
+          "required": true
+        },
+        "defaultValue": "goblinadmin",
+        "label": "VM administrator username",
+        "name": "adminUsername",
+        "osPlatform": "Linux",
+        "toolTip": "Use this username with your saved key if you connect directly to the VM.",
+        "type": "Microsoft.Compute.UserNameTextBox"
+      },
+      {
+        "constraints": {
+          "required": true
+        },
+        "label": {
+          "authenticationType": "VM access method",
+          "confirmPassword": "Confirm password",
+          "password": "Password",
+          "sshPublicKey": "SSH public key"
+        },
+        "name": "credentials",
+        "options": {
+          "hideConfirmation": false,
+          "hidePassword": true
+        },
+        "osPlatform": "Linux",
+        "toolTip": {
+          "authenticationType": "Use an SSH key for VM administration.",
+          "sshPublicKey": "Choose Generate new key pair to download a private key when creating the deployment, or use an existing public key. Keep the matching private key file for later VM access."
+        },
+        "type": "Microsoft.Compute.CredentialsCombo"
+      }
+    ],
+    "config": {
+      "basics": {
+        "description": "Deploy Goblin in your Azure account and open it at the assigned public hostname after setup. Choose a dedicated resource group; rg-goblin-prod is the suggested default. Save the access-key file when Azure prompts you during creation.",
+        "location": {
+          "resourceTypes": [
+            "Microsoft.Compute/virtualMachines"
+          ]
+        }
+      }
+    },
+    "outputs": {
+      "adminSshPublicKey": "[basics('credentials').sshPublicKey]",
+      "adminUsername": "[basics('adminUsername')]",
+      "companyName": "[basics('companyName')]",
+      "dnsLabel": "[steps('advanced').nameOverrides.dnsLabel]",
+      "environment": "[basics('environment')]",
+      "goblinPassword": "[basics('goblinPassword')]",
+      "goblinSourceRef": "[basics('goblinSourceRef')]",
+      "location": "[location()]",
+      "networkInterfaceName": "[steps('advanced').nameOverrides.networkInterfaceName]",
+      "networkSecurityGroupName": "[steps('advanced').nameOverrides.networkSecurityGroupName]",
+      "osDiskName": "[steps('advanced').nameOverrides.osDiskName]",
+      "osDiskSizeGB": "[steps('advanced').osDiskSizeGB]",
+      "publicIpName": "[steps('advanced').nameOverrides.publicIpName]",
+      "sshSourceAddressPrefix": "[if(steps('advanced').enableSshNow, steps('advanced').sshSourceAddressPrefix, '')]",
+      "subnetAddressPrefix": "[steps('advanced').subnetAddressPrefix]",
+      "subnetName": "[steps('advanced').nameOverrides.subnetName]",
+      "virtualMachineName": "[steps('advanced').nameOverrides.virtualMachineName]",
+      "virtualNetworkAddressPrefix": "[steps('advanced').virtualNetworkAddressPrefix]",
+      "virtualNetworkName": "[steps('advanced').nameOverrides.virtualNetworkName]",
+      "vmSize": "[steps('advanced').vmSize]"
+    },
+    "resourceTypes": [
+      "Microsoft.Compute/virtualMachines",
+      "Microsoft.Network/virtualNetworks",
+      "Microsoft.Network/publicIPAddresses"
+    ],
+    "steps": [
+      {
+        "elements": [
+          {
+            "label": "Enable direct SSH access now (advanced)",
+            "name": "enableSshNow",
+            "type": "Microsoft.Common.CheckBox"
+          },
+          {
+            "constraints": {
+              "regex": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}(?:/(?:[0-9]|[12][0-9]|3[0-2]))?$",
+              "required": "[steps('advanced').enableSshNow]",
+              "validationMessage": "Enter a valid value using the format described above."
+            },
+            "defaultValue": "",
+            "label": "Your allowed IP address or CIDR",
+            "name": "sshSourceAddressPrefix",
+            "toolTip": "For example, 203.0.113.10/32. Only this source can connect to port 22.",
+            "type": "Microsoft.Common.TextBox",
+            "visible": "[steps('advanced').enableSshNow]"
+          },
+          {
+            "name": "sshInfo",
+            "options": {
+              "icon": "Info",
+              "text": "Saving a key does not open the VM to SSH. Leave direct SSH access disabled unless you need it now. An authorized administrator can enable network access later through Azure."
+            },
+            "type": "Microsoft.Common.InfoBox"
+          },
+          {
+            "constraints": {
+              "regex": "^Standard_[A-Za-z0-9_]+$",
+              "required": true,
+              "validationMessage": "Enter a valid value using the format described above."
+            },
+            "defaultValue": "Standard_D4s_v5",
+            "label": "Virtual machine size",
+            "name": "vmSize",
+            "toolTip": "Default: 4 vCPUs and 16 GiB RAM. Choose an x64 VM size that supports Trusted Launch and is available in your region.",
+            "type": "Microsoft.Common.TextBox"
+          },
+          {
+            "constraints": {
+              "allowedValues": [
+                {
+                  "label": "64 GiB",
+                  "value": 64
+                },
+                {
+                  "label": "128 GiB",
+                  "value": 128
+                },
+                {
+                  "label": "256 GiB",
+                  "value": 256
+                },
+                {
+                  "label": "512 GiB",
+                  "value": 512
+                },
+                {
+                  "label": "1024 GiB",
+                  "value": 1024
+                }
+              ],
+              "required": true
+            },
+            "defaultValue": "128 GiB",
+            "label": "OS disk size",
+            "name": "osDiskSizeGB",
+            "type": "Microsoft.Common.DropDown"
+          },
+          {
+            "constraints": {
+              "regex": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$",
+              "required": true,
+              "validationMessage": "Enter a valid value using the format described above."
+            },
+            "defaultValue": "10.20.0.0/16",
+            "label": "Virtual network address range",
+            "name": "virtualNetworkAddressPrefix",
+            "toolTip": "Keep separate from K3s pod range 10.42.0.0/16 and service range 10.43.0.0/16.",
+            "type": "Microsoft.Common.TextBox"
+          },
+          {
+            "constraints": {
+              "regex": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/(?:[0-9]|[12][0-9]|3[0-2])$",
+              "required": true,
+              "validationMessage": "Enter a valid value using the format described above."
+            },
+            "defaultValue": "10.20.0.0/24",
+            "label": "VM subnet address range",
+            "name": "subnetAddressPrefix",
+            "toolTip": "Choose a subnet inside the virtual network address range.",
+            "type": "Microsoft.Common.TextBox"
+          },
+          {
+            "elements": [
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Virtual machine name",
+                "name": "virtualMachineName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: vm-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,78}[A-Za-z0-9_])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Public IP resource name",
+                "name": "publicIpName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: pip-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,62}[A-Za-z0-9_])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Virtual network name",
+                "name": "virtualNetworkName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: vnet-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,78}[A-Za-z0-9_])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Subnet name",
+                "name": "subnetName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: snet-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,78}[A-Za-z0-9_])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Network interface name",
+                "name": "networkInterfaceName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: nic-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,78}[A-Za-z0-9_])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Network security group name",
+                "name": "networkSecurityGroupName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: nsg-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,78}[A-Za-z0-9_])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "OS disk name",
+                "name": "osDiskName",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: osdisk-goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              },
+              {
+                "constraints": {
+                  "regex": "^$|^[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$",
+                  "required": false,
+                  "validationMessage": "Enter a valid value using the format described above."
+                },
+                "defaultValue": "",
+                "label": "Public hostname prefix",
+                "name": "dnsLabel",
+                "toolTip": "Leave blank for a name based on your company and environment. Default: goblin-prod.",
+                "type": "Microsoft.Common.TextBox"
+              }
+            ],
+            "label": "Optional resource-name overrides",
+            "name": "nameOverrides",
+            "type": "Microsoft.Common.Section"
+          }
+        ],
+        "label": "Advanced settings",
+        "name": "advanced"
+      }
+    ]
+  },
+  "version": "0.1.2-preview"
+}

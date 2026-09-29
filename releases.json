@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "recommended": null,
+  "releases": [
+    {
+      "version": "0.1.0-preview.1",
+      "channel": "preview",
+      "sourceRevision": "36925cad590385ab2b04deb8b8b2d49e6b829b5e",
+      "manifestSha256": "4fb9841aed3b99cf9c25f287d72f1a743b21b389997164737f7fa0f43a8455da"
+    }
+  ]
+}
