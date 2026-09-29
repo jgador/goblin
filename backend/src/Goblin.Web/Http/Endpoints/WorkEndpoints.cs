@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
@@ -5,6 +6,8 @@ using System.Threading.Tasks;
 using Goblin.Application.Work;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+
+using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Web;
 
@@ -20,29 +23,29 @@ internal static class WorkEndpoints
     }
 
     private static async Task<IResult> ListAsync(WorkStore store, CancellationToken token) =>
-        WorkResponse.Json(await store.ListAsync(token));
+        WorkResponse.Json(Array.ConvertAll(await store.ListAsync(token), Api.WorkView.From));
 
     private static async Task<IResult> GetAsync(long id, WorkStore store, CancellationToken token) =>
-        WorkResponse.Json(await store.GetAsync(id, token));
+        WorkResponse.Json(Api.WorkView.From(await store.GetAsync(id, token)));
 
     private static async Task<IResult> ApplyAsync(HttpContext context, WorkStore store)
     {
         Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        WorkCommand command = JsonSerializer.Deserialize<WorkCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
+        Api.WorkCommand command = JsonSerializer.Deserialize<Api.WorkCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
             ?? throw new PublicError("invalid_command", "Send a work command.");
         // Once accepted, the command has an independent transaction and
         // execution lifecycle. RequestAborted is deliberately not passed.
-        return WorkResponse.Json(await store.ApplyAsync(command));
+        return WorkResponse.Json(Api.WorkView.From(await store.ApplyAsync(command.ToApplication())));
     }
 
     private static async Task<IResult> ReserveIdentitiesAsync(HttpContext context, IdentityStore store, CancellationToken token)
     {
         Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        IdentityRequest request = JsonSerializer.Deserialize<IdentityRequest>(JsonSerializer.Serialize(body), WorkStore.Json)
+        Api.IdentityRequest request = JsonSerializer.Deserialize<Api.IdentityRequest>(JsonSerializer.Serialize(body), WorkStore.Json)
             ?? throw new PublicError("invalid_command", "Specify the IDs to reserve.");
-        return WorkResponse.Json(await store.ReserveAsync(request, token));
+        return WorkResponse.Json(Api.ReservedIdentities.From(await store.ReserveAsync(request.ToApplication(), token)));
     }
 
     private static async Task<IResult> AgentsAsync(WorkStore store, CancellationToken token) =>
-        WorkResponse.Json(await store.AgentsAsync(token));
+        WorkResponse.Json(Array.ConvertAll(await store.AgentsAsync(token), Api.AgentView.From));
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
@@ -8,6 +9,8 @@ using Goblin.Contracts.Runtime;
 using Goblin.Execution;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+
+using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Web;
 
@@ -32,14 +35,16 @@ internal sealed class WorkspaceEndpoints
     private async Task<IResult> GetAsync(long id, WorkspaceCheckpoints checkpoints, InspectionStore sessions, WorkStore store, CancellationToken token)
     {
         await store.GetAsync(id, token);
-        return WorkResponse.Json(new { checkpoints = await checkpoints.ListAsync(id, token), sessions = await sessions.ListAsync(id, token), terminalAvailable = _repositoryListener });
+        return WorkResponse.Json(new Api.WorkspaceView(
+            Array.ConvertAll(await checkpoints.ListAsync(id, token), Api.WorkspaceCheckpoint.From),
+            Array.ConvertAll(await sessions.ListAsync(id, token), Api.InspectionView.From), _repositoryListener));
     }
 
     private static async Task<IResult> OpenAsync(long id, HttpContext context, InspectionStore sessions)
     {
         Dictionary<string, JsonElement> body = ApiRequest.Body(context);
         InspectionRequest request = JsonSerializer.Deserialize<InspectionRequest>(JsonSerializer.Serialize(body), WorkStore.Json)!;
-        return WorkResponse.Json(await sessions.OpenAsync(id, request.Id, request.AttemptId, CancellationToken.None));
+        return WorkResponse.Json(Api.InspectionView.From(await sessions.OpenAsync(id, request.Id, request.AttemptId, CancellationToken.None)));
     }
 
     private static async Task<IResult> StopAsync(long id, long session, InspectionStore sessions)

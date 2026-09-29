@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
+using Api = Goblin.Web.Http.Contracts;
+
 namespace Goblin.Web;
 
 internal sealed class ConnectionEndpoints
@@ -41,12 +43,12 @@ internal sealed class ConnectionEndpoints
         }
     }
 
-    private Task<AuthenticationState> StatusAsync(HttpContext context) => ConnectionAsync(context, false, _auth.StatusAsync);
-    private Task<AuthenticationState> LoginChatGptAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGptAsync);
-    private Task<AuthenticationState> LoginApiKeyAsync(HttpContext context) =>
+    private Task<Api.AuthenticationState> StatusAsync(HttpContext context) => ConnectionAsync(context, false, _auth.StatusAsync);
+    private Task<Api.AuthenticationState> LoginChatGptAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGptAsync);
+    private Task<Api.AuthenticationState> LoginApiKeyAsync(HttpContext context) =>
         ConnectionAsync(context, true, () => _auth.LoginApiKeyAsync(ApiRequest.StringField(context, "apiKey")));
-    private Task<AuthenticationState> CancelLoginAsync(HttpContext context) => ConnectionAsync(context, true, _auth.CancelLoginAsync);
-    private Task<AuthenticationState> LogoutAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LogoutAsync);
+    private Task<Api.AuthenticationState> CancelLoginAsync(HttpContext context) => ConnectionAsync(context, true, _auth.CancelLoginAsync);
+    private Task<Api.AuthenticationState> LogoutAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LogoutAsync);
 
     private async Task<IResult> PromptAsync(HttpContext context)
     {
@@ -57,7 +59,7 @@ internal sealed class ConnectionEndpoints
         {
             PromptResult result = await _auth.SendPromptAsync(ApiRequest.StringField(context, "prompt"), context.RequestAborted);
             available = true;
-            return Results.Json(result);
+            return Results.Json(Api.PromptResult.From(result));
         }
         finally { if (store is not null) await store.EndVerificationAsync(WorkStore.DefaultAgentId, available); }
     }
@@ -65,21 +67,21 @@ internal sealed class ConnectionEndpoints
     private async Task<IResult> ListAsync(HttpContext context, WorkStore store, CancellationToken token)
     {
         try { await StatusAsync(context); } catch (IntegrationFailure) { }
-        return WorkResponse.Json(await store.ConnectionsAsync(token));
+        return WorkResponse.Json(Array.ConvertAll(await store.ConnectionsAsync(token), Api.ConnectionView.From));
     }
 
     private static async Task<IResult> ModelsAsync(long id, int? limit, string? selected, ModelCatalogStore catalogs, CancellationToken token) =>
-        WorkResponse.Json(await catalogs.GetAsync(id, limit ?? 3, selected, token));
+        WorkResponse.Json(Api.ModelCatalogView.From(await catalogs.GetAsync(id, limit ?? 3, selected, token)));
 
     private static async Task<IResult> RefreshModelsAsync(long id, ModelCatalogStore catalogs, CancellationToken token)
     {
         catalogs.ScheduleRefresh(id, force: true);
-        return WorkResponse.Json(await catalogs.GetAsync(id, 3, null, token));
+        return WorkResponse.Json(Api.ModelCatalogView.From(await catalogs.GetAsync(id, 3, null, token)));
     }
 
-    private static RuntimeCapabilities[] Runtimes(IExecutionHost host) => host.Capabilities;
+    private static Api.RuntimeCapabilities[] Runtimes(IExecutionHost host) => Array.ConvertAll(host.Capabilities, Api.RuntimeCapabilities.From);
 
-    private async Task<AuthenticationState> ConnectionAsync(HttpContext context, bool changing, Func<Task<AuthenticationState>> action)
+    private async Task<Api.AuthenticationState> ConnectionAsync(HttpContext context, bool changing, Func<Task<AuthenticationState>> action)
     {
         WorkStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<WorkStore>() : null;
         if (changing && store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, "Changing", requireIdle: true);
@@ -102,7 +104,7 @@ internal sealed class ConnectionEndpoints
                         catch { /* Discovery cannot change the connection result. */ }
                 }
             }
-            return state;
+            return Api.AuthenticationState.From(state);
         }
         catch
         {

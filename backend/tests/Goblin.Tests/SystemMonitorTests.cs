@@ -86,12 +86,12 @@ public sealed class SystemMonitorTests
         Assert.NotNull(monitor.Current.Machine);
         Assert.DoesNotContain("secret", JsonSerializer.Serialize(monitor.Current));
         source.Fail = false;
-        source.Snapshot = source.Snapshot with { ObservedAt = Now.AddMinutes(-10) };
+        source.Snapshot = At(source.Snapshot, Now.AddMinutes(-10));
         await monitor.CollectAsync(CancellationToken.None);
         Assert.Equal("stale", monitor.Current.Status);
         for (int i = 0; i < 40; i++)
         {
-            source.Snapshot = source.Snapshot with { ObservedAt = Now.AddMilliseconds(i) };
+            source.Snapshot = At(source.Snapshot, Now.AddMilliseconds(i));
             await monitor.CollectAsync(CancellationToken.None);
         }
         Assert.Equal("live", monitor.Current.Status);
@@ -127,6 +127,10 @@ public sealed class SystemMonitorTests
         Assert.Equal("unavailable", monitor.Current.Status);
         Assert.DoesNotContain("private", JsonSerializer.Serialize(monitor.Current));
     }
+
+    private static MachineSnapshot At(MachineSnapshot snapshot, DateTimeOffset at) =>
+        new(at, snapshot.Name, snapshot.Environment, snapshot.OperatingSystem, snapshot.UptimeSeconds,
+            snapshot.Cpu, snapshot.Memory, snapshot.Disk, snapshot.Warnings, snapshot.Services);
 
     private sealed class Source : ISystemSource
     {
