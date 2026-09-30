@@ -52,13 +52,17 @@ async function workspace(page: Page, connected = true) {
     const commands: string[] = [];
     await page.route("**/api/**", (route) => {
         const path = new URL(route.request().url()).pathname;
+        if (path === "/api/values.js") return route.continue();
         if (route.request().method() === "POST") commands.push(path);
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
         else if (path === "/api/preferences")
             json = { timeZone: "Asia/Manila" };
         if (path === "/api/work") json = items;
-        if (path === "/api/agents") json = [{ id: "1", name: "Goblin" }];
+        if (path === "/api/agents")
+            json = [
+                { id: "1", name: "Goblin", connectionId: "1", isDefault: true },
+            ];
         if (path === "/api/connections")
             json = [
                 {
@@ -195,7 +199,9 @@ test("Work state is primary, Activity stays beside it, and inspection preserves 
     await page.locator(".detail-body").evaluate((el) => {
         el.scrollTop = 0;
     });
-    await page.screenshot({ path: "test-results/workspace-work.png" });
+    await page.screenshot({
+        path: test.info().outputPath("workspace-work.png"),
+    });
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await page
         .getByPlaceholder("Describe the intended outcome…")
@@ -328,7 +334,7 @@ for (const width of [1024, 390, 320]) {
             }),
         ).toBe(true);
         await page.screenshot({
-            path: `test-results/workspace-work-${width}.png`,
+            path: test.info().outputPath(`workspace-work-${width}.png`),
         });
     });
 }
@@ -530,134 +536,4 @@ test("the scoped composer retains command identity and draft until the selected 
         commandId: "9007199254740993",
     });
     expect(commands[1]).toEqual(commands[0]);
-});
-
-test("retained workspace inspection reads files through an available session and renders text", async ({
-    page,
-}) => {
-    await workspace(page);
-    const checkpoint = "9007199254740993";
-    const posts: string[] = [];
-    await page.route("**/api/work/1/workspace**", (route) => {
-        const url = new URL(route.request().url());
-        if (route.request().method() === "POST") posts.push(url.pathname);
-        let json: unknown = {
-            checkpoints: [
-                {
-                    id: checkpoint,
-                    attemptId: "1",
-                    turnNumber: 1,
-                    branch: "goblin/1/1",
-                    commitSha: "a".repeat(40),
-                    createdAt: "2026-09-23T00:00:00Z",
-                },
-            ],
-            sessions: [{ id: "42", attemptId: "1", state: "Available" }],
-            terminalAvailable: true,
-        };
-        if (url.pathname.endsWith("/files")) {
-            expect(url.pathname).toContain("/sessions/42/files");
-            json = url.searchParams.has("path")
-                ? {
-                      path: "repository/report.txt",
-                      text: "<script>window.workspaceInjected=true</script>\nSaved output",
-                  }
-                : {
-                      files: [{ path: "repository/report.txt", size: 80 }],
-                      truncated: false,
-                  };
-        }
-        return route.fulfill({ json });
-    });
-    await page.goto("/work?item=1");
-    await page
-        .getByRole("button", { name: "Open workspace", exact: true })
-        .click();
-    const dialog = page.getByRole("dialog", { name: "Workspace", exact: true });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole("button", { name: "report.txt" }).click();
-    await expect(dialog.getByLabel("File preview")).toContainText(
-        "Saved output",
-    );
-    expect(
-        await page.evaluate(() => Reflect.get(window, "workspaceInjected")),
-    ).toBeUndefined();
-    expect(posts).toEqual([]);
-    await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Open workspace", exact: true }),
-    ).toBeFocused();
-});
-
-test("inspection reserves a bigint ID and reuses it after an unconfirmed open", async ({
-    page,
-}) => {
-    await workspace(page);
-    const checkpoint = "9007199254740993",
-        session = "9007199254740995";
-    let reservations = 0;
-    const opens: Record<string, unknown>[] = [];
-    await page.route("**/api/identities", (route) => {
-        expect(route.request().postDataJSON()).toEqual({
-            kinds: ["Inspection"],
-        });
-        reservations++;
-        return route.fulfill({ json: { ids: [session] } });
-    });
-    await page.route("**/api/work/1/workspace**", (route) => {
-        const url = new URL(route.request().url());
-        if (route.request().method() === "POST") {
-            opens.push(route.request().postDataJSON());
-            return opens.length === 1
-                ? route.fulfill({
-                      status: 503,
-                      json: { error: { message: "Open unconfirmed" } },
-                  })
-                : route.fulfill({ json: {} });
-        }
-        if (url.pathname.endsWith("/files")) {
-            expect(url.pathname).toContain(`/sessions/${session}/files`);
-            return route.fulfill({ json: { files: [], truncated: false } });
-        }
-        return route.fulfill({
-            json: {
-                checkpoints: [
-                    {
-                        id: checkpoint,
-                        attemptId: "1",
-                        turnNumber: 1,
-                        branch: "goblin/1/1",
-                        commitSha: "a".repeat(40),
-                        createdAt: "2026-09-23T00:00:00Z",
-                    },
-                ],
-                sessions:
-                    opens.length > 1
-                        ? [
-                              {
-                                  id: session,
-                                  attemptId: "1",
-                                  state: "Queued",
-                              },
-                          ]
-                        : [],
-                terminalAvailable: true,
-            },
-        });
-    });
-    await page.goto("/work?item=1");
-    await page
-        .getByRole("button", { name: "Open workspace", exact: true })
-        .click();
-    const dialog = page.getByRole("dialog", { name: "Workspace", exact: true });
-    await dialog.getByRole("button", { name: "Start inspection" }).click();
-    await expect(dialog.getByRole("alert")).toHaveText("Open unconfirmed");
-    await dialog.getByRole("button", { name: "Resend open request" }).click();
-    await expect(dialog).toContainText("Waiting for capacity");
-    expect(reservations).toBe(1);
-    expect(opens).toEqual([
-        { id: session, attemptId: "1" },
-        { id: session, attemptId: "1" },
-    ]);
 });

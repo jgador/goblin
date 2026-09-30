@@ -17,10 +17,28 @@ test("installation logs stream concurrent progress, survive refresh, and render 
         setup.transition("detail", "<img src=x onerror=alert(1)>");
         await expect(log).toContainText("<img src=x onerror=alert(1)>");
         await expect(log.locator("img")).toHaveCount(0);
-        await page.getByLabel("Follow latest").uncheck();
+        for (let index = 2; index <= 24; index++) {
+            setup.transition("detail", `Downloading image layer ${index}/24`);
+        }
+        await expect(log).toContainText("Downloading image layer 24/24");
+        const distanceFromLatest = () =>
+            log.evaluate(
+                (element) =>
+                    element.scrollHeight -
+                    element.clientHeight -
+                    element.scrollTop,
+            );
+        await expect.poll(distanceFromLatest).toBeLessThan(2);
+        await log.evaluate((element) => {
+            element.scrollTop = 0;
+        });
+        await expect(page.getByLabel("Follow latest")).not.toBeChecked();
         setup.transition("detail", "Download completed");
         await expect(log).toContainText("Download completed");
         await expect(page.getByLabel("Follow latest")).not.toBeChecked();
+        expect(await log.evaluate((element) => element.scrollTop)).toBe(0);
+        await page.getByLabel("Follow latest").check();
+        await expect.poll(distanceFromLatest).toBeLessThan(2);
         await page.reload();
         await expect(log).toContainText("Downloading image 1/8");
         await expect(log).toContainText("Download completed");

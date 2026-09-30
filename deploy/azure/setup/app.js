@@ -13,6 +13,8 @@ function render(state) {
   if (latest?.logGeneration === state.logGeneration && state.revision < latest.revision) return;
   latest = state;
   message.textContent = state.message;
+  logConnection.dataset.status = state.status;
+  logConnection.textContent = state.status === SetupStatus.Failed ? 'Installation stopped' : state.status === SetupStatus.Ready ? 'Complete' : 'Live';
   document.querySelector('#recovery').hidden = state.status !== SetupStatus.Failed;
   document.querySelector('h1').textContent = state.status === SetupStatus.Failed ? 'Setup needs attention.' : 'Getting things ready.';
   steps.replaceChildren(...state.steps.map((step, index) => {
@@ -39,9 +41,26 @@ function renderLog(state) {
   if (!Array.isArray(state.logs) || !state.logs.length) return;
   const previousScroll = log.scrollTop;
   log.replaceChildren(...state.logs.map(entry => {
-    const row = document.createElement('p');
-    const time = new Date(entry.timestamp).toLocaleTimeString([], { hour12: false });
-    row.textContent = `${time} · Attempt ${entry.attempt}${entry.step ? ` · ${entry.step}` : ''}\n${entry.message}`;
+    const row = document.createElement('div');
+    row.className = 'log-entry';
+    const meta = document.createElement('div');
+    meta.className = 'log-entry-meta';
+    const time = document.createElement('time');
+    time.dateTime = entry.timestamp;
+    time.textContent = new Date(entry.timestamp).toLocaleTimeString([], { hour12: false });
+    const attempt = document.createElement('span');
+    attempt.textContent = `Attempt ${entry.attempt}`;
+    meta.append(time, attempt);
+    if (entry.step) {
+      const step = document.createElement('span');
+      step.className = 'log-step';
+      step.textContent = state.steps.find(step => step.id === entry.step)?.label ?? entry.step;
+      meta.append(step);
+    }
+    const output = document.createElement('p');
+    output.className = 'log-message';
+    output.textContent = entry.message;
+    row.append(meta, output);
     return row;
   }));
   log.scrollTop = followLog.checked ? log.scrollHeight : previousScroll;
@@ -59,13 +78,18 @@ events.addEventListener('progress', event => {
     const state = JSON.parse(event.data);
     if (!isSetupState(state)) return;
     render(state);
-    logConnection.textContent = state.status === SetupStatus.Failed ? 'Installation stopped' : state.status === SetupStatus.Ready ? 'Complete' : 'Live';
-  } catch { logConnection.textContent = 'Reconnecting…'; }
+  } catch {
+    logConnection.textContent = 'Reconnecting…';
+    delete logConnection.dataset.status;
+  }
 });
 events.addEventListener('error', () => {
   // Bounded server batches close normally. Show a gap only when status also
   // cannot be reached; EventSource resumes automatically with its last event ID.
-  if (failures) logConnection.textContent = 'Reconnecting…';
+  if (failures) {
+    logConnection.textContent = 'Reconnecting…';
+    delete logConnection.dataset.status;
+  }
 });
 window.addEventListener('pagehide', () => events.close());
 

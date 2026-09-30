@@ -121,6 +121,7 @@ public sealed partial class WorkStore
         {
             if (row is not null) throw new ApplicationFailure("work_already_exists");
             work = new(command.WorkId, command.Text ?? "", now);
+            work.Assign(DefaultAgentId, now);
             row = new() { Id = work.Id, Objective = work.Objective, CreatedAt = now.UtcDateTime, Version = 0 };
             db.WorkItems.Add(row);
         }

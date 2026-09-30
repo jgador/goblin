@@ -40,7 +40,9 @@ rotates through Kubernetes' projected volume. Goblin strips browser cookies,
 authorization, impersonation, and proxy headers before forwarding. The browser
 cannot supply an alternate account. Headlamp cannot set Goblin cookies. The
 proxy excludes Headlamp's external proxy, cluster import, plugin installation,
-and administrative operations. It supports Kubernetes watches and log streams;
+and administrative operations. It allows read-only Kubernetes health checks at
+`/healthz`, `/livez`, and `/readyz` so Headlamp can show cluster connectivity.
+It supports Kubernetes watches and log streams;
 connections are bounded to five minutes before they need fresh authorization.
 
 Headlamp shares Goblin's browser origin, so it is a trusted part of this

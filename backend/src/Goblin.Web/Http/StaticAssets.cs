@@ -20,6 +20,7 @@ internal sealed class StaticAssets
         foreach ((string? path, string? file, string? type) in new[]
         {
             ("/", "work/index.html", "text/html; charset=utf-8"),
+            ("/api/values.js", "api/values.js", "text/javascript; charset=utf-8"),
             ("/app.js", "connection/app.js", "text/javascript; charset=utf-8"),
             ("/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
             ("/connection/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
@@ -36,7 +37,6 @@ internal sealed class StaticAssets
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
             ("/work/presentation.js", "work/presentation.js", "text/javascript; charset=utf-8"),
             ("/work/surface.js", "work/surface.js", "text/javascript; charset=utf-8"),
-            ("/work/workspace.js", "work/workspace.js", "text/javascript; charset=utf-8"),
             ("/work/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/assets/branding/icon.svg", "assets/branding/icon.svg", "image/svg+xml")
         }) staticFiles.Add(path, (await File.ReadAllBytesAsync(Path.Combine(directory, file)), type));

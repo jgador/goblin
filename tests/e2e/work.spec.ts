@@ -39,9 +39,15 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Create work", exact: true })
             .click();
         await expect(page.locator(".detail h2")).toHaveText(objective);
-        await page
-            .getByRole("button", { name: "Assign agent", exact: true })
-            .click();
+        await expect(
+            page.getByRole("button", { name: "Assign agent", exact: true }),
+        ).toHaveCount(0);
+        const id = new URL(page.url()).searchParams.get("item");
+        const saved = (await (await page.request.get(`/api/work/${id}`)).json())
+            .work;
+        expect(saved.agentId).toBe("1");
+        expect(saved.status).toBe("Ready");
+        expect(saved.attempts).toEqual([]);
     }
     for (const fromConversation of [false, true]) {
         test(`repository authorization continues the same Work ${fromConversation ? "after a conversation" : "from its objective"}`, async ({
@@ -79,7 +85,11 @@ test.describe("durable Work", () => {
                 .getByRole("button", { name: "Start work", exact: true })
                 .click();
             await expect(
-                page.getByRole("heading", { name: "Repository access needed" }),
+                page.getByRole("heading", {
+                    name: fromConversation
+                        ? "Repository access needed"
+                        : "Authorize GitHub access",
+                }),
             ).toBeVisible();
             const id = new URL(page.url()).searchParams.get("item");
             const before = (
@@ -89,20 +99,29 @@ test.describe("durable Work", () => {
             expect(before.workspace).toBeNull();
             await page.reload();
             await expect(
-                page.getByRole("heading", { name: "Repository access needed" }),
+                page.getByRole("heading", {
+                    name: fromConversation
+                        ? "Repository access needed"
+                        : "Authorize GitHub access",
+                }),
             ).toBeVisible();
-            if (fromConversation)
+            if (fromConversation) {
                 await page
                     .getByLabel("Repository", { exact: true })
-                    .selectOption("owner/repo");
-            else
-                await expect(
-                    page.getByLabel("Repository", { exact: true }),
-                ).toHaveValue("owner/repo");
-            await page.getByLabel("Agent Git email").fill("agent@example.com");
+                    .fill("owner/repo");
+                await page
+                    .getByLabel("Agent Git email")
+                    .fill("agent@example.com");
+                await page
+                    .getByRole("button", {
+                        name: "Review repository access",
+                        exact: true,
+                    })
+                    .click();
+            }
             await page
                 .getByRole("button", {
-                    name: "Authorize & continue",
+                    name: "Authorize this Work",
                     exact: true,
                 })
                 .click();
@@ -145,6 +164,13 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
+        await page
+            .getByRole("textbox", { name: "Describe the intended outcome…" })
+            .fill(objective);
+        await page
+            .getByRole("button", { name: "Create work", exact: true })
+            .click();
+        await expect(page.locator(".detail h2")).toHaveText(objective);
         await page.locator(".model-picker-trigger").click();
         const popover = page.getByRole("dialog", {
             name: "Model and reasoning effort",
@@ -173,31 +199,25 @@ test.describe("durable Work", () => {
             path: test.info().outputPath("new-work-model-picker.png"),
             fullPage: true,
         });
-        await page
-            .getByRole("textbox", { name: "Describe the intended outcome…" })
-            .fill(objective);
-        await page
-            .getByRole("button", { name: "Create work", exact: true })
-            .click();
-        await expect(page.locator(".detail h2")).toHaveText(objective);
+
         await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
             "aria-label",
-            "Model: GPT-TEST-9, reasoning effort: High",
+            "Options: GPT-TEST-9, reasoning effort: High",
         );
         await page.reload();
         await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
             "aria-label",
-            "Model: GPT-TEST-9, reasoning effort: High",
+            "Options: GPT-TEST-9, reasoning effort: High",
         );
-        await page
-            .getByRole("button", { name: "Assign agent", exact: true })
-            .click();
+        await expect(
+            page.getByRole("button", { name: "Assign agent", exact: true }),
+        ).toHaveCount(0);
         await expect(
             page.getByRole("button", { name: "Start work", exact: true }),
         ).toBeVisible();
         await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
             "aria-label",
-            "Model: GPT-TEST-9, reasoning effort: High",
+            "Options: GPT-TEST-9, reasoning effort: High",
         );
         await page.screenshot({
             path: test.info().outputPath("model-picker.png"),
@@ -230,13 +250,25 @@ test.describe("durable Work", () => {
         await expect(
             page.locator(".execution-properties").first(),
         ).toContainText("High");
-        await expect(page.locator(".model-picker-trigger")).toBeVisible();
+        await expect(
+            page.locator(".work-composer .model-picker-trigger"),
+        ).toHaveCount(0);
     });
-    test("conversation model choice follows tracked work", async ({ page }) => {
+    test("tracked conversation belongs to Goblin and selects its model before starting", async ({
+        page,
+    }) => {
         await unlock(page);
         await page
             .getByRole("button", { name: "New conversation", exact: true })
             .click();
+        await page.getByRole("textbox").fill("Plan a release " + Date.now());
+        await page.getByRole("button", { name: "Send message" }).click();
+        await page
+            .getByRole("button", { name: "Track this work", exact: true })
+            .click();
+        await expect(page.locator(".detail h2")).toContainText(
+            "Plan a release",
+        );
         await page.locator(".model-picker-trigger").click();
         const popover = page.getByRole("dialog", {
             name: "Model and reasoning effort",
@@ -249,26 +281,18 @@ test.describe("durable Work", () => {
         await popover
             .getByRole("button", { name: "High", exact: true })
             .click();
-        await page.getByRole("textbox").fill("Plan a release " + Date.now());
-        await page.getByRole("button", { name: "Send message" }).click();
-        await page
-            .getByRole("button", { name: "Track this work", exact: true })
-            .click();
-        await expect(page.locator(".detail h2")).toContainText(
-            "Plan a release",
-        );
         await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
             "aria-label",
-            "Model: GPT-TEST-0, reasoning effort: High",
+            "Options: GPT-TEST-0, reasoning effort: High",
         );
         await page.reload();
         await expect(page.locator(".model-picker-trigger")).toHaveAttribute(
             "aria-label",
-            "Model: GPT-TEST-0, reasoning effort: High",
+            "Options: GPT-TEST-0, reasoning effort: High",
         );
-        await page
-            .getByRole("button", { name: "Assign agent", exact: true })
-            .click();
+        await expect(
+            page.getByRole("button", { name: "Assign agent", exact: true }),
+        ).toHaveCount(0);
         await page
             .getByRole("button", { name: "Start work", exact: true })
             .click();
@@ -525,7 +549,10 @@ test.describe("durable Work", () => {
         await unlock(page);
         await create(page, "History remains available " + Date.now());
         await expect(
-            page.getByRole("button", { name: "Start work", exact: true }),
+            page.getByRole("button", {
+                name: "Manage Codex connection",
+                exact: true,
+            }),
         ).toBeVisible();
         expect((await page.request.get("/readyz")).status()).toBe(200);
         await page.reload();

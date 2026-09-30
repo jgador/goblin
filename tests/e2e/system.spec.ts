@@ -46,6 +46,7 @@ async function fixture(page: Page) {
     let locked = false;
     await page.route("**/api/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
+        if (path === "/api/values.js") return route.continue();
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: !locked };
         else if (path === "/api/preferences")
@@ -91,7 +92,7 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
     ).toBeVisible();
     await expect(panel.getByText(/Windows memory/)).toBeVisible();
     await page.screenshot({
-        path: "test-results/system-desktop.png",
+        path: test.info().outputPath("system-desktop.png"),
         fullPage: true,
     });
     await panel
@@ -161,7 +162,7 @@ test("System supports mobile, pending sandboxes, unavailable metrics, and lock c
         ),
     ).toBe(true);
     await page.screenshot({
-        path: "test-results/system-mobile.png",
+        path: test.info().outputPath("system-mobile.png"),
         fullPage: true,
     });
     await dialog.getByRole("button", { name: "Lock workspace" }).click();

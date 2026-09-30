@@ -17,6 +17,7 @@ test("the work preview and its assets are public while workspace APIs remain pro
     const paths = new Map([
         ["/", "text/html"],
         ["/app.js", "text/javascript"],
+        ["/api/values.js", "text/javascript"],
         ["/styles.css", "text/css"],
         ["/work", "text/html"],
         ["/work/", "text/html"],
