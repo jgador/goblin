@@ -147,7 +147,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     expect(commands).toEqual([]);
 });
 
-test("Work state is primary, Activity stays beside it, and inspection preserves drafts", async ({
+test("Work cards fill the canvas, Activity opens on demand, and inspection preserves drafts", async ({
     page,
 }) => {
     const commands = await workspace(page);
@@ -163,21 +163,19 @@ test("Work state is primary, Activity stays beside it, and inspection preserves 
         "Goal",
         "Progress",
         "Ready for your review",
-        "Decisions",
-        "Recent outputs",
+        "Outputs",
     ]);
-    await expect(
-        page.getByRole("complementary", { name: "Activity" }),
-    ).toBeVisible();
+    await expect(page.locator(".activity-panel")).toBeHidden();
     await expect(
         page.getByRole("button", { name: "Approve & complete" }),
     ).toBeVisible();
     const center = (await page.locator(".main-shell").boundingBox())!;
-    const activity = (await page.locator(".activity-panel").boundingBox())!;
     const navigation = (await page.locator(".sidebar").boundingBox())!;
-    expect(center.width).toBeGreaterThan(activity.width * 2);
     expect(center.x).toBe(navigation.width);
-    expect(activity.x).toBe(center.x + center.width);
+    expect(center.x + center.width).toBe(1440);
+    await page.getByRole("button", { name: "Activity", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "Activity" })).toBeVisible();
+    await page.keyboard.press("Escape");
     await expect(page.locator("#work-conversation")).toBeHidden();
     const draft = page.getByPlaceholder("Add context to this work…");
     await draft.fill("Keep the review draft");
@@ -231,7 +229,7 @@ test("search finds output content and filters keep selection independent from br
     await search.fill("shorter"); // Result text, not a Work title.
     await expect(list.getByRole("button")).toHaveCount(3);
     await search.fill("");
-    await page.getByRole("button", { name: /^Needs Attention/ }).click();
+    await page.getByRole("button", { name: /^Needs attention/ }).click();
     await expect(list.getByRole("button")).toHaveCount(1);
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
@@ -240,7 +238,7 @@ test("search finds output content and filters keep selection independent from br
     await expect(list.getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: /Write the release notes/ }).click();
     await expect(page.locator(".detail .status-pill")).toHaveText("Completed");
-    await page.getByRole("button", { name: /Assigned to Goblin/ }).click();
+    await page.getByRole("button", { name: /My work/ }).click();
     await expect(list.getByRole("button")).toHaveCount(2);
     await search.fill("release notes");
     await expect(list.getByRole("button")).toHaveCount(1);
@@ -338,6 +336,138 @@ for (const width of [1024, 390, 320]) {
         });
     });
 }
+
+test("completed work keeps outputs, sharing, and agent inspection available without execution controls", async ({
+    page,
+    context,
+}) => {
+    const commands = await workspace(page);
+    const at = "2026-09-21T00:00:00Z";
+    const objective = "Migrate authentication preview to TypeScript";
+    await page.route("**/api/work", (route) =>
+        route.fulfill({
+            json: [
+                {
+                    version: "3",
+                    createdAt: at,
+                    updatedAt: at,
+                    work: {
+                        id: "3",
+                        objective,
+                        status: "Completed",
+                        agentId: "1",
+                        attempts: [
+                            {
+                                id: "30",
+                                agentId: "1",
+                                status: "Succeeded",
+                                target: { runtime: "codex" },
+                                startedAt: at,
+                                finishedAt: at,
+                            },
+                        ],
+                        results: [
+                            {
+                                attemptId: "30",
+                                text: "Migrated the authentication preview and updated the tests.",
+                                proposedAt: at,
+                                approvedAt: at,
+                            },
+                        ],
+                        artifacts: [
+                            {
+                                name: "PR #123",
+                                reference:
+                                    "https://github.com/owner/project/pull/123",
+                                attemptId: "30",
+                                createdAt: at,
+                            },
+                            {
+                                name: "Commit b4a7e35",
+                                reference:
+                                    "https://github.com/owner/project/commit/b4a7e35",
+                                attemptId: "30",
+                                createdAt: at,
+                            },
+                        ],
+                        decisions: [],
+                        history: [],
+                    },
+                },
+            ],
+        }),
+    );
+    await page.setViewportSize({ width: 1743, height: 902 });
+    await page.goto("/work?item=3");
+    await expect(page.locator(".detail h2")).toHaveText(objective);
+    await expect(
+        page.locator(".progress-row .milestone-icon.complete"),
+    ).toHaveCount(3);
+    await expect(
+        page.getByRole("region", { name: "Decisions", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+        page.getByRole("button", { name: "Start work", exact: true }),
+    ).toHaveCount(0);
+    await page.keyboard.press("Control+k");
+    await expect(page.getByRole("searchbox")).toBeFocused();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await expect(
+        page.getByRole("button", { name: "Lock workspace", exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(
+        page.getByLabel("Workspace menu", { exact: true }),
+    ).toBeFocused();
+    await expect(page.locator("#workspace-menu")).not.toHaveAttribute(
+        "open",
+        "",
+    );
+    await page.screenshot({
+        path: test.info().outputPath("redesign-completed-desktop.png"),
+    });
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    await expect(page.locator("#toast")).toContainText("Work link copied");
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+        page.url(),
+    );
+    await page.getByRole("button", { name: "View all", exact: true }).click();
+    await expect(page.locator("#all-outputs")).toHaveAttribute("open", "");
+    await expect(page.locator(".output-row summary:visible")).toHaveCount(4);
+    await page.getByRole("button", { name: "Agent", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await expect(
+        settings.getByRole("heading", { name: "Agents", exact: true }),
+    ).toBeVisible();
+    await expect(
+        settings.getByRole("heading", { name: "Goblin", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".detail-body").evaluate((element) => {
+        element.scrollTop = 0;
+    });
+    await page.locator(".work-composer textarea").blur();
+    await expect(page.locator("#toast")).toHaveText("");
+    await expect(
+        page.getByRole("button", { name: "Share", exact: true }),
+    ).toBeVisible();
+    await expect(page.locator(".work-composer")).toBeInViewport();
+    expect(
+        await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+    ).toBe(true);
+    await page.locator(".detail-body").evaluate((element) => {
+        element.scrollTop = 0;
+    });
+    await expect(page.locator(".detail h2")).toBeInViewport();
+    await page.screenshot({
+        path: test.info().outputPath("redesign-completed-mobile.png"),
+    });
+    expect(commands).toEqual([]);
+});
 
 test("global Ask Goblin has its own draft and leaves Work context scoped", async ({
     page,

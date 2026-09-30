@@ -1,6 +1,6 @@
 import { mountCodex } from "../connection/codex.js";
 import { mountGitHub } from "./github.js";
-import { icon } from "../work/presentation.js";
+import { icon, escapeHtml as e } from "../work/presentation.js";
 import { SystemResources } from "./system.js";
 import { mountTimeZonePicker } from "./timezone-picker.js";
 
@@ -38,6 +38,17 @@ export class Settings {
         this.dialog.setAttribute("aria-labelledby", "settings-title");
         this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button data-provider="logs">${icon("activity")}Logs</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section><section data-provider-panel="logs" aria-label="Logs" hidden></section></div></div>`;
         document.body.append(this.dialog);
+        const agentsButton = document.createElement("button");
+        agentsButton.dataset.provider = "agents";
+        agentsButton.innerHTML = `${icon("agents")}Agents`;
+        this.dialog
+            .querySelector('[data-provider="connections"]')!
+            .before(agentsButton);
+        const agentsPanel = document.createElement("section");
+        agentsPanel.dataset.providerPanel = "agents";
+        agentsPanel.setAttribute("aria-label", "Agents");
+        agentsPanel.hidden = true;
+        this.dialog.querySelector(".settings-content")!.append(agentsPanel);
         const timezoneButton = document.createElement("button");
         timezoneButton.dataset.provider = "timezone";
         timezoneButton.innerHTML = `${icon("clock")}Time & date`;
@@ -128,6 +139,31 @@ export class Settings {
         await this.mount(provider);
     }
     private async mount(provider: string) {
+        if (provider === "agents") {
+            const panel = this.dialog.querySelector<HTMLElement>(
+                '[data-provider-panel="agents"]',
+            )!;
+            const generation = this.generation;
+            panel.innerHTML =
+                '<h3>Agents</h3><p class="settings-description">Loading agents…</p>';
+            try {
+                const response = await fetch("/api/agents");
+                if (!response.ok) throw new Error();
+                const agents = (await response.json()) as {
+                    name: string;
+                    connectionId: string;
+                    model?: string;
+                    isDefault: boolean;
+                }[];
+                if (generation !== this.generation) return;
+                panel.innerHTML = `<h3>Agents</h3><p class="settings-description">Your coworkers carry work from its goal through review.</p>${agents.map((agent) => `<div class="provider-card"><div class="provider-heading">${icon("user")}<h4>${e(agent.name)}</h4>${agent.isDefault ? '<span class="provider-default">Default</span>' : ""}</div><p class="settings-description">${agent.model ? e(agent.model) : "Uses the connected runtime’s default model"}</p></div>`).join("") || '<p class="settings-description">No agents are available yet.</p>'}`;
+            } catch {
+                if (generation !== this.generation) return;
+                panel.innerHTML =
+                    '<h3>Agents</h3><p class="settings-notice" role="alert">Agents could not be loaded. Close Settings and try again.</p>';
+            }
+            return;
+        }
         if (provider === "timezone") {
             this.timezoneDispose?.();
             this.timezoneDispose = mountTimeZonePicker(

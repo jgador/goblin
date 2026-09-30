@@ -27,6 +27,13 @@ const icons: Record<string, string> = {
     branch: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M18 7v3a4 4 0 0 1-4 4H6"/>',
     book: '<path d="M12 5v16M12 5C9 2 4 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-2-1-7-2-10 1Z"/>',
     inbox: '<path d="M4 3h16l2 12v6H2v-6Z"/><path d="M2 15h6l2 3h4l2-3h6"/>',
+    goal: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="m15 9 5-5M17 4h3v3"/>',
+    cube: '<path d="m12 3 9 5v9l-9 5-9-5V8Zm0 9 9-4M12 12 3 8m9 4v10"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2Z"/>',
+    agents: '<circle cx="7" cy="7" r="3"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="17" r="3"/><path d="m9 9 6 6M7 10v4M14 7h6m-3-3v6"/>',
+    share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10 6-4m-6 8 6 4"/>',
+    more: '<circle cx="5" cy="12" r=".8"/><circle cx="12" cy="12" r=".8"/><circle cx="19" cy="12" r=".8"/>',
+    github: '<path d="M9 19c-4 1-4-2-6-2m12 5v-4c0-1 .1-2-1-3 3 0 6-1 6-5a4 4 0 0 0-1-3c0-1 0-2-.3-3 0 0-1-.3-3 1a10 10 0 0 0-6 0c-2-1.3-3-1-3-1-.3 1-.3 2-.3 3a4 4 0 0 0-1 3c0 4 3 5 6 5-1 1-1 2-1 3v4"/>',
 };
 export function icon(name: string, cls = "") {
     return (
