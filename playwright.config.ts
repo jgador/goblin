@@ -4,6 +4,7 @@ export default defineConfig({
     testDir: "tests/e2e",
     testMatch: "*.spec.ts",
     workers: 1,
+    outputDir: ".artifacts/playwright/test-results",
     timeout: 30_000,
     use: {
         baseURL: "http://127.0.0.1:8798",
