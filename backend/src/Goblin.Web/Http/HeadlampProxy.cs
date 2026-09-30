@@ -68,10 +68,12 @@ public sealed class HeadlampProxy : IDisposable
         if (!read) return false;
         if (path.StartsWith("/headlamp/clusters/", StringComparison.Ordinal))
             return path is "/headlamp/clusters/goblin/api" or "/headlamp/clusters/goblin/apis" or
-                       "/headlamp/clusters/goblin/version" or "/headlamp/clusters/goblin/me" ||
+                       "/headlamp/clusters/goblin/version" or "/headlamp/clusters/goblin/me" or
+                       "/headlamp/clusters/goblin/healthz" or "/headlamp/clusters/goblin/livez" or
+                       "/headlamp/clusters/goblin/readyz" ||
                    path.StartsWith("/headlamp/clusters/goblin/api/", StringComparison.Ordinal) ||
                    path.StartsWith("/headlamp/clusters/goblin/apis/", StringComparison.Ordinal);
-        // Only the UI, its static assets/config, and Kubernetes discovery/read APIs
+        // Only the UI, its static assets/config, and Kubernetes discovery/read/health APIs
         // are exposed. Headlamp's external proxy, kubeconfig and plugin installers
         // are deliberately outside this route set.
         return path is "/headlamp" or "/headlamp/" or "/headlamp/config" or "/headlamp/plugins" or "/headlamp/settings" ||

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Persistence.Tests;
 
@@ -17,8 +18,8 @@ public sealed class PostgresFactAttribute : FactAttribute
 {
     public PostgresFactAttribute()
     {
-        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN")) ||
-            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_APP")))
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin)) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresApp)))
             Skip = "Set GOBLIN_TEST_POSTGRES_ADMIN and GOBLIN_TEST_POSTGRES_APP to run PostgreSQL integration tests.";
     }
 }
@@ -189,8 +190,8 @@ public sealed class PostgresTests
 
         public static async Task<TestDatabase> CreateAsync()
         {
-            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
-            var app = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_APP"));
+            var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
+            var app = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresApp));
             string name = "goblin_test_" + Guid.NewGuid().ToString("N");
             await using var connection = new NpgsqlConnection(admin.ConnectionString);
             await connection.OpenAsync();
@@ -222,7 +223,7 @@ public sealed class PostgresTests
             // Close this process's idle application sessions before dropping a
             // test database; the schema owner need not terminate other roles.
             NpgsqlConnection.ClearAllPools();
-            await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_ADMIN"));
+            await using var connection = new NpgsqlConnection(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
             await connection.OpenAsync();
             await using var drop = new NpgsqlCommand($"DROP DATABASE {_name} WITH (FORCE);", connection);
             await drop.ExecuteNonQueryAsync();

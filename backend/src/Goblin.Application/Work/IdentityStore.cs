@@ -6,8 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Application.Work;
 
-public enum IdentityKind { Work, Command, Conversation, Message, Attempt, Event, Inspection, RepositoryOperation }
+public enum IdentityKind
+{
+    Work,
+    Command,
+    Conversation,
+    Message,
+    Attempt,
+    Event,
+    Inspection,
+    RepositoryOperation
+}
+
 public sealed record IdentityRequest(IdentityKind[] Kinds);
+
 public sealed record ReservedIdentities(long[] Ids);
 
 // Reserve IDs before constructing core objects or a replayable browser command.

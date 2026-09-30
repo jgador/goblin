@@ -22,6 +22,7 @@ public sealed class KubernetesApi : IDisposable
 {
     private readonly HttpClient _client;
     private readonly string? _tokenFile;
+
     public KubernetesApi(string? address = null, string? tokenFile = null, string? caFile = null)
     {
         address ??= "https://kubernetes.default.svc";
@@ -48,21 +49,28 @@ public sealed class KubernetesApi : IDisposable
         string? text = await SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
         return text is null ? null : JsonNode.Parse(text)!.AsObject();
     }
+
     public async Task<T?> GetAsync<T>(string path, CancellationToken token) where T : class
     {
         string? text = await SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
         return text is null ? null : JsonSerializer.Deserialize<T>(text, KubernetesJson.Options)
             ?? throw new IOException("Execution control plane returned an empty resource.");
     }
+
     public Task<string?> LogsAsync(string path, CancellationToken token) => SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
+
     public async Task<bool> CreateAsync<T>(string path, T body, CancellationToken token) where T : class =>
         await SendAsync(HttpMethod.Post, path, JsonSerializer.Serialize(body, KubernetesJson.Options), token, allowConflict: true) is not null;
+
     public Task<string?> PatchAsync<T>(string path, T body, CancellationToken token) where T : class =>
         SendAsync(HttpMethod.Patch, path, JsonSerializer.Serialize(body, KubernetesJson.Options), token);
+
     public async Task<bool> TryPatchAsync<T>(string path, T body, CancellationToken token) where T : class =>
         await SendAsync(HttpMethod.Patch, path, JsonSerializer.Serialize(body, KubernetesJson.Options), token, allowConflict: true) is not null;
+
     public Task<string?> DeleteAsync(string path, CancellationToken token) => SendAsync(HttpMethod.Delete, path,
         JsonSerializer.Serialize(new DeleteOptions { PropagationPolicy = "Foreground" }, KubernetesJson.Options), token, allowMissing: true);
+
     private async Task<string?> SendAsync(HttpMethod method, string path, string? body,
         CancellationToken token, bool allowMissing = false, bool allowConflict = false)
     {
@@ -76,6 +84,7 @@ public sealed class KubernetesApi : IDisposable
         if (!response.IsSuccessStatusCode) throw new IOException("Execution control plane request failed.");
         return await response.Content.ReadAsStringAsync(token);
     }
+
     public async Task<ClientWebSocket> ExecAsync(string ns, string pod, string container, string[] command, bool tty, CancellationToken token)
     {
         // Callers supply only a recorded inspection pod, never browser-selected K8s paths.
@@ -89,5 +98,6 @@ public sealed class KubernetesApi : IDisposable
         try { await socket.ConnectAsync(uri.Uri, _client, token); return socket; }
         catch { socket.Dispose(); throw; }
     }
+
     public void Dispose() => _client.Dispose();
 }

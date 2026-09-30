@@ -1,18 +1,22 @@
 import { test, expect, type Page } from "@playwright/test";
 
 // UI edge cases use fixtures; live Codex and repository journeys are checked separately.
-async function setup(page: Page, assigned = true, waiting = false) {
+async function setup(
+    page: Page,
+    { waiting = false, availability = "Available" } = {},
+) {
     const commands: unknown[] = [];
     await page.route("**/api/**", (route) => {
         const path = new URL(route.request().url()).pathname;
+        if (path === "/api/values.js") return route.continue();
         if (route.request().method() === "POST")
             commands.push(route.request().postDataJSON());
         const data: Record<string, unknown> = {
             "/api/session": { authenticated: true },
             "/api/preferences": { timeZone: "Asia/Manila" },
             "/api/agents": [
-                { id: "1", name: "Goblin", connectionId: "1" },
                 { id: "2", name: "Release reviewer", connectionId: "1" },
+                { id: "1", name: "Goblin", connectionId: "1", isDefault: true },
             ],
             "/api/runtimes": [{ runtime: "codex", repositoryExecution: true }],
             "/api/identities": { ids: ["900"] },
@@ -21,7 +25,7 @@ async function setup(page: Page, assigned = true, waiting = false) {
                     id: "1",
                     runtime: "codex",
                     name: "Codex",
-                    availability: "Available",
+                    availability,
                 },
             ],
             "/api/github": {
@@ -54,7 +58,7 @@ async function setup(page: Page, assigned = true, waiting = false) {
                         objective: "Review the release checklist",
                         status: waiting ? "NeedsAttention" : "Ready",
                         attention: waiting ? { reason: "InputRequired" } : null,
-                        agentId: assigned ? "1" : null,
+                        agentId: "1",
                         attempts: waiting
                             ? [
                                   {
@@ -126,14 +130,14 @@ async function setup(page: Page, assigned = true, waiting = false) {
     return commands;
 }
 
-test("compact model picker snaps the slider and keeps the choice across composers", async ({
+test("execution options preserve model and effort across refresh and stay out of composers", async ({
     page,
 }) => {
     const commands = await setup(page);
     const picker = page.locator(".model-picker-trigger");
     await expect(picker).toHaveAttribute(
         "aria-label",
-        "Model: GPT-6 Sol, reasoning effort: Medium",
+        "Options: GPT-6 Sol, reasoning effort: Medium",
     );
     await picker.click();
     const popover = page.getByRole("dialog", {
@@ -156,7 +160,7 @@ test("compact model picker snaps the slider and keeps the choice across composer
     await page.keyboard.press("ArrowRight");
     await expect(picker).toHaveAttribute(
         "aria-label",
-        "Model: GPT-6 Sol, reasoning effort: High",
+        "Options: GPT-6 Sol, reasoning effort: High",
     );
     const track = await slider.boundingBox();
     expect(track).not.toBeNull();
@@ -189,7 +193,7 @@ test("compact model picker snaps the slider and keeps the choice across composer
     ).toBe(1);
     await expect(picker).toHaveAttribute(
         "aria-label",
-        "Model: GPT-6 Sol, reasoning effort: Extra High",
+        "Options: GPT-6 Sol, reasoning effort: Extra High",
     );
     await popover.locator(".model-row").click();
     await expect(
@@ -209,14 +213,14 @@ test("compact model picker snaps the slider and keeps the choice across composer
     await popover.getByRole("button", { name: "Low", exact: true }).click();
     await expect(picker).toHaveAttribute(
         "aria-label",
-        "Model: GPT-6 Luna, reasoning effort: Low",
+        "Options: GPT-6 Luna, reasoning effort: Low",
     );
     await slider.focus();
     await page.keyboard.press("ArrowRight");
     await expect(slider).toHaveValue("2");
     await expect(picker).toHaveAttribute(
         "aria-label",
-        "Model: GPT-6 Luna, reasoning effort: High",
+        "Options: GPT-6 Luna, reasoning effort: High",
     );
     await popover.getByRole("button", { name: "Low", exact: true }).click();
     await page.keyboard.press("Escape");
@@ -225,7 +229,7 @@ test("compact model picker snaps the slider and keeps the choice across composer
     await page.reload();
     await expect(picker).toHaveAttribute(
         "aria-label",
-        "Model: GPT-6 Luna, reasoning effort: Low",
+        "Options: GPT-6 Luna, reasoning effort: Low",
     );
     await page.getByRole("button", { name: "Start work", exact: true }).click();
     await expect
@@ -245,11 +249,14 @@ test("compact model picker snaps the slider and keeps the choice across composer
         .getByRole("button", { name: "New work", exact: true })
         .first()
         .click();
-    await expect(picker).toBeVisible();
+    await expect(picker).toHaveCount(0);
     await page
         .getByRole("button", { name: "New conversation", exact: true })
         .click();
-    await expect(picker).toBeVisible();
+    await expect(picker).toHaveCount(0);
+    await page
+        .getByRole("button", { name: /Review the release checklist/ })
+        .click();
     await page.setViewportSize({ width: 390, height: 844 });
     await picker.click();
     await expect(popover).toBeInViewport({ ratio: 1 });
@@ -260,29 +267,78 @@ test("compact model picker snaps the slider and keeps the choice across composer
     ).toBe(true);
 });
 
-test("agent picker stays open across background refresh and retains its selection", async ({
+test("saved Work uses its assigned Goblin with a single explicit start action", async ({
     page,
 }) => {
-    await setup(page, false);
-    const agent = page.getByLabel("Agent", { exact: true });
-    await agent.click();
+    const commands = await setup(page);
+    await expect(page.getByLabel("Agent", { exact: true })).toHaveCount(0);
+    await expect(
+        page.getByRole("button", { name: "Assign agent" }),
+    ).toHaveCount(0);
+    await expect(page.locator(".work-executor")).toContainText("Goblin");
+    await expect(page.locator(".work-executor")).toContainText("Uses Codex");
+    await expect(page.locator(".work-composer .model-picker")).toHaveCount(0);
+    await page.reload();
+    await expect(
+        page.getByRole("button", { name: "Start work", exact: true }),
+    ).toBeEnabled();
+    expect(commands).toEqual([]);
+    await page.getByRole("button", { name: "Start work", exact: true }).click();
     await expect
-        .poll(() => agent.evaluate((element) => element.matches(":open")))
-        .toBe(true);
-    await page.waitForResponse(
-        (response) => new URL(response.url()).pathname === "/api/work",
-    );
-    await expect
-        .poll(() => agent.evaluate((element) => element.matches(":open")))
-        .toBe(true);
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("Enter");
-    await expect(agent).toHaveValue("2");
-    await page.getByRole("button", { name: "New work", exact: true }).click();
+        .poll(() => commands)
+        .toContainEqual(
+            expect.objectContaining({
+                action: "Execute",
+                workId: "1",
+                expectedVersion: "1",
+            }),
+        );
+    expect(
+        commands.some(
+            (command) => (command as { action?: string }).action === "Assign",
+        ),
+    ).toBe(false);
+});
+
+test("disconnected Codex leads to connection setup and returns to Start work", async ({
+    page,
+}) => {
+    const commands = await setup(page, { availability: "Disconnected" });
     await page
-        .getByRole("button", { name: /Review the release checklist/ })
+        .getByPlaceholder("Add context to this work…")
+        .fill("Keep this draft");
+    await expect(
+        page.getByText("Connect Codex so Goblin can start working."),
+    ).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Start work", exact: true }),
+    ).toHaveCount(0);
+    await page
+        .getByRole("button", { name: "Connect Codex", exact: true })
         .click();
-    await expect(agent).toHaveValue("2");
+    await expect(
+        page.getByRole("button", { name: "Continue with ChatGPT" }),
+    ).toBeVisible();
+    await page.route("**/api/connections", (route) =>
+        route.fulfill({
+            json: [
+                {
+                    id: "1",
+                    name: "Codex",
+                    runtime: "codex",
+                    availability: "Available",
+                },
+            ],
+        }),
+    );
+    await page.getByRole("button", { name: "Close settings" }).click();
+    await expect(
+        page.getByRole("button", { name: "Start work", exact: true }),
+    ).toBeEnabled();
+    await expect(
+        page.getByPlaceholder("Add context to this work…"),
+    ).toHaveValue("Keep this draft");
+    expect(commands).toEqual([]);
 });
 
 test("repository setup validates locally and keeps the branch and Git identity through navigation", async ({
@@ -425,7 +481,7 @@ test("Settings keeps one content scroller and exposes repository loading without
 test("a waiting conversation can authorize repository access without creating another Work", async ({
     page,
 }) => {
-    const commands = await setup(page, true, true);
+    const commands = await setup(page, { waiting: true });
     await page.locator("#repository-options summary").click();
     await page.getByLabel("Repository", { exact: true }).fill("owner/project");
     await page.getByLabel("Agent Git email").fill("agent@example.com");

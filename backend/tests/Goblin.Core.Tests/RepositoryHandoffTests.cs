@@ -8,6 +8,7 @@ public sealed class RepositoryHandoffTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
     private static readonly ExecutionTarget Text = new("codex", 1, "chosen-model", requestedEffort: "high");
+
     private static ExecutionTarget Repository(long attempt) => new("codex", 1, "chosen-model",
         new("owner/repo", "Goblin", "agent@example.com", new(1, "generation", "42", "owner", 7, "main", $"goblin/1/{attempt}")), "high");
 
@@ -17,6 +18,7 @@ public sealed class RepositoryHandoffTests
         work.Assign(1, Now);
         return work;
     }
+
     private static WorkItem Running()
     {
         WorkItem work = Ready();

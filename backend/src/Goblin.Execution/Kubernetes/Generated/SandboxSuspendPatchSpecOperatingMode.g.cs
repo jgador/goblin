@@ -12,6 +12,7 @@ public enum SandboxSuspendPatchSpecOperatingMode
 {
     [JsonStringEnumMemberName("Running")]
     Running,
+
     [JsonStringEnumMemberName("Suspended")]
     Suspended,
 }

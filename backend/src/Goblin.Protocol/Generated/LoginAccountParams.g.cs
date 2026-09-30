@@ -23,7 +23,7 @@ public sealed class LoginAccountParamsJsonConverter : JsonConverter<LoginAccount
         return ProtocolUnion.ReadDiscriminator(ref reader, "type") switch
         {
             "apiKey" => JsonSerializer.Deserialize<ApiKeyLoginAccountParams>(ref reader, options)!,
-            "chatgptDeviceCode" => JsonSerializer.Deserialize<ChatgptDeviceCodeLoginAccountParams>(ref reader, options)!,
+            "chatgptDeviceCode" => JsonSerializer.Deserialize<ChatGPTDeviceCodeLoginAccountParams>(ref reader, options)!,
             _ => throw new JsonException("Unknown LoginAccountParams discriminator."),
         };
     }
@@ -35,7 +35,7 @@ public sealed class LoginAccountParamsJsonConverter : JsonConverter<LoginAccount
             case ApiKeyLoginAccountParams typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
-            case ChatgptDeviceCodeLoginAccountParams typed:
+            case ChatGPTDeviceCodeLoginAccountParams typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             default:

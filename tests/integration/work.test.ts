@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { request as httpRequest } from "node:http";
@@ -16,6 +17,7 @@ test("the work preview and its assets are public while workspace APIs remain pro
     const paths = new Map([
         ["/", "text/html"],
         ["/app.js", "text/javascript"],
+        ["/api/values.js", "text/javascript"],
         ["/styles.css", "text/css"],
         ["/work", "text/html"],
         ["/work/", "text/html"],
@@ -70,7 +72,7 @@ test("the work preview and its assets are public while workspace APIs remain pro
 test(
     "Work HTTP commands preserve bigint IDs and remain replayable",
     {
-        skip: !process.env.GOBLIN_TEST_POSTGRES_APP,
+        skip: !process.env[Env.GOBLIN_TEST_POSTGRES_APP.name],
     },
     async (t) => {
         const dataDir = await mkdtemp(join(tmpdir(), "goblin-work-ids-"));

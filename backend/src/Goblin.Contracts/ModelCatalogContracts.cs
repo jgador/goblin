@@ -13,7 +13,9 @@ public sealed record RuntimeModel(string Id, string Model, string DisplayName,
 public interface IModelCatalogSource
 {
     string Runtime { get; }
+
     string ExecutableStamp();
+
     Task<RuntimeModel[]> ListAsync(CancellationToken token);
 }
 

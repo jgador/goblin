@@ -14,6 +14,7 @@ async function home(page: Page) {
     };
     await page.route("**/api/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
+        if (path === "/api/values.js") return route.continue();
         if (path === "/api/connections") await state.connectionWait;
         if (path === "/api/work" && state.workUnavailable) {
             await route.fulfill({ status: 503, json: { error: {} } });

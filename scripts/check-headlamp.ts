@@ -1,7 +1,7 @@
+import { environmentVariables as Env } from "../config/environment.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { once } from "node:events";
 import { createHash } from "node:crypto";
@@ -11,7 +11,7 @@ import { startBackend, writePasswordHash } from "../tests/support/backend.js";
 // Opt-in integration: a real, pinned Headlamp backed by a real cluster. No saved
 // Goblin/OpenAI/GitHub credentials are used. The Azure hostname is resolved locally
 // to exercise the browser's actual Host/Origin behavior without Azure resources.
-const headlampUrl = process.env.GOBLIN_TEST_HEADLAMP_URL;
+const headlampUrl = process.env[Env.GOBLIN_TEST_HEADLAMP_URL.name];
 if (!headlampUrl)
     throw new Error(
         "Set GOBLIN_TEST_HEADLAMP_URL to the private Headlamp origin (for example a localhost port-forward).",
@@ -23,12 +23,11 @@ const browser = await chromium.launch({
         "--no-proxy-server",
     ],
 });
-await mkdir("test-results", { recursive: true });
+const artifacts = resolve(".artifacts/headlamp");
+await mkdir(artifacts, { recursive: true });
 try {
     for (const hostname of ["127.0.0.1", azureHost]) {
-        const dataDir = await mkdtemp(
-            join(tmpdir(), "goblin-headlamp-runtime-"),
-        );
+        const dataDir = await mkdtemp(join(artifacts, "runtime-"));
         const portFinder = createServer().listen(0, "127.0.0.1");
         await once(portFinder, "listening");
         const { port } = portFinder.address() as { port: number };
@@ -74,6 +73,31 @@ try {
             await expect(
                 page.getByText("goblin", { exact: true }).first(),
             ).toBeVisible({ timeout: 30_000 });
+            const healthResponse = page.waitForResponse(
+                (response) =>
+                    new URL(response.url()).pathname ===
+                    "/headlamp/clusters/goblin/healthz",
+            );
+            await page.goto(publicOrigin + "/headlamp/c/goblin");
+            assert.equal((await healthResponse).status(), 200);
+            await expect(
+                page.getByText("Lost connection to the cluster.", {
+                    exact: true,
+                }),
+            ).toHaveCount(0);
+            for (const endpoint of ["healthz", "livez", "readyz"]) {
+                const health = await page.evaluate(async (name) => {
+                    const response = await fetch(
+                        `/headlamp/clusters/goblin/${name}`,
+                    );
+                    return {
+                        status: response.status,
+                        body: await response.text(),
+                    };
+                }, endpoint);
+                assert.equal(health.status, 200, endpoint);
+                assert.equal(health.body.trim(), "ok", endpoint);
+            }
             const check = await page.evaluate(async () => {
                 const read = async (path: string) => {
                     const response = await fetch(
@@ -111,12 +135,11 @@ try {
             });
             assert.equal(check.namespaces.status, 200);
             assert.equal(check.pods.status, 200);
-            assert.ok(
-                check.pods.body.items.some(
-                    (pod: { metadata: { name: string } }) =>
-                        pod.metadata.name === "goblin-auth",
-                ),
+            const appPod = check.pods.body.items.find(
+                (pod: { metadata: { labels?: { app?: string } } }) =>
+                    pod.metadata.labels?.app === "goblin-auth",
             );
+            assert.ok(appPod);
             assert.equal(check.secrets.status, 403);
             assert.equal(check.review.status.allowed, false);
             const logPod = check.pods.body.items.find(
@@ -173,14 +196,17 @@ try {
             }
             await page.goto(publicOrigin + "/headlamp/c/goblin/pods");
             await expect(
-                page.getByText("goblin-auth", { exact: true }).first(),
+                page.getByText(appPod.metadata.name, { exact: true }).first(),
             ).toBeVisible({ timeout: 30_000 });
             await page.reload();
             await expect(
-                page.getByText("goblin-auth", { exact: true }).first(),
+                page.getByText(appPod.metadata.name, { exact: true }).first(),
             ).toBeVisible({ timeout: 30_000 });
             await page.screenshot({
-                path: `test-results/headlamp-${hostname === azureHost ? "azure-host" : "local"}.png`,
+                path: join(
+                    artifacts,
+                    `${hostname === azureHost ? "azure-host" : "local"}.png`,
+                ),
                 fullPage: true,
             });
             assert.deepEqual(errors, []);
@@ -194,7 +220,7 @@ try {
             await page.reload();
             await expect(page).toHaveURL(publicOrigin + "/?returnTo=headlamp");
             console.log(
-                `PASS: ${hostname} — login, cluster resources, read-only permissions, log streaming, subpath refresh, CSP, logout`,
+                `PASS: ${hostname} — login, cluster health, cluster resources, read-only permissions, log streaming, subpath refresh, CSP, logout`,
             );
         } finally {
             await context.close();

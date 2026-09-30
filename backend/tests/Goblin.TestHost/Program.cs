@@ -11,6 +11,7 @@ using Goblin.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 // Test-only executable; never included in the production publish/image.
 FixtureOptions config = JsonSerializer.Deserialize<FixtureOptions>(args[0], new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
@@ -36,12 +37,12 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
         RequestTimeout = TimeSpan.FromMilliseconds(config.TimeoutMs),
         Environment = new Dictionary<string, string?>
         {
-            ["PATH"] = Environment.GetEnvironmentVariable("PATH"),
-            ["OPENAI_API_KEY"] = "must-not-inherit",
-            ["CODEX_API_KEY"] = "must-not-inherit",
-            ["STACKIFY_AZURE_OPENAI_API_KEY"] = "must-not-inherit",
-            ["CODEX_HOME"] = "/must-not-use",
-            ["GOBLIN_SECRET"] = "must-not-inherit"
+            [Env.Path] = Environment.GetEnvironmentVariable(Env.Path),
+            [Env.OpenaiApiKey] = "must-not-inherit",
+            [Env.CodexApiKey] = "must-not-inherit",
+            [Env.StackifyAzureOpenaiApiKey] = "must-not-inherit",
+            [Env.CodexHome] = "/must-not-use",
+            [Env.GoblinSecret] = "must-not-inherit"
         }
     },
     VerifyApiKey = async key =>
@@ -49,7 +50,7 @@ await using WebApplication app = await GoblinApplication.CreateAsync(new()
         if (config.Verification == "invalid" || key.Contains("invalid"))
             throw new PublicError("invalid_api_key", "OpenAI rejected this API key. Check the key and try again.");
         await File.WriteAllTextAsync(Path.Combine(config.DataDir, "verified-test-key"), key);
-        return config.Verification;
+        return Goblin.Contracts.ContractValue.Parse<Goblin.Contracts.VerificationState>(config.Verification == "accepted" ? "Accepted" : "Unverified");
     }
 });
 if (config.EnableWork)
@@ -58,7 +59,7 @@ if (config.EnableWork)
     // normal Work APIs still bind grants and persist commands through PostgreSQL.
     app.MapPost("/fixture/repository", async (GitHubStore store) =>
     {
-        await store.ObserveAsync(new("browser-fixture", "42", "owner"), "Connected");
+        await store.ObserveAsync(new("browser-fixture", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await store.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "browser-fixture");
         return Results.Ok();
     });

@@ -11,7 +11,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace Goblin.Application.Work;
 
 public sealed record ConversationMessageView(long Id, string Text, DateTime CreatedAt);
+
 public sealed record ConversationView(long Id, string Title, long? WorkId, ConversationMessageView[] Messages);
+
 public sealed record ConversationCommand(long ConversationId, long MessageId, string? Text, long? WorkId = null);
 
 public sealed class ConversationStore
@@ -61,12 +63,14 @@ public sealed class ConversationStore
             Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.Where(x => x.ConversationId == conversation.Id)
                 .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync();
             var work = new WorkItem(workId, messages[0].Body, DateTimeOffset.UtcNow);
+            work.Assign(WorkStore.DefaultAgentId, DateTimeOffset.UtcNow);
             foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1))
                 work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
             db.WorkItems.Add(new()
             {
                 Id = workId,
                 Objective = work.Objective,
+                AgentId = work.AgentId,
                 Status = work.Status.ToString(),
                 Version = 1,
                 State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json),

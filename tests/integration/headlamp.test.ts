@@ -154,6 +154,10 @@ test("Headlamp shares Goblin login on local and Azure origins, streams, and excl
                     body: body === undefined ? undefined : JSON.stringify(body),
                 });
             assert.equal((await request("/headlamp/config")).status, 401);
+            assert.equal(
+                (await request("/headlamp/clusters/goblin/healthz")).status,
+                401,
+            );
             const locked = await request("/headlamp/", "GET", undefined, {
                 Accept: "text/html",
             });
@@ -214,8 +218,21 @@ test("Headlamp shares Goblin login on local and Azure origins, streams, and excl
                 200,
             );
             assert.deepEqual(JSON.parse(observed.at(-1)!.body), review);
+            for (const endpoint of ["healthz", "livez", "readyz"]) {
+                const path = `/headlamp/clusters/goblin/${endpoint}?verbose=true`;
+                const health = await request(path);
+                assert.equal(health.status, 200, path);
+                assert.deepEqual(await health.json(), { path });
+                assert.equal((await request(path, "HEAD")).status, 200, path);
+                assert.equal(observed.at(-1)!.url, path);
+            }
             const count = observed.length;
             for (const [path, method] of [
+                ["/headlamp/clusters/goblin/healthz", "POST"],
+                ["/headlamp/clusters/goblin/livez", "PUT"],
+                ["/headlamp/clusters/goblin/readyz", "DELETE"],
+                ["/headlamp/clusters/other/healthz", "GET"],
+                ["/headlamp/clusters/goblin/healthz/extra", "GET"],
                 ["/headlamp/clusters/goblin/api/v1/pods", "DELETE"],
                 ["/headlamp/clusters/goblin/api/v1/pods", "POST"],
                 ["/headlamp/cluster", "POST"],

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Goblin.Integrations.GitHub;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Tests;
 
@@ -31,14 +32,15 @@ public sealed class GitHubConnectionTests
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(connection.Profile, "hosts.yml")));
             using var restarted = new GitHubConnection(Path.Combine(root, "profile"), cli);
             Assert.Equal(state.Account, (await restarted.StatusAsync()).Account);
-            Assert.Equal("Connected", (await restarted.CheckAsync()).Status);
+            Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Connected, (await restarted.CheckAsync()).Status);
             await File.WriteAllTextAsync(Path.Combine(root, "reject"), "reject");
-            Assert.Equal("Unavailable", (await restarted.CheckAsync()).Status);
+            Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Unavailable, (await restarted.CheckAsync()).Status);
             Assert.Null((await restarted.DisconnectAsync()).Account);
             Assert.False(Directory.Exists(restarted.Profile));
         }
         finally { Directory.Delete(root, true); }
     }
+
     [Fact]
     public async Task CancelPreventsLateCredentialInstallation()
     {
@@ -57,25 +59,27 @@ public sealed class GitHubConnectionTests
         }
         finally { Directory.Delete(root, true); }
     }
+
     private static async Task<GitHubState> UntilAsync(GitHubConnection connection, Func<GitHubState, bool> predicate)
     {
         for (int i = 0; i < 200; i++) { GitHubState state = await connection.StatusAsync(); if (predicate(state)) return state; await Task.Delay(25); }
         throw new TimeoutException();
     }
+
     private static async Task<string> FakeAsync(string root)
     {
         string script = Path.Combine(root, "gh-test");
-        await File.WriteAllTextAsync(script, """
+        await File.WriteAllTextAsync(script, $$"""
             #!/bin/sh
             set -eu
             base=$(dirname "$0")
-            test -z "${GH_TOKEN:-}"
-            test -z "${GITHUB_TOKEN:-}"
-            test "$HOME" = "$GH_CONFIG_DIR"
+            test -z "${{{Env.GhToken}}:-}"
+            test -z "${{{Env.GitHubToken}}:-}"
+            test "${{Env.Home}}" = "${{Env.GhConfigDir}}"
             if [ "$1 $2" = "auth login" ]; then
               printf '! First copy your one-time code: ABCD-1234\nOpen this URL to continue in your web browser: https://github.com/login/device\n' >&2
               while [ ! -f "$base/finish" ]; do sleep 0.05; done
-              printf 'private-test-token' > "$GH_CONFIG_DIR/hosts.yml"
+              printf 'private-test-token' > "${{Env.GhConfigDir}}/hosts.yml"
             else
               test ! -f "$base/reject"
               printf '{"id":42,"login":"test-owner"}'

@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Npgsql;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Persistence.Tests;
 
@@ -13,7 +14,7 @@ public sealed class PostgresCertificateFactAttribute : FactAttribute
 {
     public PostgresCertificateFactAttribute()
     {
-        var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_APP"));
+        var connection = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresApp));
         if (connection.SslMode != SslMode.VerifyFull || string.IsNullOrEmpty(connection.SslCertificate))
             Skip = "Set GOBLIN_TEST_POSTGRES_APP to a VerifyFull client-certificate connection to run certificate tests.";
     }
@@ -21,7 +22,7 @@ public sealed class PostgresCertificateFactAttribute : FactAttribute
 
 public sealed class CertificateTests
 {
-    private static NpgsqlConnectionStringBuilder App() => new(Environment.GetEnvironmentVariable("GOBLIN_TEST_POSTGRES_APP"))
+    private static NpgsqlConnectionStringBuilder App() => new(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresApp))
     {
         Pooling = false,
         Timeout = 5,

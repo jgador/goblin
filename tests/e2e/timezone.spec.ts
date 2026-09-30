@@ -25,6 +25,7 @@ async function fixture(context: BrowserContext, state: State) {
     await context.route("**/api/**", async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
+        if (path === "/api/values.js") return route.continue();
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
         else if (path === "/api/preferences/timezones")
@@ -99,7 +100,7 @@ test("first access preselects Philippine time and saves only the confirmed works
         "Current time:",
     );
     await page.screenshot({
-        path: "test-results/timezone-onboarding.png",
+        path: test.info().outputPath("timezone-onboarding.png"),
         fullPage: true,
     });
     await setup.getByRole("button", { name: "Use timezone" }).click();
@@ -191,7 +192,7 @@ test("a failed first save keeps the selection and offers an explicit retry", asy
         ),
     ).toBe(true);
     await page.screenshot({
-        path: "test-results/timezone-mobile.png",
+        path: test.info().outputPath("timezone-mobile.png"),
         fullPage: true,
     });
     state.failSave = false;
@@ -330,7 +331,7 @@ test("country and city search keeps the chosen timezone until a matching option 
     });
     expect(missingPlaces).toEqual([]);
     await page.screenshot({
-        path: "test-results/timezone-country-search.png",
+        path: test.info().outputPath("timezone-country-search.png"),
         fullPage: true,
     });
 });

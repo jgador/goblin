@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mts";
 import { createInterface } from "node:readline";
 import { readFile, writeFile, appendFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
@@ -13,7 +14,7 @@ type Account =
     | { type: "chatgpt"; email: string; planType: string };
 
 const scenario = process.argv[2];
-const root = process.env.CODEX_HOME;
+const root = process.env[Env.CODEX_HOME.name];
 if (!root) throw new Error("The fixture requires a private CODEX_HOME.");
 const accountFile = join(root, "auth.json");
 // Scenarios deliberately send incomplete or invalid protocol payloads.

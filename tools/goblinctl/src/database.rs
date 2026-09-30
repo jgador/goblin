@@ -1,4 +1,5 @@
 use crate::assets;
+use crate::environment;
 use crate::files;
 use anyhow::Context;
 use anyhow::Result;
@@ -148,7 +149,7 @@ pub fn patch(sandbox: &Value, connection: &str) -> Result<Option<Value>> {
     )?;
     replace_named(
         &mut container["env"],
-        json!({"name":"ConnectionStrings__Goblin","value":connection}),
+        json!({"name":environment::CONNECTIONSTRINGS_GOBLIN,"value":connection}),
     )?;
     Ok(if &spec == original {
         None
@@ -157,7 +158,7 @@ pub fn patch(sandbox: &Value, connection: &str) -> Result<Option<Value>> {
     })
 }
 pub fn migration_job(image: &str) -> Value {
-    json!({"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"goblin-schema","namespace":"goblin","labels":{"app.kubernetes.io/managed-by":"goblinctl"}},"spec":{"backoffLimit":0,"template":{"metadata":{"labels":{"goblin-database-access":"true"}},"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never","securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000},"containers":[{"name":"migrate","image":image,"imagePullPolicy":"IfNotPresent","command":["dotnet","/tools/database/Goblin.Database.dll","apply","/migrations"],"env":[{"name":"ConnectionStrings__GoblinAdmin","value":"Host=goblin-postgres;Database=goblin;Username=goblin_admin;SSL Mode=VerifyFull;Root Certificate=/etc/postgres/ca.crt;SSL Certificate=/etc/postgres/tls.crt;SSL Key=/etc/postgres/tls.key;GSS Encryption Mode=Disable"}],"securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"admin","mountPath":"/etc/postgres","readOnly":true},{"name":"tmp","mountPath":"/tmp"}]}],"volumes":[{"name":"admin","secret":{"secretName":"goblin-postgres-admin-tls","defaultMode":288}},{"name":"tmp","emptyDir":{}}]}}}})
+    json!({"apiVersion":"batch/v1","kind":"Job","metadata":{"name":"goblin-schema","namespace":"goblin","labels":{"app.kubernetes.io/managed-by":"goblinctl"}},"spec":{"backoffLimit":0,"template":{"metadata":{"labels":{"goblin-database-access":"true"}},"spec":{"automountServiceAccountToken":false,"restartPolicy":"Never","securityContext":{"runAsNonRoot":true,"runAsUser":1000,"runAsGroup":1000,"fsGroup":1000},"containers":[{"name":"migrate","image":image,"imagePullPolicy":"IfNotPresent","command":["dotnet","/tools/database/Goblin.Database.dll","apply","/migrations"],"env":[{"name":environment::CONNECTIONSTRINGS_GOBLINADMIN,"value":"Host=goblin-postgres;Database=goblin;Username=goblin_admin;SSL Mode=VerifyFull;Root Certificate=/etc/postgres/ca.crt;SSL Certificate=/etc/postgres/tls.crt;SSL Key=/etc/postgres/tls.key;GSS Encryption Mode=Disable"}],"securityContext":{"allowPrivilegeEscalation":false,"readOnlyRootFilesystem":true,"capabilities":{"drop":["ALL"]}},"volumeMounts":[{"name":"admin","mountPath":"/etc/postgres","readOnly":true},{"name":"tmp","mountPath":"/tmp"}]}],"volumes":[{"name":"admin","secret":{"secretName":"goblin-postgres-admin-tls","defaultMode":288}},{"name":"tmp","emptyDir":{}}]}}}})
 }
 
 /// Reconcile the owned migration job after interruption before another can run.
@@ -188,8 +189,8 @@ pub fn setup(repo: &Path, port: Option<u16>) -> Result<()> {
     assets::unpack(temp.path(), assets::DATABASE)?;
     let mut cmd = Command::new("bash");
     cmd.arg(temp.path().join("deploy/postgres/setup.sh"))
-        .env("GOBLINCTL", std::env::current_exe()?)
-        .env("GOBLIN_CONFIG_ROOT", repo);
+        .env(environment::GOBLINCTL, std::env::current_exe()?)
+        .env(environment::GOBLIN_CONFIG_ROOT, repo);
     if let Some(port) = port {
         cmd.args(["--port", &port.to_string()]);
     }
@@ -202,6 +203,6 @@ pub fn migrate(image: &str) -> Result<()> {
         Command::new("bash")
             .arg(temp.path().join("deploy/postgres/migrate.sh"))
             .arg(image)
-            .env("GOBLINCTL", std::env::current_exe()?),
+            .env(environment::GOBLINCTL, std::env::current_exe()?),
     )
 }

@@ -13,6 +13,7 @@ public enum NonSteerableTurnKind
 {
     [JsonStringEnumMemberName("review")]
     Review,
+
     [JsonStringEnumMemberName("compact")]
     Compact,
 }

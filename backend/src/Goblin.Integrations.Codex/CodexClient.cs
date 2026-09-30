@@ -34,7 +34,9 @@ public sealed partial class CodexClient : IAsyncDisposable
 
         private set;
     }
+
     public event Action<ServerNotification>? Notification;
+
     public event Action? Disconnected;
 
     private sealed record Pending(string Method, TaskCompletionSource<JsonElement> Completion);

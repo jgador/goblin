@@ -1,3 +1,4 @@
+import { environmentVariables as Env } from "../../config/environment.mjs";
 import { goblinctl } from "../support/goblinctl.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -38,7 +39,7 @@ async function fixture() {
 const fs = require('node:fs');
 const path = require('node:path');
 const args = process.argv.slice(2);
-const root = process.env.GOBLIN_POSTGRES_SETUP_TEST;
+const root = process.env["${Env.GOBLIN_POSTGRES_SETUP_TEST.name}"];
 const file = name => path.join(root, name);
 fs.appendFileSync(file('calls.jsonl'), JSON.stringify(args) + '\\n');
 const secret = (name, values) => {
@@ -47,7 +48,7 @@ const secret = (name, values) => {
   }));
 };
 if (args[0] === 'get') {
-  if (process.env.GOBLIN_POSTGRES_SETUP_DENY === 'true') process.exit(1);
+  if (process.env["${Env.GOBLIN_POSTGRES_SETUP_DENY.name}"] === 'true') process.exit(1);
   const names = args.slice(2, args.indexOf('-n'));
   if (args[1] === 'sandbox' && args.includes('json')) {
     process.stdout.write(fs.readFileSync(file(names[0]), 'utf8'));
@@ -79,7 +80,7 @@ if (args[0] === 'get') {
     });
     secret('goblin-postgres-tls', {'tls.crt': 'server-certificate'});
   }
-} else if (args[0] === 'wait' && process.env.GOBLIN_POSTGRES_CERT_FAILED === 'true') process.exit(1);
+} else if (args[0] === 'wait' && process.env["${Env.GOBLIN_POSTGRES_CERT_FAILED.name}"] === 'true') process.exit(1);
 else if (args[0] === 'apply' && args[1] === '-k') fs.writeFileSync(file('goblin-postgres-data'), 'PVC exists');
 `,
         { mode: 0o700 },
@@ -91,9 +92,9 @@ else if (args[0] === 'apply' && args[1] === '-k') fs.writeFileSync(file('goblin-
             {
                 env: {
                     ...process.env,
-                    PATH: `${bin}:${process.env.PATH}`,
-                    GOBLIN_POSTGRES_SETUP_TEST: root,
-                    GOBLINCTL: goblinctl,
+                    [Env.PATH.name]: `${bin}:${process.env[Env.PATH.name]}`,
+                    [Env.GOBLIN_POSTGRES_SETUP_TEST.name]: root,
+                    [Env.GOBLINCTL.name]: goblinctl,
                     ...environment,
                 },
                 encoding: "utf8",
@@ -240,8 +241,8 @@ test("certificate setup removes passwords, protects exported keys, and preserves
 
 test("setup fails before changing PostgreSQL when certificate issuance or API access fails", async (t) => {
     for (const environment of [
-        { GOBLIN_POSTGRES_SETUP_DENY: "true" },
-        { GOBLIN_POSTGRES_CERT_FAILED: "true" },
+        { [Env.GOBLIN_POSTGRES_SETUP_DENY.name]: "true" },
+        { [Env.GOBLIN_POSTGRES_CERT_FAILED.name]: "true" },
     ]) {
         const { root, run, calls } = await fixture();
         t.after(() => rm(root, { recursive: true, force: true }));
@@ -317,7 +318,7 @@ test("connecting an existing Sandbox preserves its image, origin, storage and ot
                 image: "existing-image",
                 env: [
                     {
-                        name: "GOBLIN_PUBLIC_ORIGIN",
+                        name: Env.GOBLIN_PUBLIC_ORIGIN.name,
                         value: "http://existing.test",
                     },
                 ],
