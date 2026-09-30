@@ -9,6 +9,7 @@ namespace Goblin.Application.Work;
 public static class RepositoryIntent
 {
     private const string BasePattern = @"\b(?:base\s+branch\s*(?:is\s+|[:=]\s*)?|(?:branch|branching)\s+(?:from|off)\s+|based\s+on\s+)[`""']?([a-zA-Z0-9][a-zA-Z0-9._/-]*)|\buse\s+[`""']?([a-zA-Z0-9][a-zA-Z0-9._/-]*)[`""']?\s+as\s+(?:the\s+)?base\b";
+
     public static string WithoutBranchNames(string text) => Regex.Replace(text, BasePattern, " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static IEnumerable<string> Inputs(WorkSnapshot work) => work.History

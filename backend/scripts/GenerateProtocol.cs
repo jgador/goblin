@@ -145,15 +145,25 @@ internal sealed class ProtocolGenerator
     }
 
     private static JsonNode Parse(string text) => JsonNode.Parse(text) ?? throw new InvalidOperationException("Expected JSON value.");
+
     private static JsonObject AsObject(JsonNode? node) => node as JsonObject ?? throw new InvalidOperationException("Expected JSON object.");
+
     private static JsonArray AsArray(JsonNode? node) => node as JsonArray ?? throw new InvalidOperationException("Expected JSON array.");
+
     private static JsonNode? Get(JsonNode? node, string key) => node is JsonObject obj && obj.TryGetPropertyValue(key, out var value) ? value : null;
+
     private static bool Has(JsonNode? node, string key) => node is JsonObject obj && obj.ContainsKey(key);
+
     private static string? Str(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
+
     private static bool Bool(JsonNode? node, bool expected) => node is JsonValue value && value.TryGetValue<bool>(out var actual) && actual == expected;
+
     private static IEnumerable<string> Strings(JsonNode? node) => node is JsonArray array ? array.Select(value => Str(value) ?? throw new InvalidOperationException("Expected string array.")) : [];
+
     private static JsonNode? Clone(JsonNode? node) => node?.DeepClone();
+
     private static string Literal(string text) => JsonValue.Create(text)!.ToJsonString();
+
     private static JsonNode? Normalize(JsonNode? node)
     {
         if (node is JsonArray array)
@@ -171,7 +181,9 @@ internal sealed class ProtocolGenerator
         }
         return Clone(node);
     }
+
     private static bool SemanticEqual(JsonNode? left, JsonNode? right) => JsonNode.DeepEquals(Normalize(left), Normalize(right));
+
     private static bool IsEmptySemantic(JsonNode? node) => node is JsonObject && AsObject(Normalize(node)).Count == 0;
 
     private void AddNamed(string name, JsonNode schema, string reference)
@@ -227,6 +239,7 @@ internal sealed class ProtocolGenerator
             .Select(part => part.Any(char.IsLetter) && part.Where(char.IsLetter).All(char.IsUpper)
                 ? char.ToUpperInvariant(part[0]) + part[1..].ToLowerInvariant()
                 : char.ToUpperInvariant(part[0]) + part[1..]));
+        result = Regex.Replace(result, "chatgpt", "ChatGPT", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return result.Length == 0 || char.IsDigit(result[0]) ? "Value" + result : result;
     }
 
@@ -586,6 +599,7 @@ internal sealed class ProtocolGenerator
         {
             var member = Pascal(value);
             if (!names.Add(member)) throw new InvalidOperationException($"Enum member collision in {name}: {value}");
+            if (names.Count > 1) lines.Add("");
             lines.Add($"    [JsonStringEnumMemberName({Literal(value)})]");
             lines.Add($"    {member},");
         }
@@ -805,20 +819,26 @@ internal sealed class ProtocolGenerator
         public sealed class RequestId : IEquatable<RequestId>
         {
             public RequestId(string value) => String = value ?? throw new ArgumentNullException(nameof(value));
+
             public RequestId(long value) => Number = value;
 
             [JsonIgnore]
             public string? String { get; }
+
             [JsonIgnore]
             public long? Number { get; }
 
             // Responses carry new instances of the IDs used to key pending requests.
             public bool Equals(RequestId? other) => other is not null && String == other.String && Number == other.Number;
+
             public override bool Equals(object? obj) => obj is RequestId other && Equals(other);
+
             public override int GetHashCode() => HashCode.Combine(String, Number);
 
             public static implicit operator RequestId(string value) => new(value);
+
             public static implicit operator RequestId(long value) => new(value);
+
             public override string ToString() => String ?? Number?.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 ?? throw new InvalidOperationException("An uninitialized request ID has no wire representation.");
         }
@@ -891,6 +911,19 @@ internal static class ProtocolGeneratorTests
         Check(ProtocolGenerator.VariantTypeName("Result", "Result") == "ResultVariant", "variant base collision");
         Check(ProtocolGenerator.VariantTypeName("McpElicitationUntitledSingleSelectEnumSchema", "McpElicitationSingleSelectEnumSchema", true)
             == "McpElicitationUntitledSingleSelectEnumSchemaVariant", "wrapped variant collision");
+
+        var accounts = Generate("""
+            {"Account":{"oneOf":[
+               {"type":"object","properties":{"type":{"type":"string","enum":["chatgpt"]},"chatgptAccountId":{"type":"string"}},"required":["type","chatgptAccountId"]},
+               {"type":"object","properties":{"type":{"type":"string","enum":["apiKey"]}},"required":["type"]}]},
+             "AuthenticationMethod":{"type":"string","enum":["chatgpt","apiKey"]}}
+            """);
+        Check(accounts["ChatGPTAccount.g.cs"].Contains("class ChatGPTAccount : Account", StringComparison.Ordinal)
+            && accounts["ChatGPTAccount.g.cs"].Contains("string ChatGPTAccountId", StringComparison.Ordinal)
+            && accounts["ChatGPTAccount.g.cs"].Contains("[JsonPropertyName(\"chatgptAccountId\")]", StringComparison.Ordinal)
+            && accounts["Account.g.cs"].Contains("\"chatgpt\" => JsonSerializer.Deserialize<ChatGPTAccount>", StringComparison.Ordinal)
+            && accounts["AuthenticationMethod.g.cs"].Contains("[JsonStringEnumMemberName(\"chatgpt\")]\n    ChatGPT", StringComparison.Ordinal),
+            "ChatGPT identifiers preserve protocol wire names");
 
         var selectionDefinitions = """
             {"Reply":{"type":"object","properties":{"value":{"$ref":"#/definitions/Choice"},"unused":{"type":"string"}},"required":["value","unused"]},

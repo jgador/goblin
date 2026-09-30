@@ -9,6 +9,7 @@ public sealed class IntegrationFailure : Exception
     public IntegrationFailure(string code, string message) : base(message) => Code = code;
 
     public string Code { get; }
+
     public static IntegrationFailure RuntimeUnavailable() => new("runtime_unavailable",
         "Codex is unavailable. Check the connection and runtime installation.");
 }

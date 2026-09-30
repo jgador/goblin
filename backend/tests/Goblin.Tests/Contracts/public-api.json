@@ -1,0 +1,364 @@
+{
+  "AccountView": [],
+  "AgentView": [
+    "connectionId",
+    "id",
+    "isDefault",
+    "model",
+    "name"
+  ],
+  "ApiFailure": [
+    "error"
+  ],
+  "ApiKeyAccountView": [],
+  "AttemptSnapshot": [
+    "agentId",
+    "cancellationRequestedAt",
+    "checkpointId",
+    "claimedAt",
+    "cleanupFailed",
+    "cleanupPending",
+    "environmentReference",
+    "failure",
+    "finishedAt",
+    "id",
+    "ownerId",
+    "priorTurns",
+    "queuedAt",
+    "reasoningOnly",
+    "releaseWorkspace",
+    "session",
+    "startedAt",
+    "status",
+    "target",
+    "turnNumber",
+    "workId",
+    "workspaceNumber"
+  ],
+  "AuthenticationState": [
+    "account",
+    "login",
+    "notice",
+    "runtimeReady",
+    "verification"
+  ],
+  "ChatGPTAccountView": [
+    "email",
+    "planType"
+  ],
+  "ConnectionView": [
+    "availability",
+    "id",
+    "name",
+    "runtime"
+  ],
+  "ConversationCommand": [
+    "conversationId",
+    "messageId",
+    "text",
+    "workId"
+  ],
+  "ConversationMessageView": [
+    "createdAt",
+    "id",
+    "text"
+  ],
+  "ConversationView": [
+    "id",
+    "messages",
+    "title",
+    "workId"
+  ],
+  "DeviceLogin": [
+    "id",
+    "userCode",
+    "verificationUrl"
+  ],
+  "EnabledRepository": [
+    "defaultBranch",
+    "enabled",
+    "id",
+    "name"
+  ],
+  "ErrorView": [
+    "code",
+    "message"
+  ],
+  "ExecutionSession": [
+    "model",
+    "operationReference",
+    "sessionReference"
+  ],
+  "ExecutionTarget": [
+    "connectionId",
+    "repository",
+    "requestedEffort",
+    "requestedModel",
+    "runtime"
+  ],
+  "ExecutionTurnRecord": [
+    "checkpointId",
+    "environmentReference",
+    "finishedAt",
+    "number",
+    "ownerId",
+    "session",
+    "startedAt",
+    "workspaceNumber"
+  ],
+  "GitDeliveryIntent": [
+    "baseBranch",
+    "openPullRequest",
+    "push"
+  ],
+  "GitHubState": [
+    "account",
+    "configured",
+    "login",
+    "notice",
+    "status",
+    "userCode",
+    "verificationUrl"
+  ],
+  "IdentityRequest": [
+    "kinds"
+  ],
+  "InspectionRequest": [
+    "attemptId",
+    "id"
+  ],
+  "InspectionView": [
+    "attemptId",
+    "id",
+    "state",
+    "workId"
+  ],
+  "MachineSnapshot": [
+    "cpu",
+    "disk",
+    "environment",
+    "memory",
+    "name",
+    "observedAt",
+    "operatingSystem",
+    "services",
+    "uptimeSeconds",
+    "warnings"
+  ],
+  "ModelCatalogView": [
+    "defaultModel",
+    "fetchedAt",
+    "hasMore",
+    "models",
+    "refreshing",
+    "stale",
+    "unavailable"
+  ],
+  "Notice": [
+    "kind",
+    "message"
+  ],
+  "PromptResult": [
+    "authType",
+    "durationMs",
+    "model",
+    "reply"
+  ],
+  "RepositoryAccount": [
+    "accountId",
+    "generation",
+    "login"
+  ],
+  "RepositoryAuthorization": [
+    "answeredAt",
+    "defaultBranch",
+    "enableRepository",
+    "id",
+    "requestedAt",
+    "retry",
+    "status",
+    "target"
+  ],
+  "RepositoryChange": [
+    "gitAuthorEmail",
+    "gitAuthorName",
+    "grant",
+    "repository"
+  ],
+  "RepositoryGrant": [
+    "accountId",
+    "allowPullRequest",
+    "allowPush",
+    "baseBranch",
+    "branch",
+    "connectionId",
+    "generation",
+    "login",
+    "policyVersion",
+    "repositoryId"
+  ],
+  "RepositoryInfo": [
+    "canPush",
+    "defaultBranch",
+    "id",
+    "name"
+  ],
+  "ReservedIdentities": [
+    "ids"
+  ],
+  "ResourceUsage": [
+    "available",
+    "percent",
+    "total",
+    "used"
+  ],
+  "RuntimeCapabilities": [
+    "cancellation",
+    "liveApprovals",
+    "repositoryExecution",
+    "resumeSession",
+    "runtime",
+    "textExecution"
+  ],
+  "RuntimeModel": [
+    "defaultReasoningEffort",
+    "displayName",
+    "id",
+    "isDefault",
+    "isNew",
+    "model",
+    "supportedReasoningEfforts"
+  ],
+  "ServiceHealth": [
+    "cpuCores",
+    "memoryBytes",
+    "name",
+    "namespace",
+    "phase",
+    "ready",
+    "restarts"
+  ],
+  "SessionState": [
+    "authenticated"
+  ],
+  "SystemOverview": [
+    "history",
+    "machine",
+    "notice",
+    "status"
+  ],
+  "SystemSample": [
+    "at",
+    "cpu",
+    "memory"
+  ],
+  "WorkArtifact": [
+    "attemptId",
+    "createdAt",
+    "name",
+    "reference"
+  ],
+  "WorkAttention": [
+    "failure",
+    "reason"
+  ],
+  "WorkCommand": [
+    "action",
+    "agentId",
+    "attemptId",
+    "authorizationId",
+    "commandId",
+    "decisionId",
+    "delivery",
+    "expectedVersion",
+    "model",
+    "modelSelectionProvided",
+    "reasoningEffort",
+    "repository",
+    "text",
+    "workId"
+  ],
+  "WorkDecision": [
+    "answer",
+    "answeredAt",
+    "attemptId",
+    "id",
+    "question",
+    "requestedAt"
+  ],
+  "WorkEvent": [
+    "agentId",
+    "attemptId",
+    "decisionId",
+    "failure",
+    "kind",
+    "occurredAt",
+    "sequence",
+    "text"
+  ],
+  "WorkMessage": [
+    "createdAt",
+    "id",
+    "text"
+  ],
+  "WorkRepositoryRequest": [
+    "repositories",
+    "target"
+  ],
+  "WorkResult": [
+    "approvedAt",
+    "attemptId",
+    "proposedAt",
+    "requestedChanges",
+    "text"
+  ],
+  "WorkSnapshot": [
+    "agentId",
+    "artifacts",
+    "attempts",
+    "attention",
+    "decisions",
+    "history",
+    "id",
+    "messages",
+    "objective",
+    "repositoryAuthorization",
+    "repositoryRequest",
+    "results",
+    "schemaVersion",
+    "status",
+    "workspace"
+  ],
+  "WorkspaceCheckpoint": [
+    "attemptId",
+    "branch",
+    "commitSha",
+    "createdAt",
+    "id",
+    "repository",
+    "turnNumber",
+    "workId",
+    "workspaceNumber"
+  ],
+  "WorkspacePreferenceState": [
+    "timeZone"
+  ],
+  "WorkspaceView": [
+    "checkpoints",
+    "sessions",
+    "terminalAvailable"
+  ],
+  "WorkView": [
+    "createdAt",
+    "updatedAt",
+    "version",
+    "work"
+  ],
+  "WorkWorkspace": [
+    "attemptId",
+    "environmentReference",
+    "repository",
+    "turnNumber",
+    "workspaceNumber"
+  ]
+}

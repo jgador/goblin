@@ -25,7 +25,18 @@ Selection continues to use `/work?item=<id>`.
   **Work lifecycle**, with inspectable evidence for goal capture, execution, and
   result approval. Runtime success alone never marks Work complete. Older results
   and results with requested changes do not complete the current execution step.
-- Existing assignment, execution, repository setup, approval, answer, changes,
+- New Work, including tracked conversations, is assigned to the default Goblin
+  coworker in the creation transaction and remains Ready. The UI and execution
+  use that saved assignment; starting Work never creates an assignment. The
+  agent projection identifies the default through `isDefault` for the new Work
+  composer's connection status. Development data from before automatic assignment
+  is not supported and can be reset.
+- The start/retry panel shows Goblin with a quieter **Uses Codex** label. **Options**
+  holds model and reasoning choices beside the action they affect; conversation
+  composers save context without execution controls. Choices persist across refresh
+  for that Work. Disconnected Codex opens connection setup, and unavailable or
+  changing connections keep starting disabled until ready.
+- Existing execution, repository setup, approval, answer, changes,
   cancel, retry, and reconciliation commands remain available in Progress.
   They retain expected versions, reserved string identities, and unconfirmed
   command resubmission. No retry is automatic. Reading or expanding content
@@ -54,15 +65,16 @@ Selection continues to use `/work?item=<id>`.
 Rendering is split between `frontend/src/work/app.ts` (navigation and command
 coordination), `contracts.ts` (Goblin HTTP views), and `surface.ts` (read-only
 presentation of durable state). The Web host explicitly serves the new surface
-module through its existing static asset allowlist. No core, application store,
-runtime, or database changes are part of this increment.
+module through its existing static asset allowlist. The Work and conversation
+stores persist default coworker assignment through the existing core command.
+Runtime adapters and the database schema remain unchanged.
 
 ## Workspace inspection and continuation
 
-The [workspace lifecycle](workspace-lifecycle.md) adds Open workspace beside Recent
-outputs, saved file/diff inspection, historical checkpoints, and a browser terminal
-in a read-only inspection session. Backend checkpoint, continuation, and capacity
-state now back these controls. The broader domain gaps below remain independent.
+The Work page does not currently expose workspace file inspection or a terminal.
+The Open workspace panel has been removed pending a new design. Backend
+[workspace lifecycle](workspace-lifecycle.md) support for checkpoints, continuation,
+and inspection sessions remains available.
 
 ## Backend and schema gaps
 

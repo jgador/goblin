@@ -18,6 +18,7 @@ namespace Goblin.Application.Tests;
 public sealed class BoundaryTests
 {
     private static long _nextId = int.MaxValue;
+
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [Fact]
@@ -28,7 +29,7 @@ public sealed class BoundaryTests
                 x.Name!.Contains("Protocol", StringComparison.Ordinal) || x.Name.Contains("Integrations", StringComparison.Ordinal) ||
                 x.Name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
         Assert.Equal("{\"type\":\"chatgpt\",\"email\":\"user@example.test\",\"planType\":\"self_serve_business_prolite\"}",
-            JsonSerializer.Serialize<AccountView>(new ChatgptAccountView("user@example.test", "self_serve_business_prolite"), WorkStore.Json));
+            JsonSerializer.Serialize<AccountView>(new ChatGPTAccountView("user@example.test", "self_serve_business_prolite"), WorkStore.Json));
     }
 
     [Fact]
@@ -57,16 +58,24 @@ public sealed class BoundaryTests
     private sealed class UnusedHost : IExecutionHost
     {
         public RuntimeCapabilities[] Capabilities => [];
+
         public string EnvironmentFor(long workId, long attemptId) => throw new NotSupportedException();
+
         public Task StartAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) => throw new NotSupportedException();
+
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
     }
+
     private sealed class UnusedBroker : IRepositoryBroker
     {
         public Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task<ExecutionObservation?> ObserveAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task StopAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task ReleaseAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
     }
 }

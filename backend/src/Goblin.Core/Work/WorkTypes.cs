@@ -2,32 +2,99 @@ using System;
 
 namespace Goblin.Core.Work;
 
-public enum WorkStatus { Ready, Queued, InProgress, Cancelling, NeedsAttention, Completed, Cancelled }
-public enum AttemptStatus { Queued, Starting, Running, CancellationRequested, Succeeded, Failed, Uncertain, Cancelled, Waiting }
-public enum AttentionReason { InputRequired, ResultReview, Failure, UncertainExecution, CleanupRequired, RepositoryRequired }
+public enum WorkStatus
+{
+    Ready,
+    Queued,
+    InProgress,
+    Cancelling,
+    NeedsAttention,
+    Completed,
+    Cancelled
+}
+
+public enum AttemptStatus
+{
+    Queued,
+    Starting,
+    Running,
+    CancellationRequested,
+    Succeeded,
+    Failed,
+    Uncertain,
+    Cancelled,
+    Waiting
+}
+
+public enum AttentionReason
+{
+    InputRequired,
+    ResultReview,
+    Failure,
+    UncertainExecution,
+    CleanupRequired,
+    RepositoryRequired
+}
 
 // Integrations translate upstream errors into these categories. Raw exceptions,
 // response bodies, and credentials are not inputs to a failure transition.
 public enum FailureKind
 {
-    DispatchFailed, ConnectionUnavailable, CapabilityUnavailable, HostUnavailable,
-    ExecutionFailed, TimedOut, RuntimeDisconnected, CancellationFailed, CleanupFailed, StorageUnavailable
+    DispatchFailed,
+    ConnectionUnavailable,
+    CapabilityUnavailable,
+    HostUnavailable,
+    ExecutionFailed,
+    TimedOut,
+    RuntimeDisconnected,
+    CancellationFailed,
+    CleanupFailed,
+    StorageUnavailable
 }
 
 public enum WorkEventKind
 {
-    Created, Assigned, ExecutionQueued, ExecutionClaimed, ExecutionStarted,
-    ExecutionFailed, ExecutionUncertain, ExecutionStopped, RetryRequested,
-    InputRequested, InputProvided, ResultProposed, ChangesRequested, ResultApproved,
-    CancellationRequested, Cancelled, ContextAdded, ProgressReported, ArtifactRecorded,
-    CleanupRequired, CleanupFailed, CleanupCompleted, ExecutionContinued, WorkspaceSaved, WorkspaceReleased,
-    RepositoryRequested, RepositoryAuthorized, RepositoryDenied, RepositoryAuthorizationInvalidated
+    Created,
+    Assigned,
+    ExecutionQueued,
+    ExecutionClaimed,
+    ExecutionStarted,
+    ExecutionFailed,
+    ExecutionUncertain,
+    ExecutionStopped,
+    RetryRequested,
+    InputRequested,
+    InputProvided,
+    ResultProposed,
+    ChangesRequested,
+    ResultApproved,
+    CancellationRequested,
+    Cancelled,
+    ContextAdded,
+    ProgressReported,
+    ArtifactRecorded,
+    CleanupRequired,
+    CleanupFailed,
+    CleanupCompleted,
+    ExecutionContinued,
+    WorkspaceSaved,
+    WorkspaceReleased,
+    RepositoryRequested,
+    RepositoryAuthorized,
+    RepositoryDenied,
+    RepositoryAuthorizationInvalidated
 }
 
 public enum WorkRule
 {
-    InvalidValue, InvalidTransition, AgentRequired, AttemptAlreadyExists,
-    AttemptNotCurrent, OwnershipMismatch, ReconciliationRequired, DecisionNotCurrent
+    InvalidValue,
+    InvalidTransition,
+    AgentRequired,
+    AttemptAlreadyExists,
+    AttemptNotCurrent,
+    OwnershipMismatch,
+    ReconciliationRequired,
+    DecisionNotCurrent
 }
 
 // These errors express product rules; the HTTP adapter chooses status codes.
@@ -51,6 +118,7 @@ public sealed record WorkResult(long AttemptId, string Text, DateTimeOffset Prop
     DateTimeOffset? ApprovedAt = null, string? RequestedChanges = null);
 
 public sealed record WorkMessage(long Id, string Text, DateTimeOffset CreatedAt);
+
 public sealed record WorkArtifact(long AttemptId, string Reference, string Name, DateTimeOffset CreatedAt);
 
 // Runtime/session identifiers are opaque references. There are deliberately no
@@ -86,6 +154,7 @@ public sealed record RepositoryChange
     public string GitAuthorName { get; }
     public string GitAuthorEmail { get; }
     public RepositoryGrant? Grant { get; }
+
     public RepositoryChange(string repository, string gitAuthorName, string gitAuthorEmail, RepositoryGrant? grant = null)
     {
         string[] parts = (repository ?? "").Split('/');
@@ -109,14 +178,14 @@ public sealed record RepositoryGrant(long ConnectionId, string Generation, strin
     string Login, long RepositoryId, string BaseBranch, string Branch, int PolicyVersion = 2,
     bool AllowPush = false, bool AllowPullRequest = false)
 {
-    public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, string operation)
+    public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, RepositoryOperationKind operation)
     {
         if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion is not (1 or 2) ||
             Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
             !string.Equals(repository, requestedRepository, StringComparison.OrdinalIgnoreCase) ||
-            operation is not ("publish" or "pull-request" or "fetch" or "checkpoint") ||
-            PolicyVersion == 2 && (operation == "publish" && !AllowPush ||
-                operation == "pull-request" && (!AllowPush || !AllowPullRequest)))
+            !Enum.IsDefined(operation) ||
+            PolicyVersion == 2 && (operation == RepositoryOperationKind.Publish && !AllowPush ||
+                operation == RepositoryOperationKind.PullRequest && (!AllowPush || !AllowPullRequest)))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }

@@ -14,12 +14,14 @@ using Goblin.Integrations.Codex;
 using Goblin.Protocol;
 using Goblin.Web;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Tests;
 
 public sealed class CodexClientTests
 {
     private static long _nextId = int.MaxValue;
+
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [Fact]
@@ -66,10 +68,10 @@ public sealed class CodexClientTests
         string[] calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
         Assert.Equal(["initialize", "initialized", "account/read"], calls.Select(line => JsonSerializer.Deserialize<JSONRPCNotification>(line, ProtocolJson.Options)!.Method));
         Dictionary<string, string> environment = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "environment.json")))!;
-        Assert.False(environment.ContainsKey("OPENAI_API_KEY"));
-        Assert.False(environment.ContainsKey("GOBLIN_SECRET"));
-        Assert.Equal(fixture.Workspace.Home, environment["HOME"]);
-        Assert.Equal(fixture.Workspace.CodexHome, environment["CODEX_HOME"]);
+        Assert.False(environment.ContainsKey(Env.OpenaiApiKey));
+        Assert.False(environment.ContainsKey(Env.GoblinSecret));
+        Assert.Equal(fixture.Workspace.Home, environment[Env.Home]);
+        Assert.Equal(fixture.Workspace.CodexHome, environment[Env.CodexHome]);
         string args = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "arguments.json"));
         Assert.Contains("app-server", args);
         Assert.Contains("features.multi_agent=false", args);
@@ -83,8 +85,8 @@ public sealed class CodexClientTests
         await fixture.Client.StartAsync();
         Task<GetAccountResponse> first = fixture.ReadAsync();
         Task<GetAccountResponse> second = fixture.ReadAsync();
-        Assert.Equal("2", Assert.IsType<ChatgptAccount>((await first).Account).Email);
-        Assert.Equal("3", Assert.IsType<ChatgptAccount>((await second).Account).Email);
+        Assert.Equal("2", Assert.IsType<ChatGPTAccount>((await first).Account).Email);
+        Assert.Equal("3", Assert.IsType<ChatGPTAccount>((await second).Account).Email);
     }
 
     [Fact]
@@ -92,7 +94,7 @@ public sealed class CodexClientTests
     {
         await using Fixture fixture = await Fixture.CreateAsync("fragmented");
         await fixture.Client.StartAsync();
-        Assert.Equal("测试🙂@example.test", Assert.IsType<ChatgptAccount>((await fixture.ReadAsync()).Account).Email);
+        Assert.Equal("测试🙂@example.test", Assert.IsType<ChatGPTAccount>((await fixture.ReadAsync()).Account).Email);
     }
 
     [Fact]
@@ -239,8 +241,10 @@ public sealed class CodexClientTests
 
         public Workspace Workspace { get; }
         public CodexClient Client { get; }
+
         public Task<GetAccountResponse> ReadAsync(CancellationToken cancellationToken = default) =>
             Client.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false }, cancellationToken);
+
         public async Task<int> PidAsync() => int.Parse(await File.ReadAllTextAsync(Path.Combine(Workspace.CodexHome, "pid")));
 
         public static async Task<Fixture> CreateAsync(string scenario = "manual", TimeSpan? timeout = null,
@@ -273,9 +277,9 @@ public sealed class CodexClientTests
                 ShutdownTimeout = TimeSpan.FromMilliseconds(150),
                 Environment = new Dictionary<string, string?>
                 {
-                    ["PATH"] = Environment.GetEnvironmentVariable("PATH"),
-                    ["OPENAI_API_KEY"] = "must-not-inherit",
-                    ["GOBLIN_SECRET"] = "must-not-inherit"
+                    [Env.Path] = Environment.GetEnvironmentVariable(Env.Path),
+                    [Env.OpenaiApiKey] = "must-not-inherit",
+                    [Env.GoblinSecret] = "must-not-inherit"
                 }
             }));
         }

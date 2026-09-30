@@ -64,22 +64,23 @@ files outside Git depend on the retained volume and any operator-managed backups
 
 ## Inspection
 
-Open workspace shows the latest verified Git commit and recorded inspection
-sessions. **Start inspection** creates a separate pod mounting the Work PVC
+The Work page's Open workspace panel is removed pending a new design. The
+inspection API still exposes verified Git commits and recorded sessions.
+Starting an inspection session creates a separate pod mounting the Work PVC
 read-only. Execution must have stopped and cleanup must be confirmed. Inspection
 and repository execution reserve capacity and exclude concurrent access to the
 same Work volume. No agent credentials, database credentials, Kubernetes token,
 or archive download capability are mounted into the inspection pod.
 
-File/diff browsing and the browser terminal use this recorded inspection pod.
+File/diff endpoints and terminal connections use this recorded inspection pod.
 File previews are bounded and reject traversal, symbolic links, and private Git
 or worker files. The file list is limited to 1,000 entries and previews to 1 MiB;
-use the terminal to inspect larger trees. Files are rendered as text. Historical
+the terminal can inspect larger trees. File content is returned as text. Historical
 Git checkpoints are metadata, not historical filesystem snapshots. Full archive
 downloads and archive restoration are not available.
 
-Closing the panel disconnects the terminal; **Stop workspace** explicitly releases
-inspection compute. Sessions remain visible after reopening and count against
+Disconnecting a terminal does not stop inspection; an explicit stop request releases
+inspection compute. Recorded sessions survive disconnection and count against
 capacity. Terminal connections require authentication and same-origin checks,
 with availability rechecked while connected. File requests also require an
 available inspection session belonging to the Work. Browsers cannot choose
@@ -119,7 +120,7 @@ never proof that filesystem data can be discarded.
 Verification covers core suspension without a file archive, preserved dirty and
 ignored files across attempts, storage loss and capacity protection, metadata-only
 PostgreSQL checkpoints, durable inspection reservations, bounded PVC file reads,
-and browser inspection. Run the opt-in PostgreSQL tests explicitly; default test
+and the inspection API. Run the opt-in PostgreSQL tests explicitly; default test
 runs skip them when no connection is configured. Kubernetes and runtime checks
 remain necessary for the deployed integration boundary.
 

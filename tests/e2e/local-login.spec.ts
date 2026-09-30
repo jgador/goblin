@@ -6,7 +6,7 @@ import { startBackend, writePasswordHash } from "../support/backend.js";
 
 test("localhost requires the chosen password without prefilling it, including after locking", async ({
     page,
-}) => {
+}, testInfo) => {
     const dataDir = await mkdtemp(join(tmpdir(), "goblin-local-browser-"));
     const origin = "http://127.0.0.1:8799";
     const passwordHashFile = join(dataDir, "owner-password");
@@ -56,7 +56,7 @@ test("localhost requires the chosen password without prefilling it, including af
             ),
         ).toBe(false);
         await page.screenshot({
-            path: "test-results/local-login.png",
+            path: testInfo.outputPath("local-login.png"),
             fullPage: true,
         });
 

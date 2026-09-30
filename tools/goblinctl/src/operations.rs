@@ -1,3 +1,4 @@
+use crate::environment;
 use crate::files;
 use crate::local;
 use crate::setup;
@@ -55,7 +56,7 @@ pub fn status(as_json: bool, doctor: bool) -> Result<()> {
                 .args(args)
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
-                .env_remove("GOBLIN_LOCAL_PASSWORD")
+                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
                 .status()
                 .is_ok_and(|s| s.success());
             checks.push(json!({"name":name,"ok":ok}));
@@ -75,7 +76,7 @@ pub fn status(as_json: bool, doctor: bool) -> Result<()> {
                 "5",
                 &format!("{}/readyz", origin.trim()),
             ])
-            .env_remove("GOBLIN_LOCAL_PASSWORD")
+            .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
             .output();
         let ok = output.is_ok_and(|o| {
             o.status.success()
@@ -103,7 +104,7 @@ pub fn status(as_json: bool, doctor: bool) -> Result<()> {
                 ])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
-                .env_remove("GOBLIN_LOCAL_PASSWORD")
+                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
                 .status()
                 .is_ok_and(|s| s.success());
             checks.push(json!({"name":deployment,"ok":ok}));

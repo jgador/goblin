@@ -47,6 +47,13 @@ and EF mappings.
 The style pass excludes `IDE0130` and `IDE1006`, as recorded in the
 [generated C# formatting audit](generated-csharp-formatting.md).
 
+Separate C# type declarations, methods, constructors, and attributed members with
+at least one blank line. Keep attributes on their own lines directly above the
+declaration they annotate. Put enum braces and each enum value on separate lines;
+separate attributed enum values with a blank line. Adjacent plain fields and
+properties may remain grouped. Preserve positional records. These spacing rules
+also apply to generated C#; update the generators when their output needs changes.
+
 Formatting does not rebuild deployment artifacts. After editing a bootstrap or
 Bicep source, run `cargo xtask azure` to generate review assets in `.artifacts/azure`.
 Release preparation generates and verifies the assets it publishes. This requires the standalone Bicep CLI on PATH (version 0.47.16 is used in

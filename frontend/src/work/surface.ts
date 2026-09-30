@@ -1,3 +1,4 @@
+import { WorkStatus, AttentionReason, WorkEventKind } from "../api/values.js";
 import type { Work, View, Conversation } from "./contracts.js";
 import { icon, escapeHtml as e } from "./presentation.js";
 import { formatTimestamp } from "../settings/timezone.js";
@@ -51,14 +52,14 @@ export function renderProgress(item: View) {
     const w = item.work,
         attempt = w.attempts.at(-1);
     const result = w.results.find((r) => r.attemptId === attempt?.id);
-    const completed = w.status === "Completed";
-    const review = w.attention?.reason === "ResultReview";
+    const completed = w.status === WorkStatus.Completed;
+    const review = w.attention?.reason === AttentionReason.ResultReview;
     const hasResult =
         !!result && !result.requestedChanges && (review || completed);
     const executionText =
-        w.status === "Cancelled"
+        w.status === WorkStatus.Cancelled
             ? "Work cancelled"
-            : w.status === "Ready"
+            : w.status === WorkStatus.Ready
               ? attempt
                   ? "Ready for another attempt"
                   : "Ready to start"
@@ -168,54 +169,55 @@ export function renderOutputs(w: Work) {
 
 // Explicit product events only. Claims, cleanup bookkeeping, and runtime progress
 // reports stay in execution inspection; a runtime narrative is not a milestone.
-const eventNames: Record<string, string> = {
-    Created: "Work created",
-    Assigned: "Agent assigned",
-    ExecutionQueued: "Work queued",
-    ExecutionStarted: "Work started",
-    ExecutionFailed: "Execution failed",
-    ExecutionUncertain: "Execution needs reconciliation",
-    ExecutionStopped: "Execution stopped",
-    RetryRequested: "Retry requested",
-    InputRequested: "Input requested",
-    ExecutionContinued: "Execution continued",
-    WorkspaceSaved: "Git checkpoint recorded",
-    WorkspaceReleased: "Sandbox suspended",
-    InputProvided: "Input provided",
-    RepositoryDenied: "Repository access declined",
-    RepositoryAuthorizationInvalidated: "Repository authorization needs review",
-    RepositoryRequested: "Repository access requested",
-    RepositoryAuthorized: "Repository access authorized",
-    ResultProposed: "Result proposed",
-    ChangesRequested: "Changes requested",
-    ResultApproved: "Result approved",
-    CancellationRequested: "Cancellation requested",
-    Cancelled: "Work cancelled",
-    ContextAdded: "Context added",
-    ArtifactRecorded: "Artifact recorded",
-    CleanupRequired: "Cleanup needs attention",
-    CleanupFailed: "Cleanup failed",
+const eventNames: Partial<Record<WorkEventKind, string>> = {
+    [WorkEventKind.Created]: "Work created",
+    [WorkEventKind.Assigned]: "Agent assigned",
+    [WorkEventKind.ExecutionQueued]: "Work queued",
+    [WorkEventKind.ExecutionStarted]: "Work started",
+    [WorkEventKind.ExecutionFailed]: "Execution failed",
+    [WorkEventKind.ExecutionUncertain]: "Execution needs reconciliation",
+    [WorkEventKind.ExecutionStopped]: "Execution stopped",
+    [WorkEventKind.RetryRequested]: "Retry requested",
+    [WorkEventKind.InputRequested]: "Input requested",
+    [WorkEventKind.ExecutionContinued]: "Execution continued",
+    [WorkEventKind.WorkspaceSaved]: "Git checkpoint recorded",
+    [WorkEventKind.WorkspaceReleased]: "Sandbox suspended",
+    [WorkEventKind.InputProvided]: "Input provided",
+    [WorkEventKind.RepositoryDenied]: "Repository access declined",
+    [WorkEventKind.RepositoryAuthorizationInvalidated]:
+        "Repository authorization needs review",
+    [WorkEventKind.RepositoryRequested]: "Repository access requested",
+    [WorkEventKind.RepositoryAuthorized]: "Repository access authorized",
+    [WorkEventKind.ResultProposed]: "Result proposed",
+    [WorkEventKind.ChangesRequested]: "Changes requested",
+    [WorkEventKind.ResultApproved]: "Result approved",
+    [WorkEventKind.CancellationRequested]: "Cancellation requested",
+    [WorkEventKind.Cancelled]: "Work cancelled",
+    [WorkEventKind.ContextAdded]: "Context added",
+    [WorkEventKind.ArtifactRecorded]: "Artifact recorded",
+    [WorkEventKind.CleanupRequired]: "Cleanup needs attention",
+    [WorkEventKind.CleanupFailed]: "Cleanup failed",
 };
-const humanEvents = new Set([
-    "Created",
-    "Assigned",
-    "RetryRequested",
-    "InputProvided",
-    "RepositoryAuthorized",
-    "ChangesRequested",
-    "ResultApproved",
-    "CancellationRequested",
-    "ContextAdded",
+const humanEvents = new Set<WorkEventKind>([
+    WorkEventKind.Created,
+    WorkEventKind.Assigned,
+    WorkEventKind.RetryRequested,
+    WorkEventKind.InputProvided,
+    WorkEventKind.RepositoryAuthorized,
+    WorkEventKind.ChangesRequested,
+    WorkEventKind.ResultApproved,
+    WorkEventKind.CancellationRequested,
+    WorkEventKind.ContextAdded,
 ]);
-const conversationEvents = new Set([
-    "Created",
-    "ContextAdded",
-    "InputProvided",
-    "ChangesRequested",
-    "ResultProposed",
-    "InputRequested",
-    "ExecutionContinued",
-    "WorkspaceReleased",
+const conversationEvents = new Set<WorkEventKind>([
+    WorkEventKind.Created,
+    WorkEventKind.ContextAdded,
+    WorkEventKind.InputProvided,
+    WorkEventKind.ChangesRequested,
+    WorkEventKind.ResultProposed,
+    WorkEventKind.InputRequested,
+    WorkEventKind.ExecutionContinued,
+    WorkEventKind.WorkspaceReleased,
 ]);
 
 export function renderActivity(w?: Work) {
@@ -233,7 +235,10 @@ export function renderActivity(w?: Work) {
             .map((h) => {
                 const source = humanEvents.has(h.kind)
                     ? "Goblin Web"
-                    : ["InputRequested", "ResultProposed"].includes(h.kind)
+                    : [
+                            WorkEventKind.InputRequested,
+                            WorkEventKind.ResultProposed,
+                        ].some((value) => value === h.kind)
                       ? "Agent"
                       : "Goblin";
                 return `<li class="activity-item"><span class="activity-icon">${icon(source === "Goblin Web" ? "chat" : source === "Agent" ? "spark" : "activity")}</span><details id="event-${e(h.sequence)}"><summary><span class="activity-source">${source}<time datetime="${e(h.occurredAt)}" title="${e(timestamp(h.occurredAt))}">${e(relativeTime(h.occurredAt))}</time></span><span class="activity-title">${e(eventNames[h.kind])}</span>${h.text ? `<span class="activity-preview">${e(h.text)}</span>` : ""}${h.failure ? `<span class="activity-preview">${e(label(h.failure))}</span>` : ""}</summary><div class="activity-context">${h.text ? `<p class="preserve-lines">${e(h.text)}</p>` : ""}<p>${e(timestamp(h.occurredAt))}</p>${h.attemptId ? `<button class="text-button" data-action="inspect-output" data-id="execution-${e(h.attemptId)}">Attempt ${e(h.attemptId)} ${icon("arrow")}</button>` : ""}</div></details></li>`;
@@ -251,7 +256,7 @@ export function renderConversation(w: Work) {
             .filter((h) => conversationEvents.has(h.kind) && h.text)
             .map(
                 (h) =>
-                    `<article class="context-message"><p class="message-name">${["ResultProposed", "InputRequested"].includes(h.kind) ? "Goblin" : "You"}<time>${e(timestamp(h.occurredAt))}</time></p><p class="preserve-lines">${e(h.text)}</p></article>`,
+                    `<article class="context-message"><p class="message-name">${[WorkEventKind.ResultProposed, WorkEventKind.InputRequested].some((value) => value === h.kind) ? "Goblin" : "You"}<time>${e(timestamp(h.occurredAt))}</time></p><p class="preserve-lines">${e(h.text)}</p></article>`,
             )
             .join("") ||
         '<p class="section-empty">No conversation recorded yet.</p>'

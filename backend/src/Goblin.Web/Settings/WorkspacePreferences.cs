@@ -2,12 +2,23 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Goblin.Web;
 
-public sealed record WorkspacePreferenceState(string? TimeZone);
+public sealed class WorkspacePreferenceState
+{
+    [JsonConstructor]
+    public WorkspacePreferenceState(string? timeZone)
+    {
+        TimeZone = timeZone;
+    }
+
+    [JsonPropertyName("timeZone")]
+    public string? TimeZone { get; init; }
+}
 
 // Workspace UI configuration lives on the application's persistent data volume,
 // alongside workspace access configuration. It is independent of Work history.

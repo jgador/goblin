@@ -19,6 +19,7 @@ namespace Goblin.Application.Repositories;
 public sealed class RepositorySetupStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
+
     public RepositorySetupStore(IDbContextFactory<GoblinDbContext> factory) => _factory = factory;
 
     public async Task<RepositorySetupMemory[]> ReadAsync(long attemptId, CancellationToken token)

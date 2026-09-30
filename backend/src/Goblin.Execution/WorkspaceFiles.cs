@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Execution;
 
@@ -67,11 +68,12 @@ public static class WorkspaceFiles
         Add(root);
         return new { files = files.ToArray(), truncated };
     }
+
     private static void RequireRegularFile(string path)
     {
         if (!OperatingSystem.IsLinux()) return;
         var start = new ProcessStartInfo("/usr/bin/stat") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
-        start.Environment["LC_ALL"] = "C";
+        start.Environment[Env.LcAll] = "C";
         start.ArgumentList.Add("--format=%F"); start.ArgumentList.Add("--"); start.ArgumentList.Add(path);
         using Process process = Process.Start(start)!;
         string kind = process.StandardOutput.ReadToEnd(); process.StandardError.ReadToEnd(); process.WaitForExit();
@@ -79,6 +81,7 @@ public static class WorkspaceFiles
         // could otherwise block the inspection process indefinitely.
         if (process.ExitCode != 0 || !kind.StartsWith("regular", StringComparison.Ordinal)) throw new IOException("Workspace entry is not a regular file.");
     }
+
     private static bool Hidden(string path) => path == "repository/.git" || path.StartsWith("repository/.git/", StringComparison.Ordinal) ||
         (path == ".goblin" || path.StartsWith(".goblin/", StringComparison.Ordinal)) && path != ".goblin/changes.patch";
 
