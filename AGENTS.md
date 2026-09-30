@@ -40,6 +40,15 @@ Real PostgreSQL tests are opt-in; report skips rather than claiming persistence
 coverage. Run the relevant browser and real-runtime checks when integrating
 those boundaries.
 
+Coding agents must store all temporary files created inside this repository in
+`.artifacts/`, organized into clearly named subdirectories for the task or tool
+(for example, `.artifacts/playwright/` or `.artifacts/contract-investigation/`).
+This includes one-off scripts, scratch code, temporary test fixtures, test results,
+reports, screenshots, traces, logs, and other files used temporarily for testing
+or investigation. Configure tools such as Playwright to write their temporary
+files and test output into these subdirectories. Do not scatter temporary files
+or output directories elsewhere in the repository.
+
 Azure installation is manual. Keep repository automation free of Azure login,
 live deployment tests, resource provisioning, and cloud cleanup. Preserve the
 templates, installer assets, and offline deployment checks for manual use.
@@ -57,3 +66,8 @@ references when clear, and prefer exhaustive matches. Avoid opaque boolean and
 `Option` arguments in new APIs. Keep operational tooling Python-free and keep
 developer tools out of production installations. Snapshot changes must be
 reviewed before accepting them with `cargo insta`.
+
+For closed behavior and shared contract values, follow [the ownership and
+generation guide](docs/contract-values.md). Use typed internal APIs and generated
+browser values; parse only at adapters and persistence boundaries. Run
+`npm run contracts:check` after changing an owning C# or Rust definition.

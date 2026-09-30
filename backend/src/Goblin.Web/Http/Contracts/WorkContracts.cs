@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 
 namespace Goblin.Web.Http.Contracts;
 
@@ -132,7 +133,7 @@ public sealed class AgentView
 public sealed class ConnectionView
 {
     [JsonConstructor]
-    public ConnectionView(long id, string runtime, string name, string availability)
+    public ConnectionView(long id, string runtime, string name, ConnectionAvailability availability)
     {
         Id = id;
         Runtime = runtime;
@@ -150,7 +151,7 @@ public sealed class ConnectionView
     public string Name { get; init; }
 
     [JsonPropertyName("availability")]
-    public string Availability { get; init; }
+    public ConnectionAvailability Availability { get; init; }
 
     public static ConnectionView From(Goblin.Application.Work.ConnectionView value) =>
         new(value.Id, value.Runtime, value.Name, value.Availability);

@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -18,6 +17,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Wolverine;
 using Yarp.ReverseProxy.Forwarder;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Web;
 
@@ -30,7 +30,7 @@ internal static class WebServices
         ConfigureProxies(builder, options);
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
-        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
         string? executionNamespace = builder.Configuration[Env.GoblinExecutionNamespace];
         builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
         if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, databaseConnection, executionNamespace);

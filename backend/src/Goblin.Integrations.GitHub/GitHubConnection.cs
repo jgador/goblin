@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -8,12 +7,15 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Integrations.GitHub;
 
 public sealed record GitHubState(bool Configured, string? Login, string? UserCode,
-    string? VerificationUrl, string? Notice, string Status = "Disconnected", RepositoryAccount? Account = null);
+    string? VerificationUrl, string? Notice, GitHubConnectionStatus Status = GitHubConnectionStatus.Disconnected, RepositoryAccount? Account = null);
+
 public sealed class GitHubFailure : Exception
 {
     public GitHubFailure() : base("GitHub could not complete this operation. Check the connection and repository access, then try again.") { }
@@ -30,8 +32,10 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
     private Task? _login;
     private long _epoch;
     private GitHubState _state = new(true, null, null, null, null);
+
     public string Profile => Path.Combine(_directory, "active");
     private string LegacyFile => Path.Combine(Path.GetDirectoryName(_directory)!, "github.json");
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public GitHubConnection(string directory, string command = "gh")
@@ -46,14 +50,16 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
             {
                 RepositoryAccount account = JsonSerializer.Deserialize<RepositoryAccount>(File.ReadAllText(accountFile), Json)!;
                 if (string.IsNullOrWhiteSpace(account.Generation) || string.IsNullOrWhiteSpace(account.AccountId)) throw new GitHubFailure();
-                _state = new(true, account.Login, null, null, null, "Connected", account);
+                _state = new(true, account.Login, null, null, null, GitHubConnectionStatus.Connected, account);
             }
-            catch { _state = new(true, null, null, null, "The saved GitHub connection could not be read. Sign in again to restore access.", "Unavailable"); }
+            catch { _state = new(true, null, null, null, "The saved GitHub connection could not be read. Sign in again to restore access.", GitHubConnectionStatus.Unavailable); }
         }
         else if (File.Exists(Path.Combine(Path.GetDirectoryName(_directory)!, "github.json")))
             _state = _state with { Notice = "Sign in once with GitHub CLI to replace the previous GitHub connection." };
     }
+
     public Task<GitHubState> StatusAsync() { lock (_gate) return Task.FromResult(_state); }
+
     public async Task<GitHubState> StartAsync()
     {
         await _changes.WaitAsync();
@@ -61,18 +67,19 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         {
             lock (_gate)
             {
-                if (_state.Account is not null || _state.Status == "Connecting") throw new GitHubFailure();
+                if (_state.Account is not null || _state.Status == GitHubConnectionStatus.Connecting) throw new GitHubFailure();
                 long epoch = ++_epoch;
                 string staging = Path.Combine(_directory, "login-" + Guid.NewGuid().ToString("N"));
                 PrivateDirectory(staging);
                 _cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(15));
-                _state = new(true, null, null, null, null, "Connecting");
+                _state = new(true, null, null, null, null, GitHubConnectionStatus.Connecting);
                 _login = LoginAsync(epoch, staging, _cancellation.Token);
                 return _state;
             }
         }
         finally { _changes.Release(); }
     }
+
     private async Task LoginAsync(long epoch, string staging, CancellationToken token)
     {
         try
@@ -97,16 +104,17 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
                 if (Directory.Exists(Profile)) Directory.Delete(Profile, true);
                 Directory.Move(staging, Profile);
                 File.Delete(LegacyFile);
-                _state = new(true, account.Login, null, null, null, "Connected", account);
+                _state = new(true, account.Login, null, null, null, GitHubConnectionStatus.Connected, account);
             }
         }
         catch
         {
             lock (_gate) if (epoch == _epoch) _state = new(true, null, null, null,
-                token.IsCancellationRequested ? "Sign-in expired or was cancelled. Start again for a new code." : "GitHub sign-in failed. Check that GitHub CLI is installed and try again.", "Disconnected");
+                token.IsCancellationRequested ? "Sign-in expired or was cancelled. Start again for a new code." : "GitHub sign-in failed. Check that GitHub CLI is installed and try again.", GitHubConnectionStatus.Disconnected);
         }
         finally { if (Directory.Exists(staging)) Directory.Delete(staging, true); }
     }
+
     public async Task<GitHubState> DisconnectAsync()
     {
         await _changes.WaitAsync();
@@ -125,6 +133,7 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         }
         finally { _changes.Release(); }
     }
+
     public async Task<GitHubState> CheckAsync(CancellationToken token = default)
     {
         GitHubState before = await StatusAsync();
@@ -133,15 +142,16 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         {
             using JsonDocument viewer = JsonDocument.Parse(await CliAsync(["api", "user"], token));
             if (viewer.RootElement.GetProperty("id").ToString() != before.Account.AccountId) throw new GitHubFailure();
-            lock (_gate) if (_state.Account?.Generation == before.Account.Generation) _state = _state with { Status = "Connected", Notice = null };
+            lock (_gate) if (_state.Account?.Generation == before.Account.Generation) _state = _state with { Status = GitHubConnectionStatus.Connected, Notice = null };
         }
         catch
         {
             lock (_gate) if (_state.Account?.Generation == before.Account.Generation)
-                _state = _state with { Status = "Unavailable", Notice = "GitHub access could not be verified. Check the connection or disconnect and sign in again." };
+                _state = _state with { Status = GitHubConnectionStatus.Unavailable, Notice = "GitHub access could not be verified. Check the connection or disconnect and sign in again." };
         }
         return await StatusAsync();
     }
+
     public async Task<RepositoryAccount?> GetAccountAsync(CancellationToken token) => (await StatusAsync()).Account;
 
     public async Task<RepositoryInfo[]> RepositoriesAsync(int page, CancellationToken token)
@@ -150,17 +160,22 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         using JsonDocument result = JsonDocument.Parse(await CliAsync(["api", $"user/repos?per_page=100&page={page}&sort=full_name"], token));
         return [.. result.RootElement.EnumerateArray().Select(Repository)];
     }
+
     public async Task<RepositoryInfo> RepositoryAsync(string name, CancellationToken token)
     {
         _ = new Goblin.Core.Work.RepositoryChange(name, "Goblin", "goblin@example.invalid");
         using JsonDocument result = JsonDocument.Parse(await CliAsync(["api", "repos/" + name], token));
         return Repository(result.RootElement);
     }
+
     private static RepositoryInfo Repository(JsonElement row) => new(row.GetProperty("id").GetInt64(), row.GetProperty("full_name").GetString()!,
         row.GetProperty("default_branch").GetString()!, row.TryGetProperty("permissions", out JsonElement permissions) && permissions.TryGetProperty("push", out JsonElement push) && push.GetBoolean());
+
     public Task<string> CliAsync(string[] arguments, CancellationToken token, string? profile = null) => RunAsync(_command, arguments, profile ?? Profile, token);
+
     public Task<string> GitAsync(string directory, string[] arguments, CancellationToken token) =>
         RunAsync("git", ["-c", "core.hooksPath=/dev/null", "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", .. arguments], Profile, token, workingDirectory: directory);
+
     private static async Task<string> RunAsync(string command, string[] arguments, string profile, CancellationToken token,
         Action<string>? progress = null, string? workingDirectory = null)
     {
@@ -184,6 +199,7 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         if (process.ExitCode != 0) throw new GitHubFailure();
         return result;
     }
+
     private static async Task<string> ReadAsync(StreamReader reader, Action<string>? progress)
     {
         var text = new StringBuilder();
@@ -194,10 +210,12 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         }
         return text.ToString();
     }
+
     public static void PrivateDirectory(string directory)
     {
         Directory.CreateDirectory(directory);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
+
     public void Dispose() { _cancellation?.Cancel(); }
 }

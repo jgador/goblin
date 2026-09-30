@@ -17,6 +17,7 @@ namespace Goblin.Application.Workspaces;
 public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
+
     public WorkspaceCheckpoints(IDbContextFactory<GoblinDbContext> factory) => _factory = factory;
 
     public async Task<WorkspaceCheckpoint?> LatestAsync(long workId, string repository, CancellationToken token)
@@ -27,11 +28,13 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
                 x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt)).FirstOrDefaultAsync(token);
         return row;
     }
+
     public async Task<bool> VerifiedAsync(long id, long attemptId, int turnNumber, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.WorkspaceCheckpoints.AnyAsync(x => x.Id == id && x.AttemptId == attemptId && x.TurnNumber == turnNumber, token);
     }
+
     public async Task<WorkspaceCheckpoint> SaveAsync(long attemptId, int turn, string commit,
         RepositoryBroker broker, CancellationToken token)
     {
@@ -64,12 +67,14 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
         await db.SaveChangesAsync(token); await transaction.CommitAsync(token);
         return View(row);
     }
+
     public async Task<WorkspaceCheckpoint[]> ListAsync(long workId, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.WorkId == workId).OrderByDescending(x => x.CreatedAt)
             .Select(x => new WorkspaceCheckpoint(x.Id, x.WorkId, x.AttemptId, x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt)).ToArrayAsync(token);
     }
+
     private static WorkspaceCheckpoint View(Persistence.Entities.WorkspaceCheckpoint x) =>
         new(x.Id, x.WorkId, x.AttemptId, x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt);
 

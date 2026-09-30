@@ -171,6 +171,7 @@ public sealed class PersistentSandboxTests
         work.QueueExecution(attempt, new("codex", 1, repository: new("owner/repo", "Goblin", "goblin@example.test")), Now);
         work.TryClaimExecution(attempt, 100, host.EnvironmentFor(id, attempt), Now); return work;
     }
+
     private static async Task StopAsync(WorkItem work, SandboxHost host)
     {
         ExecutionAttempt attempt = work.CurrentAttempt!;
@@ -186,6 +187,7 @@ public sealed class PersistentSandboxTests
         private readonly string _auth;
         private readonly KubernetesApi _api;
         private int _version;
+
         public Dictionary<string, JsonNode> Resources { get; } = [];
         public Broker Broker { get; } = new();
         public SandboxHost Host { get; }
@@ -195,6 +197,7 @@ public sealed class PersistentSandboxTests
         public int Mutations { get; private set; }
         public JsonNode Sandbox => Resources["/apis/agents.x-k8s.io/v1beta1/namespaces/agents/sandboxes/work-1"];
         public string VolumeUid => Resources["/api/v1/namespaces/agents/persistentvolumeclaims/work-1"]["metadata"]!["uid"]!.GetValue<string>();
+
         private ControlPlane(WebApplication server)
         {
             _server = server; _auth = Path.Combine(Path.GetTempPath(), "goblin-sandbox-test-" + Guid.NewGuid().ToString("N"));
@@ -202,6 +205,7 @@ public sealed class PersistentSandboxTests
             _api = new(server.Urls.Single());
             Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Checkpoints(), new(MaxCachedVolumes: 1));
         }
+
         public static async Task<ControlPlane> StartAsync()
         {
             WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(); builder.Logging.ClearProviders();
@@ -209,6 +213,7 @@ public sealed class PersistentSandboxTests
             ControlPlane? plane = null; server.Run(context => plane!.HandleAsync(context));
             await server.StartAsync(); plane = new(server); return plane;
         }
+
         private async Task HandleAsync(HttpContext context)
         {
             string path = context.Request.Path.Value!, method = context.Request.Method;
@@ -250,33 +255,47 @@ public sealed class PersistentSandboxTests
             }
             await context.Response.WriteAsJsonAsync(value);
         }
+
         private static void Merge(JsonNode target, JsonNode patch)
         {
             foreach (KeyValuePair<string, JsonNode?> entry in patch.AsObject())
                 if (entry.Value is JsonObject && target[entry.Key] is JsonObject child) Merge(child, entry.Value);
                 else target[entry.Key] = entry.Value?.DeepClone();
         }
+
         public async ValueTask DisposeAsync() { _api.Dispose(); await _server.DisposeAsync(); Directory.Delete(_auth, true); }
     }
+
     private sealed class Broker : IRepositoryBroker
     {
         public int Stops { get; private set; }
+
         public Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token) => Task.FromResult("fixture-capability");
+
         public Task<ExecutionObservation?> ObserveAsync(WorkSnapshot work, CancellationToken token) => Task.FromResult<ExecutionObservation?>(null);
+
         public Task StopAsync(WorkSnapshot work, CancellationToken token) { Stops++; return Task.CompletedTask; }
+
         public Task ReleaseAsync(WorkSnapshot work, CancellationToken token) => Task.CompletedTask;
     }
+
     private sealed class Checkpoints : IWorkspaceCheckpoints
     {
         public Task<WorkspaceCheckpoint?> LatestAsync(long workId, string repository, CancellationToken token) => Task.FromResult<WorkspaceCheckpoint?>(null);
+
         public Task<bool> VerifiedAsync(long id, long attemptId, int turnNumber, CancellationToken token) => Task.FromResult(true);
     }
+
     private sealed class TextHost : IExecutionHost
     {
         public RuntimeCapabilities[] Capabilities => [];
+
         public string EnvironmentFor(long workId, long attemptId) => throw new NotSupportedException();
+
         public Task StartAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) => throw new NotSupportedException();
+
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
     }
 }

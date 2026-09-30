@@ -7,6 +7,7 @@ namespace Goblin.Protocol.Tests;
 public sealed class ProtocolSerializationTests
 {
     private static T Read<T>(string json) => JsonSerializer.Deserialize<T>(json, ProtocolJson.Options)!;
+
     private static string Write<T>(T value) => JsonSerializer.Serialize(value, ProtocolJson.Options);
 
     [Fact]

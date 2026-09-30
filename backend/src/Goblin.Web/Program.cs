@@ -1,7 +1,7 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using Goblin.Web;
 using Microsoft.AspNetCore.Builder;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 if (args.Length > 0 && args[0] == "--execute")
 {

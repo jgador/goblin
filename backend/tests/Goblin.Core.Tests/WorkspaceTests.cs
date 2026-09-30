@@ -8,6 +8,7 @@ namespace Goblin.Core.Tests;
 public sealed class WorkspaceTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
+
     private static WorkItem Running()
     {
         var work = new WorkItem(1, "Investigate and fix the issue", Now);
@@ -17,6 +18,7 @@ public sealed class WorkspaceTests
         work.ExecutionStarted(1, 10, new("model", "thread", "turn-1"), Now);
         return work;
     }
+
     [Fact]
     public void SuspensionRetainsWorkspaceWithoutAFileArchive()
     {
@@ -29,6 +31,7 @@ public sealed class WorkspaceTests
         Assert.Null(work.CurrentAttempt.CheckpointId);
         Assert.Equal(workspace, WorkItem.Restore(work.Snapshot()).Workspace);
     }
+
     [Fact]
     public void RetainedWorkspaceContinuesSameAttemptAndPreservesTurnOwnership()
     {
@@ -49,6 +52,7 @@ public sealed class WorkspaceTests
         Assert.Equal(2, restored.CurrentAttempt!.TurnNumber);
         Assert.Equal("thread", restored.CurrentAttempt.PriorTurns.Single().Session!.SessionReference);
     }
+
     [Fact]
     public void ReleasedWorkspaceContinuesWithReasoningBeforeAllocatingRepositoryCompute()
     {
@@ -70,6 +74,7 @@ public sealed class WorkspaceTests
         Assert.Single(work.Attempts);
         Assert.Equal(checkpoint, work.CurrentAttempt.CheckpointId);
     }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
@@ -79,6 +84,7 @@ public sealed class WorkspaceTests
         Assert.Throws<WorkRuleException>(() => work.SaveWorkspace(1, 10, checkpoint, Now));
         Assert.Null(work.CurrentAttempt!.CheckpointId);
     }
+
     [Fact]
     public void CancellingARetainedWorkspaceRequiresHostConfirmation()
     {

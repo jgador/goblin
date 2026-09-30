@@ -251,7 +251,7 @@ public sealed class WorkRecovery : BackgroundService
                 {
                     try
                     {
-                        if (attempt.Status == "Queued")
+                        if (attempt.Status == nameof(AttemptStatus.Queued))
                             await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(attempt.WorkId, attempt.Id, attempt.TurnNumber));
                         else await _coordinator.ReconcileAsync(new(attempt.WorkId, attempt.Id, attempt.TurnNumber), stoppingToken);
                     }

@@ -10,17 +10,17 @@ namespace Goblin.Integrations.Codex;
 public sealed class Authentication : IDisposable
 {
     private readonly CodexClient _codex;
-    private readonly Func<string, Task<string>> _verifyApiKey;
+    private readonly Func<string, Task<VerificationState>> _verifyApiKey;
     private readonly PromptRunner _prompts;
     private readonly Lock _gate = new();
     private Task _queue = Task.CompletedTask;
     private AccountView? _account;
     private DeviceLogin? _login;
     private Notice? _notice;
-    private string? _verification;
+    private VerificationState? _verification;
     private int _promptPending;
 
-    public Authentication(CodexClient codex, Func<string, Task<string>> verifyApiKey, TimeSpan promptTimeout)
+    public Authentication(CodexClient codex, Func<string, Task<VerificationState>> verifyApiKey, TimeSpan promptTimeout)
     {
         _codex = codex;
         _verifyApiKey = verifyApiKey;
@@ -39,7 +39,7 @@ public sealed class Authentication : IDisposable
                 {
                     if (_login is null || completed.Params.LoginId != _login.Id) return false;
                     _login = null;
-                    _notice = completed.Params.Success ? null : new("error",
+                    _notice = completed.Params.Success ? null : new(NoticeKind.Error,
                         "Sign-in did not finish. The code may have expired or device-code login may be disabled. Please try again.");
                 }
                 await RefreshAsync();
@@ -53,7 +53,7 @@ public sealed class Authentication : IDisposable
     {
         lock (_gate)
         {
-            if (_login is not null) _notice = new("error", "Codex restarted during sign-in. Please start sign-in again.");
+            if (_login is not null) _notice = new(NoticeKind.Error, "Codex restarted during sign-in. Please start sign-in again.");
             _login = null;
             _account = null;
             _verification = null;
@@ -120,17 +120,17 @@ public sealed class Authentication : IDisposable
                 return await Serial(async () =>
                 {
                     await RefreshAsync();
-                    string authType;
+                    AuthenticationMethod authType;
                     lock (_gate) authType = _account switch
                     {
-                        ApiKeyAccountView => "apiKey",
-                        ChatgptAccountView => "chatgpt",
+                        ApiKeyAccountView => AuthenticationMethod.ApiKey,
+                        ChatgptAccountView => AuthenticationMethod.Chatgpt,
                         _ => throw new IntegrationFailure("not_connected", "Connect a ChatGPT account or API key first.")
                     };
                     (string Reply, string Model, long DurationMs) result = await _prompts.RunAsync(prompt, cancellationToken);
                     lock (_gate)
                     {
-                        if (authType == "apiKey") _verification = "accepted";
+                        if (authType == AuthenticationMethod.ApiKey) _verification = VerificationState.Accepted;
                         _notice = null;
                     }
                     return new PromptResult(result.Reply, result.Model, result.DurationMs, authType);
@@ -175,12 +175,12 @@ public sealed class Authentication : IDisposable
         if (apiKey.Length is < 20 or > 4096 || apiKey.Any(c => c is < '\x21' or > '\x7e'))
             throw new IntegrationFailure("invalid_api_key", "Enter a complete OpenAI API key without spaces.");
         await RequireDisconnectedAsync();
-        string verification = await _verifyApiKey(apiKey);
+        VerificationState verification = await _verifyApiKey(apiKey);
         await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ApiKeyLoginAccountParams { ApiKey = apiKey });
         lock (_gate)
         {
             _verification = verification;
-            _notice = verification == "unverified" ? new("info",
+            _notice = verification == VerificationState.Unverified ? new(NoticeKind.Info,
                 "Key saved. Its permissions or rate limits prevented verification. Model access has not been tested.") : null;
         }
         await RefreshAsync();
