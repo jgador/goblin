@@ -17,7 +17,7 @@ public sealed class ContractValueTests
         Assert.Equal("\"accepted\"", JsonSerializer.Serialize(VerificationState.Accepted));
         Assert.Equal("\"unverified\"", JsonSerializer.Serialize(VerificationState.Unverified));
         Assert.Equal("\"apiKey\"", JsonSerializer.Serialize(AuthenticationMethod.ApiKey));
-        Assert.Equal("\"chatgpt\"", JsonSerializer.Serialize(AuthenticationMethod.Chatgpt));
+        Assert.Equal("\"chatgpt\"", JsonSerializer.Serialize(AuthenticationMethod.ChatGPT));
         Assert.Equal("\"Connected\"", JsonSerializer.Serialize(GitHubConnectionStatus.Connected));
         Assert.Equal("\"Changing\"", JsonSerializer.Serialize(ConnectionAvailability.Changing));
         Assert.Equal("\"Succeeded\"", JsonSerializer.Serialize(RepositoryOperationState.Succeeded));

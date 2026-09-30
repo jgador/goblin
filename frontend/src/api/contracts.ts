@@ -6,7 +6,7 @@ import type {
 // Shared HTTP contracts. API keys and configured passwords have no response fields.
 export type Account =
     | {
-          type: typeof import("./values.js").AuthenticationMethod.Chatgpt;
+          type: typeof import("./values.js").AuthenticationMethod.ChatGPT;
           email: string | null;
           planType: string | null;
       }

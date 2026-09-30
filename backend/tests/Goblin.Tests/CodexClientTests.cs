@@ -85,8 +85,8 @@ public sealed class CodexClientTests
         await fixture.Client.StartAsync();
         Task<GetAccountResponse> first = fixture.ReadAsync();
         Task<GetAccountResponse> second = fixture.ReadAsync();
-        Assert.Equal("2", Assert.IsType<ChatgptAccount>((await first).Account).Email);
-        Assert.Equal("3", Assert.IsType<ChatgptAccount>((await second).Account).Email);
+        Assert.Equal("2", Assert.IsType<ChatGPTAccount>((await first).Account).Email);
+        Assert.Equal("3", Assert.IsType<ChatGPTAccount>((await second).Account).Email);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class CodexClientTests
     {
         await using Fixture fixture = await Fixture.CreateAsync("fragmented");
         await fixture.Client.StartAsync();
-        Assert.Equal("测试🙂@example.test", Assert.IsType<ChatgptAccount>((await fixture.ReadAsync()).Account).Email);
+        Assert.Equal("测试🙂@example.test", Assert.IsType<ChatGPTAccount>((await fixture.ReadAsync()).Account).Email);
     }
 
     [Fact]

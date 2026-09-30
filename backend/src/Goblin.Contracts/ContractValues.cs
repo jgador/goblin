@@ -35,7 +35,7 @@ public enum AuthenticationMethod
     ApiKey,
 
     [JsonStringEnumMemberName("chatgpt")]
-    Chatgpt
+    ChatGPT
 }
 
 [JsonConverter(typeof(ContractEnumJsonConverter<GitHubConnectionStatus>))]

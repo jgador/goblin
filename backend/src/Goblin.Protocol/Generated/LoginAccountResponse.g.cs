@@ -23,9 +23,9 @@ public sealed class LoginAccountResponseJsonConverter : JsonConverter<LoginAccou
         return ProtocolUnion.ReadDiscriminator(ref reader, "type") switch
         {
             "apiKey" => JsonSerializer.Deserialize<ApiKeyLoginAccountResponse>(ref reader, options)!,
-            "chatgpt" => JsonSerializer.Deserialize<ChatgptLoginAccountResponse>(ref reader, options)!,
-            "chatgptDeviceCode" => JsonSerializer.Deserialize<ChatgptDeviceCodeLoginAccountResponse>(ref reader, options)!,
-            "chatgptAuthTokens" => JsonSerializer.Deserialize<ChatgptAuthTokensLoginAccountResponse>(ref reader, options)!,
+            "chatgpt" => JsonSerializer.Deserialize<ChatGPTLoginAccountResponse>(ref reader, options)!,
+            "chatgptDeviceCode" => JsonSerializer.Deserialize<ChatGPTDeviceCodeLoginAccountResponse>(ref reader, options)!,
+            "chatgptAuthTokens" => JsonSerializer.Deserialize<ChatGPTAuthTokensLoginAccountResponse>(ref reader, options)!,
             "amazonBedrock" => JsonSerializer.Deserialize<AmazonBedrockLoginAccountResponse>(ref reader, options)!,
             _ => throw new JsonException("Unknown LoginAccountResponse discriminator."),
         };
@@ -38,13 +38,13 @@ public sealed class LoginAccountResponseJsonConverter : JsonConverter<LoginAccou
             case ApiKeyLoginAccountResponse typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
-            case ChatgptLoginAccountResponse typed:
+            case ChatGPTLoginAccountResponse typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
-            case ChatgptDeviceCodeLoginAccountResponse typed:
+            case ChatGPTDeviceCodeLoginAccountResponse typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
-            case ChatgptAuthTokensLoginAccountResponse typed:
+            case ChatGPTAuthTokensLoginAccountResponse typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             case AmazonBedrockLoginAccountResponse typed:

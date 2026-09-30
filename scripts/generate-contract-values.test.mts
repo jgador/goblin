@@ -20,10 +20,10 @@ import { WorkStatus, isContractValue } from "../frontend/src/api/values.ts";
 test("C# extraction preserves explicit wire names and rejects syntax it cannot safely interpret", () => {
     assert.deepEqual(
         csharpValues(
-            'public enum Example { [JsonStringEnumMemberName("apiKey")] ApiKey, Chatgpt }',
+            'public enum Example { [JsonStringEnumMemberName("apiKey")] ApiKey, ChatGPT }',
             ["Example"],
         ),
-        { Example: { ApiKey: "apiKey", Chatgpt: "Chatgpt" } },
+        { Example: { ApiKey: "apiKey", ChatGPT: "ChatGPT" } },
     );
     for (const source of [
         "public enum Example { One = 1 }",
