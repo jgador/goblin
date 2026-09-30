@@ -90,6 +90,7 @@ test("localhost requires the chosen password without prefilling it, including af
         ).toBeVisible();
         expect(loginRequests).toHaveLength(2);
 
+        await page.getByLabel("Workspace menu", { exact: true }).click();
         await page.getByRole("button", { name: "Lock workspace" }).click();
         await expect(password).toHaveValue("");
         expect((await page.request.get(`${origin}/api/status`)).status()).toBe(

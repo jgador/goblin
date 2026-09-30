@@ -353,11 +353,15 @@ test.describe("durable Work", () => {
                 .locator(".output-row summary")
                 .filter({ hasText: "Approved result" }),
         ).toBeVisible();
+        await page
+            .getByRole("button", { name: "Activity", exact: true })
+            .click();
         await expect(
             page
                 .locator(".activity-title")
                 .filter({ hasText: "Result approved" }),
         ).toBeVisible();
+        await page.keyboard.press("Escape");
         await page
             .locator(".output-row summary")
             .filter({ hasText: "codex" })

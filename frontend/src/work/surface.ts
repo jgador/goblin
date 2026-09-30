@@ -97,7 +97,7 @@ export function renderProgress(item: View) {
                 : "Work completes only when a result is approved.",
         },
     ];
-    return `<div class="progress-list">${rows.map((row) => `<details class="progress-row" id="progress-${row.id}"><summary><span class="milestone-icon ${row.done ? "complete" : ""}">${icon(row.done ? "circleCheck" : "clock")}</span><span class="row-title">${e(row.title)}</span><span class="row-meta">${e(row.state)}</span>${icon("chevron", "disclosure-icon")}</summary><div class="inspection"><p>${e(row.evidence)}</p>${row.id === "execution" && attempt ? `<button class="text-button" data-action="inspect-output" data-id="execution-${e(attempt.id)}">Inspect execution ${icon("arrow")}</button>` : ""}</div></details>`).join("")}</div>`;
+    return `<div class="progress-list">${rows.map((row) => `<details class="progress-row ${row.done ? "is-complete" : ""}" id="progress-${row.id}"><summary><span class="milestone-icon ${row.done ? "complete" : ""}">${icon(row.done ? "check" : "clock")}</span><span class="row-title">${e(row.title)}</span><span class="row-meta ${row.done ? "sr-only" : ""}">${e(row.state)}</span></summary><div class="inspection"><p>${e(row.evidence)}</p>${row.id === "execution" && attempt ? `<button class="text-button" data-action="inspect-output" data-id="execution-${e(attempt.id)}">Inspect execution ${icon("arrow")}</button>` : ""}</div></details>`).join("")}</div>`;
 }
 
 export function renderDecisions(w: Work) {
@@ -124,6 +124,7 @@ export function renderOutputs(w: Work) {
                   ? "Changes requested"
                   : "Proposed result",
             type: "Result",
+            description: r.text,
             body: `<div class="preserve-lines">${e(r.text)}</div><p class="inspection-meta">Attempt ${e(r.attemptId)}${r.approvedAt ? ` · Approved ${e(timestamp(r.approvedAt))}` : ""}</p>${r.requestedChanges ? `<p class="preserve-lines">Requested changes: ${e(r.requestedChanges)}</p>` : ""}`,
         })),
         ...w.artifacts.toReversed().map((a) => ({
@@ -132,6 +133,7 @@ export function renderOutputs(w: Work) {
             icon: "file",
             title: a.name,
             type: "Artifact",
+            description: a.reference,
             body: `<p>${/^https:\/\/github\.com\//.test(a.reference) ? `<a href="${e(a.reference)}" rel="noreferrer" target="_blank">Open on GitHub ${icon("arrow")}</a>` : "Preview unavailable for this artifact."}</p><p class="inspection-meta preserve-lines">${e(a.reference)}</p>${a.attemptId ? `<p class="inspection-meta">Attempt ${e(a.attemptId)}</p>` : ""}`,
         })),
         ...w.attempts.toReversed().map((a) => ({
@@ -140,6 +142,7 @@ export function renderOutputs(w: Work) {
             icon: "activity",
             title: `${a.target.runtime} · ${label(a.status)}`,
             type: "Execution",
+            description: "Execution log and runtime details",
             body: `<dl class="execution-properties"><dt>Attempt</dt><dd>${e(a.id)}</dd><dt>Runtime turn</dt><dd>${a.turnNumber ?? 1}</dd><dt>Agent</dt><dd>${e(a.agentId ?? "Not recorded")}</dd><dt>Runtime</dt><dd>${e(a.target.runtime)}</dd><dt>Requested model</dt><dd>${e(a.target.requestedModel ?? "Codex default")}</dd><dt>Reasoning effort</dt><dd>${e(a.target.requestedEffort ? effortLabel(a.target.requestedEffort) : "Model default")}</dd><dt>Reported model</dt><dd>${e(a.session?.model ?? "Model not reported")}</dd><dt>Started</dt><dd>${e(timestamp(a.startedAt))}</dd><dt>Finished</dt><dd>${e(timestamp(a.finishedAt))}</dd>${a.environmentReference ? `<dt>Environment</dt><dd>${e(a.environmentReference)}</dd>` : ""}${a.target.repository ? `<dt>Repository</dt><dd>${e(a.target.repository.repository)}${a.target.repository.grant ? ` · ${e(a.target.repository.grant.branch)} · @${e(a.target.repository.grant.login)}` : ""}</dd>` : ""}${a.failure ? `<dt>Failure</dt><dd>${e(label(a.failure))}</dd>` : ""}${a.cleanupPending ? "<dt>Cleanup</dt><dd>Pending</dd>" : ""}</dl>${a.priorTurns?.length ? `<details class="execution-events"><summary>Previous runtime turns (${a.priorTurns.length})</summary>${a.priorTurns.map((t) => `<p class="inspection-meta">Turn ${t.number} · ${e(t.session?.model ?? "Model not reported")} · ${e(timestamp(t.startedAt))}${t.checkpointId ? " · Checkpoint saved" : ""}</p>`).join("")}</details>` : ""}${
                 w.history.filter((h) => h.attemptId === a.id).length
                     ? `<details class="execution-events" id="execution-events-${e(a.id)}"><summary>Execution history</summary>${w.history
@@ -157,7 +160,7 @@ export function renderOutputs(w: Work) {
         (a, b) => (Date.parse(b.at ?? "") || 0) - (Date.parse(a.at ?? "") || 0),
     );
     const row = (o: (typeof outputs)[number]) =>
-        `<details class="durable-row output-row" id="${e(o.id)}"><summary>${icon(o.icon)}<span class="row-title">${e(o.title)}</span><span class="row-meta">${o.type}</span>${icon("chevron", "disclosure-icon")}</summary><div class="inspection">${o.body}</div></details>`;
+        `<details class="durable-row output-row" id="${e(o.id)}"><summary>${icon(o.icon)}<span class="output-copy"><span class="row-title">${e(o.title)}</span><span class="output-description">${e(o.description)}</span></span><span class="row-meta">${o.type}</span>${icon("chevron", "disclosure-icon")}</summary><div class="inspection">${o.body}</div></details>`;
     return (
         outputs.slice(0, 3).map(row).join("") +
             (outputs.length > 3

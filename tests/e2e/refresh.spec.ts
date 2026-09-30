@@ -23,6 +23,9 @@ async function home(page: Page) {
         const data: Record<string, unknown> = {
             "/api/session": { authenticated: state.authenticated },
             "/api/preferences": { timeZone: "Asia/Manila" },
+            "/api/agents": [
+                { id: "1", name: "Goblin", connectionId: "1", isDefault: true },
+            ],
             "/api/work": [
                 {
                     version: "1",
