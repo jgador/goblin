@@ -18,6 +18,7 @@ async function settingsFixture(page: Page) {
     await page.route("**/api/**", async (route) => {
         const request = route.request(),
             path = new URL(request.url()).pathname;
+        if (path === "/api/values.js") return route.continue();
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
         else if (path === "/api/preferences")
@@ -117,7 +118,7 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
         dialog.getByRole("button", { name: "Disable owner/project" }),
     ).toBeVisible();
     await page.screenshot({
-        path: "test-results/settings-github.png",
+        path: test.info().outputPath("settings-github.png"),
         fullPage: true,
     });
     await dialog.getByRole("button", { name: "Close settings" }).click();
@@ -150,7 +151,7 @@ test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
     await dialog.getByRole("button", { name: "GitHub", exact: true }).click();
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     await page.screenshot({
-        path: "test-results/settings-mobile.png",
+        path: test.info().outputPath("settings-mobile.png"),
         fullPage: true,
     });
     await dialog.getByRole("button", { name: "Cancel sign-in" }).click();

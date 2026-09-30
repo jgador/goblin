@@ -44,6 +44,38 @@ public sealed class DurabilityTests
 
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
+    [DatabaseFact]
+    public async Task DefaultCoworkerIsSavedAtCreationAndUsedForExplicitStart()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        long id = NextId();
+        var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Save this idea for later");
+        WorkView saved = await fixture.Apply(create);
+        Assert.Equal(WorkStore.DefaultAgentId, saved.Work.AgentId);
+        Assert.Equal(WorkStatus.Ready, saved.Work.Status);
+        Assert.Empty(saved.Work.Attempts);
+        Assert.Single(saved.Work.History, x => x.Kind == WorkEventKind.Assigned);
+        Assert.Empty(fixture.Runtime.Starts);
+        Assert.Equal(saved.Version, (await fixture.Apply(create)).Version);
+        await fixture.RestartAsync();
+        Assert.Equal(WorkStore.DefaultAgentId, (await fixture.Get(id)).Work.AgentId);
+
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        Assert.Equal(WorkStore.DefaultAgentId, (await db.WorkItems.SingleAsync(x => x.Id == id)).AgentId);
+        AgentView[] agents = await scope.ServiceProvider.GetRequiredService<WorkStore>().AgentsAsync();
+        Assert.Equal(WorkStore.DefaultAgentId, Assert.Single(agents, x => x.IsDefault).Id);
+
+        var start = new WorkCommand(NextId(), id, WorkAction.Execute, saved.Version);
+        WorkView queued = await fixture.Apply(start);
+        Assert.Equal(WorkStore.DefaultAgentId, queued.Work.AgentId);
+        Assert.Equal(WorkStore.DefaultAgentId, Assert.Single(queued.Work.Attempts).AgentId);
+        Assert.Equal(queued.Version, (await fixture.Apply(start)).Version);
+        await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        Assert.Equal(1, fixture.Runtime.Starts[queued.Work.Attempts[0].Id]);
+        Assert.Equal(1, (await fixture.Get(id)).Work.History.Count(x => x.Kind == WorkEventKind.Assigned));
+    }
+
     private static async Task EnableHandoffRepository(Fixture fixture)
     {
         fixture.Runtime.RepositoryExecution = true;
@@ -700,7 +732,7 @@ public sealed class DurabilityTests
         var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Produce a reviewable answer");
         WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => fixture.Apply(create)));
         Assert.All(created, x => Assert.Equal(1, x.Version));
-        Assert.Single((await fixture.Get(id)).Work.History);
+        Assert.Equal(new[] { WorkEventKind.Created, WorkEventKind.Assigned }, (await fixture.Get(id)).Work.History.Select(x => x.Kind));
         WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
         WorkView queued = await fixture.Apply(new(NextId(), id, WorkAction.Execute, assigned.Version));
         long attempt = queued.Work.Attempts.Single().Id;
@@ -752,8 +784,9 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         long id = NextId(), rejected = NextId();
-        await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "No agent assigned"));
-        await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(rejected, id, WorkAction.Execute, 1)));
+        await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Reject an unavailable model"));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(rejected, id, WorkAction.Execute, 1,
+            Model: "unavailable-fixture-model", ModelSelectionProvided: true)));
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
         Assert.False(await db.WorkCommands.AnyAsync(x => x.Id == rejected));
@@ -825,6 +858,11 @@ public sealed class DurabilityTests
         WorkView work = await fixture.Get(workId);
         Assert.Equal(2, work.Version);
         Assert.Equal("Track this conversation", work.Work.Objective);
+        Assert.Equal(WorkStore.DefaultAgentId, work.Work.AgentId);
+        Assert.Equal(WorkStatus.Ready, work.Work.Status);
+        Assert.Empty(work.Work.Attempts);
+        await using GoblinDbContext trackedDb = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        Assert.Equal(WorkStore.DefaultAgentId, (await trackedDb.WorkItems.SingleAsync(x => x.Id == workId)).AgentId);
     }
 
     [DatabaseFact]

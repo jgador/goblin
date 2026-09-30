@@ -1,35 +1,81 @@
-:root { color-scheme: light; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #242c24; background: #f7f8f4; }
-* { box-sizing: border-box; }
-body { margin: 0; padding: 48px 24px; }
-main { max-width: 620px; margin: 0 auto; }
-.brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 650; letter-spacing: -.7px; margin-bottom: 64px; }
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #272e29;
+  background: #fffefb;
+  font-synthesis: none;
+  line-height: 1.5;
+  --green: #243d2c;
+  --muted: #697466;
+  --border: #e2e5dc;
+  --paper: #fffefb;
+  --accent: #e8eedf;
+  --focus: #668849;
+}
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: #b7c6a9 transparent; }
+body { margin: 0; padding: 40px 32px; }
+main { max-width: 1040px; margin: 0 auto; }
+[hidden] { display: none !important; }
+::selection { background: #dce8cb; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--green); font-size: 24px; font-weight: 600; letter-spacing: -.9px; margin-bottom: 48px; }
 .brand-logo { display: block; width: 34px; height: auto; }
-.eyebrow { color: #5b6c58; font-size: 11px; font-weight: 700; letter-spacing: 2px; }
-h1 { font-size: clamp(28px, 5vw, 38px); font-weight: 600; letter-spacing: -1.4px; margin: 12px 0; }
-.intro, footer, #recovery { color: #626b61; line-height: 1.6; font-size: 14px; }
+.eyebrow { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .16em; }
+h1 { color: var(--green); font-size: clamp(30px, 4vw, 42px); line-height: 1.15; font-weight: 600; letter-spacing: -1.5px; margin: 12px 0; }
+.intro, footer, #recovery { color: var(--muted); line-height: 1.7; font-size: 14px; }
 .intro { max-width: 480px; margin-bottom: 32px; }
-.summary { display: flex; gap: 12px; justify-content: space-between; font-size: 13px; min-height: 44px; line-height: 1.5; }
-#elapsed { color: #687165; white-space: nowrap; }
-ol { list-style: none; padding: 0; margin: 0; background: #fff; border: 1px solid #dfe5da; border-radius: 14px; overflow: hidden; }
-li { display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-bottom: 1px solid #eef0e9; font-size: 14px; }
+.summary { display: flex; align-items: baseline; gap: 16px; justify-content: space-between; font-size: 13px; min-height: 40px; color: var(--green); }
+#message { overflow-wrap: anywhere; }
+#elapsed { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.installation-progress { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; gap: 24px; }
+ol { list-style: none; padding: 0; margin: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+li { display: flex; align-items: center; gap: 12px; min-height: 49px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
 li:last-child { border-bottom: 0; }
-.indicator { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; border: 1px solid #c5cebd; display: grid; place-items: center; font-size: 12px; color: #69735f; }
-.label { flex: 1; }
-.status { font-size: 12px; color: #626b61; }
-li[data-status="running"] { background: #f2f7ed; }
-li[data-status="running"] .indicator { border: 2px solid #a3b891; border-top-color: #31512f; animation: spin 1s linear infinite; }
-li[data-status="complete"] .indicator { background: #e3edda; color: #284a21; border: 0; }
-li[data-status="failed"] .indicator { color: #923728; background: #fbe9e4; border: 0; }
-li[data-status="failed"] .status { color: #923728; }
-.connection { font-size: 13px; color: #626b61; min-height: 20px; }
-footer { font-size: 12px; margin-top: 32px; }
-.installation-log { margin-top: 20px; border: 1px solid #dfe5da; border-radius: 14px; background: #fff; overflow: hidden; }
-.installation-log summary { padding: 14px 18px; font-size: 14px; cursor: pointer; }
-.log-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 0 18px 12px; font-size: 12px; color: #626b61; }
-.log-toolbar label { display: flex; align-items: center; gap: 6px; }
-#install-log { height: 240px; overflow: auto; padding: 12px 18px; border-top: 1px solid #eef0e9; background: #f7f8f4; font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; }
-#install-log p { margin: 0 0 7px; white-space: pre-wrap; }
-summary:focus-visible, #install-log:focus-visible, input:focus-visible { outline: 2px solid #31512f; outline-offset: -2px; }
+.indicator { width: 22px; height: 22px; flex: 0 0 auto; border-radius: 50%; border: 1px solid #d5ddca; display: grid; place-items: center; font-size: 11px; color: var(--muted); }
+.label { flex: 1; min-width: 0; }
+.status { font-size: 11px; color: var(--muted); }
+li[data-status="running"] { background: #f0f2e9; color: var(--green); }
+li[data-status="running"] .indicator { border: 2px solid #d5ddca; border-top-color: var(--focus); animation: spin 1s linear infinite; }
+li[data-status="complete"] .indicator { background: var(--accent); color: var(--green); border: 0; }
+li[data-status="failed"] .indicator { color: #8b4e32; background: #f7ede5; border: 0; }
+li[data-status="failed"] .status { color: #8b4e32; }
+.connection { font-size: 13px; color: var(--muted); }
+.connection:empty { display: none; }
+#recovery { padding: 16px 18px; border: 1px solid #e4d6c8; border-radius: 10px; background: #faf5ee; color: #8b4e32; }
+footer { font-size: 12px; margin-top: 24px; }
+.installation-log { min-width: 0; position: sticky; top: 24px; border: 1px solid var(--border); border-radius: 14px; background: var(--paper); overflow: hidden; }
+.installation-log summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; padding: 14px 18px; color: var(--green); font-size: 13px; font-weight: 600; cursor: pointer; list-style: none; }
+.installation-log summary::-webkit-details-marker { display: none; }
+.installation-log summary::after { content: ""; width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin: -4px 3px 0; }
+.installation-log:not([open]) summary::after { transform: rotate(-45deg); margin-top: 0; }
+.installation-log summary:hover { background: #f0f2e9; }
+.log-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 49px; padding: 4px 18px; border-block: 1px solid var(--border); background: #f0f2e9; font-size: 12px; color: var(--muted); }
+#log-connection { display: inline-flex; align-items: center; gap: 7px; }
+#log-connection::before { content: ""; width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+#log-connection[data-status="running"], #log-connection[data-status="ready"] { color: #526e39; }
+#log-connection[data-status="failed"] { color: #8b4e32; }
+.log-toolbar label { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; cursor: pointer; color: var(--green); }
+.log-toolbar input { width: 15px; height: 15px; margin: 0; accent-color: var(--green); cursor: pointer; }
+#install-log { height: 488px; overflow: auto; overscroll-behavior: contain; padding: 0 18px; overflow-wrap: anywhere; }
+.log-entry { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.log-entry:last-child { border-bottom: 0; }
+.log-entry-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 6px; color: var(--muted); font-size: 11px; }
+.log-entry-meta time { font-variant-numeric: tabular-nums; }
+.log-step { padding: 1px 6px; border-radius: 4px; background: #f0f2e9; color: #526e39; }
+.log-message { margin: 0; color: var(--green); white-space: pre-wrap; font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.log-empty { margin: 24px 0; font-size: 13px; color: var(--muted); }
+summary:focus-visible, #install-log:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
+input:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
-@media (max-width: 480px) { body { padding: 28px 18px; } .brand { margin-bottom: 44px; } li { padding: 15px 12px; gap: 10px; } }
+@media (max-width: 760px) {
+  body { padding: 28px 18px; }
+  .brand { margin-bottom: 36px; }
+  .installation-progress { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .installation-log { position: static; }
+  #install-log { height: 360px; }
+  li { padding: 12px 14px; gap: 10px; }
+}
+@media (forced-colors: active) {
+  * { scrollbar-color: auto; }
+  .log-toolbar input { accent-color: auto; }
+}

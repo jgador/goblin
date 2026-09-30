@@ -6,7 +6,6 @@ import {
     IdentityKind,
     ConnectionAvailability,
 } from "../api/values.js";
-import { WorkWorkspace } from "./workspace.js";
 import { Settings } from "../settings/settings.js";
 import { SystemResources } from "../settings/system.js";
 import {
@@ -29,7 +28,13 @@ import {
     matchesWork,
     relativeTime,
 } from "./surface.js";
-type Agent = { id: string; name: string; connectionId: string; model?: string };
+type Agent = {
+    id: string;
+    name: string;
+    connectionId: string;
+    model?: string;
+    isDefault: boolean;
+};
 type Connection = {
     id: string;
     runtime: string;
@@ -167,7 +172,6 @@ const system = new SystemResources();
 const settings = new Settings(system);
 const timezoneSetup = new TimeZoneSetup();
 window.addEventListener("goblin-timezone-changed", () => render(true));
-const workWorkspace = new WorkWorkspace();
 window.addEventListener("goblin-workspace-locked", () => {
     authenticated = false;
     forgetWorkspace();
@@ -190,20 +194,9 @@ function composerWork(): Work | undefined {
         return work.find((x) => x.work.id === linked)?.work;
     }
 }
-const modelConnections = () =>
-    connections.filter(
-        (c) =>
-            c.runtime === "codex" &&
-            agents.some((a) => a.connectionId === c.id),
-    );
-function preferredModelConnection() {
-    const available = modelConnections();
-    return (
-        available.find(
-            (c) => c.availability === ConnectionAvailability.Available,
-        ) ?? available[0]
-    );
-}
+const workAgent = (w?: Work) => agents.find((a) => a.id === w?.agentId);
+const workConnection = (w?: Work) =>
+    connections.find((c) => c.id === workAgent(w)?.connectionId);
 function saveModelSelections() {
     sessionStorage.setItem(
         "goblin.modelSelections",
@@ -213,28 +206,16 @@ function saveModelSelections() {
 function modelSelection(w?: Work): ModelSelection {
     const key = w?.id ?? "draft";
     let choice = modelSelections.get(key);
-    const agent = w ? agents.find((a) => a.id === w.agentId) : undefined;
+    const agent = workAgent(w);
     if (!choice) {
         const previous =
             w?.repositoryRequest?.target ?? w?.attempts.at(-1)?.target;
-        const draftChoice =
-            w && !agent ? modelSelections.get("draft") : undefined;
         choice = {
-            connectionId:
-                agent?.connectionId ??
-                draftChoice?.connectionId ??
-                preferredModelConnection()?.id ??
-                "",
-            model:
-                previous?.requestedModel ??
-                agent?.model ??
-                draftChoice?.model ??
-                "",
-            effort: previous?.requestedEffort ?? draftChoice?.effort ?? "",
-            touched:
-                draftChoice?.touched ??
-                !!(previous?.requestedModel || previous?.requestedEffort),
-            expanded: draftChoice?.expanded ?? false,
+            connectionId: agent?.connectionId ?? "",
+            model: previous?.requestedModel ?? agent?.model ?? "",
+            effort: previous?.requestedEffort ?? "",
+            touched: !!previous,
+            expanded: false,
             notice: "",
         };
         modelSelections.set(key, choice);
@@ -247,7 +228,7 @@ function modelSelection(w?: Work): ModelSelection {
         choice.touched = false;
         choice.expanded = false;
         choice.notice = selectedAnotherModel
-            ? "This agent uses another connection. Choose a model for this agent."
+            ? "The coding agent connection changed. Choose a model again."
             : "";
         saveModelSelections();
     } else if (
@@ -258,25 +239,6 @@ function modelSelection(w?: Work): ModelSelection {
     ) {
         choice.model = agent.model ?? "";
         choice.effort = "";
-        saveModelSelections();
-    } else if (!choice.connectionId && preferredModelConnection()) {
-        choice.connectionId = preferredModelConnection()!.id;
-        saveModelSelections();
-    } else if (
-        !agent &&
-        choice.connectionId &&
-        modelConnections().length > 0 &&
-        !modelConnections().some((c) => c.id === choice.connectionId)
-    ) {
-        const selectedAnotherModel = !!(choice.model || choice.effort);
-        choice.connectionId = preferredModelConnection()!.id;
-        choice.model = "";
-        choice.effort = "";
-        choice.touched = false;
-        choice.expanded = false;
-        choice.notice = selectedAnotherModel
-            ? "The previous connection is no longer available. Choose a model again."
-            : "";
         saveModelSelections();
     }
     return choice;
@@ -293,6 +255,8 @@ function modelPayload(w: Work) {
     };
 }
 function modelCanSubmit(w: Work) {
+    if (workConnection(w)?.availability !== ConnectionAvailability.Available)
+        return false;
     const choice = modelSelection(w);
     const source = connections.find((c) => c.id === choice.connectionId);
     if (source && source.runtime !== "codex") return true;
@@ -399,8 +363,18 @@ async function loadModels(
 }
 function ensureModels() {
     const w = composerWork();
+    if (
+        !w ||
+        (w.status !== WorkStatus.Ready &&
+            w.attention?.reason !== AttentionReason.Failure)
+    )
+        return;
     const connectionId = modelConnection(w);
-    if (!connectionId) return;
+    if (
+        !connectionId ||
+        workConnection(w)?.availability !== ConnectionAvailability.Available
+    )
+        return;
     const source = connections.find((c) => c.id === connectionId);
     if (source && source.runtime !== "codex") return;
     const choice = modelSelection(w);
@@ -478,7 +452,6 @@ function forgetWorkspace() {
     loaded = false;
     system.reset();
     settings.reset();
-    workWorkspace.reset();
 }
 async function refresh(preserveError = false) {
     if (loading || sending) return;
@@ -639,22 +612,10 @@ async function send(
             path === "/api/work/commands" &&
             command.action === WorkAction.Create
         ) {
-            modelSelections.set(String(command.workId), {
-                ...modelSelection(),
-                notice: "",
-            });
-            saveModelSelections();
             selected = String(command.workId);
             view = "work";
             conversationExpanded = false;
             rememberWork();
-        }
-        if (path === "/api/conversations/commands" && command.workId) {
-            modelSelections.set(String(command.workId), {
-                ...modelSelection(),
-                notice: "",
-            });
-            saveModelSelections();
         }
     } catch (failure) {
         error = (failure as Error).message;
@@ -689,16 +650,12 @@ function message(author: string, text: string, at?: string) {
     return `<div class="message"><div class="${author === "Goblin" ? "bot-avatar" : "avatar"}">${author === "Goblin" ? '<img src="/assets/branding/icon.svg" alt="">' : "You"}</div><div><div class="message-name">${e(author)}<time>${at ? e(time(at)) : ""}</time></div><div class="message-text"><p class="preserve-lines">${e(text)}</p></div></div></div>`;
 }
 function connectionButton() {
-    const connection =
-        connections.find((c) => c.id === modelSelection().connectionId) ??
-        connections.find(
-            (c) => c.availability === ConnectionAvailability.Available,
-        ) ??
-        connections[0];
+    const agent = agents.find((a) => a.isDefault);
+    const connection = connections.find((c) => c.id === agent?.connectionId);
     return `<button class="connection-choice" type="button" data-action="settings" title="Manage AI connections">${icon("spark")}${e(connection?.name ?? "AI connections")}${icon("chevron")}</button>`;
 }
 function composer(kind: string, placeholder: string) {
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${modelControls(composerWork())}${kind === "new" ? connectionButton() : `<span class="composer-note">${kind === "chat" ? "Saved as a conversation · Track as Work to start Goblin" : changing ? "Requests changes to the current result" : current()?.work.attention?.reason === AttentionReason.InputRequired ? "Answers the pending question" : current()?.work.status === WorkStatus.Ready ? "Saves context for this work · Start work when ready" : "Saves context with this work"}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div></form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
+    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : `<span class="composer-note">${kind === "chat" ? "Saved as a conversation · Track as Work to start Goblin" : changing ? "Requests changes to the current result" : current()?.work.attention?.reason === AttentionReason.InputRequired ? "Answers the pending question" : current()?.work.status === WorkStatus.Ready ? "Saves context for this work · Start work when ready" : "Saves context with this work"}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div></form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
 }
 function rememberWork() {
     sessionStorage.setItem("goblin.selectedWork", selected);
@@ -850,7 +807,6 @@ function refreshHome(html: string) {
         ".sidebar",
         ".workspace-notices",
         ".connection-choice",
-        ".model-picker",
         ".connection-nudge",
     ]) {
         const existing = root.querySelector(selector)!;
@@ -1046,11 +1002,11 @@ function renderDetail() {
     const w = item.work,
         attempt = w.attempts.at(-1);
     const latestResult = w.results.find((r) => r.attemptId === attempt?.id);
-    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><span>Work ${e(w.id)}</span><button id="show-activity" class="text-button activity-toggle" data-action="toggle-activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div class="detail-properties"><span>${icon("spark")}${w.agentId ? `Assigned to ${e(agents.find((a) => a.id === w.agentId)?.name ?? "agent " + w.agentId)}` : "Unassigned"}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
+    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><span>Work ${e(w.id)}</span><button id="show-activity" class="text-button activity-toggle" data-action="toggle-activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div class="detail-properties"><span>${icon("spark")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
         <section class="work-section" aria-labelledby="goal-heading"><div class="section-heading"><h3 id="goal-heading">Goal</h3><button class="text-button" data-action="discuss-goal">Discuss goal${icon("arrow")}</button></div><p class="goal-text preserve-lines">${e(w.objective)}</p></section>
         <section class="work-section" aria-labelledby="progress-heading"><div class="section-heading"><h3 id="progress-heading">Progress</h3><span>Work lifecycle</span></div>${renderProgress(item)}${w.attention?.reason === AttentionReason.ResultReview && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</section>
         <section class="work-section" aria-labelledby="decisions-heading"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span>${w.decisions.length || ""}</span></div>${renderDecisions(w)}</section>
-        <section class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-heading"><h3 id="outputs-heading">Recent outputs</h3></div>${renderOutputs(w)}${w.attempts.some((a) => a.target.repository) ? '<button class="secondary" data-action="open-workspace">Open workspace</button>' : ""}</section></div>
+        <section class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-heading"><h3 id="outputs-heading">Recent outputs</h3></div>${renderOutputs(w)}</section></div>
         <div class="work-composer"><div class="composer-heading"><h3>Ask Goblin about this work</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation">${icon("chat")}${conversationExpanded ? "Hide conversation" : IdentityKind.Conversation}</button></div><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? renderConversation(w) : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === AttentionReason.InputRequired ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
 }
 function modelControls(w?: Work) {
@@ -1084,7 +1040,7 @@ function modelControls(w?: Work) {
     const statusText = unsupported
         ? "This agent does not offer Codex model choices."
         : !connectionId
-          ? "Connect a Codex agent to choose a model."
+          ? "Connect Codex to choose a model."
           : (modelErrors.get(connectionId) ??
             (catalog?.refreshing
                 ? "Checking for current models…"
@@ -1095,33 +1051,7 @@ function modelControls(w?: Work) {
                     : !catalog
                       ? "Loading available models…"
                       : ""));
-    const sources = modelConnections();
-    const sourcePicker =
-        !w?.agentId && sources.length > 1
-            ? `<div class="model-picker-field"><label for="model-connection">Connection</label><select class="field-control select-control" id="model-connection" name="model-connection"><button type="button"><selectedcontent></selectedcontent></button>${sources.map((c) => `<option value="${e(c.id)}" ${connectionId === c.id ? "selected" : ""}>${e(c.name)}</option>`).join("")}</select></div>`
-            : "";
-    const hint =
-        view === "chat" && !w
-            ? "Messages save context. This choice applies when tracked Work starts."
-            : view === "new"
-              ? "This choice applies when the new Work starts."
-              : w &&
-                  [WorkStatus.Completed, WorkStatus.Cancelled].some(
-                      (value) => value === w.status,
-                  )
-                ? "This Work is closed. Messages here will not start another attempt."
-                : w &&
-                    ([
-                        WorkStatus.Queued,
-                        WorkStatus.InProgress,
-                        WorkStatus.Cancelling,
-                    ].some((value) => value === w.status) ||
-                        [
-                            AttentionReason.InputRequired,
-                            AttentionReason.RepositoryRequired,
-                        ].some((reason) => reason === w.attention?.reason))
-                  ? "The current attempt keeps its model. This choice is for a later attempt."
-                  : "This choice applies when this Work starts or retries.";
+    const hint = "These options apply when you start or retry this work.";
     const status = `${statusText ? `<p class="model-status" role="status">${e(statusText)}</p>` : ""}${choice.notice ? `<p class="model-status" role="status">${e(choice.notice)}</p>` : ""}`;
     const modelRows = `<button type="button" class="model-option" data-action="select-model" data-value="" aria-pressed="${!choice.model}"><span>Codex default${defaultName ? `<small>${e(defaultName)}</small>` : ""}</span>${!choice.model ? icon("check") : ""}</button>${waitingForSelection ? `<span class="model-option model-option-pending">${e(choice.model)} · Checking availability</span>` : ""}${models
         .map(
@@ -1129,10 +1059,10 @@ function modelControls(w?: Work) {
                 `<button type="button" class="model-option" data-action="select-model" data-value="${e(model.model)}" aria-pressed="${choice.model === model.model}"><span>${e(model.displayName)}${model.isNew ? " <small>New</small>" : ""}</span>${choice.model === model.model ? icon("check") : ""}</button>`,
         )
         .join("")}`;
-    const menu = `<div class="model-menu"><button type="button" class="model-menu-back" data-action="model-menu-back">${icon("back")}Models</button>${sourcePicker}<div class="model-options" aria-label="Available models">${modelRows}</div>${catalog?.hasMore && !choice.expanded ? '<button type="button" class="text-button model-more" data-action="show-more-models">Show more models (up to 10)</button>' : ""}<button type="button" class="text-button model-refresh" data-action="refresh-models" ${!connectionId || unsupported || modelLoading.has(connectionId) ? "disabled" : ""}>${icon("refresh")}Refresh models</button>${status}</div>`;
+    const menu = `<div class="model-menu"><button type="button" class="model-menu-back" data-action="model-menu-back">${icon("back")}Models</button><div class="model-options" aria-label="Available models">${modelRows}</div>${catalog?.hasMore && !choice.expanded ? '<button type="button" class="text-button model-more" data-action="show-more-models">Show more models (up to 10)</button>' : ""}<button type="button" class="text-button model-refresh" data-action="refresh-models" ${!connectionId || unsupported || modelLoading.has(connectionId) ? "disabled" : ""}>${icon("refresh")}Refresh models</button>${status}</div>`;
     const slider = `<div class="model-effort-control"><label for="work-effort">Reasoning effort</label><div class="model-effort-track"><div class="model-effort-visual" data-level="${activeIndex}" aria-hidden="true"><div class="model-effort-rail"><span class="model-effort-fill"></span></div><div class="model-effort-stops">${effortStops.map((stop) => `<span class="${supportedEfforts.has(stop.value) ? "" : "is-unavailable"}"></span>`).join("")}</div><span class="model-effort-thumb"></span></div><input id="work-effort" type="range" min="0" max="3" step="1" value="${activeIndex}" aria-label="Reasoning effort" aria-valuetext="${e(currentEffortLabel)}" ${supportedEfforts.size && !unsupported ? "" : "disabled"}></div><div class="model-effort-labels">${effortStops.map((stop) => `<button type="button" data-action="set-effort" data-value="${stop.value}" aria-pressed="${currentEffort === stop.value}" ${supportedEfforts.has(stop.value) && !unsupported ? "" : "disabled"}>${stop.label}</button>`).join("")}</div></div>`;
     const main = `<button type="button" class="model-row" data-action="open-model-menu" ${connectionId && !unsupported ? "" : "disabled"}><span class="model-row-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button>${slider}${status}`;
-    return `<div class="model-picker"><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Model: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">${icon("spark")}<span class="model-picker-trigger-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
+    return `<div class="model-picker"><span class="model-picker-summary"><span class="model-picker-trigger-name">${e(modelName)}</span> · <span class="model-effort">${e(currentEffortLabel)}</span></span><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Options: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">Options${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
 }
 function repositorySetup(w: Work, required = false) {
     const handoff = [
@@ -1206,19 +1136,35 @@ function repositorySetup(w: Work, required = false) {
         </form>
     </details>`;
 }
+function executionSetup(w: Work) {
+    const connection = workConnection(w);
+    const available =
+        connection?.availability === ConnectionAvailability.Available;
+    const disconnected =
+        connection?.availability === ConnectionAvailability.Disconnected;
+    const runtime =
+        connection?.runtime === "codex" ? "Codex" : connection?.name;
+    const notice = !connectionsLoaded
+        ? "Checking the coding agent connection…"
+        : disconnected
+          ? "Connect Codex so Goblin can start working."
+          : !connection
+            ? "Goblin’s coding agent connection is unavailable."
+            : connection.availability === ConnectionAvailability.Changing
+              ? "The Codex connection is changing. You can start work when it’s ready."
+              : connection.availability === ConnectionAvailability.Verifying
+                ? "Codex is being checked. You can start work when the check finishes."
+                : "Codex needs attention before Goblin can start working.";
+    return `<div class="work-executor"><img src="/assets/branding/icon.svg" alt=""><div class="executor-identity"><strong>${e(workAgent(w)?.name ?? "Goblin")}</strong>${runtime ? `<span>Uses ${e(runtime)}</span>` : ""}</div>${available ? modelControls(w) : ""}</div>${available ? "" : `<p role="status">${notice}</p>${connectionsLoaded ? button("settings-codex", disconnected ? "Connect Codex" : "Manage Codex connection", true) : ""}`}`;
+}
 function controls(w: Work) {
     if (w.attention?.reason === AttentionReason.CleanupRequired)
         return `<div class="decision"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</div>`;
     if (w.attempts.at(-1)?.cleanupPending)
         return `<div class="decision"><p>Saving the outcome and finishing execution cleanup…</p></div>`;
-    const preferredAgentId =
-        agents.find((a) => a.connectionId === modelConnection(w))?.id ??
-        agents[0]?.id;
     let content = "";
     if (w.status === WorkStatus.Ready)
-        content = !w.agentId
-            ? `<form class="work-setup" data-form="assign"><p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select class="field-control select-control" id="agent" name="agent" required ${agents.length ? "" : "disabled"}><button type="button"><selectedcontent></selectedcontent></button>${agents.map((a) => `<option value="${a.id}" ${a.id === preferredAgentId ? "selected" : ""}>${e(a.name)}</option>`).join("") || '<option value="">No agents available</option>'}</select>${agents.length ? `<button id="assign-agent" class="primary" type="submit" ${sending || pending ? "disabled" : ""}>Assign agent</button>` : '<p class="field-hint" role="status">No agents are available. Refresh to check again.</p>'}</form>`
-            : `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${repositorySetup(w)}`;
+        content = `${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${repositorySetup(w)}` : ""}`;
     if (w.attention?.reason === AttentionReason.ResultReview)
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
     if (w.attention?.reason === AttentionReason.InputRequired)
@@ -1226,7 +1172,7 @@ function controls(w: Work) {
     if (w.attention?.reason === AttentionReason.RepositoryRequired)
         content = `${w.repositoryAuthorization?.status === RepositoryAuthorizationStatus.Pending ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${repositorySetup(w, true)}`;
     if (w.attention?.reason === AttentionReason.Failure)
-        content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${button("retry", "Retry work", true, !modelCanSubmit(w))}`;
+        content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? button("retry", "Retry work", true, !modelCanSubmit(w)) : ""}`;
     if (w.attention?.reason === AttentionReason.UncertainExecution)
         content = `<h3>Execution needs reconciliation</h3><p>Goblin cannot yet confirm the outcome. Check the execution or stop it before retrying.</p>${button("reconcile", "Reconcile execution", true)}`;
     if (
@@ -1234,7 +1180,7 @@ function controls(w: Work) {
             (value) => value === w.status,
         )
     )
-        content = `<div class="progress-title">${icon("activity")} ${e(label(w.status))}</div><p>You can close this page. Accepted work continues independently.</p>`;
+        content = `<div class="progress-title">${icon("activity")} ${w.status === WorkStatus.InProgress ? "Goblin is working" : e(label(w.status))}</div><p>You can close this page. Accepted work continues independently.</p>`;
     if (
         ![
             WorkStatus.Completed,
@@ -1258,7 +1204,7 @@ function showSetupErrors() {
 }
 function renderChat() {
     const c = conversations.find((x) => x.id === activeChat);
-    return `<section class="chat-workspace"><div class="detail-body" data-scroll="chat"><div class="thread-content">${c ? `<h1 class="conversation-title">${e(c.title)}</h1>` + c.messages.map((m) => message("You", m.text, m.createdAt)).join("") + (c.workId ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>` : `<div class="decision"><h3>Ready to take this forward?</h3><p>Track this conversation as Work when you want Goblin to execute it.</p>${button("track", "Track this work", true)}</div>`) : `<div class="conversation-empty"><h1>A little room to think</h1><p>Save ideas and context here. Track them as Work when you’re ready to start an agent.</p></div>`}</div></div>${composer("chat", "Add to the conversation…")}</section>`;
+    return `<section class="chat-workspace"><div class="detail-body" data-scroll="chat"><div class="thread-content">${c ? `<h1 class="conversation-title">${e(c.title)}</h1>` + c.messages.map((m) => message("You", m.text, m.createdAt)).join("") + (c.workId ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>` : `<div class="decision"><h3>Ready to take this forward?</h3><p>Track this conversation as Work when you want Goblin to execute it.</p>${button("track", "Track this work", true)}</div>`) : `<div class="conversation-empty"><h1>A little room to think</h1><p>Save ideas and context here. Track them as Work when you’re ready for Goblin to start.</p></div>`}</div></div>${composer("chat", "Add to the conversation…")}</section>`;
 }
 function setModelEffort(value: string, updateOnly = false) {
     const w = composerWork();
@@ -1285,7 +1231,7 @@ function setModelEffort(value: string, updateOnly = false) {
     if (trigger && modelName)
         trigger.setAttribute(
             "aria-label",
-            `Model: ${modelName}, reasoning effort: ${effort}`,
+            `Options: ${modelName}, reasoning effort: ${effort}`,
         );
     for (const element of root.querySelectorAll<HTMLElement>(".model-effort"))
         element.textContent = effort;
@@ -1336,6 +1282,9 @@ document.addEventListener("click", async (event) => {
         modelPickerOpen = !modelPickerOpen;
         modelListOpen = false;
         render(false, true);
+        root.querySelector("#model-popover")?.scrollIntoView({
+            block: "nearest",
+        });
         return;
     }
     if (action === "open-model-menu") {
@@ -1381,10 +1330,6 @@ document.addEventListener("click", async (event) => {
                     ? "codex"
                     : "connections",
         );
-        return;
-    }
-    if (action === "open-workspace" && current()) {
-        await workWorkspace.open(current()!.work);
         return;
     }
     if (action === "refresh") {
@@ -1583,10 +1528,6 @@ document.addEventListener("submit", async (event) => {
     event.preventDefault();
     const kind = event.target.dataset.form,
         data = new FormData(event.target);
-    if (kind === "assign") {
-        await command(WorkAction.Assign, { agentId: data.get("agent") });
-        return;
-    }
     if (kind === "repository") {
         let repository = String(data.get("repository") ?? "").trim();
         const url = repository.match(
@@ -1767,21 +1708,6 @@ document.addEventListener("change", (event) => {
         return;
     }
     if (
-        event.target instanceof HTMLSelectElement &&
-        event.target.id === "model-connection"
-    ) {
-        const choice = modelSelection(composerWork());
-        choice.connectionId = event.target.value;
-        choice.model = "";
-        choice.effort = "";
-        choice.touched = false;
-        choice.expanded = false;
-        choice.notice = "";
-        saveModelSelections();
-        render(false, true);
-        return;
-    }
-    if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "repository"
     ) {
@@ -1789,15 +1715,6 @@ document.addEventListener("change", (event) => {
         if (errors) delete errors.repository;
         showSetupErrors();
     }
-});
-document.addEventListener("focusout", (event) => {
-    if (
-        event.target instanceof HTMLSelectElement &&
-        event.target.id === "model-connection"
-    )
-        queueMicrotask(() => {
-            if (authenticated && root.contains(event.target as Node)) render();
-        });
 });
 document.addEventListener("pointerdown", (event) => {
     if (

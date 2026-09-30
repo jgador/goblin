@@ -30,7 +30,10 @@ public sealed record WorkCommand(long CommandId, long WorkId, WorkAction Action,
 public sealed record WorkView(long Version, DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt, WorkSnapshot Work);
 
-public sealed record AgentView(long Id, string Name, long ConnectionId, string? Model);
+public sealed record AgentView(long Id, string Name, long ConnectionId, string? Model)
+{
+    public bool IsDefault => Id == WorkStore.DefaultAgentId;
+}
 
 public sealed record ConnectionView(long Id, string Runtime, string Name, ConnectionAvailability Availability);
 

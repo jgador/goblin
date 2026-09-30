@@ -3,6 +3,7 @@
   "AgentView": [
     "connectionId",
     "id",
+    "isDefault",
     "model",
     "name"
   ],

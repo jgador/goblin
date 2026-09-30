@@ -106,12 +106,13 @@ public sealed class WorkView
 public sealed class AgentView
 {
     [JsonConstructor]
-    public AgentView(long id, string name, long connectionId, string? model)
+    public AgentView(long id, string name, long connectionId, string? model, bool isDefault)
     {
         Id = id;
         Name = name;
         ConnectionId = connectionId;
         Model = model;
+        IsDefault = isDefault;
     }
 
     [JsonPropertyName("id")]
@@ -126,8 +127,11 @@ public sealed class AgentView
     [JsonPropertyName("model")]
     public string? Model { get; init; }
 
+    [JsonPropertyName("isDefault")]
+    public bool IsDefault { get; init; }
+
     public static AgentView From(Goblin.Application.Work.AgentView value) =>
-        new(value.Id, value.Name, value.ConnectionId, value.Model);
+        new(value.Id, value.Name, value.ConnectionId, value.Model, value.IsDefault);
 }
 
 public sealed class ConnectionView
