@@ -1,3 +1,5 @@
+use goblinctl::contract_values::SetupAction;
+use goblinctl::contract_values::SetupStep;
 use goblinctl::credentials;
 use goblinctl::database;
 use goblinctl::environment;
@@ -16,18 +18,23 @@ use std::process::Command;
 fn concurrent_progress_preserves_every_update_and_completes_the_named_step() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("status.json");
-    setup::update(&path, "init", "").unwrap();
-    setup::update(&path, "begin", "").unwrap();
+    setup::update(&path, SetupAction::Init, "").unwrap();
+    setup::update(&path, SetupAction::Begin, "").unwrap();
     std::thread::scope(|scope| {
         for id in ["k3s", "image", "prefetch", "sandbox"] {
             let path = &path;
             scope.spawn(move || {
-                setup::update(path, "start", id).unwrap();
+                setup::update(path, SetupAction::Start, id).unwrap();
                 for i in 0..10 {
-                    setup::update_scoped(path, "detail", &format!("{id} progress {i}"), id)
-                        .unwrap();
+                    setup::update_scoped(
+                        path,
+                        SetupAction::Detail,
+                        &format!("{id} progress {i}"),
+                        Some(id.parse().unwrap()),
+                    )
+                    .unwrap();
                 }
-                setup::update(path, "complete", id).unwrap();
+                setup::update(path, SetupAction::Complete, id).unwrap();
             });
         }
     });
@@ -44,16 +51,16 @@ fn concurrent_progress_preserves_every_update_and_completes_the_named_step() {
             "complete"
         );
     }
-    setup::update(&path, "start", "database").unwrap();
-    setup::update(&path, "fail-step", "database").unwrap();
-    setup::update(&path, "fail-step", "prefetch").unwrap();
+    setup::update(&path, SetupAction::Start, "database").unwrap();
+    setup::update(&path, SetupAction::FailStep, "database").unwrap();
+    setup::update(&path, SetupAction::FailStep, "prefetch").unwrap();
     // A worker already being spawned may report its start after the first failure.
-    setup::update(&path, "start", "sandbox").unwrap();
-    setup::update(&path, "failed", "private failure payload").unwrap();
+    setup::update(&path, SetupAction::Start, "sandbox").unwrap();
+    setup::update(&path, SetupAction::Failed, "private failure payload").unwrap();
     let state = files::json(&path).unwrap();
     assert_eq!(state["currentStep"], "database");
     assert!(!state.to_string().contains("private failure payload"));
-    setup::update(&path, "begin", "").unwrap();
+    setup::update(&path, SetupAction::Begin, "").unwrap();
     let state = files::json(&path).unwrap();
     assert!(state["failedStep"].is_null());
     assert!(
@@ -69,12 +76,18 @@ fn concurrent_progress_preserves_every_update_and_completes_the_named_step() {
 fn public_log_tail_is_bounded_and_retains_attempt_identity() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("status.json");
-    setup::update(&path, "init", "").unwrap();
-    setup::update(&path, "begin", "").unwrap();
+    setup::update(&path, SetupAction::Init, "").unwrap();
+    setup::update(&path, SetupAction::Begin, "").unwrap();
     for i in 0..320 {
-        setup::update_scoped(&path, "detail", &format!("Image progress {i}"), "prefetch").unwrap();
+        setup::update_scoped(
+            &path,
+            SetupAction::Detail,
+            &format!("Image progress {i}"),
+            Some(SetupStep::Prefetch),
+        )
+        .unwrap();
     }
-    setup::update(&path, "begin", "").unwrap();
+    setup::update(&path, SetupAction::Begin, "").unwrap();
     let state = files::json(&path).unwrap();
     let logs = state["logs"].as_array().unwrap();
     assert_eq!(logs.len(), 300);
@@ -84,7 +97,15 @@ fn public_log_tail_is_bounded_and_retains_attempt_identity() {
     );
     assert_eq!(logs[0]["attempt"], 1);
     assert_eq!(logs.last().unwrap()["attempt"], 2);
-    assert!(setup::update_scoped(&path, "detail", "bad\nmessage", "image").is_err());
+    assert!(
+        setup::update_scoped(
+            &path,
+            SetupAction::Detail,
+            "bad\nmessage",
+            Some(SetupStep::Image)
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -144,12 +165,12 @@ fn failed_setup_and_restarts_keep_attempt_history_without_claiming_readiness() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("status.json");
     for (action, value) in [
-        ("init", ""),
-        ("begin", ""),
-        ("start", "k3s"),
-        ("complete", ""),
-        ("start", "image"),
-        ("failed", "private upstream failure"),
+        (SetupAction::Init, ""),
+        (SetupAction::Begin, ""),
+        (SetupAction::Start, "k3s"),
+        (SetupAction::Complete, ""),
+        (SetupAction::Start, "image"),
+        (SetupAction::Failed, "private upstream failure"),
     ] {
         setup::update(&path, action, value).unwrap();
     }
@@ -161,7 +182,7 @@ fn failed_setup_and_restarts_keep_attempt_history_without_claiming_readiness() {
             .unwrap()
             .contains("private upstream")
     );
-    setup::update(&path, "begin", "").unwrap();
+    setup::update(&path, SetupAction::Begin, "").unwrap();
     let state = files::json(&path).unwrap();
     assert_eq!(state["attempt"], 2);
     for step in state["steps"].as_array().unwrap() {
@@ -169,7 +190,7 @@ fn failed_setup_and_restarts_keep_attempt_history_without_claiming_readiness() {
         assert!(step.get("finishedAt").is_none());
         assert!(step.get("error").is_none());
     }
-    setup::update(&path, "start", "image").unwrap();
+    setup::update(&path, SetupAction::Start, "image").unwrap();
     let state = files::json(&path).unwrap();
     assert_eq!(state["steps"][4]["attempt"], 2);
     assert_eq!(
@@ -383,8 +404,8 @@ esac
         files::atomic_write(&local.path(name), bytes, 0o644, false).unwrap();
     }
     let state = local.path(setup::STATE);
-    setup::update(&state, "init", "").unwrap();
-    setup::update(&state, "ready", "").unwrap();
+    setup::update(&state, SetupAction::Init, "").unwrap();
+    setup::update(&state, SetupAction::Ready, "").unwrap();
     let retained = local.path("var/lib/goblin/install/private/owner-password");
     credentials::save(&retained, &credentials::hash("previous-test").unwrap()).unwrap();
     credentials::save(
@@ -438,4 +459,30 @@ fn native_activation_is_repeatable_and_preserves_installation_state() {
         assert_eq!(fs::read(&password).unwrap(), b"retained verifier");
         assert!(!legacy.exists());
     }
+}
+
+#[test]
+fn closed_setup_contracts_reject_unknown_cli_values_without_mutating_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("status.json");
+    setup::update(&path, SetupAction::Init, "").unwrap();
+    let before = fs::read(&path).unwrap();
+    for value in ["unknown", "Start", "1"] {
+        assert!(value.parse::<SetupAction>().is_err());
+    }
+    for action in [
+        SetupAction::Start,
+        SetupAction::FailStep,
+        SetupAction::Complete,
+    ] {
+        assert!(setup::update(&path, action, "unknown-step").is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_goblinctl"))
+        .args(["internal", "state", "unknown-action", "--path"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert_eq!(fs::read(&path).unwrap(), before);
 }

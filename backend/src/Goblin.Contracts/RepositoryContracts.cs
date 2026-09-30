@@ -5,14 +5,18 @@ using Goblin.Core.Work;
 namespace Goblin.Contracts.Runtime;
 
 public sealed record RepositoryAccount(string Generation, string AccountId, string Login);
+
 public sealed record RepositoryInfo(long Id, string Name, string DefaultBranch, bool CanPush);
+
 public sealed record RepositoryOperationResult(string? Commit, string? Url);
 
 // Trusted application-side discovery. Workers never receive this connection.
 public interface IRepositoryCatalog
 {
     Task<RepositoryAccount?> GetAccountAsync(CancellationToken token);
+
     Task<RepositoryInfo> RepositoryAsync(string name, CancellationToken token);
+
     Task<RepositoryInfo[]> RepositoriesAsync(int page, CancellationToken token);
 }
 
@@ -20,16 +24,23 @@ public interface IRepositoryRemote
 {
     Task PrepareCheckpointAsync(RepositoryChange repository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token) =>
         throw new System.NotSupportedException("Git checkpoint preparation is unavailable.");
+
     Task PrepareAsync(RepositoryChange repository, string directory, string? checkpoint, CancellationToken token);
+
     Task<string> InspectBundleAsync(RepositoryChange repository, string directory, string bundle, CancellationToken token);
-    Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token);
-    Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token);
+
+    Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token);
+
+    Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token);
 }
 
 public interface IRepositoryBroker
 {
     Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token);
+
     Task<ExecutionObservation?> ObserveAsync(WorkSnapshot work, CancellationToken token);
+
     Task StopAsync(WorkSnapshot work, CancellationToken token);
+
     Task ReleaseAsync(WorkSnapshot work, CancellationToken token);
 }

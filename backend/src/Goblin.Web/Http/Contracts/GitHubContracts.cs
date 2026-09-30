@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Goblin.Contracts;
 
 namespace Goblin.Web.Http.Contracts;
 
@@ -6,7 +7,7 @@ public sealed class GitHubState
 {
     [JsonConstructor]
     public GitHubState(bool configured, string? login, string? userCode, string? verificationUrl, string? notice,
-        string status = "Disconnected", RepositoryAccount? account = null)
+        GitHubConnectionStatus status = GitHubConnectionStatus.Disconnected, RepositoryAccount? account = null)
     {
         Configured = configured;
         Login = login;
@@ -33,7 +34,7 @@ public sealed class GitHubState
     public string? Notice { get; init; }
 
     [JsonPropertyName("status")]
-    public string Status { get; init; }
+    public GitHubConnectionStatus Status { get; init; }
 
     [JsonPropertyName("account")]
     public RepositoryAccount? Account { get; init; }

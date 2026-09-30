@@ -180,18 +180,26 @@ public sealed class SandboxNamingTests
     {
         public int Stops { get; private set; }
         public int Releases { get; private set; }
+
         public Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task<ExecutionObservation?> ObserveAsync(WorkSnapshot work, CancellationToken token) => Task.FromResult<ExecutionObservation?>(null);
+
         public Task StopAsync(WorkSnapshot work, CancellationToken token) { Stops++; return Task.CompletedTask; }
+
         public Task ReleaseAsync(WorkSnapshot work, CancellationToken token) { Releases++; return Task.CompletedTask; }
     }
 
     private sealed class TextHost : IExecutionHost
     {
         public RuntimeCapabilities[] Capabilities => [];
+
         public string EnvironmentFor(long workId, long attemptId) => throw new NotSupportedException();
+
         public Task StartAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
+
         public Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) => throw new NotSupportedException();
+
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
     }
 }

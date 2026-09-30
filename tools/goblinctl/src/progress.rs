@@ -1,5 +1,7 @@
 //! Public build progress is reconstructed from known BuildKit records. Compiler,
 //! package-manager and command output stays exclusively in the private host log.
+use crate::contract_values::SetupAction;
+use crate::contract_values::SetupStep;
 use crate::setup;
 use anyhow::Result;
 use std::io::BufRead;
@@ -34,7 +36,7 @@ pub fn build_output(path: &Path) -> Result<()> {
                 && let Ok(line) = std::str::from_utf8(&line)
                 && let Some(message) = build_message(line.trim_end())
             {
-                setup::update_scoped(path, "detail", &message, "image")?;
+                setup::update_scoped(path, SetupAction::Detail, &message, Some(SetupStep::Image))?;
             }
             line.clear();
             oversized = false;

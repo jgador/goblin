@@ -173,6 +173,7 @@ public sealed class SystemMonitor : BackgroundService
 {
     private readonly ISystemSource? _source;
     private SystemOverview _current;
+
     public SystemMonitor(ISystemSource? source)
     {
         _source = source;
@@ -180,6 +181,7 @@ public sealed class SystemMonitor : BackgroundService
             ? new("unsupported", "System monitoring is available with Goblin’s Kubernetes installation.", null, [])
             : new("loading", "Reading your machine’s resources…", null, []);
     }
+
     public SystemOverview Current
     {
         get
@@ -190,6 +192,7 @@ public sealed class SystemMonitor : BackgroundService
                 : current;
         }
     }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (_source is null) return;
@@ -197,6 +200,7 @@ public sealed class SystemMonitor : BackgroundService
         do { await CollectAsync(stoppingToken); }
         while (await timer.WaitForNextTickAsync(stoppingToken));
     }
+
     public async Task CollectAsync(CancellationToken token)
     {
         if (_source is null) return;

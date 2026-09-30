@@ -30,6 +30,7 @@ public sealed class WorkspaceFilesTests
         }
         finally { Directory.Delete(root, true); }
     }
+
     [Theory]
     [InlineData("../outside")]
     [InlineData("/etc/passwd")]
@@ -53,6 +54,7 @@ public sealed class WorkspaceFilesTests
         }
         finally { Directory.Delete(root, true); }
     }
+
     [Fact]
     public void InspectionMountsWorkPvcReadOnlyWithoutCredentialsOrRestoreContainer()
     {

@@ -1,4 +1,5 @@
 pub mod assets;
+pub mod contract_values;
 pub mod credentials;
 pub mod database;
 pub mod deployment;

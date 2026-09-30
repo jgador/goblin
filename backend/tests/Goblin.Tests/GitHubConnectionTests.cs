@@ -3,8 +3,8 @@ using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Goblin.Integrations.GitHub;
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Tests;
 
@@ -32,14 +32,15 @@ public sealed class GitHubConnectionTests
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(connection.Profile, "hosts.yml")));
             using var restarted = new GitHubConnection(Path.Combine(root, "profile"), cli);
             Assert.Equal(state.Account, (await restarted.StatusAsync()).Account);
-            Assert.Equal("Connected", (await restarted.CheckAsync()).Status);
+            Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Connected, (await restarted.CheckAsync()).Status);
             await File.WriteAllTextAsync(Path.Combine(root, "reject"), "reject");
-            Assert.Equal("Unavailable", (await restarted.CheckAsync()).Status);
+            Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Unavailable, (await restarted.CheckAsync()).Status);
             Assert.Null((await restarted.DisconnectAsync()).Account);
             Assert.False(Directory.Exists(restarted.Profile));
         }
         finally { Directory.Delete(root, true); }
     }
+
     [Fact]
     public async Task CancelPreventsLateCredentialInstallation()
     {
@@ -58,11 +59,13 @@ public sealed class GitHubConnectionTests
         }
         finally { Directory.Delete(root, true); }
     }
+
     private static async Task<GitHubState> UntilAsync(GitHubConnection connection, Func<GitHubState, bool> predicate)
     {
         for (int i = 0; i < 200; i++) { GitHubState state = await connection.StatusAsync(); if (predicate(state)) return state; await Task.Delay(25); }
         throw new TimeoutException();
     }
+
     private static async Task<string> FakeAsync(string root)
     {
         string script = Path.Combine(root, "gh-test");

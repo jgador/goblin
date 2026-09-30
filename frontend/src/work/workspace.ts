@@ -1,3 +1,4 @@
+import { InspectionState } from "../api/values.js";
 import { escapeHtml as e, icon } from "./presentation.js";
 import type { Work } from "./contracts.js";
 
@@ -12,12 +13,21 @@ type Checkpoint = {
 type Session = {
     id: string;
     attemptId: string;
-    state: string;
+    state: InspectionState;
 };
 type WorkspaceData = {
     checkpoints: Checkpoint[];
     sessions: Session[];
     terminalAvailable: boolean;
+};
+
+const inspectionLabels: Record<InspectionState, string> = {
+    [InspectionState.Queued]: "Waiting for capacity",
+    [InspectionState.Starting]: "Opening workspace…",
+    [InspectionState.Available]: "Workspace available",
+    [InspectionState.Stopping]: "Stopping workspace…",
+    [InspectionState.NeedsAttention]: "Inspection needs attention",
+    [InspectionState.Stopped]: "Stopped",
 };
 
 export class WorkWorkspace {
@@ -137,14 +147,15 @@ export class WorkWorkspace {
             this.data = data;
             const session = data.sessions.find((s) =>
                 [
-                    "Queued",
-                    "Starting",
-                    "Available",
-                    "Stopping",
-                    "NeedsAttention",
-                ].includes(s.state),
+                    InspectionState.Queued,
+                    InspectionState.Starting,
+                    InspectionState.Available,
+                    InspectionState.Stopping,
+                    InspectionState.NeedsAttention,
+                ].some((value) => value === s.state),
             );
-            const selected = session?.state === "Available" ? session.id : "";
+            const selected =
+                session?.state === InspectionState.Available ? session.id : "";
             const sessionChanged = this.selected !== selected;
             this.selected = selected;
             const toolbar = this.dialog.querySelector(".workspace-toolbar")!;
@@ -161,10 +172,11 @@ export class WorkWorkspace {
             }
             const area = this.dialog.querySelector(".workspace-session")!;
             const html = session
-                ? `<strong>${e(({ Queued: "Waiting for capacity", Starting: "Opening workspace…", Available: "Workspace available", Stopping: "Stopping workspace…", NeedsAttention: "Inspection needs attention" } as Record<string, string>)[session.state] ?? session.state)}</strong>${session.state === "Available" ? '<button class="secondary" data-workspace="connect">Connect terminal</button>' : ""}<button class="secondary" data-workspace="stop" ${session.state === "Stopping" ? "disabled" : ""}>Stop workspace</button>`
+                ? `<strong>${e(inspectionLabels[session.state])}</strong>${session.state === InspectionState.Available ? '<button class="secondary" data-workspace="connect">Connect terminal</button>' : ""}<button class="secondary" data-workspace="stop" ${session.state === InspectionState.Stopping ? "disabled" : ""}>Stop workspace</button>`
                 : `<button class="secondary" data-workspace="start" ${data.terminalAvailable ? "" : "disabled"}>${this.pending ? "Resend open request" : "Start inspection"}</button>${!data.terminalAvailable ? "<span>Terminal access requires a Kubernetes execution host.</span>" : ""}`;
             if (area.innerHTML !== html) area.innerHTML = html;
-            if (session && session.state !== "Available") this.socket?.close();
+            if (session && session.state !== InspectionState.Available)
+                this.socket?.close();
         } catch (error) {
             if (generation === this.generation) this.error(error);
         }
@@ -223,12 +235,12 @@ export class WorkWorkspace {
             }
             const session = this.data.sessions.find((s) =>
                 [
-                    "Queued",
-                    "Starting",
-                    "Available",
-                    "Stopping",
-                    "NeedsAttention",
-                ].includes(s.state),
+                    InspectionState.Queued,
+                    InspectionState.Starting,
+                    InspectionState.Available,
+                    InspectionState.Stopping,
+                    InspectionState.NeedsAttention,
+                ].some((value) => value === s.state),
             );
             if (action === "start") {
                 if (this.opening) return;
@@ -268,7 +280,10 @@ export class WorkWorkspace {
                 await this.request(`/sessions/${session.id}/stop`, {});
                 await this.refresh();
             }
-            if (action === "connect" && session?.state === "Available")
+            if (
+                action === "connect" &&
+                session?.state === InspectionState.Available
+            )
                 this.connect(session.id);
             if (
                 action === "interrupt" &&

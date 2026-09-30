@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.IO;
 using System.Security.Authentication;
@@ -7,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using Npgsql;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Persistence.Tests;
 

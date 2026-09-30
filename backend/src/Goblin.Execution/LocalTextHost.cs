@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Diagnostics;
 using System.Globalization;
@@ -6,13 +5,16 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Execution;
 
 public sealed record TextHostOptions(string Directory, string CodexHome, string CodexCommand,
     string WorkerAssembly, string DotnetCommand = "dotnet");
+
 public sealed record WorkerInput(WorkSnapshot Work, string CodexHome, string CodexCommand)
 {
     public string? SandboxImage { get; init; }
@@ -28,8 +30,10 @@ public sealed class LocalTextHost : IExecutionHost
 
     public LocalTextHost(TextHostOptions options) => _options = options;
 
-    public RuntimeCapabilities[] Capabilities => [new("codex", true, false, true, false, false)];
+    public RuntimeCapabilities[] Capabilities => [new(RuntimeIds.Codex, true, false, true, false, false)];
+
     public string EnvironmentFor(long workId, long attemptId) => "text/" + attemptId.ToString(CultureInfo.InvariantCulture);
+
     private string DirectoryFor(WorkSnapshot work) => Path.Combine(_options.Directory, work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture) + (work.Attempts[^1].TurnNumber == 1 ? "" : "-turn-" + work.Attempts[^1].TurnNumber));
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
@@ -129,6 +133,7 @@ public sealed class LocalTextHost : IExecutionHost
             catch (IOException) { await Task.Delay(20, token); }
         }
     }
+
     private static async Task DrainAsync(StreamReader reader)
     {
         try { while (await reader.ReadLineAsync() is not null) { } } catch { }

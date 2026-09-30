@@ -15,19 +15,25 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
 {
     private readonly GitHubConnection _github;
     private readonly Func<RepositoryChange, string> _url;
+
     public GitHubRepositoryRemote(GitHubConnection github) { _github = github; _url = Remote; }
+
     internal GitHubRepositoryRemote(GitHubConnection github, string testRemote) { _github = github; _url = _ => testRemote; }
+
     private static string GitDirectory(string directory) => Path.Combine(directory, "repository.git");
+
     private static string Remote(RepositoryChange repository) => "https://github.com/" + repository.Repository + ".git";
+
     private async Task VerifyAsync(RepositoryChange repository, CancellationToken token)
     {
         RepositoryGrant grant = repository.Grant ?? throw new GitHubFailure();
         GitHubState state = await _github.CheckAsync(token);
-        if (state.Status != "Connected" || state.Account?.Generation != grant.Generation || state.Account.AccountId != grant.AccountId)
+        if (state.Status != Goblin.Contracts.GitHubConnectionStatus.Connected || state.Account?.Generation != grant.Generation || state.Account.AccountId != grant.AccountId)
             throw new GitHubFailure();
         RepositoryInfo info = await _github.RepositoryAsync(repository.Repository, token);
         if (info.Id != grant.RepositoryId || ((grant.PolicyVersion == 1 || grant.AllowPush) && !info.CanPush) || info.DefaultBranch == grant.Branch) throw new GitHubFailure();
     }
+
     public async Task PrepareAsync(RepositoryChange repository, string directory, string? checkpoint, CancellationToken token)
     {
         await VerifyAsync(repository, token);
@@ -40,6 +46,7 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         await _github.GitAsync(git, ["symbolic-ref", "HEAD", "refs/heads/" + repository.Grant.Branch], token);
         await _github.GitAsync(git, ["bundle", "create", Path.Combine(directory, "input.bundle"), "--all"], token);
     }
+
     public async Task PrepareCheckpointAsync(RepositoryChange repository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token)
     {
         await PrepareAsync(repository, directory, checkpoint.Branch, token);
@@ -48,6 +55,7 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         if (repository.Grant!.Branch == checkpoint.Branch)
             await File.WriteAllTextAsync(Path.Combine(directory, "published-head"), checkpoint.CommitSha, token);
     }
+
     public async Task<string> InspectBundleAsync(RepositoryChange repository, string directory, string bundle, CancellationToken token)
     {
         string git = GitDirectory(directory);
@@ -58,13 +66,15 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         if (File.Exists(head)) await _github.GitAsync(git, ["merge-base", "--is-ancestor", (await File.ReadAllTextAsync(head, token)).Trim(), commit], token);
         return commit;
     }
-    public async Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token)
+
+    public async Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token)
     {
+        if (!Enum.IsDefined(operation)) throw new GitHubFailure();
         RepositoryGrant grant = repository.Grant ?? throw new GitHubFailure();
-        if (grant.PolicyVersion == 2 && (operation == "publish" && !grant.AllowPush || operation == "pull-request" && (!grant.AllowPush || !grant.AllowPullRequest)))
+        if (grant.PolicyVersion == 2 && (operation == RepositoryOperationKind.Publish && !grant.AllowPush || operation == RepositoryOperationKind.PullRequest && (!grant.AllowPush || !grant.AllowPullRequest)))
             throw new GitHubFailure();
         await VerifyAsync(repository, token);
-        if (operation == "fetch")
+        if (operation == RepositoryOperationKind.Fetch)
         {
             string git = GitDirectory(directory);
             await _github.GitAsync(git, ["fetch", "--no-tags", "--", _url(repository), "+refs/heads/*:refs/heads/*"], token);
@@ -73,7 +83,7 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
             File.Move(fresh, Path.Combine(directory, "input.bundle"), true);
             return new(null, null);
         }
-        if (operation == "publish")
+        if (operation == RepositoryOperationKind.Publish)
         {
             string head = Path.Combine(directory, "published-head");
             string expected = File.Exists(head) ? (await File.ReadAllTextAsync(head, token)).Trim() : "";
@@ -82,7 +92,7 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
             await File.WriteAllTextAsync(head, commit, token);
             return new(commit, "https://github.com/" + repository.Repository + "/tree/" + repository.Grant.Branch);
         }
-        if (operation != "pull-request" || !File.Exists(Path.Combine(directory, "published-head"))) throw new GitHubFailure();
+        if (operation != RepositoryOperationKind.PullRequest || !File.Exists(Path.Combine(directory, "published-head"))) throw new GitHubFailure();
         if ((await File.ReadAllTextAsync(Path.Combine(directory, "published-head"), token)).Trim() != commit) throw new GitHubFailure();
         string? existing = await PullRequestAsync(repository, token);
         if (existing is not null) return new(commit, existing);
@@ -91,10 +101,12 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
             "-f", "title=Goblin " + repository.Grant.Branch, "-f", "body=Changes prepared by Goblin. Review this branch before merging.", "-F", "draft=true"], token));
         return new(commit, result.RootElement.GetProperty("html_url").GetString());
     }
-    public async Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, string operation, string commit, CancellationToken token)
+
+    public async Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token)
     {
-        if (operation == "fetch") return null;
-        if (operation == "pull-request")
+        if (!Enum.IsDefined(operation)) throw new GitHubFailure();
+        if (operation is RepositoryOperationKind.Fetch or RepositoryOperationKind.Checkpoint) return null;
+        if (operation == RepositoryOperationKind.PullRequest)
         {
             string? pr = await PullRequestAsync(repository, token);
             return pr is null ? null : new(commit, pr);
@@ -104,6 +116,7 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         await File.WriteAllTextAsync(Path.Combine(directory, "published-head"), commit, token);
         return new(commit, "https://github.com/" + repository.Repository + "/tree/" + repository.Grant.Branch);
     }
+
     private async Task<string?> PullRequestAsync(RepositoryChange repository, CancellationToken token)
     {
         string owner = repository.Repository.Split('/')[0];

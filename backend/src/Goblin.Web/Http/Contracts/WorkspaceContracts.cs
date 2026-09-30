@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json.Serialization;
+using Goblin.Core.Work;
 
 namespace Goblin.Web.Http.Contracts;
 
@@ -26,7 +27,7 @@ public sealed class WorkspaceView
 public sealed class InspectionView
 {
     [JsonConstructor]
-    public InspectionView(long id, long workId, long attemptId, string state)
+    public InspectionView(long id, long workId, long attemptId, InspectionState state)
     {
         Id = id;
         WorkId = workId;
@@ -44,7 +45,7 @@ public sealed class InspectionView
     public long AttemptId { get; init; }
 
     [JsonPropertyName("state")]
-    public string State { get; init; }
+    public InspectionState State { get; init; }
 
     public static InspectionView From(Goblin.Application.Workspaces.InspectionView value) =>
         new(value.Id, value.WorkId, value.AttemptId, value.State);

@@ -7,6 +7,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 
@@ -25,6 +26,7 @@ public static class RepositoryClient
         client.DefaultRequestHeaders.Add("X-Goblin-Repository", (await File.ReadAllTextAsync("/run/credentials/repository-capability")).Trim());
         return client;
     }
+
     public static async Task DownloadAsync(long attemptId, string path)
     {
         using HttpClient client = await ClientAsync();
@@ -33,9 +35,10 @@ public static class RepositoryClient
         await using FileStream file = File.Create(path);
         await response.Content.CopyToAsync(file);
     }
-    public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, string kind)
+
+    public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, RepositoryOperationKind kind)
     {
-        if (kind is not ("publish" or "pull-request" or "fetch" or "checkpoint")) throw new IOException("Unsupported repository operation.");
+        if (!Enum.IsDefined(kind)) throw new IOException("Unsupported repository operation.");
         using HttpClient client = await ClientAsync();
         using HttpResponseMessage reservation = await client.PostAsync($"/internal/repository/{attemptId}/operation-id", null);
         reservation.EnsureSuccessStatusCode();
@@ -51,36 +54,40 @@ public static class RepositoryClient
         {
             await using FileStream stream = File.OpenRead(bundle);
             using var content = new StreamContent(stream);
-            using HttpResponseMessage accepted = await client.PostAsync($"/internal/repository/{attemptId}/{id}/{kind}", content);
+            using HttpResponseMessage accepted = await client.PostAsync($"/internal/repository/{attemptId}/{id}/{kind.WireValue()}", content);
             accepted.EnsureSuccessStatusCode();
             using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(4));
             while (true)
             {
                 using JsonDocument state = await client.GetFromJsonAsync<JsonDocument>($"/internal/repository/{attemptId}/operations/{id}", deadline.Token) ?? throw new IOException();
-                string? status = state.RootElement.GetProperty("state").GetString();
-                if (status == "Succeeded") return state.RootElement.GetProperty("url").GetString();
-                if (status is "Failed" or "Uncertain") throw new IOException("Publishing needs attention. Inspect this Work before trying again.");
+                RepositoryOperationState status = ContractValue.Parse<RepositoryOperationState>(state.RootElement.GetProperty("state").GetString()!);
+                if (status == RepositoryOperationState.Succeeded) return state.RootElement.GetProperty("url").GetString();
+                if (status is RepositoryOperationState.Failed or RepositoryOperationState.Uncertain) throw new IOException("Publishing needs attention. Inspect this Work before trying again.");
                 await Task.Delay(1000, deadline.Token);
             }
         }
         finally { File.Delete(bundle); }
     }
+
     public static async Task<WorkSnapshot?> CurrentAsync(long attemptId)
     {
         using HttpClient client = await ClientAsync();
         return await client.GetFromJsonAsync<WorkSnapshot>($"/internal/repository/{attemptId}/current", ExecutionFiles.Json);
     }
+
     public static async Task<RepositorySetupMemory[]> SetupMemoryAsync(long attemptId)
     {
         using HttpClient client = await ClientAsync();
         return await client.GetFromJsonAsync<RepositorySetupMemory[]>($"/internal/repository/{attemptId}/setup-memory", ExecutionFiles.Json) ?? [];
     }
+
     public static async Task SaveSetupMemoryAsync(long attemptId, SetupMemoryWrite request)
     {
         using HttpClient client = await ClientAsync();
         using HttpResponseMessage response = await client.PostAsJsonAsync($"/internal/repository/{attemptId}/setup-memory", request, ExecutionFiles.Json);
         response.EnsureSuccessStatusCode();
     }
+
     public static async Task<WorkspaceCheckpoint> SaveCheckpointAsync(WorkSnapshot work, string commit)
     {
         using HttpClient client = await ClientAsync();
@@ -89,13 +96,14 @@ public static class RepositoryClient
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WorkspaceCheckpoint>(ExecutionFiles.Json))!;
     }
+
     public static async Task<int> RunAsync(string[] arguments)
     {
         try
         {
             WorkerInput input = (await ExecutionFiles.ReadAsync<WorkerInput>("/run/input/input.json"))!;
             AttemptSnapshot attempt = input.Work.Attempts[^1];
-            string? url = await SubmitAsync(attempt.Id, attempt.Target.Repository!.Grant!.Branch, "/workspace/repository", arguments.Length == 1 ? arguments[0] : "");
+            string? url = await SubmitAsync(attempt.Id, attempt.Target.Repository!.Grant!.Branch, "/workspace/repository", RepositoryOperationNames.Parse(arguments.Length == 1 ? arguments[0] : ""));
             if (arguments[0] == "fetch")
             {
                 await DownloadAsync(attempt.Id, "/workspace/fetched.bundle");

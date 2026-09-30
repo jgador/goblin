@@ -7,8 +7,10 @@ namespace Goblin.Core.Tests;
 public sealed class RepositoryAuthorizationTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
+
     private static ExecutionTarget Target(long id, bool push = false, bool pr = false) => new("codex", 1, repository:
         new("owner/repo", "Goblin", "agent@example.com", new(1, "generation", "42", "owner", 22, "develop", $"goblin/1/{id}", 2, push, pr)));
+
     private static WorkItem Ready()
     {
         var work = new WorkItem(1, "Fix owner/repo", Now);
@@ -87,11 +89,11 @@ public sealed class RepositoryAuthorizationTests
     public void LocalGrantRejectsPushAndPullRequestButAllowsFetchAndCheckpoint()
     {
         RepositoryGrant grant = Target(10).Repository!.Grant!;
-        foreach (string operation in new[] { "publish", "pull-request" })
+        foreach (RepositoryOperationKind operation in new[] { RepositoryOperationKind.Publish, RepositoryOperationKind.PullRequest })
             Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, operation));
         foreach (string operation in new[] { "fetch", "checkpoint" })
-            grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, operation);
+            grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, RepositoryOperationNames.Parse(operation));
         grant = Target(10, true).Repository!.Grant!;
-        Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, "pull-request"));
+        Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, RepositoryOperationKind.PullRequest));
     }
 }

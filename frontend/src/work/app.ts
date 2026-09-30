@@ -1,3 +1,11 @@
+import {
+    WorkStatus,
+    AttentionReason,
+    RepositoryAuthorizationStatus,
+    WorkAction,
+    IdentityKind,
+    ConnectionAvailability,
+} from "../api/values.js";
 import { WorkWorkspace } from "./workspace.js";
 import { Settings } from "../settings/settings.js";
 import { SystemResources } from "../settings/system.js";
@@ -26,7 +34,7 @@ type Connection = {
     id: string;
     runtime: string;
     name: string;
-    availability: string;
+    availability: ConnectionAvailability;
 };
 type Pending = { path: string; body: Record<string, unknown> };
 type ModelOption = {
@@ -55,7 +63,6 @@ type ModelSelection = {
     expanded: boolean;
     notice: string;
 };
-type IdentityKind = "Work" | "Command" | "Conversation" | "Message";
 let work: View[] = [],
     conversations: Conversation[] = [],
     agents: Agent[] = [],
@@ -192,7 +199,9 @@ const modelConnections = () =>
 function preferredModelConnection() {
     const available = modelConnections();
     return (
-        available.find((c) => c.availability === "Available") ?? available[0]
+        available.find(
+            (c) => c.availability === ConnectionAvailability.Available,
+        ) ?? available[0]
     );
 }
 function saveModelSelections() {
@@ -401,19 +410,19 @@ const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
 const effortLabel = (value: string) =>
     effortStops.find((stop) => stop.value === value)?.label ??
     value.slice(0, 1).toUpperCase() + value.slice(1);
-const attention = (w: Work) => w.status === "NeedsAttention";
+const attention = (w: Work) => w.status === WorkStatus.NeedsAttention;
 const statusClass = (w: Work) =>
-    w.status === "Completed"
+    w.status === WorkStatus.Completed
         ? "done"
         : attention(w)
-          ? w.attention?.reason === "ResultReview"
+          ? w.attention?.reason === AttentionReason.ResultReview
               ? "review"
               : "waiting"
-          : w.status === "InProgress"
+          : w.status === WorkStatus.InProgress
             ? "working"
             : "paused";
 const status = (w: Work) =>
-    `<span class="status-pill ${statusClass(w)}">${icon(attention(w) ? "wait" : w.status === "Completed" ? "check" : "activity")}${e(label(w.attention?.reason ?? w.status))}</span>`;
+    `<span class="status-pill ${statusClass(w)}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "check" : "activity")}${e(label(w.attention?.reason ?? w.status))}</span>`;
 const button = (
     action: string,
     text: string,
@@ -581,8 +590,8 @@ async function refreshConnections() {
         connections = runtime.value;
         for (const connection of connections)
             if (
-                connection.availability === "Available" &&
-                previous.get(connection.id) !== "Available"
+                connection.availability === ConnectionAvailability.Available &&
+                previous.get(connection.id) !== ConnectionAvailability.Available
             ) {
                 modelQueries.delete(connection.id);
                 modelRequestedAt.delete(connection.id);
@@ -590,7 +599,7 @@ async function refreshConnections() {
     } else
         connections = connections.map((c) => ({
             ...c,
-            availability: "Status unavailable",
+            availability: ConnectionAvailability.Unavailable,
         }));
     if (repository.status === "fulfilled") github = repository.value;
     else if (github)
@@ -626,7 +635,10 @@ async function send(
         changing = false;
         confirmed = true;
         drafts.delete(submittedDraft);
-        if (path === "/api/work/commands" && command.action === "Create") {
+        if (
+            path === "/api/work/commands" &&
+            command.action === WorkAction.Create
+        ) {
             modelSelections.set(String(command.workId), {
                 ...modelSelection(),
                 notice: "",
@@ -656,11 +668,14 @@ async function reserve(...kinds: IdentityKind[]): Promise<string[]> {
     const result = await api<{ ids: string[] }>("/api/identities", { kinds });
     return result.ids;
 }
-async function command(action: string, extra: Record<string, unknown> = {}) {
+async function command(
+    action: WorkAction,
+    extra: Record<string, unknown> = {},
+) {
     const item = current();
     if (item)
         await send("/api/work/commands", async () => {
-            const [commandId] = await reserve("Command");
+            const [commandId] = await reserve(IdentityKind.Command);
             return {
                 commandId,
                 workId: item.work.id,
@@ -676,12 +691,14 @@ function message(author: string, text: string, at?: string) {
 function connectionButton() {
     const connection =
         connections.find((c) => c.id === modelSelection().connectionId) ??
-        connections.find((c) => c.availability === "Available") ??
+        connections.find(
+            (c) => c.availability === ConnectionAvailability.Available,
+        ) ??
         connections[0];
     return `<button class="connection-choice" type="button" data-action="settings" title="Manage AI connections">${icon("spark")}${e(connection?.name ?? "AI connections")}${icon("chevron")}</button>`;
 }
 function composer(kind: string, placeholder: string) {
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${modelControls(composerWork())}${kind === "new" ? connectionButton() : `<span class="composer-note">${kind === "chat" ? "Saved as a conversation · Track as Work to start Goblin" : changing ? "Requests changes to the current result" : current()?.work.attention?.reason === "InputRequired" ? "Answers the pending question" : current()?.work.status === "Ready" ? "Saves context for this work · Start work when ready" : "Saves context with this work"}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div></form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
+    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${modelControls(composerWork())}${kind === "new" ? connectionButton() : `<span class="composer-note">${kind === "chat" ? "Saved as a conversation · Track as Work to start Goblin" : changing ? "Requests changes to the current result" : current()?.work.attention?.reason === AttentionReason.InputRequired ? "Answers the pending question" : current()?.work.status === WorkStatus.Ready ? "Saves context for this work · Start work when ready" : "Saves context with this work"}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div></form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
 }
 function rememberWork() {
     sessionStorage.setItem("goblin.selectedWork", selected);
@@ -727,9 +744,12 @@ function renderSidebar() {
         filter === "attention"
             ? attention(w)
             : filter === "done"
-              ? w.status === "Completed"
+              ? w.status === WorkStatus.Completed
               : filter === "assigned"
-                ? !!w.agentId && !["Completed", "Cancelled"].includes(w.status)
+                ? !!w.agentId &&
+                  ![WorkStatus.Completed, WorkStatus.Cancelled].some(
+                      (value) => value === w.status,
+                  )
                 : true;
     const shown = matches
         .filter((x) => search || inView(x.work))
@@ -756,7 +776,9 @@ function renderSidebar() {
                 work.filter(
                     (x) =>
                         !!x.work.agentId &&
-                        !["Completed", "Cancelled"].includes(x.work.status),
+                        ![WorkStatus.Completed, WorkStatus.Cancelled].some(
+                            (value) => value === x.work.status,
+                        ),
                 ).length,
             ],
             [
@@ -768,9 +790,10 @@ function renderSidebar() {
             ["recent", "Recently Updated", "clock", ""],
             [
                 "done",
-                "Completed",
+                WorkStatus.Completed,
                 "circleCheck",
-                work.filter((x) => x.work.status === "Completed").length,
+                work.filter((x) => x.work.status === WorkStatus.Completed)
+                    .length,
             ],
         ]
             .map(
@@ -779,7 +802,7 @@ function renderSidebar() {
             )
             .join("")}</nav>
         <div class="sidebar-history" data-scroll="sidebar"><div class="history-heading"><h3>${search ? "Search results" : filter === "recent" ? "Latest updates" : "Your work"}</h3><span>${shown.length}</span></div>
-        <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w, updatedAt }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${w.id}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)}"><span class="work-indicator ${statusClass(w)}">${icon(attention(w) ? "wait" : w.status === "Completed" ? "circleCheck" : w.status === "InProgress" ? "activity" : "clock")}</span><span class="work-card-copy"><span class="work-title">${e(w.objective)}</span><span class="work-card-meta">${e(label(w.status))} · <time datetime="${e(updatedAt ?? "")}">${e(relativeTime(updatedAt))}</time></span></span></button>`).join("") || `<p class="sidebar-empty">${search || filter !== "all" ? "No matching work." : loaded ? "Your work will appear here." : "Loading your work…"}</p>`}</nav>
+        <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w, updatedAt }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${w.id}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)}"><span class="work-indicator ${statusClass(w)}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "circleCheck" : w.status === WorkStatus.InProgress ? "activity" : "clock")}</span><span class="work-card-copy"><span class="work-title">${e(w.objective)}</span><span class="work-card-meta">${e(label(w.status))} · <time datetime="${e(updatedAt ?? "")}">${e(relativeTime(updatedAt))}</time></span></span></button>`).join("") || `<p class="sidebar-empty">${search || filter !== "all" ? "No matching work." : loaded ? "Your work will appear here." : "Loading your work…"}</p>`}</nav>
         <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
         <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen || search ? "" : "hidden"}>${chats.map((c) => `<button class="work-card ${view === "chat" && activeChat === c.id ? "selected" : ""}" data-action="select-chat" data-id="${c.id}" aria-current="${view === "chat" && activeChat === c.id ? "page" : "false"}"><span class="work-title">${e(c.title)}</span></button>`).join("") || '<p class="sidebar-empty">Save ideas and context here.</p>'}</nav></div>
         <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button><div class="sidebar-bottom"><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}<span>Settings</span></button><button class="icon-button" data-action="lock" aria-label="Lock workspace" title="Lock workspace">${icon("lock")}</button></div></aside>`;
@@ -810,7 +833,9 @@ function renderActivityPanel() {
     return `<aside id="work-activity" class="activity-panel ${activityOpen ? "is-open" : ""}" aria-label="Activity" ${compact.matches ? (activityOpen ? 'role="dialog" aria-modal="true"' : "inert") : ""} ${mobile.matches && !sidebarCollapsed ? "inert" : ""}><div class="activity-heading"><h2>${icon("activity")}Activity</h2><button id="close-activity" class="icon-button" data-action="toggle-activity" aria-label="Close activity" ${compact.matches ? "" : "hidden"}>${icon("close")}</button></div><div class="activity-body" data-scroll="activity">${renderActivity(view === "work" ? current()?.work : undefined)}</div></aside>`;
 }
 function renderHome() {
-    const available = connections.some((c) => c.availability === "Available");
+    const available = connections.some(
+        (c) => c.availability === ConnectionAvailability.Available,
+    );
     const disconnected =
         !connections.length ||
         connections.every((c) => c.availability === "Disconnected");
@@ -1023,10 +1048,10 @@ function renderDetail() {
     const latestResult = w.results.find((r) => r.attemptId === attempt?.id);
     return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><span>Work ${e(w.id)}</span><button id="show-activity" class="text-button activity-toggle" data-action="toggle-activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2>${status(w)}</div><div class="detail-properties"><span>${icon("spark")}${w.agentId ? `Assigned to ${e(agents.find((a) => a.id === w.agentId)?.name ?? "agent " + w.agentId)}` : "Unassigned"}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
         <section class="work-section" aria-labelledby="goal-heading"><div class="section-heading"><h3 id="goal-heading">Goal</h3><button class="text-button" data-action="discuss-goal">Discuss goal${icon("arrow")}</button></div><p class="goal-text preserve-lines">${e(w.objective)}</p></section>
-        <section class="work-section" aria-labelledby="progress-heading"><div class="section-heading"><h3 id="progress-heading">Progress</h3><span>Work lifecycle</span></div>${renderProgress(item)}${w.attention?.reason === "ResultReview" && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</section>
+        <section class="work-section" aria-labelledby="progress-heading"><div class="section-heading"><h3 id="progress-heading">Progress</h3><span>Work lifecycle</span></div>${renderProgress(item)}${w.attention?.reason === AttentionReason.ResultReview && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</section>
         <section class="work-section" aria-labelledby="decisions-heading"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span>${w.decisions.length || ""}</span></div>${renderDecisions(w)}</section>
         <section class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-heading"><h3 id="outputs-heading">Recent outputs</h3></div>${renderOutputs(w)}${w.attempts.some((a) => a.target.repository) ? '<button class="secondary" data-action="open-workspace">Open workspace</button>' : ""}</section></div>
-        <div class="work-composer"><div class="composer-heading"><h3>Ask Goblin about this work</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation">${icon("chat")}${conversationExpanded ? "Hide conversation" : "Conversation"}</button></div><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? renderConversation(w) : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === "InputRequired" ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
+        <div class="work-composer"><div class="composer-heading"><h3>Ask Goblin about this work</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation">${icon("chat")}${conversationExpanded ? "Hide conversation" : IdentityKind.Conversation}</button></div><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? renderConversation(w) : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === AttentionReason.InputRequired ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
 }
 function modelControls(w?: Work) {
     const connectionId = modelConnection(w);
@@ -1080,15 +1105,21 @@ function modelControls(w?: Work) {
             ? "Messages save context. This choice applies when tracked Work starts."
             : view === "new"
               ? "This choice applies when the new Work starts."
-              : w && ["Completed", "Cancelled"].includes(w.status)
+              : w &&
+                  [WorkStatus.Completed, WorkStatus.Cancelled].some(
+                      (value) => value === w.status,
+                  )
                 ? "This Work is closed. Messages here will not start another attempt."
                 : w &&
-                    (["Queued", "InProgress", "Cancelling"].includes(
-                        w.status,
-                    ) ||
-                        ["InputRequired", "RepositoryRequired"].includes(
-                            w.attention?.reason ?? "",
-                        ))
+                    ([
+                        WorkStatus.Queued,
+                        WorkStatus.InProgress,
+                        WorkStatus.Cancelling,
+                    ].some((value) => value === w.status) ||
+                        [
+                            AttentionReason.InputRequired,
+                            AttentionReason.RepositoryRequired,
+                        ].some((reason) => reason === w.attention?.reason))
                   ? "The current attempt keeps its model. This choice is for a later attempt."
                   : "This choice applies when this Work starts or retries.";
     const status = `${statusText ? `<p class="model-status" role="status">${e(statusText)}</p>` : ""}${choice.notice ? `<p class="model-status" role="status">${e(choice.notice)}</p>` : ""}`;
@@ -1104,14 +1135,18 @@ function modelControls(w?: Work) {
     return `<div class="model-picker"><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Model: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">${icon("spark")}<span class="model-picker-trigger-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
 }
 function repositorySetup(w: Work, required = false) {
-    const handoff = ["RepositoryRequired", "InputRequired"].includes(
-        w.attention?.reason ?? "",
-    );
+    const handoff = [
+        AttentionReason.RepositoryRequired,
+        AttentionReason.InputRequired,
+    ].some((reason) => reason === w.attention?.reason);
     const approval = w.repositoryAuthorization;
     const proposed = approval?.target.repository;
     const grant =
-        approval?.status === "Invalidated" ? undefined : proposed?.grant;
-    const pendingApproval = approval?.status === "Pending";
+        approval?.status === RepositoryAuthorizationStatus.Invalidated
+            ? undefined
+            : proposed?.grant;
+    const pendingApproval =
+        approval?.status === RepositoryAuthorizationStatus.Pending;
     const suggestions = w.repositoryRequest?.repositories ?? [];
     const name =
         proposed?.repository ??
@@ -1135,9 +1170,9 @@ function repositorySetup(w: Work, required = false) {
                 ${approval.enableRepository ? '<p class="repository-authorization-note">This also enables the repository in Goblin for future requests. Each Work still requires authorization.</p>' : ""}
                 <div class="repository-actions">${button("authorize-repository", approval.enableRepository ? "Enable repository & authorize this Work" : "Authorize this Work", true)}${button("deny-repository", "Decline")}</div>
             </section>`
-            : approval?.status === "Invalidated"
+            : approval?.status === RepositoryAuthorizationStatus.Invalidated
               ? "<p>Context changed. Review repository access again.</p>"
-              : approval?.status === "Denied"
+              : approval?.status === RepositoryAuthorizationStatus.Denied
                 ? "<p>Repository access was declined. You can review a different request.</p>"
                 : "";
     return `${preview}<details id="repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
@@ -1172,7 +1207,7 @@ function repositorySetup(w: Work, required = false) {
     </details>`;
 }
 function controls(w: Work) {
-    if (w.attention?.reason === "CleanupRequired")
+    if (w.attention?.reason === AttentionReason.CleanupRequired)
         return `<div class="decision"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</div>`;
     if (w.attempts.at(-1)?.cleanupPending)
         return `<div class="decision"><p>Saving the outcome and finishing execution cleanup…</p></div>`;
@@ -1180,23 +1215,33 @@ function controls(w: Work) {
         agents.find((a) => a.connectionId === modelConnection(w))?.id ??
         agents[0]?.id;
     let content = "";
-    if (w.status === "Ready")
+    if (w.status === WorkStatus.Ready)
         content = !w.agentId
             ? `<form class="work-setup" data-form="assign"><p>Choose the agent responsible for this work.</p><label for="agent">Agent</label><select class="field-control select-control" id="agent" name="agent" required ${agents.length ? "" : "disabled"}><button type="button"><selectedcontent></selectedcontent></button>${agents.map((a) => `<option value="${a.id}" ${a.id === preferredAgentId ? "selected" : ""}>${e(a.name)}</option>`).join("") || '<option value="">No agents available</option>'}</select>${agents.length ? `<button id="assign-agent" class="primary" type="submit" ${sending || pending ? "disabled" : ""}>Assign agent</button>` : '<p class="field-hint" role="status">No agents are available. Refresh to check again.</p>'}</form>`
             : `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${repositorySetup(w)}`;
-    if (w.attention?.reason === "ResultReview")
+    if (w.attention?.reason === AttentionReason.ResultReview)
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
-    if (w.attention?.reason === "InputRequired")
+    if (w.attention?.reason === AttentionReason.InputRequired)
         content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? repositorySetup(w) : ""}`;
-    if (w.attention?.reason === "RepositoryRequired")
-        content = `${w.repositoryAuthorization?.status === "Pending" ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${repositorySetup(w, true)}`;
-    if (w.attention?.reason === "Failure")
+    if (w.attention?.reason === AttentionReason.RepositoryRequired)
+        content = `${w.repositoryAuthorization?.status === RepositoryAuthorizationStatus.Pending ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${repositorySetup(w, true)}`;
+    if (w.attention?.reason === AttentionReason.Failure)
         content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${button("retry", "Retry work", true, !modelCanSubmit(w))}`;
-    if (w.attention?.reason === "UncertainExecution")
+    if (w.attention?.reason === AttentionReason.UncertainExecution)
         content = `<h3>Execution needs reconciliation</h3><p>Goblin cannot yet confirm the outcome. Check the execution or stop it before retrying.</p>${button("reconcile", "Reconcile execution", true)}`;
-    if (["Queued", "InProgress", "Cancelling"].includes(w.status))
+    if (
+        [WorkStatus.Queued, WorkStatus.InProgress, WorkStatus.Cancelling].some(
+            (value) => value === w.status,
+        )
+    )
         content = `<div class="progress-title">${icon("activity")} ${e(label(w.status))}</div><p>You can close this page. Accepted work continues independently.</p>`;
-    if (!["Completed", "Cancelled", "Cancelling"].includes(w.status))
+    if (
+        ![
+            WorkStatus.Completed,
+            WorkStatus.Cancelled,
+            WorkStatus.Cancelling,
+        ].some((value) => value === w.status)
+    )
         content += button("cancel", "Cancel work");
     return content ? `<div class="decision">${content}</div>` : "";
 }
@@ -1475,22 +1520,22 @@ document.addEventListener("click", async (event) => {
     if (action === "filter") filter = value!;
     if (action === "changes") changing = true;
     if (action === "execute" && current())
-        await command("Execute", modelPayload(current()!.work));
+        await command(WorkAction.Execute, modelPayload(current()!.work));
     if (action === "retry" && current())
-        await command("Retry", modelPayload(current()!.work));
+        await command(WorkAction.Retry, modelPayload(current()!.work));
     if (action === "authorize-repository" || action === "deny-repository")
         await command(
             action === "authorize-repository"
-                ? "AuthorizeRepository"
-                : "DenyRepository",
+                ? WorkAction.AuthorizeRepository
+                : WorkAction.DenyRepository,
             {
                 authorizationId: current()?.work.repositoryAuthorization?.id,
             },
         );
-    if (action === "reconcile") await command("Reconcile");
-    if (action === "cancel") await command("Cancel");
+    if (action === "reconcile") await command(WorkAction.Reconcile);
+    if (action === "cancel") await command(WorkAction.Cancel);
     if (action === "approve")
-        await command("Approve", {
+        await command(WorkAction.Approve, {
             attemptId: current()?.work.attempts.at(-1)?.id,
         });
     if (action === "track") {
@@ -1498,7 +1543,10 @@ document.addEventListener("click", async (event) => {
         const confirmed = await send(
             "/api/conversations/commands",
             async () => {
-                const [workId, messageId] = await reserve("Work", "Message");
+                const [workId, messageId] = await reserve(
+                    IdentityKind.Work,
+                    IdentityKind.Message,
+                );
                 return {
                     conversationId: c.id,
                     messageId,
@@ -1536,7 +1584,7 @@ document.addEventListener("submit", async (event) => {
     const kind = event.target.dataset.form,
         data = new FormData(event.target);
     if (kind === "assign") {
-        await command("Assign", { agentId: data.get("agent") });
+        await command(WorkAction.Assign, { agentId: data.get("agent") });
         return;
     }
     if (kind === "repository") {
@@ -1565,9 +1613,10 @@ document.addEventListener("submit", async (event) => {
             return;
         }
         const w = current()!.work;
-        const handoff = ["RepositoryRequired", "InputRequired"].includes(
-            w.attention?.reason ?? "",
-        );
+        const handoff = [
+            AttentionReason.RepositoryRequired,
+            AttentionReason.InputRequired,
+        ].some((reason) => reason === w.attention?.reason);
         const policy = String(data.get("delivery-policy") ?? "message");
         const baseBranch = String(data.get("base-branch") ?? "").trim() || null;
         if (policy === "message" && baseBranch) {
@@ -1577,19 +1626,22 @@ document.addEventListener("submit", async (event) => {
             showSetupErrors();
             return;
         }
-        await command(handoff ? "PrepareRepository" : "Execute", {
-            ...(policy === "message"
-                ? {}
-                : {
-                      delivery: {
-                          baseBranch,
-                          push: policy === "push" || policy === "pr",
-                          openPullRequest: policy === "pr",
-                      },
-                  }),
-            repository: { repository, gitAuthorName, gitAuthorEmail },
-            ...(handoff ? {} : modelPayload(w)),
-        });
+        await command(
+            handoff ? WorkAction.PrepareRepository : WorkAction.Execute,
+            {
+                ...(policy === "message"
+                    ? {}
+                    : {
+                          delivery: {
+                              baseBranch,
+                              push: policy === "push" || policy === "pr",
+                              openPullRequest: policy === "pr",
+                          },
+                      }),
+                repository: { repository, gitAuthorName, gitAuthorEmail },
+                ...(handoff ? {} : modelPayload(w)),
+            },
+        );
         return;
     }
     if (kind === "unlock") {
@@ -1610,9 +1662,12 @@ document.addEventListener("submit", async (event) => {
     if (kind === "new") {
         let id = "";
         const confirmed = await send("/api/work/commands", async () => {
-            const [commandId, workId] = await reserve("Command", "Work");
+            const [commandId, workId] = await reserve(
+                IdentityKind.Command,
+                IdentityKind.Work,
+            );
             id = workId;
-            return { commandId, workId, action: "Create", text };
+            return { commandId, workId, action: WorkAction.Create, text };
         });
         if (confirmed) {
             selected = id;
@@ -1624,8 +1679,8 @@ document.addEventListener("submit", async (event) => {
             "/api/conversations/commands",
             async () => {
                 const [messageId, conversationId] = await reserve(
-                    "Message",
-                    ...(activeChat ? [] : ["Conversation" as const]),
+                    IdentityKind.Message,
+                    ...(activeChat ? [] : [IdentityKind.Conversation]),
                 );
                 activeChat ||= conversationId;
                 return { conversationId: activeChat, messageId, text };
@@ -1641,10 +1696,10 @@ document.addEventListener("submit", async (event) => {
         const w = current()?.work;
         await command(
             changing
-                ? "RequestChanges"
-                : w?.attention?.reason === "InputRequired"
-                  ? "Answer"
-                  : "AddContext",
+                ? WorkAction.RequestChanges
+                : w?.attention?.reason === AttentionReason.InputRequired
+                  ? WorkAction.Answer
+                  : WorkAction.AddContext,
             {
                 text,
                 attemptId: w?.attempts.at(-1)?.id,

@@ -13,10 +13,13 @@ public enum TurnStatus
 {
     [JsonStringEnumMemberName("completed")]
     Completed,
+
     [JsonStringEnumMemberName("interrupted")]
     Interrupted,
+
     [JsonStringEnumMemberName("failed")]
     Failed,
+
     [JsonStringEnumMemberName("inProgress")]
     InProgress,
 }

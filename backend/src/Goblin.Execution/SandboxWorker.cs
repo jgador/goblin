@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,6 +10,7 @@ using Goblin.Contracts.Runtime;
 using Goblin.Core.Repositories;
 using Goblin.Core.Work;
 using Goblin.Integrations.Codex;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Execution;
 
@@ -88,9 +88,9 @@ public static class SandboxWorker
                     await GitAsync(checkout, environment, "commit", "-m", "Goblin Work " + work.Id.ToString(CultureInfo.InvariantCulture));
                 bool publish = repository.Grant!.PolicyVersion == 1 || repository.Grant.AllowPush;
                 stage = publish ? "Publish" : "Verify local Git checkpoint";
-                string? artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? "publish" : "checkpoint");
+                string? artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? RepositoryOperationKind.Publish : RepositoryOperationKind.Checkpoint);
                 if (repository.Grant.AllowPullRequest && outcome.Kind == ObservationKind.Result)
-                    artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, "pull-request");
+                    artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, RepositoryOperationKind.PullRequest);
                 string commit = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
                 await File.WriteAllTextAsync(Path.Combine(state, "changes.patch"), await GitAsync(checkout, environment, "diff", baseline, commit));
                 stage = "Git checkpoint";
@@ -126,6 +126,7 @@ public static class SandboxWorker
             }
         }
     }
+
     public static string ClaimPrefix(string state, long attemptId, int turnNumber) => Path.Combine(state,
         "attempt-" + attemptId.ToString(CultureInfo.InvariantCulture) + "-turn-" + turnNumber.ToString(CultureInfo.InvariantCulture));
 
@@ -152,5 +153,6 @@ public static class SandboxWorker
         if (process.ExitCode != 0) throw new IOException("Repository operation failed.");
         return await output;
     }
+
     private static void Emit(ExecutionObservation observation) => Console.WriteLine("GOBLIN_RESULT " + JsonSerializer.Serialize(observation, ExecutionFiles.Json));
 }

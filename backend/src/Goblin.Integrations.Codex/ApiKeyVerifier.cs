@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 
 namespace Goblin.Integrations.Codex;
 
@@ -17,7 +18,7 @@ public sealed class ApiKeyVerifier
         Timeout = TimeSpan.FromSeconds(10)
     };
 
-    public async Task<string> VerifyAsync(string apiKey)
+    public async Task<VerificationState> VerifyAsync(string apiKey)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -32,8 +33,8 @@ public sealed class ApiKeyVerifier
         {
             if (response.StatusCode == HttpStatusCode.Unauthorized)
                 throw new IntegrationFailure("invalid_api_key", "OpenAI rejected this API key. Check the key and try again.");
-            if (response.IsSuccessStatusCode) return "accepted";
-            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests) return "unverified";
+            if (response.IsSuccessStatusCode) return VerificationState.Accepted;
+            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests) return VerificationState.Unverified;
             throw new IntegrationFailure("verification_unavailable",
                 "OpenAI could not verify the key. Your key has not been saved. Please retry.");
         }

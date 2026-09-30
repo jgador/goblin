@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json.Serialization;
+using Goblin.Contracts;
 
 namespace Goblin.Web.Http.Contracts;
 
@@ -74,14 +75,14 @@ public sealed class DeviceLogin
 public sealed class Notice
 {
     [JsonConstructor]
-    public Notice(string kind, string message)
+    public Notice(NoticeKind kind, string message)
     {
         Kind = kind;
         Message = message;
     }
 
     [JsonPropertyName("kind")]
-    public string Kind { get; init; }
+    public NoticeKind Kind { get; init; }
 
     [JsonPropertyName("message")]
     public string Message { get; init; }
@@ -93,7 +94,7 @@ public sealed class Notice
 public sealed class AuthenticationState
 {
     [JsonConstructor]
-    public AuthenticationState(AccountView? account, DeviceLogin? login, Notice? notice, string? verification,
+    public AuthenticationState(AccountView? account, DeviceLogin? login, Notice? notice, VerificationState? verification,
         bool runtimeReady)
     {
         Account = account;
@@ -113,7 +114,7 @@ public sealed class AuthenticationState
     public Notice? Notice { get; init; }
 
     [JsonPropertyName("verification")]
-    public string? Verification { get; init; }
+    public VerificationState? Verification { get; init; }
 
     [JsonPropertyName("runtimeReady")]
     public bool RuntimeReady { get; init; }
@@ -127,7 +128,7 @@ public sealed class AuthenticationState
 public sealed class PromptResult
 {
     [JsonConstructor]
-    public PromptResult(string reply, string model, long durationMs, string authType)
+    public PromptResult(string reply, string model, long durationMs, AuthenticationMethod authType)
     {
         Reply = reply;
         Model = model;
@@ -145,7 +146,7 @@ public sealed class PromptResult
     public long DurationMs { get; init; }
 
     [JsonPropertyName("authType")]
-    public string AuthType { get; init; }
+    public AuthenticationMethod AuthType { get; init; }
 
     public static PromptResult From(Goblin.Contracts.PromptResult value) =>
         new(value.Reply, value.Model, value.DurationMs, value.AuthType);

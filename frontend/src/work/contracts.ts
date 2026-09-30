@@ -1,7 +1,15 @@
+import type {
+    WorkStatus,
+    AttemptStatus,
+    AttentionReason,
+    FailureKind,
+    WorkEventKind,
+    RepositoryAuthorizationStatus,
+} from "../api/values.js";
 // Goblin-owned Work HTTP views. IDs remain decimal strings.
 export type Attempt = {
     id: string;
-    status: string;
+    status: AttemptStatus;
     agentId?: string;
     queuedAt?: string;
     startedAt?: string;
@@ -24,7 +32,7 @@ export type Attempt = {
         };
     };
     session?: { model?: string };
-    failure?: string;
+    failure?: FailureKind;
     environmentReference?: string;
     cleanupPending?: boolean;
     turnNumber?: number;
@@ -43,16 +51,16 @@ export type Attempt = {
 export type Work = {
     id: string;
     objective: string;
-    status: string;
+    status: WorkStatus;
     agentId?: string;
-    attention?: { reason: string; failure?: string };
+    attention?: { reason: AttentionReason; failure?: FailureKind };
     repositoryRequest?: {
         repositories: string[];
         target: Attempt["target"];
     };
     repositoryAuthorization?: {
         id: string;
-        status: "Pending" | "Authorized" | "Denied" | "Invalidated";
+        status: RepositoryAuthorizationStatus;
         target: Attempt["target"];
         enableRepository: boolean;
         retry: boolean;
@@ -60,9 +68,9 @@ export type Work = {
     attempts: Attempt[];
     history: {
         sequence: string;
-        kind: string;
+        kind: WorkEventKind;
         text?: string;
-        failure?: string;
+        failure?: FailureKind;
         occurredAt: string;
         attemptId?: string;
         decisionId?: string;

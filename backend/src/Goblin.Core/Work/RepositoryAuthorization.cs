@@ -14,7 +14,14 @@ public sealed record GitDeliveryIntent(string? BaseBranch = null, bool Push = fa
     }
 }
 
-public enum RepositoryAuthorizationStatus { Pending, Authorized, Denied, Invalidated }
+public enum RepositoryAuthorizationStatus
+{
+    Pending,
+    Authorized,
+    Denied,
+    Invalidated
+}
+
 public sealed record RepositoryAuthorization(long Id, ExecutionTarget Target, bool EnableRepository,
     bool Retry, DateTimeOffset RequestedAt, RepositoryAuthorizationStatus Status = RepositoryAuthorizationStatus.Pending,
     DateTimeOffset? AnsweredAt = null, string? DefaultBranch = null);
@@ -29,7 +36,7 @@ public sealed partial class WorkItem
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         Require(target.Repository?.Grant is not null, WorkRule.InvalidValue);
         ValidateNewAttempt(id, target);
-        target.Repository!.Grant!.Authorize(Id, id, target.Repository.Repository, target.Repository.Repository, target.Repository.Grant.Branch, "fetch");
+        target.Repository!.Grant!.Authorize(Id, id, target.Repository.Repository, target.Repository.Repository, target.Repository.Grant.Branch, RepositoryOperationKind.Fetch);
         Require(CurrentAttempt?.Status != AttemptStatus.Failed || retry, WorkRule.InvalidTransition);
         if (retry)
             Require(Status == WorkStatus.NeedsAttention && (Attention?.Reason == AttentionReason.Failure || Attention?.Reason == AttentionReason.RepositoryRequired && RepositoryAuthorization?.Retry == true) &&

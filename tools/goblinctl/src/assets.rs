@@ -13,6 +13,10 @@ pub fn web(path: &str) -> Option<(&'static str, &'static [u8])> {
             "text/javascript; charset=utf-8",
             include_bytes!("../../../deploy/azure/setup/app.js"),
         ),
+        "/setup/contract-values.js" => (
+            "text/javascript; charset=utf-8",
+            include_bytes!("../../../deploy/azure/setup/contract-values.js"),
+        ),
         "/setup/styles.css" => (
             "text/css; charset=utf-8",
             include_bytes!("../../../deploy/azure/setup/styles.css"),

@@ -36,7 +36,9 @@ public sealed partial class Workspace
     }
 
     public string DataDirectory { get; }
+
     public SessionState Session(bool authenticated) => new(authenticated);
+
     public string CodexHome => Path.Combine(DataDirectory, "codex");
     public string Home => Path.Combine(DataDirectory, "home");
     public string WorkingDirectory => Path.Combine(DataDirectory, "workspace");
@@ -51,7 +53,9 @@ public sealed partial class Workspace
     }
 
     internal static bool IsLoopback(Uri uri) => uri.Host is "localhost" or "127.0.0.1" or "[::1]";
+
     private static byte[] Hash(string value) => SHA256.HashData(Encoding.UTF8.GetBytes(value));
+
     private static string NewSessionToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     public static async Task<Workspace> OpenAsync(string directory, string publicOrigin, string? passwordHashFile = null, bool allowInsecureHttp = false)
