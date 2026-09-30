@@ -239,6 +239,7 @@ internal sealed class ProtocolGenerator
             .Select(part => part.Any(char.IsLetter) && part.Where(char.IsLetter).All(char.IsUpper)
                 ? char.ToUpperInvariant(part[0]) + part[1..].ToLowerInvariant()
                 : char.ToUpperInvariant(part[0]) + part[1..]));
+        result = Regex.Replace(result, "chatgpt", "ChatGPT", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
         return result.Length == 0 || char.IsDigit(result[0]) ? "Value" + result : result;
     }
 
@@ -910,6 +911,19 @@ internal static class ProtocolGeneratorTests
         Check(ProtocolGenerator.VariantTypeName("Result", "Result") == "ResultVariant", "variant base collision");
         Check(ProtocolGenerator.VariantTypeName("McpElicitationUntitledSingleSelectEnumSchema", "McpElicitationSingleSelectEnumSchema", true)
             == "McpElicitationUntitledSingleSelectEnumSchemaVariant", "wrapped variant collision");
+
+        var accounts = Generate("""
+            {"Account":{"oneOf":[
+               {"type":"object","properties":{"type":{"type":"string","enum":["chatgpt"]},"chatgptAccountId":{"type":"string"}},"required":["type","chatgptAccountId"]},
+               {"type":"object","properties":{"type":{"type":"string","enum":["apiKey"]}},"required":["type"]}]},
+             "AuthenticationMethod":{"type":"string","enum":["chatgpt","apiKey"]}}
+            """);
+        Check(accounts["ChatGPTAccount.g.cs"].Contains("class ChatGPTAccount : Account", StringComparison.Ordinal)
+            && accounts["ChatGPTAccount.g.cs"].Contains("string ChatGPTAccountId", StringComparison.Ordinal)
+            && accounts["ChatGPTAccount.g.cs"].Contains("[JsonPropertyName(\"chatgptAccountId\")]", StringComparison.Ordinal)
+            && accounts["Account.g.cs"].Contains("\"chatgpt\" => JsonSerializer.Deserialize<ChatGPTAccount>", StringComparison.Ordinal)
+            && accounts["AuthenticationMethod.g.cs"].Contains("[JsonStringEnumMemberName(\"chatgpt\")]\n    ChatGPT", StringComparison.Ordinal),
+            "ChatGPT identifiers preserve protocol wire names");
 
         var selectionDefinitions = """
             {"Reply":{"type":"object","properties":{"value":{"$ref":"#/definitions/Choice"},"unused":{"type":"string"}},"required":["value","unused"]},

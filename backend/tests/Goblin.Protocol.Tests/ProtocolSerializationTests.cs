@@ -38,10 +38,10 @@ public sealed class ProtocolSerializationTests
     public void DeviceCodeResponseAcceptsDiscriminatorAfterData()
     {
         const string json = """{"loginId":"login-1","userCode":"ABCD-EFGH","verificationUrl":"https://auth.openai.com/codex/device","type":"chatgptDeviceCode"}""";
-        ChatgptDeviceCodeLoginAccountResponse response = Assert.IsType<ChatgptDeviceCodeLoginAccountResponse>(Read<LoginAccountResponse>(json));
+        ChatGPTDeviceCodeLoginAccountResponse response = Assert.IsType<ChatGPTDeviceCodeLoginAccountResponse>(Read<LoginAccountResponse>(json));
         Assert.Equal("login-1", response.LoginId);
         Assert.Equal("ABCD-EFGH", response.UserCode);
-        ChatgptDeviceCodeLoginAccountResponse restored = Assert.IsType<ChatgptDeviceCodeLoginAccountResponse>(
+        ChatGPTDeviceCodeLoginAccountResponse restored = Assert.IsType<ChatGPTDeviceCodeLoginAccountResponse>(
             Read<LoginAccountResponse>(Write<LoginAccountResponse>(response)));
         Assert.Equal(response.LoginId, restored.LoginId);
         Assert.Equal(response.UserCode, restored.UserCode);
@@ -52,7 +52,7 @@ public sealed class ProtocolSerializationTests
     public void RequiredNullableAccountEmailRemainsPresentOnTheWire()
     {
         const string json = """{"type":"chatgpt","email":null,"planType":"plus"}""";
-        ChatgptAccount account = Assert.IsType<ChatgptAccount>(Read<Account>(json));
+        ChatGPTAccount account = Assert.IsType<ChatGPTAccount>(Read<Account>(json));
         Assert.Null(account.Email);
         Assert.Contains("\"email\":null", Write<Account>(account));
         Assert.Throws<JsonException>(() => Read<Account>("""{"type":"chatgpt","planType":"plus"}"""));

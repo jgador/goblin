@@ -156,7 +156,7 @@ public sealed class PublicApiContractTests
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
         Assert.Equal("""{"type":"apiKey"}""", JsonSerializer.Serialize<Api.AccountView>(new Api.ApiKeyAccountView(), options));
         Assert.Equal("""{"type":"chatgpt","email":"person@example.test","planType":"plus"}""",
-            JsonSerializer.Serialize<Api.AccountView>(new Api.ChatgptAccountView("person@example.test", "plus"), options));
+            JsonSerializer.Serialize<Api.AccountView>(new Api.ChatGPTAccountView("person@example.test", "plus"), options));
         Assert.Equal("""{"account":null,"login":null,"notice":null,"verification":null,"runtimeReady":false}""",
             JsonSerializer.Serialize(new Api.AuthenticationState(null, null, null, null, false), options));
     }
@@ -179,7 +179,7 @@ public sealed class PublicApiContractTests
             values.SetValue(Example(element, name), 0);
             return values;
         }
-        if (type == typeof(Goblin.Contracts.AccountView)) return new Goblin.Contracts.ChatgptAccountView("person@example.test", "plus");
+        if (type == typeof(Goblin.Contracts.AccountView)) return new Goblin.Contracts.ChatGPTAccountView("person@example.test", "plus");
         ConstructorInfo constructor = Assert.Single(type.GetConstructors());
         ParameterInfo[] parameters = constructor.GetParameters();
         object value = constructor.Invoke([.. parameters.Select(parameter => Example(parameter.ParameterType, parameter.Name!))]);

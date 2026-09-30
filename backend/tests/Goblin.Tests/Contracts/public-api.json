@@ -41,7 +41,7 @@
     "runtimeReady",
     "verification"
   ],
-  "ChatgptAccountView": [
+  "ChatGPTAccountView": [
     "email",
     "planType"
   ],

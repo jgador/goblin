@@ -8,25 +8,17 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Protocol;
 
-public sealed class ChatgptAccount : Account
+public sealed class ChatGPTDeviceCodeLoginAccountParams : LoginAccountParams
 {
-    [JsonPropertyName("email")]
-    [JsonRequired]
-    public required string? Email { get; init; }
-
-    [JsonPropertyName("planType")]
-    [JsonRequired]
-    public required PlanType PlanType { get; init; }
-
     [JsonPropertyName("type")]
     [JsonRequired]
     public override string Type
     {
-        get => "chatgpt";
+        get => "chatgptDeviceCode";
         init
         {
-            if (value != "chatgpt")
-                throw new JsonException("Expected type discriminator chatgpt.");
+            if (value != "chatgptDeviceCode")
+                throw new JsonException("Expected type discriminator chatgptDeviceCode.");
         }
     }
 

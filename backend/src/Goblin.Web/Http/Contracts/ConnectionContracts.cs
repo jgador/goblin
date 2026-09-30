@@ -6,7 +6,7 @@ namespace Goblin.Web.Http.Contracts;
 
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]
 [JsonDerivedType(typeof(ApiKeyAccountView), "apiKey")]
-[JsonDerivedType(typeof(ChatgptAccountView), "chatgpt")]
+[JsonDerivedType(typeof(ChatGPTAccountView), "chatgpt")]
 public abstract class AccountView
 {
     protected AccountView() { }
@@ -14,7 +14,7 @@ public abstract class AccountView
     public static AccountView From(Goblin.Contracts.AccountView value) => value switch
     {
         Goblin.Contracts.ApiKeyAccountView => new ApiKeyAccountView(),
-        Goblin.Contracts.ChatgptAccountView account => ChatgptAccountView.From(account),
+        Goblin.Contracts.ChatGPTAccountView account => ChatGPTAccountView.From(account),
         _ => throw new ArgumentOutOfRangeException(nameof(value))
     };
 }
@@ -30,10 +30,10 @@ public sealed class ApiKeyAccountView : AccountView
         new();
 }
 
-public sealed class ChatgptAccountView : AccountView
+public sealed class ChatGPTAccountView : AccountView
 {
     [JsonConstructor]
-    public ChatgptAccountView(string? email, string? planType)
+    public ChatGPTAccountView(string? email, string? planType)
     {
         Email = email;
         PlanType = planType;
@@ -45,7 +45,7 @@ public sealed class ChatgptAccountView : AccountView
     [JsonPropertyName("planType")]
     public string? PlanType { get; init; }
 
-    public static ChatgptAccountView From(Goblin.Contracts.ChatgptAccountView value) =>
+    public static ChatGPTAccountView From(Goblin.Contracts.ChatGPTAccountView value) =>
         new(value.Email, value.PlanType);
 }
 

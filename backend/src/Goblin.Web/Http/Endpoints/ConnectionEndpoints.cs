@@ -28,7 +28,7 @@ internal sealed class ConnectionEndpoints
     public void Map(WebApplication app)
     {
         app.MapGet("/api/status", (Delegate)StatusAsync);
-        app.MapPost("/api/auth/chatgpt", (Delegate)LoginChatGptAsync);
+        app.MapPost("/api/auth/chatgpt", (Delegate)LoginChatGPTAsync);
         app.MapPost("/api/auth/api-key", (Delegate)LoginApiKeyAsync);
         app.MapPost("/api/auth/cancel", (Delegate)CancelLoginAsync);
         app.MapPost("/api/auth/logout", (Delegate)LogoutAsync);
@@ -44,7 +44,7 @@ internal sealed class ConnectionEndpoints
 
     private Task<Api.AuthenticationState> StatusAsync(HttpContext context) => ConnectionAsync(context, false, _auth.StatusAsync);
 
-    private Task<Api.AuthenticationState> LoginChatGptAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGptAsync);
+    private Task<Api.AuthenticationState> LoginChatGPTAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGPTAsync);
 
     private Task<Api.AuthenticationState> LoginApiKeyAsync(HttpContext context) =>
         ConnectionAsync(context, true, () => _auth.LoginApiKeyAsync(ApiRequest.StringField(context, "apiKey")));
@@ -121,7 +121,7 @@ internal sealed class ConnectionEndpoints
         if (account is null) return null;
         string identity = account switch
         {
-            ChatgptAccountView chatgpt => "chatgpt:" + chatgpt.Email?.Trim().ToLowerInvariant(),
+            ChatGPTAccountView chatGPT => "chatgpt:" + chatGPT.Email?.Trim().ToLowerInvariant(),
             ApiKeyAccountView => "apiKey",
             _ => account.GetType().Name
         };

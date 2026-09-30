@@ -23,7 +23,7 @@ public sealed class AccountJsonConverter : JsonConverter<Account>
         return ProtocolUnion.ReadDiscriminator(ref reader, "type") switch
         {
             "apiKey" => JsonSerializer.Deserialize<ApiKeyAccount>(ref reader, options)!,
-            "chatgpt" => JsonSerializer.Deserialize<ChatgptAccount>(ref reader, options)!,
+            "chatgpt" => JsonSerializer.Deserialize<ChatGPTAccount>(ref reader, options)!,
             "amazonBedrock" => JsonSerializer.Deserialize<AmazonBedrockAccount>(ref reader, options)!,
             _ => throw new JsonException("Unknown Account discriminator."),
         };
@@ -36,7 +36,7 @@ public sealed class AccountJsonConverter : JsonConverter<Account>
             case ApiKeyAccount typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
-            case ChatgptAccount typed:
+            case ChatGPTAccount typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             case AmazonBedrockAccount typed:

@@ -151,7 +151,7 @@ export type VerificationState =
 
 export const AuthenticationMethod = {
     ApiKey: "apiKey",
-    Chatgpt: "chatgpt",
+    ChatGPT: "chatgpt",
 } as const;
 export type AuthenticationMethod =
     (typeof AuthenticationMethod)[keyof typeof AuthenticationMethod];

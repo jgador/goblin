@@ -89,7 +89,7 @@ public sealed class Authentication : IDisposable
         {
             _account = result.Account switch
             {
-                ChatgptAccount account => new ChatgptAccountView(account.Email, System.Text.Json.JsonSerializer.SerializeToElement(account.PlanType, ProtocolJson.Options).GetString()),
+                ChatGPTAccount account => new ChatGPTAccountView(account.Email, System.Text.Json.JsonSerializer.SerializeToElement(account.PlanType, ProtocolJson.Options).GetString()),
                 ApiKeyAccount => new ApiKeyAccountView(),
                 null => null,
                 _ => throw IntegrationFailure.RuntimeUnavailable()
@@ -124,7 +124,7 @@ public sealed class Authentication : IDisposable
                     lock (_gate) authType = _account switch
                     {
                         ApiKeyAccountView => AuthenticationMethod.ApiKey,
-                        ChatgptAccountView => AuthenticationMethod.Chatgpt,
+                        ChatGPTAccountView => AuthenticationMethod.ChatGPT,
                         _ => throw new IntegrationFailure("not_connected", "Connect a ChatGPT account or API key first.")
                     };
                     (string Reply, string Model, long DurationMs) result = await _prompts.RunAsync(prompt, cancellationToken);
@@ -150,18 +150,18 @@ public sealed class Authentication : IDisposable
         }
     }
 
-    public Task<AuthenticationState> LoginChatGptAsync() => Serial(async () =>
+    public Task<AuthenticationState> LoginChatGPTAsync() => Serial(async () =>
     {
         await RequireDisconnectedAsync();
         lock (_gate) _notice = null;
-        LoginAccountResponse result = await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ChatgptDeviceCodeLoginAccountParams());
-        if (result is not ChatgptDeviceCodeLoginAccountResponse device ||
+        LoginAccountResponse result = await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ChatGPTDeviceCodeLoginAccountParams());
+        if (result is not ChatGPTDeviceCodeLoginAccountResponse device ||
             string.IsNullOrEmpty(device.UserCode) || device.UserCode.Length > 64 ||
             !Uri.TryCreate(device.VerificationUrl, UriKind.Absolute, out Uri? url) ||
             url.Scheme != "https" || url.Host != "auth.openai.com" || !url.IsDefaultPort ||
             url.AbsolutePath != "/codex/device" || url.UserInfo.Length != 0)
         {
-            if (result is ChatgptDeviceCodeLoginAccountResponse invalid)
+            if (result is ChatGPTDeviceCodeLoginAccountResponse invalid)
                 try { await _codex.RequestAsync<CancelLoginAccountParams, CancelLoginAccountResponse>("account/login/cancel", new() { LoginId = invalid.LoginId }); } catch { }
             throw new IntegrationFailure("unexpected_login_response", "Codex returned an unexpected sign-in response. Check the pinned Codex version.");
         }
