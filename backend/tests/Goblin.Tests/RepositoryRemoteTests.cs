@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,6 +8,7 @@ using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Integrations.GitHub;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Tests;
 
@@ -75,6 +75,7 @@ public sealed class RepositoryRemoteTests
         }
         finally { Directory.Delete(root, true); }
     }
+
     private static async Task<string> Git(string directory, params string[] arguments)
     {
         var info = new ProcessStartInfo("git") { WorkingDirectory = directory, RedirectStandardOutput = true, RedirectStandardError = true };

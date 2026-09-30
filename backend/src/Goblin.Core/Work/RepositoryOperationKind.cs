@@ -3,7 +3,13 @@ using System;
 namespace Goblin.Core.Work;
 
 // A repository grant can authorize only these operations. Wire names stay explicit.
-public enum RepositoryOperationKind { Publish, PullRequest, Fetch, Checkpoint }
+public enum RepositoryOperationKind
+{
+    Publish,
+    PullRequest,
+    Fetch,
+    Checkpoint
+}
 
 public static class RepositoryOperationNames
 {
@@ -29,6 +35,6 @@ public static class RepositoryOperationNames
         return Enum.IsDefined(kind);
     }
 
-    public static RepositoryOperationKind Parse(string value) => TryParse(value, out var kind)
+    public static RepositoryOperationKind Parse(string value) => TryParse(value, out RepositoryOperationKind kind)
         ? kind : throw new WorkRuleException(WorkRule.InvalidValue);
 }

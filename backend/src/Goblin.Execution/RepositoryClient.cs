@@ -26,6 +26,7 @@ public static class RepositoryClient
         client.DefaultRequestHeaders.Add("X-Goblin-Repository", (await File.ReadAllTextAsync("/run/credentials/repository-capability")).Trim());
         return client;
     }
+
     public static async Task DownloadAsync(long attemptId, string path)
     {
         using HttpClient client = await ClientAsync();
@@ -34,6 +35,7 @@ public static class RepositoryClient
         await using FileStream file = File.Create(path);
         await response.Content.CopyToAsync(file);
     }
+
     public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, RepositoryOperationKind kind)
     {
         if (!Enum.IsDefined(kind)) throw new IOException("Unsupported repository operation.");
@@ -66,22 +68,26 @@ public static class RepositoryClient
         }
         finally { File.Delete(bundle); }
     }
+
     public static async Task<WorkSnapshot?> CurrentAsync(long attemptId)
     {
         using HttpClient client = await ClientAsync();
         return await client.GetFromJsonAsync<WorkSnapshot>($"/internal/repository/{attemptId}/current", ExecutionFiles.Json);
     }
+
     public static async Task<RepositorySetupMemory[]> SetupMemoryAsync(long attemptId)
     {
         using HttpClient client = await ClientAsync();
         return await client.GetFromJsonAsync<RepositorySetupMemory[]>($"/internal/repository/{attemptId}/setup-memory", ExecutionFiles.Json) ?? [];
     }
+
     public static async Task SaveSetupMemoryAsync(long attemptId, SetupMemoryWrite request)
     {
         using HttpClient client = await ClientAsync();
         using HttpResponseMessage response = await client.PostAsJsonAsync($"/internal/repository/{attemptId}/setup-memory", request, ExecutionFiles.Json);
         response.EnsureSuccessStatusCode();
     }
+
     public static async Task<WorkspaceCheckpoint> SaveCheckpointAsync(WorkSnapshot work, string commit)
     {
         using HttpClient client = await ClientAsync();
@@ -90,6 +96,7 @@ public static class RepositoryClient
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<WorkspaceCheckpoint>(ExecutionFiles.Json))!;
     }
+
     public static async Task<int> RunAsync(string[] arguments)
     {
         try

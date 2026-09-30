@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,6 +10,7 @@ using Goblin.Contracts.Runtime;
 using Goblin.Core.Repositories;
 using Goblin.Core.Work;
 using Goblin.Integrations.Codex;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Execution;
 
@@ -126,6 +126,7 @@ public static class SandboxWorker
             }
         }
     }
+
     public static string ClaimPrefix(string state, long attemptId, int turnNumber) => Path.Combine(state,
         "attempt-" + attemptId.ToString(CultureInfo.InvariantCulture) + "-turn-" + turnNumber.ToString(CultureInfo.InvariantCulture));
 
@@ -152,5 +153,6 @@ public static class SandboxWorker
         if (process.ExitCode != 0) throw new IOException("Repository operation failed.");
         return await output;
     }
+
     private static void Emit(ExecutionObservation observation) => Console.WriteLine("GOBLIN_RESULT " + JsonSerializer.Serialize(observation, ExecutionFiles.Json));
 }

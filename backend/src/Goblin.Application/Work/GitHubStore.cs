@@ -13,9 +13,11 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace Goblin.Application.Work;
 
 public sealed record EnabledRepository(long Id, string Name, string DefaultBranch, bool Enabled);
+
 public sealed class GitHubStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
+
     public GitHubStore(IDbContextFactory<GoblinDbContext> factory) => _factory = factory;
 
     public async Task BeginChangeAsync(CancellationToken token = default)
@@ -28,6 +30,7 @@ public sealed class GitHubStore
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
+
     public async Task ObserveAsync(RepositoryAccount? account, GitHubConnectionStatus status, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -46,12 +49,14 @@ public sealed class GitHubStore
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
+
     public async Task<EnabledRepository[]> RepositoriesAsync(CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.GithubRepositories.OrderBy(x => x.Name)
             .Select(x => new EnabledRepository(x.Id, x.Name, x.DefaultBranch, x.Enabled)).ToArrayAsync(token);
     }
+
     public async Task SetRepositoryAsync(RepositoryInfo repository, bool enabled, string generation, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -66,6 +71,7 @@ public sealed class GitHubStore
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
+
     internal static async Task AcceptAsync(GoblinDbContext db, RepositoryAuthorization approval, CancellationToken token)
     {
         RepositoryChange requested = approval.Target.Repository!;
@@ -91,6 +97,7 @@ public sealed class GitHubStore
             repository.Enabled = true;
         }
     }
+
     private static async Task RequireIdleAsync(GoblinDbContext db, CancellationToken token)
     {
         if (await db.ExecutionAttempts.AnyAsync(x => x.GithubConnectionId == 1 &&

@@ -15,6 +15,7 @@ namespace Goblin.Application.Tests;
 public sealed class ExecutionHostTests
 {
     private static long _nextId = int.MaxValue;
+
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [Fact]

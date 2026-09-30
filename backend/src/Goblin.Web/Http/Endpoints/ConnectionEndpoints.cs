@@ -1,4 +1,3 @@
-using Api = Goblin.Web.Http.Contracts;
 using System;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +10,7 @@ using Goblin.Integrations.Codex;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Web;
 
@@ -43,10 +43,14 @@ internal sealed class ConnectionEndpoints
     }
 
     private Task<Api.AuthenticationState> StatusAsync(HttpContext context) => ConnectionAsync(context, false, _auth.StatusAsync);
+
     private Task<Api.AuthenticationState> LoginChatGptAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGptAsync);
+
     private Task<Api.AuthenticationState> LoginApiKeyAsync(HttpContext context) =>
         ConnectionAsync(context, true, () => _auth.LoginApiKeyAsync(ApiRequest.StringField(context, "apiKey")));
+
     private Task<Api.AuthenticationState> CancelLoginAsync(HttpContext context) => ConnectionAsync(context, true, _auth.CancelLoginAsync);
+
     private Task<Api.AuthenticationState> LogoutAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LogoutAsync);
 
     private async Task<IResult> PromptAsync(HttpContext context)

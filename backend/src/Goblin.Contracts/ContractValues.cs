@@ -11,30 +11,61 @@ public sealed class ContractEnumJsonConverter<T> : JsonStringEnumConverter<T> wh
 [JsonConverter(typeof(ContractEnumJsonConverter<NoticeKind>))]
 public enum NoticeKind
 {
-    [JsonStringEnumMemberName("error")] Error,
-    [JsonStringEnumMemberName("info")] Info
+    [JsonStringEnumMemberName("error")]
+    Error,
+
+    [JsonStringEnumMemberName("info")]
+    Info
 }
 
 [JsonConverter(typeof(ContractEnumJsonConverter<VerificationState>))]
 public enum VerificationState
 {
-    [JsonStringEnumMemberName("accepted")] Accepted,
-    [JsonStringEnumMemberName("unverified")] Unverified
+    [JsonStringEnumMemberName("accepted")]
+    Accepted,
+
+    [JsonStringEnumMemberName("unverified")]
+    Unverified
 }
 
 [JsonConverter(typeof(ContractEnumJsonConverter<AuthenticationMethod>))]
 public enum AuthenticationMethod
 {
-    [JsonStringEnumMemberName("apiKey")] ApiKey,
-    [JsonStringEnumMemberName("chatgpt")] Chatgpt
+    [JsonStringEnumMemberName("apiKey")]
+    ApiKey,
+
+    [JsonStringEnumMemberName("chatgpt")]
+    Chatgpt
 }
 
 [JsonConverter(typeof(ContractEnumJsonConverter<GitHubConnectionStatus>))]
-public enum GitHubConnectionStatus { Disconnected, Connecting, Connected, Unavailable }
+public enum GitHubConnectionStatus
+{
+    Disconnected,
+    Connecting,
+    Connected,
+    Unavailable
+}
+
 [JsonConverter(typeof(ContractEnumJsonConverter<ConnectionAvailability>))]
-public enum ConnectionAvailability { Disconnected, Available, Unavailable, Changing, Verifying }
+public enum ConnectionAvailability
+{
+    Disconnected,
+    Available,
+    Unavailable,
+    Changing,
+    Verifying
+}
+
 [JsonConverter(typeof(ContractEnumJsonConverter<RepositoryOperationState>))]
-public enum RepositoryOperationState { Queued, Running, Succeeded, Failed, Uncertain }
+public enum RepositoryOperationState
+{
+    Queued,
+    Running,
+    Succeeded,
+    Failed,
+    Uncertain
+}
 
 public static class RuntimeIds
 {
@@ -45,6 +76,6 @@ public static class RuntimeIds
 public static class ContractValue
 {
     public static T Parse<T>(string value) where T : struct, System.Enum =>
-        System.Enum.TryParse<T>(value, out var parsed) && System.Enum.IsDefined(parsed) && parsed.ToString() == value
+        System.Enum.TryParse<T>(value, out T parsed) && System.Enum.IsDefined(parsed) && parsed.ToString() == value
             ? parsed : throw new System.InvalidOperationException($"Invalid stored {typeof(T).Name}.");
 }

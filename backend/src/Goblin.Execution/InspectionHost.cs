@@ -1,4 +1,3 @@
-using K = Goblin.Execution.Kubernetes;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
+using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Execution;
 
@@ -14,9 +14,13 @@ public sealed class InspectionHost : IInspectionHost
 {
     private readonly KubernetesApi _api;
     private readonly SandboxOptions _options;
+
     public InspectionHost(KubernetesApi api, SandboxOptions options) { _api = api; _options = options; }
+
     public static string Name(long id) => "inspect-" + id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     public static string NamespaceFor(InspectionAllocation session) => Source(session).Namespace;
+
     private static (string Namespace, string Volume) Source(InspectionAllocation session)
     {
         string[] parts = session.SourceVolume.Split('/');
@@ -24,9 +28,13 @@ public sealed class InspectionHost : IInspectionHost
             parts[2] == "work-" + session.WorkId.ToString(System.Globalization.CultureInfo.InvariantCulture)) return (parts[1], parts[2]);
         throw new IOException("Unrecognized workspace reference.");
     }
+
     private static bool ValidName(string name) => Regex.IsMatch(name, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
+
     private string Core(InspectionAllocation session) => "/api/v1/namespaces/" + NamespaceFor(session);
+
     private string Sandboxes(InspectionAllocation session) => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + NamespaceFor(session) + "/sandboxes";
+
     public async Task StartAsync(InspectionAllocation session, CancellationToken token)
     {
         if (!await _api.CreateAsync(Sandboxes(session), Manifest(session, false), token)) return;
@@ -51,12 +59,14 @@ public sealed class InspectionHost : IInspectionHost
                 if (status.State?.Terminated?.ExitCode is > 0) return InspectionObservation.Failed;
         return InspectionObservation.Pending;
     }
+
     public async Task StopAsync(InspectionAllocation session, CancellationToken token)
     {
         string name = Name(session.Id);
         await _api.CreateAsync(Sandboxes(session), Manifest(session, true), token);
         await _api.PatchAsync(Sandboxes(session) + "/" + name, SuspendPatch(), token);
     }
+
     public K.Sandbox Manifest(InspectionAllocation session, bool suspended)
     {
         string name = Name(session.Id);

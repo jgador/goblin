@@ -13,8 +13,10 @@ public enum SandboxMode
 {
     [JsonStringEnumMemberName("read-only")]
     ReadOnly,
+
     [JsonStringEnumMemberName("workspace-write")]
     WorkspaceWrite,
+
     [JsonStringEnumMemberName("danger-full-access")]
     DangerFullAccess,
 }

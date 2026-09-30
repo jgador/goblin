@@ -33,8 +33,9 @@ internal static class RepositoryEndpoints
     private static async Task<IResult> ReserveOperationIdAsync(long attemptId, RepositoryBroker broker, CancellationToken token) =>
         Results.Json(await broker.ReserveOperationIdAsync(attemptId, token));
 
-    private static async Task<IResult> EnqueueAsync(long attemptId, long operationId, string kind, HttpContext context, RepositoryBroker broker) {
-        if (!RepositoryOperationNames.TryParse(kind, out var operation))
+    private static async Task<IResult> EnqueueAsync(long attemptId, long operationId, string kind, HttpContext context, RepositoryBroker broker)
+    {
+        if (!RepositoryOperationNames.TryParse(kind, out RepositoryOperationKind operation))
             throw new ApplicationFailure("repository_operation_unavailable");
         return Results.Json(await broker.EnqueueAsync(attemptId, operationId, operation, context.Request.Body, context.RequestAborted));
     }

@@ -12,20 +12,26 @@ namespace Goblin.Protocol;
 public sealed class RequestId : IEquatable<RequestId>
 {
     public RequestId(string value) => String = value ?? throw new ArgumentNullException(nameof(value));
+
     public RequestId(long value) => Number = value;
 
     [JsonIgnore]
     public string? String { get; }
+
     [JsonIgnore]
     public long? Number { get; }
 
     // Responses carry new instances of the IDs used to key pending requests.
     public bool Equals(RequestId? other) => other is not null && String == other.String && Number == other.Number;
+
     public override bool Equals(object? obj) => obj is RequestId other && Equals(other);
+
     public override int GetHashCode() => HashCode.Combine(String, Number);
 
     public static implicit operator RequestId(string value) => new(value);
+
     public static implicit operator RequestId(long value) => new(value);
+
     public override string ToString() => String ?? Number?.ToString(System.Globalization.CultureInfo.InvariantCulture)
         ?? throw new InvalidOperationException("An uninitialized request ID has no wire representation.");
 }

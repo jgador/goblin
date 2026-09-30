@@ -14,7 +14,14 @@ public sealed record GitDeliveryIntent(string? BaseBranch = null, bool Push = fa
     }
 }
 
-public enum RepositoryAuthorizationStatus { Pending, Authorized, Denied, Invalidated }
+public enum RepositoryAuthorizationStatus
+{
+    Pending,
+    Authorized,
+    Denied,
+    Invalidated
+}
+
 public sealed record RepositoryAuthorization(long Id, ExecutionTarget Target, bool EnableRepository,
     bool Retry, DateTimeOffset RequestedAt, RepositoryAuthorizationStatus Status = RepositoryAuthorizationStatus.Pending,
     DateTimeOffset? AnsweredAt = null, string? DefaultBranch = null);

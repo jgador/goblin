@@ -15,6 +15,7 @@ public static class ExecutionFiles
     {
         Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
     };
+
     public static async Task WriteAsync<T>(string path, T value, CancellationToken token = default)
     {
         string temporary = path + "." + Guid.NewGuid().ToString("N");
@@ -28,6 +29,7 @@ public static class ExecutionFiles
         }
         File.Move(temporary, path, overwrite: true);
     }
+
     public static async Task<T?> ReadAsync<T>(string path, CancellationToken token = default)
     {
         try
@@ -51,6 +53,7 @@ public sealed class FileDispatchFailureJournal : IDispatchFailureJournal
         Directory.CreateDirectory(_directory);
         await ExecutionFiles.WriteAsync(Path.Combine(_directory, evidence.AttemptId.ToString(CultureInfo.InvariantCulture) + ".json"), evidence, token);
     }
+
     public async Task<DispatchFailureEvidence[]> ReadAsync(CancellationToken token)
     {
         if (!Directory.Exists(_directory)) return [];
@@ -59,6 +62,7 @@ public sealed class FileDispatchFailureJournal : IDispatchFailureJournal
             if (await ExecutionFiles.ReadAsync<DispatchFailureEvidence>(file, token) is { } evidence) entries.Add(evidence);
         return [.. entries];
     }
+
     public Task RemoveAsync(long attemptId, CancellationToken token)
     {
         File.Delete(Path.Combine(_directory, attemptId.ToString(CultureInfo.InvariantCulture) + ".json"));

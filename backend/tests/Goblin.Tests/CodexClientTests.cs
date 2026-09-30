@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,12 +14,14 @@ using Goblin.Integrations.Codex;
 using Goblin.Protocol;
 using Goblin.Web;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Tests;
 
 public sealed class CodexClientTests
 {
     private static long _nextId = int.MaxValue;
+
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     [Fact]
@@ -240,8 +241,10 @@ public sealed class CodexClientTests
 
         public Workspace Workspace { get; }
         public CodexClient Client { get; }
+
         public Task<GetAccountResponse> ReadAsync(CancellationToken cancellationToken = default) =>
             Client.RequestAsync<GetAccountParams, GetAccountResponse>("account/read", new() { RefreshToken = false }, cancellationToken);
+
         public async Task<int> PidAsync() => int.Parse(await File.ReadAllTextAsync(Path.Combine(Workspace.CodexHome, "pid")));
 
         public static async Task<Fixture> CreateAsync(string scenario = "manual", TimeSpan? timeout = null,

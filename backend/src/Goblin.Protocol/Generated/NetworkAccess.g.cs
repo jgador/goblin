@@ -13,6 +13,7 @@ public enum NetworkAccess
 {
     [JsonStringEnumMemberName("restricted")]
     Restricted,
+
     [JsonStringEnumMemberName("enabled")]
     Enabled,
 }

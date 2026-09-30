@@ -334,6 +334,7 @@ internal sealed class KubernetesGenerator
         };
         foreach (var (member, value) in members.Zip(values))
         {
+            if (lines[^1] != "{") lines.Add("");
             lines.Add($"    [JsonStringEnumMemberName({Literal(value)})]");
             lines.Add($"    {member},");
         }

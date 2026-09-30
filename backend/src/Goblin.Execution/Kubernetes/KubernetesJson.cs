@@ -53,9 +53,11 @@ public sealed class KubernetesIntOrString
     public long? Number { get; }
 
     public KubernetesIntOrString(string text) => Text = text ?? throw new ArgumentNullException(nameof(text));
+
     public KubernetesIntOrString(long number) => Number = number;
 
     public static implicit operator KubernetesIntOrString(string text) => new(text);
+
     public static implicit operator KubernetesIntOrString(long number) => new(number);
 }
 

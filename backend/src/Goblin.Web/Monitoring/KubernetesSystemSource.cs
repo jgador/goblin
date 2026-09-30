@@ -25,6 +25,7 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
     private KubernetesApi? _api;
     private KubernetesApi? _kubelet;
     private string? _address;
+
     public KubernetesSystemSource(string? apiAddress, string nodeName, string appNamespace, string executionNamespace,
         string tokenFile, string caFile)
     {
@@ -35,6 +36,7 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
         _tokenFile = tokenFile;
         _caFile = caFile;
     }
+
     public async Task<MachineSnapshot> ReadAsync(CancellationToken token)
     {
         // TLS/configuration errors are monitoring failures, never startup failures.
@@ -57,6 +59,7 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
         JsonObject summary = await summaryTask ?? throw new IOException("Machine metrics unavailable.");
         return Project(node, summary, await servicesTask, DateTimeOffset.UtcNow);
     }
+
     private async Task<JsonObject[]?> ReadServicesAsync(CancellationToken token)
     {
         try
@@ -68,6 +71,7 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
         }
         catch when (!token.IsCancellationRequested) { return null; }
     }
+
     public static MachineSnapshot Project(JsonObject node, JsonObject summary, JsonObject[]? pods, DateTimeOffset now)
     {
         JsonNode stats = summary["node"] ?? throw new IOException("Machine metrics unavailable.");
@@ -119,9 +123,12 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
         return new(observed, name, kernel.Contains("microsoft", StringComparison.OrdinalIgnoreCase) ? "WSL" : "Linux VM",
             Text(node["status"]?["nodeInfo"]?["osImage"]), uptime, cpu, memory, disk, warnings.Distinct().ToArray(), services);
     }
+
     private static string Text(JsonNode? value) => value?.GetValue<string>() ?? "";
+
     private static double? Number(JsonNode? value) => value is not null && value.AsValue().TryGetValue<double>(out double number)
         && double.IsFinite(number) && number >= 0 ? number : null;
+
     public static double Quantity(string value)
     {
         Match match = Regex.Match(value, @"^(?<value>\d+(?:\.\d+)?)(?<unit>n|u|m|[KMGTPE]i?|k)?$", RegexOptions.CultureInvariant);
@@ -137,5 +144,6 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
         };
         return double.Parse(match.Groups["value"].Value, CultureInfo.InvariantCulture) * factor;
     }
+
     public void Dispose() { _kubelet?.Dispose(); _api?.Dispose(); }
 }

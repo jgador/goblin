@@ -7,10 +7,16 @@ namespace Goblin.Contracts;
 [JsonDerivedType(typeof(ApiKeyAccountView), "apiKey")]
 [JsonDerivedType(typeof(ChatgptAccountView), "chatgpt")]
 public abstract record AccountView;
+
 public sealed record ApiKeyAccountView : AccountView;
+
 public sealed record ChatgptAccountView(string? Email, string? PlanType) : AccountView;
+
 public sealed record DeviceLogin(string Id, string VerificationUrl, string UserCode);
+
 public sealed record Notice(NoticeKind Kind, string Message);
+
 public sealed record AuthenticationState(AccountView? Account, DeviceLogin? Login, Notice? Notice,
     VerificationState? Verification, bool RuntimeReady);
+
 public sealed record PromptResult(string Reply, string Model, long DurationMs, AuthenticationMethod AuthType);

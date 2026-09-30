@@ -20,7 +20,9 @@ using Wolverine.EntityFrameworkCore;
 namespace Goblin.Application.Repositories;
 
 public sealed record RepositoryBrokerOptions(string Directory);
+
 public sealed record PublishRepository(long Id);
+
 public sealed record RepositoryOperationView(long Id, RepositoryOperationState State, string? Url);
 
 public sealed class RepositoryBroker : IRepositoryBroker
@@ -51,13 +53,17 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         _key = File.ReadAllBytes(key);
     }
+
     private string DirectoryFor(long attemptId) => Path.Combine(_directory, attemptId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
     private string BundleFor(long attemptId, long id) => Path.Combine(DirectoryFor(attemptId), id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".bundle");
+
     private string Capability(WorkSnapshot work)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
         return Convert.ToHexString(HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes($"{work.Id}/{attempt.Id}/{attempt.Target.Repository!.Grant!.Generation}")));
     }
+
     private async Task<WorkSnapshot> WorkAsync(long attemptId, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -76,6 +82,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
             throw new ApplicationFailure("repository_operation_unavailable");
         return work;
     }
+
     public Task<WorkSnapshot> CurrentAsync(long attemptId, CancellationToken token) => WorkAsync(attemptId, token);
 
     public async Task VerifyCheckpointAsync(WorkSnapshot work, string commit, CancellationToken token)
@@ -87,6 +94,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
             (attempt.Target.Repository!.Grant!.PolicyVersion == 1 || attempt.Target.Repository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.Repository!, DirectoryFor(attempt.Id), RepositoryOperationKind.Publish, commit, token) is null)
             throw new ApplicationFailure("workspace_checkpoint_unconfirmed");
     }
+
     public async Task AuthorizeAsync(long attemptId, string capability, bool write, CancellationToken token)
     {
         WorkSnapshot work = await WorkAsync(attemptId, token);
@@ -98,6 +106,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         if (write && attempt.Status is not (AttemptStatus.Starting or AttemptStatus.Running))
             throw new ApplicationFailure("repository_operation_unavailable");
     }
+
     public async Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
@@ -113,6 +122,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         else await _remote.PrepareAsync(repository, DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
         return Capability(work);
     }
+
     public string InputPath(long attemptId) => Path.Combine(DirectoryFor(attemptId), "input.bundle");
 
     public async Task<long> ReserveOperationIdAsync(long attemptId, CancellationToken token)
@@ -168,6 +178,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         finally { File.Delete(temporary); }
     }
+
     public async Task<RepositoryOperationView> StatusAsync(long attemptId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -175,6 +186,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
             ?? throw new ApplicationFailure("repository_operation_unavailable");
         return new(id, ContractValue.Parse<RepositoryOperationState>(operation.State), operation.ResultUrl);
     }
+
     public async Task ExecuteAsync(long id, CancellationToken token)
     {
         try { await ExecuteCoreAsync(id, token); }
@@ -185,6 +197,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
             throw;
         }
     }
+
     private async Task ExecuteCoreAsync(long id, CancellationToken token)
     {
         long attemptId;
@@ -234,6 +247,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         finally { _active.TryRemove(attemptId, out _); gate.Release(); }
     }
+
     public async Task<ExecutionObservation?> ObserveAsync(WorkSnapshot work, CancellationToken token)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
@@ -281,6 +295,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         return rows.All(x => x.State == nameof(RepositoryOperationState.Succeeded)) ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
     }
+
     private bool ExternalProcessStopped(long id)
     {
         string marker = Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external");
@@ -292,6 +307,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         return double.TryParse(lifetime[1], System.Globalization.CultureInfo.InvariantCulture, out double started) &&
             double.TryParse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture, out double now) && now - started > 300;
     }
+
     public async Task StopAsync(WorkSnapshot work, CancellationToken token)
     {
         long attemptId = work.Attempts[^1].Id;
@@ -309,6 +325,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         }
         finally { gate.Release(); }
     }
+
     public async Task ReleaseAsync(WorkSnapshot work, CancellationToken token)
     {
         await StopAsync(work, token);
@@ -318,6 +335,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         if (Directory.Exists(directory)) Directory.Delete(directory, true);
     }
 }
+
 public static class PublishRepositoryHandler
 {
     public static Task Handle(PublishRepository command, RepositoryBroker broker, CancellationToken token) => broker.ExecuteAsync(command.Id, token);
