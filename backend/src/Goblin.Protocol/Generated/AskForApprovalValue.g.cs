@@ -13,8 +13,10 @@ public enum AskForApprovalValue
 {
     [JsonStringEnumMemberName("untrusted")]
     Untrusted,
+
     [JsonStringEnumMemberName("on-request")]
     OnRequest,
+
     [JsonStringEnumMemberName("never")]
     Never,
 }

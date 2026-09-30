@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -12,6 +11,7 @@ using Goblin.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 // Test-only executable; never included in the production publish/image.
 FixtureOptions config = JsonSerializer.Deserialize<FixtureOptions>(args[0], new JsonSerializerOptions(JsonSerializerDefaults.Web))!;

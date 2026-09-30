@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,6 +9,7 @@ using Goblin.Contracts.Runtime;
 using Goblin.Core.Repositories;
 using Goblin.Execution;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Application.Tests;
 
@@ -17,6 +17,7 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "goblin-setup-test-" + Guid.NewGuid().ToString("N"));
     private readonly RepositorySetupWorkspace _workspace;
+
     private static RepositorySetup Setup => new("python-tests", "Python is needed for repository tests", ["fixture-python 3.12"],
         ["install-fixture-python"], ["pyproject.toml"], [new("printf '3.12'", "3.12")]);
 

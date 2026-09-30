@@ -65,6 +65,7 @@ public sealed class ProtocolStringEnumConverter<T> : JsonConverter<T> where T : 
 public interface IProtocolValue<TSelf, TValue> where TSelf : IProtocolValue<TSelf, TValue>
 {
     TValue Value { get; }
+
     static abstract TSelf FromValue(TValue value);
 }
 

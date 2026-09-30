@@ -9,6 +9,7 @@ namespace Goblin.Core.Tests;
 public sealed class WorkLifecycleTests
 {
     private static long _nextId = int.MaxValue;
+
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     private static readonly DateTimeOffset Now = new(2026, 9, 19, 8, 0, 0, TimeSpan.Zero);

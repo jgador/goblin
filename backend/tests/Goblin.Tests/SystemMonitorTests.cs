@@ -12,11 +12,13 @@ namespace Goblin.Tests;
 public sealed class SystemMonitorTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
+
     private static JsonObject Node() => JsonNode.Parse("""
         {"metadata":{"name":"vm"},"status":{"capacity":{"cpu":"4","memory":"8Gi"},
         "nodeInfo":{"kernelVersion":"microsoft-WSL2","osImage":"Ubuntu"},
         "conditions":[{"type":"Ready","status":"True"},{"type":"MemoryPressure","status":"False"}]}}
         """)!.AsObject();
+
     private static JsonObject Summary() => JsonNode.Parse($$$"""
         {"node":{"nodeName":"vm","startTime":"{{{Now.AddHours(-2):O}}}",
         "cpu":{"time":"{{{Now:O}}}","usageNanoCores":1000000000},
@@ -136,7 +138,9 @@ public sealed class SystemMonitorTests
     {
         public MachineSnapshot Snapshot { get; set; }
         public bool Fail { get; set; }
+
         public Source(MachineSnapshot snapshot) { Snapshot = snapshot; }
+
         public Task<MachineSnapshot> ReadAsync(CancellationToken token) => Fail
             ? throw new IOException("secret upstream body") : Task.FromResult(Snapshot);
     }

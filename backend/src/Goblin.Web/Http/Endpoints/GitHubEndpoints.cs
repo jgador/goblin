@@ -36,9 +36,13 @@ internal sealed class GitHubEndpoints
     }
 
     private Task<Api.GitHubState> StatusAsync(HttpContext context) => GitHubAsync(context, "status");
+
     private Task<Api.GitHubState> ConnectAsync(HttpContext context) => GitHubAsync(context, "connect");
+
     private Task<Api.GitHubState> DisconnectAsync(HttpContext context) => GitHubAsync(context, "disconnect");
+
     private Task<Api.GitHubState> CancelAsync(HttpContext context) => GitHubAsync(context, "cancel");
+
     private Task<Api.GitHubState> CheckAsync(HttpContext context) => GitHubAsync(context, "check");
 
     private async Task<Api.GitHubState> GitHubAsync(HttpContext context, string action)

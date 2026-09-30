@@ -366,7 +366,9 @@ public sealed partial class WorkItem
     }
 
     private static void RequireId(long id) => Require(id > 0, WorkRule.InvalidValue);
+
     private static void RequireFailure(FailureKind failure) => Require(Enum.IsDefined(failure), WorkRule.InvalidValue);
+
     private static void Require(bool condition, WorkRule rule)
     {
         if (!condition) throw new WorkRuleException(rule);

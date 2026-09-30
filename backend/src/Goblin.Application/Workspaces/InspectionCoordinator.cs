@@ -13,7 +13,9 @@ public sealed class InspectionCoordinator : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly IInspectionHost _host;
+
     public InspectionCoordinator(IServiceScopeFactory scopes, IInspectionHost host) { _scopes = scopes; _host = host; }
+
     public async Task StartAsync(long id, CancellationToken token)
     {
         using IServiceScope scope = _scopes.CreateScope();
@@ -23,6 +25,7 @@ public sealed class InspectionCoordinator : BackgroundService
         try { await _host.StartAsync(allocation, token); }
         catch { await store.ObserveAsync(id, InspectionObservation.Failed, CancellationToken.None); }
     }
+
     public async Task StopAsync(long id, CancellationToken token)
     {
         using IServiceScope scope = _scopes.CreateScope();
@@ -31,6 +34,7 @@ public sealed class InspectionCoordinator : BackgroundService
         await _host.StopAsync(allocation, token);
         await store.ObserveAsync(id, await _host.ObserveAsync(allocation, token), token);
     }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
@@ -57,8 +61,10 @@ public sealed class InspectionCoordinator : BackgroundService
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }
+
 public static class InspectionHandler
 {
     public static Task Handle(StartInspection command, InspectionCoordinator coordinator, CancellationToken token) => coordinator.StartAsync(command.Id, token);
+
     public static Task Handle(StopInspection command, InspectionCoordinator coordinator, CancellationToken token) => coordinator.StopAsync(command.Id, token);
 }

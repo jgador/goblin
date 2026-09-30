@@ -11,7 +11,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace Goblin.Application.Work;
 
 public sealed record ConversationMessageView(long Id, string Text, DateTime CreatedAt);
+
 public sealed record ConversationView(long Id, string Title, long? WorkId, ConversationMessageView[] Messages);
+
 public sealed record ConversationCommand(long ConversationId, long MessageId, string? Text, long? WorkId = null);
 
 public sealed class ConversationStore

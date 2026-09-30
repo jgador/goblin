@@ -1,4 +1,3 @@
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -26,6 +25,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using Wolverine;
 using Xunit;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Application.Tests;
 
@@ -41,6 +41,7 @@ public sealed class DatabaseFactAttribute : FactAttribute
 public sealed class DurabilityTests
 {
     private static long _nextId = int.MaxValue;
+
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
 
     private static async Task EnableHandoffRepository(Fixture fixture)
@@ -56,8 +57,11 @@ public sealed class DurabilityTests
     {
         public RepositoryAccount Account { get; set; } = new("catalog", "42", "owner");
         public RepositoryInfo Repository { get; set; } = new(22, "owner/repo", "main", true);
+
         public Task<RepositoryAccount?> GetAccountAsync(CancellationToken token) => Task.FromResult<RepositoryAccount?>(Account);
+
         public Task<RepositoryInfo> RepositoryAsync(string name, CancellationToken token) => Task.FromResult(Repository);
+
         public Task<RepositoryInfo[]> RepositoriesAsync(int page, CancellationToken token) => Task.FromResult(new[] { Repository });
     }
 
@@ -306,11 +310,14 @@ public sealed class DurabilityTests
     private sealed class CatalogSource : IModelCatalogSource
     {
         private int _calls;
+
         public string Runtime => "codex";
         public string Stamp { get; set; } = "v1";
         public bool Fail { get; set; }
         public int Calls => Volatile.Read(ref _calls);
+
         public string ExecutableStamp() => Stamp;
+
         public Task<RuntimeModel[]> ListAsync(CancellationToken token)
         {
             Interlocked.Increment(ref _calls);
@@ -928,16 +935,21 @@ public sealed class DurabilityTests
         public bool Reconciled { get; set; }
         public int Calls { get; private set; }
         public int CheckpointPreparations { get; private set; }
+
         public Task PrepareCheckpointAsync(RepositoryChange repository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token)
         { CheckpointPreparations++; return PrepareAsync(repository, directory, checkpoint.Branch, token); }
+
         public Task PrepareAsync(RepositoryChange repository, string directory, string? checkpoint, CancellationToken token) { Directory.CreateDirectory(directory); return Task.CompletedTask; }
+
         public Task<string> InspectBundleAsync(RepositoryChange repository, string directory, string bundle, CancellationToken token) => Task.FromResult(new string('a', 40));
+
         public Task<RepositoryOperationResult> ExecuteAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token)
         {
             Calls++;
             if (Fail) throw new IOException("Lost upstream response");
             return Task.FromResult(new RepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + repository.Grant!.Branch));
         }
+
         public Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token) =>
             Task.FromResult(Reconciled ? new RepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + repository.Grant!.Branch) : null);
     }
@@ -949,14 +961,18 @@ public sealed class DurabilityTests
         public bool FailCleanup { get; set; }
         public bool RepositoryExecution { get; set; }
         public RuntimeCapabilities[] Capabilities => [new("codex", true, RepositoryExecution, true, false, false)];
+
         public string EnvironmentFor(long work, long attempt) => "test/" + attempt;
+
         public Task StartAsync(WorkSnapshot work, CancellationToken token)
         {
             Starts.AddOrUpdate(work.Attempts[^1].Id, 1, (_, count) => count + 1);
             return Task.CompletedTask;
         }
+
         public Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token) =>
             Task.FromResult(Observations.GetValueOrDefault(work.Attempts[^1].Id) ?? new(ObservationKind.Pending));
+
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => FailCleanup
             ? Task.FromException(new IOException("Fixture cleanup failure")) : Task.CompletedTask;
     }
@@ -964,10 +980,13 @@ public sealed class DurabilityTests
     private sealed class InspectionRuntime : IInspectionHost
     {
         public ConcurrentDictionary<long, bool> Started { get; } = new();
+
         public Task StartAsync(InspectionAllocation session, CancellationToken token)
         { Started[session.Id] = true; return Task.CompletedTask; }
+
         public Task StopAsync(InspectionAllocation session, CancellationToken token)
         { Started[session.Id] = false; return Task.CompletedTask; }
+
         public Task<InspectionObservation> ObserveAsync(InspectionAllocation session, CancellationToken token) =>
             Task.FromResult(Started.GetValueOrDefault(session.Id) ? InspectionObservation.Running : InspectionObservation.Missing);
     }
@@ -991,6 +1010,7 @@ public sealed class DurabilityTests
         public RepositoryRemote Remote { get; } = new();
         public InspectionRuntime Inspection { get; } = new();
         public IHost Host { get; private set; } = null!;
+
         public static async Task<Fixture> CreateAsync(IRepositoryCatalog? catalog = null)
         {
             var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
@@ -1019,6 +1039,7 @@ public sealed class DurabilityTests
             await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Available, false);
             return fixture;
         }
+
         private async Task StartAsync()
         {
             HostApplicationBuilder builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
@@ -1040,7 +1061,9 @@ public sealed class DurabilityTests
             Host = builder.Build();
             await Host.StartAsync();
         }
+
         public async Task RestartAsync() { await Host.StopAsync(); Host.Dispose(); await StartAsync(); }
+
         public async Task RejectId(string table, long id)
         {
             var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin)) { Database = _name };
@@ -1049,6 +1072,7 @@ public sealed class DurabilityTests
             await using var command = new NpgsqlCommand($"ALTER TABLE public.{table} ADD CONSTRAINT rejected_test_id CHECK (id <> '{id}')", connection);
             await command.ExecuteNonQueryAsync();
         }
+
         public async Task SetDatabaseAvailable(bool available)
         {
             await using var admin = new NpgsqlConnection(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin));
@@ -1056,6 +1080,7 @@ public sealed class DurabilityTests
             await new NpgsqlCommand("ALTER DATABASE " + _name + " ALLOW_CONNECTIONS " + (available ? "true" : "false"), admin).ExecuteNonQueryAsync();
             if (!available) await CloseApplicationSessions();
         }
+
         private async Task CloseApplicationSessions()
         {
             var cleanup = new NpgsqlConnectionStringBuilder(_app) { Database = "postgres", Pooling = false };
@@ -1065,16 +1090,22 @@ public sealed class DurabilityTests
             close.Parameters.AddWithValue("name", _name);
             await close.ExecuteNonQueryAsync();
         }
+
         public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
+
         public Task<WorkView> Authorize(WorkView work) => Apply(new(NextId(), work.Work.Id, WorkAction.AuthorizeRepository,
             work.Version, AuthorizationId: work.Work.RepositoryAuthorization!.Id));
+
         public async Task<WorkView> ExecuteAndAuthorize(WorkCommand command)
         {
             WorkView view = await Apply(command);
             return view.Work.RepositoryAuthorization?.Status == RepositoryAuthorizationStatus.Pending ? await Authorize(view) : view;
         }
+
         public async Task<WorkView> Get(long id) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(id); }
+
         public Task Reconcile(long id, long attempt) => Host.Services.GetRequiredService<ExecutionCoordinator>().ReconcileAsync(new(id, attempt), CancellationToken.None);
+
         public async Task<WorkView> StartWork()
         {
             long id = NextId();
@@ -1083,6 +1114,7 @@ public sealed class DurabilityTests
             await Apply(new(NextId(), id, WorkAction.Execute, w.Version));
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
+
         public async Task<WorkView> StartRepositoryWork(string repository)
         {
             long id = NextId();
@@ -1091,6 +1123,7 @@ public sealed class DurabilityTests
             await ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, Repository: new(repository, "Goblin", "agent@example.com")));
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
+
         public async Task<WorkspaceCheckpoint> SaveCheckpoint(WorkSnapshot work)
         {
             long attempt = work.Attempts[^1].Id;
@@ -1104,11 +1137,13 @@ public sealed class DurabilityTests
             var store = new WorkspaceCheckpoints(scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
             return await store.SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), broker, default);
         }
+
         public async Task<WorkView> Until(long id, Func<WorkView, bool> ready)
         {
             for (int i = 0; i < 100; i++) { WorkView w = await Get(id); if (ready(w)) return w; await Task.Delay(100); }
             throw new TimeoutException("Expected durable transition did not arrive.");
         }
+
         public async ValueTask DisposeAsync()
         {
             await Host.StopAsync(); Host.Dispose();

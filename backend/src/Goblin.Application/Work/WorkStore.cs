@@ -1,6 +1,3 @@
-using AttemptRow = Goblin.Persistence.Entities.ExecutionAttempt;
-using Receipt = Goblin.Persistence.Entities.WorkCommand;
-using Row = Goblin.Persistence.Entities.WorkItem;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,6 +14,9 @@ using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Wolverine.EntityFrameworkCore;
+using AttemptRow = Goblin.Persistence.Entities.ExecutionAttempt;
+using Receipt = Goblin.Persistence.Entities.WorkCommand;
+using Row = Goblin.Persistence.Entities.WorkItem;
 
 namespace Goblin.Application.Work;
 
@@ -446,8 +446,10 @@ public sealed partial class WorkStore
     internal static WorkItem Restore(Row row) => row.State is null
         ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
         : WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State, Json)!);
+
     private static WorkView View(Row row) => new(row.Version, new(row.CreatedAt, TimeSpan.Zero),
         new(row.UpdatedAt, TimeSpan.Zero), Restore(row).Snapshot());
+
     private static string Hash(WorkCommand command) => Convert.ToHexString(SHA256.HashData(
         Encoding.UTF8.GetBytes(JsonSerializer.Serialize(command, Json))));
 }

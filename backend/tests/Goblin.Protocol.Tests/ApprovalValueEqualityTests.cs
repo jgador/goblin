@@ -69,8 +69,10 @@ public sealed class ApprovalValueEqualityTests
     {
         [JsonStringEnumMemberName("untrusted")]
         Untrusted,
+
         [JsonStringEnumMemberName("on-request")]
         OnRequest,
+
         [JsonStringEnumMemberName("never")]
         Never,
     }

@@ -13,6 +13,7 @@ public enum MessagePhase
 {
     [JsonStringEnumMemberName("commentary")]
     Commentary,
+
     [JsonStringEnumMemberName("final_answer")]
     FinalAnswer,
 }

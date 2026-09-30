@@ -37,6 +37,7 @@ public sealed record ProcessIdentity(int Pid, long StartedAt, string Machine)
         : StartedAt == process.StartTime.ToUniversalTime().Ticks);
 
     private static string ReadBootId() => File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim();
+
     private static string ReadPidNamespace() => new FileInfo("/proc/self/ns/pid").LinkTarget
         ?? throw new IOException("The process namespace identity is unavailable.");
 

@@ -15,21 +15,27 @@ using Wolverine.EntityFrameworkCore;
 namespace Goblin.Application.Workspaces;
 
 public sealed record StartInspection(long Id);
+
 public sealed record StopInspection(long Id);
+
 public sealed record InspectionView(long Id, long WorkId, long AttemptId, InspectionState State);
+
 public sealed class InspectionStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
     private readonly WorkOutboxFactory _outboxes;
     private readonly WorkspaceLimits _limits;
+
     public InspectionStore(IDbContextFactory<GoblinDbContext> factory, WorkOutboxFactory outboxes, WorkspaceLimits limits)
     { _factory = factory; _outboxes = outboxes; _limits = limits; }
+
     public async Task<InspectionView[]> ListAsync(long workId, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.WorkspaceSessions.AsNoTracking().Where(x => x.WorkId == workId).OrderByDescending(x => x.CreatedAt)
             .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, ContractValue.Parse<InspectionState>(x.State))).ToArrayAsync(token);
     }
+
     public async Task<InspectionView> OpenAsync(long workId, long id, long attemptId, CancellationToken token)
     {
         if (id <= 0) throw new ApplicationFailure("invalid_command");
@@ -69,6 +75,7 @@ public sealed class InspectionStore
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return View(row);
     }
+
     public async Task StopAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -80,6 +87,7 @@ public sealed class InspectionStore
         await outbox.PublishAsync(new StopInspection(id));
         await outbox.SaveChangesAndFlushMessagesAsync(token);
     }
+
     public async Task<InspectionAllocation?> ClaimAsync(long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -96,11 +104,13 @@ public sealed class InspectionStore
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
         return Allocation(row);
     }
+
     public async Task<InspectionAllocation> GetAsync(long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return Allocation(await db.WorkspaceSessions.AsNoTracking().SingleAsync(x => x.Id == id, token));
     }
+
     public async Task<InspectionView> RequireAvailableAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -108,6 +118,7 @@ public sealed class InspectionStore
             ?? throw new ApplicationFailure("workspace_unavailable");
         return View(row);
     }
+
     public async Task ObserveAsync(long id, InspectionObservation observed, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
@@ -116,12 +127,15 @@ public sealed class InspectionStore
         row.State = WorkspaceSessionRules.Observe(ContractValue.Parse<InspectionState>(row.State), observed).ToString(); row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
     }
+
     public async Task<InspectionView[]> PendingAsync(CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.WorkspaceSessions.AsNoTracking().Where(x => x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping))
             .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, ContractValue.Parse<InspectionState>(x.State))).ToArrayAsync(token);
     }
+
     private static InspectionView View(Persistence.Entities.WorkspaceSession x) => new(x.Id, x.WorkId, x.AttemptId, ContractValue.Parse<InspectionState>(x.State));
+
     private static InspectionAllocation Allocation(Persistence.Entities.WorkspaceSession x) => new(x.Id, x.WorkId, x.AttemptId, x.SourceVolume);
 }

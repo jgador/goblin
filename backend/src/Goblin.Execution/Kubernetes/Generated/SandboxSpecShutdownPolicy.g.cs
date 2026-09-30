@@ -12,6 +12,7 @@ public enum SandboxSpecShutdownPolicy
 {
     [JsonStringEnumMemberName("Delete")]
     Delete,
+
     [JsonStringEnumMemberName("Retain")]
     Retain,
 }
