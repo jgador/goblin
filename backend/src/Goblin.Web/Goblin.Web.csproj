@@ -9,6 +9,7 @@
     <ProjectReference Include="../Goblin.Application/Goblin.Application.csproj" />
     <ProjectReference Include="../Goblin.Execution/Goblin.Execution.csproj" />
     <ProjectReference Include="../Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj" />
+    <ProjectReference Include="../Goblin.Integrations.Slack/Goblin.Integrations.Slack.csproj" />
     <ProjectReference Include="../Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />
     <Content Include="../../../frontend/dist/**/*" Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

@@ -19,6 +19,10 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --table public.conversation_messages \
   --table public.conversations \
   --table public.execution_attempts \
+  --table public.external_identities \
+  --table public.external_link_requests \
+  --table public.external_conversations \
+  --table public.external_messages \
   --table public.github_connections \
   --table public.github_repositories \
   --table public.repository_operations \

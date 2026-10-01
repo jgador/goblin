@@ -5,10 +5,12 @@ using Goblin.Application;
 using Goblin.Application.Repositories;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
+using Goblin.Contracts.Conversations;
 using Goblin.Contracts.Runtime;
 using Goblin.Execution;
 using Goblin.Integrations.Codex;
 using Goblin.Integrations.GitHub;
+using Goblin.Integrations.Slack;
 using Goblin.Persistence;
 using Goblin.Web.Monitoring;
 using Microsoft.AspNetCore.Builder;
@@ -34,6 +36,17 @@ internal static class WebServices
         string? executionNamespace = builder.Configuration[Env.GoblinExecutionNamespace];
         builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
         if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, databaseConnection, executionNamespace);
+        if (options.EnableWork)
+        {
+            builder.Services.AddSingleton<SlackApi>();
+            builder.Services.AddSingleton(new SlackCredentialStore(Path.Combine(workspace.DataDirectory, "slack")));
+            builder.Services.AddSingleton<IExternalConversations, ExternalConversationAdapter>();
+            builder.Services.AddSingleton(services => new SlackConnection(services.GetRequiredService<SlackApi>(),
+                services.GetRequiredService<SlackCredentialStore>(), services.GetRequiredService<IExternalConversations>(), options.PublicOrigin));
+            builder.Services.AddHostedService(services => services.GetRequiredService<SlackConnection>());
+            builder.Services.AddSingleton(services => new SlackSetup(Path.Combine(workspace.DataDirectory, "slack-setup"),
+                services.GetRequiredService<SlackApi>(), services.GetRequiredService<SlackConnection>()));
+        }
         builder.WebHost.ConfigureKestrel(server =>
         {
             server.AddServerHeader = false;

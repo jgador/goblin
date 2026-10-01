@@ -3,6 +3,17 @@ using Goblin.Web;
 using Microsoft.AspNetCore.Builder;
 using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
+if (args.Length > 0 && args[0] == "--slack-hook")
+{
+    // The CLI supplies --source to the manifest hook. The embedded manifest
+    // does not read that directory, but the hook must accept the CLI contract.
+    bool valid = args.Length == 2 ||
+        args.Length == 3 && args[1] == "manifest" && args[2].StartsWith("--source=", StringComparison.Ordinal) ||
+        args.Length == 4 && args[1] == "manifest" && args[2] == "--source";
+    Environment.ExitCode = valid ? await Goblin.Integrations.Slack.SlackSetup.HookAsync(args[1]) : 1;
+    return;
+}
+
 if (args.Length > 0 && args[0] == "--execute")
 {
     Environment.ExitCode = await Goblin.Execution.ExecutionWorker.RunAsync(args[1..]);

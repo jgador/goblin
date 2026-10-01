@@ -42,6 +42,7 @@ COPY backend/Directory.Build.props ./backend/Directory.Build.props
 COPY backend/src ./backend/src
 COPY backend/tools ./backend/tools
 COPY --from=assets /app/frontend/dist ./frontend/dist
+COPY --from=assets /app/frontend/public/assets/branding/slack.png ./frontend/public/assets/branding/slack.png
 RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --nologo
 RUN dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --nologo
 

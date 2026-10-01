@@ -60,11 +60,12 @@ public sealed class ConversationView
 public sealed class ConversationMessageView
 {
     [JsonConstructor]
-    public ConversationMessageView(long id, string text, DateTime createdAt)
+    public ConversationMessageView(long id, string text, DateTime createdAt, ConversationMessageSource? source = null)
     {
         Id = id;
         Text = text;
         CreatedAt = createdAt;
+        Source = source;
     }
 
     [JsonPropertyName("id")]
@@ -76,6 +77,9 @@ public sealed class ConversationMessageView
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; init; }
 
+    [JsonPropertyName("source")]
+    public ConversationMessageSource? Source { get; init; }
+
     public static ConversationMessageView From(Goblin.Application.Work.ConversationMessageView value) =>
-        new(value.Id, value.Text, value.CreatedAt);
+        new(value.Id, value.Text, value.CreatedAt, value.Source is null ? null : ConversationMessageSource.From(value.Source));
 }

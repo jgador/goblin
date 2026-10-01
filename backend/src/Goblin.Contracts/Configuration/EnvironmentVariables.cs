@@ -4,6 +4,18 @@ namespace Goblin.Contracts.Configuration;
 /// <remarks>See docs/environment-variables.md before adding or forwarding a variable.</remarks>
 public static class EnvironmentVariables
 {
+    /// <summary>Slack app-level token passed by the supported CLI deploy hook.</summary>
+    /// <remarks>Format: xapp token. Required only inside the temporary setup hook; sensitive, never inherited from the operator.</remarks>
+    public const string SlackAppToken = "SLACK_APP_TOKEN";
+    /// <summary>Slack bot token passed by the supported CLI deploy hook.</summary>
+    /// <remarks>Format: xoxb token. Required only inside the temporary setup hook; sensitive, never inherited from the operator.</remarks>
+    public const string SlackBotToken = "SLACK_BOT_TOKEN";
+    /// <summary>Disable optional telemetry in Goblin's temporary Slack CLI helper.</summary>
+    /// <remarks>Format: true. Default/fallback: Goblin always sets true for setup. Required: Supplied only to the helper; not sensitive.</remarks>
+    public const string SlackDisableTelemetry = "SLACK_DISABLE_TELEMETRY";
+    /// <summary>Private temporary directory for setup subprocesses.</summary>
+    /// <remarks>Format: Absolute directory. Default/fallback: operating-system temporary directory. Required: Set for isolated Slack setup; not sensitive.</remarks>
+    public const string TmpDir = "TMPDIR";
     /// <summary>External credential used as a negative inheritance fixture; Goblin authenticates through private credential storage.</summary>
     /// <remarks>Format: Secret text. Default/fallback: Not forwarded to isolated runtimes or GitHub CLI.
     /// Required: Never required by Goblin environment configuration. Sensitive: yes.</remarks>

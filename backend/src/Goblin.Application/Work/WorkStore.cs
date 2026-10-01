@@ -106,6 +106,25 @@ public sealed partial class WorkStore
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
+        WorkView view = await ApplyInTransactionAsync(db, outbox, command, proposal, token);
+        await outbox.SaveChangesAndFlushMessagesAsync(token);
+        return view;
+    }
+
+    // Conversation adapters share these exact commands and product checks.
+    // Their actor authorization, source receipt and commands use one transaction.
+    internal Task<WorkView> ApplyConversationCommandAsync(GoblinDbContext db, IDbContextOutbox outbox,
+        WorkCommand command, CancellationToken token)
+    {
+        if (command.Action is not (WorkAction.Create or WorkAction.Execute or WorkAction.Answer or WorkAction.AddContext) ||
+            command.Repository is not null || command.AuthorizationId is not null || command.Text?.Length > 4000)
+            throw new ApplicationFailure("invalid_command");
+        return ApplyInTransactionAsync(db, outbox, command, null, token);
+    }
+
+    private async Task<WorkView> ApplyInTransactionAsync(GoblinDbContext db, IDbContextOutbox outbox,
+        WorkCommand command, RepositoryProposal? proposal, CancellationToken token)
+    {
         string fingerprint = Hash(command);
         Receipt? receipt = await db.WorkCommands.SingleOrDefaultAsync(x => x.Id == command.CommandId, token);
         if (receipt is not null)
@@ -248,7 +267,7 @@ public sealed partial class WorkStore
             Response = JsonSerializer.Serialize(view, Json),
             CreatedAt = now.UtcDateTime
         });
-        await outbox.SaveChangesAndFlushMessagesAsync(token);
+        await db.SaveChangesAsync(token);
         return view;
     }
 

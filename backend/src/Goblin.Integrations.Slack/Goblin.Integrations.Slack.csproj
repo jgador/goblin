@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <EmbeddedResource Include="manifest.json" />
+    <EmbeddedResource Include="../../../frontend/public/assets/branding/slack.png" Link="slack.png" />
+  </ItemGroup>
+</Project>

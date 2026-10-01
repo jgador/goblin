@@ -8,6 +8,7 @@ short, lowercase names; original file contents are preserved.
 | `svg/` | Scalable icon-only and icon-with-text artwork, in light and dark variants |
 | `png/` | Original PNG exports |
 | `jpeg/` | Original JPEG exports |
+| `slack/` | Derived app icon prepared for Slack upload |
 | `fonts/` | Inter font files supplied with the design; not currently loaded by the UI |
 | `source/` | Editable Illustrator document (`logo.ai`) and packaging report (`report.txt`) |
 
@@ -37,9 +38,21 @@ directly in the standalone setup bundle, served at `/setup/icon.svg`, so brandin
 is available before the application is built. Regenerate the setup bundle and
 Azure templates after changing its sources (see `deploy/azure/reference.md`).
 
+The [Slack integration plan](../../docs/slack-integration-plan.md) selects
+[`slack/icon-light.png`](slack/icon-light.png), a 1024 × 1024 PNG derived from
+`svg/icon-light.svg`. It uses the text-free artwork for light backgrounds, centered
+at 896 pixels wide on an opaque white square, preserving the original colors and
+proportions. The surrounding padding is at least 64 pixels. This export fits
+Slack's documented 512–2000 pixel icon dimensions; the original PNGs are 4167 pixels
+square. Upload this derived PNG for Slack rather than an original PNG or wordmark.
+The runtime copy is `frontend/public/assets/branding/slack.png`, served at
+`/assets/branding/slack.png` and embedded by the Slack setup adapter for upload.
+To regenerate, render the source SVG at 896 pixels wide, preserve its
+aspect ratio, center it on a 1024-pixel white square, and export as PNG.
+
 Keep original design resources here. Put assets used by the website under
 `frontend/public/assets/`, and register their browser URLs in the static-file
-map in `backend/src/Goblin.Web/GoblinApplication.cs`. The frontend build copies
+map in `backend/src/Goblin.Web/Http/StaticAssets.cs`. The frontend build copies
 those runtime files into `frontend/dist/assets/` automatically.
 This design library is excluded from the Docker build context.
 

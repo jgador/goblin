@@ -10,7 +10,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Goblin.Application.Work;
 
-public sealed record ConversationMessageView(long Id, string Text, DateTime CreatedAt);
+public sealed record ConversationMessageSource(string Provider, string WorkspaceId, string UserId, string ChannelId, string ThreadId, string MessageId);
+
+public sealed record ConversationMessageView(long Id, string Text, DateTime CreatedAt, ConversationMessageSource? Source = null);
 
 public sealed record ConversationView(long Id, string Title, long? WorkId, ConversationMessageView[] Messages);
 
@@ -32,8 +34,11 @@ public sealed class ConversationStore
     {
         Persistence.Entities.Conversation[] conversations = await db.Conversations.AsNoTracking().OrderByDescending(x => x.CreatedAt).ToArrayAsync(token);
         Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.AsNoTracking().OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync(token);
+        Persistence.Entities.ExternalMessage[] sources = await db.ExternalMessages.AsNoTracking().Where(x => x.ConversationMessageId != null).ToArrayAsync(token);
         return [.. conversations.Select(c => new ConversationView(c.Id, c.Title, c.WorkId,
-            [.. messages.Where(m => m.ConversationId == c.Id).Select(m => new ConversationMessageView(m.Id, m.Body, m.CreatedAt))]))];
+            [.. messages.Where(m => m.ConversationId == c.Id).Select(m => new ConversationMessageView(m.Id, m.Body, m.CreatedAt,
+                sources.FirstOrDefault(s => s.ConversationMessageId == m.Id) is { } source
+                    ? new("Slack", source.WorkspaceId, source.UserId, source.ChannelId, source.ThreadId, source.MessageId) : null))]))];
     }
 
     public async Task<ConversationView> ApplyAsync(ConversationCommand command)

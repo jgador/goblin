@@ -114,6 +114,7 @@ There are nineteen unique direct external crates. Sources:
 | cargo-insta | `1.46.3` | [Rust setup](../scripts/setup-rust.sh) |
 | DotSlash | `0.5.7` | [Rust setup](../scripts/setup-rust.sh) |
 | GitHub CLI (`gh`) | `2.101.0` for the application image | [GitHub CLI installer](../deploy/install-gh.mjs) |
+| Slack CLI | `4.8.0`, downloaded only into a disposable setup directory; Linux x64/ARM64 SHA-256 pinned | [Slack setup adapter](../backend/src/Goblin.Integrations.Slack/SlackSetup.cs) |
 | Bicep | `0.47.16` in release CI | [Release workflow](../.github/workflows/goblinctl-release.yml) |
 | kubectl | `1.36.4` in release CI; also bundled with K3s | [Release workflow](../.github/workflows/goblinctl-release.yml), [installer](../deploy/azure/setup/installer.sh) |
 | Gitleaks | Documented baseline `8.30.1`, allowing newer `8.x` | [Secret scanning guide](secret-scanning.md) |

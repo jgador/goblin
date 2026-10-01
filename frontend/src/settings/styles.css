@@ -100,3 +100,14 @@
 .system-cluster-link svg { width:15px; height:15px; }
 @media(max-width:420px) { .system-resources { gap:6px; } .system-resource { padding:10px 8px; } .system-resource p,.system-resource small { font-size:9px; } .system-machine { align-items:flex-start; } }
 @media(max-width:760px) { .settings-nav .settings-lock { margin-top:0; } }
+.slack-settings { display: grid; gap: 16px; }
+.slack-settings form { display: grid; gap: 12px; margin: 12px 0; }
+.slack-settings label { display: grid; gap: 6px; }
+.slack-settings input { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #d5d9df; border-radius: 8px; background: #fff; color: #10182a; }
+.slack-settings details { border-top: 1px solid #d5d9df; padding-top: 16px; }
+.slack-settings summary { cursor: pointer; }
+.slack-steps { padding-left: 24px; line-height: 1.7; }
+.slack-branding, .slack-identity { display: flex; align-items: center; gap: 12px; }
+.slack-identity { justify-content: space-between; flex-wrap: wrap; }
+.slack-branding img { border: 1px solid #e4e7ec; border-radius: 8px; }
+.slack-code input { font-family: monospace; }

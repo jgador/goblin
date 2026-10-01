@@ -12,6 +12,7 @@ using Goblin.Application.Runtime;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
 using Goblin.Contracts;
+using Goblin.Contracts.Conversations;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Repositories;
 using Goblin.Core.Work;
@@ -43,6 +44,46 @@ public sealed class DurabilityTests
     private static long _nextId = int.MaxValue;
 
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
+
+    [DatabaseFact]
+    public async Task SlackProofNeedsLocalConfirmationAndEventsDispatchOnce()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ExternalConversationStore store = scope.ServiceProvider.GetRequiredService<ExternalConversationStore>();
+        var installation = new ExternalInstallation("slack-test", "T123", "A123", "U123");
+        ExternalLinkCode code = await store.StartLinkAsync(installation, "owner-session", default);
+        var proof = new ExternalMessage(installation, "EV1", "U456", "D123", "1.000001", "1.000001", "link " + code.Code, true);
+        await store.AcceptAsync(proof, default);
+        ExternalReply proofReply = (await store.ProcessNextAsync(installation, default))!;
+        Assert.Null(proofReply.WorkId);
+        Assert.Equal(ExternalReplyKind.LinkConfirmationRequired, proofReply.Kind);
+        Assert.Empty(await store.IdentitiesAsync(installation, default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.ConfirmLinkAsync(installation, "different-session", code.Id, default));
+        await store.ConfirmLinkAsync(installation, "owner-session", code.Id, default);
+        ExternalMessage request = proof with { EventId = "EV2", ThreadId = "2.000001", MessageId = "2.000001", Text = "Explain the design" };
+        await Task.WhenAll(store.AcceptAsync(request, default), store.AcceptAsync(request, default));
+        await store.AcceptAsync(request with { EventId = "EV3" }, default);
+        ExternalReply reply = (await store.ProcessNextAsync(installation, default))!;
+        Assert.NotNull(reply.WorkId);
+        Assert.Equal(ExternalReplyKind.WorkSaved, reply.Kind);
+        Assert.Null(await store.ProcessNextAsync(installation, default));
+        await fixture.Until(reply.WorkId!.Value, view => view.Work.Attempts[0].Status == AttemptStatus.Starting);
+        WorkView work = await fixture.Get(reply.WorkId.Value);
+        Assert.Single(work.Work.Attempts);
+        Assert.Equal(1, fixture.Runtime.Starts[work.Work.Attempts[0].Id]);
+        ConversationView conversation = Assert.Single(await scope.ServiceProvider.GetRequiredService<ConversationStore>().ListAsync());
+        Assert.Equal("U456", Assert.Single(conversation.Messages).Source!.UserId);
+        await store.AcceptAsync(request with { EventId = "EV4", MessageId = "2.000002", Text = "Additional context" }, default);
+        Assert.Equal(reply.WorkId, (await store.ProcessNextAsync(installation, default))!.WorkId);
+        ExternalIdentityView identity = Assert.Single(await store.IdentitiesAsync(installation, default));
+        await store.AcceptAsync(request with { EventId = "EV5", MessageId = "2.000003", Text = "Do not accept after revocation" }, default);
+        await store.RevokeAsync(installation, identity.Id, default);
+        Assert.Null((await store.ProcessNextAsync(installation, default))!.WorkId);
+        Assert.Single((await fixture.Get(reply.WorkId.Value)).Work.Messages);
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        Assert.False(await db.ExternalMessages.AnyAsync(x => x.Body != null && x.Body.Contains(code.Code)));
+    }
 
     [DatabaseFact]
     public async Task DefaultCoworkerIsSavedAtCreationAndUsedForExplicitStart()
