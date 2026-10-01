@@ -14,7 +14,8 @@ async function home(page: Page) {
     };
     await page.route("**/api/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         if (path === "/api/connections") await state.connectionWait;
         if (path === "/api/work" && state.workUnavailable) {
             await route.fulfill({ status: 503, json: { error: {} } });
@@ -196,4 +197,79 @@ test("home refresh applies connection changes, reports failures, and clears a lo
     ).toBeVisible();
     await expect(page.locator(".home")).toHaveCount(0);
     await expect(page.getByText("Private draft")).toHaveCount(0);
+});
+
+test("a delayed Work read cannot restore private content after locking and unlocking", async ({
+    page,
+}) => {
+    const state = await home(page);
+    let release!: () => void;
+    let started!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    const intercepted = new Promise<void>((resolve) => {
+        started = resolve;
+    });
+    let delay = true;
+    await page.route("**/api/work", async (route) => {
+        if (!delay) return route.fallback();
+        const json = [
+            {
+                version: "1",
+                work: {
+                    id: "1",
+                    objective: "Obsolete session work",
+                    status: "Ready",
+                    attempts: [],
+                    history: [],
+                    decisions: [],
+                    results: [],
+                    artifacts: [],
+                },
+            },
+        ];
+        started();
+        await waiting;
+        await route.fulfill({ json });
+    });
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await intercepted;
+    state.authenticated = false;
+    await page.evaluate(() =>
+        window.dispatchEvent(new Event("goblin-workspace-locked")),
+    );
+    await expect(
+        page.getByRole("heading", { name: "Open your workspace" }),
+    ).toBeVisible();
+    delay = false;
+    state.authenticated = true;
+    state.objective = "Current session work";
+    await page.getByLabel("Goblin password", { exact: true }).fill("a");
+    await page
+        .getByRole("button", { name: "Open workspace", exact: true })
+        .click();
+    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    release();
+    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(page.locator(".work-title")).toHaveText(state.objective);
+});
+
+test("a non-JSON unauthorized connection response locks the workspace immediately", async ({
+    page,
+}) => {
+    await home(page);
+    await page.route("**/api/connections", (route) =>
+        route.fulfill({
+            status: 401,
+            contentType: "text/plain",
+            body: "Unauthorized",
+        }),
+    );
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(
+        page.getByRole("heading", { name: "Open your workspace" }),
+    ).toBeVisible();
+    await expect(page.locator(".home")).toHaveCount(0);
 });

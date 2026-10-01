@@ -641,7 +641,7 @@ test("installer verifies the pinned Agent Sandbox core release and waits for its
             arg.startsWith("https://github.com/kubernetes-sigs/agent-sandbox/"),
         );
     assert.deepEqual(sandboxDownloads, [
-        "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.3/sandbox.yaml",
+        "https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.4/sandbox.yaml",
     ]);
     const manifest = join(
         root,
@@ -655,7 +655,7 @@ test("installer verifies the pinned Agent Sandbox core release and waits for its
         .map((line) => JSON.parse(line));
     assert.ok(
         checks.includes(
-            `725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96  ${manifest}\n`,
+            `c4f6344b6f04e450b61c433ce6275f2a45bc30f746b55ce47ade454ffa2a1aa7  ${manifest}\n`,
         ),
     );
     const calls: string[][] = (

@@ -12,18 +12,17 @@
   <main>
     <div class="brand"><img class="brand-logo" src="/setup/icon.svg" alt="" width="650" height="602"><span>goblin</span></div>
     <p class="eyebrow">YOUR WORKSPACE</p>
-    <h1>Getting things ready.</h1>
+    <h1 aria-live="polite">Getting things ready.</h1>
     <p class="intro">Goblin is being installed on your server. You can close this page and return anytime.</p>
-    <div class="summary" role="status" aria-live="polite">
-      <span id="message">Connecting to installation progress…</span>
-      <span id="elapsed"></span>
-    </div>
     <div class="installation-progress">
       <ol id="steps" aria-label="Installation steps"></ol>
       <details class="installation-log" open>
         <summary>Installation log</summary>
         <div class="log-toolbar">
-          <span id="log-connection" role="status">Connecting…</span>
+          <div class="log-status">
+            <span id="log-connection" role="status">Connecting…</span>
+            <span id="elapsed" role="timer" aria-label="Elapsed time"></span>
+          </div>
           <label><input id="follow-log" type="checkbox" checked> Follow latest</label>
         </div>
         <div id="install-log" role="log" aria-label="Installation log" aria-live="off" tabindex="0"><p class="log-empty">Waiting for installation activity…</p></div>

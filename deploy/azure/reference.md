@@ -159,9 +159,9 @@ Cargo, cluster, Docker, or application build is needed to serve setup.
 
 The independent systemd worker installs and checks:
 
-1. K3s `v1.36.4+k3s1`: ready API, registered node, and ready node.
+1. K3s `v1.37.0+k3s1`: ready API, registered node, and ready node.
 2. Cert-manager `v1.21.2`: all CRDs, controllers, and admission webhook.
-3. The Goblin owner password Secret and Agent Sandbox `v1.0.3`.
+3. The Goblin owner password Secret and Agent Sandbox `v1.0.4`.
 4. The Goblin image, built with Docker and imported into K3s.
 5. Certificate-authenticated PostgreSQL and schema migrations.
 6. The Goblin workload, execution namespace, and internal Traefik route.
@@ -181,26 +181,14 @@ Outbound internet access is required for downloads and image pulls. The Ubuntu
 24.04 LTS image uses Azure's latest revision. Agent Sandbox extensions are not
 installed. Existing K3s services are reused rather than automatically upgraded.
 
-### Agent Sandbox v1.0.3 upgrade
+### Agent Sandbox v1.0.4 upgrade
 
-The [v1.0.3 release](https://github.com/kubernetes-sigs/agent-sandbox/releases/tag/v1.0.3)
-requires no Goblin API or data migration from v1.0.2. Comparing the published
-core manifests shows only the controller image update and commented TLS options;
-the `agents.x-k8s.io/v1beta1` CRD and RBAC are unchanged.
-
-- Keep the core-only `sandbox.yaml`; extensions, the Python SDK, `sandbox-router`,
-  and `sandboxd` are not used by Goblin. The `sandboxd` process-group cleanup fix
-  therefore does not change Goblin's worker cancellation behavior.
-- Controller metrics TLS is opt-in; existing HTTP metrics remain unchanged.
-  Enabling it separately requires `--metrics-secure-serving`, matching scrape
-  scheme/port and trust settings, and mounted certificates if using
-  `--metrics-cert-dir`. TLS-profile flags without secure serving prevent startup.
-- The namespace-termination reconciliation fix is included automatically.
-  The new lifecycle guidance needs no worker change: repository attempts already
-  use `restartPolicy: Never`, a deadline, and explicit suspension with retained
-  identity/PVCs. Do not add automatic retries or TTL deletion of those fences.
-- Fleet, credential, and network-policy blueprints are optional examples, not
-  prerequisites; existing network and credential isolation stays in place.
+The [v1.0.4 release](https://github.com/kubernetes-sigs/agent-sandbox/releases/tag/v1.0.4)
+keeps the core Sandbox CRD unchanged from v1.0.3. It adds Kubernetes lifecycle
+events and stops reconciliation after invalid derived Service names. Goblin keeps
+the core-only controller; the optional SDKs, router, sandboxd, and extensions are
+not installed. Existing attempts still use explicit retry, deadlines, and retained
+Sandbox identities and PVCs.
 
 Fresh Azure/local installations use the new pin. Completed installations retain
 their installed controller; changing the checkout, rebuilding Goblin's image, or
@@ -215,9 +203,9 @@ This updates the controller in place without deleting Sandboxes or PVCs.
 set -euo pipefail
 sandbox_upgrade_dir=$(mktemp -d /tmp/goblin-sandbox-upgrade.XXXXXX)
 curl --fail --silent --show-error --location \
-  https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.3/sandbox.yaml \
+  https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.4/sandbox.yaml \
   --output "$sandbox_upgrade_dir/sandbox.yaml"
-printf '725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96  %s\n' \
+printf 'c4f6344b6f04e450b61c433ce6275f2a45bc30f746b55ce47ade454ffa2a1aa7  %s\n' \
   "$sandbox_upgrade_dir/sandbox.yaml" | sha256sum --check
 cp deploy/azure/setup/sandbox-kustomization.yaml "$sandbox_upgrade_dir/kustomization.yaml"
 k3s kubectl apply --server-side --dry-run=server --field-manager=goblin-bootstrap -k "$sandbox_upgrade_dir"
@@ -230,7 +218,7 @@ k3s kubectl get sandboxes,pods -n agents
 ```
 
 Stop and inspect any apply conflict instead of forcing ownership. Confirm the
-image ends in `:v1.0.3`, Goblin is ready, and a new repository attempt can execute
+image ends in `:v1.0.4`, Goblin is ready, and a new repository attempt can execute
 and be cancelled/cleaned up while preserving its workspace and identity fence.
 A dry run validates API acceptance, not image pulls or controller/runtime behavior.
 

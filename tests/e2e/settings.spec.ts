@@ -18,7 +18,8 @@ async function settingsFixture(page: Page) {
     await page.route("**/api/**", async (route) => {
         const request = route.request(),
             path = new URL(request.url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
         else if (path === "/api/preferences")

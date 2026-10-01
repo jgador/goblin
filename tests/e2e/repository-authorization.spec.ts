@@ -43,7 +43,8 @@ test("chat shows enablement and exact Git scope before submitting only the saved
     };
     await page.route("**/api/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         if (path === "/api/work/commands") {
             commands.push(route.request().postDataJSON());
             work.repositoryAuthorization.status = "Authorized";

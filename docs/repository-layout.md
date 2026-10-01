@@ -53,6 +53,8 @@ scripts/                   Repository checks and test-tool build helpers
 
 See [environment variables](environment-variables.md) for the C#, Rust, and
 TypeScript catalogs, shared semantics, and contributor guidance.
+The [TypeScript refactoring review](typescript-refactoring.md) records the current
+browser boundaries, file inventory, and next implementation steps.
 
 The root `package.json` coordinates builds and application tests and pins the
 Codex runtime distribution. npm workspaces use one root `package-lock.json`;
