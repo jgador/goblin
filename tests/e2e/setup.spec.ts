@@ -12,6 +12,10 @@ test("installation logs stream concurrent progress, survive refresh, and render 
         setup.transition("start", "image");
         setup.transition("detail", "Downloading image 1/8");
         await expect(page.locator('li[data-status="running"]')).toHaveCount(2);
+        await expect(page.locator("#message")).toHaveCount(0);
+        await expect(
+            page.getByRole("timer", { name: "Elapsed time" }),
+        ).toHaveText(/\d+m \d+s/);
         const log = page.getByRole("log", { name: "Installation log" });
         await expect(log).toContainText("Downloading image 1/8");
         setup.transition("detail", "<img src=x onerror=alert(1)>");
@@ -84,6 +88,17 @@ test("setup displays its bundled brand icon at desktop and mobile sizes", async 
                     .locator("body")
                     .evaluate((element) => element.scrollWidth <= innerWidth),
             ).toBe(true);
+            const steps = await page
+                .getByRole("list", { name: "Installation steps" })
+                .boundingBox();
+            const log = await page.locator(".installation-log").boundingBox();
+            if (width === 1280) {
+                expect(log!.y).toBeCloseTo(steps!.y, 0);
+                expect(log!.x).toBeGreaterThan(steps!.x + steps!.width);
+            } else {
+                expect(log!.y).toBeGreaterThan(steps!.y + steps!.height);
+                expect(log!.x).toBeCloseTo(steps!.x, 0);
+            }
         }
     } finally {
         await setup.close();
@@ -144,8 +159,8 @@ test("setup tolerates the handoff gap and opens the Kubernetes application", asy
         setup.transition("begin");
         setup.transition("start", "activate");
         setup.transition("handoff");
-        await expect(page.locator("#message")).toContainText(
-            "Connecting to your workspace",
+        await expect(page.locator('li[data-status="running"]')).toContainText(
+            "Open Goblin",
         );
         await page.route("**/setup/status", (route) =>
             route.fulfill({ status: 404 }),
@@ -186,7 +201,7 @@ test("a localhost visit moves to the configured origin and opens Goblin even if 
         setup.transition("public-url", setup.url);
         await expect(page).toHaveURL(setup.url + "/");
         setup.transition("start", "verify");
-        await expect(page.locator("#message")).toHaveText(
+        await expect(page.locator('li[data-status="running"]')).toContainText(
             "Check application readiness",
         );
         // The last observed step can still be readiness when setup releases its port.

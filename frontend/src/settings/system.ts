@@ -1,4 +1,5 @@
 import { escapeHtml as e, icon } from "../work/presentation.js";
+import { requestJson } from "../api/client.js";
 import { formatTimestamp } from "./timezone.js";
 
 type Usage = {
@@ -74,20 +75,13 @@ export class SystemResources {
         this.pending = controller;
         this.lastFetch = Date.now();
         try {
-            const response = await fetch("/api/system", {
-                cache: "no-store",
-                signal: AbortSignal.any([
-                    controller.signal,
-                    AbortSignal.timeout(6000),
-                ]),
+            const result = await requestJson<Overview>("/api/system", {
+                signal: controller.signal,
+                onUnauthorized: () => {
+                    this.reset();
+                    window.dispatchEvent(new Event("goblin-workspace-locked"));
+                },
             });
-            if (response.status === 401) {
-                this.overview = null;
-                window.dispatchEvent(new Event("goblin-workspace-locked"));
-                return;
-            }
-            if (!response.ok) throw new Error();
-            const result = (await response.json()) as Overview;
             if (!result.status) throw new Error();
             if (!controller.signal.aborted) this.overview = result;
         } catch {

@@ -52,7 +52,8 @@ async function workspace(page: Page, connected = true) {
     const commands: string[] = [];
     await page.route("**/api/**", (route) => {
         const path = new URL(route.request().url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         if (route.request().method() === "POST") commands.push(path);
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
@@ -655,6 +656,11 @@ test("the scoped composer retains command identity and draft until the selected 
     await expect(page.locator(".activity-panel")).not.toContainText(
         "Check connection pooling",
     );
+    await page.reload();
+    await expect(
+        page.getByRole("button", { name: "Resend command" }),
+    ).toBeVisible();
+    expect(commands).toHaveLength(1);
     await page.getByRole("button", { name: "Resend command" }).click();
     await expect(draft).toHaveValue("");
     expect(commands).toHaveLength(2);
@@ -666,4 +672,23 @@ test("the scoped composer retains command identity and draft until the selected 
         commandId: "9007199254740993",
     });
     expect(commands[1]).toEqual(commands[0]);
+});
+
+test("corrupt command recovery does not prevent the workspace from opening", async ({
+    page,
+}) => {
+    await workspace(page);
+    await page.addInitScript(() =>
+        sessionStorage.setItem("goblin.pendingCommand", "{"),
+    );
+    await page.goto("/work?item=2");
+    await expect(page.getByRole("alert")).toContainText(
+        "saved command could not be recovered",
+    );
+    await expect(
+        page.getByRole("button", { name: "Send message" }),
+    ).toBeEnabled();
+    await expect(
+        page.getByRole("button", { name: "Resend command" }),
+    ).toHaveCount(0);
 });

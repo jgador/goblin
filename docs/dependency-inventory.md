@@ -5,6 +5,9 @@ repository's selected versions, not a claim about the latest upstream release or
 the software installed on a particular server. This inventory documents the
 inputs to update monitoring; monitoring has not been configured.
 
+Deployment and build image rows were refreshed on 2026-10-01. Other rows retain
+the original snapshot date.
+
 The manifests, lockfiles, scripts, and deployment files linked below remain the
 source of truth. An updater should read those files, rather than this dated
 inventory. The tables cover direct application dependencies and explicitly
@@ -16,10 +19,10 @@ resolved inventories described at the end.
 | Software | Repository selection | Source |
 | --- | --- | --- |
 | C# / .NET SDK | SDK `10.0.100`, with `rollForward: latestFeature` | [global.json](../global.json) |
-| .NET / ASP.NET Core | Target `net10.0`; build and runtime images use `10.0-noble` tags | [Directory.Build.props](../backend/Directory.Build.props), [Dockerfile](../Dockerfile) |
+| .NET / ASP.NET Core | Target `net10.0`; build image `10.0.401-noble`; runtime image `10.0.12-noble` | [Directory.Build.props](../backend/Directory.Build.props), [Dockerfile](../Dockerfile) |
 | Rust / Cargo | Toolchain `1.95.0`; edition `2024`; minimum Rust `1.95` | [rust-toolchain.toml](../rust-toolchain.toml), [Cargo.toml](../Cargo.toml) |
 | Clippy, rustfmt, rust-src | Components of the selected Rust toolchain | [rust-toolchain.toml](../rust-toolchain.toml) |
-| Node.js | Local minimum `>=24`; build image `24.18.0-bookworm-slim`; release CI selects `24` | [package.json](../package.json), [Dockerfile](../Dockerfile), [release workflow](../.github/workflows/goblinctl-release.yml) |
+| Node.js | Local minimum `>=24`; build image `26.10.0-bookworm-slim`; release CI selects `24` | [package.json](../package.json), [Dockerfile](../Dockerfile), [release workflow](../.github/workflows/goblinctl-release.yml) |
 | npm | Supplied by the Node installation/image; no independent version pin | [package.json](../package.json), [Dockerfile](../Dockerfile) |
 | TypeScript | `7.0.2` | Root and frontend package manifests below |
 | NuGet | Supplied by the .NET SDK; no independent CLI pin | [global.json](../global.json) |
@@ -125,16 +128,16 @@ repository currently has no Insta snapshots or DotSlash manifests. See
 
 | Software/input | Selected version | Source |
 | --- | --- | --- |
-| PostgreSQL | `16.15-bookworm` | [Database deployment](../deploy/postgres/postgres.yaml), [verification job](../deploy/postgres/verify.yaml) |
-| K3s | `v1.36.4+k3s1` | [Installer](../deploy/azure/setup/installer.sh) |
-| K3s logging test image | `rancher/k3s:v1.35.1-k3s1` | [Logging smoke check](../scripts/check-logging.sh) |
-| Agent Sandbox | `v1.0.3` | [Installer](../deploy/azure/setup/installer.sh) |
+| PostgreSQL | `18.6-bookworm` | [Database deployment](../deploy/postgres/postgres.yaml), [verification job](../deploy/postgres/verify.yaml) |
+| K3s | `v1.37.0+k3s1` | [Installer](../deploy/azure/setup/installer.sh) |
+| K3s logging test image | `rancher/k3s:v1.37.0-k3s1` | [Logging smoke check](../scripts/check-logging.sh) |
+| Agent Sandbox | `v1.0.4` | [Installer](../deploy/azure/setup/installer.sh) |
 | cert-manager | `v1.21.2` | [Installer](../deploy/azure/setup/installer.sh) |
 | Headlamp | `v0.45.0`, with image digest | [Headlamp deployment](../deploy/auth/headlamp.yaml) |
-| VictoriaLogs | `v1.52.0`, with image digest | [Logging deployment](../deploy/auth/logging/workloads.yaml) |
-| Fluent Bit | `5.1.2`, with image digest | [Logging deployment](../deploy/auth/logging/workloads.yaml) |
-| Kubernetes schema | `v1.36.4`, with content checksums | [Schema selection](../backend/schemas/kubernetes/selection.json) |
-| Agent Sandbox schema | `v1.0.3`, with content checksum | [Schema selection](../backend/schemas/kubernetes/selection.json) |
+| VictoriaLogs | `v1.53.0`, with image digest | [Logging deployment](../deploy/auth/logging/workloads.yaml) |
+| Fluent Bit | `5.1.3`, with image digest | [Logging deployment](../deploy/auth/logging/workloads.yaml) |
+| Kubernetes schema | `v1.37.0`, with content checksums | [Schema selection](../backend/schemas/kubernetes/selection.json) |
+| Agent Sandbox schema | `v1.0.4`, with content checksum | [Schema selection](../backend/schemas/kubernetes/selection.json) |
 | Codex protocol schemas | Coupled to the selected Codex runtime | [Protocol generator](../backend/scripts/GenerateProtocol.cs), [schema files](../backend/schemas/codex) |
 | Ubuntu / Debian base distributions | Ubuntu Noble and Debian Bookworm image families; Ubuntu 24.04 CI runners | [Dockerfile](../Dockerfile), [VM definition](../deploy/azure/modules/vm.bicep), [workflows](../.github/workflows) |
 

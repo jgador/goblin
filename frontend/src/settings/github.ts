@@ -1,4 +1,5 @@
 import { GitHubConnectionStatus } from "../api/values.js";
+import { requestJson, errorMessage } from "../api/client.js";
 import { escapeHtml as e } from "../work/presentation.js";
 export type GitHubState = {
     configured: boolean;
@@ -15,22 +16,17 @@ export type Repository = {
     enabled?: boolean;
     canPush?: boolean;
 };
-async function api<T>(path: string, body?: unknown): Promise<T> {
-    const response = await fetch(path, {
-        method: body === undefined ? "GET" : "POST",
-        credentials: "same-origin",
-        headers:
-            body === undefined ? {} : { "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const value = await response.json();
-    if (!response.ok)
-        throw new Error(
-            value.error?.message ?? "Could not reach Goblin. Try again.",
-        );
-    return value;
-}
 export function mountGitHub(root: HTMLElement) {
+    const controller = new AbortController();
+    function api<T>(path: string, body?: unknown) {
+        return requestJson<T>(path, {
+            body,
+            signal: controller.signal,
+            failureMessage: "Could not reach Goblin. Try again.",
+            onUnauthorized: () =>
+                window.dispatchEvent(new Event("goblin-workspace-locked")),
+        });
+    }
     let state: GitHubState | null = null,
         busy = false,
         busyAction = "",
@@ -41,7 +37,8 @@ export function mountGitHub(root: HTMLElement) {
         browsing = false,
         more = false;
     let generation = 0,
-        disposed = false;
+        disposed = false,
+        refreshing = false;
     let focusedAction = "",
         focusedRepository = "";
     function render() {
@@ -110,6 +107,8 @@ export function mountGitHub(root: HTMLElement) {
         }
     }
     async function refresh() {
+        if (disposed || busy || refreshing) return;
+        refreshing = true;
         const version = generation;
         try {
             const next = await api<GitHubState>("/api/github");
@@ -122,68 +121,89 @@ export function mountGitHub(root: HTMLElement) {
             }
         } catch (failure) {
             if (version === generation && !busy) {
-                error = (failure as Error).message;
+                error = errorMessage(
+                    failure,
+                    "Could not reach Goblin. Try again.",
+                );
                 render();
             }
+        } finally {
+            refreshing = false;
         }
     }
     async function loadEnabled() {
+        const version = generation;
         try {
-            enabled = await api<Repository[]>("/api/github/repositories");
+            const next = await api<Repository[]>("/api/github/repositories");
+            if (version === generation && !disposed) enabled = next;
         } catch {
-            enabled = [];
+            if (version === generation && !disposed) enabled = [];
         }
     }
-    root.addEventListener("click", async (event) => {
-        const button = (event.target as Element).closest<HTMLButtonElement>(
-            "button[data-github]",
-        );
-        if (!button || busy) return;
-        const action = button.dataset.github!;
-        if (action === "copy") {
+    root.addEventListener(
+        "click",
+        async (event) => {
+            if (!(event.target instanceof Element) || disposed) return;
+            const button = event.target.closest<HTMLButtonElement>(
+                "button[data-github]",
+            );
+            if (!button || busy) return;
+            const action = button.dataset.github!;
+            if (action === "copy") {
+                try {
+                    await navigator.clipboard.writeText(state?.userCode ?? "");
+                    button.textContent = "Copied";
+                } catch {
+                    error =
+                        "Select and copy the code, then paste it on GitHub’s sign-in page.";
+                    render();
+                }
+                return;
+            }
+            busy = true;
+            busyAction = action;
+            generation++;
+            error = "";
+            render();
             try {
-                await navigator.clipboard.writeText(state?.userCode ?? "");
-                button.textContent = "Copied";
-            } catch {
-                error =
-                    "Select and copy the code, then paste it on GitHub’s sign-in page.";
+                if (action === "browse" || action === "more") {
+                    const nextPage = action === "browse" ? 1 : page + 1;
+                    const result = await api<Repository[]>(
+                        `/api/github/available-repositories?page=${nextPage}`,
+                    );
+                    page = nextPage;
+                    available = page === 1 ? result : [...available, ...result];
+                    more = result.length === 100;
+                    browsing = true;
+                    await loadEnabled();
+                } else if (action === "enable" || action === "disable") {
+                    enabled = await api<Repository[]>(
+                        "/api/github/repositories",
+                        {
+                            repository: button.dataset.repository,
+                            enabled: String(action === "enable"),
+                        },
+                    );
+                } else {
+                    state = await api<GitHubState>(`/api/github/${action}`, {});
+                    await loadEnabled();
+                }
+                if (!disposed)
+                    window.dispatchEvent(
+                        new Event("goblin-connections-changed"),
+                    );
+            } catch (failure) {
+                error = errorMessage(
+                    failure,
+                    "Could not reach Goblin. Try again.",
+                );
+            } finally {
+                busy = false;
                 render();
             }
-            return;
-        }
-        busy = true;
-        busyAction = action;
-        generation++;
-        error = "";
-        render();
-        try {
-            if (action === "browse" || action === "more") {
-                const nextPage = action === "browse" ? 1 : page + 1;
-                const result = await api<Repository[]>(
-                    `/api/github/available-repositories?page=${nextPage}`,
-                );
-                page = nextPage;
-                available = page === 1 ? result : [...available, ...result];
-                more = result.length === 100;
-                browsing = true;
-                await loadEnabled();
-            } else if (action === "enable" || action === "disable") {
-                enabled = await api<Repository[]>("/api/github/repositories", {
-                    repository: button.dataset.repository,
-                    enabled: String(action === "enable"),
-                });
-            } else {
-                state = await api<GitHubState>(`/api/github/${action}`, {});
-                await loadEnabled();
-            }
-            window.dispatchEvent(new Event("goblin-connections-changed"));
-        } catch (failure) {
-            error = (failure as Error).message;
-        } finally {
-            busy = false;
-            render();
-        }
-    });
+        },
+        { signal: controller.signal },
+    );
     render();
     void Promise.all([refresh(), loadEnabled()]).then(render);
     const timer = setInterval(() => {
@@ -192,6 +212,7 @@ export function mountGitHub(root: HTMLElement) {
     return () => {
         disposed = true;
         generation++;
+        controller.abort();
         clearInterval(timer);
     };
 }

@@ -25,7 +25,8 @@ async function fixture(context: BrowserContext, state: State) {
     await context.route("**/api/**", async (route) => {
         const request = route.request();
         const path = new URL(request.url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
         else if (path === "/api/preferences/timezones")
@@ -227,7 +228,9 @@ test("Settings detects concurrent changes and a failed read never overwrites the
     );
     state.failRead = true;
     await page.reload();
-    await expect(panel.getByRole("alert")).toContainText("could not be loaded");
+    await expect(panel.getByRole("alert")).toHaveText(
+        "Preferences unavailable",
+    );
     await expect(
         panel.getByRole("button", { name: "Save timezone" }),
     ).toBeDisabled();

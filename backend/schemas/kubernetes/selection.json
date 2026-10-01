@@ -1,15 +1,15 @@
 {
   "sources": {
     "agentSandbox": {
-      "version": "v1.0.3",
+      "version": "v1.0.4",
       "file": "sandbox-v1beta1.json",
       "sha256": "9cb46ae1317deccb41617fb0a83ad1ca407cd141aec32c0c85fd594689a767af"
     },
     "kubernetes": {
-      "version": "v1.36.4",
-      "file": "kubernetes-v1.36.4-swagger.json.gz",
-      "sha256": "00fb8cb898782cc8fbdf6c2660969db220f97ce9c20175d31c6cd6e830b01926",
-      "rawSha256": "dcede2063da1d7ad62ecb5af8adb6d7fabd0b52385a7fa0048afb491dac90450"
+      "version": "v1.37.0",
+      "file": "kubernetes-v1.37.0-swagger.json.gz",
+      "sha256": "f6a43a5d55affa9a77c3bd9b4c5b090c986a738bf77a608c85e533e11628852a",
+      "rawSha256": "465276aedf437726de5a6ed23a41b86d78bb0d347edf251a755ae26a93cdd8a6"
     }
   },
   "overrides": {

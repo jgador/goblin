@@ -1,4 +1,5 @@
 import { escapeHtml as e } from "../work/presentation.js";
+import { requestJson } from "../api/client.js";
 import {
     loadTimeZone,
     locateTimeZone,
@@ -163,13 +164,13 @@ export function mountTimeZonePicker(
         controls();
         status.textContent = "Loading timezones…";
         try {
-            const [preferences, response] = await Promise.all([
+            const [preferences, available] = await Promise.all([
                 loadTimeZone(signal),
-                fetch("/api/preferences/timezones", { signal }),
+                requestJson<unknown>("/api/preferences/timezones", {
+                    signal,
+                    failureMessage: "Timezones could not be loaded. Try again.",
+                }),
             ]);
-            if (!response.ok)
-                throw new Error("Timezones could not be loaded. Try again.");
-            const available: unknown = await response.json();
             if (
                 !Array.isArray(available) ||
                 !available.every((zone) => typeof zone === "string")

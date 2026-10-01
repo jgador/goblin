@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The pre-18 PVC stored data directly in pgdata. Refuse to initialize a new
+# database beside it when an existing installation changes its image version.
+if [[ -s /var/lib/postgresql/pgdata/PG_VERSION ]]; then
+  printf 'Existing PostgreSQL data requires a major-version migration before using PostgreSQL 18. Restore into a fresh volume or run pg_upgrade; the existing data has been preserved.\n' >&2
+  exit 1
+fi
+
 # Secret volumes update their ..data symlink atomically. PostgreSQL needs SIGHUP
 # to load a renewed server certificate/CA; no restart or connection edit is needed.
 watch_certificates() {

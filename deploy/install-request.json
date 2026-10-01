@@ -23,7 +23,7 @@
     },
     {
       "path": "deploy/auth/logging/workloads.yaml",
-      "sha256": "f9c237324f1a5ace928ed03702e41f6b039087cc8fb18dfb683f8209f05e2a92"
+      "sha256": "7a118f254390e57b73ef8a98f21a8288ca5930041bfd6f2a59151775d31a8d84"
     },
     {
       "path": "deploy/auth/sandbox.yaml",

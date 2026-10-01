@@ -23,8 +23,6 @@ main { max-width: 1040px; margin: 0 auto; }
 h1 { color: var(--green); font-size: clamp(30px, 4vw, 42px); line-height: 1.15; font-weight: 600; letter-spacing: -1.5px; margin: 12px 0; }
 .intro, footer, #recovery { color: var(--muted); line-height: 1.7; font-size: 14px; }
 .intro { max-width: 480px; margin-bottom: 32px; }
-.summary { display: flex; align-items: baseline; gap: 16px; justify-content: space-between; font-size: 13px; min-height: 40px; color: var(--green); }
-#message { overflow-wrap: anywhere; }
 #elapsed { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .installation-progress { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: start; gap: 24px; }
 ol { list-style: none; padding: 0; margin: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
@@ -49,6 +47,7 @@ footer { font-size: 12px; margin-top: 24px; }
 .installation-log:not([open]) summary::after { transform: rotate(-45deg); margin-top: 0; }
 .installation-log summary:hover { background: #f0f2e9; }
 .log-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 49px; padding: 4px 18px; border-block: 1px solid var(--border); background: #f0f2e9; font-size: 12px; color: var(--muted); }
+.log-status { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 #log-connection { display: inline-flex; align-items: center; gap: 7px; }
 #log-connection::before { content: ""; width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
 #log-connection[data-status="running"], #log-connection[data-status="ready"] { color: #526e39; }

@@ -69,7 +69,7 @@ spec:
       serviceAccountName: agent-sandbox-controller
       containers:
         - name: agent-sandbox-controller
-          image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.3
+          image: registry.k8s.io/agent-sandbox/agent-sandbox-controller:v1.0.4
 `,
     );
     const rendered = execFileSync(
@@ -88,7 +88,7 @@ spec:
     );
     assert.match(
         rendered,
-        /image: registry\.k8s\.io\/agent-sandbox\/agent-sandbox-controller:v1\.0\.3/,
+        /image: registry\.k8s\.io\/agent-sandbox\/agent-sandbox-controller:v1\.0\.4/,
     );
     assert.match(rendered, /serviceAccountName: agent-sandbox-controller/);
     assert.match(

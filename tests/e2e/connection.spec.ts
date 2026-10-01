@@ -248,7 +248,7 @@ test("an expired workspace session clears the check and verifies again after unl
         page.getByRole("heading", { name: "Open your workspace" }),
     ).toBeVisible();
     await expect(page.locator("#connection-check")).toBeHidden();
-    await expect(page.locator("#account-detail")).toHaveText("");
+    await expect(page.locator("#account-detail")).toHaveCount(0);
     await page.getByLabel("Goblin password", { exact: true }).fill("a");
     await page.getByRole("button", { name: "Open workspace" }).click();
     await expect(page.locator("#connection-status")).toHaveText("Connected");

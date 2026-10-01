@@ -1,6 +1,5 @@
 import { SetupStatus, SetupPhase, SetupStepStatus, isSetupState } from "./contract-values.js";
 
-const message = document.querySelector('#message');
 const connection = document.querySelector('#connection');
 const steps = document.querySelector('#steps');
 const log = document.querySelector('#install-log');
@@ -12,7 +11,6 @@ let failures = 0;
 function render(state) {
   if (latest?.logGeneration === state.logGeneration && state.revision < latest.revision) return;
   latest = state;
-  message.textContent = state.message;
   logConnection.dataset.status = state.status;
   logConnection.textContent = state.status === SetupStatus.Failed ? 'Installation stopped' : state.status === SetupStatus.Ready ? 'Complete' : 'Live';
   document.querySelector('#recovery').hidden = state.status !== SetupStatus.Failed;

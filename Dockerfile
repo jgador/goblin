@@ -1,5 +1,5 @@
 # Build frontend assets and stage native CLI tools; Node/npm stay in this stage.
-FROM node:24.18.0-bookworm-slim AS assets
+FROM node:26.10.0-bookworm-slim AS assets
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -35,7 +35,7 @@ JS
 
 # Publish the app and migration tool against the shared .NET runtime.
 # Only their publish outputs enter the final image; the SDK stays in this stage.
-FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS build
 WORKDIR /app
 COPY global.json ./
 COPY backend/Directory.Build.props ./backend/Directory.Build.props
@@ -46,7 +46,7 @@ RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publi
 RUN dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --nologo
 
 # Runtime image for the application controller and isolated execution workers.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble
 WORKDIR /app
 # Git serves the repository broker and workers; its package also brings Perl.
 # Remove package indexes in the same layer to avoid retaining download metadata.

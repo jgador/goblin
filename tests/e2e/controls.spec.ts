@@ -8,7 +8,8 @@ async function setup(
     const commands: unknown[] = [];
     await page.route("**/api/**", (route) => {
         const path = new URL(route.request().url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         if (route.request().method() === "POST")
             commands.push(route.request().postDataJSON());
         const data: Record<string, unknown> = {
