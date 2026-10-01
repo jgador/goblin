@@ -24,6 +24,11 @@ public static class EnvironmentVariables
     /// Required: Required for schema migration. Sensitive: yes.</remarks>
     public const string ConnectionStringsGoblinAdmin = "ConnectionStrings__GoblinAdmin";
 
+    /// <summary>Fictional external-service credential used only to test subprocess environment isolation.</summary>
+    /// <remarks>Format: Dummy test marker. Default/fallback: Not forwarded to isolated runtimes or GitHub CLI.
+    /// Required: Never required by Goblin environment configuration. Sensitive: yes.</remarks>
+    public const string ExternalServiceApiKey = "EXTERNAL_SERVICE_API_KEY";
+
     /// <summary>Private GitHub CLI configuration directory.</summary>
     /// <remarks>Format: Directory path. Default/fallback: Goblin supplies its private GitHub profile.
     /// Required: Supplied for GitHub CLI. Sensitive: yes.</remarks>
@@ -253,11 +258,6 @@ public static class EnvironmentVariables
     /// <remarks>Format: PEM certificate file path. Default/fallback: Inherited only when present; otherwise runtime trust defaults.
     /// Required: Optional. Sensitive: no.</remarks>
     public const string SslCertFile = "SSL_CERT_FILE";
-
-    /// <summary>External credential used as a negative inheritance fixture; Goblin authenticates through private credential storage.</summary>
-    /// <remarks>Format: Secret text. Default/fallback: Not forwarded to isolated runtimes or GitHub CLI.
-    /// Required: Never required by Goblin environment configuration. Sensitive: yes.</remarks>
-    public const string ExternalServiceApiKey = "EXTERNAL_SERVICE_API_KEY";
 
     /// <summary>Windows system directory allowed through to Codex.</summary>
     /// <remarks>Format: Directory path. Default/fallback: Inherited only when present.

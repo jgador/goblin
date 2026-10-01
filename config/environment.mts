@@ -115,6 +115,15 @@ export const environmentVariables = {
         required: "Never required by the installer",
         sensitive: false,
     },
+    EXTERNAL_SERVICE_API_KEY: {
+        name: "EXTERNAL_SERVICE_API_KEY",
+        purpose:
+            "Fictional external-service credential used only to test subprocess environment isolation.",
+        format: "Dummy test marker",
+        fallback: "Not forwarded to isolated runtimes or GitHub CLI",
+        required: "Never required by Goblin environment configuration",
+        sensitive: true,
+    },
     GITHUB_REPOSITORY: {
         name: "GITHUB_REPOSITORY",
         purpose: "Repository selected by release publication.",
@@ -396,15 +405,6 @@ export const environmentVariables = {
             "systemd supplies it; offline harness uses success unless recovering",
         required: "Required for service recovery classification",
         sensitive: false,
-    },
-    EXTERNAL_SERVICE_API_KEY: {
-        name: "EXTERNAL_SERVICE_API_KEY",
-        purpose:
-            "External credential used as a negative inheritance fixture; Goblin authenticates through private credential storage.",
-        format: "Secret text",
-        fallback: "Not forwarded to isolated runtimes or GitHub CLI",
-        required: "Never required by Goblin environment configuration",
-        sensitive: true,
     },
 } as const satisfies Record<string, EnvironmentVariableDefinition>;
 
