@@ -315,6 +315,8 @@ async function refresh(preserveError = false) {
                     "cluster",
                     "logs",
                     "timezone",
+                    "integrations",
+                    "slack",
                 ].includes(target)
                     ? target
                     : "connections",
@@ -996,7 +998,7 @@ function showSetupErrors() {
 }
 function renderChat() {
     const c = conversations.find((x) => x.id === activeChat);
-    return `<section class="chat-workspace"><div class="detail-body" data-scroll="chat"><div class="thread-content">${c ? `<h1 class="conversation-title">${e(c.title)}</h1>` + c.messages.map((m) => message("You", m.text, m.createdAt)).join("") + (c.workId ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>` : `<div class="decision"><h3>Ready to take this forward?</h3><p>Track this conversation as Work when you want Goblin to execute it.</p>${button("track", "Track this work", true)}</div>`) : `<div class="conversation-empty"><h1>A little room to think</h1><p>Save ideas and context here. Track them as Work when you’re ready for Goblin to start.</p></div>`}</div></div>${composer("chat", "Add to the conversation…")}</section>`;
+    return `<section class="chat-workspace"><div class="detail-body" data-scroll="chat"><div class="thread-content">${c ? `<h1 class="conversation-title">${e(c.title)}</h1>` + c.messages.map((m) => message(m.source ? `${m.source.provider} · ${m.source.userId}` : "You", m.text, m.createdAt)).join("") + (c.workId ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>` : `<div class="decision"><h3>Ready to take this forward?</h3><p>Track this conversation as Work when you want Goblin to execute it.</p>${button("track", "Track this work", true)}</div>`) : `<div class="conversation-empty"><h1>A little room to think</h1><p>Save ideas and context here. Track them as Work when you’re ready for Goblin to start.</p></div>`}</div></div>${composer("chat", "Add to the conversation…")}</section>`;
 }
 function setModelEffort(value: string, updateOnly = false) {
     const w = composerWork();
@@ -1126,7 +1128,9 @@ document.addEventListener("click", async (event) => {
                     ? "codex"
                     : action === "settings-agents"
                       ? "agents"
-                      : "connections",
+                      : action === "settings-integrations"
+                        ? "integrations"
+                        : "connections",
         );
         return;
     }

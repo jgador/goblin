@@ -1,5 +1,6 @@
 import { mountCodex } from "../connection/codex.js";
 import { mountGitHub } from "./github.js";
+import { mountSlack } from "./slack.js";
 import { icon, escapeHtml as e } from "../work/presentation.js";
 import { SystemResources } from "./system.js";
 import { mountTimeZonePicker } from "./timezone-picker.js";
@@ -16,6 +17,8 @@ const providers = [
     "cluster",
     "logs",
     "timezone",
+    "integrations",
+    "slack",
 ] as const;
 type Provider = (typeof providers)[number];
 function providerFrom(value: string): Provider {
@@ -26,6 +29,7 @@ export class Settings {
     private readonly dialog = document.createElement("dialog");
     private codexMounted = false;
     private githubMounted = false;
+    private slackDispose?: () => void;
     private opener: HTMLElement | null = null;
     private openerAction = "settings";
     private generation = 0;
@@ -43,6 +47,8 @@ export class Settings {
         this.dialog.close();
         this.codexDispose?.();
         this.githubDispose?.();
+        this.slackDispose?.();
+        this.slackDispose = undefined;
         this.timezoneDispose?.();
         this.timezoneDispose = undefined;
         this.codexDispose = this.githubDispose = undefined;
@@ -58,6 +64,22 @@ export class Settings {
         this.dialog.setAttribute("aria-labelledby", "settings-title");
         this.dialog.innerHTML = `<header class="settings-header"><h2 id="settings-title">Settings</h2><button class="settings-close icon-button" type="button" aria-label="Close settings">${icon("close")}</button></header><div class="settings-layout"><nav class="settings-nav" aria-label="Settings"><p>Workspace</p><button data-provider="connections">${icon("spark")}AI connections</button><button data-provider="github">${icon("branch")}GitHub</button><button data-provider="cluster">${icon("activity")}Cluster</button><button data-provider="logs">${icon("activity")}Logs</button><button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><section data-provider-panel="connections" aria-label="AI connections"></section><section class="codex-settings" data-provider-panel="codex" aria-label="Codex connection"><p>Loading Codex settings…</p></section><section data-provider-panel="github" aria-label="GitHub connection" hidden></section><section data-provider-panel="cluster" aria-label="Cluster" hidden></section><section data-provider-panel="logs" aria-label="Logs" hidden></section></div></div>`;
         document.body.append(this.dialog);
+        const integrationsButton = document.createElement("button");
+        integrationsButton.dataset.provider = "integrations";
+        integrationsButton.innerHTML = `${icon("activity")}Integrations`;
+        this.dialog
+            .querySelector('[data-provider="github"]')!
+            .after(integrationsButton);
+        for (const name of ["integrations", "slack"]) {
+            const panel = document.createElement("section");
+            panel.dataset.providerPanel = name;
+            panel.setAttribute(
+                "aria-label",
+                name === "slack" ? "Slack integration" : "Integrations",
+            );
+            panel.hidden = true;
+            this.dialog.querySelector(".settings-content")!.append(panel);
+        }
         const agentsButton = document.createElement("button");
         agentsButton.dataset.provider = "agents";
         agentsButton.innerHTML = `${icon("agents")}Agents`;
@@ -104,6 +126,8 @@ export class Settings {
             .querySelector(".settings-close")!
             .addEventListener("click", () => this.dialog.close());
         this.dialog.addEventListener("close", () => {
+            this.slackDispose?.();
+            this.slackDispose = undefined;
             this.timezoneDispose?.();
             this.timezoneDispose = undefined;
             const replacement = Array.from(
@@ -127,6 +151,10 @@ export class Settings {
             );
     }
     private select(provider: Provider) {
+        if (provider !== "slack") {
+            this.slackDispose?.();
+            this.slackDispose = undefined;
+        }
         if (provider !== "timezone") {
             this.timezoneDispose?.();
             this.timezoneDispose = undefined;
@@ -144,12 +172,20 @@ export class Settings {
                 button.classList.toggle(
                     "selected",
                     button.dataset.provider ===
-                        (provider === "codex" ? "connections" : provider),
+                        (provider === "codex"
+                            ? "connections"
+                            : provider === "slack"
+                              ? "integrations"
+                              : provider),
                 );
                 button.setAttribute(
                     "aria-current",
                     button.dataset.provider ===
-                        (provider === "codex" ? "connections" : provider)
+                        (provider === "codex"
+                            ? "connections"
+                            : provider === "slack"
+                              ? "integrations"
+                              : provider)
                         ? "page"
                         : "false",
                 );
@@ -174,6 +210,29 @@ export class Settings {
         });
     }
     private async mount(provider: Provider) {
+        if (provider === "integrations") {
+            const panel = this.dialog.querySelector<HTMLElement>(
+                '[data-provider-panel="integrations"]',
+            )!;
+            panel.innerHTML =
+                '<h3>Integrations</h3><p class="settings-description">Bring conversations into Goblin from the tools you use.</p><div class="provider-card"><h4>Slack</h4><p class="settings-description">Direct messages and mentions through an app owned by your workspace.</p><button class="settings-primary" data-open-slack>Set up Slack</button></div>';
+            panel
+                .querySelector("[data-open-slack]")!
+                .addEventListener("click", () => {
+                    this.select("slack");
+                    void this.mount("slack");
+                });
+            return;
+        }
+        if (provider === "slack") {
+            this.slackDispose?.();
+            this.slackDispose = mountSlack(
+                this.dialog.querySelector<HTMLElement>(
+                    '[data-provider-panel="slack"]',
+                )!,
+            );
+            return;
+        }
         if (provider === "agents") {
             const panel = this.dialog.querySelector<HTMLElement>(
                 '[data-provider-panel="agents"]',

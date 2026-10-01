@@ -6,6 +6,10 @@ import { format } from "prettier";
 
 type Values = Record<string, Record<string, string>>;
 const sources: Record<string, string[]> = {
+    "backend/src/Goblin.Contracts/Conversations/ExternalConversations.cs": [
+        "SlackConnectionStatus",
+        "SlackSetupStatus",
+    ],
     "backend/src/Goblin.Core/Work/WorkTypes.cs": [
         "WorkStatus",
         "AttemptStatus",

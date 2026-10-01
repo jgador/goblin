@@ -10,6 +10,25 @@ export interface EnvironmentVariableDefinition {
 
 /** See docs/environment-variables.md before adding or forwarding a variable. */
 export const environmentVariables = {
+    GOBLIN_TEST_POSTGRES_ADMIN: {
+        name: "GOBLIN_TEST_POSTGRES_ADMIN",
+        purpose:
+            "Opt-in local PostgreSQL schema administrator connection for integration tests.",
+        format: "Npgsql connection string.",
+        fallback: "Database-dependent tests are skipped.",
+        required: "Only when running real PostgreSQL tests.",
+        sensitive: true,
+    },
+    TMPDIR: {
+        name: "TMPDIR",
+        purpose:
+            "Keep setup and test subprocess temporary files in a private task directory.",
+        format: "Absolute directory path.",
+        fallback: "Operating-system temporary directory.",
+        required:
+            "Set for isolated Slack setup and task-local integration verification.",
+        sensitive: false,
+    },
     BUILDX_BUILDER: {
         name: "BUILDX_BUILDER",
         purpose:

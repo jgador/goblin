@@ -30,7 +30,8 @@ public sealed class PublicApiContractTests
         typeof(Api.IdentityRequest), typeof(Api.ReservedIdentities), typeof(Api.ConversationCommand),
         typeof(Api.ConversationView), typeof(Api.AuthenticationState), typeof(Api.PromptResult),
         typeof(Api.ModelCatalogView), typeof(Api.RuntimeCapabilities), typeof(Api.GitHubState),
-        typeof(Api.EnabledRepository), typeof(Api.RepositoryInfo), typeof(Api.WorkspaceView)
+        typeof(Api.EnabledRepository), typeof(Api.RepositoryInfo), typeof(Api.WorkspaceView),
+        typeof(Api.SlackState), typeof(Api.SlackLinkCode)
     ];
 
     [Fact]

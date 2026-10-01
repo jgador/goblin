@@ -185,6 +185,12 @@ base/work branches, and publication permissions. The broker checks the exact bra
 and operation without sharing upstream credentials. Publication and local Git checkpoint
 receipts are durable. Local checkpoints never require publication; files stay on the
 Work PVC. Settings changes are blocked while affected execution retains capacity or
-requires cleanup. The shared application commands provide an integration boundary for
-future authenticated conversation adapters; Slack, Teams, and management MCP adapters
-remain unimplemented.
+requires cleanup. The shared application commands also serve the Slack conversation
+adapter. PostgreSQL records approved external identities, message receipts, thread
+associations, and source provenance. Receipt processing commits conversation and
+Work changes with dispatch intent through the same application boundary. Slack
+users need an explicit local owner grant; repository approvals and retries remain
+in Goblin. Teams and management MCP adapters remain unimplemented.
+
+The [Slack integration plan](slack-integration-plan.md) describes customer-owned
+apps, automated local setup, Socket Mode, and the required actor-mapping boundary.

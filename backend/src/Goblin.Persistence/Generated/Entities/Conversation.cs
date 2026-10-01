@@ -25,6 +25,9 @@ public partial class Conversation
     [InverseProperty("Conversation")]
     public virtual ICollection<ConversationMessage> ConversationMessages { get; set; } = [];
 
+    [InverseProperty("Conversation")]
+    public virtual ICollection<ExternalConversation> ExternalConversations { get; set; } = [];
+
     [ForeignKey("WorkId")]
     [InverseProperty("Conversations")]
     public virtual WorkItem? Work { get; set; }

@@ -107,5 +107,17 @@ export type Conversation = {
     id: string;
     title: string;
     workId?: string;
-    messages: { id: string; text: string; createdAt: string }[];
+    messages: {
+        id: string;
+        text: string;
+        createdAt: string;
+        source?: {
+            provider: string;
+            userId: string;
+            workspaceId: string;
+            channelId: string;
+            threadId: string;
+            messageId: string;
+        };
+    }[];
 };

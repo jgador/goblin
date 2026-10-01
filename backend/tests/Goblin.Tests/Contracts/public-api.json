@@ -58,9 +58,18 @@
     "text",
     "workId"
   ],
+  "ConversationMessageSource": [
+    "channelId",
+    "messageId",
+    "provider",
+    "threadId",
+    "userId",
+    "workspaceId"
+  ],
   "ConversationMessageView": [
     "createdAt",
     "id",
+    "source",
     "text"
   ],
   "ConversationView": [
@@ -240,6 +249,42 @@
   ],
   "SessionState": [
     "authenticated"
+  ],
+  "SlackConnectionView": [
+    "appId",
+    "botUserId",
+    "notice",
+    "status",
+    "workspace",
+    "workspaceId"
+  ],
+  "SlackIdentityView": [
+    "id",
+    "userId"
+  ],
+  "SlackLinkCode": [
+    "code",
+    "expiresAt",
+    "id"
+  ],
+  "SlackLinkView": [
+    "expiresAt",
+    "id",
+    "userId"
+  ],
+  "SlackSetupView": [
+    "appId",
+    "command",
+    "expiresAt",
+    "notice",
+    "status"
+  ],
+  "SlackState": [
+    "available",
+    "connection",
+    "identities",
+    "link",
+    "setup"
   ],
   "SystemOverview": [
     "history",

@@ -19,6 +19,7 @@ public sealed class PublicError : Exception
     public static PublicError Translate(Exception error) => error switch
     {
         PublicError known => known,
+        Goblin.Integrations.Slack.SlackFailure failure => new("slack_failed", failure.Message, 400),
         System.Text.Json.JsonException => new("invalid_command", "The command could not be read."),
         Goblin.Integrations.GitHub.GitHubFailure failure => new("github_connection_failed", failure.Message, 502),
         IntegrationFailure failure => new(failure.Code, failure.Message, failure.Code switch
@@ -33,6 +34,7 @@ public sealed class PublicError : Exception
         }),
         ApplicationFailure failure => new(failure.Code, failure.Code switch
         {
+            "external_link_expired" => "This Slack link request expired or has already been used. Start linking again.",
             "workspace_checkpoint_unconfirmed" => "The Git checkpoint could not be verified. The local workspace is retained.",
             "workspace_unavailable" => "This workspace is unavailable. Check its retained volume and inspection session.",
             "workspace_session_exists" => "A workspace session is already open for this Work.",

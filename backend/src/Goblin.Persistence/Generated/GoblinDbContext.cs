@@ -24,6 +24,14 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<ExecutionAttempt> ExecutionAttempts { get; set; }
 
+    public virtual DbSet<ExternalConversation> ExternalConversations { get; set; }
+
+    public virtual DbSet<ExternalIdentity> ExternalIdentities { get; set; }
+
+    public virtual DbSet<ExternalLinkRequest> ExternalLinkRequests { get; set; }
+
+    public virtual DbSet<ExternalMessage> ExternalMessages { get; set; }
+
     public virtual DbSet<GithubConnection> GithubConnections { get; set; }
 
     public virtual DbSet<GithubRepository> GithubRepositories { get; set; }
@@ -111,6 +119,41 @@ public partial class GoblinDbContext : DbContext
             entity.HasOne(d => d.Work).WithMany(p => p.ExecutionAttempts)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("execution_attempts_work_id_fkey");
+        });
+
+        modelBuilder.Entity<ExternalConversation>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("external_conversations_pkey");
+
+            entity.HasOne(d => d.Conversation).WithMany(p => p.ExternalConversations)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("external_conversations_conversation_id_fkey");
+        });
+
+        modelBuilder.Entity<ExternalIdentity>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("external_identities_pkey");
+
+            entity.Property(e => e.Enabled).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<ExternalLinkRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("external_link_requests_pkey");
+        });
+
+        modelBuilder.Entity<ExternalMessage>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("external_messages_pkey");
+
+            entity.HasIndex(e => new { e.InstallationId, e.Id }, "external_pending").HasFilter("(state = ANY (ARRAY['Pending'::text, 'PendingLink'::text]))");
+
+            entity.Property(e => e.ReceivedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.State).HasDefaultValueSql("'Pending'::text");
+
+            entity.HasOne(d => d.ConversationMessage).WithMany(p => p.ExternalMessages).HasConstraintName("external_messages_conversation_message_id_fkey");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.ExternalMessages).HasConstraintName("external_messages_work_id_fkey");
         });
 
         modelBuilder.Entity<GithubConnection>(entity =>
