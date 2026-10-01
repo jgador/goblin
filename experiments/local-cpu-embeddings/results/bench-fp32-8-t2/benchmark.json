@@ -1,0 +1,43 @@
+{
+  "Model": "bge-fp32.onnx",
+  "ModelBytes": 133093490,
+  "Dimensions": 384,
+  "Threads": 2,
+  "Batch": 8,
+  "Count": 512,
+  "LoadSeconds": 0.265118,
+  "LoadedRssBytes": 293720064,
+  "Seconds": 28.8261047,
+  "RecordsPerSecond": 17.761678358158466,
+  "EmbeddingsPerSecond": 17.786590292159616,
+  "AverageBatchMs": 450.32522500000016,
+  "P95BatchMs": 1360.9177,
+  "AverageInferenceBatchMs": 449.77704375,
+  "CpuSeconds": 57.146055,
+  "AverageProcessCpuPercent": 198.24411100539714,
+  "SampleStartSeconds": 0.5519684,
+  "Resources": {
+    "SampleCount": 556,
+    "PeakRssBytes": 648318976,
+    "MedianRssBytes": 643907584,
+    "AverageProcessCpuPercent": 197.80500208053948,
+    "PeakProcessCpuPercent": 305.23107574445845,
+    "AverageCapacityCpuPercent": 24.80792749575317,
+    "PeakCapacityCpuPercent": 38.85524634119516,
+    "PeakGcHeapBytes": 23142808,
+    "PeakThreads": 12,
+    "MinimumAvailableRamBytes": 6655660032
+  },
+  "WholeProcessResources": {
+    "SampleCount": 565,
+    "PeakRssBytes": 648318976,
+    "MedianRssBytes": 643751936,
+    "AverageProcessCpuPercent": 196.72802172928803,
+    "PeakProcessCpuPercent": 305.23107574445845,
+    "AverageCapacityCpuPercent": 24.67232885892586,
+    "PeakCapacityCpuPercent": 38.85524634119516,
+    "PeakGcHeapBytes": 23142808,
+    "PeakThreads": 12,
+    "MinimumAvailableRamBytes": 6655660032
+  }
+}
