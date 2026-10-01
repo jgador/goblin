@@ -16,11 +16,11 @@ step() { current_step=$1; state start "$1"; }
 done_step() { state complete "$current_step"; }
 download() { curl --fail --silent --show-error --location --retry 5 --connect-timeout 15 --max-time 300 "$1" --output "$2"; }
 
-K3S_VERSION='v1.36.4+k3s1'
-K3S_INSTALL_SHA256='46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad'
+K3S_VERSION='v1.37.0+k3s1'
+K3S_INSTALL_SHA256='ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b'
 # Core only: Goblin uses Sandbox directly, without the optional extensions.
-SANDBOX_VERSION='v1.0.3'
-SANDBOX_MANIFEST_SHA256='725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96'
+SANDBOX_VERSION='v1.0.4'
+SANDBOX_MANIFEST_SHA256='c4f6344b6f04e450b61c433ce6275f2a45bc30f746b55ce47ade454ffa2a1aa7'
 CERT_MANAGER_VERSION='v1.21.2'
 CERT_MANAGER_SHA256='e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f'
 traefik_config=/var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml

@@ -5,10 +5,10 @@ release Goblin uses and the separate service images it deploys:
 
 ```toml
 [goblinctl]
-version = "0.1.3"
+version = "0.1.4"
 
 [images]
-postgres = "postgres:16.15-bookworm"
+postgres = "postgres:18.6-bookworm"
 headlamp = "ghcr.io/headlamp-k8s/headlamp:v0.45.0"
 ```
 
@@ -73,6 +73,24 @@ cargo xtask release pin-installer --version X.Y.Z
 
 This updates the release selection and dependency lock together. Azure assets are
 generated during release preparation. It does not refresh Docker image tags.
+
+## Current stable images
+
+The deployment and build image selections were checked against upstream stable
+releases on 2026-10-01. Fresh installations use PostgreSQL 18.6, Headlamp 0.45.0,
+VictoriaLogs 1.53.0, Fluent Bit 5.1.3, K3s 1.37.0, Agent Sandbox 1.0.4, and
+cert-manager 1.21.2. The build uses Node 26.10.0, .NET SDK 10.0.401, and ASP.NET
+Core 10.0.12. K3s, cert-manager, and Agent Sandbox retain ownership of their
+bundled component images. Prereleases are excluded; explicit version tags keep
+future upstream releases from silently changing the selected version.
+
+PostgreSQL 18 mounts its PVC at `/var/lib/postgresql` and stores the database in
+`/var/lib/postgresql/18/docker`. A PostgreSQL 16 data directory requires an
+explicit major-version migration or dump/restore into a fresh PVC. Changing the
+image tag cannot upgrade database files. The startup script refuses an older
+Goblin `pgdata` directory so it cannot initialize a new database beside existing
+history. Completed installations need a deliberate upgrade; these source changes
+do not alter a running installation.
 
 ## Source files and compatibility
 

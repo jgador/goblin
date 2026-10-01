@@ -24,7 +24,7 @@ browser or terminal does not stop the installer. Starting an existing installati
 preserves its data and password.
 
 Starting an existing installation does not upgrade Agent Sandbox. Follow the
-[v1.0.3 in-place upgrade instructions](../azure/reference.md#agent-sandbox-v103-upgrade)
+[v1.0.4 in-place upgrade instructions](../azure/reference.md#agent-sandbox-v104-upgrade)
 to update its controller without resetting the cluster or deleting Goblin data.
 For this unreleased naming change, recreate local test installations as described
 in [Kubernetes names](../../docs/kubernetes-names.md#local-test-installations).

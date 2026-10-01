@@ -578,15 +578,16 @@ mod tests {
         let temp = fixture();
         let path = temp.path().join(CATALOG);
         let content = fs::read_to_string(&path).unwrap();
+        let postgres = read_catalog(temp.path()).unwrap().images["postgres"].clone();
         fs::write(&path, format!("{content}\n[packages]\nunknown = true\n")).unwrap();
         assert!(read_catalog(temp.path()).is_err());
         for reference in ["postgres", "postgres@sha256:abc", "postgres:16 --flag"] {
-            fs::write(&path, content.replace("postgres:16.15-bookworm", reference)).unwrap();
+            fs::write(&path, content.replace(&postgres, reference)).unwrap();
             assert!(read_catalog(temp.path()).is_err());
         }
         fs::write(
             &path,
-            content.replace("postgres:16.15-bookworm", "localhost:5000/postgres:16"),
+            content.replace(&postgres, "localhost:5000/postgres:16"),
         )
         .unwrap();
         read_catalog(temp.path()).unwrap();

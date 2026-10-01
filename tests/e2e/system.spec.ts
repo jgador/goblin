@@ -46,7 +46,8 @@ async function fixture(page: Page) {
     let locked = false;
     await page.route("**/api/**", async (route) => {
         const path = new URL(route.request().url()).pathname;
-        if (path === "/api/values.js") return route.continue();
+        if (route.request().resourceType() === "script")
+            return route.continue();
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: !locked };
         else if (path === "/api/preferences")

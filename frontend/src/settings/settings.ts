@@ -3,6 +3,24 @@ import { mountGitHub } from "./github.js";
 import { icon, escapeHtml as e } from "../work/presentation.js";
 import { SystemResources } from "./system.js";
 import { mountTimeZonePicker } from "./timezone-picker.js";
+import { requestJson } from "../api/client.js";
+import { ReadScope } from "../api/read-scope.js";
+import type { Agent } from "../api/workspace-contracts.js";
+
+const providers = [
+    "agents",
+    "connections",
+    "codex",
+    "github",
+    "system",
+    "cluster",
+    "logs",
+    "timezone",
+] as const;
+type Provider = (typeof providers)[number];
+function providerFrom(value: string): Provider {
+    return providers.find((provider) => provider === value) ?? "connections";
+}
 
 export class Settings {
     private readonly dialog = document.createElement("dialog");
@@ -15,11 +33,13 @@ export class Settings {
     private githubDispose?: () => void;
     private timezoneDispose?: () => void;
     private readonly system: SystemResources;
+    private readonly reads = new ReadScope();
     get isOpen() {
         return this.dialog.open;
     }
     reset() {
         this.generation++;
+        this.reads.reset();
         this.dialog.close();
         this.codexDispose?.();
         this.githubDispose?.();
@@ -73,7 +93,8 @@ export class Settings {
         this.dialog.querySelector(".settings-content")!.append(systemPanel);
         this.dialog.addEventListener("click", (event) => {
             if (
-                (event.target as Element).closest("[data-open-system-cluster]")
+                event.target instanceof Element &&
+                event.target.closest("[data-open-system-cluster]")
             ) {
                 this.select("cluster");
                 void this.mount("cluster");
@@ -97,12 +118,15 @@ export class Settings {
             .querySelectorAll<HTMLButtonElement>("[data-provider]")
             .forEach((button) =>
                 button.addEventListener("click", () => {
-                    this.select(button.dataset.provider!);
-                    void this.mount(button.dataset.provider!);
+                    const provider = providerFrom(
+                        button.dataset.provider ?? "",
+                    );
+                    this.select(provider);
+                    void this.mount(provider);
                 }),
             );
     }
-    private select(provider: string) {
+    private select(provider: Provider) {
         if (provider !== "timezone") {
             this.timezoneDispose?.();
             this.timezoneDispose = undefined;
@@ -131,14 +155,25 @@ export class Settings {
                 );
             });
     }
-    async open(provider = "connections") {
-        this.opener = document.activeElement as HTMLElement;
+    async open(value = "connections") {
+        const provider = providerFrom(value);
+        this.opener =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement
+                : null;
         this.openerAction = this.opener?.dataset.action ?? "settings";
         this.select(provider);
         if (!this.dialog.open) this.dialog.showModal();
         await this.mount(provider);
     }
-    private async mount(provider: string) {
+    private api<T>(path: string) {
+        return requestJson<T>(path, {
+            signal: this.reads.signal,
+            onUnauthorized: () =>
+                window.dispatchEvent(new Event("goblin-workspace-locked")),
+        });
+    }
+    private async mount(provider: Provider) {
         if (provider === "agents") {
             const panel = this.dialog.querySelector<HTMLElement>(
                 '[data-provider-panel="agents"]',
@@ -147,14 +182,7 @@ export class Settings {
             panel.innerHTML =
                 '<h3>Agents</h3><p class="settings-description">Loading agents…</p>';
             try {
-                const response = await fetch("/api/agents");
-                if (!response.ok) throw new Error();
-                const agents = (await response.json()) as {
-                    name: string;
-                    connectionId: string;
-                    model?: string;
-                    isDefault: boolean;
-                }[];
+                const agents = await this.api<Agent[]>("/api/agents");
                 if (generation !== this.generation) return;
                 panel.innerHTML = `<h3>Agents</h3><p class="settings-description">Your coworkers carry work from its goal through review.</p>${agents.map((agent) => `<div class="provider-card"><div class="provider-heading">${icon("user")}<h4>${e(agent.name)}</h4>${agent.isDefault ? '<span class="provider-default">Default</span>' : ""}</div><p class="settings-description">${agent.model ? e(agent.model) : "Uses the connected runtime’s default model"}</p></div>`).join("") || '<p class="settings-description">No agents are available yet.</p>'}`;
             } catch {
@@ -196,23 +224,24 @@ export class Settings {
             return;
         }
         if (provider === "cluster") {
+            const generation = this.generation;
             const panel = this.dialog.querySelector<HTMLElement>(
                 '[data-provider-panel="cluster"]',
             )!;
             panel.innerHTML =
                 '<h3>Cluster</h3><p class="settings-description">Loading cluster access…</p>';
             try {
-                const response = await fetch("/api/cluster");
-                if (!response.ok) throw new Error();
-                const cluster = (await response.json()) as {
-                    available: boolean;
-                };
+                const cluster = await this.api<{ available: boolean }>(
+                    "/api/cluster",
+                );
+                if (generation !== this.generation) return;
                 panel.innerHTML = `<h3>Cluster</h3><p class="settings-description">View pods, logs, events, and storage in Headlamp.</p>${
                     cluster.available
                         ? '<p class="settings-description">Your Goblin login gives you read-only access. Opens in a new tab.</p><a class="settings-primary" href="/headlamp/" target="_blank" rel="noopener">Open cluster</a>'
                         : '<p class="settings-notice">The cluster view is available with Goblin’s Kubernetes installation.</p>'
                 }`;
             } catch {
+                if (generation !== this.generation) return;
                 panel.innerHTML =
                     '<h3>Cluster</h3><p class="settings-notice">Cluster access could not be loaded. Unlock Goblin and try again.</p>';
             }
@@ -226,9 +255,9 @@ export class Settings {
             panel.innerHTML =
                 '<h3>Logs</h3><p class="settings-description">Loading log access…</p>';
             try {
-                const response = await fetch("/api/logs");
-                if (!response.ok) throw new Error();
-                const logs = (await response.json()) as { available: boolean };
+                const logs = await this.api<{ available: boolean }>(
+                    "/api/logs",
+                );
                 if (generation !== this.generation) return;
                 panel.innerHTML =
                     '<h3>Logs</h3><p class="settings-description">Search saved Goblin logs and follow new events.</p>' +
@@ -260,7 +289,9 @@ export class Settings {
         )!;
         const generation = this.generation;
         try {
-            const response = await fetch("/connection/panel.html");
+            const response = await fetch("/connection/panel.html", {
+                signal: this.reads.signal,
+            });
             if (!response.ok) throw new Error();
             const html = await response.text();
             if (generation !== this.generation) return;
@@ -273,10 +304,15 @@ export class Settings {
                     this.select("connections");
                     void this.mount("connections");
                 });
-            const dispose = await mountCodex(panel);
+            const dispose = await mountCodex(
+                panel,
+                undefined,
+                this.reads.signal,
+            );
             if (generation !== this.generation) dispose?.();
             else this.codexDispose = dispose;
         } catch {
+            if (generation !== this.generation) return;
             panel.innerHTML =
                 '<p class="settings-notice" role="alert">Codex settings could not be loaded. Return to AI connections and try again.</p>';
             this.codexMounted = false;

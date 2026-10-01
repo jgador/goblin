@@ -1,16 +1,18 @@
 import type {
     Account,
-    ApiFailure,
     ApiRequestBodies,
     ApiResponses,
     AuthenticationState,
     Notice,
 } from "../api/contracts.js";
+import { ApiError, requestJson } from "../api/client.js";
 
 export async function mountCodex(
     root: HTMLElement,
     onUnlocked?: () => boolean,
+    signal?: AbortSignal,
 ) {
+    const controller = new AbortController();
     function byId<Element extends HTMLElement>(
         id: string,
         kind: { new (): Element },
@@ -43,19 +45,21 @@ export async function mountCodex(
     let visiblePanel: Panel | undefined;
     let viewVersion = 0;
     let pollError = false;
+    const dispose = () => {
+        disposed = true;
+        unlocked = false;
+        controller.abort();
+        clearTimeout(pollTimer);
+    };
+    signal?.addEventListener("abort", dispose, {
+        once: true,
+        signal: controller.signal,
+    });
+    if (signal?.aborted) dispose();
     type ConnectionCheck =
         | { status: "unchecked" | "checking" | "connected" }
         | { status: "failed"; title: string; description: string };
     let connectionCheck: ConnectionCheck = { status: "unchecked" };
-
-    class ApiError extends Error {
-        constructor(
-            readonly code: string,
-            message: string,
-        ) {
-            super(message);
-        }
-    }
 
     function message(text: string, kind: Notice["kind"] = "error") {
         const box = byId("message");
@@ -90,6 +94,7 @@ export async function mountCodex(
     }
 
     function lockView() {
+        viewVersion++;
         unlocked = false;
         state = null;
         clearTimeout(pollTimer);
@@ -105,6 +110,7 @@ export async function mountCodex(
         connectionCheck = { status: "unchecked" };
         renderConnectionCheck();
         showPanel("locked");
+        window.dispatchEvent(new Event("goblin-workspace-locked"));
     }
 
     function renderConnectionCheck() {
@@ -299,31 +305,14 @@ export async function mountCodex(
         body?: ApiRequestBodies[Path],
     ): Promise<ApiResponses[Path]> {
         const requestVersion = viewVersion;
-        const response = await fetch(path, {
-            method: body === undefined ? "GET" : "POST",
-            credentials: "same-origin",
-            headers:
-                body === undefined
-                    ? {}
-                    : { "Content-Type": "application/json" },
-            body: body === undefined ? undefined : JSON.stringify(body),
+        return requestJson<ApiResponses[Path]>(path, {
+            body,
+            signal: controller.signal,
+            failureMessage: "Something went wrong. Please retry.",
+            onUnauthorized: () => {
+                if (requestVersion === viewVersion && !disposed) lockView();
+            },
         });
-        const result: unknown = await response.json();
-        if (!response.ok) {
-            const failure = result as Partial<ApiFailure> | null;
-            if (
-                failure?.error?.code === "workspace_locked" &&
-                requestVersion === viewVersion
-            )
-                lockView();
-            throw new ApiError(
-                failure?.error?.code || "request_failed",
-                failure?.error?.message ||
-                    "Something went wrong. Please retry.",
-            );
-        }
-        // Successful responses are produced by our backend using the shared contract.
-        return result as ApiResponses[Path];
     }
 
     function setBusy(value: boolean, label = "Working…") {
@@ -336,7 +325,7 @@ export async function mountCodex(
     }
 
     async function action(label: string, operation: () => Promise<void>) {
-        if (busy) return;
+        if (busy || disposed) return;
         viewVersion++;
         pollError = false;
         setBusy(true, label);
@@ -344,15 +333,18 @@ export async function mountCodex(
         try {
             await operation();
         } catch (error) {
+            if (disposed) return;
             message(
                 error instanceof Error
                     ? error.message
                     : "Could not reach Goblin. Please retry.",
             );
         } finally {
-            setBusy(false);
-            schedulePoll();
-            checkConnectionIfNeeded();
+            if (!disposed) {
+                setBusy(false);
+                schedulePoll();
+                checkConnectionIfNeeded();
+            }
         }
     }
 
@@ -467,7 +459,9 @@ export async function mountCodex(
     const visible = () => {
         if (!disposed && !document.hidden && unlocked && !busy) void poll();
     };
-    document.addEventListener("visibilitychange", visible);
+    document.addEventListener("visibilitychange", visible, {
+        signal: controller.signal,
+    });
 
     try {
         const session = await api("/api/session");
@@ -478,18 +472,15 @@ export async function mountCodex(
             render(await api("/api/status"));
         } else showPanel("locked");
     } catch (error) {
-        showPanel(unlocked ? "connect" : "locked");
-        message(
-            error instanceof Error
-                ? error.message
-                : "Could not reach Goblin. Refresh to try again.",
-        );
+        if (!disposed) {
+            showPanel(unlocked ? "connect" : "locked");
+            message(
+                error instanceof Error
+                    ? error.message
+                    : "Could not reach Goblin. Refresh to try again.",
+            );
+        }
     }
     schedulePoll();
-    return () => {
-        disposed = true;
-        unlocked = false;
-        clearTimeout(pollTimer);
-        document.removeEventListener("visibilitychange", visible);
-    };
+    return dispose;
 }

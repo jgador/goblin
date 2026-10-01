@@ -19,14 +19,14 @@ the full Sandbox specification.
 The checked-in schema inputs are:
 
 - `sandbox-v1beta1.json`: the `openAPIV3Schema` extracted from the Agent
-  Sandbox v1.0.3 `sandboxes.agents.x-k8s.io` CRD in the release manifest.
+  Sandbox v1.0.4 `sandboxes.agents.x-k8s.io` CRD in the release manifest.
   The release manifest SHA-256 is
-  `725fafdabe6aac202a89dc57f1cfe0e2e92f3164c8c2bd343fffca52f7039d96`,
+  `c4f6344b6f04e450b61c433ce6275f2a45bc30f746b55ce47ade454ffa2a1aa7`,
   matching the deployment pin.
-- `kubernetes-v1.36.4-swagger.json.gz`: the official Kubernetes v1.36.4
+- `kubernetes-v1.37.0-swagger.json.gz`: the official Kubernetes v1.37.0
   `api/openapi-spec/swagger.json`, compressed for the repository. The raw
   Swagger SHA-256 is
-  `dcede2063da1d7ad62ecb5af8adb6d7fabd0b52385a7fa0048afb491dac90450`.
+  `465276aedf437726de5a6ed23a41b86d78bb0d347edf251a755ae26a93cdd8a6`.
 
 The complete schema inputs make adding a selected path offline and repeatable;
 they do not produce unselected C# fields. The generator is a .NET 10 C#

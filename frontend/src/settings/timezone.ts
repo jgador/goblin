@@ -1,7 +1,9 @@
 import { timeZonePlaces } from "./timezone-places.js";
+import { requestJson } from "../api/client.js";
 
 type Preferences = { timeZone: string | null };
 let current: Preferences | undefined;
+let generation = 0;
 const countryNames = new Intl.DisplayNames("en", { type: "region" });
 
 export function timeZoneName(zone: string): string {
@@ -72,6 +74,7 @@ export const savedTimeZone = () => current?.timeZone;
 export const displayTimeZone = () =>
     current?.timeZone ?? suggestedTimeZone() ?? "UTC";
 export function resetTimeZone() {
+    generation++;
     current = undefined;
 }
 
@@ -85,14 +88,13 @@ function accept(value: Preferences) {
 }
 
 export async function loadTimeZone(signal?: AbortSignal) {
-    const response = await fetch("/api/preferences", {
-        cache: "no-store",
+    const version = generation;
+    const result = await requestJson<Preferences>("/api/preferences", {
         signal,
+        failureMessage: "Workspace timezone could not be loaded. Try again.",
     });
-    if (!response.ok)
-        throw new Error("Workspace timezone could not be loaded. Try again.");
-    const result = await response.json();
-    signal?.throwIfAborted();
+    if (version !== generation)
+        throw new DOMException("Workspace changed.", "AbortError");
     return accept(result);
 }
 
@@ -101,19 +103,14 @@ export async function saveTimeZone(
     expectedTimeZone: string | null,
     signal: AbortSignal,
 ) {
-    const response = await fetch("/api/preferences/timezone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timeZone, expectedTimeZone }),
+    const version = generation;
+    const result = await requestJson<Preferences>("/api/preferences/timezone", {
+        body: { timeZone, expectedTimeZone },
         signal,
+        failureMessage: "The timezone could not be saved. Try again.",
     });
-    const result = await response.json();
-    signal.throwIfAborted();
-    if (!response.ok)
-        throw new Error(
-            result.error?.message ??
-                "The timezone could not be saved. Try again.",
-        );
+    if (version !== generation)
+        throw new DOMException("Workspace changed.", "AbortError");
     return accept(result);
 }
 

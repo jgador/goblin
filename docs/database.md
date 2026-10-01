@@ -185,7 +185,7 @@ to issue certificates and read Secrets in the `goblin` namespace.
 
 | Location | Purpose |
 | --- | --- |
-| `deploy/postgres/` | PostgreSQL 16.15, certificate resources, TLS/auth configuration, setup/export scripts |
+| `deploy/postgres/` | PostgreSQL 18.6, certificate resources, TLS/auth configuration, setup/export scripts |
 | `backend/database/migrations/` | Unreleased initial baseline; ordered, immutable migrations after deployment |
 | `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
 | `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime `IDbContextFactory<GoblinDbContext>` registration |

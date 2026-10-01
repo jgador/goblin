@@ -20,7 +20,7 @@ for image in "${logging_images[@]}"; do docker pull "$image" >/dev/null; done
 printf 'Building the disposable .NET logging workload…\n'
 dotnet publish backend/tests/Goblin.LoggingSmoke -c Release -o "$logging_test_dir/publish" --nologo > "$logging_test_dir/publish.log"
 cat > "$logging_test_dir/publish/Dockerfile" <<'DOCKERFILE'
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble
 WORKDIR /app
 COPY --chown=1000:1000 . .
 USER 1000:1000
@@ -29,7 +29,7 @@ DOCKERFILE
 docker build -q -t "$logging_test_image" "$logging_test_dir/publish" > /dev/null
 printf 'Starting an isolated k3s cluster…\n'
 docker run -d --privileged --name "$logging_test_node" -p 127.0.0.1::6443 \
-  rancher/k3s:v1.35.1-k3s1 server --disable=traefik --disable=servicelb --disable=metrics-server \
+  rancher/k3s:v1.37.0-k3s1 server --disable=traefik --disable=servicelb --disable=metrics-server \
   --write-kubeconfig-mode=600 >/dev/null
 for ((attempt=0; attempt<90; attempt++)); do
   if docker exec "$logging_test_node" test -f /etc/rancher/k3s/k3s.yaml; then break; fi

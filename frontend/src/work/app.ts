@@ -7,6 +7,15 @@ import {
     ConnectionAvailability,
 } from "../api/values.js";
 import { Settings } from "../settings/settings.js";
+import { requestJson, errorMessage } from "../api/client.js";
+import type {
+    Agent,
+    Connection,
+    RuntimeCapabilities,
+} from "../api/workspace-contracts.js";
+import { ReadScope } from "../api/read-scope.js";
+import { CommandSubmission } from "./command-submission.js";
+import type { PendingCommand } from "./command-submission.js";
 import { SystemResources } from "../settings/system.js";
 import {
     formatTimestamp as time,
@@ -37,25 +46,12 @@ import {
     matchesWork,
     relativeTime,
 } from "./surface.js";
-type Agent = {
-    id: string;
-    name: string;
-    connectionId: string;
-    model?: string;
-    isDefault: boolean;
-};
-type Connection = {
-    id: string;
-    runtime: string;
-    name: string;
-    availability: ConnectionAvailability;
-};
-type Pending = { path: string; body: Record<string, unknown> };
+const workspaceReads = new ReadScope();
 let work: View[] = [],
     conversations: Conversation[] = [],
     agents: Agent[] = [],
     connections: Connection[] = [];
-let runtimes: { runtime: string; repositoryExecution: boolean }[] = [],
+let runtimes: RuntimeCapabilities[] = [],
     connectionsLoading = false,
     connectionsLoaded = false;
 const query = new URLSearchParams(location.search);
@@ -128,13 +124,15 @@ let github: {
 let authenticated = false,
     loaded = false,
     error = "",
-    sending = false,
     changing = false,
     loading = false;
-let pending: Pending | null = JSON.parse(
-        sessionStorage.getItem("goblin.pendingCommand") ?? "null",
-    ),
-    draft = "";
+let draft = "";
+const submission = new CommandSubmission(
+    sessionStorage,
+    ({ path, body }) => api(path, body),
+    () => render(),
+);
+error = submission.recoveryNotice;
 let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const system = new SystemResources();
@@ -143,6 +141,7 @@ const timezoneSetup = new TimeZoneSetup();
 window.addEventListener("goblin-timezone-changed", () => render(true));
 window.addEventListener("goblin-workspace-locked", () => {
     authenticated = false;
+    initialSettings = query.get("settings");
     forgetWorkspace();
     render();
 });
@@ -232,27 +231,19 @@ const button = (
     primary = false,
     disabled = false,
 ) =>
-    `<button class="${primary ? "primary" : "secondary"}" data-action="${action}" ${disabled || sending || ((pending || workUnavailable) && !["resend", "dismiss", "new-work", "changes"].includes(action)) ? "disabled" : ""}>${e(text)}</button>`;
+    `<button class="${primary ? "primary" : "secondary"}" data-action="${action}" ${disabled || submission.sending || ((submission.pending || workUnavailable) && !["resend", "dismiss", "new-work", "changes"].includes(action)) ? "disabled" : ""}>${e(text)}</button>`;
 async function api<T>(path: string, body?: unknown): Promise<T> {
-    const response = await fetch(
-        path,
-        body === undefined
-            ? { cache: "no-store", signal: AbortSignal.timeout(6000) }
-            : {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(body),
-              },
-    );
-    const result = await response.json();
-    if (response.status === 401) authenticated = false;
-    if (!response.ok)
-        throw new Error(
-            result.error?.message ?? "The request could not be confirmed.",
-        );
-    return result as T;
+    return requestJson<T>(path, {
+        body,
+        signal: body === undefined ? workspaceReads.signal : undefined,
+        onUnauthorized: () =>
+            window.dispatchEvent(new Event("goblin-workspace-locked")),
+    });
 }
 function forgetWorkspace() {
+    workspaceReads.reset();
+    loading = false;
+    connectionsLoading = false;
     timezoneSetup.reset();
     resetTimeZone();
     timezoneError = "";
@@ -260,6 +251,7 @@ function forgetWorkspace() {
     conversations = [];
     agents = [];
     connections = [];
+    runtimes = [];
     connectionsLoaded = false;
     repositories = [];
     github = null;
@@ -277,20 +269,24 @@ function forgetWorkspace() {
     settings.reset();
 }
 async function refresh(preserveError = false) {
-    if (loading || sending) return;
+    if (loading || submission.sending) return;
     loading = true;
+    const signal = workspaceReads.signal;
     try {
-        authenticated = (await api<{ authenticated: boolean }>("/api/session"))
-            .authenticated;
+        const session = await api<{ authenticated: boolean }>("/api/session");
+        signal.throwIfAborted();
+        authenticated = session.authenticated;
         sessionChecked = true;
         if (!authenticated) {
             forgetWorkspace();
+            render();
             return;
         }
         try {
-            await loadTimeZone(AbortSignal.timeout(6000));
+            await loadTimeZone(signal);
             timezoneError = "";
         } catch {
+            signal.throwIfAborted();
             timezoneError = `Workspace timezone could not be loaded. Displayed times currently use ${displayTimeZone()}. Open Time & date in Settings to try again.`;
         }
         if (savedTimeZone() === null) {
@@ -333,6 +329,7 @@ async function refresh(preserveError = false) {
             api<typeof runtimes>("/api/runtimes"),
         ]);
         const [items, chats, people, capabilities] = results;
+        signal.throwIfAborted();
         if (items.status === "fulfilled") {
             work = items.value;
             if (selectInitialWork) {
@@ -349,10 +346,15 @@ async function refresh(preserveError = false) {
             workUnavailable = false;
             if (view === "work" && !work.some((x) => x.work.id === selected))
                 view = "new";
-            if (!pending && !preserveError) error = "";
+            if (
+                !submission.pending &&
+                !preserveError &&
+                error !== submission.recoveryNotice
+            )
+                error = "";
         } else {
             workUnavailable = true;
-            if (!pending && !preserveError)
+            if (!submission.pending && !preserveError)
                 error =
                     "Work could not be loaded. You can still manage connections in Settings.";
         }
@@ -360,25 +362,27 @@ async function refresh(preserveError = false) {
         if (people.status === "fulfilled") agents = people.value;
         if (capabilities.status === "fulfilled") runtimes = capabilities.value;
     } catch (failure) {
-        error = (failure as Error).message;
+        if (!signal.aborted)
+            error = errorMessage(failure, "Work could not be loaded.");
     } finally {
-        if (!authenticated) forgetWorkspace();
-        loading = false;
-        render(true);
+        if (!signal.aborted) {
+            if (!authenticated) forgetWorkspace();
+            loading = false;
+            render(true);
+        }
     }
 }
 async function refreshConnections() {
+    if (!authenticated) return;
     if (connectionsLoading) return;
     connectionsLoading = true;
+    const signal = workspaceReads.signal;
     const [runtime, repository, enabled] = await Promise.allSettled([
         api<Connection[]>("/api/connections"),
         api<NonNullable<typeof github>>("/api/github"),
         api<Repository[]>("/api/github/repositories"),
     ]);
-    if (!authenticated) {
-        connectionsLoading = false;
-        return;
-    }
+    if (signal.aborted || !authenticated) return;
     if (runtime.status === "fulfilled") {
         const previous = new Map(
             connections.map((c) => [c.id, c.availability]),
@@ -405,27 +409,27 @@ async function refreshConnections() {
     render(true);
 }
 async function send(
-    path: string,
+    path: PendingCommand["path"],
     body: Record<string, unknown> | (() => Promise<Record<string, unknown>>),
     repeat = false,
 ) {
-    if (sending || (pending && !repeat)) return false;
-    sending = true;
+    if (submission.sending || (submission.pending && !repeat)) return false;
     error = "";
     let confirmed = false;
     const submittedDraft = draftKey();
-    render();
+    const signal = workspaceReads.signal;
     try {
-        const command = typeof body === "function" ? await body() : body;
-        pending = { path, body: command };
-        sessionStorage.setItem(
-            "goblin.pendingCommand",
-            JSON.stringify(pending),
-        );
-        render();
-        await api(path, command);
-        pending = null;
-        sessionStorage.removeItem("goblin.pendingCommand");
+        const saved = repeat
+            ? await submission.resend()
+            : await submission.submit(async () => {
+                  const prepared =
+                      typeof body === "function" ? await body() : body;
+                  signal.throwIfAborted();
+                  return { path, body: prepared };
+              });
+        if (!saved) return false;
+        if (signal.aborted) return false;
+        const command = saved.body;
         draft = "";
         changing = false;
         confirmed = true;
@@ -440,10 +444,13 @@ async function send(
             rememberWork();
         }
     } catch (failure) {
-        error = (failure as Error).message;
+        if (!signal.aborted)
+            error = errorMessage(
+                failure,
+                "The request could not be confirmed.",
+            );
     } finally {
-        sending = false;
-        await refresh(!confirmed);
+        if (!signal.aborted) await refresh(!confirmed);
     }
     return confirmed;
 }
@@ -488,7 +495,7 @@ function composer(kind: string, placeholder: string) {
                 : current()?.work.status === WorkStatus.Ready
                   ? "Saves context for this work · Start work when ready"
                   : "Saves context with this work";
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" ${kind !== "new" ? 'aria-describedby="composer-note"' : ""} required ${sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="settings-github">${icon("github")}GitHub</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button><button class="composer-chip" type="button" data-action="settings-agents">${icon("user")}Agent</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${sending || pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
+    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" ${kind !== "new" ? 'aria-describedby="composer-note"' : ""} required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="settings-github">${icon("github")}GitHub</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button><button class="composer-chip" type="button" data-action="settings-agents">${icon("user")}Agent</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
 }
 function rememberWork() {
     sessionStorage.setItem("goblin.selectedWork", selected);
@@ -645,9 +652,9 @@ function refreshHome(html: string) {
     }
     const reply = root.querySelector<HTMLTextAreaElement>("#reply")!;
     if (reply.value !== draft) reply.value = draft;
-    reply.disabled = sending;
+    reply.disabled = submission.sending;
     root.querySelector<HTMLButtonElement>(".send")!.disabled =
-        sending || !!pending || workUnavailable;
+        submission.sending || !!submission.pending || workUnavailable;
 }
 function render(preserveHome = false, forceSelect = false) {
     const active =
@@ -679,7 +686,7 @@ function render(preserveHome = false, forceSelect = false) {
         (active?.closest("select") || modelSliderDragging) &&
         sameContext &&
         authenticated &&
-        !sending &&
+        !submission.sending &&
         !forceSelect &&
         !repositoryChanged
     )
@@ -747,7 +754,7 @@ function render(preserveHome = false, forceSelect = false) {
     } else {
         const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
-            <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${pending ? `<div class="command-notice" role="status">${sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
+            <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
             ${view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&
@@ -917,7 +924,7 @@ function repositorySetup(w: Work, required = false) {
                 <div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="${e(proposed?.gitAuthorName ?? "Goblin")}" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div>
                 <div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "goblin@localhost")}" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
             </div>
-            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="repository-actions"><button id="start-repository" type="submit" class="primary" ${sending || pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Review repository access</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
+            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="repository-actions"><button id="start-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Review repository access</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
         </form>
     </details>`;
 }
@@ -1045,7 +1052,10 @@ function setModelEffort(value: string, updateOnly = false) {
         root.querySelector<HTMLButtonElement>("#start-repository");
     if (repositoryButton)
         repositoryButton.disabled =
-            !w || !modelCanSubmit(w) || sending || !!pending;
+            !w ||
+            !modelCanSubmit(w) ||
+            submission.sending ||
+            !!submission.pending;
 }
 document.addEventListener("click", async (event) => {
     if (!(event.target instanceof Element)) return;
@@ -1185,13 +1195,12 @@ document.addEventListener("click", async (event) => {
         render();
         return;
     }
-    if (action === "resend" && pending) {
-        await send(pending.path, pending.body, true);
+    if (action === "resend" && submission.pending) {
+        await send(submission.pending.path, submission.pending.body, true);
         return;
     }
     if (action === "dismiss") {
-        pending = null;
-        sessionStorage.removeItem("goblin.pendingCommand");
+        submission.dismiss();
         error = "";
     }
     if (action === "toggle-sidebar") {
@@ -1244,7 +1253,7 @@ document.addEventListener("click", async (event) => {
         try {
             await api("/api/session/lock", {});
         } catch (failure) {
-            error = (failure as Error).message;
+            error = errorMessage(failure, "Could not reach Goblin. Try again.");
             render();
             return;
         }
@@ -1408,7 +1417,7 @@ document.addEventListener("submit", async (event) => {
             await api("/api/session", { password: data.get("password") });
             await refresh();
         } catch (failure) {
-            error = (failure as Error).message;
+            error = errorMessage(failure, "Could not reach Goblin. Try again.");
             render();
         }
         return;

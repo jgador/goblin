@@ -1,8 +1,7 @@
 import { environmentVariables as Env } from "../config/environment.mjs";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { once } from "node:events";
 import { chromium, expect } from "@playwright/test";
@@ -23,10 +22,11 @@ const browser = await chromium.launch({
         "--no-proxy-server",
     ],
 });
-await mkdir("test-results", { recursive: true });
+const artifacts = resolve(".artifacts/logs-ui");
+await mkdir(artifacts, { recursive: true });
 try {
     for (const hostname of ["127.0.0.1", azureHost]) {
-        const dataDir = await mkdtemp(join(tmpdir(), "goblin-logs-browser-"));
+        const dataDir = await mkdtemp(join(artifacts, "runtime-"));
         const listener = createServer().listen(0, "127.0.0.1");
         await once(listener, "listening");
         const { port } = listener.address() as { port: number };
@@ -216,7 +216,10 @@ try {
             );
             assert.equal(blocked, 403);
             await page.screenshot({
-                path: `test-results/logs-${hostname === azureHost ? "azure-host" : "local"}.png`,
+                path: join(
+                    artifacts,
+                    `logs-${hostname === azureHost ? "azure-host" : "local"}.png`,
+                ),
                 fullPage: true,
             });
             await page.goto(publicOrigin + "/?settings=logs");
