@@ -16,6 +16,15 @@ import {
     displayTimeZone,
 } from "../settings/timezone.js";
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
+import { ModelCatalogs } from "./model-catalog.js";
+import {
+    ModelSelections,
+    selectedModel,
+    availableEfforts,
+    effortStops,
+    effortLabel,
+} from "./model-selection.js";
+import { renderModelPicker } from "./model-picker.js";
 import type { Repository } from "../settings/github.js";
 import { icon, escapeHtml as e } from "./presentation.js";
 import type { Work, View, Conversation } from "./contracts.js";
@@ -42,32 +51,6 @@ type Connection = {
     availability: ConnectionAvailability;
 };
 type Pending = { path: string; body: Record<string, unknown> };
-type ModelOption = {
-    id: string;
-    model: string;
-    displayName: string;
-    defaultReasoningEffort: string;
-    supportedReasoningEfforts: string[];
-    isDefault: boolean;
-    isNew: boolean;
-};
-type ModelCatalog = {
-    models: ModelOption[];
-    hasMore: boolean;
-    defaultModel?: string;
-    fetchedAt?: string;
-    stale: boolean;
-    refreshing: boolean;
-    unavailable: boolean;
-};
-type ModelSelection = {
-    connectionId: string;
-    model: string;
-    effort: string;
-    touched: boolean;
-    expanded: boolean;
-    notice: string;
-};
 let work: View[] = [],
     conversations: Conversation[] = [],
     agents: Agent[] = [],
@@ -104,44 +87,30 @@ const setupDrafts = new Map<
     { values: [string, string][]; open: boolean; approval: string }
 >();
 const setupErrors = new Map<string, Record<string, string>>();
-const modelCatalogs = new Map<string, ModelCatalog>();
-const modelQueries = new Map<string, string>();
-const modelRequestedAt = new Map<string, number>();
-const modelSelections = new Map<string, ModelSelection>();
-try {
-    const saved = JSON.parse(
-        sessionStorage.getItem("goblin.modelSelections") ?? "[]",
-    );
-    if (Array.isArray(saved))
-        for (const entry of saved)
-            if (
-                Array.isArray(entry) &&
-                typeof entry[0] === "string" &&
-                typeof entry[1]?.connectionId === "string" &&
-                typeof entry[1]?.model === "string" &&
-                typeof entry[1]?.effort === "string"
-            )
-                modelSelections.set(entry[0], {
-                    ...entry[1],
-                    touched: !!entry[1].touched,
-                    expanded: !!entry[1].expanded,
-                    notice: "",
-                });
-} catch {
-    sessionStorage.removeItem("goblin.modelSelections");
-}
-const modelLoading = new Set<string>();
-const modelErrors = new Map<string, string>();
-let modelEpoch = 0;
+const modelSelections = new ModelSelections(sessionStorage);
+const modelCatalogs = new ModelCatalogs(
+    api,
+    (connectionId, requestedModel) => {
+        if (!authenticated) {
+            modelCatalogs.clear();
+            return;
+        }
+        const w = composerWork();
+        const { catalog, error } = modelCatalogs.get(connectionId);
+        if (modelConnection(w) === connectionId && catalog && !error)
+            modelSelections.reconcile(modelContext(w), catalog, requestedModel);
+        render();
+        ensureModels();
+    },
+    (connectionId) => {
+        const choice = modelSelection(composerWork());
+        if (!authenticated || choice.connectionId !== connectionId) return;
+        return { limit: choice.expanded ? 10 : 3, selectedModel: choice.model };
+    },
+);
 let modelPickerOpen = false,
     modelListOpen = false,
     modelSliderDragging = false;
-const effortStops = [
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "Extra High" },
-] as const;
 const draftKey = () =>
     view === "work"
         ? `work:${selected}`
@@ -179,11 +148,7 @@ window.addEventListener("goblin-workspace-locked", () => {
 });
 let repositories: Repository[] = [];
 window.addEventListener("goblin-connections-changed", () => {
-    modelEpoch++;
     modelCatalogs.clear();
-    modelQueries.clear();
-    modelRequestedAt.clear();
-    modelErrors.clear();
     void refreshConnections();
 });
 const current = () => work.find((x) => x.work.id === selected);
@@ -197,52 +162,8 @@ function composerWork(): Work | undefined {
 const workAgent = (w?: Work) => agents.find((a) => a.id === w?.agentId);
 const workConnection = (w?: Work) =>
     connections.find((c) => c.id === workAgent(w)?.connectionId);
-function saveModelSelections() {
-    sessionStorage.setItem(
-        "goblin.modelSelections",
-        JSON.stringify([...modelSelections]),
-    );
-}
-function modelSelection(w?: Work): ModelSelection {
-    const key = w?.id ?? "draft";
-    let choice = modelSelections.get(key);
-    const agent = workAgent(w);
-    if (!choice) {
-        const previous =
-            w?.repositoryRequest?.target ?? w?.attempts.at(-1)?.target;
-        choice = {
-            connectionId: agent?.connectionId ?? "",
-            model: previous?.requestedModel ?? agent?.model ?? "",
-            effort: previous?.requestedEffort ?? "",
-            touched: !!previous,
-            expanded: false,
-            notice: "",
-        };
-        modelSelections.set(key, choice);
-    }
-    if (agent && choice.connectionId !== agent.connectionId) {
-        const selectedAnotherModel = !!(choice.model || choice.effort);
-        choice.connectionId = agent.connectionId;
-        choice.model = agent.model ?? "";
-        choice.effort = "";
-        choice.touched = false;
-        choice.expanded = false;
-        choice.notice = selectedAnotherModel
-            ? "The coding agent connection changed. Choose a model again."
-            : "";
-        saveModelSelections();
-    } else if (
-        agent &&
-        !choice.touched &&
-        !w?.attempts.length &&
-        choice.model !== (agent.model ?? "")
-    ) {
-        choice.model = agent.model ?? "";
-        choice.effort = "";
-        saveModelSelections();
-    }
-    return choice;
-}
+const modelContext = (w?: Work) => ({ work: w, agent: workAgent(w) });
+const modelSelection = (w?: Work) => modelSelections.get(modelContext(w));
 const modelConnection = (w?: Work) => modelSelection(w).connectionId;
 function modelPayload(w: Work) {
     const choice = modelSelection(w);
@@ -261,105 +182,13 @@ function modelCanSubmit(w: Work) {
     const source = connections.find((c) => c.id === choice.connectionId);
     if (source && source.runtime !== "codex") return true;
     if (!choice.model && !choice.effort) return true;
-    const catalog = modelCatalogs.get(modelConnection(w) ?? "");
-    const selectedModel =
-        catalog?.models.find((m) => m.model === choice.model) ??
-        (choice.model ? undefined : catalog?.models.find((m) => m.isDefault));
+    const catalog = modelCatalogs.get(choice.connectionId).catalog;
+    const model = selectedModel(catalog, choice.model);
     return (
-        !!selectedModel &&
+        !!model &&
         (!choice.effort ||
-            selectedModel.supportedReasoningEfforts.includes(choice.effort))
+            model.supportedReasoningEfforts.includes(choice.effort))
     );
-}
-async function loadModels(
-    connectionId: string,
-    limit: 3 | 10,
-    selectedModel: string,
-    force = false,
-) {
-    const query = `${limit}:${selectedModel}`;
-    const existing = modelCatalogs.get(connectionId);
-    const nextCheck =
-        existing?.stale ||
-        existing?.unavailable ||
-        modelErrors.has(connectionId)
-            ? 60_000
-            : existing?.fetchedAt
-              ? Math.max(
-                    0,
-                    Date.parse(existing.fetchedAt) +
-                        86_400_000 -
-                        (modelRequestedAt.get(connectionId) ?? 0),
-                )
-              : 60_000;
-    if (
-        modelLoading.has(connectionId) ||
-        (!force &&
-            modelQueries.get(connectionId) === query &&
-            Date.now() - (modelRequestedAt.get(connectionId) ?? 0) < nextCheck)
-    )
-        return;
-    modelLoading.add(connectionId);
-    modelRequestedAt.set(connectionId, Date.now());
-    const epoch = modelEpoch;
-    try {
-        const params = new URLSearchParams({ limit: String(limit) });
-        if (selectedModel) params.set("selected", selectedModel);
-        const catalog = await api<ModelCatalog>(
-            `/api/connections/${encodeURIComponent(connectionId)}/models?${params}`,
-        );
-        if (!authenticated || epoch !== modelEpoch) return;
-        modelCatalogs.set(connectionId, catalog);
-        modelQueries.set(connectionId, query);
-        modelErrors.delete(connectionId);
-        const visible = composerWork();
-        if (modelConnection(visible) === connectionId) {
-            const choice = modelSelection(visible);
-            if (
-                choice.model &&
-                choice.model === selectedModel &&
-                !catalog.refreshing &&
-                !catalog.unavailable &&
-                catalog.models.length > 0 &&
-                !catalog.models.some((m) => m.model === choice.model)
-            ) {
-                choice.model = "";
-                choice.effort = "";
-                choice.touched = true;
-                choice.notice =
-                    "The previous model is no longer listed. Codex default is selected.";
-            }
-            if (choice.model === selectedModel && choice.effort) {
-                const model =
-                    catalog.models.find((m) => m.model === choice.model) ??
-                    catalog.models.find((m) => m.isDefault);
-                if (!model?.supportedReasoningEfforts.includes(choice.effort))
-                    choice.effort = "";
-            }
-            saveModelSelections();
-        }
-        render();
-        if (catalog.refreshing)
-            setTimeout(() => {
-                const visible = composerWork();
-                if (authenticated && modelConnection(visible) === connectionId)
-                    void loadModels(
-                        connectionId,
-                        modelSelection(visible).expanded ? 10 : 3,
-                        modelSelection(visible).model,
-                        true,
-                    );
-            }, 2000);
-    } catch (failure) {
-        if (authenticated && epoch === modelEpoch) {
-            modelQueries.set(connectionId, query);
-            modelErrors.set(connectionId, (failure as Error).message);
-            render();
-        }
-    } finally {
-        modelLoading.delete(connectionId);
-        if (authenticated && epoch === modelEpoch) ensureModels();
-    }
 }
 function ensureModels() {
     const w = composerWork();
@@ -378,12 +207,12 @@ function ensureModels() {
     const source = connections.find((c) => c.id === connectionId);
     if (source && source.runtime !== "codex") return;
     const choice = modelSelection(w);
-    void loadModels(connectionId, choice.expanded ? 10 : 3, choice.model);
+    void modelCatalogs.load(connectionId, {
+        limit: choice.expanded ? 10 : 3,
+        selectedModel: choice.model,
+    });
 }
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
-const effortLabel = (value: string) =>
-    effortStops.find((stop) => stop.value === value)?.label ??
-    value.slice(0, 1).toUpperCase() + value.slice(1);
 const attention = (w: Work) => w.status === WorkStatus.NeedsAttention;
 const statusClass = (w: Work) =>
     w.status === WorkStatus.Completed
@@ -427,7 +256,6 @@ function forgetWorkspace() {
     timezoneSetup.reset();
     resetTimeZone();
     timezoneError = "";
-    modelEpoch++;
     work = [];
     conversations = [];
     agents = [];
@@ -440,12 +268,7 @@ function forgetWorkspace() {
     setupDrafts.clear();
     setupErrors.clear();
     modelCatalogs.clear();
-    modelQueries.clear();
-    modelRequestedAt.clear();
     modelSelections.clear();
-    sessionStorage.removeItem("goblin.modelSelections");
-    modelErrors.clear();
-    modelLoading.clear();
     modelPickerOpen = false;
     modelListOpen = false;
     modelSliderDragging = false;
@@ -566,8 +389,7 @@ async function refreshConnections() {
                 connection.availability === ConnectionAvailability.Available &&
                 previous.get(connection.id) !== ConnectionAvailability.Available
             ) {
-                modelQueries.delete(connection.id);
-                modelRequestedAt.delete(connection.id);
+                modelCatalogs.invalidate(connection.id);
             }
     } else
         connections = connections.map((c) => ({
@@ -1016,59 +838,16 @@ function renderDetail() {
         <div class="work-composer"><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? `<div class="composer-heading"><h3>Conversation</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="true" aria-controls="work-conversation">Hide conversation</button></div>${renderConversation(w)}` : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === AttentionReason.InputRequired ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
 }
 function modelControls(w?: Work) {
-    const connectionId = modelConnection(w);
-    const source = connections.find((c) => c.id === connectionId);
-    const unsupported = source && source.runtime !== "codex";
-    const catalog = modelCatalogs.get(connectionId);
     const choice = modelSelection(w);
-    const models = (catalog?.models ?? []).slice(0, choice.expanded ? 10 : 3);
-    const defaultName = models.find((m) => m.isDefault)?.displayName;
-    const selectedModel =
-        models.find((m) => m.model === choice.model) ??
-        (choice.model ? undefined : models.find((m) => m.isDefault));
-    const waitingForSelection =
-        !!choice.model && !models.some((m) => m.model === choice.model);
-    const modelName =
-        selectedModel?.displayName ??
-        (choice.model || (unsupported ? "Runtime default" : "Codex default"));
-    const currentEffort =
-        choice.effort || selectedModel?.defaultReasoningEffort || "";
-    const currentEffortLabel = currentEffort
-        ? effortLabel(currentEffort)
-        : "Default";
-    const activeIndex = Math.max(
-        0,
-        effortStops.findIndex((stop) => stop.value === currentEffort),
-    );
-    const supportedEfforts = new Set(
-        selectedModel?.supportedReasoningEfforts ?? [],
-    );
-    const statusText = unsupported
-        ? "This agent does not offer Codex model choices."
-        : !connectionId
-          ? "Connect Codex to choose a model."
-          : (modelErrors.get(connectionId) ??
-            (catalog?.refreshing
-                ? "Checking for current models…"
-                : catalog?.unavailable
-                  ? "Model list unavailable. Codex default is available."
-                  : catalog?.stale
-                    ? "Showing cached models. The list may be out of date."
-                    : !catalog
-                      ? "Loading available models…"
-                      : ""));
-    const hint = "These options apply when you start or retry this work.";
-    const status = `${statusText ? `<p class="model-status" role="status">${e(statusText)}</p>` : ""}${choice.notice ? `<p class="model-status" role="status">${e(choice.notice)}</p>` : ""}`;
-    const modelRows = `<button type="button" class="model-option" data-action="select-model" data-value="" aria-pressed="${!choice.model}"><span>Codex default${defaultName ? `<small>${e(defaultName)}</small>` : ""}</span>${!choice.model ? icon("check") : ""}</button>${waitingForSelection ? `<span class="model-option model-option-pending">${e(choice.model)} · Checking availability</span>` : ""}${models
-        .map(
-            (model) =>
-                `<button type="button" class="model-option" data-action="select-model" data-value="${e(model.model)}" aria-pressed="${choice.model === model.model}"><span>${e(model.displayName)}${model.isNew ? " <small>New</small>" : ""}</span>${choice.model === model.model ? icon("check") : ""}</button>`,
-        )
-        .join("")}`;
-    const menu = `<div class="model-menu"><button type="button" class="model-menu-back" data-action="model-menu-back">${icon("back")}Models</button><div class="model-options" aria-label="Available models">${modelRows}</div>${catalog?.hasMore && !choice.expanded ? '<button type="button" class="text-button model-more" data-action="show-more-models">Show more models (up to 10)</button>' : ""}<button type="button" class="text-button model-refresh" data-action="refresh-models" ${!connectionId || unsupported || modelLoading.has(connectionId) ? "disabled" : ""}>${icon("refresh")}Refresh models</button>${status}</div>`;
-    const slider = `<div class="model-effort-control"><label for="work-effort">Reasoning effort</label><div class="model-effort-track"><div class="model-effort-visual" data-level="${activeIndex}" aria-hidden="true"><div class="model-effort-rail"><span class="model-effort-fill"></span></div><div class="model-effort-stops">${effortStops.map((stop) => `<span class="${supportedEfforts.has(stop.value) ? "" : "is-unavailable"}"></span>`).join("")}</div><span class="model-effort-thumb"></span></div><input id="work-effort" type="range" min="0" max="3" step="1" value="${activeIndex}" aria-label="Reasoning effort" aria-valuetext="${e(currentEffortLabel)}" ${supportedEfforts.size && !unsupported ? "" : "disabled"}></div><div class="model-effort-labels">${effortStops.map((stop) => `<button type="button" data-action="set-effort" data-value="${stop.value}" aria-pressed="${currentEffort === stop.value}" ${supportedEfforts.has(stop.value) && !unsupported ? "" : "disabled"}>${stop.label}</button>`).join("")}</div></div>`;
-    const main = `<button type="button" class="model-row" data-action="open-model-menu" ${connectionId && !unsupported ? "" : "disabled"}><span class="model-row-name">${e(modelName)}</span><span class="model-effort">${e(currentEffortLabel)}</span>${icon("chevron")}</button>${slider}${status}`;
-    return `<div class="model-picker"><span class="model-picker-summary"><span class="model-picker-trigger-name">${e(modelName)}</span> · <span class="model-effort">${e(currentEffortLabel)}</span></span><button type="button" class="model-picker-trigger" data-action="toggle-model-picker" aria-label="Options: ${e(modelName)}, reasoning effort: ${e(currentEffortLabel)}" aria-haspopup="dialog" aria-expanded="${modelPickerOpen}" aria-controls="model-popover" aria-describedby="model-choice-hint" title="${e(hint)}">Options${icon("chevron")}</button><span id="model-choice-hint" class="sr-only">${e(hint)}</span>${choice.notice ? `<span class="model-picker-notice" role="status">${e(choice.notice)}</span>` : ""}${modelPickerOpen ? `<div id="model-popover" class="model-popover" role="dialog" aria-label="Model and reasoning effort">${modelListOpen ? menu : main}</div>` : ""}</div>`;
+    const state = modelCatalogs.get(choice.connectionId);
+    return renderModelPicker({
+        choice,
+        ...state,
+        connectionId: choice.connectionId,
+        runtime: connections.find((c) => c.id === choice.connectionId)?.runtime,
+        pickerOpen: modelPickerOpen,
+        listOpen: modelListOpen,
+    });
 }
 function repositorySetup(w: Work, required = false) {
     const handoff = [
@@ -1215,14 +994,14 @@ function renderChat() {
 function setModelEffort(value: string, updateOnly = false) {
     const w = composerWork();
     const choice = modelSelection(w);
-    const catalog = modelCatalogs.get(choice.connectionId);
-    const model = catalog?.models.find((item) =>
-        choice.model ? item.model === choice.model : item.isDefault,
-    );
-    if (!model?.supportedReasoningEfforts.includes(value)) return;
-    choice.effort = value;
-    choice.touched = true;
-    saveModelSelections();
+    if (
+        !modelSelections.setEffort(
+            modelContext(w),
+            value,
+            modelCatalogs.get(choice.connectionId).catalog,
+        )
+    )
+        return;
     if (!updateOnly) {
         render(false, true);
         return;
@@ -1310,13 +1089,8 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "select-model") {
-        const choice = modelSelection(composerWork());
-        choice.model = value ?? "";
-        choice.effort = "";
-        choice.touched = true;
-        choice.notice = "";
+        modelSelections.selectModel(modelContext(composerWork()), value ?? "");
         modelListOpen = false;
-        saveModelSelections();
         render(false, true);
         root.querySelector<HTMLElement>(".model-row")?.focus();
         return;
@@ -1390,34 +1164,24 @@ document.addEventListener("click", async (event) => {
     if (action === "show-more-models") {
         const w = composerWork();
         const connectionId = modelConnection(w);
+        modelSelections.expand(modelContext(w));
         const choice = modelSelection(w);
-        choice.expanded = true;
-        saveModelSelections();
-        if (connectionId) void loadModels(connectionId, 10, choice.model);
+        if (connectionId)
+            void modelCatalogs.load(connectionId, {
+                limit: 10,
+                selectedModel: choice.model,
+            });
         render();
         root.querySelector<HTMLElement>(".model-menu-back")?.focus();
         return;
     }
     if (action === "refresh-models") {
-        const w = composerWork();
-        const connectionId = modelConnection(w);
-        if (connectionId) {
-            try {
-                await api(
-                    `/api/connections/${encodeURIComponent(connectionId)}/models/refresh`,
-                    {},
-                );
-                const choice = modelSelection(w);
-                await loadModels(
-                    connectionId,
-                    choice.expanded ? 10 : 3,
-                    choice.model,
-                    true,
-                );
-            } catch (failure) {
-                modelErrors.set(connectionId, (failure as Error).message);
-            }
-        }
+        const choice = modelSelection(composerWork());
+        if (choice.connectionId)
+            await modelCatalogs.refresh(choice.connectionId, {
+                limit: choice.expanded ? 10 : 3,
+                selectedModel: choice.model,
+            });
         render();
         return;
     }
@@ -1707,16 +1471,10 @@ document.addEventListener("input", (event) => {
         event.target.id === "work-effort"
     ) {
         const choice = modelSelection(composerWork());
-        const model = modelCatalogs
-            .get(choice.connectionId)
-            ?.models.find((item) =>
-                choice.model ? item.model === choice.model : item.isDefault,
-            );
-        const available = effortStops
-            .map((stop, index) => ({ ...stop, index }))
-            .filter((stop) =>
-                model?.supportedReasoningEfforts.includes(stop.value),
-            );
+        const available = availableEfforts(
+            modelCatalogs.get(choice.connectionId).catalog,
+            choice.model,
+        );
         if (available.length) {
             const requested = Number(event.target.value);
             const nearest = available.reduce((best, stop) =>
@@ -1846,16 +1604,10 @@ document.addEventListener("keydown", (event) => {
         ].includes(event.key)
     ) {
         const choice = modelSelection(composerWork());
-        const model = modelCatalogs
-            .get(choice.connectionId)
-            ?.models.find((item) =>
-                choice.model ? item.model === choice.model : item.isDefault,
-            );
-        const available = effortStops
-            .map((stop, index) => ({ ...stop, index }))
-            .filter((stop) =>
-                model?.supportedReasoningEfforts.includes(stop.value),
-            );
+        const available = availableEfforts(
+            modelCatalogs.get(choice.connectionId).catalog,
+            choice.model,
+        );
         if (available.length) {
             event.preventDefault();
             const currentIndex = Number(event.target.value);
