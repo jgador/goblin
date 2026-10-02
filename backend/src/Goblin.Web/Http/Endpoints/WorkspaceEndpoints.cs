@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -42,8 +40,7 @@ internal sealed class WorkspaceEndpoints
 
     private static async Task<IResult> OpenAsync(long id, HttpContext context, InspectionStore sessions)
     {
-        Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        InspectionRequest request = JsonSerializer.Deserialize<InspectionRequest>(JsonSerializer.Serialize(body), WorkStore.Json)!;
+        InspectionRequest request = ApiRequest.Body<InspectionRequest>(context, WorkStore.Json);
         return WorkResponse.Json(Api.InspectionView.From(await sessions.OpenAsync(id, request.Id, request.AttemptId, CancellationToken.None)));
     }
 
@@ -57,7 +54,7 @@ internal sealed class WorkspaceEndpoints
     {
         await sessions.RequireAvailableAsync(id, session, token);
         InspectionAllocation allocation = await sessions.GetAsync(session, token);
-        JsonElement files = await InspectionFiles.ReadAsync(api, allocation, path, token);
+        WorkspaceFilesResponse files = await InspectionFiles.ReadAsync(api, allocation, path, token);
         await sessions.RequireAvailableAsync(id, session, token);
         return Results.Json(files);
     }

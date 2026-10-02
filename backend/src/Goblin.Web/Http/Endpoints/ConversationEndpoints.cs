@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -24,9 +22,7 @@ internal static class ConversationEndpoints
 
     private static async Task<IResult> ApplyAsync(HttpContext context, ConversationStore store)
     {
-        Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        Api.ConversationCommand command = JsonSerializer.Deserialize<Api.ConversationCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
-            ?? throw new PublicError("invalid_command", "Send a conversation command.");
+        Api.ConversationCommand command = ApiRequest.Body<Api.ConversationCommand>(context, WorkStore.Json);
         return WorkResponse.Json(Api.ConversationView.From(await store.ApplyAsync(command.ToApplication())));
     }
 }

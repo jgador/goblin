@@ -28,7 +28,7 @@ public sealed class SlackTests
                 @event = new { type = "app_mention", user = "U456", channel = "C123", ts = "12345.000001", text = "<@U123> Explain this" }
             }
         };
-        JsonElement envelope = JsonSerializer.SerializeToElement(payload);
+        SlackSocketEnvelope envelope = JsonSerializer.Deserialize<SlackSocketEnvelope>(JsonSerializer.Serialize(payload))!;
         ExternalMessage accepted = Assert.IsType<ExternalMessage>(SlackEvents.Parse(envelope, Installation));
         Assert.Equal("Explain this", accepted.Text);
         Assert.Equal(accepted.MessageId, accepted.ThreadId);
@@ -56,7 +56,7 @@ public sealed class SlackTests
         };
         if (subtype.Length > 0) message["subtype"] = subtype;
         if (bot is not null) message["bot_id"] = bot;
-        JsonElement envelope = JsonSerializer.SerializeToElement(new { type = "events_api", payload = new { api_app_id = "A123", team_id = "T123", event_id = "Ev123", @event = message } });
+        SlackSocketEnvelope envelope = JsonSerializer.Deserialize<SlackSocketEnvelope>(JsonSerializer.Serialize(new { type = "events_api", payload = new { api_app_id = "A123", team_id = "T123", event_id = "Ev123", @event = message } }))!;
         Assert.Null(SlackEvents.Parse(envelope, Installation));
     }
 

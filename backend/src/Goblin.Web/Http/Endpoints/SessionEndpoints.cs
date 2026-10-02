@@ -16,7 +16,7 @@ internal static class SessionEndpoints
         workspace.Session(workspace.SessionId(context.Request) is not null);
 
     private static SessionState Unlock(HttpContext context, Workspace workspace) =>
-        workspace.Unlock(ApiRequest.StringField(context, "password"), context.Response);
+        workspace.Unlock(ApiRequest.Body<UnlockRequest>(context).Password, context.Response);
 
     private static SessionState Lock(HttpContext context, Workspace workspace) =>
         workspace.Lock((string)context.Items[WorkspaceMiddleware.SessionKey]!, context.Response);

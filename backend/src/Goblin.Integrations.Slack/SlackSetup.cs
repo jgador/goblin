@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO;
@@ -58,8 +59,8 @@ public sealed class SlackSetup : IAsyncDisposable
         SlackCredentialStore.SafePath(RecoveryPath);
         if (File.Exists(RecoveryPath))
         {
-            using JsonDocument recovery = JsonDocument.Parse(File.ReadAllText(RecoveryPath));
-            string saved = SlackApi.String(recovery.RootElement, "appId");
+            SlackSetupRecovery recovery = JsonSerializer.Deserialize<SlackSetupRecovery>(File.ReadAllText(RecoveryPath)) ?? throw new JsonException();
+            string saved = recovery.AppId ?? "";
             _view = new(SlackSetupStatus.NeedsAttention, null, null, SlackApi.Id(saved, 'A') ? saved : null,
                 "A previous setup did not finish. Review your Slack apps before starting again, or connect the existing app with its tokens.");
         }
@@ -202,8 +203,8 @@ public sealed class SlackSetup : IAsyncDisposable
         lock (_gate) _view = _view with { AppId = appId };
         string path = Path.Combine(Project, "runtime.json");
         if (!File.Exists(path)) throw new SlackFailure();
-        using JsonDocument runtime = JsonDocument.Parse(await File.ReadAllTextAsync(path, token));
-        string appToken = SlackApi.String(runtime.RootElement, "appToken"), botToken = SlackApi.String(runtime.RootElement, "botToken");
+        SlackRuntimeTokens runtime = JsonSerializer.Deserialize<SlackRuntimeTokens>(await File.ReadAllTextAsync(path, token)) ?? throw new SlackFailure();
+        string appToken = runtime.AppToken, botToken = runtime.BotToken;
         SlackCredentials verified = await _api.VerifyAsync(appToken, botToken, token);
         if (verified.WorkspaceId != _team || appId is not null && verified.AppId != appId) throw new SlackFailure();
         bool icon = false;
@@ -211,9 +212,9 @@ public sealed class SlackSetup : IAsyncDisposable
         {
             // Only this helper's private CLI profile is inspected. The optional
             // icon step gracefully falls back if Slack changes its profile shape.
-            using JsonDocument profile = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(Profile, "credentials.json"), token));
-            if (profile.RootElement.TryGetProperty(_team, out JsonElement account))
-            { await _api.SetIconAsync(SlackApi.String(account, "token"), verified.AppId, token); icon = true; }
+            Dictionary<string, SlackProfileAccount>? profile = JsonSerializer.Deserialize<Dictionary<string, SlackProfileAccount>>(await File.ReadAllTextAsync(Path.Combine(Profile, "credentials.json"), token));
+            if (profile?.TryGetValue(_team, out SlackProfileAccount? account) == true)
+            { await _api.SetIconAsync(account.Token, verified.AppId, token); icon = true; }
         }
         catch (Exception error) when (error is not OperationCanceledException) { }
         await RunAsync(["auth", "logout", "--all"], token);
@@ -269,7 +270,7 @@ public sealed class SlackSetup : IAsyncDisposable
     }
 
     private Task SaveRecoveryAsync(string? appId) => SlackCredentialStore.WriteAsync(RecoveryPath,
-        JsonSerializer.SerializeToUtf8Bytes(new { appId }), CancellationToken.None);
+        JsonSerializer.SerializeToUtf8Bytes(new SlackSetupRecovery { AppId = appId }), CancellationToken.None);
 
     private string? ReadAppId()
     {
@@ -277,10 +278,8 @@ public sealed class SlackSetup : IAsyncDisposable
         if (!File.Exists(path)) return null;
         try
         {
-            using JsonDocument apps = JsonDocument.Parse(File.ReadAllText(path));
-            if (!apps.RootElement.TryGetProperty("apps", out JsonElement entries)) return null;
-            foreach (JsonProperty team in entries.EnumerateObject())
-            { string id = SlackApi.String(team.Value, "app_id"); if (SlackApi.Id(id, 'A')) return id; }
+            SlackCliApps? apps = JsonSerializer.Deserialize<SlackCliApps>(File.ReadAllText(path));
+            return apps?.Apps?.Values.Select(app => app.AppId).FirstOrDefault(id => SlackApi.Id(id, 'A'));
         }
         catch (JsonException) { }
         return null;

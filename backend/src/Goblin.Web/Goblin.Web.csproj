@@ -13,4 +13,7 @@
     <ProjectReference Include="../Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />
     <Content Include="../../../frontend/dist/**/*" Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Goblin.Tests" />
+  </ItemGroup>
 </Project>

@@ -92,8 +92,8 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
                     lock (_gate) if (epoch == _epoch && code.Success)
                         _state = _state with { UserCode = code.Groups[1].Value, VerificationUrl = "https://github.com/login/device" };
                 });
-            using JsonDocument viewer = JsonDocument.Parse(await CliAsync(["api", "user"], token, staging));
-            var account = new RepositoryAccount(Guid.NewGuid().ToString("N"), viewer.RootElement.GetProperty("id").ToString(), viewer.RootElement.GetProperty("login").GetString()!);
+            GitHubUserResponse viewer = JsonSerializer.Deserialize<GitHubUserResponse>(await CliAsync(["api", "user"], token, staging)) ?? throw new GitHubFailure();
+            var account = new RepositoryAccount(Guid.NewGuid().ToString("N"), viewer.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), viewer.Login);
             await File.WriteAllTextAsync(Path.Combine(staging, "account.json"), JsonSerializer.Serialize(account, Json), token);
             foreach (string file in Directory.GetFiles(staging, "*", SearchOption.AllDirectories))
                 if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
@@ -140,8 +140,8 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
         if (before.Account is null) return before;
         try
         {
-            using JsonDocument viewer = JsonDocument.Parse(await CliAsync(["api", "user"], token));
-            if (viewer.RootElement.GetProperty("id").ToString() != before.Account.AccountId) throw new GitHubFailure();
+            GitHubUserResponse viewer = JsonSerializer.Deserialize<GitHubUserResponse>(await CliAsync(["api", "user"], token)) ?? throw new GitHubFailure();
+            if (viewer.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) != before.Account.AccountId) throw new GitHubFailure();
             lock (_gate) if (_state.Account?.Generation == before.Account.Generation) _state = _state with { Status = GitHubConnectionStatus.Connected, Notice = null };
         }
         catch
@@ -157,19 +157,19 @@ public sealed class GitHubConnection : IRepositoryCatalog, IDisposable
     public async Task<RepositoryInfo[]> RepositoriesAsync(int page, CancellationToken token)
     {
         if (page is < 1 or > 1000) throw new GitHubFailure();
-        using JsonDocument result = JsonDocument.Parse(await CliAsync(["api", $"user/repos?per_page=100&page={page}&sort=full_name"], token));
-        return [.. result.RootElement.EnumerateArray().Select(Repository)];
+        GitHubRepositoryResponse[] result = JsonSerializer.Deserialize<GitHubRepositoryResponse[]>(await CliAsync(["api", $"user/repos?per_page=100&page={page}&sort=full_name"], token)) ?? throw new GitHubFailure();
+        return [.. result.Select(Repository)];
     }
 
     public async Task<RepositoryInfo> RepositoryAsync(string name, CancellationToken token)
     {
         _ = new Goblin.Core.Work.RepositoryChange(name, "Goblin", "goblin@example.invalid");
-        using JsonDocument result = JsonDocument.Parse(await CliAsync(["api", "repos/" + name], token));
-        return Repository(result.RootElement);
+        GitHubRepositoryResponse result = JsonSerializer.Deserialize<GitHubRepositoryResponse>(await CliAsync(["api", "repos/" + name], token)) ?? throw new GitHubFailure();
+        return Repository(result);
     }
 
-    private static RepositoryInfo Repository(JsonElement row) => new(row.GetProperty("id").GetInt64(), row.GetProperty("full_name").GetString()!,
-        row.GetProperty("default_branch").GetString()!, row.TryGetProperty("permissions", out JsonElement permissions) && permissions.TryGetProperty("push", out JsonElement push) && push.GetBoolean());
+    private static RepositoryInfo Repository(GitHubRepositoryResponse row) =>
+        new(row.Id, row.FullName, row.DefaultBranch, row.Permissions?.Push == true);
 
     public Task<string> CliAsync(string[] arguments, CancellationToken token, string? profile = null) => RunAsync(_command, arguments, profile ?? Profile, token);
 

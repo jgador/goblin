@@ -10,7 +10,7 @@ namespace Goblin.Execution;
 
 public static class InspectionFiles
 {
-    public static async Task<JsonElement> ReadAsync(KubernetesApi api, InspectionAllocation session, string? path, CancellationToken token)
+    public static async Task<WorkspaceFilesResponse> ReadAsync(KubernetesApi api, InspectionAllocation session, string? path, CancellationToken token)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(30));
@@ -34,10 +34,9 @@ public static class InspectionFiles
             if (!message.EndOfMessage) continue;
             if (channel == 3)
             {
-                using JsonDocument result = JsonDocument.Parse(status.ToArray());
-                if (result.RootElement.GetProperty("status").GetString() != "Success") throw new IOException("Workspace read failed.");
-                using JsonDocument data = JsonDocument.Parse(output.ToArray());
-                return data.RootElement.Clone();
+                WorkspaceExecStatus? result = JsonSerializer.Deserialize<WorkspaceExecStatus>(status.ToArray());
+                if (result?.Status != "Success") throw new IOException("Workspace read failed.");
+                return JsonSerializer.Deserialize<WorkspaceFilesResponse>(output.ToArray()) ?? throw new IOException("Workspace read failed.");
             }
             channel = -1;
         }

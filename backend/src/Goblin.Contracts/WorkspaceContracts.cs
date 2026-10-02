@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Core.Work;
@@ -10,7 +11,9 @@ public sealed record WorkspaceLimits(int MaxSandboxes = 2, int MaxCachedVolumes 
 public sealed record WorkspaceCheckpoint(long Id, long WorkId, long AttemptId, int TurnNumber,
     int WorkspaceNumber, string Repository, string Branch, string CommitSha, DateTimeOffset CreatedAt);
 
-public sealed record WorkspaceCheckpointWrite(int TurnNumber, string CommitSha);
+public sealed record WorkspaceCheckpointWrite(
+    [property: JsonPropertyName("turnNumber")] int TurnNumber,
+    [property: JsonPropertyName("commitSha")] string CommitSha);
 
 public interface IWorkspaceCheckpoints
 {

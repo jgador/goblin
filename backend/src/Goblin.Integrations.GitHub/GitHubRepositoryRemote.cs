@@ -96,10 +96,10 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
         if ((await File.ReadAllTextAsync(Path.Combine(directory, "published-head"), token)).Trim() != commit) throw new GitHubFailure();
         string? existing = await PullRequestAsync(repository, token);
         if (existing is not null) return new(commit, existing);
-        using JsonDocument result = JsonDocument.Parse(await _github.CliAsync(["api", "--method", "POST", "repos/" + repository.Repository + "/pulls",
+        GitHubPullRequestResponse result = JsonSerializer.Deserialize<GitHubPullRequestResponse>(await _github.CliAsync(["api", "--method", "POST", "repos/" + repository.Repository + "/pulls",
             "-f", "head=" + repository.Grant!.Branch, "-f", "base=" + repository.Grant.BaseBranch,
-            "-f", "title=Goblin " + repository.Grant.Branch, "-f", "body=Changes prepared by Goblin. Review this branch before merging.", "-F", "draft=true"], token));
-        return new(commit, result.RootElement.GetProperty("html_url").GetString());
+            "-f", "title=Goblin " + repository.Grant.Branch, "-f", "body=Changes prepared by Goblin. Review this branch before merging.", "-F", "draft=true"], token)) ?? throw new GitHubFailure();
+        return new(commit, result.HtmlUrl);
     }
 
     public async Task<RepositoryOperationResult?> ReconcileAsync(RepositoryChange repository, string directory, RepositoryOperationKind operation, string commit, CancellationToken token)
@@ -120,8 +120,8 @@ public sealed class GitHubRepositoryRemote : IRepositoryRemote
     private async Task<string?> PullRequestAsync(RepositoryChange repository, CancellationToken token)
     {
         string owner = repository.Repository.Split('/')[0];
-        using JsonDocument result = JsonDocument.Parse(await _github.CliAsync(["api", "repos/" + repository.Repository + "/pulls?state=all&head=" +
-            Uri.EscapeDataString(owner + ":" + repository.Grant!.Branch) + "&base=" + Uri.EscapeDataString(repository.Grant.BaseBranch)], token));
-        return result.RootElement.EnumerateArray().Select(x => x.GetProperty("html_url").GetString()).FirstOrDefault();
+        GitHubPullRequestResponse[] result = JsonSerializer.Deserialize<GitHubPullRequestResponse[]>(await _github.CliAsync(["api", "repos/" + repository.Repository + "/pulls?state=all&head=" +
+            Uri.EscapeDataString(owner + ":" + repository.Grant!.Branch) + "&base=" + Uri.EscapeDataString(repository.Grant.BaseBranch)], token)) ?? throw new GitHubFailure();
+        return result.Select(x => x.HtmlUrl).FirstOrDefault();
     }
 }

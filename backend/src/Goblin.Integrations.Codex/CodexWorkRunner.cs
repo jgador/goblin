@@ -104,16 +104,13 @@ public sealed class CodexWorkRunner
                         "Otherwise answer or ask clarifying questions using the saved Work context.")
             }, token);
             lock (gate) threadId = thread.Thread.Id;
-            var contextFields = new Dictionary<string, object?>
+            string context = JsonSerializer.Serialize(new CodexWorkContext(work.Objective, work.Messages,
+                work.Decisions, work.Results, work.Artifacts)
             {
-                ["Objective"] = work.Objective,
-                ["Messages"] = work.Messages,
-                ["Decisions"] = work.Decisions,
-                ["Results"] = work.Results,
-                ["Artifacts"] = work.Artifacts
-            };
-            if (repositoryChanges) contextFields["RepositorySetupMemory"] = setupMemory ?? [];
-            string context = JsonSerializer.Serialize(contextFields);
+                RepositorySetupMemory = repositoryChanges ? setupMemory ?? [] : null
+            });
+            // JSON Schema construction and the protocol's arbitrary outputSchema
+            // payload intentionally remain dynamic; result data is a typed contract.
             var properties = new Dictionary<string, object>
             {
                 ["kind"] = new { type = "string", @enum = !repositoryChanges ? new[] { "result", "input", "workspace" } : ["result", "input"] },
@@ -160,24 +157,16 @@ public sealed class CodexWorkRunner
                 }
             }
             string text = await completed;
-            using JsonDocument output = JsonDocument.Parse(text);
-            string? kind = output.RootElement.GetProperty("kind").GetString();
-            string? body = output.RootElement.GetProperty("text").GetString();
-            if (string.IsNullOrWhiteSpace(body) || (kind is not ("result" or "input") && !(kind == "workspace" && !repositoryChanges)))
-                throw new IntegrationFailure("invalid_work_result", "The runtime returned an invalid result.");
-            RepositorySetup[]? setups = null;
-            if (repositoryChanges && output.RootElement.TryGetProperty("setup", out JsonElement setup))
-            {
-                setups = setup.Deserialize<RepositorySetup[]>(new JsonSerializerOptions(JsonSerializerDefaults.Web));
-                if (setups is null || setups.Length > RepositorySetupRules.MaxObservations || !setups.All(RepositorySetupRules.Valid))
-                    throw new IntegrationFailure("invalid_work_result", "The runtime returned invalid setup observations.");
-            }
+            CodexWorkResult output = CodexWorkResults.Read(text, repositoryChanges);
+            string? kind = output.Kind;
+            string? body = output.Text;
+            RepositorySetup[]? setups = CodexWorkResults.Setup(output);
             return new(kind == "workspace" ? ObservationKind.WorkspaceRequired : kind == "input" ? ObservationKind.Paused : ObservationKind.Result, session, body)
             {
                 Setup = setups,
                 TurnNumber = work.Attempts[^1].TurnNumber,
                 ReleaseWorkspace = !repositoryChanges || kind == "result" ||
-                    !output.RootElement.TryGetProperty("releaseWorkspace", out JsonElement release) || release.GetBoolean()
+                    ((CodexRepositoryWorkResult)output).ReleaseWorkspace
             };
         }
         finally

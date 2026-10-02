@@ -106,10 +106,9 @@ public sealed class SlackConnection : BackgroundService
     {
         while (!token.IsCancellationRequested && socket.State == WebSocketState.Open)
         {
-            using JsonDocument? document = await SlackApi.ReceiveAsync(socket, token);
-            if (document is null || SlackApi.String(document.RootElement, "type") == "disconnect") return;
-            JsonElement envelope = document.RootElement;
-            string envelopeId = SlackApi.String(envelope, "envelope_id");
+            SlackSocketEnvelope? envelope = await SlackApi.ReceiveAsync(socket, token);
+            if (envelope is null || envelope.Type == "disconnect") return;
+            string envelopeId = envelope.EnvelopeId;
             if (envelopeId.Length is 0 or > 200) continue;
             ExternalMessage? message = SlackEvents.Parse(envelope, credentials.Installation);
             if (message is not null)
@@ -120,7 +119,7 @@ public sealed class SlackConnection : BackgroundService
                 deadline.CancelAfter(TimeSpan.FromSeconds(2));
                 await _conversations.AcceptAsync(message, deadline.Token);
             }
-            await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { envelope_id = envelopeId }), WebSocketMessageType.Text, true, token);
+            await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new SlackAcknowledgement(envelopeId)), WebSocketMessageType.Text, true, token);
         }
     }
 

@@ -5,10 +5,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,9 +21,16 @@ public sealed class SlackFailure : Exception
     public SlackFailure(string message = "Slack could not complete this operation. Check the connection and try again.") : base(message) { }
 }
 
-public sealed record SlackCredentials(string InstallationId, string AppToken, string BotToken,
-    string Workspace, string WorkspaceId, string AppId, string BotUserId)
+public sealed record SlackCredentials(
+    [property: JsonPropertyName("InstallationId")] string InstallationId,
+    [property: JsonPropertyName("AppToken")] string AppToken,
+    [property: JsonPropertyName("BotToken")] string BotToken,
+    [property: JsonPropertyName("Workspace")] string Workspace,
+    [property: JsonPropertyName("WorkspaceId")] string WorkspaceId,
+    [property: JsonPropertyName("AppId")] string AppId,
+    [property: JsonPropertyName("BotUserId")] string BotUserId)
 {
+    [JsonPropertyName("Installation")]
     public ExternalInstallation Installation => new(InstallationId, WorkspaceId, AppId, BotUserId);
 
     public override string ToString() => "Slack credentials (redacted)";
@@ -42,18 +49,17 @@ public sealed class SlackApi : IDisposable
         };
     }
 
-    public async Task<JsonDocument> CallAsync(string method, string credential, object body, CancellationToken token)
+    private async Task<T> CallAsync<T>(string method, string credential, IEnumerable<KeyValuePair<string, string>> body, CancellationToken token) where T : SlackResponse
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, method)
         {
-            Content = new FormUrlEncodedContent(JsonSerializer.SerializeToElement(body).EnumerateObject().Select(x =>
-                new System.Collections.Generic.KeyValuePair<string, string>(x.Name, x.Value.ValueKind == JsonValueKind.String ? x.Value.GetString()! : x.Value.GetRawText())))
+            Content = new FormUrlEncodedContent(body)
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
-        return await SendAsync(request, token, method == "auth.test");
+        return await SendAsync<T>(request, token, method == "auth.test");
     }
 
-    private async Task<JsonDocument> SendAsync(HttpRequestMessage request, CancellationToken token, bool verifyRuntimeScopes = false)
+    private async Task<T> SendAsync<T>(HttpRequestMessage request, CancellationToken token, bool verifyRuntimeScopes = false) where T : SlackResponse
     {
         try
         {
@@ -75,10 +81,9 @@ public sealed class SlackApi : IDisposable
                 if (memory.Length + read > 1024 * 1024) throw new SlackFailure();
                 memory.Write(buffer, 0, read);
             }
-            var document = JsonDocument.Parse(memory.ToArray());
-            if (!document.RootElement.TryGetProperty("ok", out JsonElement ok) || ok.ValueKind != JsonValueKind.True)
-            { document.Dispose(); throw new SlackFailure(); }
-            return document;
+            T result = JsonSerializer.Deserialize<T>(memory.ToArray()) ?? throw new SlackFailure();
+            if (!result.Ok) throw new SlackFailure();
+            return result;
         }
         catch (Exception error) when (error is HttpRequestException or JsonException or IOException) { throw new SlackFailure(); }
     }
@@ -87,22 +92,21 @@ public sealed class SlackApi : IDisposable
     {
         if (!ValidToken(appToken, "xapp-") || !ValidToken(botToken, "xoxb-"))
             throw new SlackFailure("Enter the app-level xapp token and bot xoxb token from the same Slack app.");
-        using JsonDocument auth = await CallAsync("auth.test", botToken, new { }, token);
-        JsonElement data = auth.RootElement;
-        string team = String(data, "team_id"), user = String(data, "user_id"), bot = String(data, "bot_id");
+        SlackAuthResponse auth = await CallAsync<SlackAuthResponse>("auth.test", botToken, [], token);
+        string team = auth.TeamId, user = auth.UserId, bot = auth.BotId;
         if (!Id(team, 'T') || !Id(user, 'U', 'W') || !Id(bot, 'B')) throw new SlackFailure();
-        using JsonDocument info = await CallAsync("bots.info", botToken, new { bot }, token);
-        string app = String(info.RootElement.GetProperty("bot"), "app_id");
+        SlackBotResponse info = await CallAsync<SlackBotResponse>("bots.info", botToken, [new("bot", bot)], token);
+        string app = info.Bot?.AppId ?? "";
         if (!Id(app, 'A')) throw new SlackFailure();
-        var credentials = new SlackCredentials(Guid.NewGuid().ToString("N"), appToken, botToken, String(data, "team"), team, app, user);
+        var credentials = new SlackCredentials(Guid.NewGuid().ToString("N"), appToken, botToken, auth.Team, team, app, user);
         using ClientWebSocket socket = await OpenAsync(credentials, token);
         return credentials;
     }
 
     public async Task<ClientWebSocket> OpenAsync(SlackCredentials credentials, CancellationToken token)
     {
-        using JsonDocument response = await CallAsync("apps.connections.open", credentials.AppToken, new { }, token);
-        if (!Uri.TryCreate(String(response.RootElement, "url"), UriKind.Absolute, out Uri? url) ||
+        SlackOpenResponse response = await CallAsync<SlackOpenResponse>("apps.connections.open", credentials.AppToken, [], token);
+        if (!Uri.TryCreate(response.Url, UriKind.Absolute, out Uri? url) ||
             url.Scheme != "wss" || url.UserInfo.Length != 0 || !url.IsDefaultPort ||
             !(url.Host == "wss.slack.com" || url.Host.EndsWith(".slack.com", StringComparison.Ordinal))) throw new SlackFailure();
         var socket = new ClientWebSocket();
@@ -111,16 +115,15 @@ public sealed class SlackApi : IDisposable
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
             timeout.CancelAfter(TimeSpan.FromSeconds(15));
             await socket.ConnectAsync(url, timeout.Token);
-            using JsonDocument hello = await ReceiveAsync(socket, timeout.Token) ?? throw new SlackFailure();
-            if (String(hello.RootElement, "type") != "hello" ||
-                String(hello.RootElement.GetProperty("connection_info"), "app_id") != credentials.AppId)
+            SlackSocketEnvelope hello = await ReceiveAsync(socket, timeout.Token) ?? throw new SlackFailure();
+            if (hello.Type != "hello" || hello.ConnectionInfo?.AppId != credentials.AppId)
                 throw new SlackFailure("The app and bot tokens belong to different Slack apps.");
             return socket;
         }
         catch { socket.Dispose(); throw; }
     }
 
-    public static async Task<JsonDocument?> ReceiveAsync(ClientWebSocket socket, CancellationToken token)
+    public static async Task<SlackSocketEnvelope?> ReceiveAsync(ClientWebSocket socket, CancellationToken token)
     {
         using var buffer = new MemoryStream();
         byte[] chunk = new byte[8192];
@@ -132,13 +135,13 @@ public sealed class SlackApi : IDisposable
             if (received.MessageType != WebSocketMessageType.Text || buffer.Length + received.Count > 1024 * 1024) throw new SlackFailure();
             buffer.Write(chunk, 0, received.Count);
         } while (!received.EndOfMessage);
-        return JsonDocument.Parse(buffer.ToArray());
+        return JsonSerializer.Deserialize<SlackSocketEnvelope>(buffer.ToArray()) ?? throw new SlackFailure();
     }
 
     public async Task PostAsync(SlackCredentials credentials, string channel, string thread, string text, CancellationToken token)
     {
-        using JsonDocument _ = await CallAsync("chat.postMessage", credentials.BotToken,
-            new { channel, thread_ts = thread, text, unfurl_links = false, unfurl_media = false, parse = "none" }, token);
+        var request = new SlackPostMessageRequest(channel, thread, text);
+        await CallAsync<SlackResponse>("chat.postMessage", credentials.BotToken, request.Form(), token);
     }
 
     public async Task SetIconAsync(string setupToken, string appId, CancellationToken token)
@@ -153,10 +156,8 @@ public sealed class SlackApi : IDisposable
         image.Headers.ContentType = new("image/png");
         multipart.Add(image, "file", "goblin.png");
         request.Content = multipart;
-        using JsonDocument _ = await SendAsync(request, token);
+        await SendAsync<SlackResponse>(request, token);
     }
-
-    public static string String(JsonElement value, string name) => value.TryGetProperty(name, out JsonElement field) && field.ValueKind == JsonValueKind.String ? field.GetString()! : "";
 
     public static bool Id(string value, params char[] prefixes) => value.Length is >= 2 and <= 64 && Array.IndexOf(prefixes, value[0]) >= 0 && Regex.IsMatch(value, "^[A-Z0-9]+$", RegexOptions.CultureInvariant);
 

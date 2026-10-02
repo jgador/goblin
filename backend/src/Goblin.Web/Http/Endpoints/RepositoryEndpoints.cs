@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Repositories;
@@ -57,9 +55,7 @@ internal static class RepositoryEndpoints
 
     private static async Task<IResult> CheckpointAsync(long attemptId, HttpContext context, RepositoryBroker broker, WorkspaceCheckpoints checkpoints)
     {
-        Dictionary<string, JsonElement> body = await ApiRequest.ReadBodyAsync(context.Request);
-        WorkspaceCheckpointWrite request = JsonSerializer.Deserialize<WorkspaceCheckpointWrite>(JsonSerializer.Serialize(body), ExecutionFiles.Json)
-            ?? throw new ApplicationFailure("invalid_command");
+        WorkspaceCheckpointWrite request = await ApiRequest.ReadBodyAsync<WorkspaceCheckpointWrite>(context.Request, ExecutionFiles.Json);
         return Results.Json(await checkpoints.SaveAsync(attemptId, request.TurnNumber, request.CommitSha, broker, context.RequestAborted), ExecutionFiles.Json);
     }
 }

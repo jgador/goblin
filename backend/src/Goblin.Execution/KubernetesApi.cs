@@ -9,7 +9,6 @@ using System.Net.WebSockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Execution.Kubernetes;
@@ -42,12 +41,6 @@ public sealed class KubernetesApi : IDisposable
             };
         }
         _client = new(handler) { BaseAddress = new Uri(address), Timeout = TimeSpan.FromSeconds(20) };
-    }
-
-    public async Task<JsonObject?> GetAsync(string path, CancellationToken token)
-    {
-        string? text = await SendAsync(HttpMethod.Get, path, null, token, allowMissing: true);
-        return text is null ? null : JsonNode.Parse(text)!.AsObject();
     }
 
     public async Task<T?> GetAsync<T>(string path, CancellationToken token) where T : class

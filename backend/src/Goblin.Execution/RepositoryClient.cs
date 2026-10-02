@@ -4,10 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 
@@ -59,9 +57,9 @@ public static class RepositoryClient
             using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(4));
             while (true)
             {
-                using JsonDocument state = await client.GetFromJsonAsync<JsonDocument>($"/internal/repository/{attemptId}/operations/{id}", deadline.Token) ?? throw new IOException();
-                RepositoryOperationState status = ContractValue.Parse<RepositoryOperationState>(state.RootElement.GetProperty("state").GetString()!);
-                if (status == RepositoryOperationState.Succeeded) return state.RootElement.GetProperty("url").GetString();
+                RepositoryOperationResponse state = await client.GetFromJsonAsync<RepositoryOperationResponse>($"/internal/repository/{attemptId}/operations/{id}", ExecutionFiles.Json, deadline.Token) ?? throw new IOException();
+                RepositoryOperationState status = state.Status;
+                if (status == RepositoryOperationState.Succeeded) return state.Url;
                 if (status is RepositoryOperationState.Failed or RepositoryOperationState.Uncertain) throw new IOException("Publishing needs attention. Inspect this Work before trying again.");
                 await Task.Delay(1000, deadline.Token);
             }

@@ -78,8 +78,9 @@ internal sealed class GitHubEndpoints
     private static async Task<IResult> SetRepositoryAsync(HttpContext context, GitHubConnection github, GitHubStore store)
     {
         RepositoryAccount account = (await github.StatusAsync()).Account ?? throw new PublicError("repository_unavailable", "Connect GitHub first.", 409);
-        RepositoryInfo repository = await github.RepositoryAsync(ApiRequest.StringField(context, "repository") ?? "", context.RequestAborted);
-        await store.SetRepositoryAsync(repository, ApiRequest.StringField(context, "enabled") == "true", account.Generation, context.RequestAborted);
+        RepositorySelectionRequest request = ApiRequest.Body<RepositorySelectionRequest>(context);
+        RepositoryInfo repository = await github.RepositoryAsync(request.Repository ?? "", context.RequestAborted);
+        await store.SetRepositoryAsync(repository, request.Enabled == "true", account.Generation, context.RequestAborted);
         return WorkResponse.Json(Array.ConvertAll(await store.RepositoriesAsync(), Api.EnabledRepository.From));
     }
 }
