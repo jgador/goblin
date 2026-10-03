@@ -10,9 +10,10 @@ unrecognized upstream fields are ignored rather than requiring entire API models
   unusable numeric readings remain unknown. The generic Kubernetes API is the only
   resource reader; its former dynamic overload is removed.
 - GitHub uses user, repository/permissions, and pull-request projections.
-- Slack uses Web API responses, Socket Mode envelopes/events, and typed CLI setup
-  files. Workspace-keyed CLI maps retain dictionaries with typed values. Bot/subtype
-  field presence, including explicit null, still suppresses unsupported messages.
+- Slack uses Web API responses, Socket Mode envelopes/events, typed CLI setup
+  files, and explicit CLI hook/config response contracts. Workspace-keyed CLI maps
+  retain dictionaries with typed values. Bot/subtype field presence, including
+  explicit null, still suppresses unsupported messages.
   Form requests are encoded directly without traversing serialized JSON.
 - Repository workers read a typed operation response and retain exact state parsing.
 - Codex results and setup observations use adapter contracts that map to core types;

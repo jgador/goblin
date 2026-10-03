@@ -20,13 +20,11 @@ internal class CodexWorkResult
 
 internal sealed class CodexRepositoryWorkResult : CodexWorkResult
 {
-    private RepositorySetupOutput[]? _setup;
-
     [JsonPropertyName("releaseWorkspace")]
     public bool ReleaseWorkspace { get; init; } = true;
 
     [JsonPropertyName("setup")]
-    public RepositorySetupOutput[]? Setup { get => _setup; init { _setup = value; SetupProvided = true; } }
+    public RepositorySetupOutput[]? Setup { get; init { field = value; SetupProvided = true; } }
 
     [JsonIgnore]
     public bool SetupProvided { get; private init; }

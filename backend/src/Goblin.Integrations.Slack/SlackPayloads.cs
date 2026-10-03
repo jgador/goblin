@@ -1,6 +1,6 @@
 using System;
-using System.Text.Json;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Goblin.Integrations.Slack;
@@ -50,18 +50,16 @@ public sealed class SlackEventPayload
 public sealed class SlackMessageEvent
 {
     // Presence, including explicit null, marks bot/subtype messages as unsupported.
-    private string? _botId, _subtype;
-
     [JsonPropertyName("bot_id")]
     [JsonConverter(typeof(SlackStringConverter))]
-    public string? BotId { get => _botId; init { _botId = value; HasBotId = true; } }
+    public string? BotId { get; init { field = value; HasBotId = true; } }
 
     [JsonIgnore]
     public bool HasBotId { get; private init; }
 
     [JsonPropertyName("subtype")]
     [JsonConverter(typeof(SlackStringConverter))]
-    public string? Subtype { get => _subtype; init { _subtype = value; HasSubtype = true; } }
+    public string? Subtype { get; init { field = value; HasSubtype = true; } }
 
     [JsonIgnore]
     public bool HasSubtype { get; private init; }
@@ -131,6 +129,30 @@ public sealed class SlackCliApp
     [JsonPropertyName("app_id")]
     [JsonConverter(typeof(SlackStringConverter))]
     public string AppId { get; init; } = "";
+}
+
+internal sealed class SlackCliHooksResponse
+{
+    [JsonPropertyName("hooks")]
+    public required SlackCliHooks Hooks { get; init; }
+
+    [JsonPropertyName("config")]
+    public required SlackCliConfig Config { get; init; }
+}
+
+internal sealed class SlackCliHooks
+{
+    [JsonPropertyName("get-manifest")]
+    public required string GetManifest { get; init; }
+
+    [JsonPropertyName("deploy")]
+    public required string Deploy { get; init; }
+}
+
+internal sealed class SlackCliConfig
+{
+    [JsonPropertyName("sdk-managed-connection-enabled")]
+    public required bool SdkManagedConnectionEnabled { get; init; }
 }
 
 public class SlackResponse

@@ -66,7 +66,7 @@ public static class WorkspaceFiles
             }
         }
         Add(root);
-        return new() { Files = files.ToArray(), Truncated = truncated };
+        return new() { Files = [.. files], Truncated = truncated };
     }
 
     private static void RequireRegularFile(string path)

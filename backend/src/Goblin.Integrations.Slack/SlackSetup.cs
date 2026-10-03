@@ -354,11 +354,11 @@ public sealed class SlackSetup : IAsyncDisposable
         switch (action)
         {
             case "hooks":
-                Console.Write(JsonSerializer.Serialize(new
+                Console.Write(JsonSerializer.Serialize(new SlackCliHooksResponse
                 {
-                    hooks = new System.Collections.Generic.Dictionary<string, object>
-                    { ["get-manifest"] = HookCommand("manifest"), ["deploy"] = HookCommand("capture") },
-                    config = new System.Collections.Generic.Dictionary<string, object> { ["sdk-managed-connection-enabled"] = true }
+                    Hooks = new SlackCliHooks
+                    { GetManifest = HookCommand("manifest"), Deploy = HookCommand("capture") },
+                    Config = new SlackCliConfig { SdkManagedConnectionEnabled = true }
                 }));
                 return 0;
             case "manifest": Console.Write(Assets.Manifest); return 0;
