@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json.Serialization;
 using Goblin.Application;
-using Goblin.Application.Repositories;
+using Goblin.Application.GitRepositories;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
 using Goblin.Contracts.Conversations;
@@ -120,9 +120,9 @@ internal static class WebServices
             typeof(GoblinApplication).Assembly.Location));
         builder.Services.AddSingleton<IRepositoryRemote, GitHubRepositoryRemote>();
         builder.Services.AddSingleton<IRepositoryCatalog>(services => services.GetRequiredService<GitHubConnection>());
-        builder.Services.AddSingleton(new RepositoryBrokerOptions(Path.Combine(workspace.DataDirectory, "repositories")));
-        builder.Services.AddSingleton<RepositoryBroker>();
-        builder.Services.AddSingleton<IRepositoryBroker>(services => services.GetRequiredService<RepositoryBroker>());
+        builder.Services.AddSingleton(new GitRepositoryBrokerOptions(Path.Combine(workspace.DataDirectory, "repositories")));
+        builder.Services.AddSingleton<GitRepositoryBroker>();
+        builder.Services.AddSingleton<IRepositoryBroker>(services => services.GetRequiredService<GitRepositoryBroker>());
         if (!string.IsNullOrWhiteSpace(executionNamespace))
         {
             var kubernetes = new KubernetesApi(builder.Configuration[Env.GoblinKubernetesUrl],

@@ -1,4 +1,4 @@
-using Goblin.Application.Repositories;
+using Goblin.Application.GitRepositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
@@ -21,12 +21,12 @@ public static class ApplicationServices
         options.Discovery.DisableConventionalDiscovery();
         options.Discovery.IncludeType(typeof(DispatchWorkHandler));
         options.Discovery.IncludeType(typeof(ReconcileWorkHandler));
-        options.Discovery.IncludeType(typeof(PublishRepositoryHandler));
+        options.Discovery.IncludeType(typeof(ExecuteGitRepositoryOperationHandler));
         if (inspectionEnabled) options.Discovery.IncludeType(typeof(InspectionHandler));
         options.LocalQueue("work").UseDurableInbox();
         options.PublishMessage<DispatchWork>().ToLocalQueue("work");
         options.PublishMessage<ReconcileWork>().ToLocalQueue("work");
-        options.PublishMessage<PublishRepository>().ToLocalQueue("work");
+        options.PublishMessage<ExecuteGitRepositoryOperation>().ToLocalQueue("work");
         options.PublishMessage<StartInspection>().ToLocalQueue("work");
         options.PublishMessage<StopInspection>().ToLocalQueue("work");
         options.Policies.OnException<System.Exception>().MoveToErrorQueue();
@@ -39,7 +39,7 @@ public static class ApplicationServices
         services.AddScoped<WorkStore>();
         services.AddScoped<InspectionStore>();
         services.AddScoped<GitHubStore>();
-        services.AddScoped<RepositorySetupStore>();
+        services.AddScoped<GitRepositorySetupStore>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ExternalConversationStore>();
         services.AddSingleton<ExecutionCoordinator>();

@@ -17,11 +17,11 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Wolverine.EntityFrameworkCore;
 
-namespace Goblin.Application.Repositories;
+namespace Goblin.Application.GitRepositories;
 
-public sealed class RepositoryBrokerOptions
+public sealed class GitRepositoryBrokerOptions
 {
-    public RepositoryBrokerOptions(string directory)
+    public GitRepositoryBrokerOptions(string directory)
     {
         Directory = directory;
     }
@@ -29,9 +29,9 @@ public sealed class RepositoryBrokerOptions
     public string Directory { get; init; }
 }
 
-public sealed class PublishRepository
+public sealed class ExecuteGitRepositoryOperation
 {
-    public PublishRepository(long id)
+    public ExecuteGitRepositoryOperation(long id)
     {
         Id = id;
     }
@@ -39,9 +39,9 @@ public sealed class PublishRepository
     public long Id { get; init; }
 }
 
-public sealed class RepositoryOperationView
+public sealed class GitRepositoryOperationView
 {
-    public RepositoryOperationView(long id, RepositoryOperationState state, string? url)
+    public GitRepositoryOperationView(long id, RepositoryOperationState state, string? url)
     {
         Id = id;
         State = state;
@@ -55,7 +55,7 @@ public sealed class RepositoryOperationView
     public string? Url { get; init; }
 }
 
-public sealed class RepositoryBroker : IRepositoryBroker
+public sealed class GitRepositoryBroker : IRepositoryBroker
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly IDbContextFactory<GoblinDbContext> _factory;
@@ -66,8 +66,8 @@ public sealed class RepositoryBroker : IRepositoryBroker
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _locks = new();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _active = new();
 
-    public RepositoryBroker(IServiceScopeFactory scopes, IDbContextFactory<GoblinDbContext> factory,
-        IRepositoryRemote remote, RepositoryBrokerOptions options, IWorkspaceCheckpoints? checkpoints = null)
+    public GitRepositoryBroker(IServiceScopeFactory scopes, IDbContextFactory<GoblinDbContext> factory,
+        IRepositoryRemote remote, GitRepositoryBrokerOptions options, IWorkspaceCheckpoints? checkpoints = null)
     {
         _scopes = scopes; _factory = factory; _remote = remote; _checkpoints = checkpoints;
         _directory = Path.GetFullPath(options.Directory);
@@ -164,7 +164,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
         return await IdentityStore.NextAsync(db, IdentityKind.RepositoryOperation, token);
     }
 
-    public async Task<RepositoryOperationView> EnqueueAsync(long attemptId, long id, RepositoryOperationKind kind, Stream input, CancellationToken token)
+    public async Task<GitRepositoryOperationView> EnqueueAsync(long attemptId, long id, RepositoryOperationKind kind, Stream input, CancellationToken token)
     {
         if (id <= 0) throw new ApplicationFailure("repository_operation_unavailable");
         WorkSnapshot work = await WorkAsync(attemptId, token);
@@ -202,14 +202,14 @@ public sealed class RepositoryBroker : IRepositoryBroker
             db.RepositoryOperations.Add(new() { Id = id, AttemptId = attemptId, Kind = kind.WireValue(), State = nameof(RepositoryOperationState.Queued), Fingerprint = fingerprint, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
             using IServiceScope scope = _scopes.CreateScope();
             IDbContextOutbox outbox = scope.ServiceProvider.GetRequiredService<WorkOutboxFactory>().Create(db);
-            await outbox.PublishAsync(new PublishRepository(id));
+            await outbox.PublishAsync(new ExecuteGitRepositoryOperation(id));
             await outbox.SaveChangesAndFlushMessagesAsync(token);
             return new(id, RepositoryOperationState.Queued, null);
         }
         finally { File.Delete(temporary); }
     }
 
-    public async Task<RepositoryOperationView> StatusAsync(long attemptId, long id, CancellationToken token)
+    public async Task<GitRepositoryOperationView> StatusAsync(long attemptId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         RepositoryOperation operation = await db.RepositoryOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AttemptId == attemptId, token)
@@ -366,7 +366,7 @@ public sealed class RepositoryBroker : IRepositoryBroker
     }
 }
 
-public static class PublishRepositoryHandler
+public static class ExecuteGitRepositoryOperationHandler
 {
-    public static Task Handle(PublishRepository command, RepositoryBroker broker, CancellationToken token) => broker.ExecuteAsync(command.Id, token);
+    public static Task Handle(ExecuteGitRepositoryOperation command, GitRepositoryBroker broker, CancellationToken token) => broker.ExecuteAsync(command.Id, token);
 }

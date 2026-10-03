@@ -14,13 +14,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Row = Goblin.Persistence.Entities.RepositorySetupMemory;
 
-namespace Goblin.Application.Repositories;
+namespace Goblin.Application.GitRepositories;
 
-public sealed class RepositorySetupStore
+public sealed class GitRepositorySetupStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
 
-    public RepositorySetupStore(IDbContextFactory<GoblinDbContext> factory) => _factory = factory;
+    public GitRepositorySetupStore(IDbContextFactory<GoblinDbContext> factory) => _factory = factory;
 
     public async Task<RepositorySetupMemory[]> ReadAsync(long attemptId, CancellationToken token)
     {

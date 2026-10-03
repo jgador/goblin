@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using Goblin.Application.Repositories;
+using Goblin.Application.GitRepositories;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -45,7 +45,7 @@ internal sealed class WorkspaceMiddleware
                     throw new PublicError("not_found", "This endpoint does not exist.", 404);
                 string[] segments = path.Split('/');
                 if (segments.Length < 5 || !long.TryParse(segments[3], out long attemptId)) throw new PublicError("not_found", "This endpoint does not exist.", 404);
-                await context.RequestServices.GetRequiredService<RepositoryBroker>().AuthorizeAsync(attemptId, request.Headers["X-Goblin-Repository"].ToString(), !path.EndsWith("/current", StringComparison.Ordinal), request.HttpContext.RequestAborted);
+                await context.RequestServices.GetRequiredService<GitRepositoryBroker>().AuthorizeAsync(attemptId, request.Headers["X-Goblin-Repository"].ToString(), !path.EndsWith("/current", StringComparison.Ordinal), request.HttpContext.RequestAborted);
                 await _next(context); return;
             }
             if (_repositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);

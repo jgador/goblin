@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Application.Repositories;
+using Goblin.Application.GitRepositories;
 using Goblin.Application.Work;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -36,7 +36,7 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
     }
 
     public async Task<WorkspaceCheckpoint> SaveAsync(long attemptId, int turn, string commit,
-        RepositoryBroker broker, CancellationToken token)
+        GitRepositoryBroker broker, CancellationToken token)
     {
         WorkSnapshot work = await broker.CurrentAsync(attemptId, token);
         AttemptSnapshot attempt = work.Attempts[^1];

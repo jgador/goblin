@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application;
-using Goblin.Application.Repositories;
+using Goblin.Application.GitRepositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
@@ -418,7 +418,7 @@ public sealed class DurabilityTests
         var observation = new VerifiedRepositorySetup(new("python-tests", "Tests need Python", ["python 3.12"],
             ["install-python"], ["pyproject.toml"], [new("python --version", "Python 3.12")]),
             [new("pyproject.toml", new string('b', 64))], new string('c', 64));
-        RepositorySetupStore memory = scope.ServiceProvider.GetRequiredService<RepositorySetupStore>();
+        GitRepositorySetupStore memory = scope.ServiceProvider.GetRequiredService<GitRepositorySetupStore>();
         var request = new SetupMemoryWrite(1, long.MaxValue, "image-one", [observation]);
         await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, request, default));
         Assert.Empty(await memory.ReadAsync(attempt, default));
@@ -434,7 +434,7 @@ public sealed class DurabilityTests
         await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, new SetupMemoryWrite(1, saved.Id, "changed-image", [observation]), default));
         await fixture.RestartAsync();
         using IServiceScope restarted = fixture.Host.Services.CreateScope();
-        RepositorySetupStore reopened = restarted.ServiceProvider.GetRequiredService<RepositorySetupStore>();
+        GitRepositorySetupStore reopened = restarted.ServiceProvider.GetRequiredService<GitRepositorySetupStore>();
         Assert.Equal(learned.Id, Assert.Single(await reopened.ReadAsync(attempt, default)).Id);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Ready") { CheckpointId = saved.Id };
         await fixture.Reconcile(work.Work.Id, attempt);
@@ -570,7 +570,7 @@ public sealed class DurabilityTests
         await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, repository: new("owner/repo", "Goblin", "agent@example.com")));
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         long attempt = work.Work.Attempts[^1].Id;
-        RepositoryBroker broker = fixture.Host.Services.GetRequiredService<RepositoryBroker>();
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
         await broker.PrepareAsync(work.Work, default);
         long publication = await broker.ReserveOperationIdAsync(attempt, default);
         await broker.EnqueueAsync(attempt, publication, work.Work.Attempts[^1].Target.Repository!.Grant!.AllowPush ? RepositoryOperationKind.Publish : RepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default);
@@ -610,7 +610,7 @@ public sealed class DurabilityTests
         await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version));
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         await fixture.SaveCheckpoint(work.Work);
-        await fixture.Host.Services.GetRequiredService<RepositoryBroker>().PrepareAsync(work.Work, default);
+        await fixture.Host.Services.GetRequiredService<GitRepositoryBroker>().PrepareAsync(work.Work, default);
         Assert.Equal(1, fixture.Remote.CheckpointPreparations);
     }
 
@@ -694,7 +694,7 @@ public sealed class DurabilityTests
         w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, agentId: 1));
         await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, w.Version, repository: new("owner/repo", "Goblin", "goblin@example.test")));
         w = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
-        RepositoryBroker broker = fixture.Host.Services.GetRequiredService<RepositoryBroker>();
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
         string capability = await broker.PrepareAsync(w.Work, default);
         long attempt = w.Work.Attempts[^1].Id;
         await broker.AuthorizeAsync(attempt, capability, true, default);
@@ -1135,8 +1135,8 @@ public sealed class DurabilityTests
             builder.Services.AddSingleton<IInspectionHost>(Inspection);
             builder.Services.AddSingleton<InspectionCoordinator>();
             builder.Services.AddSingleton<IRepositoryRemote>(Remote);
-            builder.Services.AddSingleton(new RepositoryBrokerOptions(Path.Combine(_directory, "repositories")));
-            builder.Services.AddSingleton<RepositoryBroker>();
+            builder.Services.AddSingleton(new GitRepositoryBrokerOptions(Path.Combine(_directory, "repositories")));
+            builder.Services.AddSingleton<GitRepositoryBroker>();
             builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(_directory));
             builder.UseWolverine(o => ApplicationServices.ConfigureMessaging(o, _app, inspectionEnabled: true));
             Host = builder.Build();
@@ -1208,7 +1208,7 @@ public sealed class DurabilityTests
         public async Task<WorkspaceCheckpoint> SaveCheckpoint(WorkSnapshot work)
         {
             long attempt = work.Attempts[^1].Id;
-            RepositoryBroker broker = Host.Services.GetRequiredService<RepositoryBroker>();
+            GitRepositoryBroker broker = Host.Services.GetRequiredService<GitRepositoryBroker>();
             await broker.PrepareAsync(work, default);
             long publication = await broker.ReserveOperationIdAsync(attempt, default);
             await broker.EnqueueAsync(attempt, publication, work.Attempts[^1].Target.Repository!.Grant!.AllowPush ? RepositoryOperationKind.Publish : RepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default);
