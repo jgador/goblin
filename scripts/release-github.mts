@@ -16,7 +16,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const repo = "jgador/goblin";
+const githubRepository = "jgador/goblin";
 export const siteUrl = "https://jgador.github.io/goblin";
 export const releaseFiles = [
     "azuredeploy.json",
@@ -59,7 +59,7 @@ function api(route: string, method = "GET", body?: unknown): any {
         "gh",
         [
             "api",
-            `repos/${repo}/${route}`,
+            `repos/${githubRepository}/${route}`,
             "--method",
             method,
             ...(body === undefined ? [] : ["--input", "-"]),
@@ -98,7 +98,7 @@ function download(tag: string, directory: string, names: string[]) {
             "download",
             tag,
             "--repo",
-            repo,
+            githubRepository,
             "--dir",
             directory,
             ...names.flatMap((name) => ["--pattern", name]),
@@ -195,7 +195,7 @@ function pinPr(version: string) {
         "run",
         "checks.yml",
         "--repo",
-        repo,
+        githubRepository,
         "--ref",
         branch,
     ]);
@@ -217,7 +217,7 @@ function publish(directory: string) {
         record.sourceRevision,
         record.channel === "preview",
         `Goblin ${record.version}`,
-        `Installer: goblinctl ${record.installer.version}\n\nSource: ${record.sourceRevision}\n\nDeployment checks passed. Azure installation is performed manually and was not verified by this workflow.\n\n[Install Goblin ${record.version}](${siteUrl}/?version=${record.version})\n\n[Verification run](https://github.com/${repo}/actions/runs/${record.runId})`,
+        `Installer: goblinctl ${record.installer.version}\n\nSource: ${record.sourceRevision}\n\nDeployment checks passed. Azure installation is performed manually and was not verified by this workflow.\n\n[Install Goblin ${record.version}](${siteUrl}/?version=${record.version})\n\n[Verification run](https://github.com/${githubRepository}/actions/runs/${record.runId})`,
         releaseFiles,
     );
 }
@@ -299,7 +299,7 @@ function publishAssets(
                 "upload",
                 tag,
                 "--repo",
-                repo,
+                githubRepository,
                 ...missing.map((name) => join(directory, name)),
             ]);
         if (published.draft)
@@ -319,7 +319,7 @@ function publishAssets(
         rmSync(staging, { recursive: true, force: true });
     }
     summary(
-        `Published [${title}](https://github.com/${repo}/releases/tag/${tag}). Installation-site delivery and dependency updates are reported separately.`,
+        `Published [${title}](https://github.com/${githubRepository}/releases/tag/${tag}). Installation-site delivery and dependency updates are reported separately.`,
     );
 }
 function publishedRelease(version: string, directory: string) {
@@ -332,9 +332,9 @@ function publishedRelease(version: string, directory: string) {
         "verify",
         join(directory, "release.json"),
         "--repo",
-        repo,
+        githubRepository,
         "--signer-workflow",
-        `${repo}/.github/workflows/goblin-release.yml`,
+        `${githubRepository}/.github/workflows/goblin-release.yml`,
         "--deny-self-hosted-runners",
     ]);
     verify(directory);
@@ -495,7 +495,7 @@ async function checkSite(version: string, recommendation: string) {
 async function main() {
     assert.equal(
         process.env[Env.GITHUB_REPOSITORY.name],
-        repo,
+        githubRepository,
         "Release operations run in the Goblin repository",
     );
     const [action, value = "", mode = "preserve"] = process.argv.slice(2);

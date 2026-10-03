@@ -112,7 +112,7 @@ pub fn installer(root: &Path) -> Result<super::release::Release> {
     let lock = read_lock(root)?;
     ensure!(lock.schema == 2, "Unsupported dependency lock schema");
     ensure!(
-        lock.goblinctl["repository"] == super::release::REPOSITORY,
+        lock.goblinctl["repository"] == super::release::GITHUB_REPOSITORY,
         "Invalid installer repository"
     );
     let release = serde_json::from_value(lock.goblinctl["release"].clone())?;
@@ -129,7 +129,7 @@ fn verify_lock(_root: &Path, catalog: &Catalog, lock: &Lock) -> Result<()> {
         "Dependency lock must target {PLATFORM}; run cargo xtask dependencies resolve"
     );
     ensure!(
-        lock.goblinctl["repository"] == super::release::REPOSITORY
+        lock.goblinctl["repository"] == super::release::GITHUB_REPOSITORY
             && lock.goblinctl["release"]["version"] == catalog.goblinctl.version,
         "Installer selection differs from lock; use cargo xtask release pin-installer"
     );
@@ -173,7 +173,7 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
             println!(
                 "goblinctl {} ({})",
                 catalog.goblinctl.version,
-                super::release::REPOSITORY
+                super::release::GITHUB_REPOSITORY
             );
             for (name, image) in &lock.images {
                 println!("image/{name} {}@{}", image.reference, image.digest);
@@ -478,7 +478,7 @@ pub fn pin_release(root: &Path, release: &super::release::Release) -> Result<()>
     let mut lock = read_lock(root)?;
     lock.catalog_sha256 = digest(&serde_json::to_vec(&catalog)?);
     lock.goblinctl =
-        serde_json::json!({"repository": super::release::REPOSITORY, "release": release});
+        serde_json::json!({"repository": super::release::GITHUB_REPOSITORY, "release": release});
     verify_lock(root, &catalog, &lock)?;
     fs::write(root.join(LOCK), json_bytes(&lock)?)?;
     Ok(())

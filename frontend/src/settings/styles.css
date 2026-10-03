@@ -36,11 +36,11 @@
 .settings-notice { padding:12px; background:#fff2e9; border:1px solid #eed8c5; color:#805333; border-radius:8px; font-size:12px; line-height:1.7; }
 .settings-code { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:18px 0; background:#f2f5eb; padding:14px; border-radius:8px; }
 .settings-code code { font-size:23px; letter-spacing:2px; }
-.repository-row { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; border-bottom:1px solid var(--border); padding:11px 0; }
-.repository-row span { min-width:0; overflow-wrap:anywhere; }
-.repository-row button { flex-shrink:0; }
-.repository-picker { margin-top:14px; }
-.settings-repositories > button { margin-top:12px; }
+.github-repository-row { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12px; border-bottom:1px solid var(--border); padding:11px 0; }
+.github-repository-row span { min-width:0; overflow-wrap:anywhere; }
+.github-repository-row button { flex-shrink:0; }
+.github-repository-picker { margin-top:14px; }
+.settings-github-repositories > button { margin-top:12px; }
 .settings-dialog [hidden] { display:none !important; }
 .settings-dialog button:focus-visible,.settings-dialog a:focus-visible { outline:2px solid var(--control-focus); outline-offset:3px; }
 @media(max-width:760px) { .settings-dialog { width:100vw; max-width:none; height:100dvh; max-height:none; margin:0; border:0; border-radius:0; } .settings-layout { display:flex; flex-direction:column; } .settings-header { padding:18px; } .settings-nav { display:flex; flex-shrink:0; padding:10px 12px; gap:4px; overflow:auto; } .settings-nav p { display:none; } .settings-nav button { width:auto; margin:0; font-size:12px; flex-shrink:0; } .settings-content { padding:22px; flex:1; } .settings-content > section { min-height:0; } }

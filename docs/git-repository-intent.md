@@ -1,7 +1,8 @@
-# Repository intent and authorization
+# Git repository intent and authorization
 
-Repository authority is owned and enforced by Goblin. Users can enable repositories
-in Settings or through an explicit approval in a Work conversation. Every new
+Goblin currently supports GitHub repositories only. Repository authority is owned
+and enforced by Goblin. Users can enable repositories in Settings or through an
+explicit approval in a Work conversation. Every new
 repository attempt, including a retry or revision, requires approval of its
 repository and Git actions. An agent cannot approve its own request.
 

@@ -1,7 +1,7 @@
 import {
     WorkStatus,
     AttentionReason,
-    RepositoryAuthorizationStatus,
+    GitRepositoryAuthorizationStatus,
     WorkAction,
     IdentityKind,
     ConnectionAvailability,
@@ -34,7 +34,7 @@ import {
     effortLabel,
 } from "./model-selection.js";
 import { renderModelPicker } from "./model-picker.js";
-import type { Repository } from "../settings/github.js";
+import type { GitRepositoryInfo } from "../settings/github.js";
 import { icon, escapeHtml as e } from "./presentation.js";
 import type { Work, View, Conversation } from "./contracts.js";
 import {
@@ -145,7 +145,7 @@ window.addEventListener("goblin-workspace-locked", () => {
     forgetWorkspace();
     render();
 });
-let repositories: Repository[] = [];
+let gitHubRepositories: GitRepositoryInfo[] = [];
 window.addEventListener("goblin-connections-changed", () => {
     modelCatalogs.clear();
     void refreshConnections();
@@ -253,7 +253,7 @@ function forgetWorkspace() {
     connections = [];
     runtimes = [];
     connectionsLoaded = false;
-    repositories = [];
+    gitHubRepositories = [];
     github = null;
     draft = "";
     drafts.clear();
@@ -379,10 +379,10 @@ async function refreshConnections() {
     if (connectionsLoading) return;
     connectionsLoading = true;
     const signal = workspaceReads.signal;
-    const [runtime, repository, enabled] = await Promise.allSettled([
+    const [runtime, gitHubConnection, enabled] = await Promise.allSettled([
         api<Connection[]>("/api/connections"),
         api<NonNullable<typeof github>>("/api/github"),
-        api<Repository[]>("/api/github/repositories"),
+        api<GitRepositoryInfo[]>("/api/github/repositories"),
     ]);
     if (signal.aborted || !authenticated) return;
     if (runtime.status === "fulfilled") {
@@ -402,10 +402,11 @@ async function refreshConnections() {
             ...c,
             availability: ConnectionAvailability.Unavailable,
         }));
-    if (repository.status === "fulfilled") github = repository.value;
+    if (gitHubConnection.status === "fulfilled")
+        github = gitHubConnection.value;
     else if (github)
         github = { ...github, notice: "GitHub status could not be refreshed." };
-    if (enabled.status === "fulfilled") repositories = enabled.value;
+    if (enabled.status === "fulfilled") gitHubRepositories = enabled.value;
     connectionsLoading = false;
     connectionsLoaded = true;
     render(true);
@@ -675,9 +676,10 @@ function render(preserveHome = false, forceSelect = false) {
         ? `${authorization.id}:${authorization.status}`
         : "";
     const previousApproval =
-        root.querySelector<HTMLElement>("#repository-options")?.dataset
+        root.querySelector<HTMLElement>("#github-repository-options")?.dataset
             .approval ?? "";
-    const repositoryChanged = sameContext && approvalKey !== previousApproval;
+    const gitHubAuthorizationChanged =
+        sameContext && approvalKey !== previousApproval;
     if (!sameContext) {
         modelPickerOpen = false;
         modelListOpen = false;
@@ -690,7 +692,7 @@ function render(preserveHome = false, forceSelect = false) {
         authenticated &&
         !submission.sending &&
         !forceSelect &&
-        !repositoryChanged
+        !gitHubAuthorizationChanged
     )
         return;
     if (
@@ -706,8 +708,9 @@ function render(preserveHome = false, forceSelect = false) {
                 ),
             ).map((x) => [x.id, x.value]),
             open:
-                root.querySelector<HTMLDetailsElement>("#repository-options")
-                    ?.open ?? false,
+                root.querySelector<HTMLDetailsElement>(
+                    "#github-repository-options",
+                )?.open ?? false,
         });
     const preserved = sameContext
         ? Array.from(
@@ -718,8 +721,8 @@ function render(preserveHome = false, forceSelect = false) {
               .filter(
                   (x) =>
                       !(
-                          repositoryChanged &&
-                          x.closest('[data-form="repository"]')
+                          gitHubAuthorizationChanged &&
+                          x.closest('[data-form="github-repository"]')
                       ) &&
                       ![
                           "work-model",
@@ -783,10 +786,11 @@ function render(preserveHome = false, forceSelect = false) {
             HTMLInputElement | HTMLSelectElement | null;
         if (field) field.value = value;
     }
-    const repositoryOptions = root.querySelector<HTMLDetailsElement>(
-        "#repository-options",
+    const gitHubRepositoryOptions = root.querySelector<HTMLDetailsElement>(
+        "#github-repository-options",
     );
-    if (repositoryOptions && setup?.open) repositoryOptions.open = true;
+    if (gitHubRepositoryOptions && setup?.open)
+        gitHubRepositoryOptions.open = true;
     showSetupErrors();
     if (focus?.id && sameContext) {
         const replacement = document.getElementById(focus.id) as
@@ -839,7 +843,7 @@ function renderDetail() {
     const w = item.work,
         attempt = w.attempts.at(-1);
     const latestResult = w.results.find((r) => r.attemptId === attempt?.id);
-    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="icon-button activity-toggle" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("more")}</button></div></div><div class="detail-properties"><span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>${icon("spark")}Updated ${e(relativeTime(item.updatedAt))}</span>${status(w)}</div>${attempt?.target.repository ? `<p class="repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
+    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="icon-button activity-toggle" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("more")}</button></div></div><div class="detail-properties"><span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>${icon("spark")}Updated ${e(relativeTime(item.updatedAt))}</span>${status(w)}</div>${attempt?.target.repository ? `<p class="git-repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
         <section class="work-section goal-section" aria-labelledby="goal-heading">${icon("goal", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="goal-heading">Goal</h3><button class="text-button goal-discuss" data-action="discuss-goal" aria-label="Discuss goal" title="Discuss goal">${icon("chat")}</button></div><p class="goal-text preserve-lines">${e(w.objective)}</p></div></section>
         <section class="work-section" aria-labelledby="progress-heading">${icon("work", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}${w.attention?.reason === AttentionReason.ResultReview && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</div></section>
         ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading">${icon("wait", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span>${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
@@ -858,60 +862,60 @@ function modelControls(w?: Work) {
         listOpen: modelListOpen,
     });
 }
-function repositorySetup(w: Work, required = false) {
+function gitHubRepositorySetup(w: Work, required = false) {
     const handoff = [
-        AttentionReason.RepositoryRequired,
+        AttentionReason.GitRepositoryRequired,
         AttentionReason.InputRequired,
     ].some((reason) => reason === w.attention?.reason);
     const approval = w.repositoryAuthorization;
     const proposed = approval?.target.repository;
     const grant =
-        approval?.status === RepositoryAuthorizationStatus.Invalidated
+        approval?.status === GitRepositoryAuthorizationStatus.Invalidated
             ? undefined
             : proposed?.grant;
     const pendingApproval =
-        approval?.status === RepositoryAuthorizationStatus.Pending;
+        approval?.status === GitRepositoryAuthorizationStatus.Pending;
     const suggestions = w.repositoryRequest?.repositories ?? [];
     const name =
         proposed?.repository ??
         (suggestions.length === 1 ? suggestions[0] : "");
     const preview =
         pendingApproval && grant
-            ? `<section class="repository-authorization" aria-label="GitHub authorization">
+            ? `<section class="github-repository-authorization" aria-label="GitHub authorization">
                 <header><h3>Authorize GitHub access</h3><p>Review the repository and Git actions for this Work.</p></header>
-                <dl class="execution-properties repository-authorization-details">
+                <dl class="execution-properties github-repository-authorization-details">
                     <dt>Repository</dt><dd>${e(proposed?.repository)}</dd>
                     <dt>GitHub account</dt><dd>${e(grant.login)}</dd>
                     <dt>Base branch</dt><dd>${e(grant.baseBranch)}</dd>
                     <dt>Work branch</dt><dd>${e(grant.branch)}</dd>
                     <dt>Git author</dt><dd>${e(proposed?.gitAuthorName)} &lt;${e(proposed?.gitAuthorEmail)}&gt;</dd>
                 </dl>
-                <div class="repository-permissions"><h4>Git actions</h4><ul>
+                <div class="github-repository-permissions"><h4>Git actions</h4><ul>
                     <li>Fetch repository and create a local work branch.</li>
                     <li>${grant.allowPush ? "Push changes to the work branch." : "Keep changes in this Work without pushing."}</li>
                     <li>${grant.allowPullRequest ? "Open a draft pull request." : "No pull request."}</li>
                 </ul></div>
-                ${approval.enableRepository ? '<p class="repository-authorization-note">This also enables the repository in Goblin for future requests. Each Work still requires authorization.</p>' : ""}
-                <div class="repository-actions">${button("authorize-repository", approval.enableRepository ? "Enable repository & authorize this Work" : "Authorize this Work", true)}${button("deny-repository", "Decline")}</div>
+                ${approval.enableRepository ? '<p class="github-repository-authorization-note">This also enables the repository in Goblin for future requests. Each Work still requires authorization.</p>' : ""}
+                <div class="github-repository-actions">${button("authorize-github-repository", approval.enableRepository ? "Enable repository & authorize this Work" : "Authorize this Work", true)}${button("deny-github-repository", "Decline")}</div>
             </section>`
-            : approval?.status === RepositoryAuthorizationStatus.Invalidated
+            : approval?.status === GitRepositoryAuthorizationStatus.Invalidated
               ? "<p>Context changed. Review repository access again.</p>"
-              : approval?.status === RepositoryAuthorizationStatus.Denied
+              : approval?.status === GitRepositoryAuthorizationStatus.Denied
                 ? "<p>Repository access was declined. You can review a different request.</p>"
                 : "";
-    return `${preview}<details id="repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
+    return `${preview}<details id="github-repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
         <summary>${icon("chevron")}${pendingApproval ? "Change repository or actions" : "Repository access"}</summary>
         <p>Review the repository and Git actions before this Work uses your GitHub connection.</p>
         ${suggestions.length > 1 ? `<p class="field-hint">Several repositories match: ${e(suggestions.join(", "))}. Choose the full name.</p>` : ""}
-        <form class="work-setup repository-form" data-form="repository" novalidate>
-            <div><label for="repository">Repository</label>
-                <input class="field-control" id="repository" name="repository" list="known-repositories" value="${e(name)}" placeholder="owner/repository or GitHub URL" required aria-describedby="repository-error">
-                <datalist id="known-repositories">${repositories.map((r) => `<option value="${e(r.name)}">${r.enabled ? "Enabled" : "Requires enablement"}</option>`).join("")}</datalist>
-                <p class="field-error" id="repository-error" hidden></p>
+        <form class="work-setup github-repository-form" data-form="github-repository" novalidate>
+            <div><label for="github-repository">Repository</label>
+                <input class="field-control" id="github-repository" name="github-repository" list="known-github-repositories" value="${e(name)}" placeholder="owner/repository or GitHub URL" required aria-describedby="github-repository-error">
+                <datalist id="known-github-repositories">${gitHubRepositories.map((r) => `<option value="${e(r.name)}">${r.enabled ? "Enabled" : "Requires enablement"}</option>`).join("")}</datalist>
+                <p class="field-error" id="github-repository-error" hidden></p>
                 <button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button>
             </div>
-            <div><label for="repository-branch">Base branch</label>
-                <input class="field-control" id="repository-branch" name="base-branch" value="${e(grant?.baseBranch ?? "")}" placeholder="From your request or repository default">
+            <div><label for="github-repository-branch">Base branch</label>
+                <input class="field-control" id="github-repository-branch" name="base-branch" value="${e(grant?.baseBranch ?? "")}" placeholder="From your request or repository default">
             </div>
             <div><label for="delivery-policy">Git actions</label>
                 <select class="field-control select-control" id="delivery-policy" name="delivery-policy">
@@ -926,7 +930,7 @@ function repositorySetup(w: Work, required = false) {
                 <div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="${e(proposed?.gitAuthorName ?? "Goblin")}" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div>
                 <div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "goblin@localhost")}" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
             </div>
-            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="repository-actions"><button id="start-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Review repository access</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
+            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="github-repository-actions"><button id="start-github-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Review repository access</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
         </form>
     </details>`;
 }
@@ -958,13 +962,13 @@ function controls(w: Work) {
         return `<div class="decision"><p>Saving the outcome and finishing execution cleanup…</p></div>`;
     let content = "";
     if (w.status === WorkStatus.Ready)
-        content = `${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${repositorySetup(w)}` : ""}`;
+        content = `${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${gitHubRepositorySetup(w)}` : ""}`;
     if (w.attention?.reason === AttentionReason.ResultReview)
         content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
     if (w.attention?.reason === AttentionReason.InputRequired)
-        content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? repositorySetup(w) : ""}`;
-    if (w.attention?.reason === AttentionReason.RepositoryRequired)
-        content = `${w.repositoryAuthorization?.status === RepositoryAuthorizationStatus.Pending ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${repositorySetup(w, true)}`;
+        content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? gitHubRepositorySetup(w) : ""}`;
+    if (w.attention?.reason === AttentionReason.GitRepositoryRequired)
+        content = `${w.repositoryAuthorization?.status === GitRepositoryAuthorizationStatus.Pending ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${gitHubRepositorySetup(w, true)}`;
     if (w.attention?.reason === AttentionReason.Failure)
         content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? button("retry", "Retry work", true, !modelCanSubmit(w)) : ""}`;
     if (w.attention?.reason === AttentionReason.UncertainExecution)
@@ -987,7 +991,7 @@ function controls(w: Work) {
 }
 function showSetupErrors() {
     const errors = setupErrors.get(renderedContext) ?? {};
-    for (const id of ["repository", "git-name", "git-email"]) {
+    for (const id of ["github-repository", "git-name", "git-email"]) {
         const field = document.getElementById(id);
         const message = document.getElementById(id + "-error");
         if (!field || !message) continue;
@@ -1050,10 +1054,11 @@ function setModelEffort(value: string, updateOnly = false) {
         );
         if (button) button.disabled = !w || !modelCanSubmit(w);
     }
-    const repositoryButton =
-        root.querySelector<HTMLButtonElement>("#start-repository");
-    if (repositoryButton)
-        repositoryButton.disabled =
+    const gitHubRepositoryButton = root.querySelector<HTMLButtonElement>(
+        "#start-github-repository",
+    );
+    if (gitHubRepositoryButton)
+        gitHubRepositoryButton.disabled =
             !w ||
             !modelCanSubmit(w) ||
             submission.sending ||
@@ -1296,11 +1301,14 @@ document.addEventListener("click", async (event) => {
         await command(WorkAction.Execute, modelPayload(current()!.work));
     if (action === "retry" && current())
         await command(WorkAction.Retry, modelPayload(current()!.work));
-    if (action === "authorize-repository" || action === "deny-repository")
+    if (
+        action === "authorize-github-repository" ||
+        action === "deny-github-repository"
+    )
         await command(
-            action === "authorize-repository"
-                ? WorkAction.AuthorizeRepository
-                : WorkAction.DenyRepository,
+            action === "authorize-github-repository"
+                ? WorkAction.AuthorizeGitRepository
+                : WorkAction.DenyGitRepository,
             {
                 authorizationId: current()?.work.repositoryAuthorization?.id,
             },
@@ -1356,17 +1364,19 @@ document.addEventListener("submit", async (event) => {
     event.preventDefault();
     const kind = event.target.dataset.form,
         data = new FormData(event.target);
-    if (kind === "repository") {
-        let repository = String(data.get("repository") ?? "").trim();
-        const url = repository.match(
+    if (kind === "github-repository") {
+        let gitHubRepository = String(
+            data.get("github-repository") ?? "",
+        ).trim();
+        const url = gitHubRepository.match(
             /^(?:https?:\/\/)?github\.com\/([^/]+\/[^/]+)/i,
         );
-        if (url) repository = url[1].replace(/\.git$/, "");
+        if (url) gitHubRepository = url[1].replace(/\.git$/, "");
         const gitAuthorName = String(data.get("git-name") ?? "").trim();
         const gitAuthorEmail = String(data.get("git-email") ?? "").trim();
         const errors: Record<string, string> = {};
-        if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(repository))
-            errors.repository =
+        if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(gitHubRepository))
+            errors["github-repository"] =
                 "Enter the full owner/repository name or GitHub URL.";
         if (!gitAuthorName)
             errors["git-name"] = "Enter a name for the agent’s commits.";
@@ -1383,20 +1393,20 @@ document.addEventListener("submit", async (event) => {
         }
         const w = current()!.work;
         const handoff = [
-            AttentionReason.RepositoryRequired,
+            AttentionReason.GitRepositoryRequired,
             AttentionReason.InputRequired,
         ].some((reason) => reason === w.attention?.reason);
         const policy = String(data.get("delivery-policy") ?? "message");
         const baseBranch = String(data.get("base-branch") ?? "").trim() || null;
         if (policy === "message" && baseBranch) {
-            errors.repository =
+            errors["github-repository"] =
                 "Choose Git actions when specifying a base branch.";
             setupErrors.set(renderedContext, errors);
             showSetupErrors();
             return;
         }
         await command(
-            handoff ? WorkAction.PrepareRepository : WorkAction.Execute,
+            handoff ? WorkAction.PrepareGitRepository : WorkAction.Execute,
             {
                 ...(policy === "message"
                     ? {}
@@ -1407,7 +1417,11 @@ document.addEventListener("submit", async (event) => {
                               openPullRequest: policy === "pr",
                           },
                       }),
-                repository: { repository, gitAuthorName, gitAuthorEmail },
+                repository: {
+                    repository: gitHubRepository,
+                    gitAuthorName,
+                    gitAuthorEmail,
+                },
                 ...(handoff ? {} : modelPayload(w)),
             },
         );
@@ -1531,10 +1545,10 @@ document.addEventListener("change", (event) => {
     }
     if (
         event.target instanceof HTMLInputElement &&
-        event.target.id === "repository"
+        event.target.id === "github-repository"
     ) {
         const errors = setupErrors.get(renderedContext);
-        if (errors) delete errors.repository;
+        if (errors) delete errors["github-repository"];
         showSetupErrors();
     }
 });

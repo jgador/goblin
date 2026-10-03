@@ -169,7 +169,7 @@ into durable setup or authorization requests. Users can enable a repository in
 Settings or explicitly enable it when approving a Work request in the conversation.
 The saved preview identifies the GitHub account, repository, base/work branches,
 Git author, and push/PR permissions. Repository metadata lookup precedes the preview;
-checkout and execution wait for approval. See [repository intent](repository-intent.md).
+checkout and execution wait for approval. See [repository intent](git-repository-intent.md).
 
 `PrepareRepository` records a preview without creating an attempt. `AuthorizeRepository`
 accepts only its saved request ID and checks current enablement and connection identity.

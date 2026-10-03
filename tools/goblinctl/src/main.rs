@@ -28,8 +28,8 @@ use std::process::Command;
 )]
 struct Cli {
     /// Source checkout or destination for local credentials and database settings.
-    #[arg(long, global = true)]
-    repo: Option<PathBuf>,
+    #[arg(long = "repo", global = true)]
+    config_root: Option<PathBuf>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -269,7 +269,7 @@ fn main() {
     }
 }
 fn execute(cli: Cli) -> Result<()> {
-    let repo = match cli.repo {
+    let config_root = match cli.config_root {
         Some(path) => {
             if path.exists() {
                 path.canonicalize()?
@@ -303,7 +303,7 @@ fn execute(cli: Cli) -> Result<()> {
             Some(InstallCommand::Status { json }) => operations::install_status(json),
             Some(InstallCommand::Retry) => {
                 if Path::new("/var/lib/goblin/local-test/config.json").exists() {
-                    local_action(&repo, LocalCommand::Retry)
+                    local_action(&config_root, LocalCommand::Retry)
                 } else {
                     operations::retry()
                 }
@@ -313,7 +313,7 @@ fn execute(cli: Cli) -> Result<()> {
                     install::bootstrap(&hostname, &args.source_ref)
                 } else {
                     local_action(
-                        &repo,
+                        &config_root,
                         LocalCommand::Start {
                             http_port: args.http_port,
                         },
@@ -324,14 +324,14 @@ fn execute(cli: Cli) -> Result<()> {
         Commands::Status { json } => operations::status(json, false),
         Commands::Doctor { json } => operations::status(json, true),
         Commands::Logs { follow } => operations::logs(follow),
-        Commands::Local { command } => local_action(&repo, command),
+        Commands::Local { command } => local_action(&config_root, command),
         Commands::Password {
             command: PasswordCommand::Set { replace, path },
         } => {
-            if path.is_none() && repo == Path::new("/var/lib/goblin/config") {
+            if path.is_none() && config_root == Path::new("/var/lib/goblin/config") {
                 return operations::set_installed_password(replace);
             }
-            let path = path.unwrap_or_else(|| repo.join(".goblin-secrets/owner-password"));
+            let path = path.unwrap_or_else(|| config_root.join(".goblin-secrets/owner-password"));
             credentials::ensure(&path, replace)?;
             println!(
                 "Goblin password verifier: {}\nUse the password chosen during setup to open Goblin.",
@@ -340,7 +340,7 @@ fn execute(cli: Cli) -> Result<()> {
             Ok(())
         }
         Commands::Db { command } => match command {
-            DbCommand::Setup { port } => database::setup(&repo, port),
+            DbCommand::Setup { port } => database::setup(&config_root, port),
             DbCommand::Migrate { image } => database::migrate(&image),
             DbCommand::Credentials { port } => {
                 let mut cmd = if files::executable("kubectl") {
@@ -360,9 +360,11 @@ fn execute(cli: Cli) -> Result<()> {
                     "-o",
                     "json",
                 ]))?;
-                database::export(&repo, &serde_json::from_str(&text)?, port)
+                database::export(&config_root, &serde_json::from_str(&text)?, port)
             }
-            DbCommand::Forward { port } => local_action(&repo, LocalCommand::Database { port }),
+            DbCommand::Forward { port } => {
+                local_action(&config_root, LocalCommand::Database { port })
+            }
         },
         Commands::Internal { command } => match command {
             InternalCommand::PrepareInstall {
@@ -423,9 +425,12 @@ fn execute(cli: Cli) -> Result<()> {
                 origin,
             } => install::render_overlay(&path, &hostname, &image, &origin),
             InternalCommand::AdminSecret => print_json(&database::admin_secret()?),
-            InternalCommand::DbExport { port } => database::export(&repo, &stdin_json()?, port),
+            InternalCommand::DbExport { port } => {
+                database::export(&config_root, &stdin_json()?, port)
+            }
             InternalCommand::DbPatch => {
-                let settings = files::json(&repo.join("backend/src/Goblin.Web/appsettings.json"))?;
+                let settings =
+                    files::json(&config_root.join("backend/src/Goblin.Web/appsettings.json"))?;
                 if let Some(patch) = database::patch(
                     &stdin_json()?,
                     settings["ConnectionStrings"]["Goblin"]
@@ -443,20 +448,22 @@ fn execute(cli: Cli) -> Result<()> {
             }
             InternalCommand::LocalPort { owner } => {
                 let config = files::json(&owner)?;
-                if config["mode"] == "direct" && config["repo"].as_str() == repo.to_str() {
+                if config["mode"] == "direct" && config["repo"].as_str() == config_root.to_str() {
                     println!("{}", config["postgres_port"].as_u64().unwrap_or(55432));
                 }
                 Ok(())
             }
             InternalCommand::Forward => local::forward(),
             InternalCommand::Snapshot { destination } => {
-                local::snapshot_source(&repo, &destination)
+                local::snapshot_source(&config_root, &destination)
             }
-            InternalCommand::Preflight { port } => print_json(&Local::new(&repo)?.preflight(port)?),
+            InternalCommand::Preflight { port } => {
+                print_json(&Local::new(&config_root)?.preflight(port)?)
+            }
         },
     }
 }
-fn local_action(repo: &Path, command: LocalCommand) -> Result<()> {
+fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
     if unsafe { libc::geteuid() } != 0 {
         use std::os::unix::process::CommandExt;
         return Err(Command::new("sudo")
@@ -470,7 +477,7 @@ fn local_action(repo: &Path, command: LocalCommand) -> Result<()> {
                 } else {
                     vec![
                         std::ffi::OsString::from("--repo"),
-                        repo.as_os_str().to_owned(),
+                        config_root.as_os_str().to_owned(),
                     ]
                 },
             )
@@ -481,7 +488,7 @@ fn local_action(repo: &Path, command: LocalCommand) -> Result<()> {
     unsafe {
         libc::umask(0o077);
     }
-    let local = Local::new(repo)?;
+    let local = Local::new(config_root)?;
     match command {
         LocalCommand::Password => {
             println!(

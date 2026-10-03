@@ -38,7 +38,7 @@ pub fn admin_secret() -> Result<Value> {
         json!({"apiVersion":"v1","kind":"Secret","type":"Opaque","metadata":{"name":"goblin-postgres-admin","namespace":"goblin"},"stringData":{"password":password}}),
     )
 }
-pub fn export(repo: &Path, secrets: &Value, port: u16) -> Result<()> {
+pub fn export(config_root: &Path, secrets: &Value, port: u16) -> Result<()> {
     ensure!(port > 0, "Invalid database port");
     let items = secrets["items"]
         .as_array()
@@ -62,17 +62,20 @@ pub fn export(repo: &Path, secrets: &Value, port: u16) -> Result<()> {
                 data.iter().any(|b| !b.is_ascii_whitespace()),
                 "The client certificate Secret is incomplete"
             );
-            outputs.push((repo.join(".goblin-postgres").join(role).join(key), data));
+            outputs.push((
+                config_root.join(".goblin-postgres").join(role).join(key),
+                data,
+            ));
         }
     }
     let web = json!({"Goblin":connection("app", Path::new("/etc/goblin-postgres"), "goblin-postgres", 5432)});
-    let tooling = json!({"Goblin":connection("app", &repo.join(".goblin-postgres/app"), "localhost", port),
-        "GoblinAdmin":connection("admin", &repo.join(".goblin-postgres/admin"), "localhost", port)});
+    let tooling = json!({"Goblin":connection("app", &config_root.join(".goblin-postgres/app"), "localhost", port),
+        "GoblinAdmin":connection("admin", &config_root.join(".goblin-postgres/admin"), "localhost", port)});
     for (relative, values) in [
         ("backend/src/Goblin.Web/appsettings.json", web),
         ("backend/tools/Goblin.Database/appsettings.json", tooling),
     ] {
-        let path = repo.join(relative);
+        let path = config_root.join(relative);
         let mut settings = if path.exists() {
             files::json(&path)?
         } else {
@@ -104,7 +107,7 @@ pub fn export(repo: &Path, secrets: &Value, port: u16) -> Result<()> {
         ".goblin-postgres/app",
         ".goblin-postgres/admin",
     ] {
-        let path = repo.join(name);
+        let path = config_root.join(name);
         files::directory(&path, 0o700)?;
         files::set_owner(&path, files::sudo_owner())?;
     }
@@ -184,13 +187,13 @@ pub fn migration_state(job: &Value, image: &str) -> Result<&'static str> {
 }
 
 /// Runtime scripts and manifests are embedded. Configuration exports stay at the requested destination.
-pub fn setup(repo: &Path, port: Option<u16>) -> Result<()> {
+pub fn setup(config_root: &Path, port: Option<u16>) -> Result<()> {
     let temp = tempfile::tempdir()?;
     assets::unpack(temp.path(), assets::DATABASE)?;
     let mut cmd = Command::new("bash");
     cmd.arg(temp.path().join("deploy/postgres/setup.sh"))
         .env(environment::GOBLINCTL, std::env::current_exe()?)
-        .env(environment::GOBLIN_CONFIG_ROOT, repo);
+        .env(environment::GOBLIN_CONFIG_ROOT, config_root);
     if let Some(port) = port {
         cmd.args(["--port", &port.to_string()]);
     }

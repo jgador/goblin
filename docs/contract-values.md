@@ -11,8 +11,8 @@ that adapter's generated models, not a Goblin-wide list of third-party strings.
 | Contract | Source of truth | Browser consumer |
 | --- | --- | --- |
 | Work and attempt statuses, attention, failures, history kinds | `Goblin.Core/Work/WorkTypes.cs` | Work views and rendering |
-| Repository authorization status | `Goblin.Core/Work/RepositoryAuthorization.cs` | Repository approval |
-| Repository operations and wire names | `Goblin.Core/Work/RepositoryOperationKind.cs` | Internal worker HTTP/CLI boundary |
+| Git repository authorization status | `Goblin.Core/Work/GitRepositoryAuthorization.cs` | Repository approval |
+| Git repository operations and wire names | `Goblin.Core/Work/GitRepositoryOperationKind.cs` | Internal worker HTTP/CLI boundary |
 | Inspection states and observations | `Goblin.Core/Work/WorkspaceSessionRules.cs` | Workspace inspection |
 | Work commands and identity reservation kinds | `Goblin.Application/Work/WorkContracts.cs`, `IdentityStore.cs` | Work commands |
 | Account, verification, notice, connection, and publication states | `Goblin.Contracts/ContractValues.cs` | Connection and Work settings |
@@ -45,6 +45,19 @@ compile-time regression checks prevent HTTP types widening back to `string`.
 TypeScript uses both the generated named constants and their literal unions.
 UI-only labels, filters, and actions can keep their own local types; they do not
 belong in product contracts merely because they are strings.
+
+Goblin currently supports GitHub repositories only. Use `GitRepository` for shared
+core and contract type and member names across languages, matching C#
+(`gitRepository` in TypeScript and `git_repository` in Rust/Bash). These names do
+not imply support for other Git hosts or arbitrary Git remotes. Keep `GitHub` for
+GitHub-specific connections, API calls, repository selection and authorization
+controls, worker commands, and release operations. Local Git checkouts and
+container image repositories are separate concepts. Generated TypeScript names
+match their owning declarations, including `AttentionReason.GitRepositoryRequired`
+and `WorkAction.PrepareGitRepository`, while their adapter JSON values remain
+`RepositoryRequired` and `PrepareRepository`. HTTP properties, routes, environment
+names, and persisted JSON keys retain their existing spellings. Name configuration
+directories by their purpose rather than treating them as Git checkouts.
 
 ## Parsing and compatibility
 

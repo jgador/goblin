@@ -49,7 +49,7 @@ export const AttentionReason = {
     Failure: "Failure",
     UncertainExecution: "UncertainExecution",
     CleanupRequired: "CleanupRequired",
-    RepositoryRequired: "RepositoryRequired",
+    GitRepositoryRequired: "RepositoryRequired",
 } as const;
 export type AttentionReason =
     (typeof AttentionReason)[keyof typeof AttentionReason];
@@ -94,21 +94,21 @@ export const WorkEventKind = {
     ExecutionContinued: "ExecutionContinued",
     WorkspaceSaved: "WorkspaceSaved",
     WorkspaceReleased: "WorkspaceReleased",
-    RepositoryRequested: "RepositoryRequested",
-    RepositoryAuthorized: "RepositoryAuthorized",
-    RepositoryDenied: "RepositoryDenied",
-    RepositoryAuthorizationInvalidated: "RepositoryAuthorizationInvalidated",
+    GitRepositoryRequested: "RepositoryRequested",
+    GitRepositoryAuthorized: "RepositoryAuthorized",
+    GitRepositoryDenied: "RepositoryDenied",
+    GitRepositoryAuthorizationInvalidated: "RepositoryAuthorizationInvalidated",
 } as const;
 export type WorkEventKind = (typeof WorkEventKind)[keyof typeof WorkEventKind];
 
-export const RepositoryAuthorizationStatus = {
+export const GitRepositoryAuthorizationStatus = {
     Pending: "Pending",
     Authorized: "Authorized",
     Denied: "Denied",
     Invalidated: "Invalidated",
 } as const;
-export type RepositoryAuthorizationStatus =
-    (typeof RepositoryAuthorizationStatus)[keyof typeof RepositoryAuthorizationStatus];
+export type GitRepositoryAuthorizationStatus =
+    (typeof GitRepositoryAuthorizationStatus)[keyof typeof GitRepositoryAuthorizationStatus];
 
 export const InspectionState = {
     Queued: "Queued",
@@ -141,9 +141,9 @@ export const WorkAction = {
     Approve: "Approve",
     AddContext: "AddContext",
     Reconcile: "Reconcile",
-    PrepareRepository: "PrepareRepository",
-    AuthorizeRepository: "AuthorizeRepository",
-    DenyRepository: "DenyRepository",
+    PrepareGitRepository: "PrepareRepository",
+    AuthorizeGitRepository: "AuthorizeRepository",
+    DenyGitRepository: "DenyRepository",
 } as const;
 export type WorkAction = (typeof WorkAction)[keyof typeof WorkAction];
 
@@ -155,7 +155,7 @@ export const IdentityKind = {
     Attempt: "Attempt",
     Event: "Event",
     Inspection: "Inspection",
-    RepositoryOperation: "RepositoryOperation",
+    GitRepositoryOperation: "RepositoryOperation",
 } as const;
 export type IdentityKind = (typeof IdentityKind)[keyof typeof IdentityKind];
 
@@ -195,15 +195,15 @@ export const ConnectionAvailability = {
 export type ConnectionAvailability =
     (typeof ConnectionAvailability)[keyof typeof ConnectionAvailability];
 
-export const RepositoryOperationState = {
+export const GitRepositoryOperationState = {
     Queued: "Queued",
     Running: "Running",
     Succeeded: "Succeeded",
     Failed: "Failed",
     Uncertain: "Uncertain",
 } as const;
-export type RepositoryOperationState =
-    (typeof RepositoryOperationState)[keyof typeof RepositoryOperationState];
+export type GitRepositoryOperationState =
+    (typeof GitRepositoryOperationState)[keyof typeof GitRepositoryOperationState];
 
 export function isContractValue<T extends Record<string, string>>(
     values: T,

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Install development tools as the current WSL/Linux user, never through sudo.
 set -euo pipefail
-goblin_repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-cd "$goblin_repo"
+goblin_git_repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$goblin_git_repository"
 
 goblin_cargo_bin="${CARGO_HOME:-$HOME/.cargo}/bin"
 export PATH="$goblin_cargo_bin:$PATH"

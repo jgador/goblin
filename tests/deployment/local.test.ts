@@ -19,33 +19,39 @@ import { goblinctl } from "../support/goblinctl.js";
 test("local source snapshots include edits and exclude ignored credentials and build products", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-local-source-"));
     t.after(() => rm(root, { recursive: true, force: true }));
-    const repo = join(root, "repo");
-    await mkdir(repo);
-    execFileSync("git", ["init", "-q", repo]);
+    const gitRepository = join(root, "git-repository");
+    await mkdir(gitRepository);
+    execFileSync("git", ["init", "-q", gitRepository]);
     const ignore = await readFile(".gitignore", "utf8");
-    await writeFile(join(repo, ".gitignore"), ignore);
-    await mkdir(join(repo, ".goblin-secrets"));
-    await writeFile(join(repo, ".goblin-secrets/.gitkeep"), "");
+    await writeFile(join(gitRepository, ".gitignore"), ignore);
+    await mkdir(join(gitRepository, ".goblin-secrets"));
+    await writeFile(join(gitRepository, ".goblin-secrets/.gitkeep"), "");
     await writeFile(
-        join(repo, ".goblin-secrets/owner-password"),
+        join(gitRepository, ".goblin-secrets/owner-password"),
         "test-only ignored verifier",
     );
-    await writeFile(join(repo, "tracked.cs"), "old contents");
-    await writeFile(join(repo, "deleted.cs"), "removed");
-    execFileSync("git", ["-C", repo, "add", "."]);
-    await writeFile(join(repo, "tracked.cs"), "current contents");
-    await unlink(join(repo, "deleted.cs"));
-    await writeFile(join(repo, "new.cs"), "new source");
-    await writeFile(join(repo, ".env"), "test-only ignored data");
+    await writeFile(join(gitRepository, "tracked.cs"), "old contents");
+    await writeFile(join(gitRepository, "deleted.cs"), "removed");
+    execFileSync("git", ["-C", gitRepository, "add", "."]);
+    await writeFile(join(gitRepository, "tracked.cs"), "current contents");
+    await unlink(join(gitRepository, "deleted.cs"));
+    await writeFile(join(gitRepository, "new.cs"), "new source");
+    await writeFile(join(gitRepository, ".env"), "test-only ignored data");
     for (const dir of [".goblin-local", "target"]) {
-        await mkdir(join(repo, dir));
+        await mkdir(join(gitRepository, dir));
         await writeFile(
-            join(repo, dir, "excluded"),
+            join(gitRepository, dir, "excluded"),
             "private or generated data",
         );
     }
     const archive = join(root, "source.tar.gz");
-    execFileSync(goblinctl, ["--repo", repo, "internal", "snapshot", archive]);
+    execFileSync(goblinctl, [
+        "--repo",
+        gitRepository,
+        "internal",
+        "snapshot",
+        archive,
+    ]);
     const names = execFileSync("tar", ["-tzf", archive], { encoding: "utf8" })
         .trim()
         .split("\n");
@@ -62,26 +68,32 @@ test("local source snapshots include edits and exclude ignored credentials and b
         "current contents",
     );
     const bytes = await readFile(archive);
-    execFileSync(goblinctl, ["--repo", repo, "internal", "snapshot", archive]);
+    execFileSync(goblinctl, [
+        "--repo",
+        gitRepository,
+        "internal",
+        "snapshot",
+        archive,
+    ]);
     assert.deepEqual(await readFile(archive), bytes);
 });
 
 test("source snapshots refuse files reached through symlinks", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-local-symlink-"));
     t.after(() => rm(root, { recursive: true, force: true }));
-    const repo = join(root, "repo");
-    await mkdir(join(repo, "tracked"), { recursive: true });
-    execFileSync("git", ["init", "-q", repo]);
-    await writeFile(join(repo, "tracked/file"), "tracked source");
-    execFileSync("git", ["-C", repo, "add", "."]);
-    await rename(join(repo, "tracked"), join(root, "external"));
-    await symlink(join(root, "external"), join(repo, "tracked"));
+    const gitRepository = join(root, "git-repository");
+    await mkdir(join(gitRepository, "tracked"), { recursive: true });
+    execFileSync("git", ["init", "-q", gitRepository]);
+    await writeFile(join(gitRepository, "tracked/file"), "tracked source");
+    execFileSync("git", ["-C", gitRepository, "add", "."]);
+    await rename(join(gitRepository, "tracked"), join(root, "external"));
+    await symlink(join(root, "external"), join(gitRepository, "tracked"));
     const snapshot = () =>
         execFileSync(
             goblinctl,
             [
                 "--repo",
-                repo,
+                gitRepository,
                 "internal",
                 "snapshot",
                 join(root, "source.tar.gz"),
@@ -89,8 +101,8 @@ test("source snapshots refuse files reached through symlinks", async (t) => {
             { stdio: "pipe" },
         );
     assert.throws(snapshot, /symlinks/);
-    await unlink(join(repo, "tracked"));
-    await symlink(join(root, "external/file"), join(repo, "link"));
+    await unlink(join(gitRepository, "tracked"));
+    await symlink(join(root, "external/file"), join(gitRepository, "link"));
     assert.throws(snapshot, /symlinks/);
 });
 

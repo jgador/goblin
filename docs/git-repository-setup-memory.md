@@ -1,7 +1,7 @@
-# Repository setup memory
+# Git repository setup memory
 
-Goblin remembers successful repository preparation across Work items without
-requiring setup files to be added to the repository. Codex decides what the
+Goblin remembers successful preparation of GitHub repositories across Work items
+without requiring setup files to be added to the repository. Codex decides what the
 current task needs, inspects the checkout and installed tools, and can learn new
 requirements during work (for example, adding Python to a .NET repository).
 Existing repository instructions take precedence over learned observations.

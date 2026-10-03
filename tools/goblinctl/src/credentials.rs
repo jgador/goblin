@@ -99,7 +99,7 @@ pub fn ensure(path: &Path, replace: bool) -> Result<PathBuf> {
     Ok(path.to_owned())
 }
 
-pub fn dev(repo: &Path) -> Result<()> {
+pub fn dev(git_repository: &Path) -> Result<()> {
     use std::os::unix::process::CommandExt;
     let path = match std::env::var_os(environment::GOBLIN_PASSWORD_HASH_FILE) {
         Some(p) => {
@@ -107,10 +107,13 @@ pub fn dev(repo: &Path) -> Result<()> {
             read(&p)?;
             p.canonicalize()?
         }
-        None => ensure(&repo.join(".goblin-secrets/owner-password"), false)?,
+        None => ensure(
+            &git_repository.join(".goblin-secrets/owner-password"),
+            false,
+        )?,
     };
     Err(std::process::Command::new("dotnet")
-        .arg(repo.join("backend/src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll"))
+        .arg(git_repository.join("backend/src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll"))
         .env(environment::GOBLIN_PASSWORD_HASH_FILE, path)
         .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
         .exec()

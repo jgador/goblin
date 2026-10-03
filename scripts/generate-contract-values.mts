@@ -94,21 +94,20 @@ export function rustValues(source: string): Values {
 
 export async function generate(root: string, check: boolean) {
     const contracts: Values = {};
-    // C# makes Git repositories explicit; existing browser identifiers and wire
-    // values remain stable across that source-only rename.
     for (const [path, names] of Object.entries(sources)) {
         const values = csharpValues(
             await readFile(resolve(root, path), "utf8"),
             names,
         );
+        // GitRepositoryEnumJsonConverter preserves earlier JSON spellings at the
+        // C# adapter boundary. Apply that policy to values, never identifiers.
         for (const [name, members] of Object.entries(values))
-            contracts[name.replaceAll("GitRepository", "Repository")] =
-                Object.fromEntries(
-                    Object.entries(members).map(([member, wire]) => [
-                        member.replaceAll("GitRepository", "Repository"),
-                        wire.replaceAll("GitRepository", "Repository"),
-                    ]),
-                );
+            contracts[name] = Object.fromEntries(
+                Object.entries(members).map(([member, wire]) => [
+                    member,
+                    wire.replaceAll("GitRepository", "Repository"),
+                ]),
+            );
     }
     const setup = rustValues(
         await readFile(

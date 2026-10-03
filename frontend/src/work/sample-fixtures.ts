@@ -132,7 +132,7 @@ export const sampleWork = [
         summary:
             "I’ve outlined the connection flow. I’m checking how repository context should follow a work item.",
         next: "Working through the repository connection flow.",
-        kind: "repo",
+        kind: "github-repository",
         outputTitle: "Repository connection flow",
         outputType: "Experience outline",
         outcome:
