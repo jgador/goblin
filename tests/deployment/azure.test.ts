@@ -50,6 +50,7 @@ async function bootstrap(
         kubeconfig?: string;
         bootstrapOnly?: boolean;
         nativeDownload?: "failed" | "corrupt" | "wrong-version";
+        nativeArchive?: "licensed" | "legacy" | "unexpected-entry";
         resume?: boolean;
         recovery?: boolean;
         pullDelay?: number;
@@ -72,6 +73,7 @@ async function bootstrap(
 ) {
     const bin = join(root, "bin");
     await mkdir(bin, { recursive: true });
+    await writeFile(join(bin, "package.json"), '{"type":"commonjs"}\n');
     const source = join(root, "archive/goblin");
     await mkdir(join(source, "deploy/azure"), { recursive: true });
     await cp("deploy/postgres", join(source, "deploy/postgres"), {
@@ -372,12 +374,26 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
     ]);
     await mkdir(join(root, "native"), { recursive: true });
     await cp(goblinctl, join(root, "native/goblinctl"));
+    const nativeEntries = ["goblinctl"];
+    if (application.nativeArchive !== "legacy") {
+        for (const name of ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]) {
+            await cp(name, join(root, "native", name));
+            nativeEntries.push(name);
+        }
+    }
+    if (application.nativeArchive === "unexpected-entry") {
+        await writeFile(
+            join(root, "native/unexpected"),
+            "unexpected archive entry",
+        );
+        nativeEntries.push("unexpected");
+    }
     execFileSync("tar", [
         "-czf",
         join(root, "goblinctl.tar.gz"),
         "-C",
         join(root, "native"),
-        "goblinctl",
+        ...nativeEntries,
     ]);
     const nativeChecksum = createHash("sha256")
         .update(await readFile(join(root, "goblinctl.tar.gz")))
@@ -1828,6 +1844,64 @@ test("invalid forwarded origins fail before installing cluster components", asyn
         );
         await assert.rejects(access(join(root, "k3s-requests.jsonl")));
     }
+});
+
+test("native archives install license documents and accept the legacy layout", async (t) => {
+    const artifacts = resolve(".artifacts/deployment");
+    await mkdir(artifacts, { recursive: true });
+    for (const nativeArchive of ["licensed", "legacy"] as const) {
+        const root = await mkdtemp(join(artifacts, "goblin-licensed-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        await bootstrap(root, fakePassword, "ready", {
+            nativeArchive,
+            bootstrapOnly: true,
+        });
+        for (const path of [
+            "share",
+            "share/licenses",
+            "share/licenses/goblinctl",
+        ]) {
+            assert.equal(
+                (await stat(join(root, "opt/goblin", path))).mode & 0o777,
+                0o755,
+            );
+        }
+        for (const name of ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]) {
+            assert.deepEqual(
+                await readFile(
+                    join(root, "opt/goblin/share/licenses/goblinctl", name),
+                ),
+                await readFile(name),
+            );
+            assert.equal(
+                (
+                    await stat(
+                        join(root, "opt/goblin/share/licenses/goblinctl", name),
+                    )
+                ).mode & 0o777,
+                0o644,
+            );
+        }
+    }
+});
+
+test("native archives with unexpected entries fail before activating the installer", async (t) => {
+    const artifacts = resolve(".artifacts/deployment");
+    await mkdir(artifacts, { recursive: true });
+    const root = await mkdtemp(join(artifacts, "goblin-archive-rejected-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await assert.rejects(
+        bootstrap(root, fakePassword, "ready", {
+            nativeArchive: "unexpected-entry",
+            bootstrapOnly: true,
+        }),
+    );
+    await assert.rejects(access(join(root, "opt/goblin/bin/goblinctl")));
+    await assert.rejects(access(join(root, "systemctl-requests.jsonl")));
+    assert.match(
+        await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8"),
+        /Unsupported native archive contents/,
+    );
 });
 
 test("native download failure, corruption, or wrong version leaves the previous installer untouched", async (t) => {

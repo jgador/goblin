@@ -62,7 +62,13 @@ else
     "https://github.com/jgador/goblin/releases/download/goblinctl-v${goblinctl_version}/goblinctl-x86_64-unknown-linux-musl.tar.gz" \
     --output "$bootstrap_dir/goblinctl.tar.gz"
   printf '%s  %s\n' "$goblinctl_sha256" "$bootstrap_dir/goblinctl.tar.gz" | sha256sum --check
-  [[ "$(tar -tzf "$bootstrap_dir/goblinctl.tar.gz")" == goblinctl ]]
+  # Accept the original single-file releases and the licensed archive layout.
+  # Keep an exact allowlist before extracting any untrusted archive entry.
+  goblinctl_archive_entries=$(tar -tzf "$bootstrap_dir/goblinctl.tar.gz")
+  if [[ "$goblinctl_archive_entries" != goblinctl && "$goblinctl_archive_entries" != $'goblinctl\nLICENSE\nNOTICE\nTHIRD_PARTY_NOTICES.md' ]]; then
+    printf 'Unsupported native archive contents.\n' >&2
+    exit 1
+  fi
   tar --extract --gzip --file "$bootstrap_dir/goblinctl.tar.gz" --directory "$bootstrap_dir" --no-same-owner --no-same-permissions goblinctl
   chmod 0755 "$bootstrap_dir/goblinctl"
 fi

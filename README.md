@@ -2,6 +2,10 @@
 
 Your self-hosted AI coworker.
 
+Goblin's original code and documentation are licensed under
+[Apache 2.0](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for
+dependency licenses and the separate treatment of fonts and brand artwork.
+
 Goblin aims to turn everyday team conversations into completed, reviewable work.
 
 Codex is the current primary coding agent integration. Goblin's architecture is

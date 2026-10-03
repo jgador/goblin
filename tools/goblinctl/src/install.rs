@@ -16,6 +16,9 @@ pub fn activate_tooling(system_root: &Path, binary: &Path) -> Result<()> {
         release.clone(),
         root("opt/goblin/bin"),
         root("opt/goblin/setup"),
+        root("opt/goblin/share"),
+        root("opt/goblin/share/licenses"),
+        root("opt/goblin/share/licenses/goblinctl"),
         root("usr/local/bin"),
     ] {
         files::directory(&directory, 0o755)?;
@@ -37,6 +40,10 @@ pub fn activate_tooling(system_root: &Path, binary: &Path) -> Result<()> {
     files::remove_file(&command)?;
     std::os::unix::fs::symlink(root("opt/goblin/bin/goblinctl"), &command)?;
     assets::unpack(&root("opt/goblin/setup"), assets::SETUP)?;
+    assets::unpack(
+        &root("opt/goblin/share/licenses/goblinctl"),
+        assets::LICENSING,
+    )?;
     for name in ["goblin-setup.service", "goblin-installer.service"] {
         files::atomic_write(
             &root("etc/systemd/system").join(name),

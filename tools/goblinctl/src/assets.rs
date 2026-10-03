@@ -29,6 +29,14 @@ pub fn web(path: &str) -> Option<(&'static str, &'static [u8])> {
     })
 }
 pub const BOOTSTRAP: &str = include_str!("../../../deploy/azure/bootstrap.sh");
+pub const LICENSING: &[(&str, &[u8])] = &[
+    ("LICENSE", include_bytes!("../../../LICENSE")),
+    ("NOTICE", include_bytes!("../../../NOTICE")),
+    (
+        "THIRD_PARTY_NOTICES.md",
+        include_bytes!("../../../THIRD_PARTY_NOTICES.md"),
+    ),
+];
 pub const SETUP: &[(&str, &[u8])] = &[
     (
         "installer.sh",

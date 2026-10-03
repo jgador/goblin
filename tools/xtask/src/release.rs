@@ -132,6 +132,9 @@ pub fn inputs(root: &Path) -> Result<Inputs> {
     );
     // These inputs may not be removed by accidentally narrowing the allowlist.
     for required in [
+        "LICENSE",
+        "NOTICE",
+        "THIRD_PARTY_NOTICES.md",
         "Cargo.toml",
         "Cargo.lock",
         "rust-toolchain.toml",
@@ -590,6 +593,12 @@ mod tests {
             fs::copy(root.join(path), destination).unwrap();
         }
         assert_eq!(inputs(directory.path()).unwrap(), original);
+        for path in ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"] {
+            let destination = directory.path().join(path);
+            fs::write(&destination, "updated licensing").unwrap();
+            assert_ne!(inputs(directory.path()).unwrap().sha256, original.sha256);
+            fs::copy(root.join(path), destination).unwrap();
+        }
         for path in [
             "README.md",
             "dependencies.lock.json",
