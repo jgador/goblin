@@ -16,8 +16,24 @@ using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Execution;
 
-public sealed record SandboxOptions(string Namespace, string Image, string CodexHome, string RepositoryUrl)
+public sealed class SandboxOptions
 {
+    public SandboxOptions(string @namespace, string image, string codexHome, string repositoryUrl)
+    {
+        Namespace = @namespace;
+        Image = image;
+        CodexHome = codexHome;
+        RepositoryUrl = repositoryUrl;
+    }
+
+    public string Namespace { get; init; }
+
+    public string Image { get; init; }
+
+    public string CodexHome { get; init; }
+
+    public string RepositoryUrl { get; init; }
+
     public string CpuLimit { get; init; } = "2";
     public string MemoryLimit { get; init; } = "2Gi";
 }

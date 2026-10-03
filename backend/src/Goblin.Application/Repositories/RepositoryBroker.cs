@@ -19,11 +19,41 @@ using Wolverine.EntityFrameworkCore;
 
 namespace Goblin.Application.Repositories;
 
-public sealed record RepositoryBrokerOptions(string Directory);
+public sealed class RepositoryBrokerOptions
+{
+    public RepositoryBrokerOptions(string directory)
+    {
+        Directory = directory;
+    }
 
-public sealed record PublishRepository(long Id);
+    public string Directory { get; init; }
+}
 
-public sealed record RepositoryOperationView(long Id, RepositoryOperationState State, string? Url);
+public sealed class PublishRepository
+{
+    public PublishRepository(long id)
+    {
+        Id = id;
+    }
+
+    public long Id { get; init; }
+}
+
+public sealed class RepositoryOperationView
+{
+    public RepositoryOperationView(long id, RepositoryOperationState state, string? url)
+    {
+        Id = id;
+        State = state;
+        Url = url;
+    }
+
+    public long Id { get; init; }
+
+    public RepositoryOperationState State { get; init; }
+
+    public string? Url { get; init; }
+}
 
 public sealed class RepositoryBroker : IRepositoryBroker
 {

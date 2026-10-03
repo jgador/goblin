@@ -95,7 +95,7 @@ await Console.In.ReadLineAsync();
 await app.Services.GetRequiredService<CodexClient>().DisposeAsync();
 await app.StopAsync();
 
-internal sealed record FixtureOptions
+internal sealed class FixtureOptions
 {
     public required string Root { get; init; }
     public required string DataDir { get; init; }

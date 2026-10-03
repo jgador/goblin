@@ -203,7 +203,7 @@ public sealed class PersistentSandboxTests
             _server = server; _auth = Path.Combine(Path.GetTempPath(), "goblin-sandbox-test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_auth); File.WriteAllText(Path.Combine(_auth, "auth.json"), "{}");
             _api = new(server.Urls.Single());
-            Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Checkpoints(), new(MaxCachedVolumes: 1));
+            Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Checkpoints(), new(maxCachedVolumes: 1));
         }
 
         public static async Task<ControlPlane> StartAsync()

@@ -18,9 +18,25 @@ public enum IdentityKind
     RepositoryOperation
 }
 
-public sealed record IdentityRequest(IdentityKind[] Kinds);
+public sealed class IdentityRequest
+{
+    public IdentityRequest(IdentityKind[] kinds)
+    {
+        Kinds = kinds;
+    }
 
-public sealed record ReservedIdentities(long[] Ids);
+    public IdentityKind[] Kinds { get; init; }
+}
+
+public sealed class ReservedIdentities
+{
+    public ReservedIdentities(long[] ids)
+    {
+        Ids = ids;
+    }
+
+    public long[] Ids { get; init; }
+}
 
 // Reserve IDs before constructing core objects or a replayable browser command.
 // Sequence gaps after cancellation or rollback are intentional; IDs are never reused.

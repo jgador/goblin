@@ -12,7 +12,24 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Goblin.Application.Work;
 
-public sealed record EnabledRepository(long Id, string Name, string DefaultBranch, bool Enabled);
+public sealed class EnabledRepository
+{
+    public EnabledRepository(long id, string name, string defaultBranch, bool enabled)
+    {
+        Id = id;
+        Name = name;
+        DefaultBranch = defaultBranch;
+        Enabled = enabled;
+    }
+
+    public long Id { get; init; }
+
+    public string Name { get; init; }
+
+    public string DefaultBranch { get; init; }
+
+    public bool Enabled { get; init; }
+}
 
 public sealed class GitHubStore
 {

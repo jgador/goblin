@@ -4,23 +4,113 @@ namespace Goblin.Core.Work;
 
 // A versioned, Goblin-owned persistence contract. Infrastructure chooses its
 // encoding. Restoring never emits events or executes side effects.
-public sealed record WorkSnapshot(int SchemaVersion, long Id, string Objective,
-    long? AgentId, WorkStatus Status, WorkAttention? Attention,
-    AttemptSnapshot[] Attempts, WorkEvent[] History, WorkDecision[] Decisions,
-    WorkResult[] Results, WorkMessage[] Messages, WorkArtifact[] Artifacts)
+public sealed class WorkSnapshot
 {
+    public WorkSnapshot(int schemaVersion, long id, string objective, long? agentId, WorkStatus status,
+        WorkAttention? attention, AttemptSnapshot[] attempts, WorkEvent[] history, WorkDecision[] decisions,
+        WorkResult[] results, WorkMessage[] messages, WorkArtifact[] artifacts)
+    {
+        SchemaVersion = schemaVersion;
+        Id = id;
+        Objective = objective;
+        AgentId = agentId;
+        Status = status;
+        Attention = attention;
+        Attempts = attempts;
+        History = history;
+        Decisions = decisions;
+        Results = results;
+        Messages = messages;
+        Artifacts = artifacts;
+    }
+
+    public int SchemaVersion { get; init; }
+
+    public long Id { get; init; }
+
+    public string Objective { get; init; }
+
+    public long? AgentId { get; init; }
+
+    public WorkStatus Status { get; init; }
+
+    public WorkAttention? Attention { get; init; }
+
+    public AttemptSnapshot[] Attempts { get; init; }
+
+    public WorkEvent[] History { get; init; }
+
+    public WorkDecision[] Decisions { get; init; }
+
+    public WorkResult[] Results { get; init; }
+
+    public WorkMessage[] Messages { get; init; }
+
+    public WorkArtifact[] Artifacts { get; init; }
+
     public WorkWorkspace? Workspace { get; init; }
     public WorkRepositoryRequest? RepositoryRequest { get; init; }
     public RepositoryAuthorization? RepositoryAuthorization { get; init; }
 }
 
-public sealed record AttemptSnapshot(long Id, long WorkId, long AgentId,
-    ExecutionTarget Target, DateTimeOffset QueuedAt, AttemptStatus Status,
-    long? OwnerId, string? EnvironmentReference, ExecutionSession? Session,
-    DateTimeOffset? ClaimedAt, DateTimeOffset? StartedAt, DateTimeOffset? FinishedAt,
-    DateTimeOffset? CancellationRequestedAt, FailureKind? Failure,
-    bool CleanupPending = false, bool CleanupFailed = false)
+public sealed class AttemptSnapshot
 {
+    public AttemptSnapshot(long id, long workId, long agentId, ExecutionTarget target, DateTimeOffset queuedAt,
+        AttemptStatus status, long? ownerId, string? environmentReference, ExecutionSession? session,
+        DateTimeOffset? claimedAt, DateTimeOffset? startedAt, DateTimeOffset? finishedAt,
+        DateTimeOffset? cancellationRequestedAt, FailureKind? failure, bool cleanupPending = false,
+        bool cleanupFailed = false)
+    {
+        Id = id;
+        WorkId = workId;
+        AgentId = agentId;
+        Target = target;
+        QueuedAt = queuedAt;
+        Status = status;
+        OwnerId = ownerId;
+        EnvironmentReference = environmentReference;
+        Session = session;
+        ClaimedAt = claimedAt;
+        StartedAt = startedAt;
+        FinishedAt = finishedAt;
+        CancellationRequestedAt = cancellationRequestedAt;
+        Failure = failure;
+        CleanupPending = cleanupPending;
+        CleanupFailed = cleanupFailed;
+    }
+
+    public long Id { get; init; }
+
+    public long WorkId { get; init; }
+
+    public long AgentId { get; init; }
+
+    public ExecutionTarget Target { get; init; }
+
+    public DateTimeOffset QueuedAt { get; init; }
+
+    public AttemptStatus Status { get; init; }
+
+    public long? OwnerId { get; init; }
+
+    public string? EnvironmentReference { get; init; }
+
+    public ExecutionSession? Session { get; init; }
+
+    public DateTimeOffset? ClaimedAt { get; init; }
+
+    public DateTimeOffset? StartedAt { get; init; }
+
+    public DateTimeOffset? FinishedAt { get; init; }
+
+    public DateTimeOffset? CancellationRequestedAt { get; init; }
+
+    public FailureKind? Failure { get; init; }
+
+    public bool CleanupPending { get; init; }
+
+    public bool CleanupFailed { get; init; }
+
     public bool ReasoningOnly { get; init; }
     public int TurnNumber { get; init; } = 1;
     public int WorkspaceNumber { get; init; } = 1;

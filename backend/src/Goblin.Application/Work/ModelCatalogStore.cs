@@ -148,10 +148,9 @@ public sealed class ModelCatalogStore
         {
             RuntimeModel[] previous = row.Catalog is null ? [] : Parse(row.Catalog);
             var previousNames = previous.Select(x => x.Model).ToHashSet(StringComparer.Ordinal);
-            row.Catalog = JsonSerializer.Serialize(models.Select(x => x with
-            {
-                IsNew = previous.Length > 0 && !previousNames.Contains(x.Model)
-            }).ToArray(), WorkStore.Json);
+            row.Catalog = JsonSerializer.Serialize(models.Select(x => new RuntimeModel(
+                x.Id, x.Model, x.DisplayName, x.DefaultReasoningEffort, x.SupportedReasoningEfforts,
+                x.IsDefault, previous.Length > 0 && !previousNames.Contains(x.Model))).ToArray(), WorkStore.Json);
             row.ExecutableStamp = stamp;
             row.FetchedAt = DateTime.UtcNow;
             row.RetryAfter = null;

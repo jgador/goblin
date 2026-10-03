@@ -43,13 +43,13 @@ public sealed class ExecutionCoordinator
         {
             // Shutdown is not permission to redeliver a claimed external start.
             if (claimed is not null)
-                await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
+                await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
         catch
         {
             await _failures.RecordAsync(new(command.WorkId, command.AttemptId,
-                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
+                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }
@@ -62,7 +62,7 @@ public sealed class ExecutionCoordinator
         {
             // Even a failed database read is evidence, not permission to run the
             // attempt again. Surface it after storage returns.
-            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.StorageUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
+            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.StorageUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
     }
@@ -180,7 +180,7 @@ public sealed class ExecutionCoordinator
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch
         {
-            await _failures.RecordAsync(new(work.Id, attempt.Id, FailureKind.CleanupFailed, Cleanup: true, TurnNumber: attempt.TurnNumber), CancellationToken.None);
+            await _failures.RecordAsync(new(work.Id, attempt.Id, FailureKind.CleanupFailed, cleanup: true, turnNumber: attempt.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }

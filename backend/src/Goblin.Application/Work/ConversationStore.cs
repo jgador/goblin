@@ -10,13 +10,89 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Goblin.Application.Work;
 
-public sealed record ConversationMessageSource(string Provider, string WorkspaceId, string UserId, string ChannelId, string ThreadId, string MessageId);
+public sealed class ConversationMessageSource
+{
+    public ConversationMessageSource(string provider, string workspaceId, string userId, string channelId,
+        string threadId, string messageId)
+    {
+        Provider = provider;
+        WorkspaceId = workspaceId;
+        UserId = userId;
+        ChannelId = channelId;
+        ThreadId = threadId;
+        MessageId = messageId;
+    }
 
-public sealed record ConversationMessageView(long Id, string Text, DateTime CreatedAt, ConversationMessageSource? Source = null);
+    public string Provider { get; init; }
 
-public sealed record ConversationView(long Id, string Title, long? WorkId, ConversationMessageView[] Messages);
+    public string WorkspaceId { get; init; }
 
-public sealed record ConversationCommand(long ConversationId, long MessageId, string? Text, long? WorkId = null);
+    public string UserId { get; init; }
+
+    public string ChannelId { get; init; }
+
+    public string ThreadId { get; init; }
+
+    public string MessageId { get; init; }
+}
+
+public sealed class ConversationMessageView
+{
+    public ConversationMessageView(long id, string text, DateTime createdAt,
+        ConversationMessageSource? source = null)
+    {
+        Id = id;
+        Text = text;
+        CreatedAt = createdAt;
+        Source = source;
+    }
+
+    public long Id { get; init; }
+
+    public string Text { get; init; }
+
+    public DateTime CreatedAt { get; init; }
+
+    public ConversationMessageSource? Source { get; init; }
+}
+
+public sealed class ConversationView
+{
+    public ConversationView(long id, string title, long? workId, ConversationMessageView[] messages)
+    {
+        Id = id;
+        Title = title;
+        WorkId = workId;
+        Messages = messages;
+    }
+
+    public long Id { get; init; }
+
+    public string Title { get; init; }
+
+    public long? WorkId { get; init; }
+
+    public ConversationMessageView[] Messages { get; init; }
+}
+
+public sealed class ConversationCommand
+{
+    public ConversationCommand(long conversationId, long messageId, string? text, long? workId = null)
+    {
+        ConversationId = conversationId;
+        MessageId = messageId;
+        Text = text;
+        WorkId = workId;
+    }
+
+    public long ConversationId { get; init; }
+
+    public long MessageId { get; init; }
+
+    public string? Text { get; init; }
+
+    public long? WorkId { get; init; }
+}
 
 public sealed class ConversationStore
 {

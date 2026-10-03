@@ -61,9 +61,11 @@ public sealed class DurabilityTests
         Assert.Empty(await store.IdentitiesAsync(installation, default));
         await Assert.ThrowsAsync<ApplicationFailure>(() => store.ConfirmLinkAsync(installation, "different-session", code.Id, default));
         await store.ConfirmLinkAsync(installation, "owner-session", code.Id, default);
-        ExternalMessage request = proof with { EventId = "EV2", ThreadId = "2.000001", MessageId = "2.000001", Text = "Explain the design" };
+        ExternalMessage Message(string eventId, string messageId, string text) =>
+            new(installation, eventId, "U456", "D123", "2.000001", messageId, text, true);
+        ExternalMessage request = Message("EV2", "2.000001", "Explain the design");
         await Task.WhenAll(store.AcceptAsync(request, default), store.AcceptAsync(request, default));
-        await store.AcceptAsync(request with { EventId = "EV3" }, default);
+        await store.AcceptAsync(Message("EV3", "2.000001", "Explain the design"), default);
         ExternalReply reply = (await store.ProcessNextAsync(installation, default))!;
         Assert.NotNull(reply.WorkId);
         Assert.Equal(ExternalReplyKind.WorkSaved, reply.Kind);
@@ -74,10 +76,10 @@ public sealed class DurabilityTests
         Assert.Equal(1, fixture.Runtime.Starts[work.Work.Attempts[0].Id]);
         ConversationView conversation = Assert.Single(await scope.ServiceProvider.GetRequiredService<ConversationStore>().ListAsync());
         Assert.Equal("U456", Assert.Single(conversation.Messages).Source!.UserId);
-        await store.AcceptAsync(request with { EventId = "EV4", MessageId = "2.000002", Text = "Additional context" }, default);
+        await store.AcceptAsync(Message("EV4", "2.000002", "Additional context"), default);
         Assert.Equal(reply.WorkId, (await store.ProcessNextAsync(installation, default))!.WorkId);
         ExternalIdentityView identity = Assert.Single(await store.IdentitiesAsync(installation, default));
-        await store.AcceptAsync(request with { EventId = "EV5", MessageId = "2.000003", Text = "Do not accept after revocation" }, default);
+        await store.AcceptAsync(Message("EV5", "2.000003", "Do not accept after revocation"), default);
         await store.RevokeAsync(installation, identity.Id, default);
         Assert.Null((await store.ProcessNextAsync(installation, default))!.WorkId);
         Assert.Single((await fixture.Get(reply.WorkId.Value)).Work.Messages);
@@ -90,7 +92,7 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         long id = NextId();
-        var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Save this idea for later");
+        var create = new WorkCommand(NextId(), id, WorkAction.Create, text: "Save this idea for later");
         WorkView saved = await fixture.Apply(create);
         Assert.Equal(WorkStore.DefaultAgentId, saved.Work.AgentId);
         Assert.Equal(WorkStatus.Ready, saved.Work.Status);
@@ -148,8 +150,8 @@ public sealed class DurabilityTests
         GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
         await settings.ObserveAsync(catalog.Account, Goblin.Contracts.GitHubConnectionStatus.Connected);
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Fix owner/repo and open a PR using base branch develop"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Fix owner/repo and open a PR using base branch develop"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
         work = await fixture.Apply(new(NextId(), id, WorkAction.Execute, work.Version));
         Assert.Empty(work.Work.Attempts);
         Assert.Empty(await settings.RepositoriesAsync());
@@ -162,11 +164,11 @@ public sealed class DurabilityTests
         long rejected = NextId();
         await fixture.RejectId("work_commands", rejected);
         await Assert.ThrowsAsync<DbUpdateException>(() => fixture.Apply(new(rejected, id, WorkAction.AuthorizeRepository,
-            work.Version, AuthorizationId: work.Work.RepositoryAuthorization!.Id)));
+            work.Version, authorizationId: work.Work.RepositoryAuthorization!.Id)));
         Assert.Empty(await settings.RepositoriesAsync());
         Assert.Empty((await fixture.Get(id)).Work.Attempts);
         var authorize = new WorkCommand(NextId(), id, WorkAction.AuthorizeRepository, work.Version,
-            AuthorizationId: work.Work.RepositoryAuthorization!.Id);
+            authorizationId: work.Work.RepositoryAuthorization!.Id);
         WorkView accepted = await fixture.Apply(authorize);
         Assert.Equal(accepted.Version, (await fixture.Apply(authorize)).Version);
         Assert.True(Assert.Single(await settings.RepositoriesAsync()).Enabled);
@@ -185,14 +187,14 @@ public sealed class DurabilityTests
         GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
         await settings.ObserveAsync(catalog.Account, Goblin.Contracts.GitHubConnectionStatus.Connected);
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Fix owner/repo"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Fix owner/repo"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
         work = await fixture.Apply(new(NextId(), id, WorkAction.Execute, work.Version));
         long oldApproval = work.Work.RepositoryAuthorization!.Id;
-        work = await fixture.Apply(new(NextId(), id, WorkAction.AddContext, work.Version, Text: "Also push the changes"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.AddContext, work.Version, text: "Also push the changes"));
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id, WorkAction.AuthorizeRepository,
-            work.Version, AuthorizationId: oldApproval)));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareRepository, work.Version, Text: "owner/repo"));
+            work.Version, authorizationId: oldApproval)));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareRepository, work.Version, text: "owner/repo"));
         Assert.True(work.Work.RepositoryAuthorization!.Target.Repository!.Grant!.AllowPush);
         await settings.ObserveAsync(new("new-account", "43", "another-owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Authorize(work));
@@ -206,8 +208,8 @@ public sealed class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         await EnableHandoffRepository(fixture);
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "https://github.com/owner/repo convert Python to Rust"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "https://github.com/owner/repo convert Python to Rust"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
         var start = new WorkCommand(NextId(), id, WorkAction.Execute, work.Version);
         work = await fixture.Apply(start);
         Assert.Equal(AttentionReason.RepositoryRequired, work.Work.Attention!.Reason);
@@ -218,11 +220,11 @@ public sealed class DurabilityTests
         work = await fixture.Get(id);
         Assert.Equal("owner/repo", Assert.Single(work.Work.RepositoryRequest!.Repositories));
         ApplicationFailure rejected = await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id,
-            WorkAction.AuthorizeRepository, work.Version, Repository: new("unapproved/repo", "Goblin", "agent@example.com"))));
+            WorkAction.AuthorizeRepository, work.Version, repository: new("unapproved/repo", "Goblin", "agent@example.com"))));
         Assert.Equal("invalid_command", rejected.Code);
         Assert.Empty((await fixture.Get(id)).Work.Attempts);
         var authorize = new WorkCommand(NextId(), id, WorkAction.AuthorizeRepository, work.Version,
-            AuthorizationId: work.Work.RepositoryAuthorization!.Id);
+            authorizationId: work.Work.RepositoryAuthorization!.Id);
         WorkView accepted = await fixture.Apply(authorize);
         Assert.Equal(accepted.Version, (await fixture.Apply(authorize)).Version);
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
@@ -245,13 +247,13 @@ public sealed class DurabilityTests
         await fixture.Reconcile(id, original);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.InputRequired && !x.Work.Attempts[^1].CleanupPending);
         var answer = new WorkCommand(NextId(), id, WorkAction.Answer, work.Version,
-            Text: "Clone https://github.com/owner/repo", DecisionId: work.Work.Decisions[^1].Id);
+            text: "Clone https://github.com/owner/repo", decisionId: work.Work.Decisions[^1].Id);
         work = await fixture.Apply(answer);
         Assert.Equal(AttentionReason.RepositoryRequired, work.Work.Attention!.Reason);
         Assert.Single(work.Work.Attempts);
         Assert.Equal(1, work.Work.Attempts[0].TurnNumber);
         work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareRepository, work.Version,
-            Repository: new("owner/repo", "Goblin", "agent@example.com")));
+            repository: new("owner/repo", "Goblin", "agent@example.com")));
         work = await fixture.Authorize(work);
         Assert.Equal(2, work.Work.Attempts.Length);
         Assert.Equal(original, work.Work.Attempts[0].Id);
@@ -281,10 +283,10 @@ public sealed class DurabilityTests
         await fixture.Reconcile(id, second);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.InputRequired && !x.Work.Attempts[^1].CleanupPending);
         work = await fixture.Apply(new(NextId(), id, WorkAction.Answer, work.Version,
-            Text: "Push the changes", DecisionId: work.Work.Decisions[^1].Id));
+            text: "Push the changes", decisionId: work.Work.Decisions[^1].Id));
         Assert.Equal(AttentionReason.RepositoryRequired, work.Work.Attention!.Reason);
         Assert.Equal(2, work.Work.Attempts.Length);
-        work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareRepository, work.Version, Text: "owner/repo"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareRepository, work.Version, text: "owner/repo"));
         Assert.False(work.Work.RepositoryAuthorization!.Retry);
         Assert.True(work.Work.RepositoryAuthorization.Target.Repository!.Grant!.AllowPush);
         work = await fixture.Authorize(work);
@@ -307,7 +309,7 @@ public sealed class DurabilityTests
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.CleanupRequired);
         Assert.NotNull(work.Work.RepositoryRequest);
         await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id,
-            WorkAction.PrepareRepository, work.Version, Repository: new("owner/repo", "Goblin", "agent@example.com"))));
+            WorkAction.PrepareRepository, work.Version, repository: new("owner/repo", "Goblin", "agent@example.com"))));
         fixture.Runtime.FailCleanup = false;
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.RepositoryRequired && !x.Work.Attempts[^1].CleanupPending);
@@ -336,20 +338,20 @@ public sealed class DurabilityTests
         Assert.Equal("gpt-test-11", (await catalogs.GetAsync(1, 3, "gpt-test-11")).Models[0].Model);
 
         long id = NextId();
-        WorkView created = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Use the selected model"));
-        WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, created.Version, AgentId: 1));
+        WorkView created = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Use the selected model"));
+        WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, created.Version, agentId: 1));
         WorkView queued = await fixture.Apply(new(NextId(), id, WorkAction.Execute, assigned.Version,
-            Model: "gpt-test-1", ReasoningEffort: "high", ModelSelectionProvided: true));
+            model: "gpt-test-1", reasoningEffort: "high", modelSelectionProvided: true));
         Assert.Equal("gpt-test-1", queued.Work.Attempts[^1].Target.RequestedModel);
         Assert.Equal("high", queued.Work.Attempts[^1].Target.RequestedEffort);
         Assert.Equal("high", (await fixture.Get(id)).Work.Attempts[^1].Target.RequestedEffort);
 
         long rejectedId = NextId();
-        WorkView other = await fixture.Apply(new(NextId(), rejectedId, WorkAction.Create, Text: "Reject unsupported effort"));
-        other = await fixture.Apply(new(NextId(), rejectedId, WorkAction.Assign, other.Version, AgentId: 1));
+        WorkView other = await fixture.Apply(new(NextId(), rejectedId, WorkAction.Create, text: "Reject unsupported effort"));
+        other = await fixture.Apply(new(NextId(), rejectedId, WorkAction.Assign, other.Version, agentId: 1));
         ApplicationFailure rejected = await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(
-            NextId(), rejectedId, WorkAction.Execute, other.Version, Model: "gpt-test-1",
-            ReasoningEffort: "unsupported", ModelSelectionProvided: true)));
+            NextId(), rejectedId, WorkAction.Execute, other.Version, model: "gpt-test-1",
+            reasoningEffort: "unsupported", modelSelectionProvided: true)));
         Assert.Equal("reasoning_effort_unavailable", rejected.Code);
         Assert.Empty((await fixture.Get(rejectedId)).Work.Attempts);
 
@@ -421,15 +423,15 @@ public sealed class DurabilityTests
         await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, request, default));
         Assert.Empty(await memory.ReadAsync(attempt, default));
         WorkspaceCheckpoint saved = await fixture.SaveCheckpoint(work.Work);
-        request = request with { CheckpointId = saved.Id };
-        await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, request with
-        { Observations = [observation with { Setup = observation.Setup with { Checks = [] } }] }, default));
+        request = new(1, saved.Id, "image-one", [observation]);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt,
+            new SetupMemoryWrite(1, saved.Id, "image-one", [observation with { Setup = observation.Setup with { Checks = [] } }]), default));
         await Task.WhenAll(memory.SaveAsync(attempt, request, default), memory.SaveAsync(attempt, request, default));
         RepositorySetupMemory learned = Assert.Single(await memory.ReadAsync(attempt, default));
         Assert.Equal(work.Work.Id, learned.WorkId);
         Assert.Equal(saved.CommitSha, learned.Commit);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, request with { TurnNumber = 2 }, default));
-        await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, request with { Environment = "changed-image" }, default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, new SetupMemoryWrite(2, saved.Id, "image-one", [observation]), default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => memory.SaveAsync(attempt, new SetupMemoryWrite(1, saved.Id, "changed-image", [observation]), default));
         await fixture.RestartAsync();
         using IServiceScope restarted = fixture.Host.Services.CreateScope();
         RepositorySetupStore reopened = restarted.ServiceProvider.GetRequiredService<RepositorySetupStore>();
@@ -442,7 +444,7 @@ public sealed class DurabilityTests
         Assert.Equal(learned.Id, Assert.Single(await reopened.ReadAsync(nextAttempt, default)).Id);
         WorkspaceCheckpoint nextSaved = await fixture.SaveCheckpoint(next.Work);
         VerifiedRepositorySetup changed = observation with { ConfigurationHash = new string('d', 64) };
-        await reopened.SaveAsync(nextAttempt, request with { CheckpointId = nextSaved.Id, Observations = [changed] }, default);
+        await reopened.SaveAsync(nextAttempt, new SetupMemoryWrite(1, nextSaved.Id, "image-one", [changed]), default);
         Assert.Equal(2, (await reopened.ReadAsync(nextAttempt, default)).Length);
         fixture.Runtime.Observations[nextAttempt] = new(ObservationKind.Result, Text: "Ready") { CheckpointId = nextSaved.Id };
         await fixture.Reconcile(next.Work.Id, nextAttempt);
@@ -469,7 +471,7 @@ public sealed class DurabilityTests
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Waiting && !x.Work.Attempts[^1].CleanupPending);
         long decision = work.Work.Decisions.Single().Id;
-        await fixture.Apply(new(NextId(), id, WorkAction.Answer, work.Version, Text: "PostgreSQL", DecisionId: decision));
+        await fixture.Apply(new(NextId(), id, WorkAction.Answer, work.Version, text: "PostgreSQL", decisionId: decision));
         work = await fixture.Until(id, x => x.Work.Attempts[^1].TurnNumber == 2 && x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         Assert.Single(work.Work.Attempts);
         Assert.Single(work.Work.Attempts[0].PriorTurns);
@@ -547,7 +549,7 @@ public sealed class DurabilityTests
         // Hold the dispatch queue while checking the durable admission reservation.
         await db.Connections.Where(x => x.Id == work.Work.Attempts[0].Target.ConnectionId)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, "Verifying"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Answer, work.Version, Text: "Yes", DecisionId: work.Work.Decisions.Single().Id));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Answer, work.Version, text: "Yes", decisionId: work.Work.Decisions.Single().Id));
         Assert.Equal(AttemptStatus.Queued, work.Work.Attempts[0].Status);
         Assert.True((await db.ExecutionAttempts.AsNoTracking().SingleAsync(x => x.Id == attempt)).WorkspaceRetained);
     }
@@ -563,9 +565,9 @@ public sealed class DurabilityTests
         await settings.ObserveAsync(new("first", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Checkpoint test"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
-        await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, Repository: new("owner/repo", "Goblin", "agent@example.com")));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Checkpoint test"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
+        await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, repository: new("owner/repo", "Goblin", "agent@example.com")));
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         long attempt = work.Work.Attempts[^1].Id;
         RepositoryBroker broker = fixture.Host.Services.GetRequiredService<RepositoryBroker>();
@@ -593,7 +595,7 @@ public sealed class DurabilityTests
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
-        await fixture.Apply(new(NextId(), id, WorkAction.Approve, work.Version, AttemptId: attempt));
+        await fixture.Apply(new(NextId(), id, WorkAction.Approve, work.Version, attemptId: attempt));
     }
 
     [DatabaseFact]
@@ -603,8 +605,8 @@ public sealed class DurabilityTests
         await EnableHandoffRepository(fixture);
         fixture.Remote.Reconciled = true;
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Push owner/repo"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Push owner/repo"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
         await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version));
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         await fixture.SaveCheckpoint(work.Work);
@@ -622,9 +624,9 @@ public sealed class DurabilityTests
         await settings.ObserveAsync(new("first", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Continue surviving edits"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
-        await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, Repository: new("owner/repo", "Goblin", "agent@example.com")));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Continue surviving edits"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
+        await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, repository: new("owner/repo", "Goblin", "agent@example.com")));
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         long first = work.Work.Attempts[^1].Id;
         string reference = work.Work.Workspace!.EnvironmentReference;
@@ -658,9 +660,9 @@ public sealed class DurabilityTests
         await settings.ObserveAsync(new("first", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
         long id = NextId();
-        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Update repository"));
-        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, AgentId: 1));
-        w = await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, w.Version, Repository: new("owner/repo", "Goblin", "goblin@example.test")));
+        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Update repository"));
+        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, agentId: 1));
+        w = await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, w.Version, repository: new("owner/repo", "Goblin", "goblin@example.test")));
         long attempt = w.Work.Attempts[^1].Id;
         RepositoryGrant original = w.Work.Attempts[^1].Target.Repository!.Grant!;
         Assert.Equal($"goblin/{id}/{attempt}", original.Branch);
@@ -688,9 +690,9 @@ public sealed class DurabilityTests
         await settings.ObserveAsync(new("first", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
         await settings.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
         long id = NextId();
-        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Publish repository"));
-        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, AgentId: 1));
-        await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, w.Version, Repository: new("owner/repo", "Goblin", "goblin@example.test")));
+        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Publish repository"));
+        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, agentId: 1));
+        await fixture.ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, w.Version, repository: new("owner/repo", "Goblin", "goblin@example.test")));
         w = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         RepositoryBroker broker = fixture.Host.Services.GetRequiredService<RepositoryBroker>();
         string capability = await broker.PrepareAsync(w.Work, default);
@@ -734,7 +736,7 @@ public sealed class DurabilityTests
         Assert.Equal(16, values.Distinct().Count());
         Assert.All(values, id => Assert.True(id > 9007199254740992L));
         long commandId = (await ids.ReserveAsync(new([IdentityKind.Command]))).Ids.Single();
-        var create = new WorkCommand(commandId, values[0], WorkAction.Create, Text: "Exact database identity");
+        var create = new WorkCommand(commandId, values[0], WorkAction.Create, text: "Exact database identity");
         WorkView saved = await fixture.Apply(create);
         Assert.Equal(values[0], saved.Work.Id);
         Assert.Equal(saved.Version, (await fixture.Apply(create)).Version);
@@ -770,11 +772,11 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         long id = NextId();
-        var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Produce a reviewable answer");
+        var create = new WorkCommand(NextId(), id, WorkAction.Create, text: "Produce a reviewable answer");
         WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => fixture.Apply(create)));
         Assert.All(created, x => Assert.Equal(1, x.Version));
         Assert.Equal(new[] { WorkEventKind.Created, WorkEventKind.Assigned }, (await fixture.Get(id)).Work.History.Select(x => x.Kind));
-        WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
+        WorkView assigned = await fixture.Apply(new(NextId(), id, WorkAction.Assign, 1, agentId: WorkStore.DefaultAgentId));
         WorkView queued = await fixture.Apply(new(NextId(), id, WorkAction.Execute, assigned.Version));
         long attempt = queued.Work.Attempts.Single().Id;
         await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
@@ -784,7 +786,7 @@ public sealed class DurabilityTests
         await fixture.Host.Services.GetRequiredService<ExecutionCoordinator>().ReconcileAsync(new(id, attempt), CancellationToken.None);
         WorkView review = await fixture.Get(id);
         Assert.Equal(AttentionReason.ResultReview, review.Work.Attention!.Reason);
-        var approve = new WorkCommand(NextId(), id, WorkAction.Approve, review.Version, AttemptId: attempt);
+        var approve = new WorkCommand(NextId(), id, WorkAction.Approve, review.Version, attemptId: attempt);
         WorkView approved = await fixture.Apply(approve);
         Assert.Equal(WorkStatus.Completed, approved.Work.Status);
         Assert.Equal(approved.Version, (await fixture.Apply(approve)).Version);
@@ -825,16 +827,16 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         long id = NextId(), rejected = NextId();
-        await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Reject an unavailable model"));
+        await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Reject an unavailable model"));
         await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(rejected, id, WorkAction.Execute, 1,
-            Model: "unavailable-fixture-model", ModelSelectionProvided: true)));
+            model: "unavailable-fixture-model", modelSelectionProvided: true)));
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
         Assert.False(await db.WorkCommands.AnyAsync(x => x.Id == rejected));
         Assert.False(await db.ExecutionAttempts.AnyAsync(x => x.WorkId == id));
         Assert.Equal(1, (await fixture.Get(id)).Version);
         Assert.Empty(fixture.Runtime.Starts);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id, WorkAction.Assign, 99, AgentId: WorkStore.DefaultAgentId)));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id, WorkAction.Assign, 99, agentId: WorkStore.DefaultAgentId)));
     }
 
     [DatabaseFact]
@@ -844,10 +846,10 @@ public sealed class DurabilityTests
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
         long id = NextId(), rejected = NextId();
-        var create = new WorkCommand(NextId(), id, WorkAction.Create, Text: "Keep each operation independent");
+        var create = new WorkCommand(NextId(), id, WorkAction.Create, text: "Keep each operation independent");
         WorkView[] created = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => store.ApplyAsync(create)));
         Assert.All(created, x => Assert.Equal(1, x.Version));
-        WorkView assigned = await store.ApplyAsync(new(NextId(), id, WorkAction.Assign, 1, AgentId: WorkStore.DefaultAgentId));
+        WorkView assigned = await store.ApplyAsync(new(NextId(), id, WorkAction.Assign, 1, agentId: WorkStore.DefaultAgentId));
 
         // Fail the database write after dispatch has been published into the
         // transaction, rather than rejecting the command before publishing.
@@ -930,8 +932,8 @@ public sealed class DurabilityTests
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Disconnected, false);
         long id = NextId();
-        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Unavailable connection"));
-        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, AgentId: WorkStore.DefaultAgentId));
+        WorkView w = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Unavailable connection"));
+        w = await fixture.Apply(new(NextId(), id, WorkAction.Assign, w.Version, agentId: WorkStore.DefaultAgentId));
         w = await fixture.Apply(new(NextId(), id, WorkAction.Execute, w.Version));
         await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.Failure);
         Assert.Empty(fixture.Runtime.Starts);
@@ -952,7 +954,7 @@ public sealed class DurabilityTests
         WorkView blocked = await fixture.Get(id);
         Assert.Equal(AttentionReason.CleanupRequired, blocked.Work.Attention!.Reason);
         Assert.Single(blocked.Work.Results);
-        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Approve, blocked.Version, AttemptId: attempt)));
+        await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(new(NextId(), id, WorkAction.Approve, blocked.Version, attemptId: attempt)));
         await fixture.RestartAsync();
         fixture.Runtime.FailCleanup = false;
         Assert.Equal(AttentionReason.CleanupRequired, (await fixture.Get(id)).Work.Attention!.Reason);
@@ -960,7 +962,7 @@ public sealed class DurabilityTests
         WorkView review = await fixture.Get(id);
         Assert.Equal(AttentionReason.ResultReview, review.Work.Attention!.Reason);
         Assert.False(review.Work.Attempts[^1].CleanupPending);
-        await fixture.Apply(new(NextId(), id, WorkAction.Approve, review.Version, AttemptId: attempt));
+        await fixture.Apply(new(NextId(), id, WorkAction.Approve, review.Version, attemptId: attempt));
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
     }
 
@@ -973,8 +975,8 @@ public sealed class DurabilityTests
         await store.BeginVerificationAsync(WorkStore.DefaultAgentId);
         await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
         long id = NextId();
-        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, Text: "Wait for verification"));
-        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: WorkStore.DefaultAgentId));
+        WorkView work = await fixture.Apply(new(NextId(), id, WorkAction.Create, text: "Wait for verification"));
+        work = await fixture.Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: WorkStore.DefaultAgentId));
         work = await fixture.Apply(new(NextId(), id, WorkAction.Execute, work.Version));
         ExecutionCoordinator coordinator = fixture.Host.Services.GetRequiredService<ExecutionCoordinator>();
         long attempt = work.Work.Attempts[^1].Id;
@@ -1173,7 +1175,7 @@ public sealed class DurabilityTests
         public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
 
         public Task<WorkView> Authorize(WorkView work) => Apply(new(NextId(), work.Work.Id, WorkAction.AuthorizeRepository,
-            work.Version, AuthorizationId: work.Work.RepositoryAuthorization!.Id));
+            work.Version, authorizationId: work.Work.RepositoryAuthorization!.Id));
 
         public async Task<WorkView> ExecuteAndAuthorize(WorkCommand command)
         {
@@ -1188,8 +1190,8 @@ public sealed class DurabilityTests
         public async Task<WorkView> StartWork()
         {
             long id = NextId();
-            WorkView w = await Apply(new(NextId(), id, WorkAction.Create, Text: "Test durable execution"));
-            w = await Apply(new(NextId(), id, WorkAction.Assign, w.Version, AgentId: WorkStore.DefaultAgentId));
+            WorkView w = await Apply(new(NextId(), id, WorkAction.Create, text: "Test durable execution"));
+            w = await Apply(new(NextId(), id, WorkAction.Assign, w.Version, agentId: WorkStore.DefaultAgentId));
             await Apply(new(NextId(), id, WorkAction.Execute, w.Version));
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
@@ -1197,9 +1199,9 @@ public sealed class DurabilityTests
         public async Task<WorkView> StartRepositoryWork(string repository)
         {
             long id = NextId();
-            WorkView work = await Apply(new(NextId(), id, WorkAction.Create, Text: "Repository setup memory"));
-            work = await Apply(new(NextId(), id, WorkAction.Assign, work.Version, AgentId: 1));
-            await ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, Repository: new(repository, "Goblin", "agent@example.com")));
+            WorkView work = await Apply(new(NextId(), id, WorkAction.Create, text: "Repository setup memory"));
+            work = await Apply(new(NextId(), id, WorkAction.Assign, work.Version, agentId: 1));
+            await ExecuteAndAuthorize(new(NextId(), id, WorkAction.Execute, work.Version, repository: new(repository, "Goblin", "agent@example.com")));
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
 

@@ -21,9 +21,20 @@ public sealed class WorkspaceFilesResponse
     public string? Text { get; init; }
 }
 
-public sealed record WorkspaceFileEntry(
-    [property: JsonPropertyName("path")] string Path,
-    [property: JsonPropertyName("size")] long Size);
+public sealed class WorkspaceFileEntry
+{
+    public WorkspaceFileEntry(string path, long size)
+    {
+        Path = path;
+        Size = size;
+    }
+
+    [JsonPropertyName("path")]
+    public string Path { get; init; }
+
+    [JsonPropertyName("size")]
+    public long Size { get; init; }
+}
 
 internal sealed class WorkspaceExecStatus
 {

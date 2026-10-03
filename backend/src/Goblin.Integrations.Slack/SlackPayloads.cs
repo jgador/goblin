@@ -193,13 +193,35 @@ internal sealed class SlackOpenResponse : SlackResponse
     public string Url { get; init; } = "";
 }
 
-internal sealed record SlackAcknowledgement([property: JsonPropertyName("envelope_id")] string EnvelopeId);
-
-internal sealed record SlackPostMessageRequest(
-    [property: JsonPropertyName("channel")] string Channel,
-    [property: JsonPropertyName("thread_ts")] string ThreadTimestamp,
-    [property: JsonPropertyName("text")] string Text)
+internal sealed class SlackAcknowledgement
 {
+    public SlackAcknowledgement(string envelopeId)
+    {
+        EnvelopeId = envelopeId;
+    }
+
+    [JsonPropertyName("envelope_id")]
+    public string EnvelopeId { get; init; }
+}
+
+internal sealed class SlackPostMessageRequest
+{
+    public SlackPostMessageRequest(string channel, string threadTimestamp, string text)
+    {
+        Channel = channel;
+        ThreadTimestamp = threadTimestamp;
+        Text = text;
+    }
+
+    [JsonPropertyName("channel")]
+    public string Channel { get; init; }
+
+    [JsonPropertyName("thread_ts")]
+    public string ThreadTimestamp { get; init; }
+
+    [JsonPropertyName("text")]
+    public string Text { get; init; }
+
     public KeyValuePair<string, string>[] Form() =>
     [
         new("channel", Channel), new("thread_ts", ThreadTimestamp), new("text", Text),

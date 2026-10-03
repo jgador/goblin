@@ -29,11 +29,50 @@ internal enum ExternalMessageState
     Rejected
 }
 
-public sealed record ExternalLinkView(long Id, string? UserId, DateTime ExpiresAt);
+public sealed class ExternalLinkView
+{
+    public ExternalLinkView(long id, string? userId, DateTime expiresAt)
+    {
+        Id = id;
+        UserId = userId;
+        ExpiresAt = expiresAt;
+    }
 
-public sealed record ExternalLinkCode(long Id, string Code, DateTime ExpiresAt);
+    public long Id { get; init; }
 
-public sealed record ExternalIdentityView(long Id, string UserId);
+    public string? UserId { get; init; }
+
+    public DateTime ExpiresAt { get; init; }
+}
+
+public sealed class ExternalLinkCode
+{
+    public ExternalLinkCode(long id, string code, DateTime expiresAt)
+    {
+        Id = id;
+        Code = code;
+        ExpiresAt = expiresAt;
+    }
+
+    public long Id { get; init; }
+
+    public string Code { get; init; }
+
+    public DateTime ExpiresAt { get; init; }
+}
+
+public sealed class ExternalIdentityView
+{
+    public ExternalIdentityView(long id, string userId)
+    {
+        Id = id;
+        UserId = userId;
+    }
+
+    public long Id { get; init; }
+
+    public string UserId { get; init; }
+}
 
 public sealed class ExternalConversationStore
 {
@@ -182,7 +221,7 @@ public sealed class ExternalConversationStore
             {
                 long workId = await IdentityStore.NextAsync(db, IdentityKind.Work, token);
                 view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    workId, WorkAction.Create, Text: message.Body), token);
+                    workId, WorkAction.Create, text: message.Body), token);
                 conversation = new()
                 {
                     Id = await IdentityStore.NextAsync(db, IdentityKind.Conversation, token),
@@ -213,7 +252,7 @@ public sealed class ExternalConversationStore
                 WorkAction action = snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
                     ? WorkAction.Answer : WorkAction.AddContext;
                 view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    row.Id, action, row.Version, message.Body, DecisionId: action == WorkAction.Answer ? decision!.Id : null), token);
+                    row.Id, action, row.Version, message.Body, decisionId: action == WorkAction.Answer ? decision!.Id : null), token);
             }
             long messageId = await IdentityStore.NextAsync(db, IdentityKind.Message, token);
             db.ConversationMessages.Add(new() { Id = messageId, ConversationId = conversation.Id, Body = message.Body, CreatedAt = message.ReceivedAt });

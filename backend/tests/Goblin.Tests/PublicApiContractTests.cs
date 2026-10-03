@@ -117,7 +117,7 @@ public sealed class PublicApiContractTests
             }
             """;
         Api.WorkCommand request = JsonSerializer.Deserialize<Api.WorkCommand>(body, WorkStore.Json)!;
-        Assert.Equal(JsonSerializer.Deserialize<WorkCommand>(body, WorkStore.Json), request.ToApplication());
+        Assert.Equivalent(JsonSerializer.Deserialize<WorkCommand>(body, WorkStore.Json), request.ToApplication(), strict: true);
         JsonElement json = JsonSerializer.SerializeToElement(request, WorkJson);
         Assert.Equal("9223372036854775807", json.GetProperty("commandId").GetString());
         Assert.Equal("9007199254740993", json.GetProperty("workId").GetString());
@@ -129,10 +129,10 @@ public sealed class PublicApiContractTests
     {
         Api.WorkCommand work = JsonSerializer.Deserialize<Api.WorkCommand>(
             """{"commandId":1,"workId":2,"action":"Create"}""", WorkStore.Json)!;
-        Assert.Equal(new WorkCommand(1, 2, WorkAction.Create), work.ToApplication());
+        Assert.Equivalent(new WorkCommand(1, 2, WorkAction.Create), work.ToApplication(), strict: true);
         Api.ConversationCommand conversation = JsonSerializer.Deserialize<Api.ConversationCommand>(
             """{"conversationId":"3","messageId":"4","text":"Hello"}""", WorkStore.Json)!;
-        Assert.Equal(new ConversationCommand(3, 4, "Hello"), conversation.ToApplication());
+        Assert.Equivalent(new ConversationCommand(3, 4, "Hello"), conversation.ToApplication(), strict: true);
         Api.IdentityRequest identities = JsonSerializer.Deserialize<Api.IdentityRequest>(
             """{"kinds":["Work","Attempt"]}""", WorkStore.Json)!;
         Assert.Equal([IdentityKind.Work, IdentityKind.Attempt], identities.ToApplication().Kinds);

@@ -4,11 +4,53 @@ using Goblin.Core.Work;
 
 namespace Goblin.Contracts.Runtime;
 
-public sealed record RepositoryAccount(string Generation, string AccountId, string Login);
+public sealed class RepositoryAccount
+{
+    public RepositoryAccount(string generation, string accountId, string login)
+    {
+        Generation = generation;
+        AccountId = accountId;
+        Login = login;
+    }
 
-public sealed record RepositoryInfo(long Id, string Name, string DefaultBranch, bool CanPush);
+    public string Generation { get; init; }
 
-public sealed record RepositoryOperationResult(string? Commit, string? Url);
+    public string AccountId { get; init; }
+
+    public string Login { get; init; }
+}
+
+public sealed class RepositoryInfo
+{
+    public RepositoryInfo(long id, string name, string defaultBranch, bool canPush)
+    {
+        Id = id;
+        Name = name;
+        DefaultBranch = defaultBranch;
+        CanPush = canPush;
+    }
+
+    public long Id { get; init; }
+
+    public string Name { get; init; }
+
+    public string DefaultBranch { get; init; }
+
+    public bool CanPush { get; init; }
+}
+
+public sealed class RepositoryOperationResult
+{
+    public RepositoryOperationResult(string? commit, string? url)
+    {
+        Commit = commit;
+        Url = url;
+    }
+
+    public string? Commit { get; init; }
+
+    public string? Url { get; init; }
+}
 
 // Trusted application-side discovery. Workers never receive this connection.
 public interface IRepositoryCatalog

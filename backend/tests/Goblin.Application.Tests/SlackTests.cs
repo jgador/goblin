@@ -33,9 +33,9 @@ public sealed class SlackTests
         Assert.Equal("Explain this", accepted.Text);
         Assert.Equal(accepted.MessageId, accepted.ThreadId);
         Assert.False(accepted.Direct);
-        Assert.Null(SlackEvents.Parse(envelope, Installation with { AppId = "A999" }));
-        Assert.Null(SlackEvents.Parse(envelope, Installation with { WorkspaceId = "T999" }));
-        Assert.Null(SlackEvents.Parse(envelope, Installation with { BotUserId = "U456" }));
+        Assert.Null(SlackEvents.Parse(envelope, new(Installation.Id, Installation.WorkspaceId, "A999", Installation.BotUserId)));
+        Assert.Null(SlackEvents.Parse(envelope, new(Installation.Id, "T999", Installation.AppId, Installation.BotUserId)));
+        Assert.Null(SlackEvents.Parse(envelope, new(Installation.Id, Installation.WorkspaceId, Installation.AppId, "U456")));
     }
 
     [Theory]
@@ -71,7 +71,7 @@ public sealed class SlackTests
             await store.SaveAsync(credentials, CancellationToken.None);
             byte[] encrypted = await File.ReadAllBytesAsync(Path.Combine(directory, "credentials"));
             Assert.DoesNotContain("neutral-test-value", System.Text.Encoding.UTF8.GetString(encrypted));
-            Assert.Equal(credentials, new SlackCredentialStore(directory).Read());
+            Assert.Equivalent(credentials, new SlackCredentialStore(directory).Read(), strict: true);
             Assert.DoesNotContain(credentials.AppToken, credentials.ToString());
             encrypted[^1] ^= 1;
             await File.WriteAllBytesAsync(Path.Combine(directory, "credentials"), encrypted);

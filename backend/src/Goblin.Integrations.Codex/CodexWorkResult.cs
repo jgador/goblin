@@ -30,21 +30,55 @@ internal sealed class CodexRepositoryWorkResult : CodexWorkResult
     public bool SetupProvided { get; private init; }
 }
 
-internal sealed record RepositorySetupOutput(
-    [property: JsonPropertyName("topic")] string Topic,
-    [property: JsonPropertyName("reason")] string Reason,
-    [property: JsonPropertyName("tools")] string[] Tools,
-    [property: JsonPropertyName("commands")] string[] Commands,
-    [property: JsonPropertyName("files")] string[] Files,
-    [property: JsonPropertyName("checks")] SetupCheckOutput[] Checks)
+internal sealed class RepositorySetupOutput
 {
+    public RepositorySetupOutput(string topic, string reason, string[] tools, string[] commands,
+        string[] files, SetupCheckOutput[] checks)
+    {
+        Topic = topic;
+        Reason = reason;
+        Tools = tools;
+        Commands = commands;
+        Files = files;
+        Checks = checks;
+    }
+
+    [JsonPropertyName("topic")]
+    public string Topic { get; init; }
+
+    [JsonPropertyName("reason")]
+    public string Reason { get; init; }
+
+    [JsonPropertyName("tools")]
+    public string[] Tools { get; init; }
+
+    [JsonPropertyName("commands")]
+    public string[] Commands { get; init; }
+
+    [JsonPropertyName("files")]
+    public string[] Files { get; init; }
+
+    [JsonPropertyName("checks")]
+    public SetupCheckOutput[] Checks { get; init; }
+
     public RepositorySetup ToCore() => new(Topic, Reason, Tools, Commands, Files,
         Checks is null ? null! : Array.ConvertAll(Checks, check => check is null ? null! : new SetupCheck(check.Command, check.ExpectedOutput)));
 }
 
-internal sealed record SetupCheckOutput(
-    [property: JsonPropertyName("command")] string Command,
-    [property: JsonPropertyName("expectedOutput")] string ExpectedOutput);
+internal sealed class SetupCheckOutput
+{
+    public SetupCheckOutput(string command, string expectedOutput)
+    {
+        Command = command;
+        ExpectedOutput = expectedOutput;
+    }
+
+    [JsonPropertyName("command")]
+    public string Command { get; init; }
+
+    [JsonPropertyName("expectedOutput")]
+    public string ExpectedOutput { get; init; }
+}
 
 internal static class CodexWorkResults
 {

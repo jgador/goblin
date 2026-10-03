@@ -13,8 +13,25 @@ namespace Goblin.Application.Work;
 
 public sealed partial class WorkStore
 {
-    private sealed record RepositoryProposal(RepositoryInfo Info, RepositoryAccount Account,
-        RepositoryChange Requested, GitDeliveryIntent Delivery);
+    private sealed class RepositoryProposal
+    {
+        public RepositoryProposal(RepositoryInfo info, RepositoryAccount account, RepositoryChange requested,
+            GitDeliveryIntent delivery)
+        {
+            Info = info;
+            Account = account;
+            Requested = requested;
+            Delivery = delivery;
+        }
+
+        public RepositoryInfo Info { get; init; }
+
+        public RepositoryAccount Account { get; init; }
+
+        public RepositoryChange Requested { get; init; }
+
+        public GitDeliveryIntent Delivery { get; init; }
+    }
 
     private async Task<WorkView?> ReplayAsync(WorkCommand command, CancellationToken token)
     {

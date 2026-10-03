@@ -21,15 +21,41 @@ public sealed class SlackFailure : Exception
     public SlackFailure(string message = "Slack could not complete this operation. Check the connection and try again.") : base(message) { }
 }
 
-public sealed record SlackCredentials(
-    [property: JsonPropertyName("InstallationId")] string InstallationId,
-    [property: JsonPropertyName("AppToken")] string AppToken,
-    [property: JsonPropertyName("BotToken")] string BotToken,
-    [property: JsonPropertyName("Workspace")] string Workspace,
-    [property: JsonPropertyName("WorkspaceId")] string WorkspaceId,
-    [property: JsonPropertyName("AppId")] string AppId,
-    [property: JsonPropertyName("BotUserId")] string BotUserId)
+public sealed class SlackCredentials
 {
+    public SlackCredentials(string installationId, string appToken, string botToken, string workspace,
+        string workspaceId, string appId, string botUserId)
+    {
+        InstallationId = installationId;
+        AppToken = appToken;
+        BotToken = botToken;
+        Workspace = workspace;
+        WorkspaceId = workspaceId;
+        AppId = appId;
+        BotUserId = botUserId;
+    }
+
+    [JsonPropertyName("InstallationId")]
+    public string InstallationId { get; init; }
+
+    [JsonPropertyName("AppToken")]
+    public string AppToken { get; init; }
+
+    [JsonPropertyName("BotToken")]
+    public string BotToken { get; init; }
+
+    [JsonPropertyName("Workspace")]
+    public string Workspace { get; init; }
+
+    [JsonPropertyName("WorkspaceId")]
+    public string WorkspaceId { get; init; }
+
+    [JsonPropertyName("AppId")]
+    public string AppId { get; init; }
+
+    [JsonPropertyName("BotUserId")]
+    public string BotUserId { get; init; }
+
     [JsonPropertyName("Installation")]
     public ExternalInstallation Installation => new(InstallationId, WorkspaceId, AppId, BotUserId);
 

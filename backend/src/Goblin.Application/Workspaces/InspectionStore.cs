@@ -14,11 +14,44 @@ using Wolverine.EntityFrameworkCore;
 
 namespace Goblin.Application.Workspaces;
 
-public sealed record StartInspection(long Id);
+public sealed class StartInspection
+{
+    public StartInspection(long id)
+    {
+        Id = id;
+    }
 
-public sealed record StopInspection(long Id);
+    public long Id { get; init; }
+}
 
-public sealed record InspectionView(long Id, long WorkId, long AttemptId, InspectionState State);
+public sealed class StopInspection
+{
+    public StopInspection(long id)
+    {
+        Id = id;
+    }
+
+    public long Id { get; init; }
+}
+
+public sealed class InspectionView
+{
+    public InspectionView(long id, long workId, long attemptId, InspectionState state)
+    {
+        Id = id;
+        WorkId = workId;
+        AttemptId = attemptId;
+        State = state;
+    }
+
+    public long Id { get; init; }
+
+    public long WorkId { get; init; }
+
+    public long AttemptId { get; init; }
+
+    public InspectionState State { get; init; }
+}
 
 public sealed class InspectionStore
 {

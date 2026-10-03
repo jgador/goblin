@@ -14,13 +14,13 @@ public sealed class IdentityJsonTests
     {
         var json = new JsonSerializerOptions(WorkStore.Json);
         json.Converters.Add(new LongJsonConverter());
-        var command = new WorkCommand(id, id - 1, WorkAction.Assign, long.MaxValue, AgentId: 1);
+        var command = new WorkCommand(id, id - 1, WorkAction.Assign, long.MaxValue, agentId: 1);
         string body = JsonSerializer.Serialize(command, json);
         using JsonDocument document = JsonDocument.Parse(body);
         Assert.Equal(JsonValueKind.String, document.RootElement.GetProperty("commandId").ValueKind);
         Assert.Equal(id, long.Parse(document.RootElement.GetProperty("commandId").GetString()!));
-        Assert.Equal(command, JsonSerializer.Deserialize<WorkCommand>(body, WorkStore.Json));
-        Assert.Equal(command, JsonSerializer.Deserialize<WorkCommand>(body, json));
+        Assert.Equivalent(command, JsonSerializer.Deserialize<WorkCommand>(body, WorkStore.Json), strict: true);
+        Assert.Equivalent(command, JsonSerializer.Deserialize<WorkCommand>(body, json), strict: true);
     }
 
     [Theory]

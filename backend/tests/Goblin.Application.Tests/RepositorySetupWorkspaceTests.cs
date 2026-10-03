@@ -31,8 +31,9 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
         _workspace = new(_root, new Dictionary<string, string> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)! });
     }
 
-    private static RepositorySetupMemory Memory(VerifiedRepositorySetup observation, string branch = "old-branch") =>
-        new(9007199254740993, 1, 2, 1, branch, new string('a', 40), "image-one", DateTimeOffset.UtcNow.AddMonths(-3), observation);
+    private static RepositorySetupMemory Memory(VerifiedRepositorySetup observation, string branch = "old-branch",
+        DateTimeOffset? verifiedAt = null) =>
+        new(9007199254740993, 1, 2, 1, branch, new string('a', 40), "image-one", verifiedAt ?? DateTimeOffset.UtcNow.AddMonths(-3), observation);
 
     [Fact]
     public async Task ReusesOldVerifiedMemoryAcrossBranchesAndSourceEditsButNeverRunsItsRecipe()
@@ -52,9 +53,8 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
         RepositorySetupMemory old = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)));
         string path = Path.Combine(_root, "pyproject.toml"), original = await File.ReadAllTextAsync(path);
         await File.WriteAllTextAsync(path, original + "version='2'\n");
-        RepositorySetupMemory newer = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)), "new-branch")
-            with
-        { VerifiedAt = DateTimeOffset.UtcNow };
+        RepositorySetupMemory newer = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)), "new-branch",
+            verifiedAt: DateTimeOffset.UtcNow);
         Assert.Equal(newer, Assert.Single(await _workspace.SelectAsync([old, newer], "image-one", default)));
         await File.WriteAllTextAsync(path, original);
         Assert.Equal(old, Assert.Single(await _workspace.SelectAsync([old, newer], "image-one", default)));
