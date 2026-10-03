@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Persistence;
@@ -15,12 +16,30 @@ public enum IdentityKind
     Attempt,
     Event,
     Inspection,
-    RepositoryOperation
+
+    [JsonStringEnumMemberName("RepositoryOperation")]
+    GitRepositoryOperation
 }
 
-public sealed record IdentityRequest(IdentityKind[] Kinds);
+public sealed class IdentityRequest
+{
+    public IdentityRequest(IdentityKind[] kinds)
+    {
+        Kinds = kinds;
+    }
 
-public sealed record ReservedIdentities(long[] Ids);
+    public IdentityKind[] Kinds { get; init; }
+}
+
+public sealed class ReservedIdentities
+{
+    public ReservedIdentities(long[] ids)
+    {
+        Ids = ids;
+    }
+
+    public long[] Ids { get; init; }
+}
 
 // Reserve IDs before constructing core objects or a replayable browser command.
 // Sequence gaps after cancellation or rollback are intentional; IDs are never reused.
@@ -58,7 +77,7 @@ public sealed class IdentityStore
             IdentityKind.Attempt => "public.execution_attempts_id_seq",
             IdentityKind.Event => "public.work_event_ids",
             IdentityKind.Inspection => "public.workspace_sessions_id_seq",
-            IdentityKind.RepositoryOperation => "public.repository_operations_id_seq",
+            IdentityKind.GitRepositoryOperation => "public.repository_operations_id_seq",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         return db.Database.SqlQuery<long>($"SELECT nextval({sequence}::regclass) AS \"Value\"").SingleAsync(token);

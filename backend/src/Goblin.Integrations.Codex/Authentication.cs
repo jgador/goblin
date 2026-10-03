@@ -89,7 +89,7 @@ public sealed class Authentication : IDisposable
         {
             _account = result.Account switch
             {
-                ChatGPTAccount account => new ChatGPTAccountView(account.Email, System.Text.Json.JsonSerializer.SerializeToElement(account.PlanType, ProtocolJson.Options).GetString()),
+                ChatGPTAccount account => new ChatGPTAccountView(account.Email, ProtocolStringEnumConverter<PlanType>.WireName(account.PlanType)),
                 ApiKeyAccount => new ApiKeyAccountView(),
                 null => null,
                 _ => throw IntegrationFailure.RuntimeUnavailable()

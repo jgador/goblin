@@ -31,7 +31,7 @@ if (args.Length == 1 && args[0] == "--sandbox-execute")
 }
 if (args.Length > 0 && args[0] == "--repository")
 {
-    Environment.ExitCode = await Goblin.Execution.RepositoryClient.RunAsync(args[1..]);
+    Environment.ExitCode = await Goblin.Execution.GitRepositoryClient.RunAsync(args[1..]);
     return;
 }
 

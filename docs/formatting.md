@@ -51,8 +51,10 @@ Separate C# type declarations, methods, constructors, and attributed members wit
 at least one blank line. Keep attributes on their own lines directly above the
 declaration they annotate. Put enum braces and each enum value on separate lines;
 separate attributed enum values with a blank line. Adjacent plain fields and
-properties may remain grouped. Preserve positional records. These spacing rules
-also apply to generated C#; update the generators when their output needs changes.
+properties may remain grouped. Formatting alone should not change record shape;
+refactoring may replace positional declarations with explicit construction APIs
+while preserving the required behavior and contracts. These spacing rules also
+apply to generated C#; update the generators when their output needs changes.
 
 Formatting does not rebuild deployment artifacts. After editing a bootstrap or
 Bicep source, run `cargo xtask azure` to generate review assets in `.artifacts/azure`.

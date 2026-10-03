@@ -8,7 +8,7 @@ async function settingsFixture(page: Page) {
         userCode: null as string | null,
         notice: null,
     };
-    const repo = {
+    const gitHubRepository = {
         id: "42",
         name: "owner/project",
         defaultBranch: "main",
@@ -53,16 +53,18 @@ async function settingsFixture(page: Page) {
             github.status = "Disconnected";
             github.userCode = null;
             json = github;
-        } else if (path === "/api/github/available-repositories") json = [repo];
+        } else if (path === "/api/github/available-repositories")
+            json = [gitHubRepository];
         else if (path === "/api/github/repositories") {
             if (request.method() === "POST")
-                repo.enabled = request.postDataJSON().enabled === "true";
-            json = repo.enabled ? [repo] : [];
+                gitHubRepository.enabled =
+                    request.postDataJSON().enabled === "true";
+            json = gitHubRepository.enabled ? [gitHubRepository] : [];
         } else if (path === "/api/connections")
             json = [{ id: "1", name: "Codex", availability: "Available" }];
         await route.fulfill({ json });
     });
-    return { github, repo };
+    return { github, gitHubRepository };
 }
 
 test("Settings keeps the Work draft and uses both connection panels", async ({

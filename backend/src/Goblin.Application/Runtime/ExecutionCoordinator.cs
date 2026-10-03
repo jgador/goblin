@@ -35,7 +35,7 @@ public sealed class ExecutionCoordinator
             claimed = await scope.ServiceProvider.GetRequiredService<WorkStore>().ClaimAsync(command,
                 _host.EnvironmentFor,
                 target => _host.Capabilities.Any(x => x.Runtime == target.Runtime &&
-                    (target.Repository is null ? x.TextExecution : x.RepositoryExecution)), token);
+                    (target.GitRepository is null ? x.TextExecution : x.GitRepositoryExecution)), token);
             if (claimed is null) return;
             await _host.StartAsync(claimed, token);
         }
@@ -43,13 +43,13 @@ public sealed class ExecutionCoordinator
         {
             // Shutdown is not permission to redeliver a claimed external start.
             if (claimed is not null)
-                await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
+                await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
         catch
         {
             await _failures.RecordAsync(new(command.WorkId, command.AttemptId,
-                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
+                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }
@@ -62,7 +62,7 @@ public sealed class ExecutionCoordinator
         {
             // Even a failed database read is evidence, not permission to run the
             // attempt again. Surface it after storage returns.
-            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.StorageUnavailable, TurnNumber: command.TurnNumber), CancellationToken.None);
+            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.StorageUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
     }
@@ -92,8 +92,8 @@ public sealed class ExecutionCoordinator
         using (IServiceScope scope = _scopes.CreateScope())
         {
             WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
-            string[] repositories = observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.Repository is null
-                ? await store.RepositorySuggestionsAsync(work, token) : [];
+            string[] gitRepositories = observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.GitRepository is null
+                ? await store.GitRepositorySuggestionsAsync(work, token) : [];
             long decisionId = observation.Kind is ObservationKind.InputRequired or ObservationKind.Paused
                 ? await scope.ServiceProvider.GetRequiredService<IdentityStore>().NextEventAsync(token) : 0;
             await store.MutateAsync(work.Id, current =>
@@ -120,11 +120,11 @@ public sealed class ExecutionCoordinator
                             current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
                         break;
                     case ObservationKind.WorkspaceRequired:
-                        if (a.Status == AttemptStatus.CancellationRequested && a.Target.Repository is null)
+                        if (a.Status == AttemptStatus.CancellationRequested && a.Target.GitRepository is null)
                             current.ConfirmExecutionStopped(a.Id, a.OwnerId!.Value, now);
-                        else if (a.Target.Repository is null)
-                            current.RequestRepositorySetupFromExecution(a.Id, a.OwnerId!.Value, repositories, now);
-                        else current.RequireRepositoryExecution(a.Id, a.OwnerId!.Value, now);
+                        else if (a.Target.GitRepository is null)
+                            current.RequestGitRepositorySetupFromExecution(a.Id, a.OwnerId!.Value, gitRepositories, now);
+                        else current.RequireGitRepositoryExecution(a.Id, a.OwnerId!.Value, now);
                         break;
                     case ObservationKind.Paused:
                         current.PauseForInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, observation.ReleaseWorkspace, now);
@@ -157,9 +157,9 @@ public sealed class ExecutionCoordinator
         }
         if (observation.Kind is ObservationKind.Result or ObservationKind.InputRequired or ObservationKind.Failed or ObservationKind.Stopped ||
             observation.Kind == ObservationKind.Paused && observation.ReleaseWorkspace ||
-            observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.Repository is null)
+            observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.GitRepository is null)
             await CleanupAsync(work, token);
-        if (observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.Repository is not null)
+        if (observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.GitRepository is not null)
             await _host.CleanupAsync(work, token);
     }
 
@@ -180,7 +180,7 @@ public sealed class ExecutionCoordinator
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch
         {
-            await _failures.RecordAsync(new(work.Id, attempt.Id, FailureKind.CleanupFailed, Cleanup: true, TurnNumber: attempt.TurnNumber), CancellationToken.None);
+            await _failures.RecordAsync(new(work.Id, attempt.Id, FailureKind.CleanupFailed, cleanup: true, turnNumber: attempt.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }

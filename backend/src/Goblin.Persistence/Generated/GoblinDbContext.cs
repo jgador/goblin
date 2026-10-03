@@ -36,9 +36,9 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<GithubRepository> GithubRepositories { get; set; }
 
-    public virtual DbSet<RepositoryOperation> RepositoryOperations { get; set; }
+    public virtual DbSet<GitRepositoryOperation> GitRepositoryOperations { get; set; }
 
-    public virtual DbSet<RepositorySetupMemory> RepositorySetupMemories { get; set; }
+    public virtual DbSet<GitRepositorySetupMemory> GitRepositorySetupMemories { get; set; }
 
     public virtual DbSet<WorkCommand> WorkCommands { get; set; }
 
@@ -175,7 +175,7 @@ public partial class GoblinDbContext : DbContext
                 .HasConstraintName("github_repositories_connection_id_fkey");
         });
 
-        modelBuilder.Entity<RepositoryOperation>(entity =>
+        modelBuilder.Entity<GitRepositoryOperation>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("repository_operations_pkey");
 
@@ -186,34 +186,34 @@ public partial class GoblinDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
 
-            entity.HasOne(d => d.Attempt).WithOne(p => p.RepositoryOperation)
+            entity.HasOne(d => d.Attempt).WithOne(p => p.GitRepositoryOperation)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_operations_attempt_id_fkey");
         });
 
-        modelBuilder.Entity<RepositorySetupMemory>(entity =>
+        modelBuilder.Entity<GitRepositorySetupMemory>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("repository_setup_memories_pkey");
 
             entity.Property(e => e.VerifiedAt).HasDefaultValueSql("now()");
 
-            entity.HasOne(d => d.Attempt).WithMany(p => p.RepositorySetupMemories)
+            entity.HasOne(d => d.Attempt).WithMany(p => p.GitRepositorySetupMemories)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_setup_memories_attempt_id_fkey");
 
-            entity.HasOne(d => d.Checkpoint).WithMany(p => p.RepositorySetupMemories)
+            entity.HasOne(d => d.Checkpoint).WithMany(p => p.GitRepositorySetupMemories)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_setup_memories_checkpoint_id_fkey");
 
-            entity.HasOne(d => d.GithubConnection).WithMany(p => p.RepositorySetupMemories)
+            entity.HasOne(d => d.GithubConnection).WithMany(p => p.GitRepositorySetupMemories)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_setup_memories_github_connection_id_fkey");
 
-            entity.HasOne(d => d.Repository).WithMany(p => p.RepositorySetupMemories)
+            entity.HasOne(d => d.GitRepository).WithMany(p => p.GitRepositorySetupMemories)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_setup_memories_repository_id_fkey");
 
-            entity.HasOne(d => d.Work).WithMany(p => p.RepositorySetupMemories)
+            entity.HasOne(d => d.Work).WithMany(p => p.GitRepositorySetupMemories)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("repository_setup_memories_work_id_fkey");
         });

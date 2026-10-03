@@ -202,16 +202,16 @@ fn failed_setup_and_restarts_keep_attempt_history_without_claiming_readiness() {
 #[test]
 fn local_ownership_is_required_before_reset() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().join("repo");
-    fs::create_dir(&repo).unwrap();
+    let git_repository = dir.path().join("git-repository");
+    fs::create_dir(&git_repository).unwrap();
     let local = Local {
-        repo: repo.clone(),
+        git_repository: git_repository.clone(),
         system: dir.path().join("system"),
     };
     let owner = local.path("var/lib/goblin/local-test/config.json");
     for config in [
         json!({"mode":"direct","repo":"/another-checkout"}),
-        json!({"mode":"vm","repo":repo}),
+        json!({"mode":"vm","repo":git_repository}),
     ] {
         files::write_json(&owner, &config, 0o600).unwrap();
         assert!(
@@ -237,14 +237,14 @@ fn local_ownership_is_required_before_reset() {
 #[test]
 fn retained_and_legacy_credentials_migrate_without_new_passwords() {
     let dir = tempfile::tempdir().unwrap();
-    let repo = dir.path().join("repo");
-    fs::create_dir(&repo).unwrap();
+    let git_repository = dir.path().join("git-repository");
+    fs::create_dir(&git_repository).unwrap();
     let local = Local {
-        repo,
+        git_repository,
         system: dir.path().join("system"),
     };
     let retained = local.path("var/lib/goblin/install/private/owner-password");
-    let legacy = local.repo.join(".goblin-local/login-password");
+    let legacy = local.git_repository.join(".goblin-local/login-password");
     let verifier = credentials::hash("retained-test").unwrap();
     credentials::save(&retained, &verifier).unwrap();
     files::atomic_write(&legacy, b"retained-test\n", 0o600, false).unwrap();
@@ -341,14 +341,14 @@ esac
         return;
     };
     let root = Path::new(&root);
-    let repo = root.join("repo");
-    fs::create_dir(&repo).unwrap();
+    let git_repository = root.join("git-repository");
+    fs::create_dir(&git_repository).unwrap();
     let local = Local {
-        repo: repo.clone(),
+        git_repository: git_repository.clone(),
         system: root.join("system"),
     };
     let owner = local.path("var/lib/goblin/local-test/config.json");
-    let mut config = json!({"mode":"direct","repo":repo,"http_port":8788});
+    let mut config = json!({"mode":"direct","repo":git_repository,"http_port":8788});
     files::write_json(&owner, &config, 0o600).unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();

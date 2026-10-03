@@ -39,7 +39,18 @@ public sealed partial class CodexClient : IAsyncDisposable
 
     public event Action? Disconnected;
 
-    private sealed record Pending(string Method, TaskCompletionSource<JsonElement> Completion);
+    private sealed class Pending
+    {
+        public Pending(string method, TaskCompletionSource<JsonElement> completion)
+        {
+            Method = method;
+            Completion = completion;
+        }
+
+        public string Method { get; init; }
+
+        public TaskCompletionSource<JsonElement> Completion { get; init; }
+    }
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {

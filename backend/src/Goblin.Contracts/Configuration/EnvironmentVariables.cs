@@ -169,7 +169,7 @@ public static class EnvironmentVariables
     /// <summary>Internal repository broker origin for isolated workers.</summary>
     /// <remarks>Format: Absolute HTTP URL reachable inside the cluster. Default/fallback: http://goblin-repository.goblin.svc:8788.
     /// Required: Optional when isolated execution is enabled. Sensitive: no.</remarks>
-    public const string GoblinRepositoryUrl = "GOBLIN_REPOSITORY_URL";
+    public const string GoblinGitRepositoryUrl = "GOBLIN_REPOSITORY_URL";
 
     /// <summary>CPU resource limit per repository sandbox.</summary>
     /// <remarks>Format: Kubernetes CPU quantity. Default/fallback: 2.

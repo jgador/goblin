@@ -28,14 +28,14 @@ public sealed class SlackTests
                 @event = new { type = "app_mention", user = "U456", channel = "C123", ts = "12345.000001", text = "<@U123> Explain this" }
             }
         };
-        JsonElement envelope = JsonSerializer.SerializeToElement(payload);
+        SlackSocketEnvelope envelope = JsonSerializer.Deserialize<SlackSocketEnvelope>(JsonSerializer.Serialize(payload))!;
         ExternalMessage accepted = Assert.IsType<ExternalMessage>(SlackEvents.Parse(envelope, Installation));
         Assert.Equal("Explain this", accepted.Text);
         Assert.Equal(accepted.MessageId, accepted.ThreadId);
         Assert.False(accepted.Direct);
-        Assert.Null(SlackEvents.Parse(envelope, Installation with { AppId = "A999" }));
-        Assert.Null(SlackEvents.Parse(envelope, Installation with { WorkspaceId = "T999" }));
-        Assert.Null(SlackEvents.Parse(envelope, Installation with { BotUserId = "U456" }));
+        Assert.Null(SlackEvents.Parse(envelope, new(Installation.Id, Installation.WorkspaceId, "A999", Installation.BotUserId)));
+        Assert.Null(SlackEvents.Parse(envelope, new(Installation.Id, "T999", Installation.AppId, Installation.BotUserId)));
+        Assert.Null(SlackEvents.Parse(envelope, new(Installation.Id, Installation.WorkspaceId, Installation.AppId, "U456")));
     }
 
     [Theory]
@@ -56,7 +56,7 @@ public sealed class SlackTests
         };
         if (subtype.Length > 0) message["subtype"] = subtype;
         if (bot is not null) message["bot_id"] = bot;
-        JsonElement envelope = JsonSerializer.SerializeToElement(new { type = "events_api", payload = new { api_app_id = "A123", team_id = "T123", event_id = "Ev123", @event = message } });
+        SlackSocketEnvelope envelope = JsonSerializer.Deserialize<SlackSocketEnvelope>(JsonSerializer.Serialize(new { type = "events_api", payload = new { api_app_id = "A123", team_id = "T123", event_id = "Ev123", @event = message } }))!;
         Assert.Null(SlackEvents.Parse(envelope, Installation));
     }
 
@@ -71,7 +71,7 @@ public sealed class SlackTests
             await store.SaveAsync(credentials, CancellationToken.None);
             byte[] encrypted = await File.ReadAllBytesAsync(Path.Combine(directory, "credentials"));
             Assert.DoesNotContain("neutral-test-value", System.Text.Encoding.UTF8.GetString(encrypted));
-            Assert.Equal(credentials, new SlackCredentialStore(directory).Read());
+            Assert.Equivalent(credentials, new SlackCredentialStore(directory).Read(), strict: true);
             Assert.DoesNotContain(credentials.AppToken, credentials.ToString());
             encrypted[^1] ^= 1;
             await File.WriteAllBytesAsync(Path.Combine(directory, "credentials"), encrypted);

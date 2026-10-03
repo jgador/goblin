@@ -2,13 +2,36 @@ using System;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 using Goblin.Core.Work;
 
 namespace Goblin.Contracts.Runtime;
 
-public sealed record RuntimeCapabilities(string Runtime, bool TextExecution,
-    bool RepositoryExecution, bool Cancellation, bool LiveApprovals, bool ResumeSession);
+public sealed class RuntimeCapabilities
+{
+    public RuntimeCapabilities(string runtime, bool textExecution, bool gitRepositoryExecution, bool cancellation,
+        bool liveApprovals, bool resumeSession)
+    {
+        Runtime = runtime;
+        TextExecution = textExecution;
+        GitRepositoryExecution = gitRepositoryExecution;
+        Cancellation = cancellation;
+        LiveApprovals = liveApprovals;
+        ResumeSession = resumeSession;
+    }
+
+    public string Runtime { get; init; }
+
+    public bool TextExecution { get; init; }
+
+    public bool GitRepositoryExecution { get; init; }
+
+    public bool Cancellation { get; init; }
+
+    public bool LiveApprovals { get; init; }
+
+    public bool ResumeSession { get; init; }
+}
 
 public enum ObservationKind
 {
@@ -31,7 +54,7 @@ public sealed record ExecutionObservation(ObservationKind Kind, ExecutionSession
     public long? CheckpointId { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public RepositorySetup[]? Setup { get; init; }
+    public GitRepositorySetup[]? Setup { get; init; }
 }
 
 // The host chooses the environment for the requested capability. Work itself
@@ -51,7 +74,28 @@ public interface IExecutionHost
     Task CleanupAsync(WorkSnapshot work, CancellationToken token);
 }
 
-public sealed record DispatchFailureEvidence(long WorkId, long AttemptId, FailureKind Failure, bool Cleanup = false, int TurnNumber = 1);
+public sealed class DispatchFailureEvidence
+{
+    public DispatchFailureEvidence(long workId, long attemptId, FailureKind failure, bool cleanup = false,
+        int turnNumber = 1)
+    {
+        WorkId = workId;
+        AttemptId = attemptId;
+        Failure = failure;
+        Cleanup = cleanup;
+        TurnNumber = turnNumber;
+    }
+
+    public long WorkId { get; init; }
+
+    public long AttemptId { get; init; }
+
+    public FailureKind Failure { get; init; }
+
+    public bool Cleanup { get; init; }
+
+    public int TurnNumber { get; init; }
+}
 
 public interface IDispatchFailureJournal
 {

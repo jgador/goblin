@@ -12,11 +12,44 @@ using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Execution;
 
-public sealed record TextHostOptions(string Directory, string CodexHome, string CodexCommand,
-    string WorkerAssembly, string DotnetCommand = "dotnet");
-
-public sealed record WorkerInput(WorkSnapshot Work, string CodexHome, string CodexCommand)
+public sealed class TextHostOptions
 {
+    public TextHostOptions(string directory, string codexHome, string codexCommand, string workerAssembly,
+        string dotnetCommand = "dotnet")
+    {
+        Directory = directory;
+        CodexHome = codexHome;
+        CodexCommand = codexCommand;
+        WorkerAssembly = workerAssembly;
+        DotnetCommand = dotnetCommand;
+    }
+
+    public string Directory { get; init; }
+
+    public string CodexHome { get; init; }
+
+    public string CodexCommand { get; init; }
+
+    public string WorkerAssembly { get; init; }
+
+    public string DotnetCommand { get; init; }
+}
+
+public sealed class WorkerInput
+{
+    public WorkerInput(WorkSnapshot work, string codexHome, string codexCommand)
+    {
+        Work = work;
+        CodexHome = codexHome;
+        CodexCommand = codexCommand;
+    }
+
+    public WorkSnapshot Work { get; init; }
+
+    public string CodexHome { get; init; }
+
+    public string CodexCommand { get; init; }
+
     public string? SandboxImage { get; init; }
 }
 
@@ -38,7 +71,7 @@ public sealed class LocalTextHost : IExecutionHost
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is not null && !work.Attempts[^1].ReasoningOnly) throw new InvalidOperationException("Repository execution requires an agent sandbox.");
+        if (work.Attempts[^1].Target.GitRepository is not null && !work.Attempts[^1].ReasoningOnly) throw new InvalidOperationException("Repository execution requires an agent sandbox.");
         string directory = DirectoryFor(work);
         Directory.CreateDirectory(directory);
         using FileStream gate = await GateAsync(directory, token);

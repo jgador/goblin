@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -16,14 +14,14 @@ namespace Goblin.Web;
 
 internal sealed class WorkspaceEndpoints
 {
-    private readonly bool _repositoryListener;
+    private readonly bool _gitRepositoryListener;
 
-    public WorkspaceEndpoints(bool repositoryListener) => _repositoryListener = repositoryListener;
+    public WorkspaceEndpoints(bool gitRepositoryListener) => _gitRepositoryListener = gitRepositoryListener;
 
     public void Map(WebApplication app)
     {
         app.MapGet("/api/work/{id:long}/workspace", GetAsync);
-        if (_repositoryListener)
+        if (_gitRepositoryListener)
         {
             app.MapPost("/api/work/{id:long}/workspace/sessions", OpenAsync);
             app.MapPost("/api/work/{id:long}/workspace/sessions/{session:long}/stop", StopAsync);
@@ -37,13 +35,12 @@ internal sealed class WorkspaceEndpoints
         await store.GetAsync(id, token);
         return WorkResponse.Json(new Api.WorkspaceView(
             Array.ConvertAll(await checkpoints.ListAsync(id, token), Api.WorkspaceCheckpoint.From),
-            Array.ConvertAll(await sessions.ListAsync(id, token), Api.InspectionView.From), _repositoryListener));
+            Array.ConvertAll(await sessions.ListAsync(id, token), Api.InspectionView.From), _gitRepositoryListener));
     }
 
     private static async Task<IResult> OpenAsync(long id, HttpContext context, InspectionStore sessions)
     {
-        Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        InspectionRequest request = JsonSerializer.Deserialize<InspectionRequest>(JsonSerializer.Serialize(body), WorkStore.Json)!;
+        InspectionRequest request = ApiRequest.Body<InspectionRequest>(context, WorkStore.Json);
         return WorkResponse.Json(Api.InspectionView.From(await sessions.OpenAsync(id, request.Id, request.AttemptId, CancellationToken.None)));
     }
 
@@ -57,7 +54,7 @@ internal sealed class WorkspaceEndpoints
     {
         await sessions.RequireAvailableAsync(id, session, token);
         InspectionAllocation allocation = await sessions.GetAsync(session, token);
-        JsonElement files = await InspectionFiles.ReadAsync(api, allocation, path, token);
+        WorkspaceFilesResponse files = await InspectionFiles.ReadAsync(api, allocation, path, token);
         await sessions.RequireAvailableAsync(id, session, token);
         return Results.Json(files);
     }

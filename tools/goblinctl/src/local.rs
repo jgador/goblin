@@ -39,13 +39,13 @@ const UNITS: &[&str] = &[
 ];
 
 pub struct Local {
-    pub repo: PathBuf,
+    pub git_repository: PathBuf,
     pub system: PathBuf,
 }
 impl Local {
-    pub fn new(repo: &Path) -> Result<Self> {
+    pub fn new(git_repository: &Path) -> Result<Self> {
         Ok(Self {
-            repo: repo.canonicalize()?,
+            git_repository: git_repository.canonicalize()?,
             system: PathBuf::from("/"),
         })
     }
@@ -53,7 +53,7 @@ impl Local {
         self.system.join(path.trim_start_matches('/'))
     }
     fn state(&self) -> PathBuf {
-        self.repo.join(".goblin-local")
+        self.git_repository.join(".goblin-local")
     }
     fn owner(&self) -> PathBuf {
         self.path("var/lib/goblin/local-test/config.json")
@@ -62,7 +62,7 @@ impl Local {
         self.path("etc/systemd/system").join(name)
     }
     pub fn password(&self) -> PathBuf {
-        self.repo.join(".goblin-secrets/owner-password")
+        self.git_repository.join(".goblin-secrets/owner-password")
     }
     pub fn owned_config(&self) -> Result<Value> {
         ensure!(
@@ -71,7 +71,7 @@ impl Local {
         );
         let config = files::json(&self.owner())?;
         ensure!(
-            config["mode"] == "direct" && config["repo"].as_str() == self.repo.to_str(),
+            config["mode"] == "direct" && config["repo"].as_str() == self.git_repository.to_str(),
             "This installation belongs to another runner or checkout; refusing to change it."
         );
         ensure!(
@@ -165,7 +165,7 @@ impl Local {
                 format!("WSL/Linux port {candidate} is already in use. Stop that listener first.")
             })?;
         }
-        Ok(json!({"version":2,"mode":"direct","repo":self.repo,"http_port":port}))
+        Ok(json!({"version":2,"mode":"direct","repo":self.git_repository,"http_port":port}))
     }
     pub fn prepare_password(&self) -> Result<PathBuf> {
         let path = self.password();
@@ -287,11 +287,11 @@ impl Local {
     fn prepare(&self, config: &Value) -> Result<String> {
         println!("Preparing the installation page and current source checkout…");
         let source = self.state().join("source.tar.gz");
-        snapshot_source(&self.repo, &source)?;
+        snapshot_source(&self.git_repository, &source)?;
         let source_ref = files::output(
             Command::new("git")
                 .arg("-C")
-                .arg(&self.repo)
+                .arg(&self.git_repository)
                 .args(["rev-parse", "HEAD"]),
         )?;
         let script = install::render_bootstrap(
@@ -652,11 +652,11 @@ pub fn forward() -> Result<()> {
         .exec()
         .into())
 }
-pub fn snapshot_source(repo: &Path, destination: &Path) -> Result<()> {
-    let repo = repo.canonicalize()?;
+pub fn snapshot_source(git_repository: &Path, destination: &Path) -> Result<()> {
+    let git_repository = git_repository.canonicalize()?;
     let inventory = Command::new("git")
         .arg("-C")
-        .arg(&repo)
+        .arg(&git_repository)
         .args([
             "ls-files",
             "--cached",
@@ -690,7 +690,7 @@ pub fn snapshot_source(repo: &Path, destination: &Path) -> Result<()> {
                         .all(|p| matches!(p, Component::Normal(_))),
                 "Unsafe source archive path"
             );
-            let source = repo.join(relative);
+            let source = git_repository.join(relative);
             let parent = source.parent().context("Missing source directory")?;
             let metadata = match fs::symlink_metadata(&source) {
                 Ok(m) => m,

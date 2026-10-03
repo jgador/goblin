@@ -22,7 +22,7 @@ internal sealed class FakeWorkHost : IExecutionHost
     public Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
         bool question = work.Objective.Contains("decision", StringComparison.OrdinalIgnoreCase) && work.Decisions.Length == 0;
-        if (work.Objective.Contains("repository handoff", StringComparison.OrdinalIgnoreCase) && work.Attempts[^1].Target.Repository is null)
+        if (work.Objective.Contains("repository handoff", StringComparison.OrdinalIgnoreCase) && work.Attempts[^1].Target.GitRepository is null)
             return ExecutionFiles.WriteAsync(PathFor(work), new ExecutionObservation(ObservationKind.WorkspaceRequired,
                 new("fixture-model", "conversation-session", "fixture-operation"), "Inspect the repository files."), token);
         return ExecutionFiles.WriteAsync(PathFor(work), new ExecutionObservation(

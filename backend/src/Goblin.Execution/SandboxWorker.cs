@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 using Goblin.Core.Work;
 using Goblin.Integrations.Codex;
 using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
@@ -52,22 +52,22 @@ public static class SandboxWorker
             string stage = "Restore";
             try
             {
-                RepositoryChange repository = attempt.Target.Repository!;
-                string branch = repository.Grant!.Branch;
+                GitRepositoryChange gitRepository = attempt.Target.GitRepository!;
+                string branch = gitRepository.Grant!.Branch;
                 if (!Directory.Exists(checkout))
                 {
                     string bundle = Path.Combine(state, "input.bundle");
-                    await RepositoryClient.DownloadAsync(attempt.Id, bundle);
+                    await GitRepositoryClient.DownloadAsync(attempt.Id, bundle);
                     await GitAsync(root, environment, "clone", "--branch", branch, "--", bundle, checkout);
                 }
-                await PrepareCheckoutAsync(checkout, environment, repository);
+                await PrepareCheckoutAsync(checkout, environment, gitRepository);
                 string baseline = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
                 stage = "Setup memory";
-                string setupEnvironment = RepositorySetupWorkspace.EnvironmentIdentity(input.SandboxImage ?? "unknown");
-                var setupWorkspace = new RepositorySetupWorkspace(checkout, environment);
-                RepositorySetupMemory[] memories = await setupWorkspace.SelectAsync(await RepositoryClient.SetupMemoryAsync(attempt.Id), setupEnvironment, CancellationToken.None);
+                string setupEnvironment = GitRepositorySetupWorkspace.EnvironmentIdentity(input.SandboxImage ?? "unknown");
+                var setupWorkspace = new GitRepositorySetupWorkspace(checkout, environment);
+                GitRepositorySetupMemory[] memories = await setupWorkspace.SelectAsync(await GitRepositoryClient.SetupMemoryAsync(attempt.Id), setupEnvironment, CancellationToken.None);
                 stage = "Runtime";
-                await using (var codex = new CodexClient(new() { Home = home, CodexHome = codexHome, Workspace = checkout, Command = "codex", RepositoryExecution = true }))
+                await using (var codex = new CodexClient(new() { Home = home, CodexHome = codexHome, Workspace = checkout, Command = "codex", GitRepositoryExecution = true }))
                 {
                     outcome = await new CodexWorkRunner(codex).RunAsync(work, true, value =>
                     {
@@ -77,7 +77,7 @@ public static class SandboxWorker
                     }, CancellationToken.None, memories);
                 }
                 stage = "Setup verification";
-                VerifiedRepositorySetup[] observations = await setupWorkspace.VerifyAsync(outcome.Setup ?? [], CancellationToken.None);
+                VerifiedGitRepositorySetup[] observations = await setupWorkspace.VerifyAsync(outcome.Setup ?? [], CancellationToken.None);
                 // Candidate commands are private worker data, not Work messages,
                 // Kubernetes logs, or runtime progress exposed to the user.
                 outcome = outcome with { Setup = null };
@@ -86,19 +86,19 @@ public static class SandboxWorker
                 await GitAsync(checkout, environment, "add", "--all");
                 if (!string.IsNullOrWhiteSpace(await GitAsync(checkout, environment, "diff", "--cached", "--name-only")))
                     await GitAsync(checkout, environment, "commit", "-m", "Goblin Work " + work.Id.ToString(CultureInfo.InvariantCulture));
-                bool publish = repository.Grant!.PolicyVersion == 1 || repository.Grant.AllowPush;
+                bool publish = gitRepository.Grant!.PolicyVersion == 1 || gitRepository.Grant.AllowPush;
                 stage = publish ? "Publish" : "Verify local Git checkpoint";
-                string? artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? RepositoryOperationKind.Publish : RepositoryOperationKind.Checkpoint);
-                if (repository.Grant.AllowPullRequest && outcome.Kind == ObservationKind.Result)
-                    artifact = await RepositoryClient.SubmitAsync(attempt.Id, branch, checkout, RepositoryOperationKind.PullRequest);
+                string? artifact = await GitRepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? GitRepositoryOperationKind.Publish : GitRepositoryOperationKind.Checkpoint);
+                if (gitRepository.Grant.AllowPullRequest && outcome.Kind == ObservationKind.Result)
+                    artifact = await GitRepositoryClient.SubmitAsync(attempt.Id, branch, checkout, GitRepositoryOperationKind.PullRequest);
                 string commit = (await GitAsync(checkout, environment, "rev-parse", "HEAD")).Trim();
                 await File.WriteAllTextAsync(Path.Combine(state, "changes.patch"), await GitAsync(checkout, environment, "diff", baseline, commit));
                 stage = "Git checkpoint";
-                WorkspaceCheckpoint saved = await RepositoryClient.SaveCheckpointAsync(work, commit);
+                WorkspaceCheckpoint saved = await GitRepositoryClient.SaveCheckpointAsync(work, commit);
                 if (observations.Length > 0)
                 {
                     stage = "Save setup memory";
-                    await RepositoryClient.SaveSetupMemoryAsync(attempt.Id, new(attempt.TurnNumber, saved.Id, setupEnvironment, observations));
+                    await GitRepositoryClient.SaveSetupMemoryAsync(attempt.Id, new(attempt.TurnNumber, saved.Id, setupEnvironment, observations));
                 }
                 outcome = outcome with { CheckpointId = saved.Id, ArtifactReference = artifact };
             }
@@ -116,7 +116,7 @@ public static class SandboxWorker
             {
                 await Task.Delay(1000);
                 WorkSnapshot? next;
-                try { next = await RepositoryClient.CurrentAsync(attempt.Id); }
+                try { next = await GitRepositoryClient.CurrentAsync(attempt.Id); }
                 catch { continue; }
                 if (next is null) continue;
                 AttemptSnapshot candidate = next.Attempts[^1];
@@ -130,15 +130,15 @@ public static class SandboxWorker
     public static string ClaimPrefix(string state, long attemptId, int turnNumber) => Path.Combine(state,
         "attempt-" + attemptId.ToString(CultureInfo.InvariantCulture) + "-turn-" + turnNumber.ToString(CultureInfo.InvariantCulture));
 
-    public static async Task PrepareCheckoutAsync(string checkout, Dictionary<string, string> environment, RepositoryChange repository)
+    public static async Task PrepareCheckoutAsync(string checkout, Dictionary<string, string> environment, GitRepositoryChange gitRepository)
     {
         // Start the authorized branch at the surviving local HEAD. Git carries the
         // index, dirty files and untracked files across this switch, including edits
         // made before a failed runtime could publish or save a checkpoint.
-        await GitAsync(checkout, environment, "checkout", "-B", repository.Grant!.Branch, "HEAD");
-        await GitAsync(checkout, environment, "remote", "set-url", "origin", "https://github.com/" + repository.Repository + ".git");
-        await GitAsync(checkout, environment, "config", "user.name", repository.GitAuthorName);
-        await GitAsync(checkout, environment, "config", "user.email", repository.GitAuthorEmail);
+        await GitAsync(checkout, environment, "checkout", "-B", gitRepository.Grant!.Branch, "HEAD");
+        await GitAsync(checkout, environment, "remote", "set-url", "origin", "https://github.com/" + gitRepository.GitRepository + ".git");
+        await GitAsync(checkout, environment, "config", "user.name", gitRepository.GitAuthorName);
+        await GitAsync(checkout, environment, "config", "user.email", gitRepository.GitAuthorEmail);
     }
 
     private static async Task<string> GitAsync(string directory, Dictionary<string, string> environment, params string[] arguments)

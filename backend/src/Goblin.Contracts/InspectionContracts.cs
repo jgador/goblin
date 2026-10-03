@@ -5,7 +5,24 @@ using Goblin.Core.Work;
 
 namespace Goblin.Contracts.Runtime;
 
-public sealed record InspectionAllocation(long Id, long WorkId, long AttemptId, string SourceVolume);
+public sealed class InspectionAllocation
+{
+    public InspectionAllocation(long id, long workId, long attemptId, string sourceVolume)
+    {
+        Id = id;
+        WorkId = workId;
+        AttemptId = attemptId;
+        SourceVolume = sourceVolume;
+    }
+
+    public long Id { get; init; }
+
+    public long WorkId { get; init; }
+
+    public long AttemptId { get; init; }
+
+    public string SourceVolume { get; init; }
+}
 
 public interface IInspectionHost
 {

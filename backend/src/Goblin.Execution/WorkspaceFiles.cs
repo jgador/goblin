@@ -23,7 +23,7 @@ public static class WorkspaceFiles
 
     // Executed only in an inspection pod with the Work PVC mounted read-only.
     // No workspace files, archives, or tool output are persisted by this reader.
-    public static object Read(string root, string? requested)
+    public static WorkspaceFilesResponse Read(string root, string? requested)
     {
         root = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
         if (requested is not null)
@@ -46,9 +46,9 @@ public static class WorkspaceFiles
                 size += read;
                 if (size == buffer.Length) throw new IOException("Workspace file is too large to preview.");
             }
-            return new { path = requested, text = Encoding.UTF8.GetString(buffer, 0, size) };
+            return new() { Path = requested, Text = Encoding.UTF8.GetString(buffer, 0, size) };
         }
-        var files = new List<object>();
+        var files = new List<WorkspaceFileEntry>();
         bool truncated = false;
         int visited = 0;
         void Add(string directory)
@@ -61,12 +61,12 @@ public static class WorkspaceFiles
                 FileAttributes attributes = File.GetAttributes(path);
                 if (attributes.HasFlag(FileAttributes.ReparsePoint)) continue;
                 if (attributes.HasFlag(FileAttributes.Directory)) Add(path);
-                else files.Add(new { path = relative, size = new FileInfo(path).Length });
+                else files.Add(new(relative, new FileInfo(path).Length));
                 if (truncated) return;
             }
         }
         Add(root);
-        return new { files = files.ToArray(), truncated };
+        return new() { Files = [.. files], Truncated = truncated };
     }
 
     private static void RequireRegularFile(string path)

@@ -47,7 +47,7 @@ public sealed partial class WorkItem
         RequireId(messageId);
         Require(!_messages.Exists(x => x.Id == messageId), WorkRule.InvalidValue);
         string input = RequireText(text);
-        InvalidateRepositoryAuthorization(now);
+        InvalidateGitRepositoryAuthorization(now);
         _messages.Add(new(messageId, input, now));
         Record(WorkEventKind.ContextAdded, now, text: input);
     }
@@ -81,7 +81,7 @@ public sealed partial class WorkItem
     {
         Require(Status == WorkStatus.Ready, WorkRule.InvalidTransition);
         ValidateNewAttempt(attemptId, target);
-        if (target.Repository?.Grant is not null) PrepareRepositoryAuthorization(attemptId, target, false, false, now);
+        if (target.GitRepository?.Grant is not null) PrepareGitRepositoryAuthorization(attemptId, target, false, false, now);
         else Queue(attemptId, target, now);
     }
 
@@ -93,7 +93,7 @@ public sealed partial class WorkItem
         Require(Status == WorkStatus.NeedsAttention && Attention?.Reason == AttentionReason.Failure &&
             CurrentAttempt?.Status == AttemptStatus.Failed, WorkRule.InvalidTransition);
         ValidateNewAttempt(attemptId, target);
-        if (target.Repository?.Grant is not null) PrepareRepositoryAuthorization(attemptId, target, false, true, now);
+        if (target.GitRepository?.Grant is not null) PrepareGitRepositoryAuthorization(attemptId, target, false, true, now);
         else
         {
             Record(WorkEventKind.RetryRequested, now, CurrentAttempt!.Id);
@@ -109,13 +109,13 @@ public sealed partial class WorkItem
         string environment = RequireText(environmentReference);
         if (CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != attemptId ||
             Status != WorkStatus.Queued) return false;
-        if (attempt.Target.Repository?.Grant is { PolicyVersion: 2 } &&
-            (RepositoryAuthorization is not { Status: RepositoryAuthorizationStatus.Authorized } approval ||
+        if (attempt.Target.GitRepository?.Grant is { PolicyVersion: 2 } &&
+            (GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approval ||
              approval.Id != attempt.Id || approval.Target != attempt.Target)) return false;
-        if (attempt.Target.Repository is { } repository && !attempt.ReasoningOnly)
+        if (attempt.Target.GitRepository is { } gitRepository && !attempt.ReasoningOnly)
         {
             environment = Workspace?.EnvironmentReference ?? environment;
-            Workspace = new(repository.Repository, environment, attempt.Id, attempt.WorkspaceNumber, attempt.TurnNumber);
+            Workspace = new(gitRepository.GitRepository, environment, attempt.Id, attempt.WorkspaceNumber, attempt.TurnNumber);
         }
         attempt.Status = AttemptStatus.Starting;
         attempt.OwnerId = ownerId;
@@ -259,7 +259,7 @@ public sealed partial class WorkItem
         Require(CurrentAttempt?.CleanupPending != true, WorkRule.ReconciliationRequired);
         if (Status is WorkStatus.Cancelled or WorkStatus.Cancelling) return;
         Require(Status != WorkStatus.Completed, WorkRule.InvalidTransition);
-        InvalidateRepositoryAuthorization(now);
+        InvalidateGitRepositoryAuthorization(now);
         ExecutionAttempt? attempt = CurrentAttempt;
         Record(WorkEventKind.CancellationRequested, now, attempt?.Id);
         if (attempt is not null && attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.Uncertain or AttemptStatus.Waiting)
@@ -296,8 +296,8 @@ public sealed partial class WorkItem
         ArgumentNullException.ThrowIfNull(target);
         Require(AgentId is not null, WorkRule.AgentRequired);
         Require(!_attempts.Exists(x => x.Id == attemptId), WorkRule.AttemptAlreadyExists);
-        Require(Workspace is null || target.Repository is null ||
-            string.Equals(Workspace.Repository, target.Repository.Repository, StringComparison.OrdinalIgnoreCase), WorkRule.OwnershipMismatch);
+        Require(Workspace is null || target.GitRepository is null ||
+            string.Equals(Workspace.GitRepository, target.GitRepository.GitRepository, StringComparison.OrdinalIgnoreCase), WorkRule.OwnershipMismatch);
     }
 
     private void Queue(long attemptId, ExecutionTarget target, DateTimeOffset now)
@@ -357,7 +357,14 @@ public sealed partial class WorkItem
 
     private void Record(WorkEventKind kind, DateTimeOffset now, long? attemptId = null,
         long? agentId = null, long? decisionId = null, FailureKind? failure = null, string? text = null) =>
-        _history.Add(new(_history.Count + 1L, now, kind, attemptId, agentId, decisionId, failure, text));
+        _history.Add(new(_history.Count + 1L, now, kind)
+        {
+            AttemptId = attemptId,
+            AgentId = agentId,
+            DecisionId = decisionId,
+            Failure = failure,
+            Text = text
+        });
 
     private static string RequireText(string value)
     {

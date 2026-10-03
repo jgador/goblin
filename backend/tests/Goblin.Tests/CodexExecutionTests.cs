@@ -7,7 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 using Goblin.Core.Work;
 using Goblin.Execution;
 using Goblin.Integrations.Codex;
@@ -26,7 +26,7 @@ public sealed class CodexExecutionTests
     [InlineData(true, false)]
     [InlineData(false, false)]
     [InlineData(false, true)]
-    public async Task PinnedRuntimeExecutesModelCommandsOnlyForRepositoryWork(bool repositoryExecution, bool requestWorkspace)
+    public async Task PinnedRuntimeExecutesModelCommandsOnlyForGitRepositoryWork(bool gitRepositoryExecution, bool requestWorkspace)
     {
         string root = Path.Combine(Path.GetTempPath(), "goblin-command-test-" + Guid.NewGuid().ToString("N"));
         string home = Path.Combine(root, "home"), codexHome = Path.Combine(root, "codex"), workspace = Path.Combine(root, "workspace");
@@ -43,10 +43,20 @@ public sealed class CodexExecutionTests
         model.Urls.Add("http://127.0.0.1:0");
         string? toolOutput = null;
         string requests = "";
-        var setup = new RepositorySetup("fixture-tools", "The repository needs this fixture tool", ["fixture 1.0"],
+        var setup = new GitRepositorySetup("fixture-tools", "The repository needs this fixture tool", ["fixture 1.0"],
             ["install-fixture"], ["package.json"], [new("test -f command-marker.txt", "")]);
-        var memory = new RepositorySetupMemory(9007199254740993, 11, 12, 1, "older-work", new string('a', 40), "fixture-image",
-            DateTimeOffset.UtcNow, new(setup, [new("package.json", new string('b', 64))], new string('c', 64)));
+        var memory = new GitRepositorySetupMemory()
+        {
+            Id = 9007199254740993,
+            WorkId = 11,
+            AttemptId = 12,
+            TurnNumber = 1,
+            Branch = "older-work",
+            Commit = new string('a', 40),
+            Environment = "fixture-image",
+            VerifiedAt = DateTimeOffset.UtcNow,
+            Observation = new(setup, [new("package.json", new string('b', 64))], new string('c', 64))
+        };
         int calls = 0;
         // A local model fixture drives the real runtime's nested command tool.
         // No user credentials or paid model requests are needed. command/exec
@@ -74,7 +84,7 @@ public sealed class CodexExecutionTests
                     id = "message-probe",
                     role = "assistant",
                     status = "completed",
-                    content = new[] { new { type = "output_text", text = repositoryExecution
+                    content = new[] { new { type = "output_text", text = gitRepositoryExecution
                         ? JsonSerializer.Serialize(new { kind = "result", text = "Command probe finished.", releaseWorkspace = true, setup = new[] { setup } }, ExecutionFiles.Json)
                         : JsonSerializer.Serialize(new { kind = requestWorkspace ? "workspace" : "result", text = "Repository access is needed.", releaseWorkspace = true }) } }
                 };
@@ -105,7 +115,7 @@ public sealed class CodexExecutionTests
                 Command = "node",
                 Arguments = [cli],
                 Environment = new Dictionary<string, string?> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path) },
-                RepositoryExecution = repositoryExecution
+                GitRepositoryExecution = gitRepositoryExecution
             });
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             string? runtimeFailure = null;
@@ -125,7 +135,7 @@ public sealed class CodexExecutionTests
             ExecutionObservation result;
             try
             {
-                result = await new CodexWorkRunner(client).RunAsync(work.Snapshot(), repositoryExecution,
+                result = await new CodexWorkRunner(client).RunAsync(work.Snapshot(), gitRepositoryExecution,
                     _ => Task.CompletedTask, timeout.Token, [memory]);
             }
             catch (IntegrationFailure)
@@ -138,7 +148,7 @@ public sealed class CodexExecutionTests
             Assert.Contains("\"effort\":\"high\"", requests);
             if (!requestWorkspace) Assert.NotNull(toolOutput);
             string marker = Path.Combine(workspace, "command-marker.txt");
-            if (repositoryExecution)
+            if (gitRepositoryExecution)
             {
                 Assert.DoesNotContain("code-mode host is disabled", toolOutput);
                 Assert.Equal("command-host-ready", (await File.ReadAllTextAsync(marker)).Trim());
@@ -149,7 +159,7 @@ public sealed class CodexExecutionTests
                 await File.WriteAllTextAsync(Path.Combine(workspace, "package.json"), "{}");
                 using Process git = Process.Start(new ProcessStartInfo("git") { WorkingDirectory = workspace, ArgumentList = { "init", "--quiet" } })!;
                 await git.WaitForExitAsync();
-                var verifier = new RepositorySetupWorkspace(workspace, new Dictionary<string, string> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)! });
+                var verifier = new GitRepositorySetupWorkspace(workspace, new Dictionary<string, string> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)! });
                 Assert.Single(await verifier.VerifyAsync(result.Setup!, timeout.Token));
             }
             else

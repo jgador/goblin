@@ -14,11 +14,44 @@ using Wolverine.EntityFrameworkCore;
 
 namespace Goblin.Application.Workspaces;
 
-public sealed record StartInspection(long Id);
+public sealed class StartInspection
+{
+    public StartInspection(long id)
+    {
+        Id = id;
+    }
 
-public sealed record StopInspection(long Id);
+    public long Id { get; init; }
+}
 
-public sealed record InspectionView(long Id, long WorkId, long AttemptId, InspectionState State);
+public sealed class StopInspection
+{
+    public StopInspection(long id)
+    {
+        Id = id;
+    }
+
+    public long Id { get; init; }
+}
+
+public sealed class InspectionView
+{
+    public InspectionView(long id, long workId, long attemptId, InspectionState state)
+    {
+        Id = id;
+        WorkId = workId;
+        AttemptId = attemptId;
+        State = state;
+    }
+
+    public long Id { get; init; }
+
+    public long WorkId { get; init; }
+
+    public long AttemptId { get; init; }
+
+    public InspectionState State { get; init; }
+}
 
 public sealed class InspectionStore
 {
@@ -51,7 +84,7 @@ public sealed class InspectionStore
             throw new ApplicationFailure("workspace_session_exists");
         Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
         WorkSnapshot work = WorkStore.Restore(workRow).Snapshot();
-        AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.Repository is not null) ?? throw new ApplicationFailure("workspace_not_found");
+        AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.GitRepository is not null) ?? throw new ApplicationFailure("workspace_not_found");
         WorkWorkspace workspace = work.Workspace ?? throw new ApplicationFailure("workspace_not_found");
         WorkspaceSessionRules.RequireOpenable(attempt.Status);
         if (workspace.AttemptId != attemptId) throw new ApplicationFailure("workspace_not_found");

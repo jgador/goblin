@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -12,16 +11,13 @@ internal static class ApiRequest
 {
     public const string BodyKey = "goblin.body";
 
-    public static Dictionary<string, JsonElement> Body(HttpContext context) =>
-        (Dictionary<string, JsonElement>)context.Items[BodyKey]!;
+    public static T Body<T>(HttpContext context, JsonSerializerOptions? options = null) where T : class =>
+        JsonSerializer.Deserialize<T>((byte[])context.Items[BodyKey]!, options) ?? throw new JsonException();
 
-    public static string? StringField(HttpContext context, string name)
-    {
-        Dictionary<string, JsonElement> body = Body(context);
-        return body.TryGetValue(name, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-    }
+    public static async Task<T> ReadBodyAsync<T>(HttpRequest request, JsonSerializerOptions? options = null) where T : class =>
+        JsonSerializer.Deserialize<T>(await ReadBodyAsync(request), options) ?? throw new JsonException();
 
-    public static async Task<Dictionary<string, JsonElement>> ReadBodyAsync(HttpRequest request)
+    public static async Task<byte[]> ReadBodyAsync(HttpRequest request)
     {
         if (request.ContentType?.Split(';')[0].Trim() != "application/json")
             throw new PublicError("invalid_content_type", "Send JSON content.", 415);
@@ -37,10 +33,21 @@ internal static class ApiRequest
                 size += read;
                 if (size > 8192) throw new PublicError("request_too_large", "The request is too large.", 413);
             }
-            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(buffer.AsSpan(0, size)) ?? throw new JsonException();
+            ValidateObject(buffer.AsSpan(0, size));
+            return buffer.AsSpan(0, size).ToArray();
         }
         catch (JsonException) { throw new PublicError("invalid_json", "The request could not be read."); }
         catch (OperationCanceledException) { throw new PublicError("invalid_request", "The request was interrupted."); }
         catch (IOException) { throw new PublicError("invalid_request", "The request was interrupted."); }
+    }
+
+    // Validate syntax once, including bodyless POSTs, without building a JSON DOM.
+    // Each endpoint binds the buffered bytes directly to its own wire contract.
+    private static void ValidateObject(ReadOnlySpan<byte> json)
+    {
+        var reader = new Utf8JsonReader(json);
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) throw new JsonException();
+        reader.Skip();
+        if (reader.Read()) throw new JsonException();
     }
 }

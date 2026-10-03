@@ -31,7 +31,7 @@ public sealed class GitHubConnectionTests
             Assert.DoesNotContain("private-test-token", JsonSerializer.Serialize(state));
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(connection.Profile, "hosts.yml")));
             using var restarted = new GitHubConnection(Path.Combine(root, "profile"), cli);
-            Assert.Equal(state.Account, (await restarted.StatusAsync()).Account);
+            Assert.Equivalent(state.Account, (await restarted.StatusAsync()).Account, strict: true);
             Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Connected, (await restarted.CheckAsync()).Status);
             await File.WriteAllTextAsync(Path.Combine(root, "reject"), "reject");
             Assert.Equal(Goblin.Contracts.GitHubConnectionStatus.Unavailable, (await restarted.CheckAsync()).Status);

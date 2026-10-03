@@ -35,7 +35,7 @@ public sealed class SystemMonitorTests
             "status":{"phase":"Running","conditions":[{"type":"Ready","status":"True"}],
             "containerStatuses":[{"restartCount":2}]}}
             """)!.AsObject();
-        MachineSnapshot view = KubernetesSystemSource.Project(Node(), Summary(), [pod], Now);
+        MachineSnapshot view = Project(Node(), Summary(), [pod], Now);
         Assert.Equal(25, view.Cpu.Percent);
         Assert.Equal(75, view.Memory.Percent);
         Assert.Equal(80, view.Disk.Percent);
@@ -54,13 +54,13 @@ public sealed class SystemMonitorTests
         summary["node"]!["cpu"]!.AsObject().Remove("usageNanoCores");
         JsonObject pending = JsonNode.Parse("""{"metadata":{"name":"agent","namespace":"agents","uid":"pending"},"status":{"phase":"Pending"}}""")!.AsObject();
         JsonObject completed = JsonNode.Parse("""{"metadata":{"name":"finished"},"status":{"phase":"Succeeded"}}""")!.AsObject();
-        MachineSnapshot view = KubernetesSystemSource.Project(Node(), summary, [pending, completed], Now);
+        MachineSnapshot view = Project(Node(), summary, [pending, completed], Now);
         Assert.Null(view.Cpu.Used);
         Assert.Null(view.Cpu.Percent);
         Assert.Null(view.Cpu.Available);
         Assert.False(Assert.Single(view.Services!).Ready);
         Assert.Equal(2, view.Warnings.Count);
-        Assert.Throws<IOException>(() => KubernetesSystemSource.Project(Node(), JsonNode.Parse("""{"node":{"nodeName":"other"}}""")!.AsObject(), [], Now));
+        Assert.Throws<IOException>(() => Project(Node(), JsonNode.Parse("""{"node":{"nodeName":"other"}}""")!.AsObject(), [], Now));
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class SystemMonitorTests
         JsonObject node = Node();
         node["status"]!["conditions"]![0]!["status"] = "Unknown";
         node["status"]!["conditions"]![1]!["status"] = "True";
-        MachineSnapshot view = KubernetesSystemSource.Project(node, Summary(), null, Now);
+        MachineSnapshot view = Project(node, Summary(), null, Now);
         Assert.Contains("The machine is not reporting ready.", view.Warnings);
         Assert.Contains("Kubernetes reports memory pressure.", view.Warnings);
         Assert.Contains("Service health could not be checked.", view.Warnings);
@@ -78,7 +78,7 @@ public sealed class SystemMonitorTests
     [Fact]
     public async Task InterruptedOrOldReadingsAreStaleWithoutExposingErrorsAndRecoverWithBoundedHistory()
     {
-        var source = new Source(KubernetesSystemSource.Project(Node(), Summary(), [], Now));
+        var source = new Source(Project(Node(), Summary(), [], Now));
         using var monitor = new SystemMonitor(source);
         await monitor.CollectAsync(CancellationToken.None);
         Assert.Equal("live", monitor.Current.Status);
@@ -105,7 +105,7 @@ public sealed class SystemMonitorTests
     {
         using var unsupported = new SystemMonitor(null);
         Assert.Equal("unsupported", unsupported.Current.Status);
-        var source = new Source(KubernetesSystemSource.Project(Node(), Summary(), [], Now)) { Fail = true };
+        var source = new Source(Project(Node(), Summary(), [], Now)) { Fail = true };
         using var monitor = new SystemMonitor(source);
         await monitor.CollectAsync(CancellationToken.None);
         Assert.Equal("unavailable", monitor.Current.Status);
@@ -130,9 +130,54 @@ public sealed class SystemMonitorTests
         Assert.DoesNotContain("private", JsonSerializer.Serialize(monitor.Current));
     }
 
+    [Fact]
+    public void TypedMetricsPreserveUnknownNumbersAndOptionalCollections()
+    {
+        JsonObject summary = Summary();
+        summary["node"]!["cpu"]!["usageNanoCores"] = "1000000000";
+        summary["node"]!["memory"]!["workingSetBytes"] = -1;
+        summary["pods"] = null;
+        MonitoringNode node = Node().Deserialize<MonitoringNode>(Goblin.Execution.Kubernetes.KubernetesJson.Options)!;
+        KubeletSummary stats = summary.Deserialize<KubeletSummary>(Goblin.Execution.Kubernetes.KubernetesJson.Options)!;
+        MachineSnapshot view = KubernetesSystemSource.Project(node, stats, [], Now);
+        Assert.Null(view.Cpu.Used);
+        Assert.Null(view.Memory.Used);
+        Assert.Contains("Some resource readings are unavailable.", view.Warnings);
+    }
+
+    [Fact]
+    public void TypedPodMetadataStillMatchesUsageAndReportsStoppingServices()
+    {
+        MonitoringPod pod = JsonSerializer.Deserialize<MonitoringPod>("""
+            {"metadata":{"name":"goblin","namespace":"goblin","uid":"app","deletionTimestamp":"now"},
+             "status":{"phase":"Running","conditions":null,"containerStatuses":null}}
+            """, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseUpper })!;
+        MachineSnapshot view = KubernetesSystemSource.Project(Node().Deserialize<MonitoringNode>()!, Summary().Deserialize<KubeletSummary>()!, [pod], Now);
+        ServiceHealth service = Assert.Single(view.Services!);
+        Assert.Equal("Stopping", service.Phase);
+        Assert.False(service.Ready);
+        Assert.Equal(0, service.Restarts);
+        Assert.Equal(.2, service.CpuCores);
+    }
+
+    private static MachineSnapshot Project(JsonObject node, JsonObject summary, JsonObject[]? pods, DateTimeOffset now) =>
+        KubernetesSystemSource.Project(node.Deserialize<MonitoringNode>()!, summary.Deserialize<KubeletSummary>()!,
+            pods is null ? null : Array.ConvertAll(pods, pod => pod.Deserialize<MonitoringPod>()!), now);
+
     private static MachineSnapshot At(MachineSnapshot snapshot, DateTimeOffset at) =>
-        new(at, snapshot.Name, snapshot.Environment, snapshot.OperatingSystem, snapshot.UptimeSeconds,
-            snapshot.Cpu, snapshot.Memory, snapshot.Disk, snapshot.Warnings, snapshot.Services);
+        new()
+        {
+            ObservedAt = at,
+            Name = snapshot.Name,
+            Environment = snapshot.Environment,
+            OperatingSystem = snapshot.OperatingSystem,
+            UptimeSeconds = snapshot.UptimeSeconds,
+            Cpu = snapshot.Cpu,
+            Memory = snapshot.Memory,
+            Disk = snapshot.Disk,
+            Warnings = snapshot.Warnings,
+            Services = snapshot.Services
+        };
 
     private sealed class Source : ISystemSource
     {

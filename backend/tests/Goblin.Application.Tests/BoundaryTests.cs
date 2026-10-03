@@ -33,11 +33,11 @@ public sealed class BoundaryTests
     }
 
     [Fact]
-    public void RepositorySandboxMountsOnlyItsOwnInputsWorkspaceAndCredentials()
+    public void GitRepositorySandboxMountsOnlyItsOwnInputsWorkspaceAndCredentials()
     {
         var work = new WorkItem(NextId(), "Edit assigned repository", DateTimeOffset.UtcNow);
         work.Assign(NextId(), DateTimeOffset.UtcNow);
-        work.QueueExecution(NextId(), new("codex", NextId(), repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
+        work.QueueExecution(NextId(), new("codex", NextId(), gitRepository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var host = new SandboxHost(api, new("executions", "worker-image", "/private/codex", "http://goblin-repository:8788"), new UnusedHost(), new UnusedBroker());
         long attemptId = work.Attempts[^1].Id;
@@ -68,7 +68,7 @@ public sealed class BoundaryTests
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
     }
 
-    private sealed class UnusedBroker : IRepositoryBroker
+    private sealed class UnusedBroker : IGitRepositoryBroker
     {
         public Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token) => throw new NotSupportedException();
 

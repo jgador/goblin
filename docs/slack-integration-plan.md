@@ -198,7 +198,7 @@ Administrator-approval recovery and live channel mentions remain unexercised.
 
 Run `npm test` plus the relevant browser checks. PostgreSQL tests are opt-in;
 report their results separately. See [Work lifecycle](work-lifecycle.md),
-[repository authority](repository-intent.md), and the
+[repository authority](git-repository-intent.md), and the
 [architecture plan](architecture-refactoring-plan.md).
 
 Optional future `goblinctl integrations slack` can share this setup service;

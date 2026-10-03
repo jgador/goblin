@@ -9,7 +9,7 @@ export type GitHubState = {
     notice?: string;
     status: GitHubConnectionStatus;
 };
-export type Repository = {
+export type GitRepositoryInfo = {
     id: string;
     name: string;
     defaultBranch: string;
@@ -32,15 +32,15 @@ export function mountGitHub(root: HTMLElement) {
         busyAction = "",
         error = "",
         page = 1;
-    let enabled: Repository[] = [],
-        available: Repository[] = [],
+    let enabled: GitRepositoryInfo[] = [],
+        available: GitRepositoryInfo[] = [],
         browsing = false,
         more = false;
     let generation = 0,
         disposed = false,
         refreshing = false;
     let focusedAction = "",
-        focusedRepository = "";
+        focusedGitHubRepository = "";
     function render() {
         if (disposed) return;
         const active = root.contains(document.activeElement)
@@ -48,7 +48,7 @@ export function mountGitHub(root: HTMLElement) {
             : null;
         if (active?.dataset.github) {
             focusedAction = active.dataset.github;
-            focusedRepository = active.dataset.repository ?? "";
+            focusedGitHubRepository = active.dataset.githubRepository ?? "";
         }
         root.innerHTML = `<h3>GitHub</h3><p class="settings-description">Choose the account and repositories Goblin can use.</p>
           <div class="settings-account" role="status">${e(state?.login ? `@${state.login} · ${state.status}` : (state?.status ?? "Loading connection…"))}</div>
@@ -60,15 +60,15 @@ export function mountGitHub(root: HTMLElement) {
                     ? `<p>Authorize GitHub CLI using this one-time code.</p>${state.userCode ? `<div class="settings-code"><code>${e(state.userCode)}</code><button data-github="copy">Copy code</button></div><a class="settings-primary" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub sign-in ↗</a>` : `<p role="status">Getting your sign-in code…</p>`}<p class="settings-description">Waiting for you to finish signing in. You can close Settings and return.</p><button data-github="cancel">Cancel sign-in</button>`
                     : state?.login
                       ? `<div class="settings-actions"><button data-github="check">Check connection</button><button data-github="disconnect">Disconnect GitHub</button></div><p class="settings-description">Disconnect removes Goblin’s saved access. You can revoke the GitHub CLI authorization from GitHub’s application settings.</p>
-          <div class="settings-repositories"><h4>Enabled repositories</h4><p class="settings-description">Work inherits access to its assigned branch. Merging stays with you.</p>${
+          <div class="settings-github-repositories"><h4>Enabled repositories</h4><p class="settings-description">Work inherits access to its assigned branch. Merging stays with you.</p>${
               enabled
                   .filter((r) => r.enabled)
                   .map(
                       (r) =>
-                          `<div class="repository-row"><span>${e(r.name)}</span><button data-github="disable" data-repository="${e(r.name)}" aria-label="Disable ${e(r.name)}">Disable</button></div>`,
+                          `<div class="github-repository-row"><span>${e(r.name)}</span><button data-github="disable" data-github-repository="${e(r.name)}" aria-label="Disable ${e(r.name)}">Disable</button></div>`,
                   )
                   .join("") || `<p>No repositories enabled yet.</p>`
-          }<button data-github="browse">Choose repositories</button>${browsing ? `<div class="repository-picker">${available.map((r) => `<div class="repository-row"><span>${e(r.name)}</span><button data-github="enable" data-repository="${e(r.name)}" ${enabled.some((x) => x.id === r.id && x.enabled) ? "disabled" : ""}>${enabled.some((x) => x.id === r.id && x.enabled) ? "Enabled" : "Enable"}</button></div>`).join("") || "No repositories available."}${more ? `<button data-github="more">Load more</button>` : ""}</div>` : ""}</div>`
+          }<button data-github="browse">Choose repositories</button>${browsing ? `<div class="github-repository-picker">${available.map((r) => `<div class="github-repository-row"><span>${e(r.name)}</span><button data-github="enable" data-github-repository="${e(r.name)}" ${enabled.some((x) => x.id === r.id && x.enabled) ? "disabled" : ""}>${enabled.some((x) => x.id === r.id && x.enabled) ? "Enabled" : "Enable"}</button></div>`).join("") || "No repositories available."}${more ? `<button data-github="more">Load more</button>` : ""}</div>` : ""}</div>`
                       : `<button class="settings-primary" data-github="connect">Connect GitHub</button><p class="settings-description">Sign in on GitHub with a one-time code. No app registration or token copying is needed.</p>`
           }`;
         root.setAttribute("aria-busy", String(busy));
@@ -95,12 +95,14 @@ export function mountGitHub(root: HTMLElement) {
                 buttons.find(
                     (button) =>
                         button.dataset.github === focusedAction &&
-                        (button.dataset.repository ?? "") === focusedRepository,
+                        (button.dataset.githubRepository ?? "") ===
+                            focusedGitHubRepository,
                 ) ??
-                (focusedRepository
+                (focusedGitHubRepository
                     ? buttons.find(
                           (button) =>
-                              button.dataset.repository === focusedRepository,
+                              button.dataset.githubRepository ===
+                              focusedGitHubRepository,
                       )
                     : undefined);
             replacement?.focus({ preventScroll: true });
@@ -134,7 +136,9 @@ export function mountGitHub(root: HTMLElement) {
     async function loadEnabled() {
         const version = generation;
         try {
-            const next = await api<Repository[]>("/api/github/repositories");
+            const next = await api<GitRepositoryInfo[]>(
+                "/api/github/repositories",
+            );
             if (version === generation && !disposed) enabled = next;
         } catch {
             if (version === generation && !disposed) enabled = [];
@@ -168,7 +172,7 @@ export function mountGitHub(root: HTMLElement) {
             try {
                 if (action === "browse" || action === "more") {
                     const nextPage = action === "browse" ? 1 : page + 1;
-                    const result = await api<Repository[]>(
+                    const result = await api<GitRepositoryInfo[]>(
                         `/api/github/available-repositories?page=${nextPage}`,
                     );
                     page = nextPage;
@@ -177,10 +181,10 @@ export function mountGitHub(root: HTMLElement) {
                     browsing = true;
                     await loadEnabled();
                 } else if (action === "enable" || action === "disable") {
-                    enabled = await api<Repository[]>(
+                    enabled = await api<GitRepositoryInfo[]>(
                         "/api/github/repositories",
                         {
-                            repository: button.dataset.repository,
+                            repository: button.dataset.githubRepository,
                             enabled: String(action === "enable"),
                         },
                     );

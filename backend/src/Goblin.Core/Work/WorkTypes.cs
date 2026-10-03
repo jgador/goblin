@@ -33,7 +33,7 @@ public enum AttentionReason
     Failure,
     UncertainExecution,
     CleanupRequired,
-    RepositoryRequired
+    GitRepositoryRequired
 }
 
 // Integrations translate upstream errors into these categories. Raw exceptions,
@@ -79,10 +79,10 @@ public enum WorkEventKind
     ExecutionContinued,
     WorkspaceSaved,
     WorkspaceReleased,
-    RepositoryRequested,
-    RepositoryAuthorized,
-    RepositoryDenied,
-    RepositoryAuthorizationInvalidated
+    GitRepositoryRequested,
+    GitRepositoryAuthorized,
+    GitRepositoryDenied,
+    GitRepositoryAuthorizationInvalidated
 }
 
 public enum WorkRule
@@ -107,9 +107,24 @@ public sealed class WorkRuleException : Exception
 
 public sealed record WorkAttention(AttentionReason Reason, FailureKind? Failure = null);
 
-public sealed record WorkEvent(long Sequence, DateTimeOffset OccurredAt, WorkEventKind Kind,
-    long? AttemptId = null, long? AgentId = null, long? DecisionId = null,
-    FailureKind? Failure = null, string? Text = null);
+public sealed record WorkEvent
+{
+    public WorkEvent(long sequence, DateTimeOffset occurredAt, WorkEventKind kind)
+    {
+        Sequence = sequence;
+        OccurredAt = occurredAt;
+        Kind = kind;
+    }
+
+    public long Sequence { get; init; }
+    public DateTimeOffset OccurredAt { get; init; }
+    public WorkEventKind Kind { get; init; }
+    public long? AttemptId { get; init; }
+    public long? AgentId { get; init; }
+    public long? DecisionId { get; init; }
+    public FailureKind? Failure { get; init; }
+    public string? Text { get; init; }
+}
 
 public sealed record WorkDecision(long Id, long AttemptId, string Question,
     DateTimeOffset RequestedAt, string? Answer = null, DateTimeOffset? AnsweredAt = null);
@@ -129,10 +144,10 @@ public sealed record ExecutionTarget
     public long ConnectionId { get; }
     public string? RequestedModel { get; }
     public string? RequestedEffort { get; }
-    public RepositoryChange? Repository { get; }
+    public GitRepositoryChange? GitRepository { get; }
 
     public ExecutionTarget(string runtime, long connectionId, string? requestedModel = null,
-        RepositoryChange? repository = null, string? requestedEffort = null)
+        GitRepositoryChange? gitRepository = null, string? requestedEffort = null)
     {
         if (string.IsNullOrWhiteSpace(runtime) || connectionId <= 0 ||
             (requestedModel is not null && string.IsNullOrWhiteSpace(requestedModel)) ||
@@ -142,22 +157,22 @@ public sealed record ExecutionTarget
         ConnectionId = connectionId;
         RequestedModel = requestedModel?.Trim();
         RequestedEffort = requestedEffort?.Trim();
-        Repository = repository;
+        GitRepository = gitRepository;
     }
 }
 
 // Explicitly requested repository changes are an execution requirement, not a
 // taxonomy imposed on every Work item. Credentials remain integration-owned.
-public sealed record RepositoryChange
+public sealed record GitRepositoryChange
 {
-    public string Repository { get; }
+    public string GitRepository { get; }
     public string GitAuthorName { get; }
     public string GitAuthorEmail { get; }
-    public RepositoryGrant? Grant { get; }
+    public GitRepositoryGrant? Grant { get; }
 
-    public RepositoryChange(string repository, string gitAuthorName, string gitAuthorEmail, RepositoryGrant? grant = null)
+    public GitRepositoryChange(string gitRepository, string gitAuthorName, string gitAuthorEmail, GitRepositoryGrant? grant = null)
     {
-        string[] parts = (repository ?? "").Split('/');
+        string[] parts = (gitRepository ?? "").Split('/');
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(gitAuthorName) || string.IsNullOrWhiteSpace(gitAuthorEmail) ||
             gitAuthorName.Contains('\n') || gitAuthorEmail.Contains('\n')) throw new WorkRuleException(WorkRule.InvalidValue);
         foreach (string part in parts)
@@ -166,7 +181,7 @@ public sealed record RepositoryChange
             foreach (char c in part)
                 if (!(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.')) throw new WorkRuleException(WorkRule.InvalidValue);
         }
-        Repository = repository!;
+        GitRepository = gitRepository!;
         GitAuthorName = gitAuthorName;
         GitAuthorEmail = gitAuthorEmail;
         Grant = grant;
@@ -174,18 +189,31 @@ public sealed record RepositoryChange
 }
 
 // Immutable authority captured when an attempt is queued; enforced outside the agent.
-public sealed record RepositoryGrant(long ConnectionId, string Generation, string AccountId,
-    string Login, long RepositoryId, string BaseBranch, string Branch, int PolicyVersion = 2,
-    bool AllowPush = false, bool AllowPullRequest = false)
+public sealed record GitRepositoryGrant
 {
-    public void Authorize(long workId, long attemptId, string repository, string requestedRepository, string branch, RepositoryOperationKind operation)
+    public GitRepositoryGrant()
+    {
+    }
+
+    public long ConnectionId { get; init; }
+    public string Generation { get; init; } = null!;
+    public string AccountId { get; init; } = null!;
+    public string Login { get; init; } = null!;
+    public long GitRepositoryId { get; init; }
+    public string BaseBranch { get; init; } = null!;
+    public string Branch { get; init; } = null!;
+    public int PolicyVersion { get; init; } = 2;
+    public bool AllowPush { get; init; }
+    public bool AllowPullRequest { get; init; }
+
+    public void Authorize(long workId, long attemptId, string gitRepository, string requestedGitRepository, string branch, GitRepositoryOperationKind operation)
     {
         if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion is not (1 or 2) ||
             Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
-            !string.Equals(repository, requestedRepository, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(gitRepository, requestedGitRepository, StringComparison.OrdinalIgnoreCase) ||
             !Enum.IsDefined(operation) ||
-            PolicyVersion == 2 && (operation == RepositoryOperationKind.Publish && !AllowPush ||
-                operation == RepositoryOperationKind.PullRequest && (!AllowPush || !AllowPullRequest)))
+            PolicyVersion == 2 && (operation == GitRepositoryOperationKind.Publish && !AllowPush ||
+                operation == GitRepositoryOperationKind.PullRequest && (!AllowPush || !AllowPullRequest)))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }
@@ -229,6 +257,31 @@ public sealed class ExecutionAttempt
 }
 
 // Runtime turns and physical allocations do not replace the logical attempt.
-public sealed record ExecutionTurnRecord(int Number, int WorkspaceNumber, long? OwnerId,
-    string? EnvironmentReference, ExecutionSession? Session, DateTimeOffset? StartedAt,
-    DateTimeOffset? FinishedAt, long? CheckpointId);
+public sealed record ExecutionTurnRecord
+{
+    public ExecutionTurnRecord(int number, int workspaceNumber)
+    {
+        Number = number;
+        WorkspaceNumber = workspaceNumber;
+    }
+
+    public int Number { get; init; }
+    public int WorkspaceNumber { get; init; }
+    public long? OwnerId { get; init; }
+    public string? EnvironmentReference { get; init; }
+    public ExecutionSession? Session { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+    public DateTimeOffset? FinishedAt { get; init; }
+    public long? CheckpointId { get; init; }
+
+    internal static ExecutionTurnRecord Capture(ExecutionAttempt attempt) =>
+        new(attempt.TurnNumber, attempt.WorkspaceNumber)
+        {
+            OwnerId = attempt.OwnerId,
+            EnvironmentReference = attempt.EnvironmentReference,
+            Session = attempt.Session,
+            StartedAt = attempt.StartedAt,
+            FinishedAt = attempt.FinishedAt,
+            CheckpointId = attempt.CheckpointId
+        };
+}

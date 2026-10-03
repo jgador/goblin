@@ -61,7 +61,7 @@ public sealed class PersistentSandboxTests
         work.ConfirmCleanup(10, 100, Now);
         work.AnswerDecision(1, "Continue", Now);
         work.TryClaimExecution(10, 101, "text/10/turn/2", Now);
-        work.RequireRepositoryExecution(10, 101, Now);
+        work.RequireGitRepositoryExecution(10, 101, Now);
         work.TryClaimExecution(10, 102, plane.Host.EnvironmentFor(1, 10), Now);
         Assert.Null(work.CurrentAttempt!.Session);
         await plane.Host.StartAsync(work.Snapshot(), default);
@@ -168,7 +168,7 @@ public sealed class PersistentSandboxTests
     private static WorkItem Running(long id, long attempt, SandboxHost host)
     {
         var work = new WorkItem(id, "Edit repository", Now); work.Assign(1, Now);
-        work.QueueExecution(attempt, new("codex", 1, repository: new("owner/repo", "Goblin", "goblin@example.test")), Now);
+        work.QueueExecution(attempt, new("codex", 1, gitRepository: new("owner/repo", "Goblin", "goblin@example.test")), Now);
         work.TryClaimExecution(attempt, 100, host.EnvironmentFor(id, attempt), Now); return work;
     }
 
@@ -203,7 +203,7 @@ public sealed class PersistentSandboxTests
             _server = server; _auth = Path.Combine(Path.GetTempPath(), "goblin-sandbox-test-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_auth); File.WriteAllText(Path.Combine(_auth, "auth.json"), "{}");
             _api = new(server.Urls.Single());
-            Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Checkpoints(), new(MaxCachedVolumes: 1));
+            Host = new(_api, new("agents", "image", _auth, "http://repository"), new TextHost(), Broker, new Checkpoints(), new(maxCachedVolumes: 1));
         }
 
         public static async Task<ControlPlane> StartAsync()
@@ -266,7 +266,7 @@ public sealed class PersistentSandboxTests
         public async ValueTask DisposeAsync() { _api.Dispose(); await _server.DisposeAsync(); Directory.Delete(_auth, true); }
     }
 
-    private sealed class Broker : IRepositoryBroker
+    private sealed class Broker : IGitRepositoryBroker
     {
         public int Stops { get; private set; }
 
@@ -281,7 +281,7 @@ public sealed class PersistentSandboxTests
 
     private sealed class Checkpoints : IWorkspaceCheckpoints
     {
-        public Task<WorkspaceCheckpoint?> LatestAsync(long workId, string repository, CancellationToken token) => Task.FromResult<WorkspaceCheckpoint?>(null);
+        public Task<WorkspaceCheckpoint?> LatestAsync(long workId, string gitRepository, CancellationToken token) => Task.FromResult<WorkspaceCheckpoint?>(null);
 
         public Task<bool> VerifiedAsync(long id, long attemptId, int turnNumber, CancellationToken token) => Task.FromResult(true);
     }

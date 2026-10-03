@@ -28,8 +28,11 @@ internal static class SettingsEndpoints
 
     private static IResult TimeZones() => Results.Json(WorkspacePreferences.TimeZones);
 
-    private static Task<WorkspacePreferenceState> SetTimeZoneAsync(HttpContext context, WorkspacePreferences preferences, CancellationToken token) =>
-        preferences.SetTimeZoneAsync(ApiRequest.StringField(context, "timeZone"), ApiRequest.StringField(context, "expectedTimeZone"), token);
+    private static Task<WorkspacePreferenceState> SetTimeZoneAsync(HttpContext context, WorkspacePreferences preferences, CancellationToken token)
+    {
+        TimeZoneRequest request = ApiRequest.Body<TimeZoneRequest>(context);
+        return preferences.SetTimeZoneAsync(request.TimeZone, request.ExpectedTimeZone, token);
+    }
 
     private static async Task<IResult> LogsPreferencesAsync(WorkspacePreferences preferences, CancellationToken token)
     {

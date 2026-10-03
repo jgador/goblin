@@ -29,11 +29,50 @@ internal enum ExternalMessageState
     Rejected
 }
 
-public sealed record ExternalLinkView(long Id, string? UserId, DateTime ExpiresAt);
+public sealed class ExternalLinkView
+{
+    public ExternalLinkView(long id, string? userId, DateTime expiresAt)
+    {
+        Id = id;
+        UserId = userId;
+        ExpiresAt = expiresAt;
+    }
 
-public sealed record ExternalLinkCode(long Id, string Code, DateTime ExpiresAt);
+    public long Id { get; init; }
 
-public sealed record ExternalIdentityView(long Id, string UserId);
+    public string? UserId { get; init; }
+
+    public DateTime ExpiresAt { get; init; }
+}
+
+public sealed class ExternalLinkCode
+{
+    public ExternalLinkCode(long id, string code, DateTime expiresAt)
+    {
+        Id = id;
+        Code = code;
+        ExpiresAt = expiresAt;
+    }
+
+    public long Id { get; init; }
+
+    public string Code { get; init; }
+
+    public DateTime ExpiresAt { get; init; }
+}
+
+public sealed class ExternalIdentityView
+{
+    public ExternalIdentityView(long id, string userId)
+    {
+        Id = id;
+        UserId = userId;
+    }
+
+    public long Id { get; init; }
+
+    public string UserId { get; init; }
+}
 
 public sealed class ExternalConversationStore
 {
@@ -181,8 +220,8 @@ public sealed class ExternalConversationStore
             if (source is null)
             {
                 long workId = await IdentityStore.NextAsync(db, IdentityKind.Work, token);
-                view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    workId, WorkAction.Create, Text: message.Body), token);
+                view = await _work.ApplyConversationCommandAsync(db, outbox,
+                    WorkCommands.Create(await IdentityStore.NextAsync(db, IdentityKind.Command, token), workId, message.Body), token);
                 conversation = new()
                 {
                     Id = await IdentityStore.NextAsync(db, IdentityKind.Conversation, token),
@@ -199,8 +238,8 @@ public sealed class ExternalConversationStore
                     ThreadId = message.ThreadId,
                     ConversationId = conversation.Id
                 });
-                view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    workId, WorkAction.Execute, view.Version), token);
+                view = await _work.ApplyConversationCommandAsync(db, outbox,
+                    WorkCommands.Execute(await IdentityStore.NextAsync(db, IdentityKind.Command, token), workId, view.Version), token);
             }
             else
             {
@@ -210,10 +249,11 @@ public sealed class ExternalConversationStore
                 WorkDecision? decision = snapshot.Decisions.LastOrDefault(x => x.AnsweredAt is null);
                 // Only an existing question may consume a conversational answer.
                 // Repository approval, retry, completion and cancellation stay in the local UI.
-                WorkAction action = snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
-                    ? WorkAction.Answer : WorkAction.AddContext;
-                view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    row.Id, action, row.Version, message.Body, DecisionId: action == WorkAction.Answer ? decision!.Id : null), token);
+                long commandId = await IdentityStore.NextAsync(db, IdentityKind.Command, token);
+                WorkCommand command = snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
+                    ? WorkCommands.Answer(commandId, row.Id, row.Version, decision.Id, message.Body)
+                    : WorkCommands.AddContext(commandId, row.Id, row.Version, message.Body);
+                view = await _work.ApplyConversationCommandAsync(db, outbox, command, token);
             }
             long messageId = await IdentityStore.NextAsync(db, IdentityKind.Message, token);
             db.ConversationMessages.Add(new() { Id = messageId, ConversationId = conversation.Id, Body = message.Body, CreatedAt = message.ReceivedAt });

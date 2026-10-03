@@ -60,7 +60,7 @@ if (config.EnableWork)
     app.MapPost("/fixture/repository", async (GitHubStore store) =>
     {
         await store.ObserveAsync(new("browser-fixture", "42", "owner"), Goblin.Contracts.GitHubConnectionStatus.Connected);
-        await store.SetRepositoryAsync(new(22, "owner/repo", "main", true), true, "browser-fixture");
+        await store.SetGitRepositoryAsync(new(22, "owner/repo", "main", true), true, "browser-fixture");
         return Results.Ok();
     });
 }
@@ -95,7 +95,7 @@ await Console.In.ReadLineAsync();
 await app.Services.GetRequiredService<CodexClient>().DisposeAsync();
 await app.StopAsync();
 
-internal sealed record FixtureOptions
+internal sealed class FixtureOptions
 {
     public required string Root { get; init; }
     public required string DataDir { get; init; }

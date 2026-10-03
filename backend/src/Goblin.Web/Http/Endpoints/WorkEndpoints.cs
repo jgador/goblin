@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -30,9 +28,7 @@ internal static class WorkEndpoints
 
     private static async Task<IResult> ApplyAsync(HttpContext context, WorkStore store)
     {
-        Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        Api.WorkCommand command = JsonSerializer.Deserialize<Api.WorkCommand>(JsonSerializer.Serialize(body), WorkStore.Json)
-            ?? throw new PublicError("invalid_command", "Send a work command.");
+        Api.WorkCommand command = ApiRequest.Body<Api.WorkCommand>(context, WorkStore.Json);
         // Once accepted, the command has an independent transaction and
         // execution lifecycle. RequestAborted is deliberately not passed.
         return WorkResponse.Json(Api.WorkView.From(await store.ApplyAsync(command.ToApplication())));
@@ -40,9 +36,7 @@ internal static class WorkEndpoints
 
     private static async Task<IResult> ReserveIdentitiesAsync(HttpContext context, IdentityStore store, CancellationToken token)
     {
-        Dictionary<string, JsonElement> body = ApiRequest.Body(context);
-        Api.IdentityRequest request = JsonSerializer.Deserialize<Api.IdentityRequest>(JsonSerializer.Serialize(body), WorkStore.Json)
-            ?? throw new PublicError("invalid_command", "Specify the IDs to reserve.");
+        Api.IdentityRequest request = ApiRequest.Body<Api.IdentityRequest>(context, WorkStore.Json);
         return WorkResponse.Json(Api.ReservedIdentities.From(await store.ReserveAsync(request.ToApplication(), token)));
     }
 

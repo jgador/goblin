@@ -17,7 +17,7 @@ use std::path::Path;
 use std::process::Command;
 
 // goblinctl ships from Goblin's own repository, not a configurable dependency source.
-pub const REPOSITORY: &str = "jgador/goblin";
+pub const GITHUB_REPOSITORY: &str = "jgador/goblin";
 pub const TARGET: &str = "x86_64-unknown-linux-musl";
 pub const ARCHIVE: &str = "goblinctl-x86_64-unknown-linux-musl.tar.gz";
 const INPUTS: &str = "tools/goblinctl/release-inputs.json";
@@ -304,11 +304,11 @@ pub fn compare(current: &Inputs, published: &Inputs, required: &BTreeSet<String>
     }
 }
 
-pub fn download(repo: &str, version: &str, destination: &Path) -> Result<()> {
+pub fn download(github_repository: &str, version: &str, destination: &Path) -> Result<()> {
     validate_version(version)?;
     ensure!(
-        repo.split('/').count() == 2
-            && repo
+        github_repository.split('/').count() == 2
+            && github_repository
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b"/._-".contains(&b)),
         "Invalid GitHub repository"
@@ -320,7 +320,7 @@ pub fn download(repo: &str, version: &str, destination: &Path) -> Result<()> {
                 "download",
                 &format!("goblinctl-v{version}"),
                 "--repo",
-                repo,
+                github_repository,
                 "--clobber",
                 "--pattern",
                 ARCHIVE,
@@ -334,7 +334,7 @@ pub fn download(repo: &str, version: &str, destination: &Path) -> Result<()> {
     )
 }
 
-pub fn verify_artifacts(repo: &str, directory: &Path) -> Result<Release> {
+pub fn verify_artifacts(github_repository: &str, directory: &Path) -> Result<Release> {
     let release: Release = json(&directory.join("release.json"))?;
     validate(&release)?;
     ensure!(
@@ -354,9 +354,9 @@ pub fn verify_artifacts(repo: &str, directory: &Path) -> Result<Release> {
                 .arg(directory.join(artifact))
                 .args([
                     "--repo",
-                    repo,
+                    github_repository,
                     "--signer-workflow",
-                    &format!("{repo}/.github/workflows/goblinctl-release.yml"),
+                    &format!("{github_repository}/.github/workflows/goblinctl-release.yml"),
                     "--deny-self-hosted-runners",
                 ]),
         )?;
@@ -366,12 +366,12 @@ pub fn verify_artifacts(repo: &str, directory: &Path) -> Result<Release> {
 
 pub fn check(
     root: &Path,
-    repo: &str,
+    github_repository: &str,
     depfile: &Path,
     directory: &Path,
     report_path: &Path,
 ) -> Result<()> {
-    let result = check_inner(root, repo, depfile, directory);
+    let result = check_inner(root, github_repository, depfile, directory);
     let report = match result {
         Ok(report) => report,
         Err(error) => Report {
@@ -394,22 +394,27 @@ pub fn check(
     Ok(())
 }
 
-fn check_inner(root: &Path, repo: &str, depfile: &Path, directory: &Path) -> Result<Report> {
+fn check_inner(
+    root: &Path,
+    github_repository: &str,
+    depfile: &Path,
+    directory: &Path,
+) -> Result<Report> {
     crate::dependencies::check(root)?;
-    verify_repository(repo)?;
+    verify_github_repository(github_repository)?;
     let snapshot = inputs(root)?;
     coverage(root, depfile, &snapshot)?;
     let required = capabilities(&root.join("deploy/goblinctl-requirements.json"))?;
     let pin = crate::dependencies::installer(root)?;
     let version = pin.version.as_str();
-    download(repo, version, directory)?;
+    download(github_repository, version, directory)?;
     let raw = files::json(&directory.join("release.json"))?;
     if raw.get("schemaVersion").is_none() {
         return Ok(Report { schema_version: 1, outcome: Outcome::ReleaseRequired,
             message: "The pinned legacy release has no authenticated installer fingerprint. Publish a release with dependency metadata.".into(),
             changed_inputs: snapshot.files.keys().cloned().collect() });
     }
-    let published = verify_artifacts(repo, directory)?;
+    let published = verify_artifacts(github_repository, directory)?;
     ensure!(published.version == version, "Release tag/version mismatch");
     let mut report = compare(&snapshot, &published.installer, &required);
     if report.outcome == Outcome::Ready && pin != published {
@@ -437,11 +442,11 @@ fn check_inner(root: &Path, repo: &str, depfile: &Path, directory: &Path) -> Res
     Ok(report)
 }
 
-pub fn pin(root: &Path, repo: &str, version: &str) -> Result<()> {
-    verify_repository(repo)?;
+pub fn pin(root: &Path, github_repository: &str, version: &str) -> Result<()> {
+    verify_github_repository(github_repository)?;
     let directory = tempfile::tempdir()?;
-    download(repo, version, directory.path())?;
-    let release = verify_artifacts(repo, directory.path())?;
+    download(github_repository, version, directory.path())?;
+    let release = verify_artifacts(github_repository, directory.path())?;
     ensure!(release.version == version, "Release tag/version mismatch");
     let report = compare(
         &inputs(root)?,
@@ -452,10 +457,10 @@ pub fn pin(root: &Path, repo: &str, version: &str) -> Result<()> {
     crate::dependencies::pin_release(root, &release)
 }
 
-fn verify_repository(repository: &str) -> Result<()> {
+fn verify_github_repository(github_repository: &str) -> Result<()> {
     ensure!(
-        repository == REPOSITORY,
-        "goblinctl releases must come from Goblin's repository: {REPOSITORY}"
+        github_repository == GITHUB_REPOSITORY,
+        "goblinctl releases must come from Goblin's repository: {GITHUB_REPOSITORY}"
     );
     Ok(())
 }

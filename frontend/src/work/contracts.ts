@@ -4,9 +4,40 @@ import type {
     AttentionReason,
     FailureKind,
     WorkEventKind,
-    RepositoryAuthorizationStatus,
+    GitRepositoryAuthorizationStatus,
 } from "../api/values.js";
 // Goblin-owned Work HTTP views. IDs remain decimal strings.
+// Property names follow the existing JSON contract, just as C# uses JsonPropertyName.
+export type GitRepositoryGrant = {
+    login: string;
+    branch: string;
+    baseBranch: string;
+    allowPush: boolean;
+    allowPullRequest: boolean;
+};
+export type GitRepositoryChange = {
+    repository: string;
+    gitAuthorName?: string;
+    gitAuthorEmail?: string;
+    grant?: GitRepositoryGrant;
+};
+export type ExecutionTarget = {
+    runtime: string;
+    requestedModel?: string;
+    requestedEffort?: string;
+    repository?: GitRepositoryChange;
+};
+export type WorkGitRepositoryRequest = {
+    repositories: string[];
+    target: ExecutionTarget;
+};
+export type GitRepositoryAuthorization = {
+    id: string;
+    status: GitRepositoryAuthorizationStatus;
+    target: ExecutionTarget;
+    enableRepository: boolean;
+    retry: boolean;
+};
 export type Attempt = {
     id: string;
     status: AttemptStatus;
@@ -14,23 +45,7 @@ export type Attempt = {
     queuedAt?: string;
     startedAt?: string;
     finishedAt?: string;
-    target: {
-        runtime: string;
-        requestedModel?: string;
-        requestedEffort?: string;
-        repository?: {
-            repository: string;
-            gitAuthorName?: string;
-            gitAuthorEmail?: string;
-            grant?: {
-                login: string;
-                branch: string;
-                baseBranch: string;
-                allowPush: boolean;
-                allowPullRequest: boolean;
-            };
-        };
-    };
+    target: ExecutionTarget;
     session?: { model?: string };
     failure?: FailureKind;
     environmentReference?: string;
@@ -54,17 +69,8 @@ export type Work = {
     status: WorkStatus;
     agentId?: string;
     attention?: { reason: AttentionReason; failure?: FailureKind };
-    repositoryRequest?: {
-        repositories: string[];
-        target: Attempt["target"];
-    };
-    repositoryAuthorization?: {
-        id: string;
-        status: RepositoryAuthorizationStatus;
-        target: Attempt["target"];
-        enableRepository: boolean;
-        retry: boolean;
-    };
+    repositoryRequest?: WorkGitRepositoryRequest;
+    repositoryAuthorization?: GitRepositoryAuthorization;
     attempts: Attempt[];
     history: {
         sequence: string;

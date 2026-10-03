@@ -47,7 +47,7 @@ internal sealed class ConnectionEndpoints
     private Task<Api.AuthenticationState> LoginChatGPTAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGPTAsync);
 
     private Task<Api.AuthenticationState> LoginApiKeyAsync(HttpContext context) =>
-        ConnectionAsync(context, true, () => _auth.LoginApiKeyAsync(ApiRequest.StringField(context, "apiKey")));
+        ConnectionAsync(context, true, () => _auth.LoginApiKeyAsync(ApiRequest.Body<ApiKeyRequest>(context).ApiKey));
 
     private Task<Api.AuthenticationState> CancelLoginAsync(HttpContext context) => ConnectionAsync(context, true, _auth.CancelLoginAsync);
 
@@ -60,7 +60,7 @@ internal sealed class ConnectionEndpoints
         bool available = false;
         try
         {
-            PromptResult result = await _auth.SendPromptAsync(ApiRequest.StringField(context, "prompt"), context.RequestAborted);
+            PromptResult result = await _auth.SendPromptAsync(ApiRequest.Body<PromptRequest>(context).Prompt, context.RequestAborted);
             available = true;
             return Results.Json(Api.PromptResult.From(result));
         }

@@ -136,7 +136,10 @@ Protocol/Kubernetes generators, EF scaffolding, and the .NET SQL migration engin
 remain authoritative. Production shell helpers find the installed CLI via
 `GOBLINCTL` or PATH; developer scripts can use `GOBLINCTL="$PWD/target/debug/goblinctl"`.
 `--repo` selects the credential/settings destination. On a standalone installed
-host, database exports default to `/var/lib/goblin/config`.
+host, database exports default to `/var/lib/goblin/config`. The flag retains its
+existing spelling; Rust names this general destination `config_root` and names
+the local source checkout `git_repository`. The local ownership file likewise
+retains its existing `repo` JSON key.
 
 ## Releases
 

@@ -16,8 +16,24 @@ using K = Goblin.Execution.Kubernetes;
 
 namespace Goblin.Execution;
 
-public sealed record SandboxOptions(string Namespace, string Image, string CodexHome, string RepositoryUrl)
+public sealed class SandboxOptions
 {
+    public SandboxOptions(string @namespace, string image, string codexHome, string gitRepositoryUrl)
+    {
+        Namespace = @namespace;
+        Image = image;
+        CodexHome = codexHome;
+        GitRepositoryUrl = gitRepositoryUrl;
+    }
+
+    public string Namespace { get; init; }
+
+    public string Image { get; init; }
+
+    public string CodexHome { get; init; }
+
+    public string GitRepositoryUrl { get; init; }
+
     public string CpuLimit { get; init; } = "2";
     public string MemoryLimit { get; init; } = "2Gi";
 }
@@ -27,19 +43,19 @@ public sealed class SandboxHost : IExecutionHost
     private readonly KubernetesApi _api;
     private readonly SandboxOptions _options;
     private readonly IExecutionHost _textHost;
-    private readonly IRepositoryBroker _repositories;
+    private readonly IGitRepositoryBroker _gitRepositories;
     private readonly IWorkspaceCheckpoints? _checkpoints;
     private readonly WorkspaceLimits _limits;
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _workLocks = new();
 
-    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IRepositoryBroker repositories, IWorkspaceCheckpoints? checkpoints = null, WorkspaceLimits? limits = null)
+    public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IGitRepositoryBroker gitRepositories, IWorkspaceCheckpoints? checkpoints = null, WorkspaceLimits? limits = null)
     {
         if (!ValidNamespace(options.Namespace))
             throw new ArgumentException("Invalid execution namespace.", nameof(options));
         _api = api;
         _options = options;
         _textHost = textHost;
-        _repositories = repositories;
+        _gitRepositories = gitRepositories;
         _checkpoints = checkpoints;
         _limits = limits ?? new();
     }
@@ -49,7 +65,7 @@ public sealed class SandboxHost : IExecutionHost
     public string EnvironmentFor(long workId, long attemptId) => "k8s/" + _options.Namespace + "/work-" +
         workId.ToString(CultureInfo.InvariantCulture);
 
-    public string EnvironmentFor(WorkSnapshot work) => work.Attempts[^1] is { Target.Repository: null } or { ReasoningOnly: true }
+    public string EnvironmentFor(WorkSnapshot work) => work.Attempts[^1] is { Target.GitRepository: null } or { ReasoningOnly: true }
         ? _textHost.EnvironmentFor(work) : EnvironmentFor(work.Id, work.Attempts[^1].Id);
 
     private static bool ValidNamespace(string value) => Regex.IsMatch(value, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
@@ -106,7 +122,7 @@ public sealed class SandboxHost : IExecutionHost
     private async Task StartCoreAsync(WorkSnapshot work, CancellationToken token)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
-        if (attempt.Target.Repository is null || attempt.ReasoningOnly) { await _textHost.StartAsync(work, token); return; }
+        if (attempt.Target.GitRepository is null || attempt.ReasoningOnly) { await _textHost.StartAsync(work, token); return; }
         if (attempt.Status != AttemptStatus.Starting || attempt.OwnerId is null) return;
         SandboxAddress address = Address(work);
         string path = address.Sandboxes + "/" + address.Name;
@@ -141,7 +157,7 @@ public sealed class SandboxHost : IExecutionHost
                 // Missing retained storage needs explicit recovery; never substitute an
                 // older checkpoint for edits that were supposed to survive suspension.
                 if (requiresVolume || (existing is null && (attempt.WorkspaceNumber > 1 || attempt.TurnNumber > 1 ||
-                    work.Attempts.SkipLast(1).Any(a => a.Target.Repository is not null && a.EnvironmentReference is not null))))
+                    work.Attempts.SkipLast(1).Any(a => a.Target.GitRepository is not null && a.EnvironmentReference is not null))))
                     throw new IOException("Retained workspace storage is missing.");
                 await RequireVolumeCapacityAsync(address, token);
                 if (!await _api.CreateAsync(address.Core + "/persistentvolumeclaims", new K.PersistentVolumeClaim
@@ -168,14 +184,14 @@ public sealed class SandboxHost : IExecutionHost
             if (!Owns(reserved, work) || reserved.Metadata?.Labels?.GetValueOrDefault("goblin-phase") != "reserved")
                 throw new IOException("Workspace reservation changed.");
             string codex = await File.ReadAllTextAsync(Path.Combine(_options.CodexHome, "auth.json"), token);
-            string capability = await _repositories.PrepareAsync(work, token);
+            string capability = await _gitRepositories.PrepareAsync(work, token);
             if (!await _api.CreateAsync(address.Core + "/secrets", new K.Secret
             {
                 ApiVersion = "v1",
                 Kind = "Secret",
                 Metadata = Metadata(name, work),
                 Type = "Opaque",
-                StringData = new() { ["auth.json"] = codex, ["repository-capability"] = capability, ["repository-url"] = _options.RepositoryUrl }
+                StringData = new() { ["auth.json"] = codex, ["repository-capability"] = capability, ["repository-url"] = _options.GitRepositoryUrl }
             }, token)) throw new IOException("Execution inputs already exist.");
             if (!await _api.CreateAsync(address.Core + "/configmaps", new K.ConfigMap
             {
@@ -211,12 +227,12 @@ public sealed class SandboxHost : IExecutionHost
 
     private async Task<ExecutionObservation> ObserveCoreAsync(WorkSnapshot work, bool stop, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is null || work.Attempts[^1].ReasoningOnly) return await _textHost.ObserveAsync(work, stop, token);
+        if (work.Attempts[^1].Target.GitRepository is null || work.Attempts[^1].ReasoningOnly) return await _textHost.ObserveAsync(work, stop, token);
         if (work.Attempts[^1].Status == AttemptStatus.Uncertain) stop = true;
         SandboxAddress address = Address(work);
         string name = address.Name;
-        ExecutionObservation? repositoryObservation = await _repositories.ObserveAsync(work, token);
-        if (repositoryObservation?.Kind == ObservationKind.Uncertain) stop = true;
+        ExecutionObservation? gitRepositoryObservation = await _gitRepositories.ObserveAsync(work, token);
+        if (gitRepositoryObservation?.Kind == ObservationKind.Uncertain) stop = true;
         K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(address.Sandboxes + "/" + name, token);
         if (sandbox is null)
         {
@@ -245,7 +261,7 @@ public sealed class SandboxHost : IExecutionHost
             {
                 string? logs = await _api.LogsAsync(address.Core + "/pods/" + podName + "/log?container=execution&limitBytes=262144", token);
                 string? result = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_RESULT ", StringComparison.Ordinal));
-                if (result is not null && repositoryObservation is null)
+                if (result is not null && gitRepositoryObservation is null)
                 {
                     ExecutionObservation observation = JsonSerializer.Deserialize<ExecutionObservation>(result[14..], ExecutionFiles.Json)!;
                     if (observation.TurnNumber == work.Attempts[^1].TurnNumber &&
@@ -257,7 +273,7 @@ public sealed class SandboxHost : IExecutionHost
                         return observation;
                     }
                 }
-                if (phase is "Succeeded" or "Failed" && repositoryObservation is null) return new(ObservationKind.Failed, Failure: FailureKind.ExecutionFailed) { TurnNumber = work.Attempts[^1].TurnNumber };
+                if (phase is "Succeeded" or "Failed" && gitRepositoryObservation is null) return new(ObservationKind.Failed, Failure: FailureKind.ExecutionFailed) { TurnNumber = work.Attempts[^1].TurnNumber };
                 string? progress = logs?.Split('\n').LastOrDefault(x => x.StartsWith("GOBLIN_PROGRESS ", StringComparison.Ordinal));
                 if (!stop && progress is not null)
                 {
@@ -273,11 +289,11 @@ public sealed class SandboxHost : IExecutionHost
             pods = await _api.GetAsync<K.PodList>(address.Core + "/pods?labelSelector=goblin-attempt%3D" + work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture), token);
             if (!(pods?.Items.Any(p => p.Metadata?.Name == name) ?? false))
             {
-                try { await _repositories.StopAsync(work, token); }
+                try { await _gitRepositories.StopAsync(work, token); }
                 catch { return new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed); }
                 return new(ObservationKind.Stopped) { TurnNumber = work.Attempts[^1].TurnNumber };
             }
-            return repositoryObservation ?? new(ObservationKind.Pending);
+            return gitRepositoryObservation ?? new(ObservationKind.Pending);
         }
         return new(ObservationKind.Pending);
     }
@@ -287,7 +303,7 @@ public sealed class SandboxHost : IExecutionHost
 
     private async Task CleanupCoreAsync(WorkSnapshot work, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is null || work.Attempts[^1].ReasoningOnly) { await _textHost.CleanupAsync(work, token); return; }
+        if (work.Attempts[^1].Target.GitRepository is null || work.Attempts[^1].ReasoningOnly) { await _textHost.CleanupAsync(work, token); return; }
         SandboxAddress address = Address(work);
         string path = address.Sandboxes + "/" + address.Name;
         K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(path, token);
@@ -300,7 +316,7 @@ public sealed class SandboxHost : IExecutionHost
         if (!Owns(sandbox, work)) return; // A later allocation owns this Work's sandbox.
         if (sandbox.Metadata?.Labels?.GetValueOrDefault("goblin-phase") == "stopped") return;
         if (!await SuspendAsync(address, sandbox, token)) throw new IOException("Workspace ownership changed.");
-        await _repositories.StopAsync(work, token);
+        await _gitRepositories.StopAsync(work, token);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         while (await _api.GetAsync<K.Pod>(address.Core + "/pods/" + address.Name, timeout.Token) is not null)
@@ -310,7 +326,7 @@ public sealed class SandboxHost : IExecutionHost
         string input = InputName(work);
         await _api.DeleteAsync(address.Core + "/secrets/" + input, token);
         await _api.DeleteAsync(address.Core + "/configmaps/" + input, token);
-        await _repositories.ReleaseAsync(work, token);
+        await _gitRepositories.ReleaseAsync(work, token);
         K.Sandbox stopped = await _api.GetAsync<K.Sandbox>(path, token) ?? throw new IOException("Workspace is unavailable.");
         if (!Owns(stopped, work) || !await _api.TryPatchAsync(path, new
         {

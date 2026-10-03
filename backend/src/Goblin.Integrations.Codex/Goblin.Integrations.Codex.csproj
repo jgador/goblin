@@ -4,4 +4,7 @@
     <ProjectReference Include="../Goblin.Protocol/Goblin.Protocol.csproj" />
     <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Goblin.Tests" />
+  </ItemGroup>
 </Project>

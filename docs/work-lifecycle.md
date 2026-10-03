@@ -127,12 +127,15 @@ service ownership intact. Connection handlers still coordinate integration calls
 with request-scoped stores; Work lifecycle rules remain in Core.
 
 Public HTTP requests and responses use classes with explicit `JsonPropertyName`
-attributes. `Http/Contracts/` maps application and core records into those classes,
+attributes. `Http/Contracts/` maps application and core types into those classes,
 including every nested Work snapshot, so C# property renames cannot silently rename
 JSON fields. Request classes map back to application commands before dispatch.
-Core records, persistence encodings, and internal repository transport remain
+Core types, persistence encodings, and internal repository transport remain
 independent of these public HTTP contracts. Contract tests pin the existing JSON
 names and verify mapping, account discriminators, request defaults, and bigint IDs.
+`WorkSnapshot` and `AttemptSnapshot` are transfer classes for persistence and worker
+inputs; the live aggregate and its domain history remain distinct. The
+[C# record audit](csharp-record-audit.md) explains the retained value/state records.
 
 `Goblin.Core` has only .NET base-library dependencies. Product types must not
 reference ASP.NET, database entities, Wolverine, or runtime SDKs/protocols. The
@@ -166,7 +169,7 @@ into durable setup or authorization requests. Users can enable a repository in
 Settings or explicitly enable it when approving a Work request in the conversation.
 The saved preview identifies the GitHub account, repository, base/work branches,
 Git author, and push/PR permissions. Repository metadata lookup precedes the preview;
-checkout and execution wait for approval. See [repository intent](repository-intent.md).
+checkout and execution wait for approval. See [repository intent](git-repository-intent.md).
 
 `PrepareRepository` records a preview without creating an attempt. `AuthorizeRepository`
 accepts only its saved request ID and checks current enablement and connection identity.

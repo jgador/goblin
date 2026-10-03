@@ -25,14 +25,15 @@ internal static class SlackEndpoints
         app.MapGet(Root + "/manifest", () => Results.Text(Assets.Manifest, "application/json"));
         app.MapPost(Root + "/setup", (HttpContext context, SlackSetup setup) => WorkResponse.Json(Api.SlackSetupView.From(setup.Start(Session(context)))));
         app.MapPost(Root + "/confirm", (HttpContext context, SlackSetup setup) =>
-            WorkResponse.Json(Api.SlackSetupView.From(setup.Confirm(Session(context), ApiRequest.StringField(context, "code") ?? ""))));
+            WorkResponse.Json(Api.SlackSetupView.From(setup.Confirm(Session(context), ApiRequest.Body<SlackConfirmationRequest>(context).Code ?? ""))));
         app.MapPost(Root + "/resume", (HttpContext context, SlackSetup setup) => WorkResponse.Json(Api.SlackSetupView.From(setup.Resume(Session(context)))));
         app.MapPost(Root + "/cancel", async (HttpContext context, SlackSetup setup) =>
         { await setup.CancelAsync(); return Results.Json(new { cancelled = true }); });
         app.MapPost(Root + "/connect", async (HttpContext context, SlackConnection connection, SlackSetup setup) =>
         {
             await setup.CancelAsync();
-            await connection.ConnectAsync(ApiRequest.StringField(context, "appToken") ?? "", ApiRequest.StringField(context, "botToken") ?? "", context.RequestAborted);
+            SlackConnectRequest request = ApiRequest.Body<SlackConnectRequest>(context);
+            await connection.ConnectAsync(request.AppToken ?? "", request.BotToken ?? "", context.RequestAborted);
             return WorkResponse.Json(Api.SlackConnectionView.From(connection.View));
         });
         app.MapPost(Root + "/disconnect", async (HttpContext context, SlackConnection connection, SlackSetup setup) =>
@@ -61,5 +62,5 @@ internal static class SlackEndpoints
 
     private static ExternalInstallation Installation(SlackConnection connection) => connection.Installation ?? throw new SlackFailure("Connect Slack first.");
 
-    private static long Id(HttpContext context) => long.TryParse(ApiRequest.StringField(context, "id"), out long id) && id > 0 ? id : throw new PublicError("invalid_command", "Choose a saved Slack identity.");
+    private static long Id(HttpContext context) => long.TryParse(ApiRequest.Body<SlackIdentityRequest>(context).Id, out long id) && id > 0 ? id : throw new PublicError("invalid_command", "Choose a saved Slack identity.");
 }

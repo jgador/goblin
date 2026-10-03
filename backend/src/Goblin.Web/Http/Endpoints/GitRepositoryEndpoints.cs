@@ -1,0 +1,61 @@
+using System.Threading;
+using System.Threading.Tasks;
+using Goblin.Application.GitRepositories;
+using Goblin.Application.Work;
+using Goblin.Application.Workspaces;
+using Goblin.Contracts.Runtime;
+using Goblin.Core.Work;
+using Goblin.Execution;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+
+namespace Goblin.Web;
+
+internal static class GitRepositoryEndpoints
+{
+    public static void Map(WebApplication app)
+    {
+        app.MapGet("/internal/repository/{attemptId:long}/input", Input);
+        app.MapPost("/internal/repository/{attemptId:long}/operation-id", ReserveOperationIdAsync);
+        app.MapPost("/internal/repository/{attemptId:long}/{operationId:long}/{kind}", EnqueueAsync);
+        app.MapGet("/internal/repository/{attemptId:long}/operations/{operationId:long}", StatusAsync);
+        app.MapGet("/internal/repository/{attemptId:long}/current", CurrentAsync);
+        app.MapGet("/internal/repository/{attemptId:long}/setup-memory", ReadSetupAsync);
+        app.MapPost("/internal/repository/{attemptId:long}/setup-memory", SaveSetupAsync);
+        app.MapPost("/internal/repository/{attemptId:long}/checkpoint", CheckpointAsync);
+    }
+
+    private static IResult Input(long attemptId, GitRepositoryBroker broker) =>
+        Results.File(broker.InputPath(attemptId), "application/octet-stream");
+
+    private static async Task<IResult> ReserveOperationIdAsync(long attemptId, GitRepositoryBroker broker, CancellationToken token) =>
+        Results.Json(await broker.ReserveOperationIdAsync(attemptId, token));
+
+    private static async Task<IResult> EnqueueAsync(long attemptId, long operationId, string kind, HttpContext context, GitRepositoryBroker broker)
+    {
+        if (!GitRepositoryOperationNames.TryParse(kind, out GitRepositoryOperationKind operation))
+            throw new ApplicationFailure("repository_operation_unavailable");
+        return Results.Json(await broker.EnqueueAsync(attemptId, operationId, operation, context.Request.Body, context.RequestAborted));
+    }
+
+    private static async Task<IResult> StatusAsync(long attemptId, long operationId, GitRepositoryBroker broker, CancellationToken token) =>
+        Results.Json(await broker.StatusAsync(attemptId, operationId, token));
+
+    private static async Task<IResult> CurrentAsync(long attemptId, GitRepositoryBroker broker, CancellationToken token) =>
+        Results.Json(await broker.CurrentAsync(attemptId, token), ExecutionFiles.Json);
+
+    private static async Task<IResult> ReadSetupAsync(long attemptId, GitRepositorySetupStore store, CancellationToken token) =>
+        Results.Json(await store.ReadAsync(attemptId, token), ExecutionFiles.Json);
+
+    private static async Task<IResult> SaveSetupAsync(long attemptId, HttpContext context, GitRepositorySetupStore store)
+    {
+        await store.SaveAsync(attemptId, context.Request.Body, context.RequestAborted);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> CheckpointAsync(long attemptId, HttpContext context, GitRepositoryBroker broker, WorkspaceCheckpoints checkpoints)
+    {
+        WorkspaceCheckpointWrite request = await ApiRequest.ReadBodyAsync<WorkspaceCheckpointWrite>(context.Request, ExecutionFiles.Json);
+        return Results.Json(await checkpoints.SaveAsync(attemptId, request.TurnNumber, request.CommitSha, broker, context.RequestAborted), ExecutionFiles.Json);
+    }
+}

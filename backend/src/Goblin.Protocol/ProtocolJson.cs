@@ -49,15 +49,16 @@ public sealed class ProtocolStringEnumConverter<T> : JsonConverter<T> where T : 
     private static readonly Dictionary<string, T> Values = Names.ToDictionary(
         entry => entry.Value, entry => entry.Key, StringComparer.Ordinal);
 
+    public static string WireName(T value) => Names.TryGetValue(value, out string? name)
+        ? name : throw new JsonException($"Invalid {typeof(T).Name} enum value.");
+
     public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         => reader.TokenType == JsonTokenType.String && Values.TryGetValue(reader.GetString()!, out T value)
             ? value : throw new JsonException($"Invalid {typeof(T).Name} wire value.");
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
     {
-        if (!Names.TryGetValue(value, out string? name))
-            throw new JsonException($"Invalid {typeof(T).Name} enum value.");
-        writer.WriteStringValue(name);
+        writer.WriteStringValue(WireName(value));
     }
 }
 

@@ -346,7 +346,7 @@ test("repository setup validates locally and keeps the branch and Git identity t
     page,
 }) => {
     const commands = await setup(page);
-    await page.locator("#repository-options summary").click();
+    await page.locator("#github-repository-options summary").click();
     const start = page.getByRole("button", {
         name: "Review repository access",
         exact: true,
@@ -382,7 +382,7 @@ test("repository setup validates locally and keeps the branch and Git identity t
     await page
         .getByRole("button", { name: /Review the release checklist/ })
         .click();
-    await expect(page.locator("#repository-options")).toHaveAttribute(
+    await expect(page.locator("#github-repository-options")).toHaveAttribute(
         "open",
         "",
     );
@@ -439,7 +439,7 @@ test("Settings keeps one content scroller and exposes repository loading without
     ).toBeVisible();
     finish();
     await expect(
-        dialog.locator(".repository-picker .repository-row"),
+        dialog.locator(".github-repository-picker .github-repository-row"),
     ).toHaveCount(30);
     await expect(
         dialog.getByRole("button", { name: "Choose repositories" }),
@@ -458,7 +458,9 @@ test("Settings keeps one content scroller and exposes repository loading without
             element.scrollTop = element.scrollHeight;
         });
         await expect(
-            dialog.locator(".repository-picker .repository-row").last(),
+            dialog
+                .locator(".github-repository-picker .github-repository-row")
+                .last(),
         ).toBeInViewport();
         expect(
             await dialog.evaluate(
@@ -483,7 +485,7 @@ test("a waiting conversation can authorize repository access without creating an
     page,
 }) => {
     const commands = await setup(page, { waiting: true });
-    await page.locator("#repository-options summary").click();
+    await page.locator("#github-repository-options summary").click();
     await page.getByLabel("Repository", { exact: true }).fill("owner/project");
     await page.getByLabel("Agent Git email").fill("agent@example.com");
     await page

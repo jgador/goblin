@@ -15,7 +15,16 @@ import {
     rustValues,
     generate,
 } from "./generate-contract-values.mts";
-import { WorkStatus, isContractValue } from "../frontend/src/api/values.ts";
+import {
+    WorkStatus,
+    AttentionReason,
+    WorkEventKind,
+    WorkAction,
+    IdentityKind,
+    GitRepositoryAuthorizationStatus,
+    GitRepositoryOperationState,
+    isContractValue,
+} from "../frontend/src/api/values.ts";
 
 test("C# extraction preserves explicit wire names and rejects syntax it cannot safely interpret", () => {
     assert.deepEqual(
@@ -82,6 +91,28 @@ test("runtime guards reject values outside the owning definition", () => {
     assert.equal(isContractValue(WorkStatus, "NeedsAttention"), true);
     for (const value of ["Working", "needsattention", 2, null, {}, " Ready"])
         assert.equal(isContractValue(WorkStatus, value), false);
+});
+
+test("Git repository identifiers match C# while existing wire values remain stable", () => {
+    assert.equal(AttentionReason.GitRepositoryRequired, "RepositoryRequired");
+    assert.equal(WorkEventKind.GitRepositoryRequested, "RepositoryRequested");
+    assert.equal(WorkEventKind.GitRepositoryAuthorized, "RepositoryAuthorized");
+    assert.equal(WorkEventKind.GitRepositoryDenied, "RepositoryDenied");
+    assert.equal(
+        WorkEventKind.GitRepositoryAuthorizationInvalidated,
+        "RepositoryAuthorizationInvalidated",
+    );
+    assert.equal(WorkAction.PrepareGitRepository, "PrepareRepository");
+    assert.equal(WorkAction.AuthorizeGitRepository, "AuthorizeRepository");
+    assert.equal(WorkAction.DenyGitRepository, "DenyRepository");
+    assert.equal(IdentityKind.GitRepositoryOperation, "RepositoryOperation");
+    assert.equal(GitRepositoryAuthorizationStatus.Pending, "Pending");
+    assert.equal(GitRepositoryOperationState.Succeeded, "Succeeded");
+    assert.equal(
+        isContractValue(AttentionReason, "GitRepositoryRequired"),
+        false,
+    );
+    assert.equal(isContractValue(WorkAction, "PrepareGitRepository"), false);
 });
 
 test("setup decoder rejects unsupported status, phase, step IDs, and step states", async () => {

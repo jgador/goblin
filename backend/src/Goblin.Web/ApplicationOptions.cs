@@ -8,7 +8,7 @@ using Goblin.Web.Monitoring;
 
 namespace Goblin.Web;
 
-public sealed record ApplicationOptions
+public sealed class ApplicationOptions
 {
     public string DataDirectory { get; init; } = ".goblin-auth";
     public string? PasswordHashFile { get; init; }

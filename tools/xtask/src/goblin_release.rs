@@ -230,7 +230,7 @@ fn release_tags() -> Result<Vec<String>> {
         "api",
         "--paginate",
         "--slurp",
-        &format!("repos/{}/releases?per_page=100", release::REPOSITORY),
+        &format!("repos/{}/releases?per_page=100", release::GITHUB_REPOSITORY),
     ]))?;
     let pages: Vec<Vec<serde_json::Value>> = serde_json::from_str(&response)?;
     let mut tags = pages
@@ -299,7 +299,7 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
             }
             Ok(())
         }
-        Task::PinInstaller { version } => release::pin(root, release::REPOSITORY, &version),
+        Task::PinInstaller { version } => release::pin(root, release::GITHUB_REPOSITORY, &version),
         Task::BuildInstaller { output } => {
             clean_source()?;
             let target = tempfile::tempdir()?;
@@ -320,7 +320,7 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
             fs::create_dir_all(&artifacts)?;
             release::check(
                 root,
-                release::REPOSITORY,
+                release::GITHUB_REPOSITORY,
                 &depfile,
                 &artifacts,
                 &artifacts.join("check.json"),
@@ -360,7 +360,7 @@ fn prepare(
         let workspace = env!("CARGO_PKG_VERSION");
         if workspace != pin.version && tags.contains(&format!("goblinctl-v{workspace}")) {
             // Authenticate and compare before changing the dependency selection.
-            release::pin(root, release::REPOSITORY, workspace)?;
+            release::pin(root, release::GITHUB_REPOSITORY, workspace)?;
             output("outcome", "pin-required")?;
             output("installer", workspace)?;
             return summary(&format!(
@@ -408,7 +408,7 @@ fn prepare(
     fs::create_dir_all(&archive)?;
     release::check(
         root,
-        release::REPOSITORY,
+        release::GITHUB_REPOSITORY,
         depfile,
         &archive,
         &archive.join("check.json"),
