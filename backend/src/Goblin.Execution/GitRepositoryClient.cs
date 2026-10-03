@@ -13,7 +13,7 @@ using Goblin.Core.Work;
 namespace Goblin.Execution;
 
 // Carries only an attempt capability, never an upstream GitHub credential.
-public static class RepositoryClient
+public static class GitRepositoryClient
 {
     private static async Task<HttpClient> ClientAsync()
     {
@@ -35,7 +35,7 @@ public static class RepositoryClient
         await response.Content.CopyToAsync(file);
     }
 
-    public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, RepositoryOperationKind kind)
+    public static async Task<string?> SubmitAsync(long attemptId, string branch, string checkout, GitRepositoryOperationKind kind)
     {
         if (!Enum.IsDefined(kind)) throw new IOException("Unsupported repository operation.");
         using HttpClient client = await ClientAsync();
@@ -58,10 +58,10 @@ public static class RepositoryClient
             using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(4));
             while (true)
             {
-                RepositoryOperationResponse state = await client.GetFromJsonAsync<RepositoryOperationResponse>($"/internal/repository/{attemptId}/operations/{id}", ExecutionFiles.Json, deadline.Token) ?? throw new IOException();
-                RepositoryOperationState status = state.Status;
-                if (status == RepositoryOperationState.Succeeded) return state.Url;
-                if (status is RepositoryOperationState.Failed or RepositoryOperationState.Uncertain) throw new IOException("Publishing needs attention. Inspect this Work before trying again.");
+                GitRepositoryOperationResponse state = await client.GetFromJsonAsync<GitRepositoryOperationResponse>($"/internal/repository/{attemptId}/operations/{id}", ExecutionFiles.Json, deadline.Token) ?? throw new IOException();
+                GitRepositoryOperationState status = state.Status;
+                if (status == GitRepositoryOperationState.Succeeded) return state.Url;
+                if (status is GitRepositoryOperationState.Failed or GitRepositoryOperationState.Uncertain) throw new IOException("Publishing needs attention. Inspect this Work before trying again.");
                 await Task.Delay(1000, deadline.Token);
             }
         }
@@ -74,10 +74,10 @@ public static class RepositoryClient
         return await client.GetFromJsonAsync<WorkSnapshot>($"/internal/repository/{attemptId}/current", ExecutionFiles.Json);
     }
 
-    public static async Task<RepositorySetupMemory[]> SetupMemoryAsync(long attemptId)
+    public static async Task<GitRepositorySetupMemory[]> SetupMemoryAsync(long attemptId)
     {
         using HttpClient client = await ClientAsync();
-        return await client.GetFromJsonAsync<RepositorySetupMemory[]>($"/internal/repository/{attemptId}/setup-memory", ExecutionFiles.Json) ?? [];
+        return await client.GetFromJsonAsync<GitRepositorySetupMemory[]>($"/internal/repository/{attemptId}/setup-memory", ExecutionFiles.Json) ?? [];
     }
 
     public static async Task SaveSetupMemoryAsync(long attemptId, SetupMemoryWrite request)
@@ -102,7 +102,7 @@ public static class RepositoryClient
         {
             WorkerInput input = (await ExecutionFiles.ReadAsync<WorkerInput>("/run/input/input.json"))!;
             AttemptSnapshot attempt = input.Work.Attempts[^1];
-            string? url = await SubmitAsync(attempt.Id, attempt.Target.Repository!.Grant!.Branch, "/workspace/repository", RepositoryOperationNames.Parse(arguments.Length == 1 ? arguments[0] : ""));
+            string? url = await SubmitAsync(attempt.Id, attempt.Target.GitRepository!.Grant!.Branch, "/workspace/repository", GitRepositoryOperationNames.Parse(arguments.Length == 1 ? arguments[0] : ""));
             if (arguments[0] == "fetch")
             {
                 await DownloadAsync(attempt.Id, "/workspace/fetched.bundle");

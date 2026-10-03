@@ -21,18 +21,8 @@ public sealed class WorkspaceLimits
 
 public sealed class WorkspaceCheckpoint
 {
-    public WorkspaceCheckpoint(long id, long workId, long attemptId, int turnNumber, int workspaceNumber,
-        string repository, string branch, string commitSha, DateTimeOffset createdAt)
+    public WorkspaceCheckpoint()
     {
-        Id = id;
-        WorkId = workId;
-        AttemptId = attemptId;
-        TurnNumber = turnNumber;
-        WorkspaceNumber = workspaceNumber;
-        Repository = repository;
-        Branch = branch;
-        CommitSha = commitSha;
-        CreatedAt = createdAt;
     }
 
     public long Id { get; init; }
@@ -45,11 +35,11 @@ public sealed class WorkspaceCheckpoint
 
     public int WorkspaceNumber { get; init; }
 
-    public string Repository { get; init; }
+    public string GitRepository { get; init; } = null!;
 
-    public string Branch { get; init; }
+    public string Branch { get; init; } = null!;
 
-    public string CommitSha { get; init; }
+    public string CommitSha { get; init; } = null!;
 
     public DateTimeOffset CreatedAt { get; init; }
 }
@@ -71,7 +61,7 @@ public sealed class WorkspaceCheckpointWrite
 
 public interface IWorkspaceCheckpoints
 {
-    Task<WorkspaceCheckpoint?> LatestAsync(long workId, string repository, CancellationToken token);
+    Task<WorkspaceCheckpoint?> LatestAsync(long workId, string gitRepository, CancellationToken token);
 
     Task<bool> VerifiedAsync(long id, long attemptId, int turnNumber, CancellationToken token);
 }

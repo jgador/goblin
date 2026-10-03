@@ -17,8 +17,8 @@ const sources: Record<string, string[]> = {
         "FailureKind",
         "WorkEventKind",
     ],
-    "backend/src/Goblin.Core/Work/RepositoryAuthorization.cs": [
-        "RepositoryAuthorizationStatus",
+    "backend/src/Goblin.Core/Work/GitRepositoryAuthorization.cs": [
+        "GitRepositoryAuthorizationStatus",
     ],
     "backend/src/Goblin.Core/Work/WorkspaceSessionRules.cs": [
         "InspectionState",
@@ -32,7 +32,7 @@ const sources: Record<string, string[]> = {
         "AuthenticationMethod",
         "GitHubConnectionStatus",
         "ConnectionAvailability",
-        "RepositoryOperationState",
+        "GitRepositoryOperationState",
     ],
 };
 
@@ -94,11 +94,22 @@ export function rustValues(source: string): Values {
 
 export async function generate(root: string, check: boolean) {
     const contracts: Values = {};
-    for (const [path, names] of Object.entries(sources))
-        Object.assign(
-            contracts,
-            csharpValues(await readFile(resolve(root, path), "utf8"), names),
+    // C# makes Git repositories explicit; existing browser identifiers and wire
+    // values remain stable across that source-only rename.
+    for (const [path, names] of Object.entries(sources)) {
+        const values = csharpValues(
+            await readFile(resolve(root, path), "utf8"),
+            names,
         );
+        for (const [name, members] of Object.entries(values))
+            contracts[name.replaceAll("GitRepository", "Repository")] =
+                Object.fromEntries(
+                    Object.entries(members).map(([member, wire]) => [
+                        member.replaceAll("GitRepository", "Repository"),
+                        wire.replaceAll("GitRepository", "Repository"),
+                    ]),
+                );
+    }
     const setup = rustValues(
         await readFile(
             resolve(root, "tools/goblinctl/src/contract_values.rs"),

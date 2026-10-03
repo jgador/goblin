@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using Goblin.Contracts;
 using Goblin.Core.Work;
 
@@ -16,32 +17,24 @@ public enum WorkAction
     Approve,
     AddContext,
     Reconcile,
-    PrepareRepository,
-    AuthorizeRepository,
-    DenyRepository
+
+    [JsonStringEnumMemberName("PrepareRepository")]
+    PrepareGitRepository,
+
+    [JsonStringEnumMemberName("AuthorizeRepository")]
+    AuthorizeGitRepository,
+
+    [JsonStringEnumMemberName("DenyRepository")]
+    DenyGitRepository
 }
 
 public sealed class WorkCommand
 {
-    public WorkCommand(long commandId, long workId, WorkAction action, long? expectedVersion = null,
-        string? text = null, long? agentId = null, long? attemptId = null, long? decisionId = null,
-        RepositoryChange? repository = null, string? model = null, string? reasoningEffort = null,
-        bool modelSelectionProvided = false, GitDeliveryIntent? delivery = null, long? authorizationId = null)
+    public WorkCommand(long commandId, long workId, WorkAction action)
     {
         CommandId = commandId;
         WorkId = workId;
         Action = action;
-        ExpectedVersion = expectedVersion;
-        Text = text;
-        AgentId = agentId;
-        AttemptId = attemptId;
-        DecisionId = decisionId;
-        Repository = repository;
-        Model = model;
-        ReasoningEffort = reasoningEffort;
-        ModelSelectionProvided = modelSelectionProvided;
-        Delivery = delivery;
-        AuthorizationId = authorizationId;
     }
 
     public long CommandId { get; init; }
@@ -60,7 +53,7 @@ public sealed class WorkCommand
 
     public long? DecisionId { get; init; }
 
-    public RepositoryChange? Repository { get; init; }
+    public GitRepositoryChange? GitRepository { get; init; }
 
     public string? Model { get; init; }
 

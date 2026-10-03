@@ -41,10 +41,19 @@ public sealed class WorkspaceContinuationTests
             await File.WriteAllTextAsync(Path.Combine(root, "untracked.txt"), "unfinished\n");
             await File.WriteAllTextAsync(Path.Combine(root, "output.log"), "ignored output\n");
             string status = await Git("status", "--porcelain"), staged = await Git("diff", "--cached"), dirty = await Git("diff");
-            var repository = new RepositoryChange("owner/repo", "Goblin", "goblin@example.test",
-                new(1, "generation", "account", "owner", 1, "main", "goblin/1/2"));
+            var gitRepository = new GitRepositoryChange("owner/repo", "Goblin", "goblin@example.test",
+                new()
+                {
+                    ConnectionId = 1,
+                    Generation = "generation",
+                    AccountId = "account",
+                    Login = "owner",
+                    GitRepositoryId = 1,
+                    BaseBranch = "main",
+                    Branch = "goblin/1/2"
+                });
             await SandboxWorker.PrepareCheckoutAsync(root, new Dictionary<string, string>
-            { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)!, [Env.GitConfigGlobal] = "/dev/null" }, repository);
+            { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)!, [Env.GitConfigGlobal] = "/dev/null" }, gitRepository);
             Assert.Equal("goblin/1/2", await Git("branch", "--show-current"));
             Assert.Equal(head, await Git("rev-parse", "HEAD"));
             Assert.Equal(status, await Git("status", "--porcelain"));

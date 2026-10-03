@@ -5,7 +5,7 @@ using Xunit;
 
 namespace Goblin.Application.Tests;
 
-public sealed class RepositoryReferencesTests
+public sealed class GitRepositoryReferencesTests
 {
     [Theory]
     [InlineData("https://github.com/owner/repo convert Python to Rust", "owner/repo")]
@@ -16,10 +16,10 @@ public sealed class RepositoryReferencesTests
     [InlineData("Use https://evil.github.com/owner/repo", null)]
     [InlineData("Use https://example.com/owner/repo", null)]
     [InlineData("Use https://github.com.evil/owner/repo", null)]
-    public void OnlyExplicitReferencesSuggestRepositories(string objective, string? expected)
+    public void OnlyExplicitReferencesSuggestGitRepositories(string objective, string? expected)
     {
         var work = new WorkItem(1, objective, DateTimeOffset.UtcNow);
-        string[] matches = RepositoryReferences.Find(work.Snapshot(), ["owner/repo"]);
+        string[] matches = GitRepositoryReferences.Find(work.Snapshot(), ["owner/repo"]);
         Assert.Equal(expected is null ? [] : [expected], matches);
     }
 
@@ -27,6 +27,6 @@ public sealed class RepositoryReferencesTests
     public void AmbiguousReferencesAndFollowupAnswersAreRetainedForSelection()
     {
         var work = new WorkItem(1, "Compare owner/repo and https://github.com/other/repo", DateTimeOffset.UtcNow);
-        Assert.Equal(new[] { "other/repo", "owner/repo" }, RepositoryReferences.Find(work.Snapshot(), ["owner/repo"], "Clone OWNER/REPO"));
+        Assert.Equal(new[] { "other/repo", "owner/repo" }, GitRepositoryReferences.Find(work.Snapshot(), ["owner/repo"], "Clone OWNER/REPO"));
     }
 }

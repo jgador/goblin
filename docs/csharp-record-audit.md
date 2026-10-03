@@ -21,10 +21,11 @@ this audit does not claim deep immutability or structural array equality.
 
 ## Converted types
 
-All names in each row were converted. Existing namespaces, visibility, property
-types, `init` accessors, constructor argument order/defaults, JSON policies, and
-polymorphic metadata were preserved. Class constructor parameters use camelCase,
-and callers using named arguments follow the same convention. Classes intentionally
+All names in each row were converted. The initial conversion preserved namespaces,
+visibility, property types, `init` accessors, constructor argument order/defaults,
+JSON policies, and polymorphic metadata. The subsequent construction refactor
+below deliberately changes constructor signatures while retaining property and
+JSON contracts. Regular constructor parameters use camelCase. Classes intentionally
 have reference equality and no synthesized record cloning or deconstruction.
 
 | Types | Usage and decision |
@@ -43,6 +44,48 @@ have reference equality and no synthesized record cloning or deconstruction.
 | `WorkspaceLimits`, `TextHostOptions`, `SandboxOptions`, `GitRepositoryBrokerOptions`, `ApplicationOptions`, `FixtureOptions` | Configuration carriers. They have no production record equality/copy use; `FixtureOptions` is deserialized by the HTTP test host. |
 | `RepositoryProposal` | Private discovery result carried from repository lookup into the application transaction. Its constituent domain objects retain their own semantics. |
 | `CodexClient.Pending` | Private request coordination holder containing a live completion source. This is operational state rather than a serializable DTO; a class also better expresses its reference identity. |
+
+## Construction after the DTO conversion
+
+The 19 reviewed types with more than seven constructor parameters now use small
+constructors and named initialization. Seven is a design review threshold, not a
+universal limit or a reason to create an arbitrary parameter wrapper.
+
+| Types | Construction |
+| --- | --- |
+| Application and HTTP `WorkCommand` | Three arguments: command ID, Work ID, and action. Other properties use named initialization. Application factories cover common actions. |
+| Core and HTTP `WorkSnapshot`, `AttemptSnapshot`; Runtime and HTTP `WorkspaceCheckpoint`; Runtime `RepositorySetupMemory`; Conversations `ExternalMessage`; Monitoring `MachineSnapshot`; HTTP `RepositoryGrant`, `RepositoryAuthorization`, `WorkEvent`, `ExecutionTurnRecord` | Explicit parameterless constructors and existing `init` properties. Snapshot capture, adapter mapping, and persistence projections assign the complete representation. |
+| Core `WorkEvent` | Sequence, timestamp, and kind in the constructor; named context properties. |
+| Core `RepositoryAuthorization` | ID, target, and request time in the constructor; named intent and decision state. |
+| Core `ExecutionTurnRecord` | Turn and workspace numbers in the constructor; a Core capture method copies provenance before continuation resets the live attempt. |
+| Core `RepositoryGrant` | A non-positional record initialized by name from the application repository proposal, after the current connection is checked. |
+
+The four Core types remain records with value equality and immutable copying.
+Their generated positional deconstruction APIs and previous long constructors
+are intentionally removed. Repository callers have been migrated; external C#
+callers would need to migrate construction and deconstruction and rebuild. HTTP
+and persisted JSON remain unchanged, including property order and defaults.
+
+`WorkCommands` creates application-originated commands with fields appropriate to
+each action. `WorkModelSelection` represents an explicit selection, including
+explicit null model/effort values; omitting it preserves inheritance. The HTTP
+mapper copies every submitted property directly, preserving existing validation
+and replay fingerprints even for unusual or invalid combinations. Lifecycle
+validation remains in Core and application command validation remains in its store.
+
+Named initialization no longer forces callers to supply every property. Existing
+mapping locations own completeness. Null-forgiving property initializers preserve
+the old missing-field JSON behavior; adding `required` or replacing missing
+references with empty strings/collections would change that behavior. Non-null
+defaults such as grant policy version and attempt turn/workspace values remain
+explicit. This convention does not authorize partially populated live domain state.
+
+The constructor compatibility fixture was captured before these signature changes
+at `9de7d83`. Its 114 cases cover all 19 types under default and Web JSON policies,
+including populated, omitted, and explicit-null values. Exact serialized-string
+checks protect property order and command fingerprints. Mapping fixtures use
+distinct values, and Core tests cover restored grant equality and captured turn
+provenance. Existing authorization transitions continue using `with`.
 
 ## Every retained record
 

@@ -220,8 +220,8 @@ public sealed class ExternalConversationStore
             if (source is null)
             {
                 long workId = await IdentityStore.NextAsync(db, IdentityKind.Work, token);
-                view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    workId, WorkAction.Create, text: message.Body), token);
+                view = await _work.ApplyConversationCommandAsync(db, outbox,
+                    WorkCommands.Create(await IdentityStore.NextAsync(db, IdentityKind.Command, token), workId, message.Body), token);
                 conversation = new()
                 {
                     Id = await IdentityStore.NextAsync(db, IdentityKind.Conversation, token),
@@ -238,8 +238,8 @@ public sealed class ExternalConversationStore
                     ThreadId = message.ThreadId,
                     ConversationId = conversation.Id
                 });
-                view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    workId, WorkAction.Execute, view.Version), token);
+                view = await _work.ApplyConversationCommandAsync(db, outbox,
+                    WorkCommands.Execute(await IdentityStore.NextAsync(db, IdentityKind.Command, token), workId, view.Version), token);
             }
             else
             {
@@ -249,10 +249,11 @@ public sealed class ExternalConversationStore
                 WorkDecision? decision = snapshot.Decisions.LastOrDefault(x => x.AnsweredAt is null);
                 // Only an existing question may consume a conversational answer.
                 // Repository approval, retry, completion and cancellation stay in the local UI.
-                WorkAction action = snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
-                    ? WorkAction.Answer : WorkAction.AddContext;
-                view = await _work.ApplyConversationCommandAsync(db, outbox, new(await IdentityStore.NextAsync(db, IdentityKind.Command, token),
-                    row.Id, action, row.Version, message.Body, decisionId: action == WorkAction.Answer ? decision!.Id : null), token);
+                long commandId = await IdentityStore.NextAsync(db, IdentityKind.Command, token);
+                WorkCommand command = snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
+                    ? WorkCommands.Answer(commandId, row.Id, row.Version, decision.Id, message.Body)
+                    : WorkCommands.AddContext(commandId, row.Id, row.Version, message.Body);
+                view = await _work.ApplyConversationCommandAsync(db, outbox, command, token);
             }
             long messageId = await IdentityStore.NextAsync(db, IdentityKind.Message, token);
             db.ConversationMessages.Add(new() { Id = messageId, ConversationId = conversation.Id, Body = message.Body, CreatedAt = message.ReceivedAt });

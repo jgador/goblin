@@ -71,48 +71,36 @@ public sealed class ServiceHealth
 public sealed class MachineSnapshot
 {
     [JsonConstructor]
-    public MachineSnapshot(DateTimeOffset observedAt, string name, string environment, string operatingSystem,
-        double? uptimeSeconds, ResourceUsage cpu, ResourceUsage memory, ResourceUsage disk,
-        IReadOnlyList<string> warnings, IReadOnlyList<ServiceHealth>? services)
+    public MachineSnapshot()
     {
-        ObservedAt = observedAt;
-        Name = name;
-        Environment = environment;
-        OperatingSystem = operatingSystem;
-        UptimeSeconds = uptimeSeconds;
-        Cpu = cpu;
-        Memory = memory;
-        Disk = disk;
-        Warnings = warnings;
-        Services = services;
     }
 
     [JsonPropertyName("observedAt")]
     public DateTimeOffset ObservedAt { get; init; }
 
     [JsonPropertyName("name")]
-    public string Name { get; init; }
+    public string Name { get; init; } = null!;
 
     [JsonPropertyName("environment")]
-    public string Environment { get; init; }
+    public string Environment { get; init; } = null!;
 
     [JsonPropertyName("operatingSystem")]
-    public string OperatingSystem { get; init; }
+    public string OperatingSystem { get; init; } = null!;
 
     [JsonPropertyName("uptimeSeconds")]
     public double? UptimeSeconds { get; init; }
 
     [JsonPropertyName("cpu")]
-    public ResourceUsage Cpu { get; init; }
+    public ResourceUsage Cpu { get; init; } = null!;
 
     [JsonPropertyName("memory")]
-    public ResourceUsage Memory { get; init; }
+    public ResourceUsage Memory { get; init; } = null!;
 
     [JsonPropertyName("disk")]
-    public ResourceUsage Disk { get; init; }
+    public ResourceUsage Disk { get; init; } = null!;
 
     [JsonPropertyName("warnings")]
-    public IReadOnlyList<string> Warnings { get; init; }
+    public IReadOnlyList<string> Warnings { get; init; } = null!;
 
     [JsonPropertyName("services")]
     public IReadOnlyList<ServiceHealth>? Services { get; init; }

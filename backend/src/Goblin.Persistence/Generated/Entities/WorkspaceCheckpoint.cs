@@ -27,7 +27,7 @@ public partial class WorkspaceCheckpoint
     public int WorkspaceNumber { get; set; }
 
     [Column("repository")]
-    public string Repository { get; set; } = null!;
+    public string GitRepository { get; set; } = null!;
 
     [Column("branch")]
     public string Branch { get; set; } = null!;
@@ -43,7 +43,7 @@ public partial class WorkspaceCheckpoint
     public virtual ExecutionAttempt Attempt { get; set; } = null!;
 
     [InverseProperty("Checkpoint")]
-    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
+    public virtual ICollection<GitRepositorySetupMemory> GitRepositorySetupMemories { get; set; } = [];
 
     [ForeignKey("WorkId")]
     [InverseProperty("WorkspaceCheckpoints")]

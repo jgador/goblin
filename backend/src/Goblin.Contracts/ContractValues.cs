@@ -57,8 +57,8 @@ public enum ConnectionAvailability
     Verifying
 }
 
-[JsonConverter(typeof(ContractEnumJsonConverter<RepositoryOperationState>))]
-public enum RepositoryOperationState
+[JsonConverter(typeof(ContractEnumJsonConverter<GitRepositoryOperationState>))]
+public enum GitRepositoryOperationState
 {
     Queued,
     Running,

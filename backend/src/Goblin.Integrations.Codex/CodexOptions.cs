@@ -21,7 +21,7 @@ public sealed record CodexOptions
             .ToDictionary(x => (string)x.Key, x => (string?)x.Value);
     public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(20);
     public TimeSpan ShutdownTimeout { get; init; } = TimeSpan.FromSeconds(2);
-    public bool RepositoryExecution { get; init; }
+    public bool GitRepositoryExecution { get; init; }
 
     // File metadata is a cheap local revision check for the installed CLI.
     // A running app-server keeps its startup revision until it is restarted.
@@ -85,14 +85,14 @@ public sealed record CodexOptions
         // Model-directed commands need the code-mode host even when the optional
         // code_mode feature is off. Only isolated repository workers may run them.
         foreach (string feature in new[] { "shell_tool", "unified_exec", "code_mode_host" })
-            Config($"features.{feature}={(RepositoryExecution ? "true" : "false")}");
+            Config($"features.{feature}={(GitRepositoryExecution ? "true" : "false")}");
         string[] disabled = ["shell_snapshot", "view_image", "image_generation",
             "apps", "plugins", "remote_plugin", "multi_agent", "hooks", "memories", "goals",
             "code_mode", "skill_search", "skill_mcp_dependency_install",
             "sleep_tool", "request_permissions_tool", "workspace_dependencies"];
         foreach (string feature in disabled) Config($"features.{feature}=false");
         Config("web_search=\"disabled\"");
-        Config(RepositoryExecution ? "sandbox_mode=\"danger-full-access\"" : "sandbox_mode=\"read-only\"");
+        Config(GitRepositoryExecution ? "sandbox_mode=\"danger-full-access\"" : "sandbox_mode=\"read-only\"");
         Config("approval_policy=\"never\"");
         Config("project_doc_max_bytes=0");
         Config("skills.include_instructions=false");

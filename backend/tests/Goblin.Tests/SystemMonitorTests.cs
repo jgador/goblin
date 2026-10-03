@@ -165,8 +165,19 @@ public sealed class SystemMonitorTests
             pods is null ? null : Array.ConvertAll(pods, pod => pod.Deserialize<MonitoringPod>()!), now);
 
     private static MachineSnapshot At(MachineSnapshot snapshot, DateTimeOffset at) =>
-        new(at, snapshot.Name, snapshot.Environment, snapshot.OperatingSystem, snapshot.UptimeSeconds,
-            snapshot.Cpu, snapshot.Memory, snapshot.Disk, snapshot.Warnings, snapshot.Services);
+        new()
+        {
+            ObservedAt = at,
+            Name = snapshot.Name,
+            Environment = snapshot.Environment,
+            OperatingSystem = snapshot.OperatingSystem,
+            UptimeSeconds = snapshot.UptimeSeconds,
+            Cpu = snapshot.Cpu,
+            Memory = snapshot.Memory,
+            Disk = snapshot.Disk,
+            Warnings = snapshot.Warnings,
+            Services = snapshot.Services
+        };
 
     private sealed class Source : ISystemSource
     {

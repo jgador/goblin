@@ -69,10 +69,10 @@ public partial class ExecutionAttempt
     public virtual GithubConnection? GithubConnection { get; set; }
 
     [InverseProperty("Attempt")]
-    public virtual RepositoryOperation? RepositoryOperation { get; set; }
+    public virtual GitRepositoryOperation? GitRepositoryOperation { get; set; }
 
     [InverseProperty("Attempt")]
-    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
+    public virtual ICollection<GitRepositorySetupMemory> GitRepositorySetupMemories { get; set; } = [];
 
     [ForeignKey("WorkId")]
     [InverseProperty("ExecutionAttempts")]

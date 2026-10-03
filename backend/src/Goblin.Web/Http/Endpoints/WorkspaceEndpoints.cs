@@ -14,14 +14,14 @@ namespace Goblin.Web;
 
 internal sealed class WorkspaceEndpoints
 {
-    private readonly bool _repositoryListener;
+    private readonly bool _gitRepositoryListener;
 
-    public WorkspaceEndpoints(bool repositoryListener) => _repositoryListener = repositoryListener;
+    public WorkspaceEndpoints(bool gitRepositoryListener) => _gitRepositoryListener = gitRepositoryListener;
 
     public void Map(WebApplication app)
     {
         app.MapGet("/api/work/{id:long}/workspace", GetAsync);
-        if (_repositoryListener)
+        if (_gitRepositoryListener)
         {
             app.MapPost("/api/work/{id:long}/workspace/sessions", OpenAsync);
             app.MapPost("/api/work/{id:long}/workspace/sessions/{session:long}/stop", StopAsync);
@@ -35,7 +35,7 @@ internal sealed class WorkspaceEndpoints
         await store.GetAsync(id, token);
         return WorkResponse.Json(new Api.WorkspaceView(
             Array.ConvertAll(await checkpoints.ListAsync(id, token), Api.WorkspaceCheckpoint.From),
-            Array.ConvertAll(await sessions.ListAsync(id, token), Api.InspectionView.From), _repositoryListener));
+            Array.ConvertAll(await sessions.ListAsync(id, token), Api.InspectionView.From), _gitRepositoryListener));
     }
 
     private static async Task<IResult> OpenAsync(long id, HttpContext context, InspectionStore sessions)

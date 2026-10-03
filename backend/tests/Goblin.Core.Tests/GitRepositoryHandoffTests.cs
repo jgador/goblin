@@ -4,13 +4,22 @@ using Xunit;
 
 namespace Goblin.Core.Tests;
 
-public sealed class RepositoryHandoffTests
+public sealed class GitRepositoryHandoffTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
     private static readonly ExecutionTarget Text = new("codex", 1, "chosen-model", requestedEffort: "high");
 
-    private static ExecutionTarget Repository(long attempt) => new("codex", 1, "chosen-model",
-        new("owner/repo", "Goblin", "agent@example.com", new(1, "generation", "42", "owner", 7, "main", $"goblin/1/{attempt}")), "high");
+    private static ExecutionTarget GitRepository(long attempt) => new("codex", 1, "chosen-model",
+        new("owner/repo", "Goblin", "agent@example.com", new()
+        {
+            ConnectionId = 1,
+            Generation = "generation",
+            AccountId = "42",
+            Login = "owner",
+            GitRepositoryId = 7,
+            BaseBranch = "main",
+            Branch = $"goblin/1/{attempt}"
+        }), "high");
 
     private static WorkItem Ready()
     {
@@ -32,16 +41,16 @@ public sealed class RepositoryHandoffTests
     public void InitialSetupPersistsWithoutCreatingAnAttemptOrWorkspace()
     {
         WorkItem work = Ready();
-        work.RequestRepositorySetup(Text, ["owner/repo"], Now);
+        work.RequestGitRepositorySetup(Text, ["owner/repo"], Now);
         work = WorkItem.Restore(work.Snapshot());
-        Assert.Equal(AttentionReason.RepositoryRequired, work.Attention!.Reason);
+        Assert.Equal(AttentionReason.GitRepositoryRequired, work.Attention!.Reason);
         Assert.Empty(work.Attempts);
         Assert.Null(work.Workspace);
-        Assert.Equal(Text, work.RepositoryRequest!.Target);
-        work.PrepareRepositoryAuthorization(11, Repository(11), false, false, Now);
-        work.AuthorizeRepository(11, Repository(11), Now);
+        Assert.Equal(Text, work.GitRepositoryRequest!.Target);
+        work.PrepareGitRepositoryAuthorization(11, GitRepository(11), false, false, Now);
+        work.AuthorizeGitRepository(11, GitRepository(11), Now);
         Assert.Equal(WorkStatus.Queued, work.Status);
-        Assert.Null(work.RepositoryRequest);
+        Assert.Null(work.GitRepositoryRequest);
         Assert.Equal("high", work.CurrentAttempt!.Target.RequestedEffort);
     }
 
@@ -49,15 +58,15 @@ public sealed class RepositoryHandoffTests
     public void RuntimeHandoffWaitsForConfirmedCleanupAndPreservesPriorProvenance()
     {
         WorkItem work = Running();
-        work.RequestRepositorySetupFromExecution(10, 100, [], Now);
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11, Repository(11), Now));
+        work.RequestGitRepositorySetupFromExecution(10, 100, [], Now);
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(11, GitRepository(11), Now));
         work.ReportCleanupFailure(10, 100, Now);
         Assert.Equal(AttentionReason.CleanupRequired, work.Attention!.Reason);
         work = WorkItem.Restore(work.Snapshot());
         work.ConfirmCleanup(10, 100, Now);
-        Assert.Equal(AttentionReason.RepositoryRequired, work.Attention!.Reason);
-        work.PrepareRepositoryAuthorization(11, Repository(11), false, false, Now);
-        work.AuthorizeRepository(11, Repository(11), Now);
+        Assert.Equal(AttentionReason.GitRepositoryRequired, work.Attention!.Reason);
+        work.PrepareGitRepositoryAuthorization(11, GitRepository(11), false, false, Now);
+        work.AuthorizeGitRepository(11, GitRepository(11), Now);
         Assert.Equal(2, work.Attempts.Count);
         Assert.Equal(AttemptStatus.Succeeded, work.Attempts[0].Status);
         Assert.Equal(Text, work.Attempts[0].Target);
@@ -71,13 +80,13 @@ public sealed class RepositoryHandoffTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void WaitingConversationCanAuthorizeRepositoryWithOrWithoutAnotherAnswer(bool answerFirst)
+    public void WaitingConversationCanAuthorizeGitRepositoryWithOrWithoutAnotherAnswer(bool answerFirst)
     {
         WorkItem work = Running();
         work.PauseForInput(10, 100, 101, "Provide repository contents", true, Now);
-        if (answerFirst) work.RequestRepositorySetupForAnswer(101, "Clone owner/repo", ["owner/repo"], Now);
-        work.PrepareRepositoryAuthorization(11, Repository(11), false, false, Now);
-        work.AuthorizeRepository(11, Repository(11), Now);
+        if (answerFirst) work.RequestGitRepositorySetupForAnswer(101, "Clone owner/repo", ["owner/repo"], Now);
+        work.PrepareGitRepositoryAuthorization(11, GitRepository(11), false, false, Now);
+        work.AuthorizeGitRepository(11, GitRepository(11), Now);
         Assert.NotNull(Assert.Single(work.Decisions).Answer);
         Assert.Equal(1, work.Attempts[0].TurnNumber);
         Assert.Equal(2, work.Attempts.Count);
@@ -89,16 +98,16 @@ public sealed class RepositoryHandoffTests
     {
         WorkItem work = Running();
         work.ExecutionUncertain(10, 100, FailureKind.RuntimeDisconnected, Now);
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11, Repository(11), Now));
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(11, GitRepository(11), Now));
         work.ConfirmExecutionStopped(10, 100, Now);
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11, Repository(11), Now));
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(11, GitRepository(11), Now));
         Assert.Equal(AttentionReason.Failure, work.Attention!.Reason);
 
         work = Ready();
-        work.RequestRepositorySetup(Text, [], Now);
-        Assert.Throws<WorkRuleException>(() => work.PrepareRepositoryAuthorization(11,
-            new("another-runtime", 2, repository: Repository(11).Repository), false, false, Now));
-        Assert.Throws<WorkRuleException>(() => work.PrepareRepositoryAuthorization(11,
+        work.RequestGitRepositorySetup(Text, [], Now);
+        Assert.Throws<WorkRuleException>(() => work.PrepareGitRepositoryAuthorization(11,
+            new("another-runtime", 2, gitRepository: GitRepository(11).GitRepository), false, false, Now));
+        Assert.Throws<WorkRuleException>(() => work.PrepareGitRepositoryAuthorization(11,
             new("codex", 1, "chosen-model", new("owner/repo", "Goblin", "agent@example.com"), "high"), false, false, Now));
         Assert.Empty(work.Attempts);
     }

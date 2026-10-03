@@ -26,33 +26,17 @@ public sealed class ExternalInstallation
 
 public sealed class ExternalMessage
 {
-    public ExternalMessage(ExternalInstallation installation, string eventId, string userId, string channelId,
-        string threadId, string messageId, string text, bool direct)
+    public ExternalMessage()
     {
-        Installation = installation;
-        EventId = eventId;
-        UserId = userId;
-        ChannelId = channelId;
-        ThreadId = threadId;
-        MessageId = messageId;
-        Text = text;
-        Direct = direct;
     }
 
-    public ExternalInstallation Installation { get; init; }
-
-    public string EventId { get; init; }
-
-    public string UserId { get; init; }
-
-    public string ChannelId { get; init; }
-
-    public string ThreadId { get; init; }
-
-    public string MessageId { get; init; }
-
-    public string Text { get; init; }
-
+    public ExternalInstallation Installation { get; init; } = null!;
+    public string EventId { get; init; } = null!;
+    public string UserId { get; init; } = null!;
+    public string ChannelId { get; init; } = null!;
+    public string ThreadId { get; init; } = null!;
+    public string MessageId { get; init; } = null!;
+    public string Text { get; init; } = null!;
     public bool Direct { get; init; }
 }
 

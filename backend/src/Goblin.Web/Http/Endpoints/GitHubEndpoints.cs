@@ -29,9 +29,9 @@ internal sealed class GitHubEndpoints
         app.MapPost("/api/github/check", (Delegate)CheckAsync);
         if (_options.EnableWork)
         {
-            app.MapGet("/api/github/repositories", RepositoriesAsync);
-            app.MapGet("/api/github/available-repositories", AvailableRepositoriesAsync);
-            app.MapPost("/api/github/repositories", SetRepositoryAsync);
+            app.MapGet("/api/github/repositories", GitRepositoriesAsync);
+            app.MapGet("/api/github/available-repositories", AvailableGitRepositoriesAsync);
+            app.MapPost("/api/github/repositories", SetGitRepositoryAsync);
         }
     }
 
@@ -69,18 +69,18 @@ internal sealed class GitHubEndpoints
         finally { _gate.Release(); }
     }
 
-    private static async Task<IResult> RepositoriesAsync(GitHubStore store, CancellationToken token) =>
-        WorkResponse.Json(Array.ConvertAll(await store.RepositoriesAsync(token), Api.EnabledRepository.From));
+    private static async Task<IResult> GitRepositoriesAsync(GitHubStore store, CancellationToken token) =>
+        WorkResponse.Json(Array.ConvertAll(await store.GitRepositoriesAsync(token), Api.EnabledGitRepository.From));
 
-    private static async Task<IResult> AvailableRepositoriesAsync(GitHubConnection github, int? page, CancellationToken token) =>
-        WorkResponse.Json(Array.ConvertAll(await github.RepositoriesAsync(page ?? 1, token), Api.RepositoryInfo.From));
+    private static async Task<IResult> AvailableGitRepositoriesAsync(GitHubConnection github, int? page, CancellationToken token) =>
+        WorkResponse.Json(Array.ConvertAll(await github.GitRepositoriesAsync(page ?? 1, token), Api.GitRepositoryInfo.From));
 
-    private static async Task<IResult> SetRepositoryAsync(HttpContext context, GitHubConnection github, GitHubStore store)
+    private static async Task<IResult> SetGitRepositoryAsync(HttpContext context, GitHubConnection github, GitHubStore store)
     {
-        RepositoryAccount account = (await github.StatusAsync()).Account ?? throw new PublicError("repository_unavailable", "Connect GitHub first.", 409);
-        RepositorySelectionRequest request = ApiRequest.Body<RepositorySelectionRequest>(context);
-        RepositoryInfo repository = await github.RepositoryAsync(request.Repository ?? "", context.RequestAborted);
-        await store.SetRepositoryAsync(repository, request.Enabled == "true", account.Generation, context.RequestAborted);
-        return WorkResponse.Json(Array.ConvertAll(await store.RepositoriesAsync(), Api.EnabledRepository.From));
+        GitRepositoryAccount account = (await github.StatusAsync()).Account ?? throw new PublicError("repository_unavailable", "Connect GitHub first.", 409);
+        GitRepositorySelectionRequest request = ApiRequest.Body<GitRepositorySelectionRequest>(context);
+        GitRepositoryInfo gitRepository = await github.GitRepositoryAsync(request.GitRepository ?? "", context.RequestAborted);
+        await store.SetGitRepositoryAsync(gitRepository, request.Enabled == "true", account.Generation, context.RequestAborted);
+        return WorkResponse.Json(Array.ConvertAll(await store.GitRepositoriesAsync(), Api.EnabledGitRepository.From));
     }
 }

@@ -6,22 +6,22 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 using Goblin.Execution;
 using Xunit;
 using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Application.Tests;
 
-public sealed class RepositorySetupWorkspaceTests : IDisposable
+public sealed class GitRepositorySetupWorkspaceTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "goblin-setup-test-" + Guid.NewGuid().ToString("N"));
-    private readonly RepositorySetupWorkspace _workspace;
+    private readonly GitRepositorySetupWorkspace _workspace;
 
-    private static RepositorySetup Setup => new("python-tests", "Python is needed for repository tests", ["fixture-python 3.12"],
+    private static GitRepositorySetup Setup => new("python-tests", "Python is needed for repository tests", ["fixture-python 3.12"],
         ["install-fixture-python"], ["pyproject.toml"], [new("printf '3.12'", "3.12")]);
 
-    public RepositorySetupWorkspaceTests()
+    public GitRepositorySetupWorkspaceTests()
     {
         Directory.CreateDirectory(_root);
         using Process process = Process.Start(new ProcessStartInfo("git")
@@ -31,17 +31,28 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
         _workspace = new(_root, new Dictionary<string, string> { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)! });
     }
 
-    private static RepositorySetupMemory Memory(VerifiedRepositorySetup observation, string branch = "old-branch",
+    private static GitRepositorySetupMemory Memory(VerifiedGitRepositorySetup observation, string branch = "old-branch",
         DateTimeOffset? verifiedAt = null) =>
-        new(9007199254740993, 1, 2, 1, branch, new string('a', 40), "image-one", verifiedAt ?? DateTimeOffset.UtcNow.AddMonths(-3), observation);
+        new()
+        {
+            Id = 9007199254740993,
+            WorkId = 1,
+            AttemptId = 2,
+            TurnNumber = 1,
+            Branch = branch,
+            Commit = new string('a', 40),
+            Environment = "image-one",
+            VerifiedAt = verifiedAt ?? DateTimeOffset.UtcNow.AddMonths(-3),
+            Observation = observation
+        };
 
     [Fact]
     public async Task ReusesOldVerifiedMemoryAcrossBranchesAndSourceEditsButNeverRunsItsRecipe()
     {
-        RepositorySetup setup = Setup with { Commands = ["touch must-not-execute"] };
-        VerifiedRepositorySetup observation = Assert.Single(await _workspace.VerifyAsync([setup], default));
+        GitRepositorySetup setup = Setup with { Commands = ["touch must-not-execute"] };
+        VerifiedGitRepositorySetup observation = Assert.Single(await _workspace.VerifyAsync([setup], default));
         await File.WriteAllTextAsync(Path.Combine(_root, "app.py"), "print('new source')");
-        RepositorySetupMemory memory = Memory(observation);
+        GitRepositorySetupMemory memory = Memory(observation);
         Assert.Equal(memory, Assert.Single(await _workspace.SelectAsync([memory], "image-one", default)));
         Assert.False(File.Exists(Path.Combine(_root, "must-not-execute")));
         Assert.Empty(await _workspace.SelectAsync([memory], "image-two", default));
@@ -50,10 +61,10 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
     [Fact]
     public async Task ChangedAddedAndRemovedRequirementsInvalidateWithoutErasingOlderBranchMemory()
     {
-        RepositorySetupMemory old = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)));
+        GitRepositorySetupMemory old = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)));
         string path = Path.Combine(_root, "pyproject.toml"), original = await File.ReadAllTextAsync(path);
         await File.WriteAllTextAsync(path, original + "version='2'\n");
-        RepositorySetupMemory newer = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)), "new-branch",
+        GitRepositorySetupMemory newer = Memory(Assert.Single(await _workspace.VerifyAsync([Setup], default)), "new-branch",
             verifiedAt: DateTimeOffset.UtcNow);
         Assert.Equal(newer, Assert.Single(await _workspace.SelectAsync([old, newer], "image-one", default)));
         await File.WriteAllTextAsync(path, original);
@@ -69,8 +80,8 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
     public async Task CustomSetupScriptAndInstructionsArePartOfApplicability()
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "prepare.sh"), "echo prepare-v1");
-        RepositorySetup setup = Setup with { Files = ["pyproject.toml", "prepare.sh"] };
-        RepositorySetupMemory old = Memory(Assert.Single(await _workspace.VerifyAsync([setup], default)));
+        GitRepositorySetup setup = Setup with { Files = ["pyproject.toml", "prepare.sh"] };
+        GitRepositorySetupMemory old = Memory(Assert.Single(await _workspace.VerifyAsync([setup], default)));
         await File.WriteAllTextAsync(Path.Combine(_root, "AGENTS.md"), "Use different tooling.");
         Assert.Empty(await _workspace.SelectAsync([old], "image-one", default));
         File.Delete(Path.Combine(_root, "AGENTS.md"));
@@ -91,8 +102,8 @@ public sealed class RepositorySetupWorkspaceTests : IDisposable
     public async Task ReplacedComputeMustVerifyAgainEvenWhenRequirementsMatch()
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "installed-version"), "3.12");
-        RepositorySetup setup = Setup with { Checks = [new("cat installed-version", "3.12")] };
-        RepositorySetupMemory memory = Memory(Assert.Single(await _workspace.VerifyAsync([setup], default)));
+        GitRepositorySetup setup = Setup with { Checks = [new("cat installed-version", "3.12")] };
+        GitRepositorySetupMemory memory = Memory(Assert.Single(await _workspace.VerifyAsync([setup], default)));
         File.Delete(Path.Combine(_root, "installed-version"));
         Assert.Single(await _workspace.SelectAsync([memory], "image-one", default));
         await Assert.ThrowsAsync<IOException>(() => _workspace.VerifyAsync([setup], default));

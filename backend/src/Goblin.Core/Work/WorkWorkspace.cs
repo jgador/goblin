@@ -4,7 +4,7 @@ namespace Goblin.Core.Work;
 
 // A Work owns the durable workspace. The opaque location outlives attempts and
 // compute allocations; the last writer identifies the files owned by this Work.
-public sealed record WorkWorkspace(string Repository, string EnvironmentReference,
+public sealed record WorkWorkspace(string GitRepository, string EnvironmentReference,
     long AttemptId, int WorkspaceNumber, int TurnNumber);
 
 public sealed partial class WorkItem
@@ -34,10 +34,10 @@ public sealed partial class WorkItem
         Record(WorkEventKind.InputRequested, now, attemptId, decisionId: decisionId, text: question);
     }
 
-    public void RequireRepositoryExecution(long attemptId, long ownerId, DateTimeOffset now)
+    public void RequireGitRepositoryExecution(long attemptId, long ownerId, DateTimeOffset now)
     {
         ExecutionAttempt attempt = OwnedActiveAttempt(attemptId, ownerId);
-        Require(attempt.ReasoningOnly && attempt.Target.Repository is not null, WorkRule.InvalidTransition);
+        Require(attempt.ReasoningOnly && attempt.Target.GitRepository is not null, WorkRule.InvalidTransition);
         attempt.Status = AttemptStatus.Waiting;
         attempt.FinishedAt = now;
         ContinueExecution(now);
@@ -48,11 +48,10 @@ public sealed partial class WorkItem
     {
         ExecutionAttempt attempt = CurrentAttempt!;
         Require(attempt.Status == AttemptStatus.Waiting && !attempt.CleanupPending, WorkRule.InvalidTransition);
-        attempt.PriorTurns = [.. attempt.PriorTurns, new(attempt.TurnNumber, attempt.WorkspaceNumber,
-            attempt.OwnerId, attempt.EnvironmentReference, attempt.Session, attempt.StartedAt, attempt.FinishedAt, attempt.CheckpointId)];
+        attempt.PriorTurns = [.. attempt.PriorTurns, ExecutionTurnRecord.Capture(attempt)];
         attempt.TurnNumber++;
         if (attempt.ReleaseWorkspace && !attempt.ReasoningOnly) attempt.WorkspaceNumber++;
-        attempt.ReasoningOnly = attempt.ReleaseWorkspace && attempt.Target.Repository is not null;
+        attempt.ReasoningOnly = attempt.ReleaseWorkspace && attempt.Target.GitRepository is not null;
         attempt.Status = AttemptStatus.Queued;
         attempt.OwnerId = null;
         attempt.EnvironmentReference = null;

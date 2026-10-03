@@ -7,22 +7,8 @@ namespace Goblin.Web.Http.Contracts;
 public sealed class WorkSnapshot
 {
     [JsonConstructor]
-    public WorkSnapshot(int schemaVersion, long id, string objective, long? agentId, WorkStatus status,
-        WorkAttention? attention, AttemptSnapshot[] attempts, WorkEvent[] history, WorkDecision[] decisions,
-        WorkResult[] results, WorkMessage[] messages, WorkArtifact[] artifacts)
+    public WorkSnapshot()
     {
-        SchemaVersion = schemaVersion;
-        Id = id;
-        Objective = objective;
-        AgentId = agentId;
-        Status = status;
-        Attention = attention;
-        Attempts = attempts;
-        History = history;
-        Decisions = decisions;
-        Results = results;
-        Messages = messages;
-        Artifacts = artifacts;
     }
 
     [JsonPropertyName("schemaVersion")]
@@ -32,7 +18,7 @@ public sealed class WorkSnapshot
     public long Id { get; init; }
 
     [JsonPropertyName("objective")]
-    public string Objective { get; init; }
+    public string Objective { get; init; } = null!;
 
     [JsonPropertyName("agentId")]
     public long? AgentId { get; init; }
@@ -44,70 +30,58 @@ public sealed class WorkSnapshot
     public WorkAttention? Attention { get; init; }
 
     [JsonPropertyName("attempts")]
-    public AttemptSnapshot[] Attempts { get; init; }
+    public AttemptSnapshot[] Attempts { get; init; } = null!;
 
     [JsonPropertyName("history")]
-    public WorkEvent[] History { get; init; }
+    public WorkEvent[] History { get; init; } = null!;
 
     [JsonPropertyName("decisions")]
-    public WorkDecision[] Decisions { get; init; }
+    public WorkDecision[] Decisions { get; init; } = null!;
 
     [JsonPropertyName("results")]
-    public WorkResult[] Results { get; init; }
+    public WorkResult[] Results { get; init; } = null!;
 
     [JsonPropertyName("messages")]
-    public WorkMessage[] Messages { get; init; }
+    public WorkMessage[] Messages { get; init; } = null!;
 
     [JsonPropertyName("artifacts")]
-    public WorkArtifact[] Artifacts { get; init; }
+    public WorkArtifact[] Artifacts { get; init; } = null!;
 
     [JsonPropertyName("workspace")]
     public WorkWorkspace? Workspace { get; init; }
 
     [JsonPropertyName("repositoryRequest")]
-    public WorkRepositoryRequest? RepositoryRequest { get; init; }
+    public WorkGitRepositoryRequest? GitRepositoryRequest { get; init; }
 
     [JsonPropertyName("repositoryAuthorization")]
-    public RepositoryAuthorization? RepositoryAuthorization { get; init; }
+    public GitRepositoryAuthorization? GitRepositoryAuthorization { get; init; }
 
     public static WorkSnapshot From(Goblin.Core.Work.WorkSnapshot value) =>
-        new(value.SchemaVersion, value.Id, value.Objective, value.AgentId, value.Status,
-            value.Attention is null ? null : WorkAttention.From(value.Attention),
-            Array.ConvertAll(value.Attempts, AttemptSnapshot.From), Array.ConvertAll(value.History, WorkEvent.From),
-            Array.ConvertAll(value.Decisions, WorkDecision.From), Array.ConvertAll(value.Results, WorkResult.From),
-            Array.ConvertAll(value.Messages, WorkMessage.From), Array.ConvertAll(value.Artifacts, WorkArtifact.From))
+        new()
         {
+            SchemaVersion = value.SchemaVersion,
+            Id = value.Id,
+            Objective = value.Objective,
+            AgentId = value.AgentId,
+            Status = value.Status,
+            Attention = value.Attention is null ? null : WorkAttention.From(value.Attention),
+            Attempts = Array.ConvertAll(value.Attempts, AttemptSnapshot.From),
+            History = Array.ConvertAll(value.History, WorkEvent.From),
+            Decisions = Array.ConvertAll(value.Decisions, WorkDecision.From),
+            Results = Array.ConvertAll(value.Results, WorkResult.From),
+            Messages = Array.ConvertAll(value.Messages, WorkMessage.From),
+            Artifacts = Array.ConvertAll(value.Artifacts, WorkArtifact.From),
             Workspace = value.Workspace is null ? null : WorkWorkspace.From(value.Workspace),
-            RepositoryRequest = value.RepositoryRequest is null ? null : WorkRepositoryRequest.From(value.RepositoryRequest),
-            RepositoryAuthorization = value.RepositoryAuthorization is null ? null : RepositoryAuthorization.From(value.RepositoryAuthorization)
+            GitRepositoryRequest = value.GitRepositoryRequest is null ? null : WorkGitRepositoryRequest.From(value.GitRepositoryRequest),
+            GitRepositoryAuthorization = value.GitRepositoryAuthorization is null ? null : GitRepositoryAuthorization.From(value.GitRepositoryAuthorization)
         };
 }
 
 public sealed class AttemptSnapshot
 {
     [JsonConstructor]
-    public AttemptSnapshot(long id, long workId, long agentId, ExecutionTarget target, DateTimeOffset queuedAt,
-        AttemptStatus status, long? ownerId, string? environmentReference, ExecutionSession? session,
-        DateTimeOffset? claimedAt, DateTimeOffset? startedAt, DateTimeOffset? finishedAt,
-        DateTimeOffset? cancellationRequestedAt, FailureKind? failure, bool cleanupPending = false,
-        bool cleanupFailed = false)
+    public AttemptSnapshot()
     {
-        Id = id;
-        WorkId = workId;
-        AgentId = agentId;
-        Target = target;
-        QueuedAt = queuedAt;
-        Status = status;
-        OwnerId = ownerId;
-        EnvironmentReference = environmentReference;
-        Session = session;
-        ClaimedAt = claimedAt;
-        StartedAt = startedAt;
-        FinishedAt = finishedAt;
-        CancellationRequestedAt = cancellationRequestedAt;
-        Failure = failure;
-        CleanupPending = cleanupPending;
-        CleanupFailed = cleanupFailed;
     }
 
     [JsonPropertyName("id")]
@@ -120,7 +94,7 @@ public sealed class AttemptSnapshot
     public long AgentId { get; init; }
 
     [JsonPropertyName("target")]
-    public ExecutionTarget Target { get; init; }
+    public ExecutionTarget Target { get; init; } = null!;
 
     [JsonPropertyName("queuedAt")]
     public DateTimeOffset QueuedAt { get; init; }
@@ -177,11 +151,24 @@ public sealed class AttemptSnapshot
     public ExecutionTurnRecord[] PriorTurns { get; init; } = [];
 
     public static AttemptSnapshot From(Goblin.Core.Work.AttemptSnapshot value) =>
-        new(value.Id, value.WorkId, value.AgentId, ExecutionTarget.From(value.Target), value.QueuedAt, value.Status,
-            value.OwnerId, value.EnvironmentReference,
-            value.Session is null ? null : ExecutionSession.From(value.Session), value.ClaimedAt, value.StartedAt,
-            value.FinishedAt, value.CancellationRequestedAt, value.Failure, value.CleanupPending, value.CleanupFailed)
+        new()
         {
+            Id = value.Id,
+            WorkId = value.WorkId,
+            AgentId = value.AgentId,
+            Target = ExecutionTarget.From(value.Target),
+            QueuedAt = value.QueuedAt,
+            Status = value.Status,
+            OwnerId = value.OwnerId,
+            EnvironmentReference = value.EnvironmentReference,
+            Session = value.Session is null ? null : ExecutionSession.From(value.Session),
+            ClaimedAt = value.ClaimedAt,
+            StartedAt = value.StartedAt,
+            FinishedAt = value.FinishedAt,
+            CancellationRequestedAt = value.CancellationRequestedAt,
+            Failure = value.Failure,
+            CleanupPending = value.CleanupPending,
+            CleanupFailed = value.CleanupFailed,
             ReasoningOnly = value.ReasoningOnly,
             TurnNumber = value.TurnNumber,
             WorkspaceNumber = value.WorkspaceNumber,
@@ -194,10 +181,10 @@ public sealed class AttemptSnapshot
 public sealed class WorkWorkspace
 {
     [JsonConstructor]
-    public WorkWorkspace(string repository, string environmentReference, long attemptId, int workspaceNumber,
+    public WorkWorkspace(string gitRepository, string environmentReference, long attemptId, int workspaceNumber,
         int turnNumber)
     {
-        Repository = repository;
+        GitRepository = gitRepository;
         EnvironmentReference = environmentReference;
         AttemptId = attemptId;
         WorkspaceNumber = workspaceNumber;
@@ -205,7 +192,7 @@ public sealed class WorkWorkspace
     }
 
     [JsonPropertyName("repository")]
-    public string Repository { get; init; }
+    public string GitRepository { get; init; }
 
     [JsonPropertyName("environmentReference")]
     public string EnvironmentReference { get; init; }
@@ -220,53 +207,43 @@ public sealed class WorkWorkspace
     public int TurnNumber { get; init; }
 
     public static WorkWorkspace From(Goblin.Core.Work.WorkWorkspace value) =>
-        new(value.Repository, value.EnvironmentReference, value.AttemptId, value.WorkspaceNumber, value.TurnNumber);
+        new(value.GitRepository, value.EnvironmentReference, value.AttemptId, value.WorkspaceNumber, value.TurnNumber);
 }
 
-public sealed class WorkRepositoryRequest
+public sealed class WorkGitRepositoryRequest
 {
     [JsonConstructor]
-    public WorkRepositoryRequest(ExecutionTarget target, string[] repositories)
+    public WorkGitRepositoryRequest(ExecutionTarget target, string[] gitRepositories)
     {
         Target = target;
-        Repositories = repositories;
+        GitRepositories = gitRepositories;
     }
 
     [JsonPropertyName("target")]
     public ExecutionTarget Target { get; init; }
 
     [JsonPropertyName("repositories")]
-    public string[] Repositories { get; init; }
+    public string[] GitRepositories { get; init; }
 
-    public static WorkRepositoryRequest From(Goblin.Core.Work.WorkRepositoryRequest value) =>
-        new(ExecutionTarget.From(value.Target), value.Repositories);
+    public static WorkGitRepositoryRequest From(Goblin.Core.Work.WorkGitRepositoryRequest value) =>
+        new(ExecutionTarget.From(value.Target), value.GitRepositories);
 }
 
-public sealed class RepositoryAuthorization
+public sealed class GitRepositoryAuthorization
 {
     [JsonConstructor]
-    public RepositoryAuthorization(long id, ExecutionTarget target, bool enableRepository, bool retry,
-        DateTimeOffset requestedAt, RepositoryAuthorizationStatus status = RepositoryAuthorizationStatus.Pending,
-        DateTimeOffset? answeredAt = null, string? defaultBranch = null)
+    public GitRepositoryAuthorization()
     {
-        Id = id;
-        Target = target;
-        EnableRepository = enableRepository;
-        Retry = retry;
-        RequestedAt = requestedAt;
-        Status = status;
-        AnsweredAt = answeredAt;
-        DefaultBranch = defaultBranch;
     }
 
     [JsonPropertyName("id")]
     public long Id { get; init; }
 
     [JsonPropertyName("target")]
-    public ExecutionTarget Target { get; init; }
+    public ExecutionTarget Target { get; init; } = null!;
 
     [JsonPropertyName("enableRepository")]
-    public bool EnableRepository { get; init; }
+    public bool EnableGitRepository { get; init; }
 
     [JsonPropertyName("retry")]
     public bool Retry { get; init; }
@@ -275,7 +252,7 @@ public sealed class RepositoryAuthorization
     public DateTimeOffset RequestedAt { get; init; }
 
     [JsonPropertyName("status")]
-    public RepositoryAuthorizationStatus Status { get; init; }
+    public GitRepositoryAuthorizationStatus Status { get; init; } = GitRepositoryAuthorizationStatus.Pending;
 
     [JsonPropertyName("answeredAt")]
     public DateTimeOffset? AnsweredAt { get; init; }
@@ -283,7 +260,16 @@ public sealed class RepositoryAuthorization
     [JsonPropertyName("defaultBranch")]
     public string? DefaultBranch { get; init; }
 
-    public static RepositoryAuthorization From(Goblin.Core.Work.RepositoryAuthorization value) =>
-        new(value.Id, ExecutionTarget.From(value.Target), value.EnableRepository, value.Retry, value.RequestedAt,
-            value.Status, value.AnsweredAt, value.DefaultBranch);
+    public static GitRepositoryAuthorization From(Goblin.Core.Work.GitRepositoryAuthorization value) =>
+        new()
+        {
+            Id = value.Id,
+            Target = ExecutionTarget.From(value.Target),
+            EnableGitRepository = value.EnableGitRepository,
+            Retry = value.Retry,
+            RequestedAt = value.RequestedAt,
+            Status = value.Status,
+            AnsweredAt = value.AnsweredAt,
+            DefaultBranch = value.DefaultBranch
+        };
 }

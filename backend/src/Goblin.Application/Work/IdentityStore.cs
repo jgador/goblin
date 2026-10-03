@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Persistence;
@@ -15,7 +16,9 @@ public enum IdentityKind
     Attempt,
     Event,
     Inspection,
-    RepositoryOperation
+
+    [JsonStringEnumMemberName("RepositoryOperation")]
+    GitRepositoryOperation
 }
 
 public sealed class IdentityRequest
@@ -74,7 +77,7 @@ public sealed class IdentityStore
             IdentityKind.Attempt => "public.execution_attempts_id_seq",
             IdentityKind.Event => "public.work_event_ids",
             IdentityKind.Inspection => "public.workspace_sessions_id_seq",
-            IdentityKind.RepositoryOperation => "public.repository_operations_id_seq",
+            IdentityKind.GitRepositoryOperation => "public.repository_operations_id_seq",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         return db.Database.SqlQuery<long>($"SELECT nextval({sequence}::regclass) AS \"Value\"").SingleAsync(token);

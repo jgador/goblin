@@ -89,14 +89,14 @@ public sealed class TypedJsonBoundaryTests
     [Fact]
     public void GitHubProjectionsKeepIdentifiersAndIgnoreUnconsumedApiFields()
     {
-        GitHubRepositoryResponse repository = JsonSerializer.Deserialize<GitHubRepositoryResponse>("""
+        GitHubRepositoryResponse gitRepository = JsonSerializer.Deserialize<GitHubRepositoryResponse>("""
             {"id":9007199254740993,"full_name":"owner/repo","default_branch":"master",
              "permissions":{"push":true,"admin":false},"owner":{"anything":[1,2,3]}}
             """, DifferentPolicy)!;
-        Assert.Equal(9007199254740993, repository.Id);
-        Assert.Equal("owner/repo", repository.FullName);
-        Assert.Equal("master", repository.DefaultBranch);
-        Assert.True(repository.Permissions!.Push);
+        Assert.Equal(9007199254740993, gitRepository.Id);
+        Assert.Equal("owner/repo", gitRepository.FullName);
+        Assert.Equal("master", gitRepository.DefaultBranch);
+        Assert.True(gitRepository.Permissions!.Push);
         Assert.Null(JsonSerializer.Deserialize<GitHubRepositoryResponse>("""
             {"id":1,"full_name":"owner/read-only","default_branch":"main"}
             """)!.Permissions);
@@ -107,15 +107,15 @@ public sealed class TypedJsonBoundaryTests
     }
 
     [Fact]
-    public void RepositoryPollingKeepsExactStateParsingAndNullableSuccessUrls()
+    public void GitRepositoryPollingKeepsExactStateParsingAndNullableSuccessUrls()
     {
-        RepositoryOperationResponse response = JsonSerializer.Deserialize<RepositoryOperationResponse>(
+        GitRepositoryOperationResponse response = JsonSerializer.Deserialize<GitRepositoryOperationResponse>(
             "{\"state\":\"Succeeded\",\"url\":null}", DifferentPolicy)!;
-        Assert.Equal(RepositoryOperationState.Succeeded, response.Status);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, response.Status);
         Assert.Null(response.Url);
         foreach (string state in new[] { "succeeded", "Unknown", "1" })
         {
-            response = JsonSerializer.Deserialize<RepositoryOperationResponse>("{\"state\":\"" + state + "\",\"url\":null}")!;
+            response = JsonSerializer.Deserialize<GitRepositoryOperationResponse>("{\"state\":\"" + state + "\",\"url\":null}")!;
             Assert.Throws<InvalidOperationException>(() => response.Status);
         }
     }
@@ -134,15 +134,15 @@ public sealed class TypedJsonBoundaryTests
     [Fact]
     public void CodexResultsPreserveSetupPresenceAndComputeReleaseDefaults()
     {
-        CodexRepositoryWorkResult result = Assert.IsType<CodexRepositoryWorkResult>(CodexWorkResults.Read(
+        CodexGitRepositoryWorkResult result = Assert.IsType<CodexGitRepositoryWorkResult>(CodexWorkResults.Read(
             "{\"kind\":\"input\",\"text\":\"Choose a direction\"}", true));
         Assert.True(result.ReleaseWorkspace);
         Assert.Null(CodexWorkResults.Setup(result));
-        result = Assert.IsType<CodexRepositoryWorkResult>(CodexWorkResults.Read(
+        result = Assert.IsType<CodexGitRepositoryWorkResult>(CodexWorkResults.Read(
             "{\"kind\":\"input\",\"text\":\"Continue here\",\"releaseWorkspace\":false,\"setup\":[]}", true));
         Assert.False(result.ReleaseWorkspace);
         Assert.Empty(CodexWorkResults.Setup(result)!);
-        result = Assert.IsType<CodexRepositoryWorkResult>(CodexWorkResults.Read(
+        result = Assert.IsType<CodexGitRepositoryWorkResult>(CodexWorkResults.Read(
             "{\"kind\":\"result\",\"text\":\"Review this\",\"setup\":null}", true));
         Assert.Equal("invalid_work_result", Assert.Throws<IntegrationFailure>(() => CodexWorkResults.Setup(result)).Code);
         Assert.Equal("workspace", CodexWorkResults.Read("{\"kind\":\"workspace\",\"text\":\"Inspect repo\",\"setup\":123}", false).Kind);
@@ -158,7 +158,7 @@ public sealed class TypedJsonBoundaryTests
              "tools":["dotnet 10.0.100"],"commands":[],"files":["global.json"],
              "checks":[{"command":"dotnet --version","expectedOutput":"10.0.100"}]}]}
             """;
-        Goblin.Core.Repositories.RepositorySetup setup = Assert.Single(CodexWorkResults.Setup(CodexWorkResults.Read(json, true))!);
+        Goblin.Core.GitRepositories.GitRepositorySetup setup = Assert.Single(CodexWorkResults.Setup(CodexWorkResults.Read(json, true))!);
         Assert.Equal("dotnet", setup.Topic);
         Assert.Equal("10.0.100", Assert.Single(setup.Checks).ExpectedOutput);
         Assert.Throws<IntegrationFailure>(() => CodexWorkResults.Setup(CodexWorkResults.Read(json.Replace("global.json", "../outside"), true)));

@@ -54,18 +54,8 @@ public sealed class InspectionView
 public sealed class WorkspaceCheckpoint
 {
     [JsonConstructor]
-    public WorkspaceCheckpoint(long id, long workId, long attemptId, int turnNumber, int workspaceNumber,
-        string repository, string branch, string commitSha, DateTimeOffset createdAt)
+    public WorkspaceCheckpoint()
     {
-        Id = id;
-        WorkId = workId;
-        AttemptId = attemptId;
-        TurnNumber = turnNumber;
-        WorkspaceNumber = workspaceNumber;
-        Repository = repository;
-        Branch = branch;
-        CommitSha = commitSha;
-        CreatedAt = createdAt;
     }
 
     [JsonPropertyName("id")]
@@ -84,18 +74,28 @@ public sealed class WorkspaceCheckpoint
     public int WorkspaceNumber { get; init; }
 
     [JsonPropertyName("repository")]
-    public string Repository { get; init; }
+    public string GitRepository { get; init; } = null!;
 
     [JsonPropertyName("branch")]
-    public string Branch { get; init; }
+    public string Branch { get; init; } = null!;
 
     [JsonPropertyName("commitSha")]
-    public string CommitSha { get; init; }
+    public string CommitSha { get; init; } = null!;
 
     [JsonPropertyName("createdAt")]
     public DateTimeOffset CreatedAt { get; init; }
 
     public static WorkspaceCheckpoint From(Goblin.Contracts.Runtime.WorkspaceCheckpoint value) =>
-        new(value.Id, value.WorkId, value.AttemptId, value.TurnNumber, value.WorkspaceNumber, value.Repository,
-            value.Branch, value.CommitSha, value.CreatedAt);
+        new()
+        {
+            Id = value.Id,
+            WorkId = value.WorkId,
+            AttemptId = value.AttemptId,
+            TurnNumber = value.TurnNumber,
+            WorkspaceNumber = value.WorkspaceNumber,
+            GitRepository = value.GitRepository,
+            Branch = value.Branch,
+            CommitSha = value.CommitSha,
+            CreatedAt = value.CreatedAt
+        };
 }

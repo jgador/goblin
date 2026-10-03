@@ -1,12 +1,12 @@
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 
 namespace Goblin.Contracts.Runtime;
 
 // Validation at the worker/controller boundary; no Work lifecycle rules live here.
-public static class RepositorySetupRules
+public static class GitRepositorySetupRules
 {
     public const int MaxObservations = 8;
     public const int MaxPayloadBytes = 65536;
@@ -21,7 +21,7 @@ public static class RepositorySetupRules
 
     public static bool Hash(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
 
-    public static bool Valid(RepositorySetup? setup) => setup is not null &&
+    public static bool Valid(GitRepositorySetup? setup) => setup is not null &&
         SafeText(setup.Topic, 80) && SafeText(setup.Reason, 1000) &&
         setup.Tools is { Length: > 0 and <= 16 } && setup.Tools.All(x => SafeText(x, 160)) &&
         setup.Commands is { Length: <= 16 } && setup.Commands.All(x => SafeText(x, 2000)) &&
@@ -30,7 +30,7 @@ public static class RepositorySetupRules
         setup.Checks is { Length: > 0 and <= 8 } && setup.Checks.All(x => x is not null &&
             SafeText(x.Command, 2000) && SafeText(x.ExpectedOutput, 2000, empty: true));
 
-    public static bool Valid(VerifiedRepositorySetup? observation) => observation is not null && Valid(observation.Setup) &&
+    public static bool Valid(VerifiedGitRepositorySetup? observation) => observation is not null && Valid(observation.Setup) &&
         Hash(observation.ConfigurationHash) && observation.Files is not null &&
         observation.Files.Length == observation.Setup.Files.Length &&
         observation.Files.All(x => x is not null && SafePath(x.Path) && (x.Sha256 is null || Hash(x.Sha256))) &&

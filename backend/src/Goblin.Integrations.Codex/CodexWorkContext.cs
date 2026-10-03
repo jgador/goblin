@@ -33,5 +33,5 @@ internal sealed class CodexWorkContext
 
     [JsonPropertyName("RepositorySetupMemory")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public RepositorySetupMemory[]? RepositorySetupMemory { get; init; }
+    public GitRepositorySetupMemory[]? GitRepositorySetupMemory { get; init; }
 }

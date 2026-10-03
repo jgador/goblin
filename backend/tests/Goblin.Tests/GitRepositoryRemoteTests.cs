@@ -12,7 +12,7 @@ using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Tests;
 
-public sealed class RepositoryRemoteTests
+public sealed class GitRepositoryRemoteTests
 {
     [Fact]
     public async Task RealBundlesPublishOnlyAssignedBranchAndNeverRunSandboxHooks()
@@ -30,15 +30,26 @@ public sealed class RepositoryRemoteTests
             string initial = await Git(source, "rev-parse", "HEAD");
             await Git(root, "clone", "--bare", source, origin);
             string profile = Path.Combine(root, "profile"); Directory.CreateDirectory(Path.Combine(profile, "active"));
-            var account = new RepositoryAccount("generation", "42", "owner");
+            var account = new GitRepositoryAccount("generation", "42", "owner");
             await File.WriteAllTextAsync(Path.Combine(profile, "active", "account.json"), JsonSerializer.Serialize(account, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
             string cli = Path.Combine(root, "fake-gh");
             await File.WriteAllTextAsync(cli, "#!/bin/sh\nif [ \"$2\" = user ]; then printf '{\"id\":42,\"login\":\"owner\"}'; else printf '{\"id\":22,\"full_name\":\"owner/repo\",\"default_branch\":\"main\",\"permissions\":{\"push\":true}}'; fi\n");
             File.SetUnixFileMode(cli, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             using var github = new GitHubConnection(profile, cli);
             var remote = new GitHubRepositoryRemote(github, origin);
-            var repository = new RepositoryChange("owner/repo", "Goblin", "goblin@example.test", new(1, "generation", "42", "owner", 22, "main", "goblin/1/2", AllowPush: true, AllowPullRequest: true));
-            await remote.PrepareAsync(repository, broker, null, default);
+            var gitRepository = new GitRepositoryChange("owner/repo", "Goblin", "goblin@example.test", new()
+            {
+                ConnectionId = 1,
+                Generation = "generation",
+                AccountId = "42",
+                Login = "owner",
+                GitRepositoryId = 22,
+                BaseBranch = "main",
+                Branch = "goblin/1/2",
+                AllowPush = true,
+                AllowPullRequest = true
+            });
+            await remote.PrepareAsync(gitRepository, broker, null, default);
             await Git(root, "clone", "--branch", "goblin/1/2", Path.Combine(broker, "input.bundle"), sandbox);
             await Git(sandbox, "config", "user.name", "Goblin"); await Git(sandbox, "config", "user.email", "goblin@example.test");
             await File.WriteAllTextAsync(Path.Combine(sandbox, "hello.txt"), "changed");
@@ -49,29 +60,40 @@ public sealed class RepositoryRemoteTests
             File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             string bundle = Path.Combine(root, "changes.bundle");
             await Git(sandbox, "bundle", "create", bundle, "refs/heads/goblin/1/2");
-            string commit = await remote.InspectBundleAsync(repository, broker, bundle, default);
+            string commit = await remote.InspectBundleAsync(gitRepository, broker, bundle, default);
             Assert.Equal(changed, commit);
-            var local = new RepositoryChange(repository.Repository, repository.GitAuthorName, repository.GitAuthorEmail,
-                repository.Grant! with { AllowPush = false, AllowPullRequest = false });
+            var local = new GitRepositoryChange(gitRepository.GitRepository, gitRepository.GitAuthorName, gitRepository.GitAuthorEmail,
+                gitRepository.Grant! with { AllowPush = false, AllowPullRequest = false });
             Assert.Equal(commit, await remote.InspectBundleAsync(local, broker, bundle, default));
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, RepositoryOperationKind.Publish, commit, default));
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, RepositoryOperationKind.PullRequest, commit, default));
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, GitRepositoryOperationKind.Publish, commit, default));
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, GitRepositoryOperationKind.PullRequest, commit, default));
             Assert.DoesNotContain("goblin/1/2", await Git(origin, "for-each-ref", "--format=%(refname)"));
-            await remote.ExecuteAsync(repository, broker, RepositoryOperationKind.Publish, commit, default);
+            await remote.ExecuteAsync(gitRepository, broker, GitRepositoryOperationKind.Publish, commit, default);
             Assert.Equal(initial, await Git(origin, "rev-parse", "main"));
             Assert.Equal(changed, await Git(origin, "rev-parse", "goblin/1/2"));
             Assert.False(File.Exists(Path.Combine(root, "hook-ran")));
-            Assert.NotNull(await remote.ReconcileAsync(repository, broker, RepositoryOperationKind.Publish, commit, default));
+            Assert.NotNull(await remote.ReconcileAsync(gitRepository, broker, GitRepositoryOperationKind.Publish, commit, default));
             // A resumed published attempt needs its confirmed remote head for the next lease.
             Directory.Delete(broker, true);
-            await remote.PrepareCheckpointAsync(repository, broker,
-                new(1, 1, 2, 1, 1, repository.Repository, repository.Grant!.Branch, commit, DateTimeOffset.UtcNow), default);
-            await remote.InspectBundleAsync(repository, broker, bundle, default);
-            await remote.ExecuteAsync(repository, broker, RepositoryOperationKind.Publish, commit, default);
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(repository, broker, (RepositoryOperationKind)99, commit, default));
+            await remote.PrepareCheckpointAsync(gitRepository, broker,
+                new()
+                {
+                    Id = 1,
+                    WorkId = 1,
+                    AttemptId = 2,
+                    TurnNumber = 1,
+                    WorkspaceNumber = 1,
+                    GitRepository = gitRepository.GitRepository,
+                    Branch = gitRepository.Grant!.Branch,
+                    CommitSha = commit,
+                    CreatedAt = DateTimeOffset.UtcNow
+                }, default);
+            await remote.InspectBundleAsync(gitRepository, broker, bundle, default);
+            await remote.ExecuteAsync(gitRepository, broker, GitRepositoryOperationKind.Publish, commit, default);
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(gitRepository, broker, (GitRepositoryOperationKind)99, commit, default));
             await Git(sandbox, "checkout", "-b", "wrong-branch");
             await Git(sandbox, "bundle", "create", Path.Combine(root, "wrong.bundle"), "refs/heads/wrong-branch");
-            await Assert.ThrowsAsync<GitHubFailure>(() => remote.InspectBundleAsync(repository, broker, Path.Combine(root, "wrong.bundle"), default));
+            await Assert.ThrowsAsync<GitHubFailure>(() => remote.InspectBundleAsync(gitRepository, broker, Path.Combine(root, "wrong.bundle"), default));
         }
         finally { Directory.Delete(root, true); }
     }

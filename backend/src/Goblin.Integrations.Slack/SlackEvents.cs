@@ -21,7 +21,17 @@ public static class SlackEvents
         string timestamp = message.Timestamp, thread = message.ThreadTimestamp, id = payload.EventId;
         if (thread.Length == 0) thread = timestamp;
         if (text.Length is 0 or > 4000 || !Timestamp(timestamp) || !Timestamp(thread) || !Regex.IsMatch(id, "^Ev[A-Za-z0-9]{1,62}$", RegexOptions.CultureInvariant)) return null;
-        return new(installation, id, user, channel, thread, timestamp, text, direct);
+        return new()
+        {
+            Installation = installation,
+            EventId = id,
+            UserId = user,
+            ChannelId = channel,
+            ThreadId = thread,
+            MessageId = timestamp,
+            Text = text,
+            Direct = direct
+        };
     }
 
     private static bool Timestamp(string value) => Regex.IsMatch(value, "^[0-9]{1,16}\\.[0-9]{1,8}$", RegexOptions.CultureInvariant);

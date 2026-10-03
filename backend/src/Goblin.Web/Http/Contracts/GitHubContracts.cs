@@ -7,7 +7,7 @@ public sealed class GitHubState
 {
     [JsonConstructor]
     public GitHubState(bool configured, string? login, string? userCode, string? verificationUrl, string? notice,
-        GitHubConnectionStatus status = GitHubConnectionStatus.Disconnected, RepositoryAccount? account = null)
+        GitHubConnectionStatus status = GitHubConnectionStatus.Disconnected, GitRepositoryAccount? account = null)
     {
         Configured = configured;
         Login = login;
@@ -37,17 +37,17 @@ public sealed class GitHubState
     public GitHubConnectionStatus Status { get; init; }
 
     [JsonPropertyName("account")]
-    public RepositoryAccount? Account { get; init; }
+    public GitRepositoryAccount? Account { get; init; }
 
     public static GitHubState From(Goblin.Integrations.GitHub.GitHubState value) =>
         new(value.Configured, value.Login, value.UserCode, value.VerificationUrl, value.Notice, value.Status,
-            value.Account is null ? null : RepositoryAccount.From(value.Account));
+            value.Account is null ? null : GitRepositoryAccount.From(value.Account));
 }
 
-public sealed class EnabledRepository
+public sealed class EnabledGitRepository
 {
     [JsonConstructor]
-    public EnabledRepository(long id, string name, string defaultBranch, bool enabled)
+    public EnabledGitRepository(long id, string name, string defaultBranch, bool enabled)
     {
         Id = id;
         Name = name;
@@ -67,14 +67,14 @@ public sealed class EnabledRepository
     [JsonPropertyName("enabled")]
     public bool Enabled { get; init; }
 
-    public static EnabledRepository From(Goblin.Application.Work.EnabledRepository value) =>
+    public static EnabledGitRepository From(Goblin.Application.Work.EnabledGitRepository value) =>
         new(value.Id, value.Name, value.DefaultBranch, value.Enabled);
 }
 
-public sealed class RepositoryAccount
+public sealed class GitRepositoryAccount
 {
     [JsonConstructor]
-    public RepositoryAccount(string generation, string accountId, string login)
+    public GitRepositoryAccount(string generation, string accountId, string login)
     {
         Generation = generation;
         AccountId = accountId;
@@ -90,14 +90,14 @@ public sealed class RepositoryAccount
     [JsonPropertyName("login")]
     public string Login { get; init; }
 
-    public static RepositoryAccount From(Goblin.Contracts.Runtime.RepositoryAccount value) =>
+    public static GitRepositoryAccount From(Goblin.Contracts.Runtime.GitRepositoryAccount value) =>
         new(value.Generation, value.AccountId, value.Login);
 }
 
-public sealed class RepositoryInfo
+public sealed class GitRepositoryInfo
 {
     [JsonConstructor]
-    public RepositoryInfo(long id, string name, string defaultBranch, bool canPush)
+    public GitRepositoryInfo(long id, string name, string defaultBranch, bool canPush)
     {
         Id = id;
         Name = name;
@@ -117,6 +117,6 @@ public sealed class RepositoryInfo
     [JsonPropertyName("canPush")]
     public bool CanPush { get; init; }
 
-    public static RepositoryInfo From(Goblin.Contracts.Runtime.RepositoryInfo value) =>
+    public static GitRepositoryInfo From(Goblin.Contracts.Runtime.GitRepositoryInfo value) =>
         new(value.Id, value.Name, value.DefaultBranch, value.CanPush);
 }

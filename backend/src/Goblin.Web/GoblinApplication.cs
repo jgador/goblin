@@ -24,8 +24,8 @@ public static class GoblinApplication
             ContentRootPath = AppContext.BaseDirectory
         });
         WebServices.Configure(builder, options, workspace, runtimeOptions);
-        bool repositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(builder.Configuration[Env.GoblinExecutionNamespace]);
-        builder.WebHost.UseUrls(repositoryListener ? [options.ListenUrl, "http://0.0.0.0:8788"] : [options.ListenUrl]);
+        bool gitRepositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(builder.Configuration[Env.GoblinExecutionNamespace]);
+        builder.WebHost.UseUrls(gitRepositoryListener ? [options.ListenUrl, "http://0.0.0.0:8788"] : [options.ListenUrl]);
 
         WebApplication app = builder.Build();
         // Resolve eagerly so event subscriptions exist before the first initialization.
@@ -35,7 +35,7 @@ public static class GoblinApplication
         StaticAssets assets = await StaticAssets.LoadAsync(options.AssetDirectory);
 
         app.UseWebSockets();
-        app.UseMiddleware<WorkspaceMiddleware>(assets, repositoryListener);
+        app.UseMiddleware<WorkspaceMiddleware>(assets, gitRepositoryListener);
         new HealthEndpoints(options).Map(app);
         assets.Map(app);
         SessionEndpoints.Map(app);
@@ -45,8 +45,8 @@ public static class GoblinApplication
         SlackEndpoints.Map(app, options.EnableWork);
         if (options.EnableWork)
         {
-            RepositoryEndpoints.Map(app);
-            new WorkspaceEndpoints(repositoryListener).Map(app);
+            GitRepositoryEndpoints.Map(app);
+            new WorkspaceEndpoints(gitRepositoryListener).Map(app);
             ConversationEndpoints.Map(app);
             WorkEndpoints.Map(app);
         }

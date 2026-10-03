@@ -12,9 +12,9 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Goblin.Application.Work;
 
-public sealed class EnabledRepository
+public sealed class EnabledGitRepository
 {
-    public EnabledRepository(long id, string name, string defaultBranch, bool enabled)
+    public EnabledGitRepository(long id, string name, string defaultBranch, bool enabled)
     {
         Id = id;
         Name = name;
@@ -48,7 +48,7 @@ public sealed class GitHubStore
         await transaction.CommitAsync(token);
     }
 
-    public async Task ObserveAsync(RepositoryAccount? account, GitHubConnectionStatus status, CancellationToken token = default)
+    public async Task ObserveAsync(GitRepositoryAccount? account, GitHubConnectionStatus status, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
@@ -67,14 +67,14 @@ public sealed class GitHubStore
         await transaction.CommitAsync(token);
     }
 
-    public async Task<EnabledRepository[]> RepositoriesAsync(CancellationToken token = default)
+    public async Task<EnabledGitRepository[]> GitRepositoriesAsync(CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.GithubRepositories.OrderBy(x => x.Name)
-            .Select(x => new EnabledRepository(x.Id, x.Name, x.DefaultBranch, x.Enabled)).ToArrayAsync(token);
+            .Select(x => new EnabledGitRepository(x.Id, x.Name, x.DefaultBranch, x.Enabled)).ToArrayAsync(token);
     }
 
-    public async Task SetRepositoryAsync(RepositoryInfo repository, bool enabled, string generation, CancellationToken token = default)
+    public async Task SetGitRepositoryAsync(GitRepositoryInfo gitRepository, bool enabled, string generation, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
@@ -82,36 +82,36 @@ public sealed class GitHubStore
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
         if (connection.Generation != generation || connection.Availability != nameof(GitHubConnectionStatus.Connected))
             throw new ApplicationFailure("repository_unavailable");
-        GithubRepository? row = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == repository.Id, token);
-        if (row is null) { row = new() { Id = repository.Id, ConnectionId = 1 }; db.GithubRepositories.Add(row); }
-        row.Name = repository.Name; row.DefaultBranch = repository.DefaultBranch; row.Enabled = enabled;
+        GithubRepository? row = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == gitRepository.Id, token);
+        if (row is null) { row = new() { Id = gitRepository.Id, ConnectionId = 1 }; db.GithubRepositories.Add(row); }
+        row.Name = gitRepository.Name; row.DefaultBranch = gitRepository.DefaultBranch; row.Enabled = enabled;
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
     }
 
-    internal static async Task AcceptAsync(GoblinDbContext db, RepositoryAuthorization approval, CancellationToken token)
+    internal static async Task AcceptAsync(GoblinDbContext db, GitRepositoryAuthorization approval, CancellationToken token)
     {
-        RepositoryChange requested = approval.Target.Repository!;
-        RepositoryGrant grant = requested.Grant!;
+        GitRepositoryChange requested = approval.Target.GitRepository!;
+        GitRepositoryGrant grant = requested.Grant!;
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == grant.ConnectionId, token);
         if (connection.Availability != nameof(GitHubConnectionStatus.Connected) || connection.Generation != grant.Generation ||
             connection.AccountId != grant.AccountId || connection.Login != grant.Login)
             throw new ApplicationFailure("repository_authorization_changed");
-        GithubRepository? repository = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == grant.RepositoryId, token);
-        if (repository is not null && (repository.ConnectionId != grant.ConnectionId ||
-            !repository.Name.Equals(requested.Repository, StringComparison.OrdinalIgnoreCase)))
+        GithubRepository? gitRepository = await db.GithubRepositories.SingleOrDefaultAsync(x => x.Id == grant.GitRepositoryId, token);
+        if (gitRepository is not null && (gitRepository.ConnectionId != grant.ConnectionId ||
+            !gitRepository.Name.Equals(requested.GitRepository, StringComparison.OrdinalIgnoreCase)))
             throw new ApplicationFailure("repository_authorization_changed");
-        if (repository?.Enabled != true)
+        if (gitRepository?.Enabled != true)
         {
-            if (!approval.EnableRepository) throw new ApplicationFailure("repository_authorization_changed");
+            if (!approval.EnableGitRepository) throw new ApplicationFailure("repository_authorization_changed");
             await RequireIdleAsync(db, token);
-            if (repository is null)
+            if (gitRepository is null)
             {
-                repository = new() { Id = grant.RepositoryId, ConnectionId = grant.ConnectionId, Name = requested.Repository };
-                db.GithubRepositories.Add(repository);
+                gitRepository = new() { Id = grant.GitRepositoryId, ConnectionId = grant.ConnectionId, Name = requested.GitRepository };
+                db.GithubRepositories.Add(gitRepository);
             }
-            repository.DefaultBranch = approval.DefaultBranch ?? grant.BaseBranch;
-            repository.Enabled = true;
+            gitRepository.DefaultBranch = approval.DefaultBranch ?? grant.BaseBranch;
+            gitRepository.Enabled = true;
         }
     }
 

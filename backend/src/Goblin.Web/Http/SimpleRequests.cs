@@ -36,11 +36,11 @@ internal sealed class TimeZoneRequest
     public string? ExpectedTimeZone { get; init; }
 }
 
-internal sealed class RepositorySelectionRequest
+internal sealed class GitRepositorySelectionRequest
 {
     [JsonPropertyName("repository")]
     [JsonConverter(typeof(RequestStringConverter))]
-    public string? Repository { get; init; }
+    public string? GitRepository { get; init; }
 
     [JsonPropertyName("enabled")]
     [JsonConverter(typeof(RequestStringConverter))]

@@ -26,17 +26,8 @@ public sealed class WorkAttention
 public sealed class WorkEvent
 {
     [JsonConstructor]
-    public WorkEvent(long sequence, DateTimeOffset occurredAt, WorkEventKind kind, long? attemptId = null,
-        long? agentId = null, long? decisionId = null, FailureKind? failure = null, string? text = null)
+    public WorkEvent()
     {
-        Sequence = sequence;
-        OccurredAt = occurredAt;
-        Kind = kind;
-        AttemptId = attemptId;
-        AgentId = agentId;
-        DecisionId = decisionId;
-        Failure = failure;
-        Text = text;
     }
 
     [JsonPropertyName("sequence")]
@@ -64,8 +55,17 @@ public sealed class WorkEvent
     public string? Text { get; init; }
 
     public static WorkEvent From(Goblin.Core.Work.WorkEvent value) =>
-        new(value.Sequence, value.OccurredAt, value.Kind, value.AttemptId, value.AgentId, value.DecisionId,
-            value.Failure, value.Text);
+        new()
+        {
+            Sequence = value.Sequence,
+            OccurredAt = value.OccurredAt,
+            Kind = value.Kind,
+            AttemptId = value.AttemptId,
+            AgentId = value.AgentId,
+            DecisionId = value.DecisionId,
+            Failure = value.Failure,
+            Text = value.Text
+        };
 }
 
 public sealed class WorkDecision
@@ -190,12 +190,12 @@ public sealed class ExecutionTarget
 {
     [JsonConstructor]
     public ExecutionTarget(string runtime, long connectionId, string? requestedModel = null,
-        RepositoryChange? repository = null, string? requestedEffort = null)
+        GitRepositoryChange? gitRepository = null, string? requestedEffort = null)
     {
         Runtime = runtime;
         ConnectionId = connectionId;
         RequestedModel = requestedModel;
-        Repository = repository;
+        GitRepository = gitRepository;
         RequestedEffort = requestedEffort;
     }
 
@@ -209,30 +209,30 @@ public sealed class ExecutionTarget
     public string? RequestedModel { get; init; }
 
     [JsonPropertyName("repository")]
-    public RepositoryChange? Repository { get; init; }
+    public GitRepositoryChange? GitRepository { get; init; }
 
     [JsonPropertyName("requestedEffort")]
     public string? RequestedEffort { get; init; }
 
     public static ExecutionTarget From(Goblin.Core.Work.ExecutionTarget value) =>
         new(value.Runtime, value.ConnectionId, value.RequestedModel,
-            value.Repository is null ? null : RepositoryChange.From(value.Repository), value.RequestedEffort);
+            value.GitRepository is null ? null : GitRepositoryChange.From(value.GitRepository), value.RequestedEffort);
 }
 
-public sealed class RepositoryChange
+public sealed class GitRepositoryChange
 {
     [JsonConstructor]
-    public RepositoryChange(string repository, string gitAuthorName, string gitAuthorEmail,
-        RepositoryGrant? grant = null)
+    public GitRepositoryChange(string gitRepository, string gitAuthorName, string gitAuthorEmail,
+        GitRepositoryGrant? grant = null)
     {
-        Repository = repository;
+        GitRepository = gitRepository;
         GitAuthorName = gitAuthorName;
         GitAuthorEmail = gitAuthorEmail;
         Grant = grant;
     }
 
     [JsonPropertyName("repository")]
-    public string Repository { get; init; }
+    public string GitRepository { get; init; }
 
     [JsonPropertyName("gitAuthorName")]
     public string GitAuthorName { get; init; }
@@ -241,57 +241,46 @@ public sealed class RepositoryChange
     public string GitAuthorEmail { get; init; }
 
     [JsonPropertyName("grant")]
-    public RepositoryGrant? Grant { get; init; }
+    public GitRepositoryGrant? Grant { get; init; }
 
-    public static RepositoryChange From(Goblin.Core.Work.RepositoryChange value) =>
-        new(value.Repository, value.GitAuthorName, value.GitAuthorEmail,
-            value.Grant is null ? null : RepositoryGrant.From(value.Grant));
+    public static GitRepositoryChange From(Goblin.Core.Work.GitRepositoryChange value) =>
+        new(value.GitRepository, value.GitAuthorName, value.GitAuthorEmail,
+            value.Grant is null ? null : GitRepositoryGrant.From(value.Grant));
 
-    public Goblin.Core.Work.RepositoryChange ToCore() =>
-        new(Repository, GitAuthorName, GitAuthorEmail, Grant?.ToCore());
+    public Goblin.Core.Work.GitRepositoryChange ToCore() =>
+        new(GitRepository, GitAuthorName, GitAuthorEmail, Grant?.ToCore());
 }
 
-public sealed class RepositoryGrant
+public sealed class GitRepositoryGrant
 {
     [JsonConstructor]
-    public RepositoryGrant(long connectionId, string generation, string accountId, string login, long repositoryId,
-        string baseBranch, string branch, int policyVersion = 2, bool allowPush = false, bool allowPullRequest = false)
+    public GitRepositoryGrant()
     {
-        ConnectionId = connectionId;
-        Generation = generation;
-        AccountId = accountId;
-        Login = login;
-        RepositoryId = repositoryId;
-        BaseBranch = baseBranch;
-        Branch = branch;
-        PolicyVersion = policyVersion;
-        AllowPush = allowPush;
-        AllowPullRequest = allowPullRequest;
     }
 
     [JsonPropertyName("connectionId")]
     public long ConnectionId { get; init; }
 
     [JsonPropertyName("generation")]
-    public string Generation { get; init; }
+    public string Generation { get; init; } = null!;
 
     [JsonPropertyName("accountId")]
-    public string AccountId { get; init; }
+    public string AccountId { get; init; } = null!;
 
     [JsonPropertyName("login")]
-    public string Login { get; init; }
+    public string Login { get; init; } = null!;
 
     [JsonPropertyName("repositoryId")]
-    public long RepositoryId { get; init; }
+    public long GitRepositoryId { get; init; }
 
     [JsonPropertyName("baseBranch")]
-    public string BaseBranch { get; init; }
+    public string BaseBranch { get; init; } = null!;
 
     [JsonPropertyName("branch")]
-    public string Branch { get; init; }
+    public string Branch { get; init; } = null!;
 
     [JsonPropertyName("policyVersion")]
-    public int PolicyVersion { get; init; }
+    public int PolicyVersion { get; init; } = 2;
 
     [JsonPropertyName("allowPush")]
     public bool AllowPush { get; init; }
@@ -299,13 +288,35 @@ public sealed class RepositoryGrant
     [JsonPropertyName("allowPullRequest")]
     public bool AllowPullRequest { get; init; }
 
-    public static RepositoryGrant From(Goblin.Core.Work.RepositoryGrant value) =>
-        new(value.ConnectionId, value.Generation, value.AccountId, value.Login, value.RepositoryId, value.BaseBranch,
-            value.Branch, value.PolicyVersion, value.AllowPush, value.AllowPullRequest);
+    public static GitRepositoryGrant From(Goblin.Core.Work.GitRepositoryGrant value) =>
+        new()
+        {
+            ConnectionId = value.ConnectionId,
+            Generation = value.Generation,
+            AccountId = value.AccountId,
+            Login = value.Login,
+            GitRepositoryId = value.GitRepositoryId,
+            BaseBranch = value.BaseBranch,
+            Branch = value.Branch,
+            PolicyVersion = value.PolicyVersion,
+            AllowPush = value.AllowPush,
+            AllowPullRequest = value.AllowPullRequest
+        };
 
-    public Goblin.Core.Work.RepositoryGrant ToCore() =>
-        new(ConnectionId, Generation, AccountId, Login, RepositoryId, BaseBranch, Branch, PolicyVersion, AllowPush,
-            AllowPullRequest);
+    public Goblin.Core.Work.GitRepositoryGrant ToCore() =>
+        new()
+        {
+            ConnectionId = ConnectionId,
+            Generation = Generation,
+            AccountId = AccountId,
+            Login = Login,
+            GitRepositoryId = GitRepositoryId,
+            BaseBranch = BaseBranch,
+            Branch = Branch,
+            PolicyVersion = PolicyVersion,
+            AllowPush = AllowPush,
+            AllowPullRequest = AllowPullRequest
+        };
 }
 
 public sealed class ExecutionSession
@@ -334,17 +345,8 @@ public sealed class ExecutionSession
 public sealed class ExecutionTurnRecord
 {
     [JsonConstructor]
-    public ExecutionTurnRecord(int number, int workspaceNumber, long? ownerId, string? environmentReference,
-        ExecutionSession? session, DateTimeOffset? startedAt, DateTimeOffset? finishedAt, long? checkpointId)
+    public ExecutionTurnRecord()
     {
-        Number = number;
-        WorkspaceNumber = workspaceNumber;
-        OwnerId = ownerId;
-        EnvironmentReference = environmentReference;
-        Session = session;
-        StartedAt = startedAt;
-        FinishedAt = finishedAt;
-        CheckpointId = checkpointId;
     }
 
     [JsonPropertyName("number")]
@@ -372,9 +374,17 @@ public sealed class ExecutionTurnRecord
     public long? CheckpointId { get; init; }
 
     public static ExecutionTurnRecord From(Goblin.Core.Work.ExecutionTurnRecord value) =>
-        new(value.Number, value.WorkspaceNumber, value.OwnerId, value.EnvironmentReference,
-            value.Session is null ? null : ExecutionSession.From(value.Session), value.StartedAt, value.FinishedAt,
-            value.CheckpointId);
+        new()
+        {
+            Number = value.Number,
+            WorkspaceNumber = value.WorkspaceNumber,
+            OwnerId = value.OwnerId,
+            EnvironmentReference = value.EnvironmentReference,
+            Session = value.Session is null ? null : ExecutionSession.From(value.Session),
+            StartedAt = value.StartedAt,
+            FinishedAt = value.FinishedAt,
+            CheckpointId = value.CheckpointId
+        };
 }
 
 public sealed class GitDeliveryIntent

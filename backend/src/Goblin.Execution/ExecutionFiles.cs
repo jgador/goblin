@@ -5,16 +5,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 
 namespace Goblin.Execution;
 
 public static class ExecutionFiles
 {
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
-    };
+    public static readonly JsonSerializerOptions Json = GitRepositoryJson.CreateOptions(JsonSerializerDefaults.Web);
 
     public static async Task WriteAsync<T>(string path, T value, CancellationToken token = default)
     {

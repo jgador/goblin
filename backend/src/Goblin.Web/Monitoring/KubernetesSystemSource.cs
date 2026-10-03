@@ -118,8 +118,19 @@ public sealed class KubernetesSystemSource : ISystemSource, IDisposable
         double? uptime = DateTimeOffset.TryParse(stats.StartTime, CultureInfo.InvariantCulture, out DateTimeOffset start)
             ? Math.Max(0, (now - start).TotalSeconds) : null;
         string kernel = node.Status?.NodeInfo?.KernelVersion ?? "";
-        return new(observed, name, kernel.Contains("microsoft", StringComparison.OrdinalIgnoreCase) ? "WSL" : "Linux VM",
-            node.Status?.NodeInfo?.OsImage ?? "", uptime, cpu, memory, disk, warnings.Distinct().ToArray(), services);
+        return new()
+        {
+            ObservedAt = observed,
+            Name = name,
+            Environment = kernel.Contains("microsoft", StringComparison.OrdinalIgnoreCase) ? "WSL" : "Linux VM",
+            OperatingSystem = node.Status?.NodeInfo?.OsImage ?? "",
+            UptimeSeconds = uptime,
+            Cpu = cpu,
+            Memory = memory,
+            Disk = disk,
+            Warnings = warnings.Distinct().ToArray(),
+            Services = services
+        };
     }
 
     private static double? Number(double? value) => value is { } number && double.IsFinite(number) && number >= 0 ? number : null;

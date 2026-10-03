@@ -28,21 +28,18 @@ public sealed partial class WorkStore
     private readonly IDbContextFactory<GoblinDbContext> _dbFactory;
     private readonly WorkOutboxFactory _outboxes;
     private readonly WorkspaceLimits _limits;
-    private readonly IRepositoryCatalog? _repositoryCatalog;
+    private readonly IGitRepositoryCatalog? _gitRepositoryCatalog;
 
-    public WorkStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkOutboxFactory outboxes, WorkspaceLimits? limits = null, IRepositoryCatalog? repositoryCatalog = null)
+    public WorkStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkOutboxFactory outboxes, WorkspaceLimits? limits = null, IGitRepositoryCatalog? gitRepositoryCatalog = null)
     {
         _dbFactory = dbFactory;
         _outboxes = outboxes;
         _limits = limits ?? new();
-        _repositoryCatalog = repositoryCatalog;
+        _gitRepositoryCatalog = gitRepositoryCatalog;
     }
 
     public static readonly long DefaultAgentId = 1;
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
-    };
+    public static readonly JsonSerializerOptions Json = GitRepositoryJson.CreateOptions(JsonSerializerDefaults.Web);
 
     public async Task<WorkView[]> ListAsync(CancellationToken token = default)
     {
@@ -73,14 +70,14 @@ public sealed partial class WorkStore
             .Select(x => new ConnectionView(x.Id, x.Runtime, x.Name, ContractValue.Parse<ConnectionAvailability>(x.Availability))).ToArrayAsync(token);
     }
 
-    public async Task<string[]> RepositorySuggestionsAsync(WorkSnapshot work, CancellationToken token = default)
+    public async Task<string[]> GitRepositorySuggestionsAsync(WorkSnapshot work, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        return await RepositorySuggestionsAsync(db, work, null, token);
+        return await GitRepositorySuggestionsAsync(db, work, null, token);
     }
 
-    private static async Task<string[]> RepositorySuggestionsAsync(GoblinDbContext db, WorkSnapshot work,
-        string? answer, CancellationToken token) => RepositoryReferences.Find(work,
+    private static async Task<string[]> GitRepositorySuggestionsAsync(GoblinDbContext db, WorkSnapshot work,
+        string? answer, CancellationToken token) => GitRepositoryReferences.Find(work,
             await db.GithubRepositories.Select(x => x.Name).ToArrayAsync(token), answer);
 
     public async Task<WorkView> ApplyAsync(WorkCommand command, CancellationToken token = default)
@@ -88,21 +85,21 @@ public sealed partial class WorkStore
         if (command.CommandId <= 0 || command.WorkId <= 0 || !Enum.IsDefined(command.Action))
             throw new ApplicationFailure("invalid_command");
         if (command.Text?.Length > 4000) throw new ApplicationFailure("text_too_long");
-        if (command.Repository is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareRepository))
+        if (command.GitRepository is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareGitRepository))
             throw new ApplicationFailure("invalid_command");
         if (command.Model?.Length > 128 || command.ReasoningEffort?.Length > 32 ||
             (command.Action is not (WorkAction.Execute or WorkAction.Retry) &&
                 (command.Model is not null || command.ReasoningEffort is not null || command.ModelSelectionProvided)))
             throw new ApplicationFailure("invalid_model_selection");
-        if (command.Delivery is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareRepository) ||
-            command.AuthorizationId is not null && command.Action is not (WorkAction.AuthorizeRepository or WorkAction.DenyRepository))
+        if (command.Delivery is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareGitRepository) ||
+            command.AuthorizationId is not null && command.Action is not (WorkAction.AuthorizeGitRepository or WorkAction.DenyGitRepository))
             throw new ApplicationFailure("invalid_command");
-        if (command.Action is WorkAction.AuthorizeRepository or WorkAction.DenyRepository &&
+        if (command.Action is WorkAction.AuthorizeGitRepository or WorkAction.DenyGitRepository &&
             (command.Text is not null || command.AgentId is not null || command.AttemptId is not null || command.DecisionId is not null))
             throw new ApplicationFailure("invalid_command");
         WorkView? replay = await ReplayAsync(command, token);
         if (replay is not null) return replay;
-        RepositoryProposal? proposal = await ProposalAsync(command, token);
+        GitRepositoryProposal? proposal = await ProposalAsync(command, token);
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
@@ -117,13 +114,13 @@ public sealed partial class WorkStore
         WorkCommand command, CancellationToken token)
     {
         if (command.Action is not (WorkAction.Create or WorkAction.Execute or WorkAction.Answer or WorkAction.AddContext) ||
-            command.Repository is not null || command.AuthorizationId is not null || command.Text?.Length > 4000)
+            command.GitRepository is not null || command.AuthorizationId is not null || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
         return ApplyInTransactionAsync(db, outbox, command, null, token);
     }
 
     private async Task<WorkView> ApplyInTransactionAsync(GoblinDbContext db, IDbContextOutbox outbox,
-        WorkCommand command, RepositoryProposal? proposal, CancellationToken token)
+        WorkCommand command, GitRepositoryProposal? proposal, CancellationToken token)
     {
         string fingerprint = Hash(command);
         Receipt? receipt = await db.WorkCommands.SingleOrDefaultAsync(x => x.Id == command.CommandId, token);
@@ -165,7 +162,7 @@ public sealed partial class WorkStore
                     ?? throw new ApplicationFailure("agent_required");
                 Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
                 long attemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
-                RepositoryChange? repository = null; // Bound only by a verified proposal.
+                GitRepositoryChange? gitRepository = null; // Bound only by a verified proposal.
                 string? model = command.ModelSelectionProvided ? command.Model :
                     command.Model ?? (command.Action == WorkAction.Retry ? work.CurrentAttempt?.Target.RequestedModel : agent.Model);
                 string? effort = command.ModelSelectionProvided ? command.ReasoningEffort :
@@ -173,18 +170,18 @@ public sealed partial class WorkStore
                         ? work.CurrentAttempt?.Target.RequestedEffort : null);
                 if (command.ModelSelectionProvided || command.Model is not null || command.ReasoningEffort is not null)
                     await ModelCatalogStore.ValidateSelectionAsync(db, connection, model, effort, token);
-                var target = new ExecutionTarget(connection.Runtime, connection.Id, model, repository, effort);
+                var target = new ExecutionTarget(connection.Runtime, connection.Id, model, gitRepository, effort);
                 if (proposal is not null)
                 {
                     await SaveProposalAsync(db, work, attemptId, target, proposal, command.Action == WorkAction.Retry, now, token);
                     break;
                 }
-                if (command.Action == WorkAction.Execute && repository is null)
+                if (command.Action == WorkAction.Execute && gitRepository is null)
                 {
-                    string[] suggestions = await RepositorySuggestionsAsync(db, work.Snapshot(), null, token);
+                    string[] suggestions = await GitRepositorySuggestionsAsync(db, work.Snapshot(), null, token);
                     if (suggestions.Length > 0)
                     {
-                        work.RequestRepositorySetup(target, suggestions, now);
+                        work.RequestGitRepositorySetup(target, suggestions, now);
                         break;
                     }
                 }
@@ -192,23 +189,23 @@ public sealed partial class WorkStore
                 else work.QueueExecution(attemptId, target, now);
                 await outbox.PublishAsync(new DispatchWork(work.Id, attemptId));
                 break;
-            case WorkAction.PrepareRepository:
-                ExecutionTarget previous = work.RepositoryRequest?.Target ?? work.CurrentAttempt?.Target
+            case WorkAction.PrepareGitRepository:
+                ExecutionTarget previous = work.GitRepositoryRequest?.Target ?? work.CurrentAttempt?.Target
                     ?? throw new ApplicationFailure("invalid_command");
                 await SaveProposalAsync(db, work, await IdentityStore.NextAsync(db, IdentityKind.Attempt, token), previous,
-                    proposal ?? throw new ApplicationFailure("repository_ambiguous"), work.CurrentAttempt?.Status == AttemptStatus.Failed && work.RepositoryAuthorization?.Retry == true, now, token);
+                    proposal ?? throw new ApplicationFailure("repository_ambiguous"), work.CurrentAttempt?.Status == AttemptStatus.Failed && work.GitRepositoryAuthorization?.Retry == true, now, token);
                 break;
-            case WorkAction.AuthorizeRepository:
-                RepositoryAuthorization approval = work.RepositoryAuthorization
+            case WorkAction.AuthorizeGitRepository:
+                GitRepositoryAuthorization approval = work.GitRepositoryAuthorization
                     ?? throw new ApplicationFailure("repository_authorization_changed");
-                if (approval.Id != command.AuthorizationId || approval.Status != RepositoryAuthorizationStatus.Pending)
+                if (approval.Id != command.AuthorizationId || approval.Status != GitRepositoryAuthorizationStatus.Pending)
                     throw new ApplicationFailure("repository_authorization_changed");
                 await GitHubStore.AcceptAsync(db, approval, token);
-                work.AuthorizeRepository(approval.Id, approval.Target, now);
+                work.AuthorizeGitRepository(approval.Id, approval.Target, now);
                 await outbox.PublishAsync(new DispatchWork(work.Id, approval.Id));
                 break;
-            case WorkAction.DenyRepository:
-                work.DenyRepositoryAuthorization(command.AuthorizationId ?? 0, now);
+            case WorkAction.DenyGitRepository:
+                work.DenyGitRepositoryAuthorization(command.AuthorizationId ?? 0, now);
                 break;
             case WorkAction.Cancel:
                 work.RequestCancellation(now);
@@ -216,24 +213,24 @@ public sealed partial class WorkStore
                     await outbox.PublishAsync(new ReconcileWork(work.Id, cancelled.Id));
                 break;
             case WorkAction.Answer:
-                if (work.CurrentAttempt?.Target.Repository is { } existingRepository)
+                if (work.CurrentAttempt?.Target.GitRepository is { } existingGitRepository)
                 {
-                    string[] referenced = RepositoryReferences.FindText(command.Text ?? "",
+                    string[] referenced = GitRepositoryReferences.FindText(command.Text ?? "",
                         await db.GithubRepositories.Select(x => x.Name).ToArrayAsync(token));
-                    if (referenced.Any(x => !x.Equals(existingRepository.Repository, StringComparison.OrdinalIgnoreCase)))
+                    if (referenced.Any(x => !x.Equals(existingGitRepository.GitRepository, StringComparison.OrdinalIgnoreCase)))
                         throw new ApplicationFailure("repository_requires_new_work");
                 }
-                RepositoryGrant? currentGrant = work.CurrentAttempt?.Target.Repository?.Grant;
-                GitDeliveryIntent requestedDelivery = RepositoryIntent.Delivery(work.Snapshot(), command.Text);
+                GitRepositoryGrant? currentGrant = work.CurrentAttempt?.Target.GitRepository?.Grant;
+                GitDeliveryIntent requestedDelivery = GitRepositoryIntent.Delivery(work.Snapshot(), command.Text);
                 bool changedDelivery = currentGrant is not null && (currentGrant.AllowPush != requestedDelivery.Push ||
                     currentGrant.AllowPullRequest != requestedDelivery.OpenPullRequest || currentGrant.BaseBranch != requestedDelivery.BaseBranch);
-                if (work.CurrentAttempt?.Target.Repository is null || changedDelivery)
+                if (work.CurrentAttempt?.Target.GitRepository is null || changedDelivery)
                 {
-                    string[] suggestions = await RepositorySuggestionsAsync(db, work.Snapshot(), command.Text, token);
-                    if (suggestions.Length == 0 && work.CurrentAttempt?.Target.Repository is { } currentRepository) suggestions = [currentRepository.Repository];
+                    string[] suggestions = await GitRepositorySuggestionsAsync(db, work.Snapshot(), command.Text, token);
+                    if (suggestions.Length == 0 && work.CurrentAttempt?.Target.GitRepository is { } currentGitRepository) suggestions = [currentGitRepository.GitRepository];
                     if (suggestions.Length > 0)
                     {
-                        work.RequestRepositorySetupForAnswer(command.DecisionId ?? 0, command.Text ?? "", suggestions, now);
+                        work.RequestGitRepositorySetupForAnswer(command.DecisionId ?? 0, command.Text ?? "", suggestions, now);
                         break;
                     }
                 }
@@ -292,13 +289,13 @@ public sealed partial class WorkStore
         if (connection.Availability is nameof(ConnectionAvailability.Changing) or nameof(ConnectionAvailability.Verifying)) return null;
         FailureKind? failure = !supportsRuntime(attempt.Target) ? FailureKind.CapabilityUnavailable :
             connection.Availability != nameof(ConnectionAvailability.Available) ? FailureKind.ConnectionUnavailable : null;
-        if (attempt.Target.Repository?.Grant is { } grant && !await db.GithubConnections.AnyAsync(x =>
+        if (attempt.Target.GitRepository?.Grant is { } grant && !await db.GithubConnections.AnyAsync(x =>
             x.Id == grant.ConnectionId && x.Generation == grant.Generation && x.AccountId == grant.AccountId && x.Availability == nameof(GitHubConnectionStatus.Connected), token))
             failure = FailureKind.ConnectionUnavailable;
-        if (attempt.Target.Repository?.Grant is { } repositoryGrant && !await db.GithubRepositories.AnyAsync(x =>
-            x.Id == repositoryGrant.RepositoryId && x.ConnectionId == repositoryGrant.ConnectionId && x.Enabled &&
-            x.Name == attempt.Target.Repository.Repository, token)) failure = FailureKind.ConnectionUnavailable;
-        if (failure is null && attempt.Target.Repository is not null && !attempt.ReasoningOnly)
+        if (attempt.Target.GitRepository?.Grant is { } gitRepositoryGrant && !await db.GithubRepositories.AnyAsync(x =>
+            x.Id == gitRepositoryGrant.GitRepositoryId && x.ConnectionId == gitRepositoryGrant.ConnectionId && x.Enabled &&
+            x.Name == attempt.Target.GitRepository.GitRepository, token)) failure = FailureKind.ConnectionUnavailable;
+        if (failure is null && attempt.Target.GitRepository is not null && !attempt.ReasoningOnly)
         {
             if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id &&
                 (x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention)), token)) return null;
@@ -446,7 +443,7 @@ public sealed partial class WorkStore
                     WorkId = work.Id,
                     AgentId = attempt.AgentId,
                     ConnectionId = attempt.Target.ConnectionId,
-                    GithubConnectionId = attempt.Target.Repository?.Grant?.ConnectionId,
+                    GithubConnectionId = attempt.Target.GitRepository?.Grant?.ConnectionId,
                     Runtime = attempt.Target.Runtime,
                     QueuedAt = attempt.QueuedAt.UtcDateTime
                 };

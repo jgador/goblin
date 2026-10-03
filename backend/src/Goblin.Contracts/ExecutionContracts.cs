@@ -2,19 +2,19 @@ using System;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 using Goblin.Core.Work;
 
 namespace Goblin.Contracts.Runtime;
 
 public sealed class RuntimeCapabilities
 {
-    public RuntimeCapabilities(string runtime, bool textExecution, bool repositoryExecution, bool cancellation,
+    public RuntimeCapabilities(string runtime, bool textExecution, bool gitRepositoryExecution, bool cancellation,
         bool liveApprovals, bool resumeSession)
     {
         Runtime = runtime;
         TextExecution = textExecution;
-        RepositoryExecution = repositoryExecution;
+        GitRepositoryExecution = gitRepositoryExecution;
         Cancellation = cancellation;
         LiveApprovals = liveApprovals;
         ResumeSession = resumeSession;
@@ -24,7 +24,7 @@ public sealed class RuntimeCapabilities
 
     public bool TextExecution { get; init; }
 
-    public bool RepositoryExecution { get; init; }
+    public bool GitRepositoryExecution { get; init; }
 
     public bool Cancellation { get; init; }
 
@@ -54,7 +54,7 @@ public sealed record ExecutionObservation(ObservationKind Kind, ExecutionSession
     public long? CheckpointId { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public RepositorySetup[]? Setup { get; init; }
+    public GitRepositorySetup[]? Setup { get; init; }
 }
 
 // The host chooses the environment for the requested capability. Work itself

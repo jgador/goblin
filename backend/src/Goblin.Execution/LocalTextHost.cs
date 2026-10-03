@@ -71,7 +71,7 @@ public sealed class LocalTextHost : IExecutionHost
 
     public async Task StartAsync(WorkSnapshot work, CancellationToken token)
     {
-        if (work.Attempts[^1].Target.Repository is not null && !work.Attempts[^1].ReasoningOnly) throw new InvalidOperationException("Repository execution requires an agent sandbox.");
+        if (work.Attempts[^1].Target.GitRepository is not null && !work.Attempts[^1].ReasoningOnly) throw new InvalidOperationException("Repository execution requires an agent sandbox.");
         string directory = DirectoryFor(work);
         Directory.CreateDirectory(directory);
         using FileStream gate = await GateAsync(directory, token);

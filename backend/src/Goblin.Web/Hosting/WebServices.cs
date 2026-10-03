@@ -5,6 +5,7 @@ using Goblin.Application;
 using Goblin.Application.GitRepositories;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
+using Goblin.Contracts;
 using Goblin.Contracts.Conversations;
 using Goblin.Contracts.Runtime;
 using Goblin.Execution;
@@ -32,7 +33,7 @@ internal static class WebServices
         ConfigureProxies(builder, options);
         string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
         if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
-        builder.Services.ConfigureHttpJsonOptions(json => json.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
+        builder.Services.ConfigureHttpJsonOptions(json => GitRepositoryJson.Configure(json.SerializerOptions));
         string? executionNamespace = builder.Configuration[Env.GoblinExecutionNamespace];
         builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
         if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, databaseConnection, executionNamespace);
@@ -118,11 +119,11 @@ internal static class WebServices
         IExecutionHost executionHost = new LocalTextHost(new(
             Path.Combine(workspace.DataDirectory, "executions"), workspace.CodexHome, runtimeOptions.Command,
             typeof(GoblinApplication).Assembly.Location));
-        builder.Services.AddSingleton<IRepositoryRemote, GitHubRepositoryRemote>();
-        builder.Services.AddSingleton<IRepositoryCatalog>(services => services.GetRequiredService<GitHubConnection>());
+        builder.Services.AddSingleton<IGitRepositoryRemote, GitHubRepositoryRemote>();
+        builder.Services.AddSingleton<IGitRepositoryCatalog>(services => services.GetRequiredService<GitHubConnection>());
         builder.Services.AddSingleton(new GitRepositoryBrokerOptions(Path.Combine(workspace.DataDirectory, "repositories")));
         builder.Services.AddSingleton<GitRepositoryBroker>();
-        builder.Services.AddSingleton<IRepositoryBroker>(services => services.GetRequiredService<GitRepositoryBroker>());
+        builder.Services.AddSingleton<IGitRepositoryBroker>(services => services.GetRequiredService<GitRepositoryBroker>());
         if (!string.IsNullOrWhiteSpace(executionNamespace))
         {
             var kubernetes = new KubernetesApi(builder.Configuration[Env.GoblinKubernetesUrl],
@@ -131,7 +132,7 @@ internal static class WebServices
             builder.Services.AddSingleton(kubernetes);
             var sandboxOptions = new SandboxOptions(executionNamespace,
                 builder.Configuration[Env.GoblinExecutionImage] ?? "goblin-auth:0.1.0", workspace.CodexHome,
-                builder.Configuration[Env.GoblinRepositoryUrl] ?? "http://goblin-repository.goblin.svc:8788")
+                builder.Configuration[Env.GoblinGitRepositoryUrl] ?? "http://goblin-repository.goblin.svc:8788")
             {
                 CpuLimit = builder.Configuration[Env.GoblinSandboxCpuLimit] ?? "2",
                 MemoryLimit = builder.Configuration[Env.GoblinSandboxMemoryLimit] ?? "2Gi"
@@ -141,7 +142,7 @@ internal static class WebServices
             builder.Services.AddSingleton<InspectionCoordinator>();
             builder.Services.AddHostedService(services => services.GetRequiredService<InspectionCoordinator>());
             builder.Services.AddSingleton<IExecutionHost>(services => options.ExecutionHost ?? new SandboxHost(kubernetes, sandboxOptions,
-                executionHost, services.GetRequiredService<IRepositoryBroker>(), services.GetRequiredService<IWorkspaceCheckpoints>(), workspaceLimits));
+                executionHost, services.GetRequiredService<IGitRepositoryBroker>(), services.GetRequiredService<IWorkspaceCheckpoints>(), workspaceLimits));
         }
         else builder.Services.AddSingleton(options.ExecutionHost ?? executionHost);
         builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(Path.Combine(workspace.DataDirectory, "dispatch-failures")));

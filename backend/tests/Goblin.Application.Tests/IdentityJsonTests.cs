@@ -14,7 +14,11 @@ public sealed class IdentityJsonTests
     {
         var json = new JsonSerializerOptions(WorkStore.Json);
         json.Converters.Add(new LongJsonConverter());
-        var command = new WorkCommand(id, id - 1, WorkAction.Assign, long.MaxValue, agentId: 1);
+        var command = new WorkCommand(id, id - 1, WorkAction.Assign)
+        {
+            ExpectedVersion = long.MaxValue,
+            AgentId = 1
+        };
         string body = JsonSerializer.Serialize(command, json);
         using JsonDocument document = JsonDocument.Parse(body);
         Assert.Equal(JsonValueKind.String, document.RootElement.GetProperty("commandId").ValueKind);

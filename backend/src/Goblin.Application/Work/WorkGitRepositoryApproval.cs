@@ -13,9 +13,9 @@ namespace Goblin.Application.Work;
 
 public sealed partial class WorkStore
 {
-    private sealed class RepositoryProposal
+    private sealed class GitRepositoryProposal
     {
-        public RepositoryProposal(RepositoryInfo info, RepositoryAccount account, RepositoryChange requested,
+        public GitRepositoryProposal(GitRepositoryInfo info, GitRepositoryAccount account, GitRepositoryChange requested,
             GitDeliveryIntent delivery)
         {
             Info = info;
@@ -24,13 +24,27 @@ public sealed partial class WorkStore
             Delivery = delivery;
         }
 
-        public RepositoryInfo Info { get; init; }
+        public GitRepositoryInfo Info { get; init; }
 
-        public RepositoryAccount Account { get; init; }
+        public GitRepositoryAccount Account { get; init; }
 
-        public RepositoryChange Requested { get; init; }
+        public GitRepositoryChange Requested { get; init; }
 
         public GitDeliveryIntent Delivery { get; init; }
+
+        public GitRepositoryGrant CreateGrant(long connectionId, long workId, long attemptId) => new()
+        {
+            ConnectionId = connectionId,
+            Generation = Account.Generation,
+            AccountId = Account.AccountId,
+            Login = Account.Login,
+            GitRepositoryId = Info.Id,
+            BaseBranch = Delivery.BaseBranch ?? Info.DefaultBranch,
+            Branch = $"goblin/{workId}/{attemptId}",
+            PolicyVersion = 2,
+            AllowPush = Delivery.Push,
+            AllowPullRequest = Delivery.OpenPullRequest
+        };
     }
 
     private async Task<WorkView?> ReplayAsync(WorkCommand command, CancellationToken token)
@@ -44,26 +58,26 @@ public sealed partial class WorkStore
 
     // Discovery may call GitHub. Do it before acquiring the product transaction;
     // expected version and connection generation are checked again when saving.
-    private async Task<RepositoryProposal?> ProposalAsync(WorkCommand command, CancellationToken token)
+    private async Task<GitRepositoryProposal?> ProposalAsync(WorkCommand command, CancellationToken token)
     {
-        if (command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareRepository)) return null;
+        if (command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareGitRepository)) return null;
         WorkView view = await GetAsync(command.WorkId, token);
         if (view.Version != command.ExpectedVersion) throw new ApplicationFailure("work_changed");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         Persistence.Entities.GithubRepository[] known = await db.GithubRepositories.AsNoTracking().ToArrayAsync(token);
-        RepositoryChange? selected = command.Repository;
-        string[] references = RepositoryReferences.Find(view.Work, [.. known.Select(x => x.Name)]);
-        string? name = selected?.Repository ?? (command.Action == WorkAction.PrepareRepository ? command.Text?.Trim() : null)
+        GitRepositoryChange? selected = command.GitRepository;
+        string[] references = GitRepositoryReferences.Find(view.Work, [.. known.Select(x => x.Name)]);
+        string? name = selected?.GitRepository ?? (command.Action == WorkAction.PrepareGitRepository ? command.Text?.Trim() : null)
             ?? (references.Length == 1 ? references[0] : null)
-            ?? view.Work.Attempts.LastOrDefault()?.Target.Repository?.Repository;
+            ?? view.Work.Attempts.LastOrDefault()?.Target.GitRepository?.GitRepository;
         if (name is null) return null;
-        if (!name.Contains('/') && _repositoryCatalog is not null)
+        if (!name.Contains('/') && _gitRepositoryCatalog is not null)
         {
             if (!Regex.IsMatch(name, @"^[a-zA-Z0-9_.-]+$")) throw new ApplicationFailure("repository_unavailable");
             string[] matches = [];
             for (int page = 1; page <= 1000; page++)
             {
-                RepositoryInfo[] batch = await _repositoryCatalog.RepositoriesAsync(page, token);
+                GitRepositoryInfo[] batch = await _gitRepositoryCatalog.GitRepositoriesAsync(page, token);
                 matches = [.. matches, .. batch.Where(x => x.Name.Split('/')[1].Equals(name, StringComparison.OrdinalIgnoreCase)).Select(x => x.Name)];
                 if (matches.Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1) throw new ApplicationFailure("repository_ambiguous");
                 if (batch.Length < 100) break;
@@ -71,32 +85,32 @@ public sealed partial class WorkStore
             }
             name = matches.Distinct(StringComparer.OrdinalIgnoreCase).SingleOrDefault() ?? throw new ApplicationFailure("repository_unavailable");
         }
-        var requested = new RepositoryChange(name, selected?.GitAuthorName ?? "Goblin", selected?.GitAuthorEmail ?? "goblin@localhost");
-        GitDeliveryIntent delivery = command.Delivery ?? RepositoryIntent.Delivery(view.Work);
+        var requested = new GitRepositoryChange(name, selected?.GitAuthorName ?? "Goblin", selected?.GitAuthorEmail ?? "goblin@localhost");
+        GitDeliveryIntent delivery = command.Delivery ?? GitRepositoryIntent.Delivery(view.Work);
         delivery.Validate();
-        RepositoryAccount account;
-        RepositoryInfo info;
-        if (_repositoryCatalog is not null)
+        GitRepositoryAccount account;
+        GitRepositoryInfo info;
+        if (_gitRepositoryCatalog is not null)
         {
-            account = await _repositoryCatalog.GetAccountAsync(token) ?? throw new ApplicationFailure("repository_unavailable");
-            info = await _repositoryCatalog.RepositoryAsync(name, token);
-            if (await _repositoryCatalog.GetAccountAsync(token) != account) throw new ApplicationFailure("repository_authorization_changed");
+            account = await _gitRepositoryCatalog.GetAccountAsync(token) ?? throw new ApplicationFailure("repository_unavailable");
+            info = await _gitRepositoryCatalog.GitRepositoryAsync(name, token);
+            if (await _gitRepositoryCatalog.GetAccountAsync(token) != account) throw new ApplicationFailure("repository_authorization_changed");
         }
         else
         {
             // Hosts without discovery may propose only already enabled catalog entries.
-            Persistence.Entities.GithubRepository repository = known.SingleOrDefault(x => x.Enabled && x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            Persistence.Entities.GithubRepository gitRepository = known.SingleOrDefault(x => x.Enabled && x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                 ?? throw new ApplicationFailure("repository_unavailable");
-            Persistence.Entities.GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == repository.ConnectionId, token);
+            Persistence.Entities.GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == gitRepository.ConnectionId, token);
             account = new(connection.Generation!, connection.AccountId!, connection.Login!);
-            info = new(repository.Id, repository.Name, repository.DefaultBranch, true);
+            info = new(gitRepository.Id, gitRepository.Name, gitRepository.DefaultBranch, true);
         }
         if ((delivery.Push || delivery.OpenPullRequest) && !info.CanPush) throw new ApplicationFailure("repository_unavailable");
         return new(info, account, requested, delivery);
     }
 
     private static async Task SaveProposalAsync(GoblinDbContext db, WorkItem work, long id, ExecutionTarget target,
-        RepositoryProposal proposal, bool retry, DateTimeOffset now, CancellationToken token)
+        GitRepositoryProposal proposal, bool retry, DateTimeOffset now, CancellationToken token)
     {
         Persistence.Entities.GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
         if (connection.Availability != "Connected" || connection.Generation != proposal.Account.Generation ||
@@ -104,11 +118,9 @@ public sealed partial class WorkStore
             throw new ApplicationFailure("repository_authorization_changed");
         bool enabled = await db.GithubRepositories.AnyAsync(x => x.Id == proposal.Info.Id && x.Enabled &&
             x.Name == proposal.Info.Name && x.ConnectionId == connection.Id, token);
-        var repository = new RepositoryChange(proposal.Info.Name, proposal.Requested.GitAuthorName, proposal.Requested.GitAuthorEmail,
-            new(connection.Id, proposal.Account.Generation, proposal.Account.AccountId, proposal.Account.Login, proposal.Info.Id,
-                proposal.Delivery.BaseBranch ?? proposal.Info.DefaultBranch, $"goblin/{work.Id}/{id}", 2,
-                proposal.Delivery.Push, proposal.Delivery.OpenPullRequest));
-        work.PrepareRepositoryAuthorization(id, new(target.Runtime, target.ConnectionId, target.RequestedModel, repository, target.RequestedEffort),
+        var gitRepository = new GitRepositoryChange(proposal.Info.Name, proposal.Requested.GitAuthorName, proposal.Requested.GitAuthorEmail,
+            proposal.CreateGrant(connection.Id, work.Id, id));
+        work.PrepareGitRepositoryAuthorization(id, new(target.Runtime, target.ConnectionId, target.RequestedModel, gitRepository, target.RequestedEffort),
             !enabled, retry, now, proposal.Info.DefaultBranch);
     }
 }

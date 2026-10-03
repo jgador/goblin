@@ -20,7 +20,7 @@ public sealed class ContractValueTests
         Assert.Equal("\"chatgpt\"", JsonSerializer.Serialize(AuthenticationMethod.ChatGPT));
         Assert.Equal("\"Connected\"", JsonSerializer.Serialize(GitHubConnectionStatus.Connected));
         Assert.Equal("\"Changing\"", JsonSerializer.Serialize(ConnectionAvailability.Changing));
-        Assert.Equal("\"Succeeded\"", JsonSerializer.Serialize(RepositoryOperationState.Succeeded));
+        Assert.Equal("\"Succeeded\"", JsonSerializer.Serialize(GitRepositoryOperationState.Succeeded));
     }
 
     [Theory]
@@ -48,12 +48,23 @@ public sealed class ContractValueTests
     public void StoredStatesRoundTripAndUnrecognizedOperationsCannotGainAuthority()
     {
         Assert.Equal(InspectionState.Available, ContractValue.Parse<InspectionState>("Available"));
-        Assert.Equal(RepositoryOperationState.Uncertain, ContractValue.Parse<RepositoryOperationState>("Uncertain"));
-        Assert.Equal(RepositoryOperationKind.PullRequest, RepositoryOperationNames.Parse("pull-request"));
-        Assert.Equal("checkpoint", RepositoryOperationKind.Checkpoint.WireValue());
+        Assert.Equal(GitRepositoryOperationState.Uncertain, ContractValue.Parse<GitRepositoryOperationState>("Uncertain"));
+        Assert.Equal(GitRepositoryOperationKind.PullRequest, GitRepositoryOperationNames.Parse("pull-request"));
+        Assert.Equal("checkpoint", GitRepositoryOperationKind.Checkpoint.WireValue());
         foreach (string value in new[] { "merge", "Publish", "1", "pull_request", " publish" })
-            Assert.False(RepositoryOperationNames.TryParse(value, out _));
-        var grant = new RepositoryGrant(1, "generation", "42", "owner", 22, "main", "goblin/10/20", AllowPush: true, AllowPullRequest: true);
-        Assert.Throws<WorkRuleException>(() => grant.Authorize(10, 20, "owner/repo", "owner/repo", grant.Branch, (RepositoryOperationKind)99));
+            Assert.False(GitRepositoryOperationNames.TryParse(value, out _));
+        var grant = new GitRepositoryGrant()
+        {
+            ConnectionId = 1,
+            Generation = "generation",
+            AccountId = "42",
+            Login = "owner",
+            GitRepositoryId = 22,
+            BaseBranch = "main",
+            Branch = "goblin/10/20",
+            AllowPush = true,
+            AllowPullRequest = true
+        };
+        Assert.Throws<WorkRuleException>(() => grant.Authorize(10, 20, "owner/repo", "owner/repo", grant.Branch, (GitRepositoryOperationKind)99));
     }
 }

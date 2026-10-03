@@ -12,17 +12,17 @@ internal sealed class WorkspaceMiddleware
     private readonly RequestDelegate _next;
     private readonly Workspace _workspace;
     private readonly StaticAssets _assets;
-    private readonly bool _repositoryListener;
+    private readonly bool _gitRepositoryListener;
     private readonly HeadlampProxy? _headlamp;
     private readonly VictoriaLogsProxy? _logs;
 
-    public WorkspaceMiddleware(RequestDelegate next, Workspace workspace, StaticAssets assets, bool repositoryListener,
+    public WorkspaceMiddleware(RequestDelegate next, Workspace workspace, StaticAssets assets, bool gitRepositoryListener,
         HeadlampProxy? headlamp = null, VictoriaLogsProxy? logs = null)
     {
         _next = next;
         _workspace = workspace;
         _assets = assets;
-        _repositoryListener = repositoryListener;
+        _gitRepositoryListener = gitRepositoryListener;
         _headlamp = headlamp;
         _logs = logs;
     }
@@ -41,14 +41,14 @@ internal sealed class WorkspaceMiddleware
             string path = request.Path.Value ?? "/";
             if (path.StartsWith("/internal/repository/", StringComparison.Ordinal))
             {
-                if (!_repositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin"))
+                if (!_gitRepositoryListener || context.Connection.LocalPort != 8788 || request.Headers.ContainsKey("Origin"))
                     throw new PublicError("not_found", "This endpoint does not exist.", 404);
                 string[] segments = path.Split('/');
                 if (segments.Length < 5 || !long.TryParse(segments[3], out long attemptId)) throw new PublicError("not_found", "This endpoint does not exist.", 404);
                 await context.RequestServices.GetRequiredService<GitRepositoryBroker>().AuthorizeAsync(attemptId, request.Headers["X-Goblin-Repository"].ToString(), !path.EndsWith("/current", StringComparison.Ordinal), request.HttpContext.RequestAborted);
                 await _next(context); return;
             }
-            if (_repositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);
+            if (_gitRepositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);
             // Endpoint routing treats /work and /work/ as the same route.
             if (path == "/work/") path = "/work";
             bool get = HttpMethods.IsGet(request.Method);

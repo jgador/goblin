@@ -49,7 +49,7 @@ public partial class WorkItem
     public virtual ICollection<ExternalMessage> ExternalMessages { get; set; } = [];
 
     [InverseProperty("Work")]
-    public virtual ICollection<RepositorySetupMemory> RepositorySetupMemories { get; set; } = [];
+    public virtual ICollection<GitRepositorySetupMemory> GitRepositorySetupMemories { get; set; } = [];
 
     [InverseProperty("Work")]
     public virtual ICollection<WorkCommand> WorkCommands { get; set; } = [];

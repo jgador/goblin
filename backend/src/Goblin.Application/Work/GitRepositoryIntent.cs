@@ -6,7 +6,7 @@ using Goblin.Core.Work;
 
 namespace Goblin.Application.Work;
 
-public static class RepositoryIntent
+public static class GitRepositoryIntent
 {
     private const string BasePattern = @"\b(?:base\s+branch\s*(?:is\s+|[:=]\s*)?|(?:branch|branching)\s+(?:from|off)\s+|based\s+on\s+)[`""']?([a-zA-Z0-9][a-zA-Z0-9._/-]*)|\buse\s+[`""']?([a-zA-Z0-9][a-zA-Z0-9._/-]*)[`""']?\s+as\s+(?:the\s+)?base\b";
 
@@ -18,9 +18,9 @@ public static class RepositoryIntent
 
     public static GitDeliveryIntent Delivery(WorkSnapshot work, string? answer = null)
     {
-        RepositoryGrant? prior = work.Attempts.LastOrDefault()?.Target.Repository?.Grant;
+        GitRepositoryGrant? prior = work.Attempts.LastOrDefault()?.Target.GitRepository?.Grant;
         var intent = new GitDeliveryIntent(prior?.BaseBranch, prior?.AllowPush ?? false, prior?.AllowPullRequest ?? false);
-        long authorizedAt = work.History.LastOrDefault(x => x.Kind == WorkEventKind.RepositoryAuthorized)?.Sequence ?? 0;
+        long authorizedAt = work.History.LastOrDefault(x => x.Kind == WorkEventKind.GitRepositoryAuthorized)?.Sequence ?? 0;
         IEnumerable<string> inputs = work.History.Where(x => x.Sequence > authorizedAt && x.Kind is WorkEventKind.Created or WorkEventKind.ContextAdded or WorkEventKind.InputProvided or WorkEventKind.ChangesRequested)
             .Select(x => x.Text ?? "");
         foreach (string input in inputs.Append(answer ?? "")) intent = Parse(input, intent);

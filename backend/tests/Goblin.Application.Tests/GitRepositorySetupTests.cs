@@ -3,14 +3,14 @@ using Xunit;
 
 namespace Goblin.Application.Tests;
 
-public sealed class RepositorySetupTests
+public sealed class GitRepositorySetupTests
 {
     [Theory]
     [InlineData("https://user:password@example.test/repo")]
     [InlineData("api_key=private-value")]
     [InlineData("cat /run/credentials/auth.json")]
     [InlineData("-----BEGIN RSA PRIVATE KEY-----")]
-    public void SetupRejectsCredentialMaterial(string value) => Assert.False(RepositorySetupRules.SafeText(value, 2000));
+    public void SetupRejectsCredentialMaterial(string value) => Assert.False(GitRepositorySetupRules.SafeText(value, 2000));
 
     [Theory]
     [InlineData("../../outside")]
@@ -18,5 +18,5 @@ public sealed class RepositorySetupTests
     [InlineData(".git/config")]
     [InlineData(".env")]
     [InlineData("C:\\private")]
-    public void SetupInputsStayInsideRepository(string value) => Assert.False(RepositorySetupRules.SafePath(value));
+    public void SetupInputsStayInsideGitRepository(string value) => Assert.False(GitRepositorySetupRules.SafePath(value));
 }

@@ -11,7 +11,7 @@ using Microsoft.AspNetCore.Http;
 
 namespace Goblin.Web;
 
-internal static class RepositoryEndpoints
+internal static class GitRepositoryEndpoints
 {
     public static void Map(WebApplication app)
     {
@@ -33,7 +33,7 @@ internal static class RepositoryEndpoints
 
     private static async Task<IResult> EnqueueAsync(long attemptId, long operationId, string kind, HttpContext context, GitRepositoryBroker broker)
     {
-        if (!RepositoryOperationNames.TryParse(kind, out RepositoryOperationKind operation))
+        if (!GitRepositoryOperationNames.TryParse(kind, out GitRepositoryOperationKind operation))
             throw new ApplicationFailure("repository_operation_unavailable");
         return Results.Json(await broker.EnqueueAsync(attemptId, operationId, operation, context.Request.Body, context.RequestAborted));
     }

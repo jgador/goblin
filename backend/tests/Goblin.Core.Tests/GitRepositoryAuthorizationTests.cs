@@ -4,12 +4,24 @@ using Xunit;
 
 namespace Goblin.Core.Tests;
 
-public sealed class RepositoryAuthorizationTests
+public sealed class GitRepositoryAuthorizationTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
 
-    private static ExecutionTarget Target(long id, bool push = false, bool pr = false) => new("codex", 1, repository:
-        new("owner/repo", "Goblin", "agent@example.com", new(1, "generation", "42", "owner", 22, "develop", $"goblin/1/{id}", 2, push, pr)));
+    private static ExecutionTarget Target(long id, bool push = false, bool pr = false) => new("codex", 1, gitRepository:
+        new("owner/repo", "Goblin", "agent@example.com", new()
+        {
+            ConnectionId = 1,
+            Generation = "generation",
+            AccountId = "42",
+            Login = "owner",
+            GitRepositoryId = 22,
+            BaseBranch = "develop",
+            Branch = $"goblin/1/{id}",
+            PolicyVersion = 2,
+            AllowPush = push,
+            AllowPullRequest = pr
+        }));
 
     private static WorkItem Ready()
     {
@@ -22,17 +34,17 @@ public sealed class RepositoryAuthorizationTests
     public void PreviewSurvivesRestoreAndCannotExecuteUntilExactRequestIsApproved()
     {
         WorkItem work = Ready();
-        work.PrepareRepositoryAuthorization(10, Target(10), true, false, Now, "main");
+        work.PrepareGitRepositoryAuthorization(10, Target(10), true, false, Now, "main");
         work = WorkItem.Restore(work.Snapshot());
         Assert.Empty(work.Attempts);
-        Assert.True(work.RepositoryAuthorization!.EnableRepository);
+        Assert.True(work.GitRepositoryAuthorization!.EnableGitRepository);
         Assert.False(work.TryClaimExecution(10, 100, "sandbox", Now));
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11, Target(10), Now));
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(10, Target(10, true), Now));
-        work.AuthorizeRepository(10, Target(10), Now);
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(11, Target(10), Now));
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(10, Target(10, true), Now));
+        work.AuthorizeGitRepository(10, Target(10), Now);
         Assert.True(work.TryClaimExecution(10, 100, "sandbox", Now));
         Assert.False(work.TryClaimExecution(10, 101, "sandbox", Now));
-        Assert.Equal(RepositoryAuthorizationStatus.Authorized, work.RepositoryAuthorization.Status);
+        Assert.Equal(GitRepositoryAuthorizationStatus.Authorized, work.GitRepositoryAuthorization.Status);
     }
 
     [Theory]
@@ -44,9 +56,9 @@ public sealed class RepositoryAuthorizationTests
         WorkItem work = Ready();
         work.QueueExecution(10, Target(10), Now);
         if (action == "context") work.AddContext(11, "Do not push", Now);
-        if (action == "deny") work.DenyRepositoryAuthorization(10, Now);
+        if (action == "deny") work.DenyGitRepositoryAuthorization(10, Now);
         if (action == "cancel") work.RequestCancellation(Now);
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(10, Target(10), Now));
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(10, Target(10), Now));
         Assert.Empty(work.Attempts);
     }
 
@@ -55,14 +67,14 @@ public sealed class RepositoryAuthorizationTests
     {
         WorkItem work = Ready();
         work.QueueExecution(10, Target(10), Now);
-        work.AuthorizeRepository(10, Target(10), Now);
+        work.AuthorizeGitRepository(10, Target(10), Now);
         work.DispatchFailed(10, FailureKind.HostUnavailable, Now);
         work.RetryExecution(11, Target(11, true), Now);
         Assert.Single(work.Attempts);
-        Assert.True(work.RepositoryAuthorization!.Retry);
-        work.DenyRepositoryAuthorization(11, Now);
-        work.PrepareRepositoryAuthorization(12, Target(12), false, true, Now);
-        work.AuthorizeRepository(12, Target(12), Now);
+        Assert.True(work.GitRepositoryAuthorization!.Retry);
+        work.DenyGitRepositoryAuthorization(11, Now);
+        work.PrepareGitRepositoryAuthorization(12, Target(12), false, true, Now);
+        work.AuthorizeGitRepository(12, Target(12), Now);
         Assert.Equal(AttemptStatus.Failed, work.Attempts[0].Status);
         Assert.Equal(12, work.CurrentAttempt!.Id);
     }
@@ -72,15 +84,15 @@ public sealed class RepositoryAuthorizationTests
     {
         WorkItem work = Ready();
         work.QueueExecution(10, Target(10), Now);
-        work.AuthorizeRepository(10, Target(10), Now);
+        work.AuthorizeGitRepository(10, Target(10), Now);
         work.TryClaimExecution(10, 100, "sandbox", Now);
         work.PauseForInput(10, 100, 101, "Deliver changes?", false, Now);
-        work.PrepareRepositoryAuthorization(11, Target(11, true), false, false, Now);
+        work.PrepareGitRepositoryAuthorization(11, Target(11, true), false, false, Now);
         Assert.True(work.CurrentAttempt!.CleanupPending);
         Assert.True(work.CurrentAttempt.ReleaseWorkspace);
-        Assert.Throws<WorkRuleException>(() => work.AuthorizeRepository(11, Target(11, true), Now));
+        Assert.Throws<WorkRuleException>(() => work.AuthorizeGitRepository(11, Target(11, true), Now));
         work.ConfirmCleanup(10, 100, Now);
-        work.AuthorizeRepository(11, Target(11, true), Now);
+        work.AuthorizeGitRepository(11, Target(11, true), Now);
         Assert.Equal(AttemptStatus.Succeeded, work.Attempts[0].Status);
         Assert.Equal(WorkStatus.Queued, work.Status);
     }
@@ -88,12 +100,12 @@ public sealed class RepositoryAuthorizationTests
     [Fact]
     public void LocalGrantRejectsPushAndPullRequestButAllowsFetchAndCheckpoint()
     {
-        RepositoryGrant grant = Target(10).Repository!.Grant!;
-        foreach (RepositoryOperationKind operation in new[] { RepositoryOperationKind.Publish, RepositoryOperationKind.PullRequest })
+        GitRepositoryGrant grant = Target(10).GitRepository!.Grant!;
+        foreach (GitRepositoryOperationKind operation in new[] { GitRepositoryOperationKind.Publish, GitRepositoryOperationKind.PullRequest })
             Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, operation));
         foreach (string operation in new[] { "fetch", "checkpoint" })
-            grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, RepositoryOperationNames.Parse(operation));
-        grant = Target(10, true).Repository!.Grant!;
-        Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, RepositoryOperationKind.PullRequest));
+            grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, GitRepositoryOperationNames.Parse(operation));
+        grant = Target(10, true).GitRepository!.Grant!;
+        Assert.Throws<WorkRuleException>(() => grant.Authorize(1, 10, "owner/repo", "owner/repo", grant.Branch, GitRepositoryOperationKind.PullRequest));
     }
 }

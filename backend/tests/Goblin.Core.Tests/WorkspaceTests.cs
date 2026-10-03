@@ -13,7 +13,7 @@ public sealed class WorkspaceTests
     {
         var work = new WorkItem(1, "Investigate and fix the issue", Now);
         work.Assign(1, Now);
-        work.QueueExecution(1, new("codex", 1, repository: new("owner/repo", "Goblin", "agent@example.com")), Now);
+        work.QueueExecution(1, new("codex", 1, gitRepository: new("owner/repo", "Goblin", "agent@example.com")), Now);
         work.TryClaimExecution(1, 10, "k8s/agents/run-1/1", Now);
         work.ExecutionStarted(1, 10, new("model", "thread", "turn-1"), Now);
         return work;
@@ -54,7 +54,7 @@ public sealed class WorkspaceTests
     }
 
     [Fact]
-    public void ReleasedWorkspaceContinuesWithReasoningBeforeAllocatingRepositoryCompute()
+    public void ReleasedWorkspaceContinuesWithReasoningBeforeAllocatingGitRepositoryCompute()
     {
         WorkItem work = Running();
         long checkpoint = 9007199254740993;
@@ -67,12 +67,34 @@ public sealed class WorkspaceTests
         Assert.True(work.CurrentAttempt!.ReasoningOnly);
         Assert.Equal(2, work.CurrentAttempt.WorkspaceNumber);
         work.TryClaimExecution(1, 20, "text/1", Now);
-        work.RequireRepositoryExecution(1, 20, Now);
+        work.RequireGitRepositoryExecution(1, 20, Now);
         Assert.False(work.CurrentAttempt.ReasoningOnly);
         Assert.Equal(3, work.CurrentAttempt.TurnNumber);
         Assert.Equal(2, work.CurrentAttempt.WorkspaceNumber);
         Assert.Single(work.Attempts);
         Assert.Equal(checkpoint, work.CurrentAttempt.CheckpointId);
+    }
+
+    [Fact]
+    public void ContinuingCapturesAllTurnProvenanceBeforeTheNextOwnerStarts()
+    {
+        WorkItem work = Running();
+        work.SaveWorkspace(1, 10, 21, Now.AddSeconds(1));
+        work.PauseForInput(1, 10, 22, "Which database?", false, Now.AddSeconds(2));
+        work.AnswerDecision(22, "PostgreSQL", Now.AddSeconds(3));
+        var expected = new ExecutionTurnRecord(1, 1)
+        {
+            OwnerId = 10,
+            EnvironmentReference = "k8s/agents/run-1/1",
+            Session = new("model", "thread", "turn-1"),
+            StartedAt = Now,
+            FinishedAt = Now.AddSeconds(2),
+            CheckpointId = 21
+        };
+        Assert.True(work.TryClaimExecution(1, 30, "k8s/agents/run-1/1", Now.AddSeconds(4)));
+        work.ExecutionStarted(1, 30, new("model", "thread", "turn-2"), Now.AddSeconds(5));
+        Assert.Equal(expected, Assert.Single(work.CurrentAttempt!.PriorTurns));
+        Assert.Equal(expected, Assert.Single(WorkItem.Restore(work.Snapshot()).CurrentAttempt!.PriorTurns));
     }
 
     [Theory]
@@ -122,11 +144,11 @@ public sealed class WorkspaceTests
     }
 
     [Fact]
-    public void AWorkCannotReuseItsWorkspaceForAnotherRepository()
+    public void AWorkCannotReuseItsWorkspaceForAnotherGitRepository()
     {
         WorkItem work = Running();
         work.ExecutionFailed(1, 10, FailureKind.ExecutionFailed, Now);
         Assert.Throws<WorkRuleException>(() => work.RetryExecution(2,
-            new("codex", 1, repository: new("owner/other", "Goblin", "agent@example.com")), Now));
+            new("codex", 1, gitRepository: new("owner/other", "Goblin", "agent@example.com")), Now));
     }
 }

@@ -41,7 +41,7 @@ public sealed class ExecuteGitRepositoryOperation
 
 public sealed class GitRepositoryOperationView
 {
-    public GitRepositoryOperationView(long id, RepositoryOperationState state, string? url)
+    public GitRepositoryOperationView(long id, GitRepositoryOperationState state, string? url)
     {
         Id = id;
         State = state;
@@ -50,16 +50,16 @@ public sealed class GitRepositoryOperationView
 
     public long Id { get; init; }
 
-    public RepositoryOperationState State { get; init; }
+    public GitRepositoryOperationState State { get; init; }
 
     public string? Url { get; init; }
 }
 
-public sealed class GitRepositoryBroker : IRepositoryBroker
+public sealed class GitRepositoryBroker : IGitRepositoryBroker
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly IDbContextFactory<GoblinDbContext> _factory;
-    private readonly IRepositoryRemote _remote;
+    private readonly IGitRepositoryRemote _remote;
     private readonly IWorkspaceCheckpoints? _checkpoints;
     private readonly string _directory;
     private readonly byte[] _key;
@@ -67,7 +67,7 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _active = new();
 
     public GitRepositoryBroker(IServiceScopeFactory scopes, IDbContextFactory<GoblinDbContext> factory,
-        IRepositoryRemote remote, GitRepositoryBrokerOptions options, IWorkspaceCheckpoints? checkpoints = null)
+        IGitRepositoryRemote remote, GitRepositoryBrokerOptions options, IWorkspaceCheckpoints? checkpoints = null)
     {
         _scopes = scopes; _factory = factory; _remote = remote; _checkpoints = checkpoints;
         _directory = Path.GetFullPath(options.Directory);
@@ -91,7 +91,7 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
     private string Capability(WorkSnapshot work)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
-        return Convert.ToHexString(HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes($"{work.Id}/{attempt.Id}/{attempt.Target.Repository!.Grant!.Generation}")));
+        return Convert.ToHexString(HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes($"{work.Id}/{attempt.Id}/{attempt.Target.GitRepository!.Grant!.Generation}")));
     }
 
     private async Task<WorkSnapshot> WorkAsync(long attemptId, CancellationToken token)
@@ -101,12 +101,12 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
             ?? throw new ApplicationFailure("repository_operation_unavailable");
         using IServiceScope scope = _scopes.CreateScope();
         WorkSnapshot work = (await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(attempt.WorkId, token)).Work;
-        if (work.Attempts[^1].Id != attemptId || work.Attempts[^1].Target.Repository?.Grant is null)
+        if (work.Attempts[^1].Id != attemptId || work.Attempts[^1].Target.GitRepository?.Grant is null)
             throw new ApplicationFailure("repository_operation_unavailable");
-        RepositoryGrant grant = work.Attempts[^1].Target.Repository!.Grant!;
-        if (grant.PolicyVersion == 2 && (work.RepositoryAuthorization is not { Status: RepositoryAuthorizationStatus.Authorized } approved ||
+        GitRepositoryGrant grant = work.Attempts[^1].Target.GitRepository!.Grant!;
+        if (grant.PolicyVersion == 2 && (work.GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approved ||
             approved.Id != attemptId || approved.Target != work.Attempts[^1].Target) ||
-            !await db.GithubRepositories.AnyAsync(x => x.Id == grant.RepositoryId && x.Enabled &&
+            !await db.GithubRepositories.AnyAsync(x => x.Id == grant.GitRepositoryId && x.Enabled &&
                 x.ConnectionId == grant.ConnectionId && x.Connection.Generation == grant.Generation &&
                 x.Connection.AccountId == grant.AccountId && x.Connection.Availability == nameof(GitHubConnectionStatus.Connected), token))
             throw new ApplicationFailure("repository_operation_unavailable");
@@ -120,8 +120,8 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         if (string.IsNullOrEmpty(commit) || commit.Length != 40 || !commit.All(Uri.IsHexDigit)) throw new ApplicationFailure("workspace_changed");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        if (!await db.RepositoryOperations.AnyAsync(x => x.AttemptId == attempt.Id && (x.Kind == RepositoryOperationKind.Publish.WireValue() || x.Kind == RepositoryOperationKind.Checkpoint.WireValue()) && x.State == nameof(RepositoryOperationState.Succeeded) && x.CommitSha == commit, token) ||
-            (attempt.Target.Repository!.Grant!.PolicyVersion == 1 || attempt.Target.Repository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.Repository!, DirectoryFor(attempt.Id), RepositoryOperationKind.Publish, commit, token) is null)
+        if (!await db.GitRepositoryOperations.AnyAsync(x => x.AttemptId == attempt.Id && (x.Kind == GitRepositoryOperationKind.Publish.WireValue() || x.Kind == GitRepositoryOperationKind.Checkpoint.WireValue()) && x.State == nameof(GitRepositoryOperationState.Succeeded) && x.CommitSha == commit, token) ||
+            (attempt.Target.GitRepository!.Grant!.PolicyVersion == 1 || attempt.Target.GitRepository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.GitRepository!, DirectoryFor(attempt.Id), GitRepositoryOperationKind.Publish, commit, token) is null)
             throw new ApplicationFailure("workspace_checkpoint_unconfirmed");
     }
 
@@ -140,16 +140,16 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
     public async Task<string> PrepareAsync(WorkSnapshot work, CancellationToken token)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
-        RepositoryChange repository = attempt.Target.Repository!;
-        if (repository.Grant is null) throw new ApplicationFailure("repository_unavailable");
-        repository.Grant.Authorize(work.Id, attempt.Id, repository.Repository, repository.Repository, repository.Grant.Branch, RepositoryOperationKind.Fetch);
-        string? checkpoint = work.Attempts.SkipLast(1).LastOrDefault(x => x.Target.Repository?.Repository == repository.Repository &&
-            work.Artifacts.Any(a => a.AttemptId == x.Id))?.Target.Repository?.Grant?.Branch;
-        Goblin.Contracts.Runtime.WorkspaceCheckpoint? saved = _checkpoints is null ? null : await _checkpoints.LatestAsync(work.Id, repository.Repository, token);
+        GitRepositoryChange gitRepository = attempt.Target.GitRepository!;
+        if (gitRepository.Grant is null) throw new ApplicationFailure("repository_unavailable");
+        gitRepository.Grant.Authorize(work.Id, attempt.Id, gitRepository.GitRepository, gitRepository.GitRepository, gitRepository.Grant.Branch, GitRepositoryOperationKind.Fetch);
+        string? checkpoint = work.Attempts.SkipLast(1).LastOrDefault(x => x.Target.GitRepository?.GitRepository == gitRepository.GitRepository &&
+            work.Artifacts.Any(a => a.AttemptId == x.Id))?.Target.GitRepository?.Grant?.Branch;
+        Goblin.Contracts.Runtime.WorkspaceCheckpoint? saved = _checkpoints is null ? null : await _checkpoints.LatestAsync(work.Id, gitRepository.GitRepository, token);
         bool published = saved is not null && work.Attempts.Any(x => x.Id == saved.AttemptId &&
-            (x.Target.Repository?.Grant?.PolicyVersion == 1 || x.Target.Repository?.Grant?.AllowPush == true));
-        if (saved is not null && published) await _remote.PrepareCheckpointAsync(repository, DirectoryFor(attempt.Id), saved, token);
-        else await _remote.PrepareAsync(repository, DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
+            (x.Target.GitRepository?.Grant?.PolicyVersion == 1 || x.Target.GitRepository?.Grant?.AllowPush == true));
+        if (saved is not null && published) await _remote.PrepareCheckpointAsync(gitRepository, DirectoryFor(attempt.Id), saved, token);
+        else await _remote.PrepareAsync(gitRepository, DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
         return Capability(work);
     }
 
@@ -161,15 +161,15 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
         if (work.Attempts[^1].Status is not (AttemptStatus.Starting or AttemptStatus.Running))
             throw new ApplicationFailure("repository_operation_unavailable");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        return await IdentityStore.NextAsync(db, IdentityKind.RepositoryOperation, token);
+        return await IdentityStore.NextAsync(db, IdentityKind.GitRepositoryOperation, token);
     }
 
-    public async Task<GitRepositoryOperationView> EnqueueAsync(long attemptId, long id, RepositoryOperationKind kind, Stream input, CancellationToken token)
+    public async Task<GitRepositoryOperationView> EnqueueAsync(long attemptId, long id, GitRepositoryOperationKind kind, Stream input, CancellationToken token)
     {
         if (id <= 0) throw new ApplicationFailure("repository_operation_unavailable");
         WorkSnapshot work = await WorkAsync(attemptId, token);
-        RepositoryChange repository = work.Attempts[^1].Target.Repository!;
-        repository.Grant!.Authorize(work.Id, attemptId, repository.Repository, repository.Repository, repository.Grant.Branch, kind);
+        GitRepositoryChange gitRepository = work.Attempts[^1].Target.GitRepository!;
+        gitRepository.Grant!.Authorize(work.Id, attemptId, gitRepository.GitRepository, gitRepository.GitRepository, gitRepository.Grant.Branch, kind);
         string temporary = Path.Combine(DirectoryFor(attemptId), Guid.NewGuid().ToString("N") + ".upload");
         string fingerprint;
         try
@@ -188,23 +188,23 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
             fingerprint = kind.WireValue() + ":" + Convert.ToHexString(hash.GetHashAndReset());
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
             await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
-            RepositoryOperation? previous = await db.RepositoryOperations.SingleOrDefaultAsync(x => x.Id == id, token);
+            GitRepositoryOperation? previous = await db.GitRepositoryOperations.SingleOrDefaultAsync(x => x.Id == id, token);
             if (previous is not null)
             {
                 if (previous.AttemptId != attemptId || previous.Fingerprint != fingerprint) throw new ApplicationFailure("command_id_reused");
-                return new(previous.Id, ContractValue.Parse<RepositoryOperationState>(previous.State), previous.ResultUrl);
+                return new(previous.Id, ContractValue.Parse<GitRepositoryOperationState>(previous.State), previous.ResultUrl);
             }
             Persistence.Entities.ExecutionAttempt attempt = await db.ExecutionAttempts.SingleAsync(x => x.Id == attemptId, token);
-            if (attempt.Status is not (nameof(AttemptStatus.Starting) or nameof(AttemptStatus.Running)) || await db.RepositoryOperations.AnyAsync(x => x.AttemptId == attemptId &&
-                (x.State == nameof(RepositoryOperationState.Queued) || x.State == nameof(RepositoryOperationState.Running) || x.State == nameof(RepositoryOperationState.Uncertain) || x.State == nameof(RepositoryOperationState.Failed)), token))
+            if (attempt.Status is not (nameof(AttemptStatus.Starting) or nameof(AttemptStatus.Running)) || await db.GitRepositoryOperations.AnyAsync(x => x.AttemptId == attemptId &&
+                (x.State == nameof(GitRepositoryOperationState.Queued) || x.State == nameof(GitRepositoryOperationState.Running) || x.State == nameof(GitRepositoryOperationState.Uncertain) || x.State == nameof(GitRepositoryOperationState.Failed)), token))
                 throw new ApplicationFailure("repository_operation_unavailable");
             File.Move(temporary, BundleFor(attemptId, id), true);
-            db.RepositoryOperations.Add(new() { Id = id, AttemptId = attemptId, Kind = kind.WireValue(), State = nameof(RepositoryOperationState.Queued), Fingerprint = fingerprint, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+            db.GitRepositoryOperations.Add(new() { Id = id, AttemptId = attemptId, Kind = kind.WireValue(), State = nameof(GitRepositoryOperationState.Queued), Fingerprint = fingerprint, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
             using IServiceScope scope = _scopes.CreateScope();
             IDbContextOutbox outbox = scope.ServiceProvider.GetRequiredService<WorkOutboxFactory>().Create(db);
             await outbox.PublishAsync(new ExecuteGitRepositoryOperation(id));
             await outbox.SaveChangesAndFlushMessagesAsync(token);
-            return new(id, RepositoryOperationState.Queued, null);
+            return new(id, GitRepositoryOperationState.Queued, null);
         }
         finally { File.Delete(temporary); }
     }
@@ -212,9 +212,9 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
     public async Task<GitRepositoryOperationView> StatusAsync(long attemptId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        RepositoryOperation operation = await db.RepositoryOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AttemptId == attemptId, token)
+        GitRepositoryOperation operation = await db.GitRepositoryOperations.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.AttemptId == attemptId, token)
             ?? throw new ApplicationFailure("repository_operation_unavailable");
-        return new(id, ContractValue.Parse<RepositoryOperationState>(operation.State), operation.ResultUrl);
+        return new(id, ContractValue.Parse<GitRepositoryOperationState>(operation.State), operation.ResultUrl);
     }
 
     public async Task ExecuteAsync(long id, CancellationToken token)
@@ -234,9 +234,9 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
         await using (GoblinDbContext db = await _factory.CreateDbContextAsync(token))
         {
             await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
-            RepositoryOperation row = await db.RepositoryOperations.SingleAsync(x => x.Id == id, token);
-            if (row.State != nameof(RepositoryOperationState.Queued)) return;
-            row.State = nameof(RepositoryOperationState.Running); row.UpdatedAt = DateTime.UtcNow; attemptId = row.AttemptId;
+            GitRepositoryOperation row = await db.GitRepositoryOperations.SingleAsync(x => x.Id == id, token);
+            if (row.State != nameof(GitRepositoryOperationState.Queued)) return;
+            row.State = nameof(GitRepositoryOperationState.Running); row.UpdatedAt = DateTime.UtcNow; attemptId = row.AttemptId;
             await db.SaveChangesAsync(token); await transaction.CommitAsync(token);
         }
         SemaphoreSlim gate = _locks.GetOrAdd(attemptId, _ => new(1));
@@ -249,31 +249,31 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
         {
             WorkSnapshot work = await WorkAsync(attemptId, cancellation.Token);
             if (work.Attempts[^1].Status is not (AttemptStatus.Starting or AttemptStatus.Running)) throw new ApplicationFailure("repository_operation_unavailable");
-            RepositoryChange repository = work.Attempts[^1].Target.Repository!;
+            GitRepositoryChange gitRepository = work.Attempts[^1].Target.GitRepository!;
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(cancellation.Token);
-            RepositoryOperation row = await db.RepositoryOperations.SingleAsync(x => x.Id == id, cancellation.Token);
-            if (row.State != nameof(RepositoryOperationState.Running)) throw new ApplicationFailure("repository_operation_unavailable");
-            repository.Grant!.Authorize(work.Id, attemptId, repository.Repository, repository.Repository, repository.Grant.Branch, RepositoryOperationNames.Parse(row.Kind));
-            string commit = row.Kind == "fetch" ? "read" : await _remote.InspectBundleAsync(repository, DirectoryFor(attemptId), BundleFor(attemptId, id), cancellation.Token);
+            GitRepositoryOperation row = await db.GitRepositoryOperations.SingleAsync(x => x.Id == id, cancellation.Token);
+            if (row.State != nameof(GitRepositoryOperationState.Running)) throw new ApplicationFailure("repository_operation_unavailable");
+            gitRepository.Grant!.Authorize(work.Id, attemptId, gitRepository.GitRepository, gitRepository.GitRepository, gitRepository.Grant.Branch, GitRepositoryOperationNames.Parse(row.Kind));
+            string commit = row.Kind == "fetch" ? "read" : await _remote.InspectBundleAsync(gitRepository, DirectoryFor(attemptId), BundleFor(attemptId, id), cancellation.Token);
             row.CommitSha = commit; row.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellation.Token);
-            if (row.Kind == RepositoryOperationKind.Checkpoint.WireValue())
+            if (row.Kind == GitRepositoryOperationKind.Checkpoint.WireValue())
             {
-                row.State = nameof(RepositoryOperationState.Succeeded);
+                row.State = nameof(GitRepositoryOperationState.Succeeded);
                 await db.SaveChangesAsync(cancellation.Token);
                 return;
             }
             await File.WriteAllLinesAsync(Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external"),
                 [File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim(), File.ReadAllText("/proc/uptime").Split(' ')[0]], cancellation.Token);
             external = true;
-            RepositoryOperationResult result = await _remote.ExecuteAsync(repository, DirectoryFor(attemptId), RepositoryOperationNames.Parse(row.Kind), commit, cancellation.Token);
-            row.State = nameof(RepositoryOperationState.Succeeded); row.ResultUrl = result.Url; row.UpdatedAt = DateTime.UtcNow;
+            GitRepositoryOperationResult result = await _remote.ExecuteAsync(gitRepository, DirectoryFor(attemptId), GitRepositoryOperationNames.Parse(row.Kind), commit, cancellation.Token);
+            row.State = nameof(GitRepositoryOperationState.Succeeded); row.ResultUrl = result.Url; row.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync(cancellation.Token);
         }
         catch
         {
             await using GoblinDbContext db = await _factory.CreateDbContextAsync();
-            await db.RepositoryOperations.Where(x => x.Id == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.State, external ? nameof(RepositoryOperationState.Uncertain) : nameof(RepositoryOperationState.Failed)).SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
+            await db.GitRepositoryOperations.Where(x => x.Id == id).ExecuteUpdateAsync(s => s.SetProperty(x => x.State, external ? nameof(GitRepositoryOperationState.Uncertain) : nameof(GitRepositoryOperationState.Failed)).SetProperty(x => x.UpdatedAt, DateTime.UtcNow));
         }
         finally { _active.TryRemove(attemptId, out _); gate.Release(); }
     }
@@ -282,32 +282,32 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
     {
         AttemptSnapshot attempt = work.Attempts[^1];
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        RepositoryOperation[] rows = await db.RepositoryOperations.Where(x => x.AttemptId == attempt.Id && x.State != nameof(RepositoryOperationState.Succeeded)).ToArrayAsync(token);
+        GitRepositoryOperation[] rows = await db.GitRepositoryOperations.Where(x => x.AttemptId == attempt.Id && x.State != nameof(GitRepositoryOperationState.Succeeded)).ToArrayAsync(token);
         if (rows.Length == 0) return null;
-        foreach (RepositoryOperation? row in rows)
+        foreach (GitRepositoryOperation? row in rows)
         {
             string evidence = Path.Combine(_directory, row.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed");
             if (File.Exists(evidence))
             {
-                row.State = row.CommitSha is null ? nameof(RepositoryOperationState.Failed) : nameof(RepositoryOperationState.Uncertain);
+                row.State = row.CommitSha is null ? nameof(GitRepositoryOperationState.Failed) : nameof(GitRepositoryOperationState.Uncertain);
                 await db.SaveChangesAsync(token);
                 File.Delete(evidence);
             }
-            if (_active.ContainsKey(attempt.Id) || row.State == nameof(RepositoryOperationState.Queued)) return new(ObservationKind.Pending);
+            if (_active.ContainsKey(attempt.Id) || row.State == nameof(GitRepositoryOperationState.Queued)) return new(ObservationKind.Pending);
             await db.Entry(row).ReloadAsync(token);
-            if (row.State == nameof(RepositoryOperationState.Succeeded)) continue;
-            if (row.Kind == RepositoryOperationKind.Checkpoint.WireValue() && row.State is nameof(RepositoryOperationState.Running) or nameof(RepositoryOperationState.Uncertain))
+            if (row.State == nameof(GitRepositoryOperationState.Succeeded)) continue;
+            if (row.Kind == GitRepositoryOperationKind.Checkpoint.WireValue() && row.State is nameof(GitRepositoryOperationState.Running) or nameof(GitRepositoryOperationState.Uncertain))
             {
-                row.State = nameof(RepositoryOperationState.Failed); await db.SaveChangesAsync(token); continue;
+                row.State = nameof(GitRepositoryOperationState.Failed); await db.SaveChangesAsync(token); continue;
             }
-            if (row.State is nameof(RepositoryOperationState.Running) or nameof(RepositoryOperationState.Uncertain))
+            if (row.State is nameof(GitRepositoryOperationState.Running) or nameof(GitRepositoryOperationState.Uncertain))
             {
-                row.State = nameof(RepositoryOperationState.Uncertain);
-                RepositoryOperationResult? result = null;
+                row.State = nameof(GitRepositoryOperationState.Uncertain);
+                GitRepositoryOperationResult? result = null;
                 try
                 {
                     if (row.CommitSha is not null)
-                        result = await _remote.ReconcileAsync(attempt.Target.Repository!, DirectoryFor(attempt.Id), RepositoryOperationNames.Parse(row.Kind), row.CommitSha, token);
+                        result = await _remote.ReconcileAsync(attempt.Target.GitRepository!, DirectoryFor(attempt.Id), GitRepositoryOperationNames.Parse(row.Kind), row.CommitSha, token);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
                 catch
@@ -316,14 +316,14 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
                     // Failure retains the uncertain history; it does not assert that
                     // GitHub was unchanged or automatically repeat the operation.
                 }
-                if (result is not null) { row.State = nameof(RepositoryOperationState.Succeeded); row.ResultUrl = result.Url; }
+                if (result is not null) { row.State = nameof(GitRepositoryOperationState.Succeeded); row.ResultUrl = result.Url; }
                 // Each external subprocess has a 120s watchdog; the entire operation also has
                 // a 120s limit. After a controller crash no child can survive this bound.
-                else if (ExternalProcessStopped(row.Id)) row.State = nameof(RepositoryOperationState.Failed);
+                else if (ExternalProcessStopped(row.Id)) row.State = nameof(GitRepositoryOperationState.Failed);
                 await db.SaveChangesAsync(token);
             }
         }
-        return rows.All(x => x.State == nameof(RepositoryOperationState.Succeeded)) ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
+        return rows.All(x => x.State == nameof(GitRepositoryOperationState.Succeeded)) ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
     }
 
     private bool ExternalProcessStopped(long id)
@@ -347,10 +347,10 @@ public sealed class GitRepositoryBroker : IRepositoryBroker
         try
         {
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-            await db.RepositoryOperations.Where(x => x.AttemptId == attemptId && x.State == nameof(RepositoryOperationState.Queued))
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, nameof(RepositoryOperationState.Failed)), token);
+            await db.GitRepositoryOperations.Where(x => x.AttemptId == attemptId && x.State == nameof(GitRepositoryOperationState.Queued))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.State, nameof(GitRepositoryOperationState.Failed)), token);
             if ((await ObserveAsync(work, token))?.Kind == ObservationKind.Uncertain &&
-                await db.RepositoryOperations.AnyAsync(x => x.AttemptId == attemptId && (x.State == nameof(RepositoryOperationState.Running) || x.State == nameof(RepositoryOperationState.Uncertain)), token))
+                await db.GitRepositoryOperations.AnyAsync(x => x.AttemptId == attemptId && (x.State == nameof(GitRepositoryOperationState.Running) || x.State == nameof(GitRepositoryOperationState.Uncertain)), token))
                 throw new ApplicationFailure("repository_operation_unavailable");
         }
         finally { gate.Release(); }

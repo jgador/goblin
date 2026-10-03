@@ -8,25 +8,11 @@ namespace Goblin.Web.Http.Contracts;
 public sealed class WorkCommand
 {
     [JsonConstructor]
-    public WorkCommand(long commandId, long workId, WorkAction action, long? expectedVersion = null,
-        string? text = null, long? agentId = null, long? attemptId = null, long? decisionId = null,
-        RepositoryChange? repository = null, string? model = null, string? reasoningEffort = null,
-        bool modelSelectionProvided = false, GitDeliveryIntent? delivery = null, long? authorizationId = null)
+    public WorkCommand(long commandId, long workId, WorkAction action)
     {
         CommandId = commandId;
         WorkId = workId;
         Action = action;
-        ExpectedVersion = expectedVersion;
-        Text = text;
-        AgentId = agentId;
-        AttemptId = attemptId;
-        DecisionId = decisionId;
-        Repository = repository;
-        Model = model;
-        ReasoningEffort = reasoningEffort;
-        ModelSelectionProvided = modelSelectionProvided;
-        Delivery = delivery;
-        AuthorizationId = authorizationId;
     }
 
     [JsonPropertyName("commandId")]
@@ -54,7 +40,7 @@ public sealed class WorkCommand
     public long? DecisionId { get; init; }
 
     [JsonPropertyName("repository")]
-    public RepositoryChange? Repository { get; init; }
+    public GitRepositoryChange? GitRepository { get; init; }
 
     [JsonPropertyName("model")]
     public string? Model { get; init; }
@@ -72,8 +58,20 @@ public sealed class WorkCommand
     public long? AuthorizationId { get; init; }
 
     public Goblin.Application.Work.WorkCommand ToApplication() =>
-        new(CommandId, WorkId, Action, ExpectedVersion, Text, AgentId, AttemptId, DecisionId, Repository?.ToCore(),
-            Model, ReasoningEffort, ModelSelectionProvided, Delivery?.ToCore(), AuthorizationId);
+        new(CommandId, WorkId, Action)
+        {
+            ExpectedVersion = ExpectedVersion,
+            Text = Text,
+            AgentId = AgentId,
+            AttemptId = AttemptId,
+            DecisionId = DecisionId,
+            GitRepository = GitRepository?.ToCore(),
+            Model = Model,
+            ReasoningEffort = ReasoningEffort,
+            ModelSelectionProvided = ModelSelectionProvided,
+            Delivery = Delivery?.ToCore(),
+            AuthorizationId = AuthorizationId
+        };
 }
 
 public sealed class WorkView

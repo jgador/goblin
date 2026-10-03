@@ -6,29 +6,15 @@ namespace Goblin.Core.Work;
 // encoding. Restoring never emits events or executes side effects.
 public sealed class WorkSnapshot
 {
-    public WorkSnapshot(int schemaVersion, long id, string objective, long? agentId, WorkStatus status,
-        WorkAttention? attention, AttemptSnapshot[] attempts, WorkEvent[] history, WorkDecision[] decisions,
-        WorkResult[] results, WorkMessage[] messages, WorkArtifact[] artifacts)
+    public WorkSnapshot()
     {
-        SchemaVersion = schemaVersion;
-        Id = id;
-        Objective = objective;
-        AgentId = agentId;
-        Status = status;
-        Attention = attention;
-        Attempts = attempts;
-        History = history;
-        Decisions = decisions;
-        Results = results;
-        Messages = messages;
-        Artifacts = artifacts;
     }
 
     public int SchemaVersion { get; init; }
 
     public long Id { get; init; }
 
-    public string Objective { get; init; }
+    public string Objective { get; init; } = null!;
 
     public long? AgentId { get; init; }
 
@@ -36,47 +22,27 @@ public sealed class WorkSnapshot
 
     public WorkAttention? Attention { get; init; }
 
-    public AttemptSnapshot[] Attempts { get; init; }
+    public AttemptSnapshot[] Attempts { get; init; } = null!;
 
-    public WorkEvent[] History { get; init; }
+    public WorkEvent[] History { get; init; } = null!;
 
-    public WorkDecision[] Decisions { get; init; }
+    public WorkDecision[] Decisions { get; init; } = null!;
 
-    public WorkResult[] Results { get; init; }
+    public WorkResult[] Results { get; init; } = null!;
 
-    public WorkMessage[] Messages { get; init; }
+    public WorkMessage[] Messages { get; init; } = null!;
 
-    public WorkArtifact[] Artifacts { get; init; }
+    public WorkArtifact[] Artifacts { get; init; } = null!;
 
     public WorkWorkspace? Workspace { get; init; }
-    public WorkRepositoryRequest? RepositoryRequest { get; init; }
-    public RepositoryAuthorization? RepositoryAuthorization { get; init; }
+    public WorkGitRepositoryRequest? GitRepositoryRequest { get; init; }
+    public GitRepositoryAuthorization? GitRepositoryAuthorization { get; init; }
 }
 
 public sealed class AttemptSnapshot
 {
-    public AttemptSnapshot(long id, long workId, long agentId, ExecutionTarget target, DateTimeOffset queuedAt,
-        AttemptStatus status, long? ownerId, string? environmentReference, ExecutionSession? session,
-        DateTimeOffset? claimedAt, DateTimeOffset? startedAt, DateTimeOffset? finishedAt,
-        DateTimeOffset? cancellationRequestedAt, FailureKind? failure, bool cleanupPending = false,
-        bool cleanupFailed = false)
+    public AttemptSnapshot()
     {
-        Id = id;
-        WorkId = workId;
-        AgentId = agentId;
-        Target = target;
-        QueuedAt = queuedAt;
-        Status = status;
-        OwnerId = ownerId;
-        EnvironmentReference = environmentReference;
-        Session = session;
-        ClaimedAt = claimedAt;
-        StartedAt = startedAt;
-        FinishedAt = finishedAt;
-        CancellationRequestedAt = cancellationRequestedAt;
-        Failure = failure;
-        CleanupPending = cleanupPending;
-        CleanupFailed = cleanupFailed;
     }
 
     public long Id { get; init; }
@@ -85,7 +51,7 @@ public sealed class AttemptSnapshot
 
     public long AgentId { get; init; }
 
-    public ExecutionTarget Target { get; init; }
+    public ExecutionTarget Target { get; init; } = null!;
 
     public DateTimeOffset QueuedAt { get; init; }
 
@@ -113,8 +79,11 @@ public sealed class AttemptSnapshot
 
     public bool ReasoningOnly { get; init; }
     public int TurnNumber { get; init; } = 1;
+
     public int WorkspaceNumber { get; init; } = 1;
+
     public bool ReleaseWorkspace { get; init; } = true;
+
     public long? CheckpointId { get; init; }
     public ExecutionTurnRecord[] PriorTurns { get; init; } = [];
 }
@@ -127,10 +96,24 @@ public sealed partial class WorkItem
         for (int i = 0; i < attempts.Length; i++)
         {
             ExecutionAttempt a = _attempts[i];
-            attempts[i] = new(a.Id, a.WorkId, a.AgentId, a.Target, a.QueuedAt,
-                a.Status, a.OwnerId, a.EnvironmentReference, a.Session, a.ClaimedAt,
-                a.StartedAt, a.FinishedAt, a.CancellationRequestedAt, a.Failure, a.CleanupPending, a.CleanupFailed)
+            attempts[i] = new()
             {
+                Id = a.Id,
+                WorkId = a.WorkId,
+                AgentId = a.AgentId,
+                Target = a.Target,
+                QueuedAt = a.QueuedAt,
+                Status = a.Status,
+                OwnerId = a.OwnerId,
+                EnvironmentReference = a.EnvironmentReference,
+                Session = a.Session,
+                ClaimedAt = a.ClaimedAt,
+                StartedAt = a.StartedAt,
+                FinishedAt = a.FinishedAt,
+                CancellationRequestedAt = a.CancellationRequestedAt,
+                Failure = a.Failure,
+                CleanupPending = a.CleanupPending,
+                CleanupFailed = a.CleanupFailed,
                 ReasoningOnly = a.ReasoningOnly,
                 TurnNumber = a.TurnNumber,
                 WorkspaceNumber = a.WorkspaceNumber,
@@ -139,10 +122,24 @@ public sealed partial class WorkItem
                 PriorTurns = a.PriorTurns
             };
         }
-        return new(2, Id, Objective, AgentId, Status, Attention, attempts,
-            [.. _history], [.. _decisions], [.. _results],
-            [.. _messages], [.. _artifacts])
-        { Workspace = Workspace, RepositoryRequest = RepositoryRequest, RepositoryAuthorization = RepositoryAuthorization };
+        return new()
+        {
+            SchemaVersion = 2,
+            Id = Id,
+            Objective = Objective,
+            AgentId = AgentId,
+            Status = Status,
+            Attention = Attention,
+            Attempts = attempts,
+            History = [.. _history],
+            Decisions = [.. _decisions],
+            Results = [.. _results],
+            Messages = [.. _messages],
+            Artifacts = [.. _artifacts],
+            Workspace = Workspace,
+            GitRepositoryRequest = GitRepositoryRequest,
+            GitRepositoryAuthorization = GitRepositoryAuthorization
+        };
     }
 
     public static WorkItem Restore(WorkSnapshot state)
@@ -156,8 +153,8 @@ public sealed partial class WorkItem
             Status = state.Status,
             Attention = state.Attention,
             Workspace = state.Workspace,
-            RepositoryRequest = state.RepositoryRequest,
-            RepositoryAuthorization = state.RepositoryAuthorization
+            GitRepositoryRequest = state.GitRepositoryRequest,
+            GitRepositoryAuthorization = state.GitRepositoryAuthorization
         };
         work._history.Clear();
         for (int i = 0; i < state.History.Length; i++)

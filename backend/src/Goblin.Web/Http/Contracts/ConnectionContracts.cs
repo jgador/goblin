@@ -155,12 +155,12 @@ public sealed class PromptResult
 public sealed class RuntimeCapabilities
 {
     [JsonConstructor]
-    public RuntimeCapabilities(string runtime, bool textExecution, bool repositoryExecution, bool cancellation,
+    public RuntimeCapabilities(string runtime, bool textExecution, bool gitRepositoryExecution, bool cancellation,
         bool liveApprovals, bool resumeSession)
     {
         Runtime = runtime;
         TextExecution = textExecution;
-        RepositoryExecution = repositoryExecution;
+        GitRepositoryExecution = gitRepositoryExecution;
         Cancellation = cancellation;
         LiveApprovals = liveApprovals;
         ResumeSession = resumeSession;
@@ -173,7 +173,7 @@ public sealed class RuntimeCapabilities
     public bool TextExecution { get; init; }
 
     [JsonPropertyName("repositoryExecution")]
-    public bool RepositoryExecution { get; init; }
+    public bool GitRepositoryExecution { get; init; }
 
     [JsonPropertyName("cancellation")]
     public bool Cancellation { get; init; }
@@ -185,6 +185,6 @@ public sealed class RuntimeCapabilities
     public bool ResumeSession { get; init; }
 
     public static RuntimeCapabilities From(Goblin.Contracts.Runtime.RuntimeCapabilities value) =>
-        new(value.Runtime, value.TextExecution, value.RepositoryExecution, value.Cancellation, value.LiveApprovals,
+        new(value.Runtime, value.TextExecution, value.GitRepositoryExecution, value.Cancellation, value.LiveApprovals,
             value.ResumeSession);
 }

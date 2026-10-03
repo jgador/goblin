@@ -46,13 +46,23 @@ public sealed class WorkLifecycleTests
         Assert.Equal(long.MaxValue - 4, restored.CurrentAttempt!.OwnerId);
         Assert.Equal(long.MaxValue - 5, restored.Decisions.Single().Id);
         WorkSnapshot snapshot = work.Snapshot();
-        var previousSchema = new WorkSnapshot(1, snapshot.Id, snapshot.Objective, snapshot.AgentId, snapshot.Status,
-            snapshot.Attention, snapshot.Attempts, snapshot.History, snapshot.Decisions, snapshot.Results,
-            snapshot.Messages, snapshot.Artifacts)
+        var previousSchema = new WorkSnapshot()
         {
+            SchemaVersion = 1,
+            Id = snapshot.Id,
+            Objective = snapshot.Objective,
+            AgentId = snapshot.AgentId,
+            Status = snapshot.Status,
+            Attention = snapshot.Attention,
+            Attempts = snapshot.Attempts,
+            History = snapshot.History,
+            Decisions = snapshot.Decisions,
+            Results = snapshot.Results,
+            Messages = snapshot.Messages,
+            Artifacts = snapshot.Artifacts,
             Workspace = snapshot.Workspace,
-            RepositoryRequest = snapshot.RepositoryRequest,
-            RepositoryAuthorization = snapshot.RepositoryAuthorization
+            GitRepositoryRequest = snapshot.GitRepositoryRequest,
+            GitRepositoryAuthorization = snapshot.GitRepositoryAuthorization
         };
         Reject(WorkRule.InvalidValue, () => WorkItem.Restore(previousSchema));
     }

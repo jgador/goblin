@@ -101,7 +101,7 @@ public sealed class SandboxNamingTests
     }
 
     [Fact]
-    public void ConversationClaimsRecordTheTextHostUntilRepositoryAccessIsAuthorized()
+    public void ConversationClaimsRecordTheTextHostUntilGitRepositoryAccessIsAuthorized()
     {
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var text = new LocalTextHost(new("/unused", "/unused", "codex", "/unused"));
@@ -169,14 +169,14 @@ public sealed class SandboxNamingTests
     {
         var work = new WorkItem(workId, "Edit repository", DateTimeOffset.UtcNow);
         work.Assign(1, DateTimeOffset.UtcNow);
-        work.QueueExecution(attemptId, new("codex", 1, repository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
+        work.QueueExecution(attemptId, new("codex", 1, gitRepository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         Assert.True(work.TryClaimExecution(attemptId, 1, reference, DateTimeOffset.UtcNow));
         return work.Snapshot();
     }
 
     private static JsonObject Json(K.Sandbox manifest) => JsonSerializer.SerializeToNode(manifest, K.KubernetesJson.Options)!.AsObject();
 
-    private sealed class Broker : IRepositoryBroker
+    private sealed class Broker : IGitRepositoryBroker
     {
         public int Stops { get; private set; }
         public int Releases { get; private set; }

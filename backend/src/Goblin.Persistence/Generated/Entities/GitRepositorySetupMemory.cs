@@ -8,15 +8,15 @@ namespace Goblin.Persistence.Entities;
 
 [Table("repository_setup_memories")]
 [Index("AttemptId", "TurnNumber", "Topic", Name = "repository_setup_memories_attempt_id_turn_number_topic_key", IsUnique = true)]
-[Index("GithubConnectionId", "AccountId", "RepositoryId", "VerifiedAt", Name = "repository_setup_recall", IsDescending = new[] { false, false, false, true })]
-public partial class RepositorySetupMemory
+[Index("GithubConnectionId", "AccountId", "GitRepositoryId", "VerifiedAt", Name = "repository_setup_recall", IsDescending = new[] { false, false, false, true })]
+public partial class GitRepositorySetupMemory
 {
     [Key]
     [Column("id")]
     public long Id { get; set; }
 
     [Column("repository_id")]
-    public long RepositoryId { get; set; }
+    public long GitRepositoryId { get; set; }
 
     [Column("github_connection_id")]
     public long GithubConnectionId { get; set; }
@@ -52,22 +52,22 @@ public partial class RepositorySetupMemory
     public DateTime VerifiedAt { get; set; }
 
     [ForeignKey("AttemptId")]
-    [InverseProperty("RepositorySetupMemories")]
+    [InverseProperty("GitRepositorySetupMemories")]
     public virtual ExecutionAttempt Attempt { get; set; } = null!;
 
     [ForeignKey("CheckpointId")]
-    [InverseProperty("RepositorySetupMemories")]
+    [InverseProperty("GitRepositorySetupMemories")]
     public virtual WorkspaceCheckpoint Checkpoint { get; set; } = null!;
 
     [ForeignKey("GithubConnectionId")]
-    [InverseProperty("RepositorySetupMemories")]
+    [InverseProperty("GitRepositorySetupMemories")]
     public virtual GithubConnection GithubConnection { get; set; } = null!;
 
-    [ForeignKey("RepositoryId")]
-    [InverseProperty("RepositorySetupMemories")]
-    public virtual GithubRepository Repository { get; set; } = null!;
+    [ForeignKey("GitRepositoryId")]
+    [InverseProperty("GitRepositorySetupMemories")]
+    public virtual GithubRepository GitRepository { get; set; } = null!;
 
     [ForeignKey("WorkId")]
-    [InverseProperty("RepositorySetupMemories")]
+    [InverseProperty("GitRepositorySetupMemories")]
     public virtual WorkItem Work { get; set; } = null!;
 }

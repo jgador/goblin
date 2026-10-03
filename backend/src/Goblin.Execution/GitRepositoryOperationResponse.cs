@@ -4,10 +4,10 @@ using Goblin.Core.Work;
 
 namespace Goblin.Execution;
 
-public sealed class RepositoryOperationResponse
+public sealed class GitRepositoryOperationResponse
 {
     [JsonIgnore]
-    public RepositoryOperationState Status => ContractValue.Parse<RepositoryOperationState>(State);
+    public GitRepositoryOperationState Status => ContractValue.Parse<GitRepositoryOperationState>(State);
 
     [JsonPropertyName("state")]
     [JsonRequired]

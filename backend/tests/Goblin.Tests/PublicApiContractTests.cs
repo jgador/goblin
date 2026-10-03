@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 using Goblin.Web;
 using Goblin.Web.Monitoring;
 using Xunit;
@@ -30,7 +31,7 @@ public sealed class PublicApiContractTests
         typeof(Api.IdentityRequest), typeof(Api.ReservedIdentities), typeof(Api.ConversationCommand),
         typeof(Api.ConversationView), typeof(Api.AuthenticationState), typeof(Api.PromptResult),
         typeof(Api.ModelCatalogView), typeof(Api.RuntimeCapabilities), typeof(Api.GitHubState),
-        typeof(Api.EnabledRepository), typeof(Api.RepositoryInfo), typeof(Api.WorkspaceView),
+        typeof(Api.EnabledGitRepository), typeof(Api.GitRepositoryInfo), typeof(Api.WorkspaceView),
         typeof(Api.SlackState), typeof(Api.SlackLinkCode)
     ];
 
@@ -40,7 +41,8 @@ public sealed class PublicApiContractTests
         // Captured from the public API before replacing records with HTTP classes.
         using Stream stream = typeof(PublicApiContractTests).Assembly
             .GetManifestResourceStream("Goblin.Tests.Contracts.public-api.json")!;
-        Dictionary<string, string[]> expected = JsonSerializer.Deserialize<Dictionary<string, string[]>>(stream)!;
+        Dictionary<string, string[]> expected = JsonSerializer.Deserialize<Dictionary<string, string[]>>(stream)!
+            .ToDictionary(entry => entry.Key.Replace("Repository", "GitRepository", StringComparison.Ordinal), entry => entry.Value);
         var visited = new Dictionary<string, Type>();
         // A naming-policy change must not change a single field on the wire.
         var options = new JsonSerializerOptions(WorkJson) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseUpper };
@@ -87,7 +89,7 @@ public sealed class PublicApiContractTests
         Type sourceType = map.GetParameters()[0].ParameterType;
         object source = Example(sourceType);
         object response = map.Invoke(null, [source])!;
-        foreach (JsonSerializerOptions options in new[] { new JsonSerializerOptions(JsonSerializerDefaults.Web), WorkJson })
+        foreach (JsonSerializerOptions options in new[] { GitRepositoryJson.CreateOptions(JsonSerializerDefaults.Web), WorkJson })
         {
             JsonElement expected = JsonSerializer.SerializeToElement(source, sourceType, options);
             JsonElement actual = JsonSerializer.SerializeToElement(response, contract, options);
@@ -99,7 +101,7 @@ public sealed class PublicApiContractTests
     }
 
     [Fact]
-    public void WorkRequestBindsExistingNamesAndPreservesNestedRepositoryAuthority()
+    public void WorkRequestBindsExistingNamesAndPreservesNestedGitRepositoryAuthority()
     {
         const string body = """
             {
@@ -165,17 +167,19 @@ public sealed class PublicApiContractTests
     private static object Example(Type type, string name = "")
     {
         type = Nullable.GetUnderlyingType(type) ?? type;
-        if (type == typeof(string)) return name.Equals("repository", StringComparison.OrdinalIgnoreCase) ? "owner/repo" : "example";
-        if (type == typeof(long)) return 9007199254740993L;
-        if (type == typeof(int)) return 7;
-        if (type == typeof(double)) return 12.5;
-        if (type == typeof(bool)) return true;
-        if (type == typeof(DateTimeOffset)) return new DateTimeOffset(2026, 9, 30, 1, 2, 3, TimeSpan.Zero);
-        if (type == typeof(DateTime)) return new DateTime(2026, 9, 30, 1, 2, 3, DateTimeKind.Utc);
+        name = name.ToLowerInvariant();
+        int seed = name.Aggregate(17, (value, c) => (value * 31 + c) % 10000);
+        if (type == typeof(string)) return name.Split('.')[^1] == "gitrepository" ? "owner/repo" : "example-" + name;
+        if (type == typeof(long)) return 9007199254740993L + seed;
+        if (type == typeof(int)) return seed + 1;
+        if (type == typeof(double)) return seed + 0.5;
+        if (type == typeof(bool)) return seed % 2 == 0;
+        if (type == typeof(DateTimeOffset)) return new DateTimeOffset(2026, 9, 30, 1, 2, 3, TimeSpan.Zero).AddSeconds(seed);
+        if (type == typeof(DateTime)) return new DateTime(2026, 9, 30, 1, 2, 3, DateTimeKind.Utc).AddSeconds(seed);
         if (type.IsEnum) return Enum.GetValues(type).GetValue(0)!;
-        if (type.IsArray)
+        if (type.IsArray || type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IReadOnlyList<>))
         {
-            Type element = type.GetElementType()!;
+            Type element = type.IsArray ? type.GetElementType()! : type.GetGenericArguments()[0];
             Array values = Array.CreateInstance(element, 1);
             values.SetValue(Example(element, name), 0);
             return values;
@@ -183,10 +187,10 @@ public sealed class PublicApiContractTests
         if (type == typeof(Goblin.Contracts.AccountView)) return new Goblin.Contracts.ChatGPTAccountView("person@example.test", "plus");
         ConstructorInfo constructor = Assert.Single(type.GetConstructors());
         ParameterInfo[] parameters = constructor.GetParameters();
-        object value = constructor.Invoke([.. parameters.Select(parameter => Example(parameter.ParameterType, parameter.Name!))]);
+        object value = constructor.Invoke([.. parameters.Select(parameter => Example(parameter.ParameterType, name + "." + parameter.Name!))]);
         foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             if (property.SetMethod is not null && !parameters.Any(parameter => property.Name.Equals(parameter.Name, StringComparison.OrdinalIgnoreCase)))
-                property.SetValue(value, Example(property.PropertyType, property.Name));
+                property.SetValue(value, Example(property.PropertyType, name + "." + property.Name));
         return value;
     }
 }

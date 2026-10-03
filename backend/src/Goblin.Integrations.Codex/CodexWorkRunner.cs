@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
-using Goblin.Core.Repositories;
+using Goblin.Core.GitRepositories;
 using Goblin.Core.Work;
 using Goblin.Protocol;
 
@@ -19,8 +19,8 @@ public sealed class CodexWorkRunner
 
     public CodexWorkRunner(CodexClient codex) => _codex = codex;
 
-    public async Task<ExecutionObservation> RunAsync(WorkSnapshot work, bool repositoryChanges,
-        Func<ExecutionObservation, Task> progress, CancellationToken token, RepositorySetupMemory[]? setupMemory = null)
+    public async Task<ExecutionObservation> RunAsync(WorkSnapshot work, bool gitRepositoryChanges,
+        Func<ExecutionObservation, Task> progress, CancellationToken token, GitRepositorySetupMemory[]? setupMemory = null)
     {
         object gate = new();
         string? threadId = null, turnId = null;
@@ -83,17 +83,17 @@ public sealed class CodexWorkRunner
                 Ephemeral = false,
                 Model = work.Attempts[^1].Target.RequestedModel,
                 ApprovalPolicy = AskForApproval.Never,
-                Sandbox = repositoryChanges ? SandboxMode.DangerFullAccess : SandboxMode.ReadOnly,
+                Sandbox = gitRepositoryChanges ? SandboxMode.DangerFullAccess : SandboxMode.ReadOnly,
                 BaseInstructions = "You execute a Goblin Work item. Return a JSON object with kind and text. " +
                     "Use kind result for a proposed outcome requiring human review, or input for a question that prevents progress. " +
                     "Do not claim approval or completion on behalf of the user. " +
                     "Set releaseWorkspace based on whether this conversation still needs repository compute. " +
                     "Use false when continuing interactive investigation needs the existing workspace, true when waiting for review, longer human input, or no further file access. " +
                     "A release request suspends compute while preserving files on this Work's persistent volume. PostgreSQL stores conversation and Git provenance, never workspace file archives. Respect an explicit request to keep the workspace open. " +
-                    (repositoryChanges ? RepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
+                    (gitRepositoryChanges ? GitRepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
                         "This Work's workspace can contain edits and local commits from earlier attempts. Inspect git status and git diff before editing; preserve unfinished changes and use the supplied Work context to continue. " +
                         "Commit locally. The approved repository grant controls publication: " +
-                        $"push allowed={work.Attempts[^1].Target.Repository?.Grant?.AllowPush}; draft PR allowed={work.Attempts[^1].Target.Repository?.Grant?.AllowPullRequest}. " +
+                        $"push allowed={work.Attempts[^1].Target.GitRepository?.Grant?.AllowPush}; draft PR allowed={work.Attempts[^1].Target.GitRepository?.Grant?.AllowPullRequest}. " +
                         "Use goblin-github publish or goblin-github pull-request only when allowed. Goblin saves local checkpoints without publishing when push is not approved. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
@@ -107,17 +107,17 @@ public sealed class CodexWorkRunner
             string context = JsonSerializer.Serialize(new CodexWorkContext(work.Objective, work.Messages,
                 work.Decisions, work.Results, work.Artifacts)
             {
-                RepositorySetupMemory = repositoryChanges ? setupMemory ?? [] : null
+                GitRepositorySetupMemory = gitRepositoryChanges ? setupMemory ?? [] : null
             });
             // JSON Schema construction and the protocol's arbitrary outputSchema
             // payload intentionally remain dynamic; result data is a typed contract.
             var properties = new Dictionary<string, object>
             {
-                ["kind"] = new { type = "string", @enum = !repositoryChanges ? new[] { "result", "input", "workspace" } : ["result", "input"] },
+                ["kind"] = new { type = "string", @enum = !gitRepositoryChanges ? new[] { "result", "input", "workspace" } : ["result", "input"] },
                 ["text"] = new { type = "string" },
                 ["releaseWorkspace"] = new { type = "boolean" }
             };
-            if (repositoryChanges) properties["setup"] = RepositorySetupInstructions.Schema();
+            if (gitRepositoryChanges) properties["setup"] = GitRepositorySetupInstructions.Schema();
             JsonElement schema = JsonSerializer.SerializeToElement(new
             {
                 type = "object",
@@ -132,7 +132,7 @@ public sealed class CodexWorkRunner
                 Effort = work.Attempts[^1].Target.RequestedEffort,
                 ApprovalPolicy = AskForApproval.Never,
                 OutputSchema = schema,
-                SandboxPolicy = repositoryChanges ? new ExternalSandboxSandboxPolicy { NetworkAccess = NetworkAccess.Enabled }
+                SandboxPolicy = gitRepositoryChanges ? new ExternalSandboxSandboxPolicy { NetworkAccess = NetworkAccess.Enabled }
                     : new ReadOnlySandboxPolicy { NetworkAccess = false }
             }, token);
             lock (gate)
@@ -157,16 +157,16 @@ public sealed class CodexWorkRunner
                 }
             }
             string text = await completed;
-            CodexWorkResult output = CodexWorkResults.Read(text, repositoryChanges);
+            CodexWorkResult output = CodexWorkResults.Read(text, gitRepositoryChanges);
             string? kind = output.Kind;
             string? body = output.Text;
-            RepositorySetup[]? setups = CodexWorkResults.Setup(output);
+            GitRepositorySetup[]? setups = CodexWorkResults.Setup(output);
             return new(kind == "workspace" ? ObservationKind.WorkspaceRequired : kind == "input" ? ObservationKind.Paused : ObservationKind.Result, session, body)
             {
                 Setup = setups,
                 TurnNumber = work.Attempts[^1].TurnNumber,
-                ReleaseWorkspace = !repositoryChanges || kind == "result" ||
-                    ((CodexRepositoryWorkResult)output).ReleaseWorkspace
+                ReleaseWorkspace = !gitRepositoryChanges || kind == "result" ||
+                    ((CodexGitRepositoryWorkResult)output).ReleaseWorkspace
             };
         }
         finally

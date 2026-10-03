@@ -20,12 +20,22 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
 
     public WorkspaceCheckpoints(IDbContextFactory<GoblinDbContext> factory) => _factory = factory;
 
-    public async Task<WorkspaceCheckpoint?> LatestAsync(long workId, string repository, CancellationToken token)
+    public async Task<WorkspaceCheckpoint?> LatestAsync(long workId, string gitRepository, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        WorkspaceCheckpoint? row = await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.WorkId == workId && x.Repository == repository)
-            .OrderByDescending(x => x.CreatedAt).Select(x => new WorkspaceCheckpoint(x.Id, x.WorkId, x.AttemptId,
-                x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt)).FirstOrDefaultAsync(token);
+        WorkspaceCheckpoint? row = await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.WorkId == workId && x.GitRepository == gitRepository)
+            .OrderByDescending(x => x.CreatedAt).Select(x => new WorkspaceCheckpoint()
+            {
+                Id = x.Id,
+                WorkId = x.WorkId,
+                AttemptId = x.AttemptId,
+                TurnNumber = x.TurnNumber,
+                WorkspaceNumber = x.WorkspaceNumber,
+                GitRepository = x.GitRepository,
+                Branch = x.Branch,
+                CommitSha = x.CommitSha,
+                CreatedAt = x.CreatedAt
+            }).FirstOrDefaultAsync(token);
         return row;
     }
 
@@ -58,8 +68,8 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
             AttemptId = attemptId,
             TurnNumber = turn,
             WorkspaceNumber = attempt.WorkspaceNumber,
-            Repository = attempt.Target.Repository!.Repository,
-            Branch = attempt.Target.Repository.Grant!.Branch,
+            GitRepository = attempt.Target.GitRepository!.GitRepository,
+            Branch = attempt.Target.GitRepository.Grant!.Branch,
             CommitSha = commit,
             CreatedAt = DateTime.UtcNow
         };
@@ -72,10 +82,32 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         return await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.WorkId == workId).OrderByDescending(x => x.CreatedAt)
-            .Select(x => new WorkspaceCheckpoint(x.Id, x.WorkId, x.AttemptId, x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt)).ToArrayAsync(token);
+            .Select(x => new WorkspaceCheckpoint()
+            {
+                Id = x.Id,
+                WorkId = x.WorkId,
+                AttemptId = x.AttemptId,
+                TurnNumber = x.TurnNumber,
+                WorkspaceNumber = x.WorkspaceNumber,
+                GitRepository = x.GitRepository,
+                Branch = x.Branch,
+                CommitSha = x.CommitSha,
+                CreatedAt = x.CreatedAt
+            }).ToArrayAsync(token);
     }
 
     private static WorkspaceCheckpoint View(Persistence.Entities.WorkspaceCheckpoint x) =>
-        new(x.Id, x.WorkId, x.AttemptId, x.TurnNumber, x.WorkspaceNumber, x.Repository, x.Branch, x.CommitSha, x.CreatedAt);
+        new()
+        {
+            Id = x.Id,
+            WorkId = x.WorkId,
+            AttemptId = x.AttemptId,
+            TurnNumber = x.TurnNumber,
+            WorkspaceNumber = x.WorkspaceNumber,
+            GitRepository = x.GitRepository,
+            Branch = x.Branch,
+            CommitSha = x.CommitSha,
+            CreatedAt = x.CreatedAt
+        };
 
 }

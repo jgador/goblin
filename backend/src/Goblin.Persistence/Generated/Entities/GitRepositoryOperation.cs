@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Goblin.Persistence.Entities;
 
 [Table("repository_operations")]
-public partial class RepositoryOperation
+public partial class GitRepositoryOperation
 {
     [Key]
     [Column("id")]
@@ -38,6 +38,6 @@ public partial class RepositoryOperation
     public DateTime UpdatedAt { get; set; }
 
     [ForeignKey("AttemptId")]
-    [InverseProperty("RepositoryOperation")]
+    [InverseProperty("GitRepositoryOperation")]
     public virtual ExecutionAttempt Attempt { get; set; } = null!;
 }
