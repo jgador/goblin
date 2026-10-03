@@ -3,6 +3,11 @@
 Official artwork supplied in the `GoblinBoard_Logo_Final` package. Filenames use
 short, lowercase names; original file contents are preserved.
 
+The supplied brand artwork and its copies are outside Goblin's Apache license
+grant; this repository grants no additional copyright permission for that
+artwork. The Inter fonts remain under the [SIL Open Font License 1.1](fonts/OFL.txt).
+See the repository's [license scope and third-party notices](../../THIRD_PARTY_NOTICES.md).
+
 | Directory | Contents |
 | --- | --- |
 | `svg/` | Scalable icon-only and icon-with-text artwork, in light and dark variants |

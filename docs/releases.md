@@ -46,6 +46,10 @@ version suggestions ignore goblinctl releases.
 Preparation compares all shipping inputs against the authenticated published
 installer selected by `dependencies.toml`. The inventory includes Rust source,
 shared build inputs, and embedded setup/PostgreSQL assets outside `tools/`.
+It also includes `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`; changes to
+these shipping documents require a new installer release. The archive contains
+the executable followed by those three documents, with deterministic metadata.
+Installation preserves the documents in `/opt/goblin/share/licenses/goblinctl/`.
 Additions and deletions count. Source differences are conservative release
 requirements; the tooling does not infer semantic compatibility or bump size.
 

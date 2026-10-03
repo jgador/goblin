@@ -52,6 +52,7 @@ WORKDIR /app
 # Git serves the repository broker and workers; its package also brings Perl.
 # Remove package indexes in the same layer to avoid retaining download metadata.
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md /usr/share/doc/goblin/
 # appsettings.json contains certificate paths; private keys are mounted at runtime.
 COPY --from=build --chown=1000:1000 /publish ./
 # Provisioning runs the SQL migrations with this separately published tool.

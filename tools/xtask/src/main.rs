@@ -5,6 +5,7 @@ use clap::Parser;
 use clap::Subcommand;
 use flate2::Compression;
 use flate2::GzBuilder;
+use goblinctl::assets;
 use goblinctl::credentials;
 use goblinctl::environment;
 use goblinctl::files;
@@ -126,14 +127,18 @@ fn package(binary: &Path, target: &str, output: &Path) -> Result<()> {
         .mtime(0)
         .write(Vec::new(), Compression::best());
     let mut archive = tar::Builder::new(gzip);
-    let mut header = tar::Header::new_gnu();
-    header.set_mode(0o755);
-    header.set_uid(0);
-    header.set_gid(0);
-    header.set_mtime(0);
-    header.set_size(bytes.len() as u64);
-    header.set_cksum();
-    archive.append_data(&mut header, "goblinctl", bytes.as_slice())?;
+    for (name, contents) in
+        std::iter::once(("goblinctl", bytes.as_slice())).chain(assets::LICENSING.iter().copied())
+    {
+        let mut header = tar::Header::new_gnu();
+        header.set_mode(if name == "goblinctl" { 0o755 } else { 0o644 });
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(0);
+        header.set_size(contents.len() as u64);
+        header.set_cksum();
+        archive.append_data(&mut header, name, contents)?;
+    }
     let archive = archive.into_inner()?.finish()?;
     let checksum = format!("{:x}", Sha256::digest(&archive));
     fs::write(output.join(&name), archive)?;

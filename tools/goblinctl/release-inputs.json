@@ -2,6 +2,9 @@
   "schemaVersion": 1,
   "description": "Shipping installer inputs. Rust compiler dependency files verify that embedded files are covered. Pin and generated ARM files deliberately stay outside this boundary.",
   "files": [
+    "LICENSE",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
