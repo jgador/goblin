@@ -31,8 +31,13 @@ The implemented boundary and its current limitations are documented in
   the database and put custom behavior outside generated files. Preserve the
   frontend technology, visual design, branding, accessibility, and HTTP security.
 - Use regular constructors for class declarations and readonly fields for
-  retained dependencies. Preserve existing property contracts and positional
-  record declarations.
+  retained dependencies. Constructor signatures and positional record declarations
+  may change as part of refactoring; do not preserve them solely because they
+  already exist. Prefer cohesive types and clear construction APIs over long
+  positional or optional parameter lists. Preserve public property contracts,
+  JSON behavior, and relied-upon record semantics by default; change them when
+  the task calls for it. Update affected callers and relevant tests together,
+  and identify any external compatibility impact.
 
 Use `dotnet test backend/tests/Goblin.Core.Tests` for core changes. `npm test`
 builds and runs protocol checks, .NET tests, HTTP tests, and deployment tests.
