@@ -127,6 +127,6 @@ integration tests. Images inside upstream k3s, cert-manager, and Agent Sandbox
 releases remain managed by those upstream releases.
 
 CI runs `dependencies check --locked` and source tests. **Prepare Goblin release**
-checks the published installer and can open a reviewed pin PR. **Publish goblinctl**
-is an explicit maintainer action. The [release guide](releases.md) describes the
+selects and verifies the installer, then obtains one approval to publish the exact
+Goblin–goblinctl pair. It creates no dependency-pin PR. The [release guide](releases.md) describes the
 complete routine and installation verification.

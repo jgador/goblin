@@ -75,6 +75,9 @@ dotslash --version
 | `just release` | Build the musl CLI and create the deterministic review archive |
 | `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
 | `cargo xtask release prepare --source-branch release/0.1` | In Actions, prepare an unpublished Goblin/goblinctl candidate from checked release-branch source |
+| `cargo xtask release check-candidate --directory PATH --source-root SOURCE` | Check the candidate executable, source inputs and reproduced Azure assets |
+| `cargo xtask release verify --directory PATH` | Verify a sealed coordinated candidate or historical published Goblin record |
+| `cargo xtask release authenticate-installer --directory PATH` | Verify installer bytes and historical/coordinated provenance |
 
 Coordinated preparation supplies `GOBLINCTL_BUILD_VERSION` only to the isolated
 native build. All installer version reporting uses that compiled value, defaulting

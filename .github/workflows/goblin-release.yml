@@ -20,13 +20,24 @@ on:
       source-sha:
         description: Advanced — full merged SHA (blank freezes the selected branch tip)
         type: string
+      recommend:
+        description: Make this release the installation default after publication
+        type: boolean
+        default: false
 permissions:
   contents: read
   attestations: read
   checks: read
+  actions: read
 jobs:
   prepare:
     runs-on: ubuntu-24.04
+    outputs:
+      source: ${{ steps.prepare.outputs.source }}
+      version: ${{ steps.prepare.outputs.version }}
+      installer-origin: ${{ steps.prepare.outputs.installer-origin }}
+      attempt: ${{ steps.identity.outputs.attempt }}
+      artifact: ${{ steps.upload.outputs.artifact-id }}
     steps:
       - name: Require the development workflow
         env:
@@ -44,6 +55,15 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check the publication approval configuration
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-github.mts preflight
+      - id: identity
+        run: echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - name: Prepare the coordinated candidate
         id: prepare
         env:
@@ -60,8 +80,169 @@ jobs:
           if [[ -n "$INSTALLER_VERSION" ]]; then args+=(--installer-version "$INSTALLER_VERSION"); fi
           cargo xtask release prepare "${args[@]}"
       - uses: actions/upload-artifact@v4
+        id: upload
         with:
           name: goblin-candidate-${{ github.run_attempt }}
           path: .artifacts/goblin/
           if-no-files-found: error
           retention-days: 30
+  verify:
+    name: Verify the frozen source and candidate
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.source }}
+          path: .artifacts/source
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.artifact }}
+          path: .artifacts/goblin
+          merge-multiple: true
+      - uses: ./.github/actions/setup-rust
+      - uses: ./.github/actions/setup-deployment
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: .artifacts/source/global.json
+      - name: Verify installer inputs and reproduce candidate Azure assets
+        run: |
+          cargo xtask release check-candidate --directory .artifacts/goblin --source-root .artifacts/source
+          mkdir -p .artifacts/candidate-bin
+          tar -xzf .artifacts/goblin/installer/goblinctl-x86_64-unknown-linux-musl.tar.gz -C .artifacts/candidate-bin
+      - name: Test the frozen source using the packaged installer
+        working-directory: .artifacts/source
+        env:
+          GOBLINCTL_TEST_BINARY: ${{ github.workspace }}/.artifacts/candidate-bin/goblinctl
+        run: |
+          just fmt-check
+          just clippy --workspace --all-targets -- -D warnings
+          npm ci
+          npm test
+          npx playwright install --with-deps chromium
+          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
+          git diff --exit-code
+      - name: Check the candidate and source after testing
+        run: cargo xtask release check-candidate --directory .artifacts/goblin --source-root .artifacts/source
+  ready:
+    name: Seal the verified candidate
+    needs: [prepare, verify]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      artifact: ${{ steps.upload.outputs.artifact-id }}
+      sha256: ${{ steps.identity.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.artifact }}
+          path: .artifacts/goblin
+          merge-multiple: true
+      - name: Seal the candidate whose verification succeeded
+        env:
+          PREPARED_ATTEMPT: ${{ needs.prepare.outputs.attempt }}
+          RELEASE_SOURCE: ${{ needs.prepare.outputs.source }}
+        run: |
+          cargo xtask release seal --directory .artifacts/goblin --expected-attempt "$PREPARED_ATTEMPT"
+          cargo xtask release verify --directory .artifacts/goblin --expected-source "$RELEASE_SOURCE" --expected-run "$GITHUB_RUN_ID" --expected-attempt "$PREPARED_ATTEMPT"
+      - id: identity
+        run: echo "sha256=$(sha256sum .artifacts/goblin/release.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - name: Attest the verified release pair
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: .artifacts/goblin/release.json
+      - name: Attest newly built installer assets
+        if: needs.prepare.outputs.installer-origin == 'built'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            .artifacts/goblin/installer/release.json
+            .artifacts/goblin/installer/goblinctl-x86_64-unknown-linux-musl.tar.gz
+      - uses: actions/upload-artifact@v4
+        id: upload
+        with:
+          name: goblin-ready-${{ github.run_attempt }}
+          path: .artifacts/goblin/
+          if-no-files-found: error
+          retention-days: 30
+  publish:
+    name: Publish Goblin and goblinctl
+    needs: [prepare, ready]
+    runs-on: ubuntu-24.04
+    environment: goblin-release
+    concurrency:
+      group: goblin-publication
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      attestations: read
+      checks: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: ./.github/actions/setup-rust
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ needs.ready.outputs.artifact }}
+          path: .artifacts/goblin
+          merge-multiple: true
+      - name: Publish or recover the approved release pair
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SOURCE: ${{ needs.prepare.outputs.source }}
+          PREPARED_ATTEMPT: ${{ needs.prepare.outputs.attempt }}
+          CANDIDATE_SHA256: ${{ needs.ready.outputs.sha256 }}
+        run: node scripts/release-github.mts publish .artifacts/goblin
+      - name: Explain publication recovery
+        if: failure()
+        run: |
+          echo 'Publication did not complete. Use **Re-run failed jobs** on this run to retry with the retained candidate. Existing tags and bytes must match; published versions are never overwritten. Missing/expired artifacts require fresh preparation and approval.' >> "$GITHUB_STEP_SUMMARY"
+  installation-site:
+    needs: [prepare, publish]
+    uses: ./.github/workflows/goblin-install-site.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      recommend: ${{ inputs.recommend }}
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      attestations: read
+  report:
+    name: Report publication and installation delivery
+    if: always()
+    needs: [publish, installation-site]
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - env:
+          PUBLICATION: ${{ needs.publish.result }}
+          DELIVERY: ${{ needs.installation-site.result }}
+        run: |
+          echo "Release publication: **$PUBLICATION**. Installation-site delivery: **$DELIVERY**." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$PUBLICATION" == success && "$DELIVERY" != success ]]; then
+            echo 'The releases are published. Re-run the failed delivery job or use **Recommend Goblin release** with recommendation unchecked to repair delivery only.' >> "$GITHUB_STEP_SUMMARY"
+          fi
