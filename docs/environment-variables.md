@@ -62,6 +62,12 @@ removal. `env!("CARGO_MANIFEST_DIR")` and `env!("CARGO_PKG_VERSION")` are compil
 inputs whose macros require string literals, not runtime configuration. Their
 definitions remain Cargo-owned.
 
+`GOBLINCTL_BUILD_VERSION` is a compile-time release input defined in the Rust
+catalog. Preparation validates and supplies it to the isolated goblinctl build;
+the executable reports that version consistently. An ordinary build falls back
+to the Cargo package version. Changing a running process's environment cannot
+change its version. The literal in `option_env!` is required by the compiler.
+
 Codex and GitHub subprocesses keep their explicit allowlists and private homes.
 Adding a definition grants no forwarding permission. The catalogs also name
 test-only failure controls and negative credential-inheritance fixtures; those

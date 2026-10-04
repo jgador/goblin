@@ -3,11 +3,10 @@
 Develop on `master`; stabilize and service each release line on
 `release/<major>.<minor>`. Goblin and goblinctl keep independent versions.
 
-The current phase establishes stabilization branches and backports, as described
-in [issue #41](https://github.com/jgador/goblin/issues/41). It introduces no tagging
-or publication requirement. Existing published releases remain available for
-installation. Coordinated Goblin/goblinctl publication is a follow-up in the
-[release workflow plan](release-workflow-plan.md).
+Stabilization and backports from [issue #41](https://github.com/jgador/goblin/issues/41)
+are implemented. Step 3 of the [release workflow plan](release-workflow-plan.md)
+automates coordinated candidate preparation. Verification, approval, publication,
+and recovery remain follow-up work. Existing published releases remain available.
 
 ## Development and stabilization
 
@@ -85,91 +84,72 @@ explicit exception to the master-first approach.
 
 Backport application code, goblinctl code, and bundled assets by the same process.
 Do not substitute a newer `master` installer or merge an unrelated dependency-pin
-update to make the backport possible. In the planned coordinated workflow,
-preparation will decide whether the release branch's source can reuse goblinctl
-or needs a new build. Neither cutting a branch nor merging a backport publishes a
+update to make the backport possible. Coordinated preparation decides whether the release branch's source can reuse
+goblinctl or needs a new build. Neither cutting a branch nor merging a backport publishes a
 release.
+
+## Prepare a coordinated candidate
+
+1. Merge source changes or backports into the intended release line. Wait for
+   **goblin-checks** to pass for the exact commit.
+2. Open **Actions → Prepare Goblin release → Run workflow** on `master`.
+   The workflow uses the checked-in preparation tooling from this run; **Source
+   branch** selects the product source, for example `release/0.1`.
+3. Choose **preview** or **stable**. Leave the Goblin version blank to suggest the
+   next version within that line. An optional full source SHA must already belong
+   to that release branch; otherwise preparation captures its current tip once.
+4. Normally leave **goblinctl version** blank. Preparation authenticates published
+   installer metadata and compares the frozen source's shipping inputs and
+   required capabilities. It prefers the checked-in selection, then the source's
+   Cargo version, then newer published versions. An exact match can be reused
+   even when its source is older or the checked-in pin has not been updated.
+5. If nothing matches, preparation builds goblinctl from the captured source. It
+   uses the source's Cargo version when unused, otherwise suggests the next unused
+   patch version. An override can select a matching published installer or an
+   unused version. Releases, drafts, and orphan tags reserve their versions.
+6. Download **goblin-candidate-<attempt>** and review its summary. It contains the
+   selected installer archive, installer manifest/checksums, generated Azure
+   assets, and the coordinated `release.json` with checksums for every asset.
+
+Goblin and goblinctl retain independent versions. The chosen goblinctl version is
+an explicit compile-time input, recorded in its manifest and reported by the
+binary, metadata, and local installer paths. Cargo manifests and lockfiles are
+unchanged. A release branch cut before this build support existed needs the
+support backported if it must build a version different from its Cargo version.
+
+Source is exported from Git into an isolated tree under `.artifacts/`; build
+outputs cannot change the checkout. Bicep reads a candidate-specific installer
+selection in another isolated rendering tree, so both the bootstrap and displayed
+metadata use the recorded installer. Development pins and service image locks
+are unchanged, and preparation creates no dependency PR.
+
+Shipping inputs include Rust source/build configuration, setup and PostgreSQL
+bundles, branding, and licensing files. Additions and deletions count. Changed
+inputs require a matching publication or a new build. Missing capabilities in the
+source, failed authentication, failed source checks, and conflicting requested
+versions stop preparation with a failing job and a next action. Legacy manifests
+without input fingerprints are never reused.
+
+The workflow has read permissions and stops after candidate upload. It checks the
+packaged binary's version, metadata, and installation-request validator. These
+checks do not replace the full candidate verification planned in step 4:
+`deploymentChecks` remains `pending`. Candidates are neither approved nor
+published, and the original seal/publication commands reject their schema.
 
 ## Publication during this phase
 
-Leave **Prepare Goblin release** and **Publish goblinctl** unused for the
-stabilization/backport phase. They remain master-only, and do not yet implement
-coordinated publication from a release branch. The instructions below describe
-that existing implementation for reference and recovery of existing releases.
-Before publishing from `release/*`, implement the coordinated workflow described
-in the [plan](release-workflow-plan.md).
-
-## Prepare and publish Goblin
-
-1. Merge your source changes after **Goblin checks** passes.
-2. Open **Actions → Prepare Goblin release → Run workflow** on `master`.
-   Leave **Release channel** at **preview** and **Goblin version** blank to suggest
-   the next version, starting at `0.1.0-preview.1`. An optional full source SHA
-   selects a particular merged commit. **Make recommended** defaults to false.
-3. If preparation requests an installer release, follow the installer steps below.
-   If it creates a dependency PR, merge that PR and run Prepare again.
-4. Preparation verifies the published installer, runs source/deployment/browser
-   checks locally on the runner, and generates the release assets. Azure
-   installation is performed manually after publication.
-5. Review the summary:
-
-   ```text
-   Goblin 0.1.0-preview.2
-   Installer: goblinctl 0.1.3 — reused
-   Deployment checks: passed
-   Azure installation: manual
-   Ready to publish
-   ```
-
-6. Select **Review deployments**, approve `goblin-release`, then choose
-   **Approve and deploy**. The job named **Publish Goblin** publishes the prepared
-   release to GitHub. Azure deployment is a separate manual action.
-
-The workflow captures the source once. A later merge to `master` cannot change
-that candidate. Publication creates `goblin-v<version>` at the captured commit and
-uploads the same tested templates, portal UI, verification record and checksums.
-Preview versions are GitHub prereleases. Source branches and published versions
-are never automatically upgraded on installed machines.
-
-The automatic version suggestion increments the preview number. A stable release
-removes the preview suffix; after a stable release, the next suggestion begins the
-next patch preview. Enter an explicit version for a minor/major release. Goblin
-version suggestions ignore goblinctl releases.
-
-## When a new installer is needed
-
-Preparation compares all shipping inputs against the authenticated published
-installer selected by `dependencies.toml`. The inventory includes Rust source,
-shared build inputs, and embedded setup/PostgreSQL assets outside `tools/`.
-It also includes `LICENSE`, `NOTICE`, and `THIRD_PARTY_NOTICES.md`; changes to
-these shipping documents require a new installer release. The archive contains
-the executable followed by those three documents, with deterministic metadata.
-Installation preserves the documents in `/opt/goblin/share/licenses/goblinctl/`.
-Additions and deletions count. Source differences are conservative release
-requirements; the tooling does not infer semantic compatibility or bump size.
-
-1. Review the suggested goblinctl version. Update the Cargo workspace version and
-   run `cargo check --workspace` to update its lockfile. Merge those two files in
-   an ordinary PR. An existing unused version bump can be used as-is.
-2. Run **Actions → Publish goblinctl** on `master`. Its optional SHA defaults to
-   that workflow run's `master` commit. Review and approve the existing
-   `goblinctl-release` environment after source and packaged executable tests pass.
-3. Publication creates `goblinctl-vX.Y.Z` and authenticates the archive and manifest
-   with GitHub attestations. A following job opens a dependency PR updating only
-   `dependencies.toml` and `dependencies.lock.json`.
-4. Merge the dependency PR and run **Prepare Goblin release** again.
-
-If the installer was published but the dependency PR failed, run Prepare again.
-It checks the Cargo version's published release as well as the existing pin.
-Local recovery uses the same authenticated pin operation:
+Coordinated publication remains disabled until steps 4–6 are implemented and
+verified. Do not use **Publish goblinctl** as a prerequisite to preparation; its
+standalone publication/pin flow remains only for the existing implementation and
+will be retired during workflow cleanup. The original installer pin command is
+still available for deliberate development dependency updates:
 
 ```bash
 cargo xtask release pin-installer --version X.Y.Z
 ```
 
-Review and commit the two dependency files together. This operation does not
-refresh service images. Pin updates and generated Azure outputs do not change the
-installer fingerprint, so pinning does not cause another installer release.
+Creating a release branch, merging a backport, and preparing a candidate do not
+publish releases or change the installation recommendation.
 
 ## Installation defaults and recommendation
 
@@ -177,8 +157,7 @@ The [installation page](https://jgador.github.io/goblin/) lists published Goblin
 versions and selects the recommendation. Each version opens its own Azure
 assets. Azure displays **Goblin version**, already bound to the source and installer.
 
-Publication updates the installation site. It changes the default only when
-**Make recommended** was selected. For later promotion or rollback, run
+For existing published releases, promotion, rollback, and site recovery use
 **Recommend Goblin release** with an already published version. Uncheck its
 recommendation option to repair site delivery while preserving the current default.
 An older published version remains independently installable.
@@ -188,7 +167,7 @@ During development, explicitly recommend a tested preview. For a stable
 announcement, publish and recommend the stable release; later previews do not
 replace it automatically. A recommendation affects new installations.
 
-The first site deployment accompanies the first published Goblin release.
+Site delivery will follow publication when the coordinated publication phase is implemented.
 The `gh-pages` branch stores generated site assets, the published catalog, and its
 recommendation. GitHub Pages uses the Actions deployment source. Versioned assets
 also remain permanently attached to GitHub Releases. The repository-wide GitHub
@@ -207,13 +186,16 @@ file. Install `checks.yml` before activating protection in a new repository so
 the required `goblin-checks` job exists. Its PR trigger covers all target branches;
 its push trigger covers `master` and `release/**`.
 
-The existing publication workflows also require configured approval and hosting.
+Candidate preparation needs read access to source checks, releases, and attestations;
+it does not require publication approval or Pages configuration. Existing
+publication/recommendation workflows retain their approval and hosting settings.
 On 2026-09-29, the `goblin-release` reviewer environment (restricted to `master`)
 and GitHub Pages Actions hosting were configured. PR automation was already
 enabled. Azure credentials and subscription settings are not required. Keep
 publication restrictions unchanged during the stabilization/backport phase.
 
-For a new repository, configure:
+The retained publication and site workflows use these settings; coordinated
+candidate preparation does not require them:
 
 - A `goblin-release` environment with at least one required maintainer reviewer.
   Allow that maintainer to approve their own run. Limit deployment branches to
@@ -271,14 +253,15 @@ cargo xtask release verify-installer
 The public archive is downloaded and verified; this command does not deploy Azure.
 `cargo xtask release check-installer` validates local compiler input coverage and
 contracts without requiring a published binary. `just release` creates a local
-review archive; publication uses `cargo xtask release build-installer` from clean
-merged source.
+review archive. The standalone legacy workflow uses
+`cargo xtask release build-installer` from clean merged source.
 
 Candidate artifacts expire after 30 days. A failed preparation can be rerun using
-**Re-run all jobs**; evidence from different attempts cannot be combined. A
-publication-only retry can reuse the original approved, sealed candidate while
-its artifacts exist. It may fill missing draft assets only when all existing
-assets and the tag already match. A published version is never overwritten.
+**Re-run all jobs**, creating a fresh candidate. A blank source SHA captures the
+release branch tip again; specify the original SHA to prepare that exact source.
+Evidence from different attempts cannot be combined. Publication recovery from
+an approved retained candidate remains step 5; never substitute new bytes into
+an existing published version.
 
 After changing release tooling or workflows, start a new **Prepare Goblin
 release** run from the updated `master`. Rerunning an older run keeps its original

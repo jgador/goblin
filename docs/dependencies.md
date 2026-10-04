@@ -14,7 +14,11 @@ headlamp = "ghcr.io/headlamp-k8s/headlamp:v0.45.0"
 
 Goblin and goblinctl keep independent versions. `goblinctl.version` selects the
 published installer; the Cargo workspace version identifies the installer being
-built from source. Cargo, npm, and NuGet dependencies stay in their native project
+built during ordinary development. Coordinated release preparation may supply an
+independent goblinctl build version without editing Cargo files. The candidate's
+release record owns its exact installer pairing; preparation can reuse a newer
+matching publication or build one without changing this development pin.
+Cargo, npm, and NuGet dependencies stay in their native project
 files. Tool versions and download checksums stay in their existing setup files.
 
 Each image owns what it contains. Goblin's Dockerfile selects its Node and .NET

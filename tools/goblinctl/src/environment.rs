@@ -38,6 +38,12 @@ pub const GITHUB_RUN_ID: &str = "GITHUB_RUN_ID";
 /// Required: Optional; supplied by GitHub Actions. Sensitive: no.
 pub const GITHUB_STEP_SUMMARY: &str = "GITHUB_STEP_SUMMARY";
 
+/// goblinctl version embedded by a coordinated release build; never read at runtime.
+/// Format: MAJOR.MINOR.PATCH, validated by release preparation before compilation.
+/// Default/fallback: Cargo package version when unset during compilation.
+/// Required: Supplied explicitly for coordinated builds. Sensitive: no.
+pub const GOBLINCTL_BUILD_VERSION: &str = "GOBLINCTL_BUILD_VERSION";
+
 /// Repository/configuration root used by PostgreSQL setup.
 /// Format: Directory path.
 /// Default/fallback: Current working directory in setup.sh; Rust tooling supplies repository root.

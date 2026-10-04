@@ -6,10 +6,7 @@ use crate::files;
 pub fn activate_tooling(system_root: &Path, binary: &Path) -> Result<()> {
     let root = |path: &str| system_root.join(path.trim_start_matches('/'));
     let digest = checksum(binary)?;
-    let release = root(&format!(
-        "opt/goblin/releases/{}-{digest}",
-        env!("CARGO_PKG_VERSION")
-    ));
+    let release = root(&format!("opt/goblin/releases/{}-{digest}", crate::VERSION));
     for directory in [
         root("opt/goblin"),
         root("opt/goblin/releases"),
@@ -104,7 +101,7 @@ pub fn bootstrap(hostname: &str, source_ref: &str) -> Result<()> {
             crate::credentials::ensure(&temporary_credentials.path().join("owner-password"), false)?
         }
     };
-    let script = render_bootstrap(hostname, source_ref, env!("CARGO_PKG_VERSION"), "local")?;
+    let script = render_bootstrap(hostname, source_ref, crate::VERSION, "local")?;
     files::input(
         Command::new("bash")
             .env(environment::GOBLIN_PASSWORD_HASH_FILE, password_path)

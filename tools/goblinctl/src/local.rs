@@ -294,12 +294,8 @@ impl Local {
                 .arg(&self.git_repository)
                 .args(["rev-parse", "HEAD"]),
         )?;
-        let script = install::render_bootstrap(
-            "localhost",
-            source_ref.trim(),
-            env!("CARGO_PKG_VERSION"),
-            "local",
-        )?;
+        let script =
+            install::render_bootstrap("localhost", source_ref.trim(), crate::VERSION, "local")?;
         files::directory(&self.path("var/lib/goblin"), 0o751)?;
         files::directory(
             self.owner()
