@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 mod azure;
+mod candidate;
 mod dependencies;
 mod goblin_release;
 mod package;

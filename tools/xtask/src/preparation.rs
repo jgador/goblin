@@ -1,5 +1,8 @@
 //! A read-only GitHub operation producing one unpublished Goblin/goblinctl candidate.
 use crate::azure;
+use crate::candidate::Candidate;
+use crate::candidate::InstallerOrigin;
+use crate::candidate::Source;
 use crate::dependencies;
 use crate::goblin_release::Channel;
 use crate::goblin_release::Check;
@@ -16,8 +19,6 @@ use clap::Args;
 use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -48,39 +49,6 @@ pub struct Options {
     output: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Source {
-    branch: String,
-    revision: String,
-    branch_tip: String,
-    check_run_id: u64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum InstallerOrigin {
-    Published,
-    Built,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Candidate {
-    schema_version: u32,
-    version: String,
-    channel: Channel,
-    source: Source,
-    workflow_revision: String,
-    installer: release::Release,
-    installer_origin: InstallerOrigin,
-    changed_installer_inputs: Vec<String>,
-    run_id: String,
-    run_attempt: String,
-    assets: BTreeMap<String, String>,
-    deployment_checks: Check,
-}
-
 #[derive(Default)]
 struct Inventory {
     reserved: BTreeSet<String>,
@@ -93,7 +61,7 @@ enum Selection {
     Build(String),
 }
 
-fn line(branch: &str) -> Result<[u64; 2]> {
+pub(crate) fn line(branch: &str) -> Result<[u64; 2]> {
     let text = branch
         .strip_prefix("release/")
         .context("Select release/<major>.<minor>, for example release/0.1")?;
@@ -377,12 +345,11 @@ fn authenticated_manifest(version: &str, directory: &Path) -> Result<Option<rele
     Ok(Some(record))
 }
 
-fn validate_executable(root: &Path, directory: &Path, version: &str) -> Result<()> {
-    let executable = directory.join("executable");
-    fs::create_dir_all(&executable)?;
+pub(crate) fn validate_executable(root: &Path, directory: &Path, version: &str) -> Result<()> {
+    let executable = tempfile::tempdir_in(directory)?;
     let archive = flate2::read::GzDecoder::new(fs::File::open(directory.join(release::ARCHIVE))?);
-    tar::Archive::new(archive).unpack(&executable)?;
-    let binary = executable.join("goblinctl");
+    tar::Archive::new(archive).unpack(executable.path())?;
+    let binary = executable.path().join("goblinctl");
     ensure!(
         files::output(Command::new(&binary).arg("--version"))?.trim()
             == format!("goblinctl {version}"),
@@ -573,13 +540,20 @@ fn prepare(root: &Path, options: &Options) -> Result<()> {
     output("outcome", "prepared")?;
     output("version", &candidate.version)?;
     output("installer", &candidate.installer.version)?;
+    output(
+        "installer-origin",
+        match candidate.installer_origin {
+            InstallerOrigin::Published => "published",
+            InstallerOrigin::Built => "built",
+        },
+    )?;
     output("source", &candidate.source.revision)?;
     let disposition = match candidate.installer_origin {
         InstallerOrigin::Published => "reused",
         InstallerOrigin::Built => "built, unpublished",
     };
     summary(&format!(
-        "## Candidate prepared\n\nGoblin {}\n\ngoblinctl {} — {disposition}\n\nSource: `{}` at `{}`\n\nThe candidate contains the installer archive, its manifest, generated Azure assets, and their checksums. Full candidate verification, approval, and publication remain pending (step 4). Azure installation is manual.",
+        "## Candidate prepared\n\nGoblin {}\n\ngoblinctl {} — {disposition}\n\nSource: `{}` at `{}`\n\nThe candidate contains the installer archive, its manifest, generated Azure assets, and their checksums. The workflow must finish candidate verification before requesting publication approval. Azure installation is manual.",
         candidate.version,
         candidate.installer.version,
         candidate.source.branch,

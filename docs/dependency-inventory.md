@@ -22,7 +22,7 @@ resolved inventories described at the end.
 | .NET / ASP.NET Core | Target `net10.0`; build image `10.0.401-noble`; runtime image `10.0.12-noble` | [Directory.Build.props](../backend/Directory.Build.props), [Dockerfile](../Dockerfile) |
 | Rust / Cargo | Toolchain `1.95.0`; edition `2024`; minimum Rust `1.95` | [rust-toolchain.toml](../rust-toolchain.toml), [Cargo.toml](../Cargo.toml) |
 | Clippy, rustfmt, rust-src | Components of the selected Rust toolchain | [rust-toolchain.toml](../rust-toolchain.toml) |
-| Node.js | Local minimum `>=24`; build image `26.10.0-bookworm-slim`; release CI selects `24` | [package.json](../package.json), [Dockerfile](../Dockerfile), [release workflow](../.github/workflows/goblinctl-release.yml) |
+| Node.js | Local minimum `>=24`; build image `26.10.0-bookworm-slim`; release CI selects `24` | [package.json](../package.json), [Dockerfile](../Dockerfile), [release workflow](../.github/workflows/goblin-release.yml) |
 | npm | Supplied by the Node installation/image; no independent version pin | [package.json](../package.json), [Dockerfile](../Dockerfile) |
 | TypeScript | `7.0.2` | Root and frontend package manifests below |
 | NuGet | Supplied by the .NET SDK; no independent CLI pin | [global.json](../global.json) |
@@ -115,8 +115,8 @@ There are nineteen unique direct external crates. Sources:
 | DotSlash | `0.5.7` | [Rust setup](../scripts/setup-rust.sh) |
 | GitHub CLI (`gh`) | `2.101.0` for the application image | [GitHub CLI installer](../deploy/install-gh.mjs) |
 | Slack CLI | `4.8.0`, downloaded only into a disposable setup directory; Linux x64/ARM64 SHA-256 pinned | [Slack setup adapter](../backend/src/Goblin.Integrations.Slack/SlackSetup.cs) |
-| Bicep | `0.47.16` in release CI | [Release workflow](../.github/workflows/goblinctl-release.yml) |
-| kubectl | `1.36.4` in release CI; also bundled with K3s | [Release workflow](../.github/workflows/goblinctl-release.yml), [installer](../deploy/azure/setup/installer.sh) |
+| Bicep | `0.47.16` in release CI | [Release workflow](../.github/workflows/goblin-release.yml) |
+| kubectl | `1.36.4` in release CI; also bundled with K3s | [Release workflow](../.github/workflows/goblin-release.yml), [installer](../deploy/azure/setup/installer.sh) |
 | Gitleaks | Documented baseline `8.30.1`, allowing newer `8.x` | [Secret scanning guide](secret-scanning.md) |
 | Rustup | Setup downloads the upstream installer without a version pin | [Rust setup](../scripts/setup-rust.sh) |
 
@@ -148,8 +148,8 @@ resources. They are not independently pinned by these application manifests.
 
 ## GitHub Actions
 
-Sources: [Rust CI](../.github/workflows/rust-ci.yml),
-[release workflow](../.github/workflows/goblinctl-release.yml), and
+Sources: [source checks](../.github/workflows/checks.yml),
+[release workflow](../.github/workflows/goblin-release.yml), and
 [shared Rust setup](../.github/actions/setup-rust/action.yml).
 
 | Action | Selected reference |

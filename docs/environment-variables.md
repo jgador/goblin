@@ -68,6 +68,10 @@ the executable reports that version consistently. An ordinary build falls back
 to the Cargo package version. Changing a running process's environment cannot
 change its version. The literal in `option_env!` is required by the compiler.
 
+Release publication receives `CANDIDATE_SHA256` from the sealing job and checks it
+against the downloaded manifest. `PREPARED_ATTEMPT` retains the original preparation
+attempt when failed jobs are rerun; it is not replaced by the retry attempt.
+
 Codex and GitHub subprocesses keep their explicit allowlists and private homes.
 Adding a definition grants no forwarding permission. The catalogs also name
 test-only failure controls and negative credential-inheritance fixtures; those
