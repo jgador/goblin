@@ -69,6 +69,54 @@ fn unchanged_installer_is_reused_with_its_original_source_revision() {
 }
 
 #[test]
+fn reused_installer_tag_must_match_its_authenticated_source() {
+    let (_, mut published, _) = fixture();
+    published.source_revision = "a".repeat(40);
+    let tag = json!({"object":{"type":"commit","sha":published.source_revision}});
+    assert_eq!(
+        verify_reused_installer(&published, || Ok(published.clone()), || Ok(tag)).unwrap(),
+        published
+    );
+
+    for invalid in [
+        json!({"object":{"type":"commit","sha":"b".repeat(40)}}),
+        json!({"object":{"type":"tag","sha":published.source_revision}}),
+        json!({}),
+    ] {
+        let message = verify_reused_installer(&published, || Ok(published.clone()), || Ok(invalid))
+            .unwrap_err()
+            .to_string();
+        assert!(message.contains(&published.version));
+        assert!(message.contains(&published.source_revision));
+        assert!(message.contains("--installer-version"));
+        assert!(message.contains("keep existing tags and assets unchanged"));
+    }
+}
+
+#[test]
+fn selected_installer_verification_failures_never_fall_back_to_a_build() {
+    let (_, published, _) = fixture();
+    let failed = verify_reused_installer(
+        &published,
+        || anyhow::bail!("Attestation failed"),
+        || panic!("Unauthenticated artifacts cannot reach the tag check"),
+    )
+    .unwrap_err();
+    assert!(format!("{failed:#}").contains("Attestation failed"));
+    assert!(failed.to_string().contains("--installer-version"));
+
+    let mut changed = published.clone();
+    changed.sha256 = "b".repeat(64);
+    let failed = verify_reused_installer(
+        &published,
+        || Ok(changed),
+        || panic!("Changed artifacts cannot reach the tag check"),
+    )
+    .unwrap_err();
+    assert!(failed.to_string().contains("changed during preparation"));
+}
+
+#[test]
 fn bundle_changes_additions_and_deletions_build_without_a_version_bump() {
     let (snapshot, published, inventory) = fixture();
     let bundle = snapshot
@@ -131,7 +179,7 @@ fn later_matching_publication_is_reused_without_a_pin_update() {
 }
 
 #[test]
-fn missing_capabilities_and_failed_authentication_stop_preparation() {
+fn missing_capabilities_and_failed_metadata_lookup_stop_preparation() {
     let (snapshot, published, inventory) = fixture();
     let mut required = snapshot.capabilities.clone();
     required.insert("install.future.v1".into());
@@ -142,7 +190,7 @@ fn missing_capabilities_and_failed_authentication_stop_preparation() {
         "0.1.4",
         &inventory,
         None,
-        |_| panic!("Must stop before authentication"),
+        |_| panic!("Must stop before inspecting publications"),
     );
     assert!(result.unwrap_err().to_string().contains("Backport"));
     let result = select_installer(
@@ -152,13 +200,13 @@ fn missing_capabilities_and_failed_authentication_stop_preparation() {
         "0.1.4",
         &inventory,
         None,
-        |_| anyhow::bail!("Attestation failed"),
+        |_| anyhow::bail!("Metadata lookup failed"),
     );
     assert!(
         result
             .unwrap_err()
             .to_string()
-            .contains("Attestation failed")
+            .contains("Metadata lookup failed")
     );
 }
 

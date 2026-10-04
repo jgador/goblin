@@ -99,11 +99,13 @@ release.
 3. Choose **preview** or **stable**. Leave the Goblin version blank to suggest the
    next version within that line. An optional full source SHA must already belong
    to that release branch; otherwise preparation captures its current tip once.
-4. Normally leave **goblinctl version** blank. Preparation authenticates published
+4. Normally leave **goblinctl version** blank. Preparation reads published
    installer metadata and compares the frozen source's shipping inputs and
    required capabilities. It prefers the checked-in selection, then the source's
    Cargo version, then newer published versions. An exact match can be reused
    even when its source is older or the checked-in pin has not been updated.
+   Before reuse, preparation verifies the selected installer's archive,
+   authenticates its archive and manifest, and checks its tag's source commit.
 5. If nothing matches, preparation builds goblinctl from the captured source. It
    uses the source's Cargo version when unused, otherwise suggests the next unused
    patch version. An override can select a matching published installer or an
@@ -130,6 +132,13 @@ inputs require a matching publication or a new build. Missing capabilities in th
 source, failed authentication, failed source checks, and conflicting requested
 versions stop preparation with a failing job and a next action. Legacy manifests
 without input fingerprints are never reused.
+
+An incompatible historical installer's signatures or tag cannot block a new
+build. Its metadata is used only to rule it out; preparation does not execute or
+include its archive in the candidate. Failed verification of a selected installer
+stops preparation. Investigate its provenance or start a new preparation with an
+unused **Optional goblinctl version** (`--installer-version` in the preparation
+CLI). Keep the existing release's tag and assets unchanged.
 
 ## Verify and publish the candidate
 
