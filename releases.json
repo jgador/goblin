@@ -3,6 +3,12 @@
   "recommended": "0.1.0-preview.2",
   "releases": [
     {
+      "version": "0.1.0-preview.3",
+      "channel": "preview",
+      "sourceRevision": "9d1266cd1322cece1c156b495097b3262647a9b9",
+      "manifestSha256": "a9f564697158dfc768cc008ac2fff80a95be8c2f91c12b85bf404d7f5e39cf72"
+    },
+    {
       "version": "0.1.0-preview.2",
       "channel": "preview",
       "sourceRevision": "bd877e47e9cee4c67ca3e4c1a2dc4658b6315943",

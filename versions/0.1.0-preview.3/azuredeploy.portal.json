@@ -1,0 +1,685 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "templateHash": "13521910813563554871",
+      "version": "0.47.16.16243"
+    },
+    "goblin": {
+      "installerSha256": "794765813d0ffcc763a205d44c15629b0be2fe47664d38fbf99dcaa71635fdc7",
+      "installerVersion": "0.1.6",
+      "sourceRevision": "9d1266cd1322cece1c156b495097b3262647a9b9",
+      "version": "0.1.0-preview.3"
+    }
+  },
+  "outputs": {
+    "goblinUrl": {
+      "metadata": {
+        "description": "Open this URL to follow installation progress. It opens Goblin when ready. HTTPS is configured separately."
+      },
+      "type": "string",
+      "value": "[format('http://{0}', reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value)]"
+    },
+    "publicHostname": {
+      "metadata": {
+        "description": "Azure-managed public hostname serving the Goblin UI over HTTP."
+      },
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value]"
+    },
+    "publicIpAddress": {
+      "metadata": {
+        "description": "Public IPv4 address of the VM."
+      },
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicIpAddress.value]"
+    },
+    "readinessCommand": {
+      "metadata": {
+        "description": "Command for checking installation progress through Azure Run Command, including before Kubernetes exists."
+      },
+      "type": "string",
+      "value": "[format('az vm run-command invoke --ids {0} --command-id RunShellScript --scripts \"cat /var/lib/goblin/bootstrap-status /var/lib/goblin/install/status.json\"', reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.virtualMachineResourceId.value)]"
+    },
+    "resourceNames": {
+      "metadata": {
+        "description": "Effective customer resource names, including any overrides."
+      },
+      "type": "object",
+      "value": "[variables('names')]"
+    },
+    "sshAccessNote": {
+      "metadata": {
+        "description": "Instructions for later VM access. The private key is never included in deployment outputs."
+      },
+      "type": "string",
+      "value": "[if(empty(trim(parameters('adminSshPublicKey'))), 'No SSH key was supplied. An authorized Azure administrator can add a new public key later.', format('Keep your matching private key for later VM access. {0}', if(empty(trim(parameters('sshSourceAddressPrefix'))), 'Public SSH is closed; an administrator must allow port 22 from your IP before connecting.', 'Public SSH is restricted to the configured source IP or CIDR.')))]"
+    },
+    "sshCommand": {
+      "metadata": {
+        "description": "SSH command using the saved private key. Replace the example key path with the downloaded file. Empty when no public key was supplied."
+      },
+      "type": "string",
+      "value": "[if(empty(trim(parameters('adminSshPublicKey'))), '', format('ssh -i /path/to/saved-key.pem {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.publicHostname.value))]"
+    },
+    "virtualMachineResourceId": {
+      "metadata": {
+        "description": "VM resource ID for administration through the Azure portal or CLI."
+      },
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'goblin-infrastructure'), '2025-04-01').outputs.virtualMachineResourceId.value]"
+    }
+  },
+  "parameters": {
+    "adminSshPublicKey": {
+      "defaultValue": "",
+      "metadata": {
+        "description": "Public part of the VM access key. The portal credentials control supplies the public key. The empty default permits review before Azure generates a new key; use main.bicep for CLI installation without SSH. Never supply a private key. Set sshSourceAddressPrefix only when direct SSH access is needed."
+      },
+      "type": "string"
+    },
+    "adminUsername": {
+      "defaultValue": "goblinadmin",
+      "metadata": {
+        "description": "Linux administrator username."
+      },
+      "type": "string"
+    },
+    "companyName": {
+      "defaultValue": "Goblin",
+      "maxLength": 24,
+      "metadata": {
+        "description": "Company or software name. Keep Goblin or replace it with your own name. Use letters, numbers, spaces or hyphens, starting with a letter. Spaces become hyphens and letters become lowercase in default resource names."
+      },
+      "minLength": 2,
+      "type": "string"
+    },
+    "dnsLabel": {
+      "defaultValue": "",
+      "maxLength": 63,
+      "metadata": {
+        "description": "Optional Azure public DNS label. Blank uses the generated label (default: goblin-prod). Use lowercase letters, numbers and hyphens, starting with a letter and ending with a letter or number. Must be available in the region; choose another label if occupied."
+      },
+      "type": "string"
+    },
+    "environment": {
+      "allowedValues": [
+        "dev",
+        "test",
+        "staging",
+        "prod"
+      ],
+      "defaultValue": "prod",
+      "metadata": {
+        "description": "Environment included in generated names. No instance number is appended."
+      },
+      "type": "string"
+    },
+    "goblinPassword": {
+      "maxLength": 128,
+      "metadata": {
+        "description": "Password for opening Goblin. A password is required, with no minimum length or character-mix requirement (up to 128 characters). This is separate from your Azure, SSH, and AI provider credentials. Use the same password when redeploying unless you intend to change it."
+      },
+      "type": "securestring"
+    },
+    "goblinSourceRef": {
+      "allowedValues": [
+        "9d1266cd1322cece1c156b495097b3262647a9b9"
+      ],
+      "defaultValue": "9d1266cd1322cece1c156b495097b3262647a9b9",
+      "maxLength": 40,
+      "metadata": {
+        "description": "Exact Goblin source revision. Release preparation fixes this to the selected Goblin version."
+      },
+      "minLength": 40,
+      "type": "string"
+    },
+    "location": {
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for the VM. Defaults to the selected resource group location."
+      },
+      "type": "string"
+    },
+    "networkInterfaceName": {
+      "defaultValue": "",
+      "maxLength": 80,
+      "metadata": {
+        "description": "Optional network interface name. Blank uses the generated name (default: nic-goblin-prod)."
+      },
+      "type": "string"
+    },
+    "networkSecurityGroupName": {
+      "defaultValue": "",
+      "maxLength": 80,
+      "metadata": {
+        "description": "Optional network security group name. Blank uses the generated name (default: nsg-goblin-prod)."
+      },
+      "type": "string"
+    },
+    "osDiskName": {
+      "defaultValue": "",
+      "maxLength": 80,
+      "metadata": {
+        "description": "Optional OS disk name. Blank uses the generated name (default: osdisk-goblin-prod)."
+      },
+      "type": "string"
+    },
+    "osDiskSizeGB": {
+      "defaultValue": 128,
+      "maxValue": 1024,
+      "metadata": {
+        "description": "OS disk capacity in GiB. Kubernetes data is stored on this managed disk."
+      },
+      "minValue": 64,
+      "type": "int"
+    },
+    "publicIpName": {
+      "defaultValue": "",
+      "maxLength": 80,
+      "metadata": {
+        "description": "Optional public IP resource name. Blank uses the generated name (default: pip-goblin-prod). This is separate from the DNS label."
+      },
+      "type": "string"
+    },
+    "sshSourceAddressPrefix": {
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional advanced setting: source IP/CIDR allowed to connect over SSH, for example 203.0.113.10/32. Public SSH is enabled only when this setting and adminSshPublicKey are both supplied. Azure Portal Run Command remains available without SSH."
+      },
+      "type": "string"
+    },
+    "subnetAddressPrefix": {
+      "defaultValue": "10.20.0.0/24",
+      "metadata": {
+        "description": "VM subnet address range, contained in the virtual network range."
+      },
+      "type": "string"
+    },
+    "subnetName": {
+      "defaultValue": "",
+      "maxLength": 80,
+      "metadata": {
+        "description": "Optional subnet name. Blank uses the generated name (default: snet-goblin-prod)."
+      },
+      "type": "string"
+    },
+    "virtualMachineName": {
+      "defaultValue": "",
+      "maxLength": 64,
+      "metadata": {
+        "description": "Optional VM name. Blank uses the generated name (default: vm-goblin-prod). Must also be a valid Linux hostname."
+      },
+      "type": "string"
+    },
+    "virtualNetworkAddressPrefix": {
+      "defaultValue": "10.20.0.0/16",
+      "metadata": {
+        "description": "Virtual network address range. Keep it separate from the K3s pod range 10.42.0.0/16 and service range 10.43.0.0/16."
+      },
+      "type": "string"
+    },
+    "virtualNetworkName": {
+      "defaultValue": "",
+      "maxLength": 64,
+      "metadata": {
+        "description": "Optional virtual network name. Blank uses the generated name (default: vnet-goblin-prod)."
+      },
+      "type": "string"
+    },
+    "vmSize": {
+      "defaultValue": "Standard_D4s_v5",
+      "metadata": {
+        "description": "VM size. The default provides 4 vCPUs and 16 GiB RAM; verify regional availability and pricing before deploying. Use an x64 size."
+      },
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "apiVersion": "2025-04-01",
+      "name": "goblin-infrastructure",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "adminSshPublicKey": {
+            "value": "[parameters('adminSshPublicKey')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('adminUsername')]"
+          },
+          "dnsLabel": {
+            "value": "[variables('effectiveDnsLabel')]"
+          },
+          "goblinPassword": {
+            "value": "[parameters('goblinPassword')]"
+          },
+          "goblinSourceRef": {
+            "value": "[parameters('goblinSourceRef')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "names": {
+            "value": "[variables('names')]"
+          },
+          "osDiskSizeGB": {
+            "value": "[parameters('osDiskSizeGB')]"
+          },
+          "requireSshPublicKey": {
+            "value": true
+          },
+          "sshSourceAddressPrefix": {
+            "value": "[trim(parameters('sshSourceAddressPrefix'))]"
+          },
+          "subnetAddressPrefix": {
+            "value": "[parameters('subnetAddressPrefix')]"
+          },
+          "tags": {
+            "value": "[variables('tags')]"
+          },
+          "virtualNetworkAddressPrefix": {
+            "value": "[parameters('virtualNetworkAddressPrefix')]"
+          },
+          "vmSize": {
+            "value": "[parameters('vmSize')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "templateHash": "12834443437408928703",
+              "version": "0.47.16.16243"
+            }
+          },
+          "outputs": {
+            "publicHostname": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', parameters('names').publicIp), '2024-05-01').dnsSettings.fqdn]"
+            },
+            "publicIpAddress": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', parameters('names').publicIp), '2024-05-01').ipAddress]"
+            },
+            "virtualMachineResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('names').virtualMachine)]"
+            }
+          },
+          "parameters": {
+            "adminSshPublicKey": {
+              "type": "string"
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "dnsLabel": {
+              "type": "string"
+            },
+            "goblinPassword": {
+              "maxLength": 128,
+              "type": "securestring"
+            },
+            "goblinSourceRef": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "names": {
+              "type": "object"
+            },
+            "osDiskSizeGB": {
+              "type": "int"
+            },
+            "requireSshPublicKey": {
+              "defaultValue": false,
+              "metadata": {
+                "description": "Fail bootstrap if the portal did not supply the expected SSH public key. CLI deployments may omit a key."
+              },
+              "type": "bool"
+            },
+            "sshSourceAddressPrefix": {
+              "type": "string"
+            },
+            "subnetAddressPrefix": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "virtualNetworkAddressPrefix": {
+              "type": "string"
+            },
+            "vmSize": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "apiVersion": "2024-05-01",
+              "location": "[parameters('location')]",
+              "name": "[parameters('names').networkSecurityGroup]",
+              "properties": {
+                "securityRules": "[concat(variables('webRules'), variables('sshRules'))]"
+              },
+              "tags": "[parameters('tags')]",
+              "type": "Microsoft.Network/networkSecurityGroups"
+            },
+            {
+              "apiVersion": "2024-05-01",
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('names').networkSecurityGroup)]"
+              ],
+              "location": "[parameters('location')]",
+              "name": "[parameters('names').virtualNetwork]",
+              "properties": {
+                "addressSpace": {
+                  "addressPrefixes": [
+                    "[parameters('virtualNetworkAddressPrefix')]"
+                  ]
+                },
+                "subnets": [
+                  {
+                    "name": "[parameters('names').subnet]",
+                    "properties": {
+                      "addressPrefix": "[parameters('subnetAddressPrefix')]",
+                      "defaultOutboundAccess": false,
+                      "networkSecurityGroup": {
+                        "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('names').networkSecurityGroup)]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "tags": "[parameters('tags')]",
+              "type": "Microsoft.Network/virtualNetworks"
+            },
+            {
+              "apiVersion": "2024-05-01",
+              "location": "[parameters('location')]",
+              "name": "[parameters('names').publicIp]",
+              "properties": {
+                "dnsSettings": {
+                  "domainNameLabel": "[parameters('dnsLabel')]"
+                },
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Static"
+              },
+              "sku": {
+                "name": "Standard"
+              },
+              "tags": "[parameters('tags')]",
+              "type": "Microsoft.Network/publicIPAddresses"
+            },
+            {
+              "apiVersion": "2024-05-01",
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('names').publicIp)]",
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('names').virtualNetwork)]"
+              ],
+              "location": "[parameters('location')]",
+              "name": "[parameters('names').networkInterface]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "primary",
+                    "properties": {
+                      "privateIPAllocationMethod": "Dynamic",
+                      "publicIPAddress": {
+                        "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('names').publicIp)]"
+                      },
+                      "subnet": {
+                        "id": "[format('{0}/subnets/{1}', resourceId('Microsoft.Network/virtualNetworks', parameters('names').virtualNetwork), parameters('names').subnet)]"
+                      }
+                    }
+                  }
+                ]
+              },
+              "tags": "[parameters('tags')]",
+              "type": "Microsoft.Network/networkInterfaces"
+            },
+            {
+              "apiVersion": "2024-11-01",
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', parameters('names').networkInterface)]"
+              ],
+              "location": "[parameters('location')]",
+              "name": "[parameters('names').virtualMachine]",
+              "properties": {
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": true
+                  }
+                },
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('names').networkInterface)]",
+                      "properties": {
+                        "deleteOption": "Detach",
+                        "primary": true
+                      }
+                    }
+                  ]
+                },
+                "osProfile": {
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "computerName": "[parameters('names').virtualMachine]",
+                  "linuxConfiguration": "[union(createObject('disablePasswordAuthentication', true(), 'provisionVMAgent', true()), if(empty(trim(parameters('adminSshPublicKey'))), createObject(), createObject('ssh', createObject('publicKeys', createArray(createObject('path', format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername')), 'keyData', trim(parameters('adminSshPublicKey'))))))))]"
+                },
+                "securityProfile": {
+                  "securityType": "TrustedLaunch",
+                  "uefiSettings": {
+                    "secureBootEnabled": true,
+                    "vTpmEnabled": true
+                  }
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "offer": "ubuntu-24_04-lts",
+                    "publisher": "Canonical",
+                    "sku": "server",
+                    "version": "latest"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "deleteOption": "Detach",
+                    "diskSizeGB": "[parameters('osDiskSizeGB')]",
+                    "managedDisk": {
+                      "storageAccountType": "StandardSSD_LRS"
+                    },
+                    "name": "[parameters('names').osDisk]"
+                  }
+                }
+              },
+              "tags": "[parameters('tags')]",
+              "type": "Microsoft.Compute/virtualMachines"
+            },
+            {
+              "apiVersion": "2024-11-01",
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('names').publicIp)]",
+                "[resourceId('Microsoft.Compute/virtualMachines', parameters('names').virtualMachine)]"
+              ],
+              "location": "[parameters('location')]",
+              "name": "[format('{0}/{1}', parameters('names').virtualMachine, 'goblin-bootstrap')]",
+              "properties": {
+                "autoUpgradeMinorVersion": true,
+                "protectedSettings": {
+                  "script": "[base64(if(and(parameters('requireSshPublicKey'), empty(trim(parameters('adminSshPublicKey')))), variables('$fxv#2'), replace(replace(replace(variables('bootstrapScript'), '__GOBLIN_HOSTNAME_BASE64__', base64(reference(resourceId('Microsoft.Network/publicIPAddresses', parameters('names').publicIp), '2024-05-01').dnsSettings.fqdn)), '__GOBLIN_SOURCE_REF_BASE64__', base64(parameters('goblinSourceRef'))), '__GOBLIN_PASSWORD_BASE64__', base64(parameters('goblinPassword')))))]"
+                },
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.1"
+              },
+              "tags": "[parameters('tags')]",
+              "type": "Microsoft.Compute/virtualMachines/extensions"
+            }
+          ],
+          "variables": {
+            "$fxv#0": {
+              "catalogSha256": "19159a23d200b2180907b1190b7b94ef469ef984d473472415e7419738b38c83",
+              "goblinctl": {
+                "release": {
+                  "cargoLockSha256": "595fa21d4d50c8a57d94175ad8974a048f19542958460d69aad528ff80724fa1",
+                  "installer": {
+                    "capabilities": [
+                      "install.victorialogs.v1"
+                    ],
+                    "files": {
+                      ".cargo/config.toml": "07e75f80544a833951c1532649fadd0ee21712b40e55b6e74b880b3c11259e36",
+                      "Cargo.lock": "595fa21d4d50c8a57d94175ad8974a048f19542958460d69aad528ff80724fa1",
+                      "Cargo.toml": "4499b1bff91eefbf0db69040c9a2f2989cee10a3cd2fda4ac9c1bd43ad6a68b3",
+                      "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+                      "NOTICE": "a6df258aac54a2c413337b86fe938402366c1c913b5098436669bc3089ccf27b",
+                      "THIRD_PARTY_NOTICES.md": "b6b3c97846c1d94fbc32e999b060f89a8d28bca5154ebac438d0c8250532583f",
+                      "assets/branding/svg/icon-light.svg": "7b6a338b3e3912014a73332099cef5800e49d23c5c234e0168bf65dce8cbe821",
+                      "deploy/azure/bootstrap.sh": "84e031934d047aae84a0c449112460be33ab83ae685df47ce209b3b555c81b16",
+                      "deploy/azure/install-app.sh": "b993fad1e47b7628a5d9404ee0eafb89ce036640c2dbda7e52b7dd0ac8a62a73",
+                      "deploy/azure/setup/app.js": "035aff32b41fefeec488e3621ff0244288af65e3fdb4570b7d3da3bdbc4f519e",
+                      "deploy/azure/setup/contract-values.js": "2568c370ada75282029223a4e6f422873c882706de530b6f52902cf3b2a13c2d",
+                      "deploy/azure/setup/goblin-installer.service": "afb981b0c6a377025f188f61698f6ca6c8d2b56837ce6317a693f7d5fdcc005b",
+                      "deploy/azure/setup/goblin-setup.service": "9e2434d3eca8f3c2fac25566e5efb1c217513f5008cd86b481606137ddbb6050",
+                      "deploy/azure/setup/index.html": "c3c55f5c69f0a7a6f7f34ea3221e65314cf69dcd1fa0498ed26e962f83ccc982",
+                      "deploy/azure/setup/installer.sh": "395279087ee0678227afc549d8b2b5516d92abd1623b66a0f70b7ef0298c354d",
+                      "deploy/azure/setup/sandbox-kustomization.yaml": "c76a85a7753be0171f1b8e100db487c8d2be83ef89f0e5e5464169fca66b3430",
+                      "deploy/azure/setup/styles.css": "c75661624d02503dffbcbf5299204db628da15ec4dfa419bbbe4ff4e9508e3f3",
+                      "deploy/local/postgres-service.yaml": "c6c839b2eb726e80bf223a234b04acf650bed09cde37d0841775e464d660430a",
+                      "deploy/postgres/ca.yaml": "7b8f82c660ba3342a134857cc8f4c7bc3250135a1839ae652cbbd282078a3c42",
+                      "deploy/postgres/certificates.yaml": "12db66ab1517dd91802891efd35a50311f47f58fbb5d2700cde5f089d66afb0a",
+                      "deploy/postgres/init-database.sh": "aa4e83b46dac0f04985f83bac8a4a7b715dce22f85b39229ea9a453af29b0c6a",
+                      "deploy/postgres/kustomization.yaml": "5c9452207802bdfec42da466b5a840f48176d5b3e50c7e16033e8d715675f538",
+                      "deploy/postgres/migrate.sh": "1f31eacd4028b895462414e465217c8234a2fe0ab017bc21b5934fc283dfebf9",
+                      "deploy/postgres/pg_hba.conf": "48ad1d89c939874c14eb474fbb5afff91f5c2fb63a0f648ded8dd980863c8d2c",
+                      "deploy/postgres/pg_ident.conf": "052fd2ad1e0105d7571297db2c7dadb10952e6866344e803f4414f62419487d5",
+                      "deploy/postgres/postgres.yaml": "4318afd985d8c257bb2060a37a6eeab6c12f43e75f1ea3747825686840fcf725",
+                      "deploy/postgres/setup.sh": "79e28d08e2f84cc2aed4b99bce4683bdeaa1ed452ad099a9a67f2d95c70de53f",
+                      "deploy/postgres/start-postgres.sh": "f3e59afc63e2e97b95166143fdf56c7dde4174467d4af959190423bd7bcdcd77",
+                      "deploy/postgres/verify.yaml": "1390630920ffe16e97cfa74aaecf77092b14a7cab973955566fca815162dedfb",
+                      "rust-toolchain.toml": "570656042681cfd8795403a455baf9a33035331a07db0645e866bbcea89a3d64",
+                      "scripts/build-goblinctl-release.sh": "47ba2fc2e4dd188f486c9df66d7d0069a1016a8c8ec6308746a0c5410012bf29",
+                      "tools/goblinctl/Cargo.toml": "aafede54666c4d294f2f5004350791bc8c0b7600831267a005441ae575a274a6",
+                      "tools/goblinctl/capabilities.json": "b1dbbe55bcba195a33a4f7b47cb6a9a2f5f58b11fefd0aff0c383b034f2f4449",
+                      "tools/goblinctl/release-inputs.json": "dda4da156da63f88641c688c54315030e6b03fb49c1b87dd07c2a48392bf902f",
+                      "tools/goblinctl/src/assets.rs": "08f431a6807218010bc26a0ba93fceb22cbff637269768dc2f226f2d4b55f791",
+                      "tools/goblinctl/src/contract_values.rs": "5def0cba52bb4dee7e1d1f58d5ed72d6ab06ceaf76af366932ee7a6e27b106cd",
+                      "tools/goblinctl/src/credentials.rs": "453b5bdfbb0de17bacd080442a1abe59b920d4a090271d4485eb9d18fa456051",
+                      "tools/goblinctl/src/database.rs": "99cbe3ab97d706c5f64d74cc2832d274c245dad0c794917d86cec9d4923dde9c",
+                      "tools/goblinctl/src/deployment.rs": "e26f02cb61ed5c16d30c107bebddc0a4450ca94ec2a2d6aa94de7ccc2db472c6",
+                      "tools/goblinctl/src/environment.rs": "08623416ae8ba2870b6bfa53b3b244499d20bc7a7f70c40b8753b84e210850c1",
+                      "tools/goblinctl/src/files.rs": "3b54fa46be074190a7d469cbc5228ff485a0b302f0bda10590cc781a18a95e23",
+                      "tools/goblinctl/src/install.rs": "3a96fb73ff57f3f4fb1aebdc2235d82e4a5594e27d1ea3d14b094f0fe3af0f76",
+                      "tools/goblinctl/src/lib.rs": "711a99289a63c1fb54d14357fde88a43f6c1e1bca13c73e38327af99a379bda4",
+                      "tools/goblinctl/src/local.rs": "783ff9733346aab898f83161673d8293c63aa86acf2c5e04a891f061f4e3c57b",
+                      "tools/goblinctl/src/main.rs": "fe4be438cd1691d4b1b6b8ae4970971c23241affd44093b2de767d358a59e933",
+                      "tools/goblinctl/src/operations.rs": "2b60bb25ad15e6d83e16004d2dba655aed8b6f836e9f5c4b7ddbaf57b1d50aa6",
+                      "tools/goblinctl/src/progress.rs": "d35b09b644d9583a10cdd4340ef1639a254a9039ef6307b77ed9a4b3c5db9a06",
+                      "tools/goblinctl/src/setup.rs": "0e715e39f6af4558376001a14435560721113c6a975685aff8ef33d8e156be45"
+                    },
+                    "schemaVersion": 1,
+                    "sha256": "568945f2efc0caaaafa0ac8958f9bb402a2013b4908899771c56086e638c2f39"
+                  },
+                  "schemaVersion": 1,
+                  "sha256": "794765813d0ffcc763a205d44c15629b0be2fe47664d38fbf99dcaa71635fdc7",
+                  "sourceDirty": false,
+                  "sourceRevision": "9d1266cd1322cece1c156b495097b3262647a9b9",
+                  "target": "x86_64-unknown-linux-musl",
+                  "version": "0.1.6"
+                },
+                "repository": "jgador/goblin"
+              },
+              "images": {
+                "fluent-bit": {
+                  "digest": "sha256:c5542543523c9678398dd78d927c05e8425ec15b038f226b67b3b019b1a70845",
+                  "reference": "cr.fluentbit.io/fluent/fluent-bit:5.1.3"
+                },
+                "headlamp": {
+                  "digest": "sha256:db3f0e0fc58d358d41daa3fe7fc852437552c7ee873c3645470f7b86a8e0db49",
+                  "reference": "ghcr.io/headlamp-k8s/headlamp:v0.45.0"
+                },
+                "postgres": {
+                  "digest": "sha256:3725f4e2499eef5134592b3b4ab79a543ed7f8e533b05b5b637af926630f6650",
+                  "reference": "postgres:18.6-bookworm"
+                },
+                "victorialogs": {
+                  "digest": "sha256:251121fa882af99b95ba0c230a4a2f412ea602d2698c64a96c58dc9842bb755d",
+                  "reference": "victoriametrics/victoria-logs:v1.53.0"
+                }
+              },
+              "platform": "linux/amd64",
+              "schema": 2
+            },
+            "$fxv#1": "#!/usr/bin/env bash\n# Azure Custom Script launches scripts through /bin/sh; ensure Bash semantics.\nif [ -z \"${BASH_VERSION:-}\" ]; then\n  exec /bin/bash \"$0\" \"$@\"\nfi\nset +x\nset -Eeuo pipefail\numask 077\n\n# Public status is readable by the unprivileged UI; configuration is root-only.\ninstall -d -m 0751 /var/lib/goblin\ninstall -d -m 0755 /var/lib/goblin/install\ninstall -d -m 0700 /var/lib/goblin/install/private\nexec > >(tee -a /var/log/goblin-bootstrap.log) 2>&1\nprintf 'running\\n' > /var/lib/goblin/bootstrap-status\nbootstrap_dir=''\ncurrent_stage='Preparing the server'\nstage() { current_stage=$1; printf '[Goblin] %s\\n' \"$current_stage\"; }\nfinish() {\n  local result=$?\n  if [[ \"$result\" != 0 ]]; then\n    printf 'failed\\n' > /var/lib/goblin/bootstrap-status\n    printf '[Goblin] Setup failed during: %s (exit code %s).\\n' \"$current_stage\" \"$result\" >&2\n  fi\n  if [[ -n \"$bootstrap_dir\" ]]; then rm -rf \"$bootstrap_dir\"; fi\n  exit \"$result\"\n}\ntrap finish EXIT\n\nif command -v cloud-init >/dev/null; then\n  cloud_init_result=0\n  cloud-init status --wait || cloud_init_result=$?\n  if [[ \"$cloud_init_result\" != 0 && \"$cloud_init_result\" != 2 ]]; then exit \"$cloud_init_result\"; fi\nfi\nif ! command -v curl >/dev/null || ! command -v tar >/dev/null; then\n  apt-get -o DPkg::Lock::Timeout=300 update\n  DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=300 install -y ca-certificates curl tar\nfi\nbootstrap_dir=$(mktemp -d /var/lib/goblin/bootstrap.XXXXXX)\n\n# ARM encodes all user-supplied values before embedding them in shell source.\ngoblin_hostname=$(printf '%s' '__GOBLIN_HOSTNAME_BASE64__' | base64 --decode)\ngoblin_source_ref=$(printf '%s' '__GOBLIN_SOURCE_REF_BASE64__' | base64 --decode)\nif [[ \"$goblin_hostname\" != localhost && ! \"$goblin_hostname\" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$ ]] || \\\n   [[ ! \"$goblin_source_ref\" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]]; then\n  printf 'Invalid public hostname or Goblin source ref.\\n' >&2\n  exit 1\nfi\nstage 'Preparing native Goblin administration tooling'\ngoblinctl_version='__GOBLINCTL_VERSION__'\ngoblinctl_sha256='__GOBLINCTL_SHA256__'\nif [[ \"$(uname -m)\" != x86_64 ]]; then printf 'Goblin requires an x86-64 host.\\n' >&2; exit 1; fi\nif [[ -n \"${GOBLINCTL_LOCAL_BINARY:-}\" ]]; then\n  # Explicit developer input: never compiled or downloaded on the installed host.\n  [[ \"${GOBLINCTL_LOCAL_SHA256:-}\" =~ ^[a-f0-9]{64}$ ]]\n  install -m 0755 \"$GOBLINCTL_LOCAL_BINARY\" \"$bootstrap_dir/goblinctl\"\n  printf '%s  %s\\n' \"$GOBLINCTL_LOCAL_SHA256\" \"$bootstrap_dir/goblinctl\" | sha256sum --check\nelse\n  [[ \"$goblinctl_version\" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ && \"$goblinctl_sha256\" =~ ^[a-f0-9]{64}$ ]]\n  curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \\\n    --retry 5 --connect-timeout 15 --max-time 300 \\\n    \"https://github.com/jgador/goblin/releases/download/goblinctl-v${goblinctl_version}/goblinctl-x86_64-unknown-linux-musl.tar.gz\" \\\n    --output \"$bootstrap_dir/goblinctl.tar.gz\"\n  printf '%s  %s\\n' \"$goblinctl_sha256\" \"$bootstrap_dir/goblinctl.tar.gz\" | sha256sum --check\n  # Accept the original single-file releases and the licensed archive layout.\n  # Keep an exact allowlist before extracting any untrusted archive entry.\n  goblinctl_archive_entries=$(tar -tzf \"$bootstrap_dir/goblinctl.tar.gz\")\n  if [[ \"$goblinctl_archive_entries\" != goblinctl && \"$goblinctl_archive_entries\" != $'goblinctl\\nLICENSE\\nNOTICE\\nTHIRD_PARTY_NOTICES.md' ]]; then\n    printf 'Unsupported native archive contents.\\n' >&2\n    exit 1\n  fi\n  tar --extract --gzip --file \"$bootstrap_dir/goblinctl.tar.gz\" --directory \"$bootstrap_dir\" --no-same-owner --no-same-permissions goblinctl\n  chmod 0755 \"$bootstrap_dir/goblinctl\"\nfi\n[[ \"$(\"$bootstrap_dir/goblinctl\" --version)\" == \"goblinctl $goblinctl_version\" ]]\n\nstage 'Preparing the Goblin password'\nif [[ -n \"${GOBLIN_PASSWORD_HASH_FILE:-}\" ]]; then\n  \"$bootstrap_dir/goblinctl\" internal validate-password \"$GOBLIN_PASSWORD_HASH_FILE\"\n  install -m 0600 \"$GOBLIN_PASSWORD_HASH_FILE\" \"$bootstrap_dir/owner-password\"\nelse\n  printf '%s' '__GOBLIN_PASSWORD_BASE64__' | base64 --decode | \\\n    \"$bootstrap_dir/goblinctl\" internal hash-password > \"$bootstrap_dir/owner-password\"\nfi\n\n# Reprovisioning explicitly starts a new attempt and can update the owner password.\n# Stop the old worker (including recovery) before replacing its executable/config.\nif systemctl cat goblin-installer.service >/dev/null 2>&1; then systemctl stop goblin-installer.service; fi\nexec 9>/var/lib/goblin/install/installer.lock\nflock -w 420 9\nif systemctl cat goblin-setup.service >/dev/null 2>&1; then systemctl stop goblin-setup.service; fi\n\"$bootstrap_dir/goblinctl\" internal activate --binary \"$bootstrap_dir/goblinctl\"\nexport GOBLINCTL=/opt/goblin/bin/goblinctl\ninstall -m 0600 \"$bootstrap_dir/owner-password\" /var/lib/goblin/install/private/owner-password\nprintf '%s\\n' \"$goblin_hostname\" > /var/lib/goblin/install/private/hostname\nprintf '%s\\n' \"$goblin_source_ref\" > /var/lib/goblin/install/private/source-ref\nprintf 'http://%s\\n' \"$goblin_hostname\" > /var/lib/goblin/public-url\nrm -rf /var/lib/goblin/install/private/work\n\"$GOBLINCTL\" internal state init\nexec 9>&-\n\nstage 'Starting the installation status page'\nsystemctl daemon-reload\nsystemctl enable --now goblin-setup.service\nsetup_ready=false\nfor ((attempt=0; attempt<30; attempt++)); do\n  if curl --fail --silent --show-error --noproxy '*' --connect-timeout 2 --max-time 3 \\\n      --unix-socket /run/goblin-setup/health.sock http://127.0.0.1/setup/healthz --output \"$bootstrap_dir/setup-health.json\" && \\\n      \"$GOBLINCTL\" internal json-test \"$bootstrap_dir/setup-health.json\" setup true\n  then setup_ready=true; break; fi\n  sleep 1\ndone\nif [[ \"$setup_ready\" != true ]]; then printf 'The installation status page did not start.\\n' >&2; exit 1; fi\nstage 'Starting background installation'\n# Type=exec returns once the worker is launched, independent of cluster readiness.\nsystemctl enable --now goblin-installer.service\nprintf 'setup-ready\\n' > /var/lib/goblin/bootstrap-status\nprintf 'Follow installation progress: http://%s\\n' \"$goblin_hostname\"\n",
+            "$fxv#2": "#!/bin/sh\nset -eu\n\nmkdir -p /var/lib/goblin\nprintf '%s\\n' failed > /var/lib/goblin/bootstrap-status\nprintf '%s\\n' 'Goblin installation failed during VM access-key setup: Azure did not supply the SSH public key. The installation cannot continue. Retry the portal deployment and complete the key-generation and download step.' >&2\nexit 1\n",
+            "bootstrapScript": "[replace(replace(variables('$fxv#1'), '__GOBLINCTL_VERSION__', variables('goblinctlRelease').version), '__GOBLINCTL_SHA256__', variables('goblinctlRelease').sha256)]",
+            "goblinctlRelease": "[variables('$fxv#0').goblinctl.release]",
+            "sshRules": "[if(or(empty(parameters('sshSourceAddressPrefix')), empty(trim(parameters('adminSshPublicKey')))), createArray(), createArray(createObject('name', 'allow-ssh', 'properties', createObject('priority', 120, 'direction', 'Inbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourcePortRange', '*', 'destinationPortRange', '22', 'sourceAddressPrefix', parameters('sshSourceAddressPrefix'), 'destinationAddressPrefix', '*'))))]",
+            "webRules": [
+              {
+                "name": "allow-http",
+                "properties": {
+                  "access": "Allow",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRange": "80",
+                  "direction": "Inbound",
+                  "priority": 100,
+                  "protocol": "Tcp",
+                  "sourceAddressPrefix": "Internet",
+                  "sourcePortRange": "*"
+                }
+              },
+              {
+                "name": "allow-https",
+                "properties": {
+                  "access": "Allow",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRange": "443",
+                  "direction": "Inbound",
+                  "priority": 110,
+                  "protocol": "Tcp",
+                  "sourceAddressPrefix": "Internet",
+                  "sourcePortRange": "*"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "type": "Microsoft.Resources/deployments"
+    }
+  ],
+  "variables": {
+    "companyPrefix": "[replace(toLower(trim(parameters('companyName'))), ' ', '-')]",
+    "effectiveDnsLabel": "[if(empty(trim(parameters('dnsLabel'))), variables('nameBase'), trim(parameters('dnsLabel')))]",
+    "nameBase": "[format('{0}-{1}', variables('workloadPrefix'), parameters('environment'))]",
+    "names": {
+      "networkInterface": "[if(empty(trim(parameters('networkInterfaceName'))), format('nic-{0}', variables('nameBase')), trim(parameters('networkInterfaceName')))]",
+      "networkSecurityGroup": "[if(empty(trim(parameters('networkSecurityGroupName'))), format('nsg-{0}', variables('nameBase')), trim(parameters('networkSecurityGroupName')))]",
+      "osDisk": "[if(empty(trim(parameters('osDiskName'))), format('osdisk-{0}', variables('nameBase')), trim(parameters('osDiskName')))]",
+      "publicIp": "[if(empty(trim(parameters('publicIpName'))), format('pip-{0}', variables('nameBase')), trim(parameters('publicIpName')))]",
+      "resourceGroup": "[resourceGroup().name]",
+      "subnet": "[if(empty(trim(parameters('subnetName'))), format('snet-{0}', variables('nameBase')), trim(parameters('subnetName')))]",
+      "virtualMachine": "[if(empty(trim(parameters('virtualMachineName'))), format('vm-{0}', variables('nameBase')), trim(parameters('virtualMachineName')))]",
+      "virtualNetwork": "[if(empty(trim(parameters('virtualNetworkName'))), format('vnet-{0}', variables('nameBase')), trim(parameters('virtualNetworkName')))]"
+    },
+    "tags": {
+      "application": "goblin",
+      "company": "[trim(parameters('companyName'))]",
+      "environment": "[parameters('environment')]",
+      "managedBy": "goblin-arm"
+    },
+    "workloadPrefix": "[if(equals(variables('companyPrefix'), 'goblin'), 'goblin', format('{0}-goblin', variables('companyPrefix')))]"
+  }
+}
