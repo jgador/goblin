@@ -348,13 +348,6 @@ pub fn download_files(
     files::run(&mut command)
 }
 
-pub fn verify_manifest(github_repository: &str, directory: &Path) -> Result<Release> {
-    let release: Release = json(&directory.join("release.json"))?;
-    validate(&release)?;
-    authenticate(github_repository, &directory.join("release.json"))?;
-    Ok(release)
-}
-
 pub fn verify_archive(directory: &Path) -> Result<Release> {
     let release: Release = json(&directory.join("release.json"))?;
     validate(&release)?;
