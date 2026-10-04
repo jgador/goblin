@@ -2,7 +2,7 @@ name: Goblin checks
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [master, 'release/**']
   merge_group:
   workflow_dispatch:
 permissions:
