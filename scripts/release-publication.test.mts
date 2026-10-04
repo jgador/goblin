@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import {
+    inspectPublication,
     publishPair,
     type Publication,
     type PublicationHost,
@@ -79,7 +80,8 @@ function githubFixture() {
                 const released = releases.get(
                     route.slice("releases/tags/".length),
                 );
-                return released
+                // GitHub's tag endpoint only returns published releases.
+                return released && !released.draft
                     ? {
                           ...released,
                           assets: [...released.files.keys()].map((name) => ({
@@ -87,6 +89,19 @@ function githubFixture() {
                           })),
                       }
                     : null;
+            }
+            const page = /^releases\?per_page=100&page=(\d+)$/.exec(route);
+            if (method === "GET" && page) {
+                const start = (Number(page[1]) - 1) * 100;
+                return [...releases.values()]
+                    .sort((left, right) => right.id - left.id)
+                    .slice(start, start + 100)
+                    .map((released) => ({
+                        ...released,
+                        assets: [...released.files.keys()].map((name) => ({
+                            name,
+                        })),
+                    }));
             }
             if (method === "POST" && route === "git/refs") {
                 const tag = body.ref.slice("refs/tags/".length);
@@ -211,6 +226,34 @@ test("a conflict in the Goblin version stops before publishing an installer", (t
         /another source/,
     );
     assert.equal(github.mutations.length, 0);
+});
+
+test("draft recovery discovers retained candidates beyond the first page of releases", (t) => {
+    const { installer, goblin } = fixture(t);
+    const github = githubFixture();
+    github.interrupt(2 + installer.names.length);
+    assert.throws(
+        () => publishPair(installer, goblin, "built", github.host),
+        /Simulated connection loss/,
+    );
+    const retained = github.releases.get(installer.tag)!;
+    for (let index = 0; index < 100; index++) {
+        const tag = "goblinctl-v9.0." + index;
+        github.releases.set(tag, {
+            ...retained,
+            id: retained.id + index + 1,
+            tag_name: tag,
+            files: new Map(),
+        });
+    }
+    assert.equal(github.host.api("releases/tags/" + installer.tag), null);
+    const before = github.mutations.length;
+    const inspected = inspectPublication(installer, github.host);
+    assert.ok(inspected);
+    assert.equal(inspected.released.id, retained.id);
+    assert.equal(inspected.released.draft, true);
+    assert.deepEqual(inspected.missing, []);
+    assert.equal(github.mutations.length, before);
 });
 
 test("changed candidate bytes cannot take over an incomplete publication", (t) => {

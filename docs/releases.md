@@ -292,7 +292,9 @@ original preparation attempt. A retried publication job may require environment
 approval again; there is still one publication job for the pair.
 
 Publication first verifies existing tags, drafts and assets against the retained
-candidate. It adds only missing draft assets, verifies every uploaded byte before
+candidate. Drafts are discovered through GitHub's paginated release list because
+the release-by-tag endpoint only returns published releases. Publication adds
+only missing draft assets, verifies every uploaded byte before
 publishing the draft, and skips completed components. If goblinctl was published
 but Goblin failed, the retry verifies goblinctl and finishes Goblin. Conflicting
 tags, foreign drafts, changed assets or incomplete already-published releases stop
