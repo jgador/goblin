@@ -179,6 +179,19 @@ function publicationMarker(spec: Publication) {
         " -->"
     );
 }
+function findPublication(tag: string, host: PublicationHost) {
+    const published = host.api("releases/tags/" + tag);
+    if (published) return published;
+    // The tag endpoint excludes drafts, even for their author. The release list
+    // includes drafts visible to this token, including interrupted publications.
+    for (let page = 1; ; page++) {
+        const releases = host.api("releases?per_page=100&page=" + page);
+        assert.ok(Array.isArray(releases), "Could not list release drafts");
+        const released = releases.find((entry: any) => entry.tag_name === tag);
+        if (released) return released;
+        if (releases.length < 100) return null;
+    }
+}
 export function inspectPublication(
     spec: Publication,
     host: PublicationHost = github,
@@ -196,7 +209,7 @@ export function inspectPublication(
             "Release tag identifies another source",
         );
     }
-    const released = host.api("releases/tags/" + spec.tag);
+    const released = findPublication(spec.tag, host);
     if (!released) return null;
     assert.ok(reference, "Existing release has no source tag");
     assert.equal(
@@ -267,7 +280,10 @@ export function publishAssets(
         ]);
     // Verify every uploaded byte while still a draft. Only then expose the release.
     const verified = inspectPublication(spec, host);
-    assert.ok(verified);
+    assert.ok(
+        verified,
+        `Release ${spec.tag} could not be found after uploading assets; recover the original run`,
+    );
     assert.equal(verified.missing.length, 0, "Uploaded release is incomplete");
     if (verified.released.draft)
         host.api("releases/" + verified.released.id, "PATCH", {
