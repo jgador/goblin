@@ -1,9 +1,61 @@
 # Goblin release workflow plan
 
-Status: implemented in the working tree, 2026-09-29, and updated to keep Azure
-installation manual at the maintainer's request. The [release guide](releases.md)
-documents operation and required repository setup. Repository automation does
-not authenticate to Azure, perform live installations, or manage cloud resources.
+Status: stabilization and backports are the current implementation phase;
+coordinated publication is the follow-up. The [release guide](releases.md)
+documents the branch and backport procedure and required repository setup.
+Repository automation does not authenticate to Azure, perform live installations,
+or manage cloud resources.
+
+## Current rollout
+
+1. **Establish stabilization branches and checks — issue #41.** Develop on
+   `master`; cut `release/<major>.<minor>` from a checked master commit when a line
+   is ready for stabilization. Run `goblin-checks` for PRs targeting either branch
+   family and pushes to both. Apply the same active PR and status-check protections
+   to both, without bypass actors. Creating a release branch requires no tag,
+   published goblinctl, or dependency-pin update. Keep the existing publication
+   workflows unused in this phase.
+2. **Stabilize through targeted backports.** Fix master first in the normal case.
+   Cherry-pick the relevant fix with provenance onto
+   `backport/<major>.<minor>/<issue>-<description>` and open a PR targeting that
+   release line. Resolve conflicts and verify the fix against the release branch.
+   Include required prerequisites deliberately; do not merge all of master into
+   the stabilized line. Document any release-only exception. Apply this process
+   equally to application code, goblinctl, and bundled assets.
+3. **Prepare a coordinated release — planned follow-up.** Freeze a source SHA
+   from the selected release line and choose independent Goblin/goblinctl versions.
+   Reuse authenticated matching goblinctl, or build a new version from the selected
+   source within the same operation. Changes to bundled assets count. Resolve a
+   new goblinctl version without a version-bump PR and restart. Both paths produce
+   one candidate whose release record owns the exact pairing; preparation no
+   longer creates a dependency-pin PR.
+4. **Verify, approve, and publish — planned follow-up.** Test and seal the candidate,
+   then obtain one approval for coordinated publication. Publish newly built
+   goblinctl first, then Goblin using those same verified assets. Update installation
+   delivery afterward and change the recommendation only when requested. Support
+   release-branch sources consistently in source validation and approval policies.
+5. **Recover partial publication — planned follow-up.** Explicitly retry the
+   unfinished publication using the retained, approved candidate after verifying
+   existing tags and assets. Never overwrite a published version. Changed source
+   or artifacts require fresh preparation and approval. Report site delivery and
+   recommendation separately from release publication.
+6. **Service each line with the same operation — planned follow-up.** After a
+   backport, prepare the next candidate from that release branch. A goblinctl build
+   must reflect that branch's shipping inputs even if master has moved ahead.
+
+Steps 1–2 implement [issue #41](https://github.com/jgador/goblin/issues/41). Verify
+the source-check triggers and the live protections for both branch families. No
+release is published as part of this phase. Steps 3–6 must be implemented and
+verified before publication from release branches is enabled; exercise installer
+reuse, changed bundles, backports, version conflicts, and partial-publication
+recovery.
+
+## Existing publication implementation
+
+The remaining sections record the master-only implementation introduced on
+2026-09-29. Its separate goblinctl publication and dependency-pin handoff are
+existing behavior, to be replaced by steps 3–6 above. They are not prerequisites
+for stabilization or backports and are not the coordinated release design.
 
 ## Outcome
 
@@ -24,8 +76,8 @@ verifies their exact pairing.
 
 When a new installer is needed, preparation suggests its version. The maintainer
 explicitly publishes goblinctl, merges the resulting dependency update, and
-resumes Goblin preparation. This is the selected approach for the first version
-of this workflow.
+resumes Goblin preparation. This was the approach implemented for the first
+version of this workflow.
 
 ## 1. Maintainer experience
 
@@ -35,7 +87,8 @@ of this workflow.
 - Installer changes can merge before a corresponding installer is published.
 - Installation links select published Goblin releases. They do not install the
   moving development branch.
-- Introduce maintenance branches only when an actual backport is needed.
+- The current rollout supersedes the original maintenance-only branch policy:
+  cut a release branch for stabilization, then retain it for servicing/backports.
 
 ### Prepare Goblin release
 

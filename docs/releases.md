@@ -1,8 +1,103 @@
 # Goblin releases
 
-Goblin and goblinctl have independent versions. Develop on `master`; install a
-published Goblin release. Source checks allow unreleased installer changes to
-merge. Release preparation decides whether the selected installer can be reused.
+Develop on `master`; stabilize and service each release line on
+`release/<major>.<minor>`. Goblin and goblinctl keep independent versions.
+
+The current phase establishes stabilization branches and backports, as described
+in [issue #41](https://github.com/jgador/goblin/issues/41). It introduces no tagging
+or publication requirement. Existing published releases remain available for
+installation. Coordinated Goblin/goblinctl publication is a follow-up in the
+[release workflow plan](release-workflow-plan.md).
+
+## Development and stabilization
+
+| Branch | Purpose |
+| --- | --- |
+| `master` | Ongoing development and the normal first destination for fixes. |
+| `release/0.1` | Stabilization and later servicing for the `0.1.x` line. |
+| `backport/0.1/<issue>-<description>` | A temporary branch for a targeted fix, merged by PR into `release/0.1`. |
+
+Use feature/fix PRs targeting `master` for ordinary work. Cut a release branch
+when its source is ready for stabilization, before a backport is needed. Continue
+new development on `master`; keep the release branch focused on fixes needed for
+that line. Do not merge all of `master` into an existing release branch.
+
+To cut a line, start with a clean working tree and fetch the current source:
+
+```bash
+git fetch origin
+```
+
+Confirm that `origin/master` is the intended stabilization point and that
+`goblin-checks` passed for that exact commit. Then, for the `0.1` line:
+
+```bash
+git switch --create release/0.1 origin/master
+git push --set-upstream origin release/0.1
+```
+
+Use the appropriate major/minor name for another line. Creating the branch does
+not require publishing goblinctl, updating its dependency pin, or creating a tag.
+Unreleased goblinctl changes may be present in the source being stabilized.
+
+PRs targeting `master` or `release/*`, and pushes to either, run `goblin-checks`.
+The same active ruleset requires PRs, an up-to-date passing check, and resolved
+review conversations; it blocks deletion and force pushes. It has no bypass
+actors and requires no second reviewer, so a sole maintainer can merge a passing
+PR. Once a release branch exists, make changes through PRs rather than direct
+pushes. Branch creation uses an already checked commit from `master`.
+
+## Backport a fix
+
+Normally merge the fix into `master` first. Decide which existing release lines
+need it, and make a separate backport PR for each affected line.
+
+For example, replace `MASTER_FIX_COMMIT` with the commit that landed on `master`:
+
+```bash
+git fetch origin
+git switch --create backport/0.1/123-fix-description origin/release/0.1
+git cherry-pick -x MASTER_FIX_COMMIT
+```
+
+Use the resulting squash commit or the relevant ordinary commits. Do not blindly
+cherry-pick a merge commit. The `-x` option records the original commit so the fix
+can be traced across branches. Resolve conflicts for the release branch's code,
+then use `git cherry-pick --continue`; use `git cherry-pick --abort` to abandon the
+attempt. After resolving conflicts, confirm that the final commit message still
+identifies the original commit. Include any necessary prerequisite fixes explicitly.
+
+Run the checks relevant to the fix on the backport, then push its branch:
+
+```bash
+git push --set-upstream origin backport/0.1/123-fix-description
+```
+
+Open a PR with **base `release/0.1`** and this backport branch as the head. Link the
+original issue/PR and commit, explain why the release line needs the fix, and note
+conflict resolutions and verification. Wait for `goblin-checks` and merge through
+the protected PR flow. Confirm the checks on the resulting release-branch commit
+before using it as a later candidate.
+
+A fix that applies only to an older line may start there; document why it does
+not apply to `master`, or track the corresponding forward fix. Keep this an
+explicit exception to the master-first approach.
+
+Backport application code, goblinctl code, and bundled assets by the same process.
+Do not substitute a newer `master` installer or merge an unrelated dependency-pin
+update to make the backport possible. In the planned coordinated workflow,
+preparation will decide whether the release branch's source can reuse goblinctl
+or needs a new build. Neither cutting a branch nor merging a backport publishes a
+release.
+
+## Publication during this phase
+
+Leave **Prepare Goblin release** and **Publish goblinctl** unused for the
+stabilization/backport phase. They remain master-only, and do not yet implement
+coordinated publication from a release branch. The instructions below describe
+that existing implementation for reference and recovery of existing releases.
+Before publishing from `release/*`, implement the coordinated workflow described
+in the [plan](release-workflow-plan.md).
 
 ## Prepare and publish Goblin
 
@@ -101,13 +196,22 @@ also remain permanently attached to GitHub Releases. The repository-wide GitHub
 
 ## Repository setup
 
-The workflows require configured approval and hosting. On 2026-09-29, the
-`goblin-release` reviewer environment (restricted to `master`) and GitHub Pages
-Actions hosting were configured. PR automation was already enabled. Azure
-credentials and subscription settings are not required. The existing source-check
-ruleset is disabled; activate
-the desired configuration in [`.github/goblin-ruleset.json`](../.github/goblin-ruleset.json)
-after the replacement workflow is merged.
+Source protection is defined in
+[`.github/goblin-ruleset.json`](../.github/goblin-ruleset.json). Apply it as an active
+repository ruleset for `master` and release branches. The
+[live ruleset](https://github.com/jgador/goblin/rules/24076471) is active for both.
+The ruleset uses GitHub's
+`refs/heads/release/**/*` pattern to cover both immediate and nested release
+branch names; Actions uses `release/**`. Verify the live ruleset as well as the
+file. Install `checks.yml` before activating protection in a new repository so
+the required `goblin-checks` job exists. Its PR trigger covers all target branches;
+its push trigger covers `master` and `release/**`.
+
+The existing publication workflows also require configured approval and hosting.
+On 2026-09-29, the `goblin-release` reviewer environment (restricted to `master`)
+and GitHub Pages Actions hosting were configured. PR automation was already
+enabled. Azure credentials and subscription settings are not required. Keep
+publication restrictions unchanged during the stabilization/backport phase.
 
 For a new repository, configure:
 
