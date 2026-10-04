@@ -138,6 +138,10 @@ The repository-local Codex hook formats changed languages (TypeScript, Rust, and
 C#) after each completed turn. See [formatting setup](docs/formatting.md) for tool
 installation, manual commands, and the required hook trust step.
 
+The [repository instruction audit](docs/repository-instruction-audit.md) inventories
+agent and contributor guidance and proposes scoped follow-up changes to reading,
+compatibility, verification, and skill boundaries.
+
 The official artwork, exports, and packaged fonts are organized in
 [`assets/branding/`](assets/branding/README.md). The UI uses
 `frontend/public/assets/branding/icon.svg`, copied from the light-background, icon-only
