@@ -22,7 +22,7 @@ use std::process::Command;
 
 #[derive(Parser)]
 #[command(
-    version,
+    version = goblinctl::VERSION,
     about = "Install and administer Goblin",
     long_about = "Install and administer Goblin. The web UI controls Work; this CLI manages the installation and its infrastructure."
 )]

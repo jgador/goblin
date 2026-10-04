@@ -308,6 +308,20 @@ pub fn compare(current: &Inputs, published: &Inputs, required: &BTreeSet<String>
 }
 
 pub fn download(github_repository: &str, version: &str, destination: &Path) -> Result<()> {
+    download_files(
+        github_repository,
+        version,
+        destination,
+        &[ARCHIVE, "release.json", "SHA256SUMS"],
+    )
+}
+
+pub fn download_files(
+    github_repository: &str,
+    version: &str,
+    destination: &Path,
+    names: &[&str],
+) -> Result<()> {
     validate_version(version)?;
     ensure!(
         github_repository.split('/').count() == 2
@@ -316,28 +330,32 @@ pub fn download(github_repository: &str, version: &str, destination: &Path) -> R
                 .all(|b| b.is_ascii_alphanumeric() || b"/._-".contains(&b)),
         "Invalid GitHub repository"
     );
-    files::run(
-        Command::new("gh")
-            .args([
-                "release",
-                "download",
-                &format!("goblinctl-v{version}"),
-                "--repo",
-                github_repository,
-                "--clobber",
-                "--pattern",
-                ARCHIVE,
-                "--pattern",
-                "release.json",
-                "--pattern",
-                "SHA256SUMS",
-                "--dir",
-            ])
-            .arg(destination),
-    )
+    let mut command = Command::new("gh");
+    command
+        .args([
+            "release",
+            "download",
+            &format!("goblinctl-v{version}"),
+            "--repo",
+            github_repository,
+            "--clobber",
+            "--dir",
+        ])
+        .arg(destination);
+    for name in names {
+        command.args(["--pattern", name]);
+    }
+    files::run(&mut command)
 }
 
-pub fn verify_artifacts(github_repository: &str, directory: &Path) -> Result<Release> {
+pub fn verify_manifest(github_repository: &str, directory: &Path) -> Result<Release> {
+    let release: Release = json(&directory.join("release.json"))?;
+    validate(&release)?;
+    authenticate(github_repository, &directory.join("release.json"))?;
+    Ok(release)
+}
+
+pub fn verify_archive(directory: &Path) -> Result<Release> {
     let release: Release = json(&directory.join("release.json"))?;
     validate(&release)?;
     ensure!(
@@ -349,21 +367,29 @@ pub fn verify_artifacts(github_repository: &str, directory: &Path) -> Result<Rel
             == format!("{}  {ARCHIVE}\n", release.sha256),
         "SHA256SUMS mismatch"
     );
-    // Attest the manifest as well as the archive: the dependency claims must be authenticated.
-    for artifact in [ARCHIVE, "release.json"] {
-        files::run(
-            Command::new("gh")
-                .args(["attestation", "verify"])
-                .arg(directory.join(artifact))
-                .args([
-                    "--repo",
-                    github_repository,
-                    "--signer-workflow",
-                    &format!("{github_repository}/.github/workflows/goblinctl-release.yml"),
-                    "--deny-self-hosted-runners",
-                ]),
-        )?;
-    }
+    Ok(release)
+}
+
+fn authenticate(github_repository: &str, artifact: &Path) -> Result<()> {
+    files::run(
+        Command::new("gh")
+            .args(["attestation", "verify"])
+            .arg(artifact)
+            .args([
+                "--repo",
+                github_repository,
+                "--signer-workflow",
+                &format!("{github_repository}/.github/workflows/goblinctl-release.yml"),
+                "--deny-self-hosted-runners",
+            ]),
+    )
+}
+
+pub fn verify_artifacts(github_repository: &str, directory: &Path) -> Result<Release> {
+    let release = verify_archive(directory)?;
+    // Authenticate the dependency claims as well as the binary bytes.
+    authenticate(github_repository, &directory.join("release.json"))?;
+    authenticate(github_repository, &directory.join(ARCHIVE))?;
     Ok(release)
 }
 

@@ -1,5 +1,6 @@
-//! Goblin releases pair an immutable source revision with a published installer.
+//! Verification and compatibility for the original published Goblin release format.
 use crate::azure;
+#[cfg(test)]
 use crate::dependencies;
 use crate::release;
 use anyhow::Context;
@@ -29,20 +30,8 @@ pub enum Channel {
 
 #[derive(Subcommand)]
 pub enum Task {
-    /// Select a Goblin version and installer, then generate the candidate assets.
-    Prepare {
-        #[arg(long, value_enum, default_value = "preview")]
-        channel: Channel,
-        #[arg(long)]
-        version: Option<String>,
-        #[arg(long, default_value = ".artifacts/goblin")]
-        output: PathBuf,
-        #[arg(
-            long,
-            default_value = "target/x86_64-unknown-linux-musl/release/goblinctl.d"
-        )]
-        depfile: PathBuf,
-    },
+    /// Prepare a coordinated candidate from a checked release-branch commit.
+    Prepare(crate::preparation::Options),
     /// Record successful deployment tests and seal the candidate for publication.
     Seal {
         #[arg(long, default_value = ".artifacts/goblin")]
@@ -90,12 +79,12 @@ pub enum Task {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-struct Version {
-    base: [u64; 3],
-    preview: Option<u64>,
+pub(crate) struct Version {
+    pub(crate) base: [u64; 3],
+    pub(crate) preview: Option<u64>,
 }
 impl Version {
-    fn parse(text: &str) -> Result<Self> {
+    pub(crate) fn parse(text: &str) -> Result<Self> {
         let (base, preview) = match text.split_once("-preview.") {
             Some((base, number)) => (base, Some(number)),
             None => (text, None),
@@ -121,7 +110,7 @@ impl Version {
             preview,
         })
     }
-    fn text(&self) -> String {
+    pub(crate) fn text(&self) -> String {
         let [major, minor, patch] = self.base;
         let base = format!("{major}.{minor}.{patch}");
         match self.preview {
@@ -131,7 +120,7 @@ impl Version {
     }
 }
 
-fn next_version(tags: &[String], channel: Channel) -> Result<String> {
+pub(crate) fn next_version(tags: &[String], channel: Channel) -> Result<String> {
     let versions = tags
         .iter()
         .filter_map(|tag| tag.strip_prefix("goblin-v"))
@@ -189,7 +178,7 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
 fn write(path: &Path, value: &impl Serialize) -> Result<()> {
     files::write_json(path, &serde_json::to_value(value)?, 0o644)
 }
-fn output(name: &str, value: &str) -> Result<()> {
+pub(crate) fn output(name: &str, value: &str) -> Result<()> {
     ensure!(!value.contains(['\n', '\r']), "Invalid Actions output");
     if let Ok(path) = std::env::var(environment::GITHUB_OUTPUT) {
         writeln!(
@@ -199,7 +188,7 @@ fn output(name: &str, value: &str) -> Result<()> {
     }
     Ok(())
 }
-fn summary(message: &str) -> Result<()> {
+pub(crate) fn summary(message: &str) -> Result<()> {
     println!("{message}");
     if let Ok(path) = std::env::var(environment::GITHUB_STEP_SUMMARY) {
         writeln!(fs::OpenOptions::new().append(true).open(path)?, "{message}")?;
@@ -224,49 +213,9 @@ fn clean_source() -> Result<String> {
     ]))?;
     Ok(source)
 }
-fn release_tags() -> Result<Vec<String>> {
-    // Include drafts to reserve incomplete publications. Pagination also detects API failures.
-    let response = files::output(Command::new("gh").args([
-        "api",
-        "--paginate",
-        "--slurp",
-        &format!("repos/{}/releases?per_page=100", release::GITHUB_REPOSITORY),
-    ]))?;
-    let pages: Vec<Vec<serde_json::Value>> = serde_json::from_str(&response)?;
-    let mut tags = pages
-        .into_iter()
-        .flatten()
-        .map(|item| {
-            item["tag_name"]
-                .as_str()
-                .map(str::to_owned)
-                .context("Release has no tag")
-        })
-        .collect::<Result<Vec<_>>>()?;
-    // A failed publication can leave a tag before its draft release exists.
-    // Reserve those versions too, before preparing another candidate.
-    let refs =
-        files::output(Command::new("git").args(["ls-remote", "--tags", "--refs", "origin"]))?;
-    for line in refs.lines() {
-        let (_, reference) = line.split_once('\t').context("Invalid remote tag")?;
-        tags.push(
-            reference
-                .strip_prefix("refs/tags/")
-                .context("Invalid tag reference")?
-                .to_owned(),
-        );
-    }
-    Ok(tags)
-}
-
 pub fn execute(root: &Path, task: Task) -> Result<()> {
     match task {
-        Task::Prepare {
-            channel,
-            version,
-            output,
-            depfile,
-        } => prepare(root, channel, version.as_deref(), &output, &depfile),
+        Task::Prepare(options) => crate::preparation::execute(root, options),
         Task::Seal { directory } => {
             let record = seal(
                 &directory,
@@ -327,120 +276,6 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
             )
         }
     }
-}
-
-fn prepare(
-    root: &Path,
-    channel: Channel,
-    requested: Option<&str>,
-    directory: &Path,
-    depfile: &Path,
-) -> Result<()> {
-    let source = clean_source()?;
-    dependencies::check(root)?;
-    let tags = release_tags()?;
-    let version = requested.map_or_else(|| next_version(&tags, channel), |v| Ok(v.to_owned()))?;
-    let parsed = Version::parse(&version)?;
-    ensure!(
-        (parsed.preview.is_some()) == (channel == Channel::Preview),
-        "Version must match the selected release channel"
-    );
-    ensure!(
-        !tags.contains(&format!("goblin-v{version}")),
-        "Goblin version already exists; choose another version"
-    );
-    let pin = dependencies::installer(root)?;
-    let snapshot = release::inputs(root)?;
-    release::coverage(root, depfile, &snapshot)?;
-    let required = release::capabilities(&root.join("deploy/goblinctl-requirements.json"))?;
-    let comparison = release::compare(&snapshot, &pin.installer, &required);
-    output("version", &version)?;
-    output("source", &source)?;
-    if comparison.outcome != release::Outcome::Ready {
-        let workspace = env!("CARGO_PKG_VERSION");
-        if workspace != pin.version && tags.contains(&format!("goblinctl-v{workspace}")) {
-            // Authenticate and compare before changing the dependency selection.
-            release::pin(root, release::GITHUB_REPOSITORY, workspace)?;
-            output("outcome", "pin-required")?;
-            output("installer", workspace)?;
-            return summary(&format!(
-                "## Goblin {version}\n\nPublished goblinctl {workspace} matches. Merge the dependency update PR, then run Prepare Goblin release again."
-            ));
-        }
-        let suggestion = if !tags.contains(&format!("goblinctl-v{workspace}")) {
-            workspace.to_owned()
-        } else {
-            let versions = tags
-                .iter()
-                .filter_map(|tag| tag.strip_prefix("goblinctl-v"))
-                .map(Version::parse)
-                .collect::<Result<Vec<_>>>()?;
-            let mut next = versions
-                .into_iter()
-                .map(|v| v.base)
-                .max()
-                .unwrap_or([0, 1, 0]);
-            next[2] = next[2]
-                .checked_add(1)
-                .context("Installer version overflow")?;
-            Version {
-                base: next,
-                preview: None,
-            }
-            .text()
-        };
-        output("outcome", "installer-required")?;
-        output("installer", &suggestion)?;
-        return summary(&format!(
-            "## Goblin {version}\n\n**New goblinctl release required**\n\nSuggested version: `{suggestion}`. Review/merge the Cargo version bump, run **Publish goblinctl**, merge its dependency PR, then run Prepare again.\n\nChanged inputs:\n{}\n\nMissing capabilities: {:?}",
-            comparison
-                .changed_inputs
-                .iter()
-                .map(|p| format!("- `{p}`"))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            required
-                .difference(&pin.installer.capabilities)
-                .collect::<Vec<_>>()
-        ));
-    }
-    let archive = root.join(".artifacts/goblinctl-check");
-    fs::create_dir_all(&archive)?;
-    release::check(
-        root,
-        release::GITHUB_REPOSITORY,
-        depfile,
-        &archive,
-        &archive.join("check.json"),
-    )?;
-    ensure!(
-        !directory.join("release.json").exists(),
-        "Candidate directory already contains a release; use a fresh output directory"
-    );
-    azure::generate(root, directory, &version, &source)?;
-    let mut assets = BTreeMap::new();
-    for name in azure::ASSETS {
-        assets.insert(name.to_owned(), install::checksum(&directory.join(name))?);
-    }
-    let record = Record {
-        schema_version: 1,
-        version: version.clone(),
-        channel,
-        source_revision: source,
-        installer: pin,
-        run_id: std::env::var(environment::GITHUB_RUN_ID)
-            .context("Prepare runs in GitHub Actions")?,
-        run_attempt: std::env::var(environment::GITHUB_RUN_ATTEMPT)?,
-        assets,
-        deployment_checks: Check::Pending,
-    };
-    write(&directory.join("release.json"), &record)?;
-    output("outcome", "prepared")?;
-    output("installer", &record.installer.version)?;
-    summary(&format!(
-        "## Goblin {version}\n\nInstaller: goblinctl {} — reused\n\nCandidate assets prepared. Deployment tests must pass before publication. Azure installation is performed manually.",
-        record.installer.version
-    ))
 }
 
 fn validate_assets(directory: &Path, record: &Record) -> Result<()> {

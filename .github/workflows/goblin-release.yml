@@ -2,193 +2,66 @@ name: Prepare Goblin release
 on:
   workflow_dispatch:
     inputs:
+      source-branch:
+        description: Stabilization branch (release/major.minor)
+        type: string
+        required: true
       channel:
         description: Release channel
         type: choice
         options: [preview, stable]
         default: preview
       version:
-        description: Goblin version (blank suggests the next version)
+        description: Goblin version (blank suggests the next version in this line)
+        type: string
+      installer-version:
+        description: Optional goblinctl version (reuse if published and matching, otherwise build if unused)
         type: string
       source-sha:
-        description: Advanced — merged source SHA (blank uses this master commit)
+        description: Advanced — full merged SHA (blank freezes the selected branch tip)
         type: string
-      recommend:
-        description: Make recommended after publication
-        type: boolean
-        default: false
 permissions:
   contents: read
   attestations: read
-  actions: read
-  pages: read
+  checks: read
 jobs:
   prepare:
-    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-24.04
-    outputs:
-      outcome: ${{ steps.prepare.outputs.outcome }}
-      version: ${{ steps.prepare.outputs.version }}
-      installer: ${{ steps.prepare.outputs.installer }}
-      source: ${{ steps.prepare.outputs.source }}
-      attempt: ${{ steps.identity.outputs.attempt }}
     steps:
-      - name: Validate source input
+      - name: Require the development workflow
         env:
-          SOURCE: ${{ inputs.source-sha || github.sha }}
-        run: '[[ "$SOURCE" =~ ^[0-9a-f]{40}$ ]]'
+          WORKFLOW_REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [[ "$WORKFLOW_REF" != refs/heads/master || "$REPOSITORY" != jgador/goblin ]]; then
+            echo '::error::Run preparation on jgador/goblin master and select the release branch in Source branch.'
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source-sha || github.sha }}
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-      - uses: actions/setup-dotnet@v4
-        with:
-          global-json-file: global.json
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
-      - id: identity
-        run: echo "attempt=$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Resolve the release and its installer
+      - name: Prepare the coordinated candidate
         id: prepare
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_BRANCH: ${{ inputs.source-branch }}
+          SOURCE_SHA: ${{ inputs.source-sha }}
           CHANNEL: ${{ inputs.channel }}
           VERSION: ${{ inputs.version }}
+          INSTALLER_VERSION: ${{ inputs.installer-version }}
         run: |
-          bash scripts/build-goblinctl-release.sh target
-          args=(--channel "$CHANNEL")
+          args=(--source-branch "$SOURCE_BRANCH" --channel "$CHANNEL")
+          if [[ -n "$SOURCE_SHA" ]]; then args+=(--source-sha "$SOURCE_SHA"); fi
           if [[ -n "$VERSION" ]]; then args+=(--version "$VERSION"); fi
+          if [[ -n "$INSTALLER_VERSION" ]]; then args+=(--installer-version "$INSTALLER_VERSION"); fi
           cargo xtask release prepare "${args[@]}"
       - uses: actions/upload-artifact@v4
-        if: steps.prepare.outputs.outcome == 'pin-required'
-        with:
-          name: installer-pin-${{ github.run_attempt }}
-          path: |
-            dependencies.toml
-            dependencies.lock.json
-          if-no-files-found: error
-      - name: Verify approval and installation hosting settings
-        if: steps.prepare.outputs.outcome == 'prepared'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: node scripts/release-github.mts preflight
-      - name: Test the selected source and published executable
-        if: steps.prepare.outputs.outcome == 'prepared'
-        run: |
-          just fmt-check
-          just clippy --workspace --all-targets -- -D warnings
-          npm ci
-          npm test
-          mkdir -p .artifacts/published-bin
-          tar -xzf .artifacts/goblinctl-check/goblinctl-x86_64-unknown-linux-musl.tar.gz -C .artifacts/published-bin
-          GOBLINCTL_TEST_BINARY=.artifacts/published-bin/goblinctl node --test dist/tests/deployment/*.test.js dist/tests/integration/local-login.test.js
-          npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
-      - uses: actions/upload-artifact@v4
-        if: steps.prepare.outputs.outcome == 'prepared'
         with:
           name: goblin-candidate-${{ github.run_attempt }}
-          path: .artifacts/goblin/*
+          path: .artifacts/goblin/
           if-no-files-found: error
           retention-days: 30
-  pin:
-    needs: prepare
-    if: needs.prepare.outputs.outcome == 'pin-required'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.source }}
-      - uses: actions/download-artifact@v4
-        with:
-          name: installer-pin-${{ needs.prepare.outputs.attempt }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.prepare.outputs.installer }}
-        run: node scripts/release-github.mts pin-pr "$VERSION"
-  ready:
-    name: Ready to publish
-    needs: prepare
-    if: needs.prepare.outputs.outcome == 'prepared'
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-      - uses: ./.github/actions/setup-rust
-      - uses: actions/download-artifact@v4
-        with:
-          name: goblin-candidate-${{ needs.prepare.outputs.attempt }}
-          path: .artifacts/goblin
-      - name: Seal the successful checks and show the summary
-        run: cargo xtask release seal
-      - uses: actions/attest-build-provenance@v2
-        with:
-          subject-path: .artifacts/goblin/*
-      - uses: actions/upload-artifact@v4
-        with:
-          name: goblin-ready-${{ needs.prepare.outputs.attempt }}
-          path: .artifacts/goblin/*
-          if-no-files-found: error
-          retention-days: 30
-  publish:
-    name: Publish Goblin
-    needs: [prepare, ready]
-    runs-on: ubuntu-24.04
-    environment: goblin-release
-    concurrency:
-      group: goblin-publication
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      actions: read
-      pages: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.workflow_sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - uses: ./.github/actions/setup-rust
-      - uses: actions/download-artifact@v4
-        with:
-          name: goblin-ready-${{ needs.prepare.outputs.attempt }}
-          path: .artifacts/goblin
-      - name: Publish the approved candidate
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_SOURCE: ${{ needs.prepare.outputs.source }}
-          PREPARED_ATTEMPT: ${{ needs.prepare.outputs.attempt }}
-        run: |
-          node scripts/release-github.mts preflight
-          node scripts/release-github.mts publish .artifacts/goblin
-  installation-site:
-    needs: [prepare, publish]
-    uses: ./.github/workflows/goblin-install-site.yml
-    with:
-      version: ${{ needs.prepare.outputs.version }}
-      recommend: ${{ inputs.recommend }}
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-      attestations: read

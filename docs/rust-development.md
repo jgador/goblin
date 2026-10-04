@@ -74,6 +74,14 @@ dotslash --version
 | `just test-doc --workspace` | Run Rust documentation tests, which nextest excludes |
 | `just release` | Build the musl CLI and create the deterministic review archive |
 | `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
+| `cargo xtask release prepare --source-branch release/0.1` | In Actions, prepare an unpublished Goblin/goblinctl candidate from checked release-branch source |
+
+Coordinated preparation supplies `GOBLINCTL_BUILD_VERSION` only to the isolated
+native build. All installer version reporting uses that compiled value, defaulting
+to the Cargo package version for ordinary builds. Packaging records the selected
+version, original source SHA, shipping inputs, and archive checksum. It reads
+license documents from the selected source, including when tooling runs from a
+newer master commit. See [the release guide](releases.md).
 
 `just fmt` passes `--config imports_granularity=Item` directly to rustfmt, exactly
 as Codex does. Keeping this option on the command line avoids the pinned stable

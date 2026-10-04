@@ -128,7 +128,7 @@ impl InstallRequest {
 
 pub fn metadata() -> serde_json::Value {
     serde_json::json!({
-        "version": env!("CARGO_PKG_VERSION"),
+        "version": crate::VERSION,
         "installRequest": schemars::schema_for!(InstallRequest)
     })
 }
