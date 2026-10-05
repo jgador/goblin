@@ -17,7 +17,7 @@ images.
 | --- | --- | --- |
 | Rust and Cargo | 1.95.0 in `rust-toolchain.toml`, matching Codex | Compiler and package manager |
 | Clippy, rustfmt, rust-src | Components of that toolchain, matching Codex | Linting, formatting, standard-library source navigation |
-| just | 1.51.0, matching Codex CI | Shared development commands |
+| GNU Make | Supplied by Ubuntu/WSL build-essential and GitHub runners | Repository development targets |
 | cargo-nextest | 0.9.103, matching Codex CI | Rust test runner |
 | cargo-insta | 1.46.3, matching Codex's locked `insta` library | Review snapshot tests when used |
 | DotSlash | 0.5.7 | Run checksum-pinned executable manifests when used |
@@ -26,7 +26,7 @@ Codex's installation guide leaves `cargo-insta` and DotSlash CLI versions
 unpinned. Goblin pins those installations for reproducibility; DotSlash 0.5.7 was
 the current published version when this setup was added. Neither helper is a
 production dependency. Goblin currently has no Insta snapshots or DotSlash
-manifests, so its required checks use just and nextest.
+manifests, so its required checks use Make and nextest.
 
 On Ubuntu 24.04 / WSL2, install the system prerequisites:
 
@@ -40,9 +40,9 @@ user. The setup script is safe to rerun and uses the version in
 `rust-toolchain.toml`; do not run it through `sudo`:
 
 ```bash
-bash scripts/setup-rust.sh
+make setup-rust
 source "$HOME/.cargo/env"
-just install
+make install-rust
 ```
 
 The script also installs `x86_64-unknown-linux-musl`, which matches Codex's Linux
@@ -52,7 +52,7 @@ Rust is installed per Linux user. To check the setup:
 ```bash
 rustup show
 rustup component list --installed
-just --version
+make --version
 cargo nextest --version
 cargo insta --version
 dotslash --version
@@ -62,17 +62,17 @@ dotslash --version
 
 | Command | Behavior |
 | --- | --- |
-| `just build --workspace` | Build both Rust crates using the lockfile |
-| `just goblinctl --help` | Run the operator CLI from source |
-| `just fmt` | Format the justfile and Rust, with one imported item per `use` |
-| `just fmt-check` | Check the same formatting without modifying files |
-| `just clippy -p goblinctl` | Lint a crate and its tests |
-| `just clippy --workspace --all-targets -- -D warnings` | Run the CI lint checks |
-| `just fix -p goblinctl` | Apply Clippy's automatic fixes; inspect the resulting diff |
-| `just test -p goblinctl` | Run selected tests with nextest |
-| `just test --workspace` | Run all Rust tests with nextest |
-| `just test-doc --workspace` | Run Rust documentation tests, which nextest excludes |
-| `just release` | Build the musl CLI and create the deterministic review archive |
+| `make build-native` | Build both Rust crates using the lockfile |
+| `make goblinctl ARGS=--help` | Run the operator CLI from source |
+| `make format-rust` | Format Rust, with one imported item per `use` |
+| `make format-rust-check` | Check the same formatting without modifying files |
+| `make lint-rust CARGO_ARGS="-p goblinctl"` | Lint a crate and its tests |
+| `make lint-rust` | Run the CI lint checks |
+| `make fix-rust CARGO_ARGS="-p goblinctl"` | Apply Clippy's automatic fixes; inspect the resulting diff |
+| `make test-rust CARGO_ARGS="-p goblinctl"` | Run selected tests with nextest and then documentation tests |
+| `make test-rust` | Run all Rust tests with nextest and then documentation tests |
+| `make test-rust-doc` | Run Rust documentation tests, which nextest excludes |
+| `make release-local` | Build the musl CLI and create the deterministic review archive |
 | `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
 | `cargo xtask release prepare --source-branch release/0.1` | In Actions, prepare an unpublished Goblin/goblinctl candidate from checked release-branch source |
 
@@ -83,10 +83,10 @@ version, original source SHA, shipping inputs, and archive checksum. It reads
 license documents from the selected source, including when tooling runs from a
 newer master commit. See [the release guide](releases.md).
 
-`just fmt` passes `--config imports_granularity=Item` directly to rustfmt, exactly
+`make format-rust` passes `--config imports_granularity=Item` directly to rustfmt, exactly
 as Codex does. Keeping this option on the command line avoids the pinned stable
 formatter ignoring it as an unstable TOML configuration setting. The hook,
-npm scripts, editor, and CI use the same formatting rule.
+Make targets, editor, and CI use the same formatting rule.
 
 Both crates inherit Codex's general workspace Clippy rules. `clippy.toml` permits
 `unwrap`/`expect` in tests and prohibits holding Tokio lock guards across awaits.
@@ -103,7 +103,7 @@ Goblin omits Codex's explicit `inherits` key because 0.9.103 warns that it is un
 Avoid `--all-features` for routine local runs. Review snapshot differences before
 using `cargo insta accept`; the tool is installed for tests that need it.
 
-`npm test` builds the full application and runs nextest plus Rust documentation
+`make test` builds the full application and runs nextest plus Rust documentation
 tests, generated-protocol checks, .NET tests, HTTP tests, and deployment tests.
 Real PostgreSQL checks remain opt-in. `.github/workflows/checks.yml` runs the
 Rust checks for pull requests and `master`; the release workflow uses the same
@@ -138,7 +138,7 @@ profile structure. Goblin retains its existing development optimization for the
 
 ## Boundaries
 
-The shared workflow uses Bash for just recipes and Rust for `xtask`, preserving
+The shared workflow uses Bash for Make recipes and Rust for `xtask`, preserving
 Goblin's Python-free tooling. Codex's Python formatter wrapper, Bazel build graph,
 custom nightly argument-comment compiler plugin, voice/V8 build dependencies,
 and platform-specific test overrides belong to Codex's application. They are not
@@ -148,7 +148,7 @@ that Goblin does not compile; Goblin's musl build is checked directly in CI.
 
 All development tools stay on developer machines and CI runners. Production
 receives the compiled `goblinctl` archive described in [the native tooling
-guide](goblinctl.md), without Rust, Cargo, just, nextest, or Python.
+guide](goblinctl.md), without Rust, Cargo, Make, nextest, or Python.
 
 ## Verification — 2026-09-27
 
@@ -156,7 +156,7 @@ The setup script installed all listed versions and a second run left them in
 place. The WSL editor extensions were installed, and the debugger configuration
 was checked against CodeLLDB's configuration schema. Formatting, Clippy, all
 seven nextest cases, the documentation-test command, and the complete Stop hook
-passed. The full `npm test` suite, four setup browser journeys, and 14 focused
+passed. The full `make test` suite, four setup browser journeys, and 14 focused
 checks against the refreshed musl archive also passed. Repeated packaging produced
 identical archive bytes, and the archive checksum agrees with the release pin
 and both ARM templates.

@@ -3,11 +3,12 @@ FROM node:26.10.0-bookworm-slim AS assets
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY frontend/package.json ./frontend/package.json
+COPY frontend/package.json frontend/package-lock.json ./frontend/
 # The lockfile pins Codex and its platform-specific prebuilt Rust runtime.
-RUN npm ci
+RUN npm ci --omit=dev
+RUN npm --prefix frontend ci
 COPY frontend ./frontend
-RUN npm run build:assets
+RUN npm --prefix frontend run build
 # Download the pinned GitHub CLI release and verify its checksum.
 COPY deploy/install-gh.mjs /tmp/install-gh.mjs
 RUN node /tmp/install-gh.mjs

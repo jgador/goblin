@@ -32,6 +32,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
@@ -46,12 +49,10 @@ jobs:
           echo "version=$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "goblinctl") | .version')" >> "$GITHUB_OUTPUT"
       - name: Verify candidate source
         run: |
-          just fmt-check
-          just clippy --workspace --all-targets -- -D warnings
-          npm ci
-          npm test
-          npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
+          make install
+          make check
+          make browser-install
+          make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
       - name: Build from clean source and test the packaged executable
         run: |
           cargo xtask release build-installer --output .artifacts/goblinctl

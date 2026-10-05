@@ -53,7 +53,7 @@ full process environments, or secret-bearing connection strings.
 1. Confirm the host is the intended WSL environment. Check
    `/var/lib/goblin/local-test/config.json`: `mode` must be `direct` and `repo`
    must match this resolved checkout. Record `http_port` and optional
-   `postgres_port`. Use `npm run install:local -- status` when ownership exists.
+   `postgres_port`. Use `make local-status` when ownership exists.
    A missing installation is a valid repeat-cleanup case, not a reason to start one.
 2. Inspect the installation's systemd units, k3s configuration/drop-ins, uninstall
    and killall scripts, storage paths, and mounts. Check for a custom
@@ -130,7 +130,7 @@ to preserve.
 For the standard, verified local installation, run from the repository root:
 
 ```bash
-env -u K3S_DATA_DIR npm run install:local -- reset --yes
+env -u K3S_DATA_DIR make local-reset ARGS=--yes
 ```
 
 The runner requests sudo if needed. Its reset stops the installer **before** setup
@@ -246,12 +246,12 @@ blockers, and verification results. Give the next command without running it
 unless the user separately asked to reinstall:
 
 ```bash
-npm run install:local -- start
+make local-start
 ```
 
 The default Windows browser address is `http://localhost:8788`. A new password is
 chosen in the terminal after the verifier is removed, unless the user deliberately
-supplies `GOBLIN_LOCAL_PASSWORD`. `npm start` launches only the direct application
+supplies `GOBLIN_LOCAL_PASSWORD`. `make dev` launches only the direct application
 on port 8787 and does **not** show installation progress. Windows browser site data
 is not cleared by WSL cleanup; suggest a private window or clearing only this
 localhost site's data if the user also wants a fresh browser session.

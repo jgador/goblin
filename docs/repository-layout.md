@@ -27,7 +27,7 @@ backend/
 tools/goblinctl/            Native operator CLI and shared installation code
 tools/xtask/               Developer and release tooling
 Cargo.toml                 Rust workspace; toolchain and dependencies are pinned
-justfile                   Rust development commands shared by local checks and CI
+Makefile                   Repository task runner for builds, checks, and local operations
 .config/nextest.toml        Rust test-runner profiles
 .vscode/                   Rust/TOML editing and native debugging configuration
 frontend/
@@ -36,7 +36,7 @@ frontend/
   src/api/contracts.ts     Goblin HTTP types used by the UI and application tests
   public/assets/           Static assets copied into the browser build
   scripts/                 Browser build helpers
-  package.json             Frontend npm workspace and TypeScript dependency
+  package.json             Standalone frontend npm package and TypeScript dependency
   tsconfig.json            Browser compiler settings; no Node.js types
 tests/
   integration/             HTTP tests against the C# test host
@@ -56,9 +56,15 @@ TypeScript catalogs, shared semantics, and contributor guidance.
 The [TypeScript refactoring review](typescript-refactoring.md) records the current
 browser boundaries, file inventory, and next implementation steps.
 
-The root `package.json` coordinates builds and application tests and pins the
-Codex runtime distribution. npm workspaces use one root `package-lock.json`;
-`npm ci` installs both repository and frontend dependencies. The root
+The root `Makefile` coordinates builds, checks, tests, and local operations.
+The root `package.json` has no task scripts or npm workspaces; it only pins
+non-frontend Node tooling (Playwright, Prettier, TypeScript, Node types) and the
+Codex runtime distribution. Its `package-lock.json` preserves the runtime and
+tool pins. `frontend/package.json` and `frontend/package-lock.json` independently
+own frontend dependencies and npm scripts. No backend or test tooling is added
+to the frontend package. `make install` installs both locked Node packages and
+fetches locked Rust dependencies; first install the Rust helpers with
+`make setup-rust` and load the Cargo environment as described below. The root
 `tsconfig.json` compiles Node.js test tooling, while `frontend/tsconfig.json`
 compiles browser source independently. `global.json` stays at the root so the
 pinned .NET SDK applies to commands run from either the root or `backend/`.
@@ -69,8 +75,8 @@ semantics, including when a test copies a script outside the repository. These
 scripts do not depend on compiled output or an installed TypeScript runner.
 `tsconfig.scripts.json` checks them without emitting files and permits only
 erasable TypeScript syntax. Native Node execution strips types without checking
-them; `npm run typecheck:scripts` performs that check as part of the full build
-and `npm run typecheck`.
+them; `make typecheck-scripts` performs that check as part of the full build
+and `make typecheck`.
 
 The installer page in `deploy/azure/setup/app.js` remains JavaScript because the
 native goblinctl setup server packages it directly for the browser. Moving its source
@@ -78,28 +84,59 @@ to TypeScript would require generating and checking the packaged JavaScript.
 
 ## Build and test
 
+Install GNU Make, Node.js 24+, and the .NET SDK selected by `global.json`. On
+Ubuntu/WSL, `build-essential` includes Make. Then run:
+
+```bash
+make setup-rust
+source "$HOME/.cargo/env"
+make install
+```
+
+Use `make help` to list targets. Workflows are serialized even with `make -j`
+because cleaning compiled tools and copying frontend assets share build outputs.
+Pass tool options through `ARGS`, for example
+`make test-browser ARGS="tests/e2e/setup.spec.ts --headed"` or
+`make local-start ARGS="--http-port 8888"`. Rust selectors use `CARGO_ARGS`, for
+example `make test-rust CARGO_ARGS="-p goblinctl"`.
+
+Frontend-only work continues inside its own package:
+
+```bash
+cd frontend
+npm ci
+npm run build
+npm run typecheck
+```
+
+
 | Command | Purpose |
 | --- | --- |
-| `npm ci` | Install the locked workspace dependencies |
-| `bash scripts/setup-rust.sh` | Install the pinned Rust development tools |
-| `just fmt` | Format Rust and the justfile using Codex conventions |
-| `just clippy --workspace --all-targets -- -D warnings` | Lint the Rust workspace |
-| `just test --workspace` | Run Rust tests with nextest |
-| `npm run build` | Build native tools, frontend assets, test tooling, and the .NET solution |
-| `npm start` | Build, provision the local password on first run, and start the application |
-| `npm run setup:password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
-| `npm run build:assets` | Build only the frontend |
-| `npm run build --workspace frontend` | Run the frontend workspace build directly |
-| `npm run build:backend` | Build the .NET solution using any existing frontend output |
-| `npm run typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
-| `npm run typecheck:scripts` | Check directly executed TypeScript scripts without building |
-| `npm test` | Build, check protocol generation, and run .NET, HTTP, and deployment tests |
-| `npm run test:browser` | Build and run Playwright journeys |
-| `npm run test:codex` | Build and check the pinned Codex binary with isolated test credentials |
-| `npm run protocol:generate` | Regenerate C# models from the checked-in schemas |
-| `npm run protocol:check` | Verify that generated models match the schemas |
-| `npm run kubernetes:generate` | Regenerate selected Kubernetes and Agent Sandbox models |
-| `npm run kubernetes:check` | Verify those models match the pinned schemas and selection |
+| `make install` | Install both locked Node packages and fetch locked Rust dependencies |
+| `make setup-rust` | Install the pinned Rust development tools |
+| `make format-rust` | Format Rust using Codex conventions |
+| `make lint-rust` | Lint the Rust workspace |
+| `make test-rust` | Run Rust tests with nextest and then documentation tests |
+| `make check` | Run Rust formatting/lints, the full offline test suite, and type checks |
+| `make format` | Format TypeScript, Rust, and handwritten C# |
+| `make local-start` | Start the full local installation with existing safety checks |
+| `make local-status` | Report installation status without changing it |
+| `make local-reset ARGS=--yes` | Explicitly reset only the owned local installation |
+| `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
+| `make dev` | Build, provision the local password on first run, and start the application |
+| `make setup-password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
+| `make build-assets` | Build only the frontend |
+| `npm --prefix frontend run build` | Run the frontend package build directly |
+| `make build-backend` | Build the .NET solution using any existing frontend output |
+| `make typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
+| `make typecheck-scripts` | Check directly executed TypeScript scripts without building |
+| `make test` | Build, check protocol generation, and run .NET, HTTP, and deployment tests |
+| `make test-browser` | Build and run Playwright journeys |
+| `make test-codex` | Build and check the pinned Codex binary with isolated test credentials |
+| `make protocol-generate` | Regenerate C# models from the checked-in schemas |
+| `make protocol-check` | Verify that generated models match the schemas |
+| `make kubernetes-generate` | Regenerate selected Kubernetes and Agent Sandbox models |
+| `make kubernetes-check` | Verify those models match the pinned schemas and selection |
 
 After building frontend assets, publish with:
 

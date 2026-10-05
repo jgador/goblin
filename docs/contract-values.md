@@ -30,16 +30,16 @@ to be called `codex` are separate adapter details.
 Edit the owning C# enum or Rust `contract_values!` declaration, then run:
 
 ```bash
-npm run contracts:generate
-npm run contracts:check
-npm run test:contracts
+make contracts-generate
+make contracts-check
+make test-contracts
 ```
 
 The small generator extracts explicit declarations into `frontend/src/api/values.ts`
 and `deploy/azure/setup/contract-values.js`. It rejects aliases, assigned numeric
 values, duplicate values, or syntax it cannot interpret. Add a source/type entry
 to the generator when a new enum crosses a browser boundary. Never edit generated
-values directly. `npm test` and `npm run typecheck` reject stale generated files;
+values directly. `make test` and `make typecheck` reject stale generated files;
 compile-time regression checks prevent HTTP types widening back to `string`.
 
 TypeScript uses both the generated named constants and their literal unions.

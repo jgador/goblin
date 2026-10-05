@@ -155,7 +155,7 @@ Run the core scenarios and boundary check with:
 dotnet test backend/tests/Goblin.Core.Tests
 ```
 
-The solution and `npm test` include this project. The tests cover attention for
+The solution and `make test` include this project. The tests cover attention for
 every failure category, explicit retries, execution ownership, stale events,
 uncertainty, cancellation races, decisions, revisions, and approval. Real PostgreSQL and process tests in `Goblin.Application.Tests` cover command
 deduplication, dispatch, restart, reservations, uncertainty, and cleanup. Browser

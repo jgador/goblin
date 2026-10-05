@@ -60,7 +60,7 @@ enabled explicitly for this deployment; traffic is unencrypted until you add HTT
 To test the full installation directly in WSL/Ubuntu, use the [local installer](deploy/local/README.md):
 
 ```bash
-npm run install:local -- start
+make local-start
 ```
 
 Open **http://localhost:8788** in Windows to follow installation and enter Goblin
@@ -81,15 +81,18 @@ whole WSL or Azure Linux VM, including processes outside Kubernetes.
 To try authentication first:
 
 ```bash
-# Requires .NET 10 SDK, Node.js 24+, and the Ubuntu build prerequisites.
-bash scripts/setup-rust.sh
+# Requires GNU Make, .NET 10 SDK, Node.js 24+, and the Ubuntu build prerequisites.
+make setup-rust
 source "$HOME/.cargo/env"
-npm ci
-npm start
+make install
+make dev
 ```
 
 The [Rust development guide](docs/rust-development.md) documents the Codex-aligned
-toolchain, just commands, nextest runner, formatting, and editor/debugger setup.
+toolchain, Make targets, nextest runner, formatting, and editor/debugger setup.
+Use `make help` for the full target list, or `make build`, `make test`,
+`make check`, and `make format` for common workflows. Frontend-only commands
+remain npm commands inside `frontend/`; see [repository tasks](docs/repository-layout.md#build-and-test).
 
 On first start, choose and confirm your password in the terminal. Open
 http://localhost:8787, enter that password, and click **Open workspace**.
@@ -104,8 +107,8 @@ release; installed hosts do not require Python or a Rust compiler.
 The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official
 Rust `codex app-server`; the browser UI remains TypeScript. Protocol models are
 generated from the checked-in schemas using `System.Text.Json`.
-`npm start` builds the browser assets and .NET solution, then starts the C# host.
-Use `npm run typecheck` for TypeScript checks and a .NET build, or `npm test`
+`make dev` builds the browser assets and .NET solution, then starts the C# host.
+Use `make typecheck` for TypeScript checks and a .NET build, or `make test`
 for schema drift checks (.NET), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for the current
 Codex integration, model regeneration, and direct .NET commands.
@@ -123,15 +126,15 @@ require attention and explicit recovery.
 
 Durable Work requires a configured, migrated PostgreSQL database. The installer
 sets this up before starting Goblin. For direct local development, follow the
-[database guide](docs/database.md) first, then run `npm start`. Set
+[database guide](docs/database.md) first, then run `make dev`. Set
 `GOBLIN_WORK_ENABLED=false` to manage connections without PostgreSQL.
 [Execution hosting](docs/execution-hosting.md) covers repository sandboxes,
 GitHub sign-in, credentials, recovery, and current validation limits.
 
 To check for API keys and other secrets before committing, install the free local
-Gitleaks CLI and run `npm run secrets:setup` once per checkout. Run
-`npm run secrets:scan` for a manual check of the index and working tree, or
-`npm run secrets:history` to check existing commits before a push. See the
+Gitleaks CLI and run `make secrets-setup` once per checkout. Run
+`make secrets-scan` for a manual check of the index and working tree, or
+`make secrets-history` to check existing commits before a push. See the
 [secret-scanning guide](docs/secret-scanning.md) for installation and scan scope.
 
 The repository-local Codex hook formats changed languages (TypeScript, Rust, and

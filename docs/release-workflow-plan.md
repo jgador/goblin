@@ -378,17 +378,17 @@ GitHub workflow orchestration thin.
   source checks still run for ordinary and automation-created PRs.
 
 Verification uses focused release-decision and failure-path tests, existing
-deployment/authentication/browser tests, the required Rust checks, and `npm test`.
+deployment/authentication/browser tests, the required Rust checks, and `make test`.
 Record manual Azure verification and PostgreSQL/runtime coverage accurately. The
 final release exercise must demonstrate both the reused-installer path and the
 deliberate new-installer path.
 
 ## Implementation verification — 2026-09-29
 
-- `npm test` passed: 35 Rust tests, 246 .NET tests, six release orchestration
+- `make test` passed: 35 Rust tests, 246 .NET tests, six release orchestration
   checks, and 97 HTTP/deployment checks. The 39 .NET PostgreSQL tests and one Work
   HTTP persistence test were skipped because their live database was unconfigured.
-- The final focused `just test -p xtask` run passed all 21 tests; Clippy and script
+- The final focused `make test-rust CARGO_ARGS="-p xtask"` run passed all 21 tests; Clippy and script
   type checks passed.
 - All six setup/installation-selector Playwright checks passed.
 - All 20 secret-scanner regression tests passed; the repository scan reported no

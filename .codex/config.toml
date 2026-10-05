@@ -19,27 +19,24 @@ has_changes() {
 
 if has_changes '*.ts' '*.tsx' '*.mts' '*.cts'; then
     if [ -x node_modules/.bin/prettier ]; then
-        npm run format:typescript >&2
+        make format-typescript >&2
     else
-        printf '%s\n' 'Skipping TypeScript formatting: run npm ci to install Prettier.' >&2
+        printf '%s\n' 'Skipping TypeScript formatting: run make install to install Prettier.' >&2
     fi
 fi
 
-if has_changes '*.rs' justfile; then
-    # Cargo and the pinned just helper are installed through the Rust setup script.
-    if ! command -v cargo >/dev/null 2>&1 || ! command -v just >/dev/null 2>&1; then
+if has_changes '*.rs'; then
+    # Cargo is installed through the Rust setup script.
+    if ! command -v cargo >/dev/null 2>&1; then
         export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
     fi
-    npm run format:rust >&2
+    make format-rust >&2
 fi
 
 if has_changes '*.cs' \
     ':(exclude)backend/src/Goblin.Protocol/Generated/**' \
     ':(exclude)backend/src/Goblin.Persistence/Generated/**'; then
-    cd backend
-    # Generated protocol types and EF mappings must stay reproducible.
-    dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
-    dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 IDE1006 --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated >&2
+    make format-backend >&2
 fi
 printf '{}\n'
 '''

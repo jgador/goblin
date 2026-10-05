@@ -19,7 +19,6 @@ rustup show active-toolchain
 rustup target add x86_64-unknown-linux-musl
 
 # These versions match Codex's CI helper pins.
-cargo install --locked just --version 1.51.0
 cargo install --locked cargo-nextest --version 0.9.103
 # Match Codex's snapshot library; its install guide leaves the CLI unpinned.
 cargo install --locked cargo-insta --version 1.46.3

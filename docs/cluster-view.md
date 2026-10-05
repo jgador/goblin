@@ -60,12 +60,12 @@ before declaring the installation complete.
 
 ## Development and checks
 
-A standalone `npm start` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
+A standalone `make dev` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
 optionally points the backend at a trusted private Headlamp origin configured
 with `-base-url=/headlamp`. Kubernetes manifests set it automatically. Do not
 point it at an arbitrary third-party service.
 
-`npm test` includes authenticated proxy, local/Azure Host and Origin, streaming,
+`make test` includes authenticated proxy, local/Azure Host and Origin, streaming,
 credential filtering, route restrictions, and installer tests. For the real
 Headlamp/browser check against an existing cluster, temporarily forward its
 private Service in one terminal:
@@ -77,7 +77,7 @@ kubectl port-forward -n goblin service/goblin-headlamp 14466:4466 --address 127.
 Then run:
 
 ```bash
-GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 npm run test:headlamp
+GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make test-headlamp
 ```
 
 This uses isolated Goblin authentication and real Kubernetes reads, without saved
