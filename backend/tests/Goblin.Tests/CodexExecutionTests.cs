@@ -36,7 +36,7 @@ public sealed class CodexExecutionTests
         var source = new DirectoryInfo(AppContext.BaseDirectory);
         while (source is not null && !File.Exists(Path.Combine(source.FullName, "package.json"))) source = source.Parent;
         string cli = Path.Combine(source!.FullName, "node_modules/@openai/codex/bin/codex.js");
-        Assert.True(File.Exists(cli), "Install the pinned Codex runtime with npm ci before running this test.");
+        Assert.True(File.Exists(cli), "Install the pinned Codex runtime with make install before running this test.");
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
         await using WebApplication model = builder.Build();

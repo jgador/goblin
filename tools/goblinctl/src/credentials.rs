@@ -84,7 +84,7 @@ pub fn ensure(path: &Path, replace: bool) -> Result<PathBuf> {
         Err(_) => {
             ensure!(
                 std::io::stdin().is_terminal(),
-                "No local password is configured. Run npm run setup:password in a terminal, or supply GOBLIN_LOCAL_PASSWORD for unattended setup."
+                "No local password is configured. Run make setup-password in a terminal, or supply GOBLIN_LOCAL_PASSWORD for unattended setup."
             );
             let password = rpassword::prompt_password("Goblin password: ")?;
             let confirmation = rpassword::prompt_password("Confirm Goblin password: ")?;

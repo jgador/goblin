@@ -57,7 +57,7 @@ The existing TypeScript, CSS, Goblin branding, responsive layout, keyboard tabs,
 password access, same-origin checks, and content security policy remain in use.
 User and runtime text is escaped before rendering.
 
-Run `npm run build` and `npx playwright test tests/e2e/work.spec.ts` with
+Run `make build` and `make test-browser ARGS=tests/e2e/work.spec.ts` with
 `GOBLIN_TEST_POSTGRES_ADMIN` and `GOBLIN_TEST_POSTGRES_APP` configured for a
 **disposable migrated test database**. Browser tests use real APIs and PostgreSQL
 with a deterministic execution fixture; they do not authenticate a real model

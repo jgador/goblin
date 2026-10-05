@@ -96,7 +96,7 @@ fresh disposable database. No filesystem archive columns or new EF properties ar
 introduced. Core, real PostgreSQL, Git bundle, and browser tests cover these gates;
 live GitHub and authenticated model execution remain separate integration checks.
 
-Verification on 2026-09-26: `npm test` passed its build, generated-protocol checks,
+Verification on 2026-09-26: `make test` passed its build, generated-protocol checks,
 .NET tests, and all 88 HTTP/deployment checks. The final .NET run after the resume
 and retry regressions passed 279 tests, including 113 application tests against an
 isolated PostgreSQL 16 server. Six certificate tests were skipped because that

@@ -130,7 +130,7 @@ with the same path prefix to enable the UI.
 
 ## Verification
 
-`npm test` covers JSON formatting, scopes and integer serialization, category
+`make test` covers JSON formatting, scopes and integer serialization, category
 filters, authenticated proxy reads/streams, credential stripping, rejected
 mutations, backend failure, existing Headlamp behavior, and installer failures.
 Database tests are separate and remain opt-in.
@@ -138,7 +138,7 @@ Database tests are separate and remain opt-in.
 For actual collection, buffering, restarts, and the real VMUI browser check:
 
 ```bash
-npm run test:logging
+make test-logging
 ```
 
 This requires Docker, kubectl, curl, ripgrep, the repository's .NET/Node tools, and Chromium
@@ -151,7 +151,7 @@ To check just the real UI against a trusted private service, port-forward the
 VictoriaLogs service to localhost and run:
 
 ```bash
-GOBLIN_TEST_VICTORIALOGS_URL=http://127.0.0.1:19428 npm run test:logs-ui
+GOBLIN_TEST_VICTORIALOGS_URL=http://127.0.0.1:19428 make test-logs-ui
 ```
 
 This checks login, search, refresh, Settings access, CSP, logout, and an Azure-shaped
@@ -160,7 +160,7 @@ verification on that VM.
 
 ### Verified on 2026-09-27
 
-- `npm test`: seven Rust tests, protocol/Kubernetes generation checks, 246 .NET
+- `make test`: seven Rust tests, protocol/Kubernetes generation checks, 246 .NET
   tests, and 90 HTTP/deployment tests passed. Thirty-nine .NET PostgreSQL tests
   and one Work HTTP persistence test were skipped because a live database was
   not configured.

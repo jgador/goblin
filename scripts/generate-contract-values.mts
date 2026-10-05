@@ -159,7 +159,7 @@ export function isSetupState(state) {
         if (check) {
             if ((await readFile(output, "utf8")) !== data)
                 throw new Error(
-                    `Stale generated contracts: ${path}. Run npm run contracts:generate.`,
+                    `Stale generated contracts: ${path}. Run make contracts-generate.`,
                 );
         } else await writeFile(output, data!);
     }

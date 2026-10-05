@@ -123,12 +123,10 @@ jobs:
         env:
           GOBLINCTL_TEST_BINARY: ${{ github.workspace }}/.artifacts/candidate-bin/goblinctl
         run: |
-          just fmt-check
-          just clippy --workspace --all-targets -- -D warnings
-          npm ci
-          npm test
-          npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
+          make install
+          make check
+          make browser-install
+          make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
           git diff --exit-code
       - name: Check the candidate and source after testing
         run: cargo xtask release check-candidate --directory .artifacts/goblin --source-root .artifacts/source
