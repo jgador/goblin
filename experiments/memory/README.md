@@ -28,8 +28,9 @@ Each run must:
    `runs/NNN.json`.
 7. Update `STATE.md` with the champion, lesson, and next hypotheses.
 
-The benchmark does not call an LLM. GPT-6.1 Sol orchestrates the experiment, but
-retrieval scoring itself is deterministic and incurs no external model/API cost.
+The scheduled task requests GPT-6.1 Sol rather than GPT-6 Astra for orchestration.
+The benchmark itself does not call an LLM, so retrieval scoring is deterministic
+and incurs no external model/API cost.
 
 ## Reproduce the current champion
 
