@@ -1,0 +1,20 @@
+{"id":"q001","query":"what actually caused the deployment failure database migration or secret","relevant":["d003","d002"]}
+{"id":"q002","query":"are failed work executions retried automatically","relevant":["d007"]}
+{"id":"q003","query":"what is the durable unit in goblin","relevant":["d004"]}
+{"id":"q004","query":"where should workspace filesystem files remain","relevant":["d019","d020"]}
+{"id":"q005","query":"how long should logs be retained by default","relevant":["d012"]}
+{"id":"q006","query":"should the llm read every raw log line","relevant":["d013"]}
+{"id":"q007","query":"which lightweight lexical memory approach is being considered","relevant":["d021","d023"]}
+{"id":"q008","query":"what happens before local embeddings are computed","relevant":["d023","d022"]}
+{"id":"q009","query":"which systems should the lightweight memory poc avoid","relevant":["d024"]}
+{"id":"q010","query":"how should lexical vector and hybrid retrieval be compared","relevant":["d025"]}
+{"id":"q011","query":"what hardware does the dedicated self hosted server have","relevant":["d026"]}
+{"id":"q012","query":"what operating system is installed on the dedicated host","relevant":["d027"]}
+{"id":"q013","query":"what cluster distribution is preferred on the small vm","relevant":["d028","d018"]}
+{"id":"q014","query":"what does the ak3s dashboard use for kubernetes administration","relevant":["d029"]}
+{"id":"q015","query":"what language is the ak3s cli being converted to","relevant":["d030"]}
+{"id":"q016","query":"what tools should normal ak3s users not need installed","relevant":["d032"]}
+{"id":"q017","query":"where should frontend npm commands stay","relevant":["d033"]}
+{"id":"q018","query":"what should orchestrate non frontend repository workflows","relevant":["d034"]}
+{"id":"q019","query":"when should dynamic system text json remain","relevant":["d037"]}
+{"id":"q020","query":"what is roslynkit's token savings target","relevant":["d040"]}
