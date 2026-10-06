@@ -2,8 +2,8 @@
 
 ## Current champions
 
-Operational ingestion and embedding-cache champion: Run 026,
-`fts5-e5-small-v2-rrf60-int8-fp16-rerank-supersession-control`.
+Operational ingestion and embedding-cache champion: Run 027,
+`fts5-e5-small-v2-rrf60-int8-fp16-rerank-two-worker-claims`.
 
 Semantic retrieval and compact vector-storage core: Run 020,
 `fts5-e5-small-v2-rrf60-rank-one-budget-int8-maxabs-fp16-rerank`.
@@ -81,8 +81,15 @@ The stale job still had zero attempts or attachments, while the latest revision
 alone became ready. The declared content drift from Run 024 is retained as a
 separate observation rather than treated as a queue error.
 
+Run 027 extends Run 026 with two local workers using independent SQLite
+connections. Ten atomic four-job claims were disjoint and complete, each worker
+claimed five batches and 20 records, and all 40 active jobs completed exactly
+once. Final vectors were byte-identical to a fresh synchronous replay, while
+all Run 026 rankings, evidence, context, and the 626,688-byte database matched.
+Run 027 is the current operational champion.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
-Its process RSS was about 15 MiB in the Run 010 environment versus 230.902 MiB
+Its process RSS was about 15 MiB in the Run 010 environment versus 231.516 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
 
 Benchmark generation: 1
@@ -92,7 +99,7 @@ Queries: 20
 
 ### Champion behavior
 
-Run 026 uses Run 020's fixed retrieval and context pipeline. That pipeline uses
+Run 027 uses Run 020's fixed retrieval and context pipeline. That pipeline uses
 Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
 RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
@@ -100,13 +107,13 @@ context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
 attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
 distance. Full original records remain in SQLite for provenance.
 
-For semantic retrieval, Run 026 first searches a max-absolute-scaled sqlite-vec
+For semantic retrieval, Run 027 first searches a max-absolute-scaled sqlite-vec
 `int8[384]` index for 20 candidates. It fetches FP16 copies of those vectors
 from ordinary SQLite blobs, computes cosine scores in FP32 against the FP32
 query, and reranks to the top 10 before unchanged RRF. The FP16 payload is
 30,720 bytes for 40 records. The rule was fixed before evaluation.
 
-At context assembly, Run 026 retains Run 017's rules. It first applies Run 014's
+At context assembly, Run 027 retains Run 017's rules. It first applies Run 014's
 selector and protects every selected clause from the rank-one record and the
 first selected clause from each lower-rank record. It then admits remaining
 lower-rank clauses in retrieval order up to a 128 approximate-token target.
@@ -117,7 +124,7 @@ The compactor removes a conservative set of high-frequency function words. It de
 
 The full record remains stored. The sketch is generated at context assembly time, so persistent storage remains unchanged.
 
-Before indexing, Run 026 retains Run 021's FP32 document embedding key: SHA-256 over a
+Before indexing, Run 027 retains Run 021's FP32 document embedding key: SHA-256 over a
 namespace containing the pinned model revision, dimensions, and embedding
 conventions plus the document prefix and NFC-normalized stripped text. The
 cache remains in the same SQLite database as FTS5 and vec0. A cache hit is
@@ -125,7 +132,7 @@ decoded and reused; a miss is locally embedded and inserted. Run 022 removes
 entries outside the active namespace and vacuums the database after a model or
 convention migration.
 
-At ingestion, Run 026 commits the full record to FTS5 and a durable pending job
+At ingestion, Run 027 commits the full record to FTS5 and a durable pending job
 in one SQLite transaction. The local worker claims jobs in ingestion order,
 commits `processing`, resolves each embedding through the active cache namespace,
 and commits `ready` with its cache key. On restart, it atomically requeues jobs
@@ -141,6 +148,13 @@ vector is shared across the two indexes to isolate index behavior from repeated
 CPU reduction-order jitter; every repeated query embedding was nevertheless
 timed and was byte-identical in this measured run.
 
+Run 027 retains that update and uses two worker-local SQLite connections. Each
+worker starts `BEGIN IMMEDIATE`, selects the next four FIFO jobs, performs
+status-guarded updates to `processing` with durable worker attribution, and
+commits before inference. Five synchronized claim rounds allow inference to
+overlap while serializing only the short claim transaction. Final attachment is
+guarded by both `processing` state and worker ownership.
+
 ### Current champion metrics
 
 - Original MRR@5: 0.975
@@ -149,27 +163,29 @@ timed and was byte-identical in this measured run.
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
 - Mean original context: 128.20 approximate tokens
 - Mean held-out context: 131.85 approximate tokens
-- Mean int8 candidate search: 0.294 ms original, 0.282 ms held-out
-- Mean FP16 rerank: 0.159 ms original, 0.160 ms held-out
-- Mean total search/fusion: 0.638 ms original, 0.621 ms held-out
-- Mean end-to-end retrieval/context latency: 7.04 ms original, 8.06 ms held-out
-- Mean context assembly latency: 0.089 ms original, 0.092 ms held-out
-- Peak process RSS: 230.902 MiB
+- Mean int8 candidate search: 0.381 ms original, 0.375 ms held-out
+- Mean FP16 rerank: 0.204 ms original, 0.216 ms held-out
+- Mean total search/fusion: 0.849 ms original, 0.803 ms held-out
+- Mean end-to-end retrieval/context latency: 9.60 ms original, 8.47 ms held-out
+- Mean context assembly latency: 0.133 ms original, 0.098 ms held-out
+- Peak process RSS: 231.516 MiB
 - Model and tokenizer: 133,804,864 bytes
 - SQLite with FTS5, records, int8 vec0, FP16 rerank blobs, and FP32 cache:
   626,688 bytes
-- FTS5 plus pending-job enqueue: 40 records, 0.000632 s wall, 0.000631 s CPU
-- Pending update transaction: 0.000283 s wall and CPU
-- Worker: ten FIFO batches of four, 20 cache hits and 20 misses
-- Worker drain: 0.321 s wall, 0.648 s CPU
-- Total controlled preseed plus worker embedding: 0.657 s wall, 1.318 s CPU
-- Synchronous control corpus embedding: 0.643 s wall, 1.297 s CPU, 62.20
-  documents/s; complete control including evaluation: 1.387 s wall, 2.779 s CPU
+- FTS5 plus pending-job enqueue: 40 records, 0.000909 s wall, 0.000909 s CPU
+- Pending update transaction: 0.000362 s wall, 0.000363 s CPU
+- Workers: two independent connections, five batches and 20 jobs each, 20
+  aggregate cache hits and 20 misses
+- Worker drain: 0.292 s wall, 0.743 s process CPU
+- Slowest atomic claim: 2.006 ms wall, 6.416 ms process CPU
+- Total controlled preseed plus concurrent worker embedding: 0.551 s wall,
+  1.260 s process CPU, 72.59 documents/s
+- Fresh vector replay: 0.585 s wall, 1.179 s CPU, zero vector delta
 - Final lifecycle: 40 unique ready outputs, zero pending, zero processing, one
   superseded job with zero attempts, and 40 ready jobs with one attempt each
 
-Measured process CPU across 20 hybrid queries was 0.281 seconds on the original
-set and 0.326 seconds on held-out. Resource measurements are environment-sensitive;
+Measured process CPU across 20 hybrid queries was 0.384 seconds on the original
+set and 0.339 seconds on held-out. Resource measurements are environment-sensitive;
 the committed reproduction records load, embedding, query, search, end-to-end,
 CPU and process-lifetime peak RSS separately.
 
@@ -284,6 +300,11 @@ champion while Run 005 remained the lightweight fallback.
   FTS5, vector-only, hybrid, evidence, and context parity. A control index must
   also declare the same distance metric; sqlite-vec's default is not a substitute
   for the champion's explicit cosine metric.
+- Run 027 showed that `BEGIN IMMEDIATE` plus status-guarded claims is sufficient
+  for two local workers to divide this fixed queue without duplicate work or
+  attachment. Durable worker attribution, disjoint ordinals, exactly one attempt
+  per active job, and a byte-identical vector replay all passed. This validates
+  two in-process workers on one SQLite database, not multi-host coordination.
 
 ## Next hypotheses
 
@@ -326,11 +347,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
     after SQLite reopen.
 18. Run 025 completed pending-update supersession. Correctness and provenance
     passed, but exact Run 024 ranking/context parity failed, so it was rejected.
-19. Run 026 completed the synchronous updated-corpus control and is the current
-    operational champion.
-20. Next: test atomic claim coordination with two local SQLite workers and
-    require every active job to be embedded or reused exactly once, with no
-    duplicate ready attachments and unchanged Run 026 retrieval/context.
+19. Run 026 completed the synchronous updated-corpus control.
+20. Run 027 completed atomic claim coordination with two local SQLite workers
+    and is the current operational champion.
+21. Next: supersede a revision after a worker has claimed it but before ready
+    attachment, and require the stale worker's guarded completion to fail while
+    only the new revision becomes searchable semantically.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -353,7 +375,13 @@ Reproduce Run 006 held-out evidence validation:
 python3 experiments/memory/run_heldout_validation.py
 ```
 
-Reproduce the current Run 026 operational champion after the pinned E5 setup:
+Reproduce the current Run 027 operational champion after the pinned E5 setup:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_two_workers --threads 2
+```
+
+Reproduce the accepted Run 026 synchronous-control stage:
 
 ```bash
 .artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_supersession_control --threads 2

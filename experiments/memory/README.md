@@ -445,3 +445,31 @@ See `runs/026.json` for the exact parity gates, full per-query results, lifecycl
 provenance, model and dependency pins, CPU, RSS, storage, and separated worker,
 control-embedding, vector-search, and end-to-end timings. No answer generator or
 external inference API was evaluated.
+
+## Two-worker atomic claims (Run 027)
+
+Run 027 retains Run 026's updated-corpus retrieval pipeline and adds two local
+workers, each with its own SQLite connection. Every four-job claim uses
+`BEGIN IMMEDIATE`, FIFO selection, status-guarded updates, and a commit before
+inference. Ready attachment is guarded by both processing state and durable
+worker ownership.
+
+The workers each claimed five batches and 20 records. Their claim sets had no
+overlap, all 40 active jobs had exactly one attempt and one unique attachment,
+and the stale revision remained superseded with zero attempts. The slowest
+claim took 2.006 ms wall time. Concurrent draining took 0.292 seconds wall and
+0.743 seconds process CPU with exactly 20 cache hits and 20 misses.
+
+All Run 026 lexical, vector-only, and hybrid rankings, quality, evidence, and
+context matched exactly. A fresh full-corpus replay produced byte-identical
+vectors with zero maximum delta. SQLite remained 626,688 bytes. Run 027 is
+accepted as the operational concurrency champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_two_workers --threads 2
+```
+
+See `runs/027.json` for worker attribution, claim transactions, per-batch
+timings, vector replay, queue provenance, full per-query measurements, and every
+acceptance gate. This evaluates retrieval and context assembly, not answer
+generation.

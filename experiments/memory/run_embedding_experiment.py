@@ -10,8 +10,10 @@ import resource
 import sqlite3
 import statistics
 import tempfile
+import threading
 import time
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from run_experiment import (
@@ -136,6 +138,7 @@ def main():
             "sqlite_pending_recovery",
             "sqlite_pending_supersession",
             "sqlite_pending_supersession_control",
+            "sqlite_pending_two_workers",
         ],
         default="none",
     )
@@ -462,6 +465,37 @@ def main():
             "worker_cpu_seconds_at_most": 2.0,
             "selected_before_evaluation": True,
         }
+    elif args.embedding_cache == "sqlite_pending_two_workers":
+        result.update(
+            run=27,
+            followup_to_run=26,
+            method="fts5-e5-small-v2-rrf60-int8-fp16-rerank-two-worker-claims",
+            hypothesis=(
+                "Two local workers using independent SQLite connections and atomic claims "
+                "can process disjoint batches exactly once while preserving Run 026 output."
+            ),
+        )
+        result["embedding_queue_rule"] = {
+            "states": ["pending", "processing", "ready", "superseded"],
+            "workers": 2,
+            "connection_scope": "one independent SQLite connection per worker",
+            "claim_transaction": "BEGIN IMMEDIATE, select four FIFO jobs, guarded update, commit",
+            "rounds_per_worker": 5,
+            "batch_size": 4,
+            "preseeded_cache_documents": len(corpus) // 2,
+            "update_document": "d040",
+            "update_suffix": " Cache experiment revision two.",
+            "expected_disjoint_active_claims": len(corpus),
+            "expected_attempts_per_active_job": 1,
+            "expected_ready_attachments": len(corpus),
+            "expected_worker_cache_hits": len(corpus) // 2,
+            "expected_worker_cache_misses": len(corpus) // 2,
+            "retrieval_context_reference_run": 26,
+            "database_growth_at_most_percent": 5.0,
+            "worker_wall_seconds_at_most": 1.0,
+            "worker_cpu_seconds_at_most": 2.0,
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -486,15 +520,20 @@ def main():
             "sqlite_pending_recovery",
             "sqlite_pending_supersession",
             "sqlite_pending_supersession_control",
+            "sqlite_pending_two_workers",
         )
         recovery_enabled = args.embedding_cache == "sqlite_pending_recovery"
         supersession_enabled = args.embedding_cache in (
             "sqlite_pending_supersession",
             "sqlite_pending_supersession_control",
+            "sqlite_pending_two_workers",
         )
         control_enabled = args.embedding_cache == "sqlite_pending_supersession_control"
+        two_worker_enabled = args.embedding_cache == "sqlite_pending_two_workers"
+        stable_query_enabled = control_enabled or two_worker_enabled
         if queue_enabled:
             if supersession_enabled:
+                claim_column = ", claimed_by TEXT" if two_worker_enabled else ""
                 db.execute(
                     "CREATE TABLE embedding_jobs("
                     "job_id INTEGER PRIMARY KEY, document_id TEXT NOT NULL, "
@@ -502,7 +541,8 @@ def main():
                     "content_sha256 TEXT NOT NULL, status TEXT NOT NULL "
                     "CHECK(status IN ('pending','processing','ready','superseded')), "
                     "attempts INTEGER NOT NULL DEFAULT 0, "
-                    "namespace_sha256 TEXT, cache_key TEXT, "
+                    "namespace_sha256 TEXT, cache_key TEXT"
+                    + claim_column + ", "
                     "UNIQUE(document_id,revision))"
                 )
             else:
@@ -682,7 +722,7 @@ def main():
         options.intra_op_num_threads = args.threads
         options.inter_op_num_threads = 1
         options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-        options.use_deterministic_compute = control_enabled
+        options.use_deterministic_compute = stable_query_enabled
         session = ort.InferenceSession(str(args.model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"])
         tokenizer = Tokenizer.from_file(str(args.model_dir / "tokenizer.json"))
         tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
@@ -692,7 +732,7 @@ def main():
         result["load_peak_rss_mib"] = rss()
         result["runtime_versions"] = {"onnxruntime": ort.__version__, "numpy": np.__version__,
                                        "tokenizers": __import__("tokenizers").__version__}
-        result["deterministic_compute"] = control_enabled
+        result["deterministic_compute"] = stable_query_enabled
 
         def embed(texts, prefix):
             enc = tokenizer.encode_batch([prefix + text for text in texts])
@@ -748,7 +788,10 @@ def main():
             )
             db.commit()
 
-            def cached_document_embeddings(texts, active_namespace, document_prefix):
+            def cached_document_embeddings(
+                texts, active_namespace, document_prefix, connection=None
+            ):
+                connection = connection or db
                 started = time.perf_counter()
                 cpu_started = time.process_time()
                 active_namespace_sha256 = hashlib.sha256(active_namespace.encode()).hexdigest()
@@ -764,7 +807,7 @@ def main():
                         + normalized.encode()
                     )
                     cache_key = hashlib.sha256(key_input).hexdigest()
-                    row = db.execute(
+                    row = connection.execute(
                         "SELECT embedding FROM embedding_cache WHERE cache_key=?",
                         (cache_key,),
                     ).fetchone()
@@ -787,7 +830,7 @@ def main():
                         document_prefix,
                     )
                     for (cache_key, item), vector in zip(batch, embedded):
-                        db.execute(
+                        connection.execute(
                             "INSERT INTO embedding_cache VALUES (?,?,?,?)",
                             (cache_key, active_namespace_sha256, item["content_sha256"], vector.tobytes()),
                         )
@@ -795,7 +838,7 @@ def main():
                             output[index] = vector
                 inference_wall = time.perf_counter() - inference_started
                 inference_cpu = time.process_time() - inference_cpu_started
-                db.commit()
+                connection.commit()
                 vectors_out = np.stack(output).astype(np.float32)
                 assert vectors_out.shape == (len(texts), dimensions)
                 total_wall = time.perf_counter() - started
@@ -870,22 +913,11 @@ def main():
                 worker_misses = 0
                 worker_inference_wall = 0.0
                 worker_inference_cpu = 0.0
-                while True:
-                    rows = db.execute(
-                        "SELECT j.rowid,j.document_id,j.ordinal,m.text,j.content_sha256 "
-                        "FROM embedding_jobs j JOIN memory m ON m.id=j.document_id "
-                        "WHERE j.status='pending' ORDER BY j.ordinal,j.rowid LIMIT 4"
-                    ).fetchall()
-                    if not rows:
-                        break
-                    db.executemany(
-                        "UPDATE embedding_jobs SET status='processing',attempts=attempts+1 "
-                        "WHERE rowid=? AND status='pending'",
-                        [(row[0],) for row in rows],
-                    )
-                    db.commit()
+
+                def complete_claimed_batch(connection, rows, worker_id=None):
                     batch_vectors, measured = cached_document_embeddings(
-                        [row[3] for row in rows], namespace, conventions["document_prefix"]
+                        [row[3] for row in rows], namespace,
+                        conventions["document_prefix"], connection,
                     )
                     for (job_id, document_id, ordinal, text, content_sha256), vector in zip(
                         rows, batch_vectors
@@ -898,18 +930,124 @@ def main():
                             + normalized.encode()
                         )
                         cache_key = hashlib.sha256(key_input).hexdigest()
-                        db.execute(
-                            "UPDATE embedding_jobs SET status='ready',namespace_sha256=?,"
-                            "cache_key=? WHERE rowid=? AND status='processing'",
-                            (namespace_sha256, cache_key, job_id),
+                        guarded_worker = " AND claimed_by=?" if worker_id else ""
+                        parameters = (
+                            (namespace_sha256, cache_key, job_id, worker_id)
+                            if worker_id else (namespace_sha256, cache_key, job_id)
                         )
-                    db.commit()
-                    worker_hits += measured["hits"]
-                    worker_misses += measured["misses"]
-                    worker_inference_wall += measured["inference_wall_seconds"]
-                    worker_inference_cpu += measured["inference_cpu_seconds"]
-                    batch_metrics.append(
-                        {
+                        cursor = connection.execute(
+                            "UPDATE embedding_jobs SET status='ready',namespace_sha256=?,"
+                            "cache_key=? WHERE rowid=? AND status='processing'"
+                            + guarded_worker,
+                            parameters,
+                        )
+                        assert cursor.rowcount == 1
+                    connection.commit()
+                    return measured
+
+                if two_worker_enabled:
+                    claim_barrier = threading.Barrier(2)
+                    sequence_lock = threading.Lock()
+                    claim_sequence = 0
+
+                    def run_worker(worker_number):
+                        nonlocal claim_sequence
+                        worker_id = f"worker-{worker_number}"
+                        connection = sqlite3.connect(
+                            Path(td) / "memory.db", timeout=5.0
+                        )
+                        connection.execute("PRAGMA busy_timeout=5000")
+                        worker_batches = []
+                        try:
+                            for round_number in range(1, 6):
+                                claim_barrier.wait()
+                                claim_started = time.perf_counter()
+                                claim_cpu_started = time.process_time()
+                                connection.execute("BEGIN IMMEDIATE")
+                                rows = connection.execute(
+                                    "SELECT j.rowid,j.document_id,j.ordinal,m.text,j.content_sha256 "
+                                    "FROM embedding_jobs j JOIN memory m ON m.id=j.document_id "
+                                    "WHERE j.status='pending' "
+                                    "ORDER BY j.ordinal,j.rowid LIMIT 4"
+                                ).fetchall()
+                                updates = 0
+                                for row in rows:
+                                    updates += connection.execute(
+                                        "UPDATE embedding_jobs SET status='processing',"
+                                        "attempts=attempts+1,claimed_by=? "
+                                        "WHERE rowid=? AND status='pending'",
+                                        (worker_id, row[0]),
+                                    ).rowcount
+                                connection.commit()
+                                claim_wall = time.perf_counter() - claim_started
+                                claim_cpu = time.process_time() - claim_cpu_started
+                                assert len(rows) == 4 and updates == 4
+                                with sequence_lock:
+                                    claim_sequence += 1
+                                    sequence = claim_sequence
+                                claim_barrier.wait()
+                                measured = complete_claimed_batch(
+                                    connection, rows, worker_id
+                                )
+                                worker_batches.append({
+                                    "claim_sequence": sequence,
+                                    "worker": worker_id,
+                                    "round": round_number,
+                                    "ordinals": [row[2] for row in rows],
+                                    "documents": len(rows),
+                                    "claim_updates": updates,
+                                    "claim_wall_seconds": claim_wall,
+                                    "claim_cpu_seconds": claim_cpu,
+                                    "hits": measured["hits"],
+                                    "misses": measured["misses"],
+                                    "wall_seconds": measured["total_wall_seconds"],
+                                    "cpu_seconds": measured["total_cpu_seconds"],
+                                    "inference_wall_seconds": measured["inference_wall_seconds"],
+                                    "inference_cpu_seconds": measured["inference_cpu_seconds"],
+                                })
+                        finally:
+                            connection.close()
+                        return worker_batches
+
+                    with ThreadPoolExecutor(max_workers=2) as executor:
+                        worker_results = list(executor.map(run_worker, (1, 2)))
+                    batch_metrics = sorted(
+                        [batch for batches in worker_results for batch in batches],
+                        key=lambda batch: batch["ordinals"][0],
+                    )
+                    for batch_number, batch in enumerate(batch_metrics, 1):
+                        batch["batch"] = batch_number
+                    worker_hits = sum(batch["hits"] for batch in batch_metrics)
+                    worker_misses = sum(batch["misses"] for batch in batch_metrics)
+                    worker_inference_wall = sum(
+                        batch["inference_wall_seconds"] for batch in batch_metrics
+                    )
+                    worker_inference_cpu = sum(
+                        batch["inference_cpu_seconds"] for batch in batch_metrics
+                    )
+                    concurrent_inference_wall_work_seconds = worker_inference_wall
+                    concurrent_inference_cpu_observed_sum = worker_inference_cpu
+                else:
+                    while True:
+                        rows = db.execute(
+                            "SELECT j.rowid,j.document_id,j.ordinal,m.text,j.content_sha256 "
+                            "FROM embedding_jobs j JOIN memory m ON m.id=j.document_id "
+                            "WHERE j.status='pending' ORDER BY j.ordinal,j.rowid LIMIT 4"
+                        ).fetchall()
+                        if not rows:
+                            break
+                        db.executemany(
+                            "UPDATE embedding_jobs SET status='processing',attempts=attempts+1 "
+                            "WHERE rowid=? AND status='pending'",
+                            [(row[0],) for row in rows],
+                        )
+                        db.commit()
+                        measured = complete_claimed_batch(db, rows)
+                        worker_hits += measured["hits"]
+                        worker_misses += measured["misses"]
+                        worker_inference_wall += measured["inference_wall_seconds"]
+                        worker_inference_cpu += measured["inference_cpu_seconds"]
+                        batch_metrics.append({
                             "batch": len(batch_metrics) + 1,
                             "ordinals": [row[2] for row in rows],
                             "documents": len(rows),
@@ -917,10 +1055,15 @@ def main():
                             "misses": measured["misses"],
                             "wall_seconds": measured["total_wall_seconds"],
                             "cpu_seconds": measured["total_cpu_seconds"],
-                        }
-                    )
+                        })
                 worker_wall = time.perf_counter() - worker_started
                 worker_cpu = time.process_time() - worker_cpu_started
+                if two_worker_enabled:
+                    # Per-batch process CPU windows overlap across threads, so
+                    # summing them double-counts. The process-wide worker window
+                    # is the comparable critical-path measurement.
+                    worker_inference_wall = worker_wall
+                    worker_inference_cpu = worker_cpu
                 status_counts = dict(
                     db.execute(
                         "SELECT status,count(*) FROM embedding_jobs GROUP BY status"
@@ -942,6 +1085,64 @@ def main():
                     "SELECT count(*),count(DISTINCT document_id),count(DISTINCT cache_key) "
                     "FROM embedding_jobs WHERE status='ready'"
                 ).fetchone()
+                if two_worker_enabled:
+                    worker_ordinals = {
+                        worker_id: sorted(
+                            ordinal
+                            for batch in batch_metrics
+                            if batch["worker"] == worker_id
+                            for ordinal in batch["ordinals"]
+                        )
+                        for worker_id in ("worker-1", "worker-2")
+                    }
+                    claim_overlap = sorted(
+                        set(worker_ordinals["worker-1"])
+                        & set(worker_ordinals["worker-2"])
+                    )
+                    durable_attribution = dict(db.execute(
+                        "SELECT claimed_by,count(*) FROM embedding_jobs "
+                        "WHERE status='ready' GROUP BY claimed_by ORDER BY claimed_by"
+                    ).fetchall())
+                    replay_started = time.perf_counter()
+                    replay_cpu_started = time.process_time()
+                    replay_vectors = np.concatenate([
+                        embed(
+                            [document["text"] for document in corpus[offset:offset + 4]],
+                            conventions["document_prefix"],
+                        )
+                        for offset in range(0, len(corpus), 4)
+                    ])
+                    result["ingestion_lifecycle"]["two_worker_coordination"] = {
+                        "workers": 2,
+                        "independent_connections": True,
+                        "atomic_claim_transaction": "BEGIN IMMEDIATE",
+                        "worker_ordinals": worker_ordinals,
+                        "claim_overlap_ordinals": claim_overlap,
+                        "durable_ready_attribution": durable_attribution,
+                        "claim_updates": sum(
+                            batch["claim_updates"] for batch in batch_metrics
+                        ),
+                        "max_claim_wall_seconds": max(
+                            batch["claim_wall_seconds"] for batch in batch_metrics
+                        ),
+                        "max_claim_cpu_seconds": max(
+                            batch["claim_cpu_seconds"] for batch in batch_metrics
+                        ),
+                        "aggregate_inference_wall_work_seconds": (
+                            concurrent_inference_wall_work_seconds
+                        ),
+                        "overlapping_batch_cpu_observed_sum": (
+                            concurrent_inference_cpu_observed_sum
+                        ),
+                        "vector_replay_wall_seconds": time.perf_counter() - replay_started,
+                        "vector_replay_cpu_seconds": time.process_time() - replay_cpu_started,
+                        "vectors_byte_identical_to_synchronous_replay": bool(
+                            np.array_equal(vectors, replay_vectors)
+                        ),
+                        "vector_replay_max_absolute_delta": float(
+                            np.max(np.abs(vectors - replay_vectors))
+                        ),
+                    }
                 if supersession_enabled:
                     pending_update = result["ingestion_lifecycle"]["pending_update"]
                     update_index = pending_update["ordinal"]
@@ -1243,12 +1444,12 @@ def main():
                                        "stored_vectors": len(vectors),
                                        "unit_norm_max_error": float(np.max(np.abs(np.linalg.norm(vectors, axis=1) - 1)))}
 
-        comparison_query_vectors = {} if control_enabled else None
+        comparison_query_vectors = {} if stable_query_enabled else None
         repeated_query_vector_deltas = []
 
         def comparison_query_vector(query):
             fresh = embed([query], conventions["query_prefix"])[0]
-            if not control_enabled:
+            if not stable_query_enabled:
                 return fresh
             reference_vector = comparison_query_vectors.get(query)
             if reference_vector is None:
@@ -1493,7 +1694,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (24 if args.embedding_cache in (
+        reference_run = (26 if args.embedding_cache == "sqlite_pending_two_workers" else
+                         24 if args.embedding_cache in (
                              "sqlite_pending_supersession",
                              "sqlite_pending_supersession_control",
                          ) else
@@ -1549,6 +1751,7 @@ def main():
                 "sqlite_pending_recovery",
                 "sqlite_pending_supersession",
                 "sqlite_pending_supersession_control",
+                "sqlite_pending_two_workers",
             ):
                 lifecycle = result["ingestion_lifecycle"]
                 enqueue = lifecycle["enqueue"]
@@ -1723,6 +1926,51 @@ def main():
                                 context_growth_within_five_percent
                             ),
                         })
+                    if two_worker_enabled:
+                        coordination = lifecycle["two_worker_coordination"]
+                        worker_one = coordination["worker_ordinals"]["worker-1"]
+                        worker_two = coordination["worker_ordinals"]["worker-2"]
+                        cache_gate.update({
+                            "two_independent_workers_claimed_five_batches_each": (
+                                coordination["workers"] == 2
+                                and coordination["independent_connections"]
+                                and len(worker_one) == len(corpus) // 2
+                                and len(worker_two) == len(corpus) // 2
+                                and sum(
+                                    batch["worker"] == "worker-1"
+                                    for batch in worker["batches"]
+                                ) == 5
+                                and sum(
+                                    batch["worker"] == "worker-2"
+                                    for batch in worker["batches"]
+                                ) == 5
+                            ),
+                            "atomic_claim_sets_are_disjoint_and_complete": (
+                                coordination["atomic_claim_transaction"] == "BEGIN IMMEDIATE"
+                                and coordination["claim_overlap_ordinals"] == []
+                                and sorted(worker_one + worker_two) == list(range(len(corpus)))
+                                and coordination["claim_updates"] == len(corpus)
+                                and all(
+                                    batch["claim_updates"] == 4
+                                    for batch in worker["batches"]
+                                )
+                            ),
+                            "durable_worker_attribution_is_balanced": (
+                                coordination["durable_ready_attribution"]
+                                == {"worker-1": len(corpus) // 2,
+                                    "worker-2": len(corpus) // 2}
+                            ),
+                            "all_claim_transactions_below_fifty_ms": (
+                                coordination["max_claim_wall_seconds"] <= 0.05
+                                and coordination["max_claim_cpu_seconds"] <= 0.05
+                            ),
+                            "two_worker_vectors_match_synchronous_replay": (
+                                coordination[
+                                    "vectors_byte_identical_to_synchronous_replay"
+                                ]
+                                and coordination["vector_replay_max_absolute_delta"] == 0.0
+                            ),
+                        })
                 else:
                     cache_gate.update({
                         "all_jobs_ready_once": (
@@ -1842,7 +2090,11 @@ def main():
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the pending-supersession synchronous-control extension to Run {reference_run}: the asynchronous path exactly matched an independently embedded synchronous reindex for FTS5, vector-only, hybrid, context, and vectors while preserving lifecycle and resource bounds."
+            notes=(f"Accepted as the two-worker atomic-claim extension to Run {reference_run}: independent SQLite connections claimed disjoint FIFO batches exactly once, completed unique attachments, and preserved vectors, retrieval, evidence, context, and resource bounds."
+                   if args.embedding_cache == "sqlite_pending_two_workers" and accepted else
+                   f"Rejected as a two-worker atomic-claim extension to Run {reference_run}: disjoint claims, exactly-once completion, vector parity, retrieval/context parity, or a fixed resource gate failed."
+                   if args.embedding_cache == "sqlite_pending_two_workers" else
+                   f"Accepted as the pending-supersession synchronous-control extension to Run {reference_run}: the asynchronous path exactly matched an independently embedded synchronous reindex for FTS5, vector-only, hybrid, context, and vectors while preserving lifecycle and resource bounds."
                    if args.embedding_cache == "sqlite_pending_supersession_control" and accepted else
                    f"Rejected as a pending-supersession synchronous-control extension to Run {reference_run}: exact asynchronous/control parity, lifecycle provenance, champion quality, or a fixed resource gate failed."
                    if args.embedding_cache == "sqlite_pending_supersession_control" else
