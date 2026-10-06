@@ -1,0 +1,310 @@
+{
+  "baseline_same_sandbox": {
+    "context_chars_mean": 676,
+    "context_tokens_approx_mean": 169.4,
+    "cpu_seconds": 0.002164,
+    "db_size_bytes": 45056,
+    "hit_at_1": 0.9,
+    "latency_ms_mean": 0.10829,
+    "latency_ms_p95": 0.209315,
+    "mrr_at_5": 0.941667,
+    "peak_rss_mb": 92.543,
+    "recall_at_5": 0.95
+  },
+  "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+  "champion": true,
+  "context_chars_mean": 662.95,
+  "context_reduction_percent": 1.95,
+  "context_tokens_approx_mean": 166.1,
+  "corpus_documents": 40,
+  "cpu_seconds": 0.002296,
+  "db_size_bytes": 45056,
+  "details": [
+    {
+      "context_chars": 704,
+      "first_relevant_rank": 1,
+      "query": "q001",
+      "suppressed": [
+        "d001"
+      ],
+      "top": [
+        "d002",
+        "d003",
+        "d007",
+        "d010"
+      ]
+    },
+    {
+      "context_chars": 546,
+      "first_relevant_rank": 1,
+      "query": "q002",
+      "suppressed": [
+        "d008"
+      ],
+      "top": [
+        "d007",
+        "d005",
+        "d004",
+        "d022"
+      ]
+    },
+    {
+      "context_chars": 633,
+      "first_relevant_rank": 1,
+      "query": "q003",
+      "suppressed": [],
+      "top": [
+        "d004",
+        "d009",
+        "d006",
+        "d010",
+        "d018"
+      ]
+    },
+    {
+      "context_chars": 624,
+      "first_relevant_rank": 1,
+      "query": "q004",
+      "suppressed": [],
+      "top": [
+        "d019",
+        "d020",
+        "d016",
+        "d011",
+        "d031"
+      ]
+    },
+    {
+      "context_chars": 651,
+      "first_relevant_rank": 1,
+      "query": "q005",
+      "suppressed": [],
+      "top": [
+        "d012",
+        "d014",
+        "d011",
+        "d016",
+        "d040"
+      ]
+    },
+    {
+      "context_chars": 764,
+      "first_relevant_rank": 1,
+      "query": "q006",
+      "suppressed": [],
+      "top": [
+        "d013",
+        "d012",
+        "d007",
+        "d040",
+        "d037"
+      ]
+    },
+    {
+      "context_chars": 686,
+      "first_relevant_rank": 1,
+      "query": "q007",
+      "suppressed": [],
+      "top": [
+        "d021",
+        "d015",
+        "d014",
+        "d024",
+        "d025"
+      ]
+    },
+    {
+      "context_chars": 629,
+      "first_relevant_rank": 1,
+      "query": "q008",
+      "suppressed": [],
+      "top": [
+        "d022",
+        "d039",
+        "d009",
+        "d005",
+        "d021"
+      ]
+    },
+    {
+      "context_chars": 704,
+      "first_relevant_rank": 1,
+      "query": "q009",
+      "suppressed": [],
+      "top": [
+        "d024",
+        "d021",
+        "d017",
+        "d022",
+        "d015"
+      ]
+    },
+    {
+      "context_chars": 681,
+      "first_relevant_rank": 1,
+      "query": "q010",
+      "suppressed": [],
+      "top": [
+        "d025",
+        "d011",
+        "d012",
+        "d016",
+        "d017"
+      ]
+    },
+    {
+      "context_chars": 545,
+      "first_relevant_rank": 3,
+      "query": "q011",
+      "suppressed": [],
+      "top": [
+        "d014",
+        "d028",
+        "d026",
+        "d020",
+        "d027"
+      ]
+    },
+    {
+      "context_chars": 618,
+      "first_relevant_rank": 1,
+      "query": "q012",
+      "suppressed": [],
+      "top": [
+        "d027",
+        "d026",
+        "d032",
+        "d017",
+        "d036"
+      ]
+    },
+    {
+      "context_chars": 480,
+      "first_relevant_rank": 1,
+      "query": "q013",
+      "suppressed": [],
+      "top": [
+        "d028",
+        "d015",
+        "d012",
+        "d027",
+        "d018"
+      ]
+    },
+    {
+      "context_chars": 733,
+      "first_relevant_rank": 1,
+      "query": "q014",
+      "suppressed": [],
+      "top": [
+        "d029",
+        "d028",
+        "d020",
+        "d034",
+        "d030"
+      ]
+    },
+    {
+      "context_chars": 692,
+      "first_relevant_rank": 1,
+      "query": "q015",
+      "suppressed": [],
+      "top": [
+        "d030",
+        "d031",
+        "d014",
+        "d010",
+        "d029"
+      ]
+    },
+    {
+      "context_chars": 706,
+      "first_relevant_rank": 1,
+      "query": "q016",
+      "suppressed": [],
+      "top": [
+        "d032",
+        "d031",
+        "d010",
+        "d030",
+        "d029"
+      ]
+    },
+    {
+      "context_chars": 745,
+      "first_relevant_rank": 1,
+      "query": "q017",
+      "suppressed": [],
+      "top": [
+        "d033",
+        "d035",
+        "d031",
+        "d034",
+        "d016"
+      ]
+    },
+    {
+      "context_chars": 739,
+      "first_relevant_rank": 1,
+      "query": "q018",
+      "suppressed": [],
+      "top": [
+        "d034",
+        "d035",
+        "d011",
+        "d033",
+        "d010"
+      ]
+    },
+    {
+      "context_chars": 775,
+      "first_relevant_rank": 2,
+      "query": "q019",
+      "suppressed": [],
+      "top": [
+        "d036",
+        "d037",
+        "d017",
+        "d024",
+        "d019"
+      ]
+    },
+    {
+      "context_chars": 604,
+      "first_relevant_rank": 1,
+      "query": "q020",
+      "suppressed": [],
+      "top": [
+        "d040",
+        "d015",
+        "d018",
+        "d039",
+        "d013"
+      ]
+    }
+  ],
+  "hit_at_1": 0.9,
+  "hypothesis": "Deterministic correction/supersession linking can remove stale retrieved memories without reducing retrieval quality.",
+  "k": 5,
+  "latency_ms_mean": 0.104117,
+  "latency_ms_p95": 0.163677,
+  "method": "sqlite-fts5-bm25-supersession-filter",
+  "mrr_at_5": 0.941667,
+  "notes": "Accepted: unchanged retrieval quality with 1.95% lower mean returned context. Suppressed only explicitly stale notes linked to later corrections; all records remain stored for provenance.",
+  "orchestration_model_verified": false,
+  "peak_rss_mb": 92.539,
+  "python_version": "3.13.5",
+  "q001_context_reduction_percent": 19.45,
+  "q002_context_reduction_percent": 14.29,
+  "query_count": 20,
+  "recall_at_5": 0.95,
+  "requested_orchestration_model": "GPT-6.1 Sol",
+  "retrieval_uses_llm": false,
+  "run": 4,
+  "sqlite_version": "3.46.1",
+  "status": "accepted",
+  "supersessions": {
+    "d001": "d003",
+    "d008": "d007"
+  }
+}
