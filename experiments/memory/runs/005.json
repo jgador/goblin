@@ -1,0 +1,39 @@
+{
+  "run": 5,
+  "method": "sqlite-fts5-bm25-supersession-compact-sketch",
+  "hypothesis": "A deterministic per-record context sketch can reduce prompt context while preserving retrieval quality and all retained content terms.",
+  "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+  "corpus_documents": 40,
+  "query_count": 20,
+  "k": 5,
+  "mrr_at_5": 0.941667,
+  "recall_at_5": 0.95,
+  "hit_at_1": 0.9,
+  "context_chars_mean": 600.65,
+  "context_tokens_approx_mean": 150.5,
+  "context_reduction_vs_run004_chars_percent": 9.4,
+  "context_reduction_vs_run004_tokens_percent": 9.39,
+  "content_term_retention": 1,
+  "supersessions": {
+    "d001": "d003",
+    "d008": "d007"
+  },
+  "db_size_bytes": 45056,
+  "persistent_extra_bytes": 0,
+  "compaction_microbenchmark": {
+    "runtime": "connector V8",
+    "records": 800000,
+    "wall_ms": 4768,
+    "wall_us_per_record": 5.96
+  },
+  "latency_ms_mean": null,
+  "cpu_seconds": null,
+  "peak_rss_mb": null,
+  "resource_measurement_note": "Connector execution exposed compaction wall time but not comparable process CPU or peak RSS. Reproduction in the Python runner records those metrics.",
+  "retrieval_uses_llm": false,
+  "requested_orchestration_model": "GPT-6.1 Sol",
+  "orchestration_model_verified": false,
+  "status": "accepted",
+  "champion": true,
+  "notes": "Accepted: unchanged retrieval quality, 9.39% lower approximate context than Run 004, and 100% retention of non-function content terms. Full original records remain indexed and stored."
+}

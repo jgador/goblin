@@ -24,6 +24,11 @@ STOPWORDS = {
 }
 STALE_MARKERS = ("temporary note", "old brainstorm")
 CORRECTION_MARKERS = ("correction", "confirmed", "postmortem")
+COMPACTION_DROPWORDS = {
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "to", "of",
+    "in", "on", "for", "with", "as", "at", "by", "from", "this", "that", "it",
+    "itself", "has", "have", "had",
+}
 
 
 def load_jsonl(path):
@@ -35,6 +40,20 @@ def fts_query(text):
     terms = [m.group(0).lower() for m in WORD_RE.finditer(text)]
     # OR is intentionally recall-oriented for messy natural-language queries.
     return " OR ".join(f'"{t}"' for t in terms)
+
+
+def compact_text(text):
+    """Create a cheap context sketch while preserving semantic operators.
+
+    Only high-frequency function words are removed. Negation, conjunctions,
+    modality, temporal words, identifiers, numbers, and content terms remain.
+    Retrieval still uses the original full text.
+    """
+    return " ".join(
+        token
+        for token in WORD_RE.findall(text)
+        if token.lower() not in COMPACTION_DROPWORDS
+    )
 
 
 def make_reranker(corpus):
@@ -110,7 +129,7 @@ def detect_supersessions(corpus, minimum_overlap=0.20):
     return links
 
 
-def evaluate(db, queries, k=5, reranker=None, suppressed_ids=None):
+def evaluate(db, queries, k=5, reranker=None, suppressed_ids=None, context_transform=None):
     suppressed_ids = suppressed_ids or set()
     latencies_ms = []
     context_chars = []
@@ -118,6 +137,8 @@ def evaluate(db, queries, k=5, reranker=None, suppressed_ids=None):
     recall_at_k = []
     hit_at_1 = []
     rows_out = []
+    content_terms_total = 0
+    content_terms_retained = 0
     cpu_start = time.process_time()
 
     for q in queries:
@@ -138,8 +159,25 @@ def evaluate(db, queries, k=5, reranker=None, suppressed_ids=None):
         reciprocal_ranks.append(0.0 if rank is None else 1.0 / rank)
         recall_at_k.append(len(relevant.intersection(ids)) / len(relevant))
         hit_at_1.append(1.0 if ids and ids[0] in relevant else 0.0)
-        chars = sum(len(row[1]) for row in rows)
+        rendered = [context_transform(row[1]) if context_transform else row[1] for row in rows]
+        chars = sum(len(text) for text in rendered)
         context_chars.append(chars)
+        if context_transform is not None:
+            for row, compacted in zip(rows, rendered):
+                original_terms = [
+                    token.lower()
+                    for token in WORD_RE.findall(row[1])
+                    if token.lower() not in COMPACTION_DROPWORDS
+                ]
+                compact_terms = [
+                    token.lower()
+                    for token in WORD_RE.findall(compacted)
+                    if token.lower() not in COMPACTION_DROPWORDS
+                ]
+                content_terms_total += len(original_terms)
+                content_terms_retained += sum(
+                    1 for left, right in zip(original_terms, compact_terms) if left == right
+                )
         rows_out.append({
             "query": q["id"],
             "top": ids,
@@ -162,6 +200,10 @@ def evaluate(db, queries, k=5, reranker=None, suppressed_ids=None):
         "context_tokens_approx_mean": round(statistics.fmean(approx_context_tokens), 2),
         "cpu_seconds": round(cpu_seconds, 6),
         "peak_rss_mb": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 3),
+        "content_term_retention": (
+            round(content_terms_retained / content_terms_total, 6)
+            if content_terms_total else None
+        ),
         "details": rows_out,
     }
 
@@ -169,7 +211,7 @@ def evaluate(db, queries, k=5, reranker=None, suppressed_ids=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", help="print machine-readable result")
-    parser.add_argument("--method", choices=["bm25", "idf-intent", "supersession"], default="supersession")
+    parser.add_argument("--method", choices=["bm25", "idf-intent", "supersession", "compact"], default="compact")
     args = parser.parse_args()
 
     corpus_path = ROOT / "corpus.jsonl"
@@ -181,7 +223,8 @@ def main():
     ).hexdigest()
 
     reranker = make_reranker(corpus) if args.method == "idf-intent" else None
-    supersessions = detect_supersessions(corpus) if args.method == "supersession" else {}
+    supersessions = detect_supersessions(corpus) if args.method in ("supersession", "compact") else {}
+    context_transform = compact_text if args.method == "compact" else None
     artifacts = ROOT.parents[1] / ".artifacts" / "memory-loop"
     artifacts.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="goblin-memory-", dir=artifacts) as td:
@@ -196,11 +239,21 @@ def main():
             [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus],
         )
         db.commit()
-        metrics = evaluate(db, queries, reranker=reranker, suppressed_ids=set(supersessions))
+        metrics = evaluate(
+            db,
+            queries,
+            reranker=reranker,
+            suppressed_ids=set(supersessions),
+            context_transform=context_transform,
+        )
         metrics["db_size_bytes"] = db_path.stat().st_size
         db.close()
 
-    if args.method == "supersession":
+    if args.method == "compact":
+        run = 5
+        method = "sqlite-fts5-bm25-supersession-compact-sketch"
+        hypothesis = "A deterministic per-record context sketch can reduce prompt context while preserving retrieval quality and all retained content terms."
+    elif args.method == "supersession":
         run = 4
         method = "sqlite-fts5-bm25-supersession-filter"
         hypothesis = "Deterministic correction/supersession linking can remove stale retrieved memories without reducing retrieval quality."

@@ -40,8 +40,7 @@ python3 experiments/memory/run_experiment.py
 
 The script uses only the Python standard library and requires SQLite with FTS5.
 
-Run 002 is a reconstructed, rejected candidate; see `STATE.md` for provenance.
-Reproduce it with `--method idf-intent`.
-
-The default now reproduces Run 004 supersession filtering. Use `--method bm25`
-for the original lexical baseline.
+The default now reproduces Run 005: Run 004 supersession filtering plus a
+conservative context-only compact sketch. Use `--method supersession` for Run 004,
+`--method bm25` for the original lexical baseline, or `--method idf-intent` for
+the rejected reconstructed Run 002 candidate.
