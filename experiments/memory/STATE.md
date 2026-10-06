@@ -49,14 +49,13 @@ ranking rather than replacing lexical search immediately.
 Test only one per hourly run, in this approximate order unless new evidence makes
 another experiment more useful:
 
-1. Add lightweight term/phrase weighting so distinctive terms and exception
-   language outrank generic overlaps.
-2. Add source authority and recency weighting to handle stale notes versus later
-   corrections without losing deterministic lexical retrieval.
-3. Add deterministic deduplication/correction linking before retrieval.
-4. Add compact per-record summaries and compare quality versus context size.
-5. Add CPU-only local embeddings as a challenger to lexical search.
-6. Try lexical + vector hybrid retrieval only after a vector-only result exists.
+1. Add deterministic correction/supersession linking so stale notes can be
+   suppressed or demoted without query-specific ranking rules.
+2. Add compact per-record summaries and compare quality versus context size.
+3. Add CPU-only local embeddings as a challenger to lexical search.
+4. Try lexical + vector hybrid retrieval only after a vector-only result exists.
+5. Before adding more tunable reranking heuristics, add held-out evaluation so
+   benchmark-specific rules cannot silently become the strategy.
 
 ## Reproduction
 
@@ -90,5 +89,29 @@ Reproduce the rejected candidate:
 python3 experiments/memory/run_experiment.py --method idf-intent --json
 ```
 
-The default remains the accepted BM25 baseline. Next, establish held-out queries
-before adding further intent rules, then test source authority and recency.
+The default remains the accepted BM25 baseline.
+
+## Run 003: source authority + recency
+
+Hypothesis: a small, query-independent source-authority prior plus recency bonus
+can improve BM25 ranking without increasing returned context or persistent
+storage.
+
+The candidate reranked only the existing BM25 top five. Its score combined
+normalized BM25 relevance with a 0.10 source-authority weight and 0.02 global
+recency weight. Source classes such as postmortem, decision, requirements,
+architecture, and inventory received higher priors than research, note, Slack,
+and scratch records.
+
+Status: rejected.
+
+On the unchanged benchmark, the candidate produced the same MRR@5 (0.941667),
+Recall@5 (0.95), and Hit@1 (0.90) as BM25. q011 remained rank 3 and q019 remained
+rank 2. Mean latency increased from 0.089707 ms to 0.095805 ms in the same
+sandbox, while mean context stayed about 169.4 tokens, peak RSS stayed about
+92.16 MB, and the SQLite database stayed 45,056 bytes.
+
+Lesson: generic authority and recency priors are useful metadata, but on their
+own they do not resolve the benchmark's lexical ambiguity. No candidate
+implementation was retained. Run 001 remains the champion. Detailed fresh
+measurements are in `runs/003.json`.
