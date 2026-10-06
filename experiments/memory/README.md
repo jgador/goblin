@@ -365,3 +365,27 @@ gate and becomes the operational ingestion/cache champion.
 See `runs/023.json` for enqueue, pending-query, per-batch worker, cache, model,
 CPU, RSS, SQLite, latency, quality, context, and per-query measurements. No
 external inference API or answer generator is used.
+
+## Restart recovery for pending embeddings (Run 024)
+
+Run 024 injects one deterministic interruption after ordinals 0 through 3 are
+committed as `processing` and before any cache lookup or inference. It closes
+and reopens SQLite, confirms all four jobs remain stranded, then atomically
+reclaims them to `pending` before starting the unchanged FIFO worker.
+
+Recovery took 0.484 ms wall time and reclaimed exactly four jobs. The recovered
+ordinals formed the first worker batch. Completion produced 40 unique ready
+documents and 40 unique cache keys, with 36 jobs attempted once and the four
+interrupted jobs attempted twice. The worker retained Run 023's ten batches,
+20 cache hits, 20 misses, exact lexical/vector/hybrid rankings and context, and
+630,784-byte database. Run 024 passes every predeclared gate and becomes the
+operational ingestion/cache champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_recovery --threads 2
+```
+
+See `runs/024.json` for the durable interruption state, reopen observation,
+reclaim timing, attempt distribution, output uniqueness, queue batches, cache,
+model, CPU, RSS, SQLite, latency, quality, context, and per-query measurements.
+No external inference API or answer generator is used.

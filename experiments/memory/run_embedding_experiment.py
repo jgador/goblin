@@ -133,6 +133,7 @@ def main():
             "sqlite_content_sha256",
             "sqlite_namespace_gc",
             "sqlite_pending_queue",
+            "sqlite_pending_recovery",
         ],
         default="none",
     )
@@ -371,6 +372,33 @@ def main():
             "worker_cpu_seconds_at_most": 2.0,
             "selected_before_evaluation": True,
         }
+    elif args.embedding_cache == "sqlite_pending_recovery":
+        result.update(
+            run=24,
+            followup_to_run=23,
+            method="fts5-e5-small-v2-rrf60-int8-fp16-rerank-pending-recovery",
+            hypothesis=(
+                "A reopened SQLite worker can reclaim a durably stranded processing batch "
+                "and complete with unique ready outputs while preserving Run 023 retrieval."
+            ),
+        )
+        result["embedding_queue_rule"] = {
+            "states": ["pending", "processing", "ready"],
+            "ordering": "ascending ingestion ordinal",
+            "batch_size": 4,
+            "preseeded_cache_documents": len(corpus) // 2,
+            "interruption": "after processing commit and before cache lookup or inference",
+            "injected_processing_ordinals": [0, 1, 2, 3],
+            "reclaim": "after reopening SQLite, atomically change processing to pending",
+            "reclaim_wall_seconds_at_most": 0.05,
+            "reclaim_cpu_seconds_at_most": 0.05,
+            "expected_attempts": {"once": len(corpus) - 4, "twice": 4},
+            "expected_worker_cache_hits": len(corpus) // 2,
+            "expected_worker_cache_misses": len(corpus) // 2,
+            "worker_wall_seconds_at_most": 1.0,
+            "worker_cpu_seconds_at_most": 2.0,
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -390,7 +418,11 @@ def main():
     with tempfile.TemporaryDirectory(dir=ARTIFACTS) as td:
         db = sqlite3.connect(Path(td) / "memory.db")
         db.execute("CREATE VIRTUAL TABLE memory USING fts5(id UNINDEXED, text, source UNINDEXED, ts UNINDEXED, tokenize='unicode61')")
-        queue_enabled = args.embedding_cache == "sqlite_pending_queue"
+        queue_enabled = args.embedding_cache in (
+            "sqlite_pending_queue",
+            "sqlite_pending_recovery",
+        )
+        recovery_enabled = args.embedding_cache == "sqlite_pending_recovery"
         if queue_enabled:
             db.execute(
                 "CREATE TABLE embedding_jobs("
@@ -629,6 +661,51 @@ def main():
                     corpus_texts[:preseed_count], namespace, conventions["document_prefix"]
                 )
                 preseed_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+                if recovery_enabled:
+                    interrupted_rows = db.execute(
+                        "SELECT document_id,ordinal FROM embedding_jobs "
+                        "WHERE status='pending' ORDER BY ordinal LIMIT 4"
+                    ).fetchall()
+                    db.executemany(
+                        "UPDATE embedding_jobs SET status='processing',attempts=attempts+1 "
+                        "WHERE document_id=? AND status='pending'",
+                        [(row[0],) for row in interrupted_rows],
+                    )
+                    db.commit()
+                    before_reopen = {
+                        "ordinals": [row[1] for row in interrupted_rows],
+                        "processing_jobs": db.execute(
+                            "SELECT count(*) FROM embedding_jobs WHERE status='processing'"
+                        ).fetchone()[0],
+                    }
+                    db.close()
+                    db = sqlite3.connect(Path(td) / "memory.db")
+                    reopened_ordinals = [
+                        row[0] for row in db.execute(
+                            "SELECT ordinal FROM embedding_jobs "
+                            "WHERE status='processing' ORDER BY ordinal"
+                        ).fetchall()
+                    ]
+                    recovery_started = time.perf_counter()
+                    recovery_cpu_started = time.process_time()
+                    recovery_cursor = db.execute(
+                        "UPDATE embedding_jobs SET status='pending' WHERE status='processing'"
+                    )
+                    recovered_jobs = recovery_cursor.rowcount
+                    db.commit()
+                    result["ingestion_lifecycle"]["recovery"] = {
+                        "interruption_point": "after processing commit and before cache lookup or inference",
+                        "before_reopen": before_reopen,
+                        "processing_ordinals_after_reopen": reopened_ordinals,
+                        "recovered_jobs": recovered_jobs,
+                        "wall_seconds": time.perf_counter() - recovery_started,
+                        "cpu_seconds": time.process_time() - recovery_cpu_started,
+                        "status_counts_after_reclaim": dict(
+                            db.execute(
+                                "SELECT status,count(*) FROM embedding_jobs GROUP BY status"
+                            ).fetchall()
+                        ),
+                    }
                 worker_started = time.perf_counter()
                 worker_cpu_started = time.process_time()
                 batch_metrics = []
@@ -701,6 +778,10 @@ def main():
                 cache_entries, cache_payload_bytes = db.execute(
                     "SELECT count(*),coalesce(sum(length(embedding)),0) FROM embedding_cache"
                 ).fetchone()
+                ready_output = db.execute(
+                    "SELECT count(*),count(DISTINCT document_id),count(DISTINCT cache_key) "
+                    "FROM embedding_jobs WHERE status='ready'"
+                ).fetchone()
                 result["embedding_cache"] = {
                     "namespace_sha256": namespace_sha256,
                     "preseed": preseed_cache,
@@ -727,6 +808,11 @@ def main():
                             "SELECT attempts,count(*) FROM embedding_jobs GROUP BY attempts"
                         ).fetchall()
                     ),
+                    "ready_output": {
+                        "rows": ready_output[0],
+                        "unique_documents": ready_output[1],
+                        "unique_cache_keys": ready_output[2],
+                    },
                     "database_bytes": (Path(td) / "memory.db").stat().st_size,
                     "peak_rss_mib": rss(),
                 }
@@ -1013,7 +1099,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (22 if args.embedding_cache == "sqlite_pending_queue" else
+        reference_run = (23 if args.embedding_cache == "sqlite_pending_recovery" else
+                         22 if args.embedding_cache == "sqlite_pending_queue" else
                          21 if args.embedding_cache == "sqlite_namespace_gc" else
                          20 if cache_enabled else
                          17 if args.vector_storage != "float32" else
@@ -1054,7 +1141,7 @@ def main():
         cache_gate = None
         if cache_enabled:
             cache_metrics = result["embedding_cache"]
-            if args.embedding_cache == "sqlite_pending_queue":
+            if args.embedding_cache in ("sqlite_pending_queue", "sqlite_pending_recovery"):
                 lifecycle = result["ingestion_lifecycle"]
                 enqueue = lifecycle["enqueue"]
                 pending_fts = lifecycle["fts_while_pending"]
@@ -1098,23 +1185,60 @@ def main():
                         worker["cache_hits"] == len(corpus) // 2
                         and worker["cache_misses"] == len(corpus) // 2
                     ),
-                    "all_jobs_ready_once": (
-                        worker["status_counts"]
-                        == {"pending": 0, "processing": 0, "ready": len(corpus)}
-                        and worker["attempts"] == {1: len(corpus)}
-                    ),
                     "worker_within_fixed_bounds": (
                         worker["wall_seconds"] <= 1.0
                         and worker["cpu_seconds"] <= 2.0
                     ),
-                    "run_022_rankings_and_context_exact": (
+                    f"run_{reference_run:03}_rankings_and_context_exact": (
                         retrieval_rankings_exact and context_exact
                     ),
-                    "database_growth_at_most_twenty_five_percent": (
-                        result["vector_db_bytes_including_fts_and_raw_records"]
-                        <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.25
-                    ),
                 }
+                if recovery_enabled:
+                    recovery = lifecycle["recovery"]
+                    cache_gate.update({
+                        "four_processing_jobs_survived_reopen": (
+                            recovery["before_reopen"] == {
+                                "ordinals": [0, 1, 2, 3], "processing_jobs": 4
+                            }
+                            and recovery["processing_ordinals_after_reopen"] == [0, 1, 2, 3]
+                        ),
+                        "four_jobs_reclaimed_below_fifty_ms": (
+                            recovery["recovered_jobs"] == 4
+                            and recovery["wall_seconds"] <= 0.05
+                            and recovery["cpu_seconds"] <= 0.05
+                            and recovery["status_counts_after_reclaim"] == {"pending": len(corpus)}
+                        ),
+                        "recovered_batch_resumed_first": (
+                            worker["batches"][0]["ordinals"] == [0, 1, 2, 3]
+                        ),
+                        "all_jobs_ready_with_unique_outputs": (
+                            worker["status_counts"]
+                            == {"pending": 0, "processing": 0, "ready": len(corpus)}
+                            and worker["attempts"] == {1: len(corpus) - 4, 2: 4}
+                            and worker["ready_output"] == {
+                                "rows": len(corpus),
+                                "unique_documents": len(corpus),
+                                "unique_cache_keys": len(corpus),
+                            }
+                            and cache_metrics["entries_after_worker"] == len(corpus)
+                        ),
+                        "database_not_larger_than_run_023": (
+                            result["vector_db_bytes_including_fts_and_raw_records"]
+                            <= reference["vector_db_bytes_including_fts_and_raw_records"]
+                        ),
+                    })
+                else:
+                    cache_gate.update({
+                        "all_jobs_ready_once": (
+                            worker["status_counts"]
+                            == {"pending": 0, "processing": 0, "ready": len(corpus)}
+                            and worker["attempts"] == {1: len(corpus)}
+                        ),
+                        "database_growth_at_most_twenty_five_percent": (
+                            result["vector_db_bytes_including_fts_and_raw_records"]
+                            <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.25
+                        ),
+                    })
             else:
                 cold_cache = cache_metrics["cold_build"]
                 warm_cache = cache_metrics["warm_reindex"]
@@ -1219,7 +1343,11 @@ def main():
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the pending-ingestion extension to Run {reference_run}: FTS5 remained available before model loading, the bounded FIFO worker reused cache entries, and final retrieval/evidence/context matched."
+            notes=(f"Accepted as the pending-recovery extension to Run {reference_run}: four durably stranded processing jobs survived reopen, were reclaimed, completed with unique ready outputs, and final retrieval/evidence/context matched."
+                   if args.embedding_cache == "sqlite_pending_recovery" and accepted else
+                   f"Rejected as a pending-recovery extension to Run {reference_run}: durable interruption, bounded reclaim, unique completion, final parity, or a resource gate failed."
+                   if args.embedding_cache == "sqlite_pending_recovery" else
+                   f"Accepted as the pending-ingestion extension to Run {reference_run}: FTS5 remained available before model loading, the bounded FIFO worker reused cache entries, and final retrieval/evidence/context matched."
                    if args.embedding_cache == "sqlite_pending_queue" and accepted else
                    f"Rejected as a pending-ingestion extension to Run {reference_run}: immediate lexical availability, bounded draining, cache reuse, final parity, or a resource gate failed."
                    if args.embedding_cache == "sqlite_pending_queue" else
