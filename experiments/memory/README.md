@@ -39,3 +39,6 @@ python3 experiments/memory/run_experiment.py
 ```
 
 The script uses only the Python standard library and requires SQLite with FTS5.
+
+Run 002 is a reconstructed, rejected candidate; see `STATE.md` for provenance.
+Reproduce it with `--method idf-intent`. The default is still BM25.

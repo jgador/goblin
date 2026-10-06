@@ -1,0 +1,492 @@
+{
+  "baseline": {
+    "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+    "context_chars_mean": 676.0,
+    "context_tokens_approx_mean": 169.4,
+    "corpus_documents": 40,
+    "cpu_seconds": 0.002372,
+    "db_size_bytes": 45056,
+    "details": [
+      {
+        "first_relevant_rank": 1,
+        "query": "q001",
+        "top": [
+          "d002",
+          "d003",
+          "d001",
+          "d007",
+          "d010"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q002",
+        "top": [
+          "d007",
+          "d008",
+          "d005",
+          "d004",
+          "d022"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q003",
+        "top": [
+          "d004",
+          "d009",
+          "d006",
+          "d010",
+          "d018"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q004",
+        "top": [
+          "d019",
+          "d020",
+          "d016",
+          "d011",
+          "d031"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q005",
+        "top": [
+          "d012",
+          "d014",
+          "d011",
+          "d016",
+          "d040"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q006",
+        "top": [
+          "d013",
+          "d012",
+          "d007",
+          "d040",
+          "d037"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q007",
+        "top": [
+          "d021",
+          "d015",
+          "d014",
+          "d024",
+          "d025"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q008",
+        "top": [
+          "d022",
+          "d039",
+          "d009",
+          "d005",
+          "d021"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q009",
+        "top": [
+          "d024",
+          "d021",
+          "d017",
+          "d022",
+          "d015"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q010",
+        "top": [
+          "d025",
+          "d011",
+          "d012",
+          "d016",
+          "d017"
+        ]
+      },
+      {
+        "first_relevant_rank": 3,
+        "query": "q011",
+        "top": [
+          "d014",
+          "d028",
+          "d026",
+          "d020",
+          "d027"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q012",
+        "top": [
+          "d027",
+          "d026",
+          "d032",
+          "d017",
+          "d036"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q013",
+        "top": [
+          "d028",
+          "d015",
+          "d012",
+          "d027",
+          "d018"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q014",
+        "top": [
+          "d029",
+          "d028",
+          "d020",
+          "d034",
+          "d030"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q015",
+        "top": [
+          "d030",
+          "d031",
+          "d014",
+          "d010",
+          "d029"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q016",
+        "top": [
+          "d032",
+          "d031",
+          "d010",
+          "d030",
+          "d029"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q017",
+        "top": [
+          "d033",
+          "d035",
+          "d031",
+          "d034",
+          "d016"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q018",
+        "top": [
+          "d034",
+          "d035",
+          "d011",
+          "d033",
+          "d010"
+        ]
+      },
+      {
+        "first_relevant_rank": 2,
+        "query": "q019",
+        "top": [
+          "d036",
+          "d037",
+          "d017",
+          "d024",
+          "d019"
+        ]
+      },
+      {
+        "first_relevant_rank": 1,
+        "query": "q020",
+        "top": [
+          "d040",
+          "d015",
+          "d018",
+          "d039",
+          "d013"
+        ]
+      }
+    ],
+    "hit_at_1": 0.9,
+    "hypothesis": "SQLite FTS5 with BM25 is a useful low-cost lexical baseline for messy memory retrieval.",
+    "k": 5,
+    "latency_ms_mean": 0.114669,
+    "latency_ms_p95": 0.133401,
+    "method": "sqlite-fts5-bm25",
+    "mrr_at_5": 0.941667,
+    "peak_rss_mb": 13.875,
+    "python_version": "3.12.14",
+    "query_count": 20,
+    "recall_at_5": 0.95,
+    "run": 1,
+    "sqlite_version": "3.53.1"
+  },
+  "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+  "champion": false,
+  "context_chars_mean": 676.0,
+  "context_tokens_approx_mean": 169.4,
+  "corpus_documents": 40,
+  "cpu_seconds": 0.001851,
+  "db_size_bytes": 45056,
+  "details": [
+    {
+      "first_relevant_rank": 1,
+      "query": "q001",
+      "top": [
+        "d002",
+        "d003",
+        "d001",
+        "d007",
+        "d010"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q002",
+      "top": [
+        "d007",
+        "d008",
+        "d005",
+        "d004",
+        "d022"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q003",
+      "top": [
+        "d004",
+        "d009",
+        "d010",
+        "d006",
+        "d018"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q004",
+      "top": [
+        "d019",
+        "d020",
+        "d016",
+        "d011",
+        "d031"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q005",
+      "top": [
+        "d012",
+        "d011",
+        "d016",
+        "d014",
+        "d040"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q006",
+      "top": [
+        "d013",
+        "d012",
+        "d007",
+        "d040",
+        "d037"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q007",
+      "top": [
+        "d021",
+        "d015",
+        "d014",
+        "d024",
+        "d025"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q008",
+      "top": [
+        "d022",
+        "d039",
+        "d009",
+        "d021",
+        "d005"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q009",
+      "top": [
+        "d024",
+        "d017",
+        "d021",
+        "d015",
+        "d022"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q010",
+      "top": [
+        "d025",
+        "d012",
+        "d016",
+        "d017",
+        "d011"
+      ]
+    },
+    {
+      "first_relevant_rank": 3,
+      "query": "q011",
+      "top": [
+        "d014",
+        "d028",
+        "d026",
+        "d020",
+        "d027"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q012",
+      "top": [
+        "d027",
+        "d026",
+        "d036",
+        "d032",
+        "d017"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q013",
+      "top": [
+        "d028",
+        "d015",
+        "d012",
+        "d027",
+        "d018"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q014",
+      "top": [
+        "d029",
+        "d028",
+        "d020",
+        "d034",
+        "d030"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q015",
+      "top": [
+        "d030",
+        "d014",
+        "d031",
+        "d010",
+        "d029"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q016",
+      "top": [
+        "d032",
+        "d010",
+        "d031",
+        "d030",
+        "d029"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q017",
+      "top": [
+        "d033",
+        "d035",
+        "d031",
+        "d034",
+        "d016"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q018",
+      "top": [
+        "d034",
+        "d035",
+        "d011",
+        "d033",
+        "d010"
+      ]
+    },
+    {
+      "first_relevant_rank": 2,
+      "query": "q019",
+      "top": [
+        "d036",
+        "d037",
+        "d024",
+        "d017",
+        "d019"
+      ]
+    },
+    {
+      "first_relevant_rank": 1,
+      "query": "q020",
+      "top": [
+        "d040",
+        "d015",
+        "d039",
+        "d013",
+        "d018"
+      ]
+    }
+  ],
+  "hit_at_1": 0.9,
+  "hypothesis": "IDF-weighted lexical coverage and a small exception-intent reranker improve BM25 ranking.",
+  "k": 5,
+  "latency_ms_mean": 0.088941,
+  "latency_ms_p95": 0.140652,
+  "method": "sqlite-fts5-bm25-idf-intent",
+  "mrr_at_5": 0.941667,
+  "notes": "No quality improvement; preserve Run 001 champion. Exception-intent heuristic needs held-out validation. Prior reported MRR 1.0 could not be reproduced with this reconstruction.",
+  "peak_rss_mb": 13.75,
+  "provenance": "Reconstructed on 2026-10-06 from the prior conversation description. The original unpushed Run 002 patch was unavailable; these are fresh measurements, not the previously reported results.",
+  "python_version": "3.12.14",
+  "query_count": 20,
+  "recall_at_5": 0.95,
+  "requested_orchestration_model": "GPT-6.1 Sol",
+  "retrieval_uses_llm": false,
+  "run": 2,
+  "sqlite_version": "3.53.1",
+  "status": "rejected"
+}

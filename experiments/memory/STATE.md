@@ -69,3 +69,26 @@ python3 experiments/memory/run_experiment.py --json
 Expected quality for generation 1 is stable: MRR@5 0.941667, Recall@5 0.95, and
 Hit@1 0.90. Latency, CPU, and RSS vary by sandbox and should be compared only to
 runs made in a similar environment.
+
+## Run 002 recovery and rerun
+
+The original Run 002 patch was not retained in the accessible workspace or
+conversation history. The prior report claimed MRR@5 and Hit@1 of 1.0, but
+those measurements are not verified artifacts. A reconstruction of IDF-weighted
+lexical coverage plus a small exception-intent reranker was evaluated on the
+unchanged benchmark on 2026-10-06. It achieved MRR@5 0.941667, Recall@5 0.95,
+and Hit@1 0.90, so it was rejected. Run 001 remains the champion.
+
+Fresh candidate and baseline measurements, along with explicit provenance, are
+stored in `runs/002.json`. This recovery does not claim to be the original patch.
+The candidate only reranks the BM25 top five and cannot improve candidate recall.
+The exception-intent rule risks overfitting and needs held-out validation.
+
+Reproduce the rejected candidate:
+
+```bash
+python3 experiments/memory/run_experiment.py --method idf-intent --json
+```
+
+The default remains the accepted BM25 baseline. Next, establish held-out queries
+before adding further intent rules, then test source authority and recency.

@@ -26,7 +26,35 @@ def fts_query(text):
     return " OR ".join(f'"{t}"' for t in terms)
 
 
-def evaluate(db, queries, k=5):
+def make_reranker(corpus):
+    document_terms = {
+        doc["id"]: {m.group(0).lower() for m in WORD_RE.finditer(doc["text"])}
+        for doc in corpus
+    }
+    frequencies = {}
+    for terms in document_terms.values():
+        for term in terms:
+            frequencies[term] = frequencies.get(term, 0) + 1
+    idf = {term: math.log(1 + len(corpus) / count) for term, count in frequencies.items()}
+
+    def rerank(query, rows):
+        terms = {m.group(0).lower() for m in WORD_RE.finditer(query)}
+        total = sum(idf.get(term, 0) for term in terms) or 1
+
+        def score(row):
+            coverage = sum(idf.get(term, 0) for term in terms & document_terms[row[0]]) / total
+            # A general exception-intent heuristic, deliberately recorded as an
+            # overfitting risk until evaluated on held-out questions.
+            exception_intent = "when" in terms and "remain" in terms
+            exception_bonus = 0.25 if exception_intent and "exceptions" in document_terms[row[0]] else 0
+            return (coverage + exception_bonus, -row[2])
+
+        return sorted(rows, key=score, reverse=True)
+
+    return rerank
+
+
+def evaluate(db, queries, k=5, reranker=None):
     latencies_ms = []
     context_chars = []
     reciprocal_ranks = []
@@ -41,6 +69,8 @@ def evaluate(db, queries, k=5):
             "SELECT id, text, bm25(memory) AS score FROM memory WHERE memory MATCH ? ORDER BY score LIMIT ?",
             (fts_query(q["query"]), k),
         ).fetchall()
+        if reranker is not None:
+            rows = reranker(q["query"], rows)
         elapsed = (time.perf_counter() - started) * 1000
         latencies_ms.append(elapsed)
         ids = [row[0] for row in rows]
@@ -73,6 +103,7 @@ def evaluate(db, queries, k=5):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--json", action="store_true", help="print machine-readable result")
+    parser.add_argument("--method", choices=["bm25", "idf-intent"], default="bm25")
     args = parser.parse_args()
 
     corpus_path = ROOT / "corpus.jsonl"
@@ -83,7 +114,10 @@ def main():
         corpus_path.read_bytes() + b"\0" + queries_path.read_bytes()
     ).hexdigest()
 
-    with tempfile.TemporaryDirectory(prefix="goblin-memory-") as td:
+    reranker = make_reranker(corpus) if args.method == "idf-intent" else None
+    artifacts = ROOT.parents[1] / ".artifacts" / "memory-loop"
+    artifacts.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="goblin-memory-", dir=artifacts) as td:
         db_path = Path(td) / "memory.db"
         db = sqlite3.connect(db_path)
         db.execute(
@@ -95,14 +129,14 @@ def main():
             [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus],
         )
         db.commit()
-        metrics = evaluate(db, queries)
+        metrics = evaluate(db, queries, reranker=reranker)
         metrics["db_size_bytes"] = db_path.stat().st_size
         db.close()
 
     result = {
-        "run": 1,
-        "method": "sqlite-fts5-bm25",
-        "hypothesis": "SQLite FTS5 with BM25 is a useful low-cost lexical baseline for messy memory retrieval.",
+        "run": 2 if reranker else 1,
+        "method": "sqlite-fts5-bm25-idf-intent" if reranker else "sqlite-fts5-bm25",
+        "hypothesis": "IDF-weighted lexical coverage and a small exception-intent reranker improve BM25 ranking." if reranker else "SQLite FTS5 with BM25 is a useful low-cost lexical baseline for messy memory retrieval.",
         "corpus_documents": len(corpus),
         "benchmark_sha256": benchmark_sha256,
         "python_version": __import__("platform").python_version(),
