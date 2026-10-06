@@ -185,3 +185,19 @@ Complete offline E5 pipeline after model preparation:
 Run 014 is the semantic-quality champion's current context-assembly strategy.
 See `runs/014.json` for isolated assembly timing, full embedding/search/context
 timing, selection rules and per-query evidence results.
+
+## Conservative cross-record deduplication (Run 015)
+
+Run 015 replayed Run 014 and tested fixed cross-record near-duplicate clause
+removal with exact semantic-operator and identifier guards plus source
+provenance merging. It found no eligible duplicates on either frozen set, left
+context unchanged, and increased isolated assembly cost, so it was rejected.
+Run 014 remains the champion; the deduplication thresholds were not relaxed
+after observing benchmark results.
+
+```bash
+python3 experiments/memory/run_deduplication_experiment.py --iterations 1000
+```
+
+See `runs/015.json` for the rule, timing, provenance invariant, and per-query
+results. The replay uses no model weights, remote APIs, or answer generator.

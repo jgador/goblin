@@ -15,6 +15,10 @@ Run 014 extends Run 010's accepted E5 retrieval with query-aware context
 assembly. It preserves every original and held-out retrieval/evidence metric
 while reducing mean assembled context on both frozen sets.
 
+Run 015 did not replace it. The predeclared conservative cross-record
+near-duplicate rule found no eligible clauses in either frozen set, so it added
+comparison work without reducing context.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
 Its process RSS was about 15 MiB in the Run 010 environment versus 236.312 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
@@ -109,6 +113,11 @@ champion while Run 005 remained the lightweight fallback.
   original context by 5.52% and held-out context by 5.64% without changing any
   retrieval metric or losing held-out evidence. Its isolated assembly overhead
   was about 0.04 ms per query, so it extends Run 010 as the current champion.
+- Run 015 showed that conservative cross-record clause deduplication has no
+  opportunity after Run 014 on this benchmark: it removed zero clauses, left
+  context unchanged, and increased isolated assembly from about 0.05 ms to
+  0.27-0.30 ms per query. Do not loosen similarity thresholds against the
+  frozen labels; that would weaken semantic guards and invite overfitting.
 
 ## Next hypotheses
 
@@ -127,8 +136,11 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    against q003 or try another dimension without a specific follow-up reason.
 7. Run 014 completed fixed query-aware clause selection and is the current
    context-assembly extension to Run 010.
-8. Next: test fixed cross-record near-duplicate clause removal after Run 014,
-   preserving provenance and the frozen evidence set.
+8. Run 015 completed fixed cross-record near-duplicate clause removal; the
+   candidate was rejected because it found no safe duplicates.
+9. Next: test a fixed rank-aware context budget after Run 014 that always keeps
+   one selected clause per retrieved record, admits additional selected clauses
+   in retrieval order up to a predeclared token limit, and preserves provenance.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -433,3 +445,29 @@ Reproduce the complete pipeline after the Run 010 model preparation:
 
 The final command is offline. Full pipeline measurements, isolated assembly
 timings, selection rules and per-query contexts are in `runs/014.json`.
+
+## Run 015: cross-record near-duplicate clause removal
+
+Run 015 replayed Run 014's fixed rankings and query-aware selected clauses, then
+tested one predeclared cross-record filter. It retained the first occurrence in
+retrieval order only when token-set Jaccard was at least 0.80 or smaller-set
+containment was at least 0.90. Semantic operators, numbers, underscore tokens,
+and uppercase identifiers had to match exactly. Any removed clause would have
+merged its document and clause provenance into the retained entry.
+
+No selected clauses met that conservative rule on either frozen set. Original
+context therefore stayed at 139.55 approximate tokens and held-out context at
+145.65, with all retrieval/evidence metrics unchanged and provenance invariants
+passing. Mean isolated assembly rose from 0.047 to 0.274 ms on original queries
+and from 0.052 to 0.302 ms on held-out queries. The candidate is rejected and
+Run 014 remains champion. Loosening the thresholds after observing this result
+would be label-driven and risks merging clauses with different meaning.
+
+Reproduce without model weights or external APIs:
+
+```bash
+python3 experiments/memory/run_deduplication_experiment.py --iterations 1000
+```
+
+Full metrics and per-query duplicate/provenance results are in `runs/015.json`.
+This is retrieval/evidence evaluation only; no answer generator was evaluated.
