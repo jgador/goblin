@@ -287,7 +287,7 @@ top-five result, evidence score, and context mean on both frozen sets.
 SQLite fell 69.06%, from 1,654,784 to 512,000 bytes. Candidate search plus
 reranking remained near 1 ms, below the fixed 2 ms gate. End-to-end latency rose
 to 9.17 ms original and 9.37 ms held-out, an explicit storage tradeoff. Run 020
-passes the predeclared gate and is the current champion.
+passes the predeclared gate and remains the retrieval and vector-storage core.
 
 ```bash
 .artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --threads 2
@@ -295,3 +295,27 @@ passes the predeclared gate and is the current champion.
 
 See `runs/020.json` for complete measurements and rankings. No external
 inference API or answer generator is used.
+
+## Content-addressed SQLite embedding cache (Run 021)
+
+Run 021 adds a reusable FP32 embedding cache to the Run 020 SQLite database.
+Keys bind the pinned E5 revision, dimensions, prefixes, pooling, normalization,
+token limit, and distance convention to NFC-normalized document text. The
+retrieval, reranking, fusion, supersession, and context pipeline is unchanged.
+
+The cold build produced 40 misses. An unchanged warm reindex produced 40 hits
+and no inference, reducing wall time from 0.380 seconds to 0.000587 seconds
+(99.85%). A deterministic edit to one record produced 39 hits and one miss in
+0.00976 seconds. Every Run 020 vector-only and hybrid top-five result, quality
+metric, evidence score, and context mean matched exactly. Combined SQLite size
+rose from 512,000 to 606,208 bytes, an 18.40% increase within the fixed 25%
+gate, so Run 021 is accepted as the operational cache champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_content_sha256 --threads 2
+```
+
+See `runs/021.json` for cold, warm, incremental-update, model, CPU, RSS,
+SQLite, latency, quality, context, and per-query measurements. Model inference
+is local and offline after preparation. No external inference API or answer
+generator is used.

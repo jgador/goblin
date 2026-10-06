@@ -2,15 +2,18 @@
 
 ## Current champions
 
-Semantic-quality and storage champion: Run 020,
+Operational embedding-cache champion: Run 021,
+`fts5-e5-small-v2-rrf60-int8-fp16-rerank-content-cache`.
+
+Semantic retrieval and compact vector-storage core: Run 020,
 `fts5-e5-small-v2-rrf60-rank-one-budget-int8-maxabs-fp16-rerank`.
 
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 020 hypothesis: max-absolute int8 vec0 candidate retrieval followed by
-FP16 reranking can match Run 017 quality and context with substantially less
-SQLite storage.
+Run 021 hypothesis: a content-addressed SQLite embedding cache can avoid
+unchanged-document inference and limit a one-record update to one embedding
+while preserving Run 020 retrieval.
 
 Run 014 extends Run 010's accepted E5 retrieval with query-aware context
 assembly. It preserves every original and held-out retrieval/evidence metric
@@ -32,12 +35,19 @@ Run 019 did not replace Run 017. Per-vector max-absolute int8 scaling restored
 every original hybrid top-five result and its context, but two held-out hybrid
 top-five sets still changed and mean held-out context increased by 0.61%.
 
-Run 020 replaces Run 017 as the overall champion. A fixed int8 top-20 candidate
-pool followed by SQLite-stored FP16 reranking exactly restores every Run 017
-vector-only and hybrid top-five result while reducing SQLite storage by 69.06%.
+Run 020 replaced Run 017 as the overall champion at that stage. A fixed int8
+top-20 candidate pool followed by SQLite-stored FP16 reranking exactly restores
+every Run 017 vector-only and hybrid top-five result while reducing SQLite
+storage by 69.06%.
+
+Run 021 extends Run 020 operationally. Its content-addressed FP32 cache produced
+40/40 warm hits, reduced reindex wall time by 99.85%, and embedded only the one
+changed record in a deterministic update. Retrieval, evidence, and context
+matched Run 020 exactly. Combined SQLite storage rose 18.40% to 606,208 bytes,
+within the predeclared 25% gate.
 
 Run 005 remains the operational fallback when embedding cost is not acceptable.
-Its process RSS was about 15 MiB in the Run 010 environment versus 228.238 MiB
+Its process RSS was about 15 MiB in the Run 010 environment versus 228.734 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
 
 Benchmark generation: 1
@@ -47,20 +57,21 @@ Queries: 20
 
 ### Champion behavior
 
-Run 020 uses Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
+Run 021 uses Run 020's fixed retrieval and context pipeline. That pipeline uses
+Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
 RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
 context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
 attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
 distance. Full original records remain in SQLite for provenance.
 
-For semantic retrieval, Run 020 first searches a max-absolute-scaled sqlite-vec
+For semantic retrieval, Run 021 first searches a max-absolute-scaled sqlite-vec
 `int8[384]` index for 20 candidates. It fetches FP16 copies of those vectors
 from ordinary SQLite blobs, computes cosine scores in FP32 against the FP32
 query, and reranks to the top 10 before unchanged RRF. The FP16 payload is
 30,720 bytes for 40 records. The rule was fixed before evaluation.
 
-At context assembly, Run 020 retains Run 017's rules. It first applies Run 014's
+At context assembly, Run 021 retains Run 017's rules. It first applies Run 014's
 selector and protects every selected clause from the rank-one record and the
 first selected clause from each lower-rank record. It then admits remaining
 lower-rank clauses in retrieval order up to a 128 approximate-token target.
@@ -71,6 +82,12 @@ The compactor removes a conservative set of high-frequency function words. It de
 
 The full record remains stored. The sketch is generated at context assembly time, so persistent storage remains unchanged.
 
+Before indexing, Run 021 keys cached FP32 document embeddings by SHA-256 over a
+namespace containing the pinned model revision, dimensions, and embedding
+conventions plus the document prefix and NFC-normalized stripped text. The
+cache remains in the same SQLite database as FTS5 and vec0. A cache hit is
+decoded and reused; a miss is locally embedded and inserted.
+
 ### Semantic champion metrics
 
 - Original MRR@5: 0.975
@@ -79,17 +96,21 @@ The full record remains stored. The sketch is generated at context assembly time
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
 - Mean original context: 128.80 approximate tokens
 - Mean held-out context: 131.40 approximate tokens
-- Mean int8 candidate search: 0.539 ms original, 0.475 ms held-out
-- Mean FP16 rerank: 0.279 ms original, 0.287 ms held-out
-- Mean total search/fusion: 1.071 ms original, 1.007 ms held-out
-- Mean end-to-end retrieval/context latency: 9.17 ms original, 9.37 ms held-out
-- Mean context assembly latency: 0.147 ms original, 0.137 ms held-out
-- Peak process RSS: 228.352 MiB
+- Mean int8 candidate search: 0.255 ms original, 0.322 ms held-out
+- Mean FP16 rerank: 0.146 ms original, 0.164 ms held-out
+- Mean total search/fusion: 0.543 ms original, 0.622 ms held-out
+- Mean end-to-end retrieval/context latency: 4.77 ms original, 5.34 ms held-out
+- Mean context assembly latency: 0.081 ms original, 0.082 ms held-out
+- Peak process RSS: 228.734 MiB
 - Model and tokenizer: 133,804,864 bytes
-- SQLite with FTS5, records, int8 vec0, and FP16 rerank blobs: 512,000 bytes
+- SQLite with FTS5, records, int8 vec0, FP16 rerank blobs, and FP32 cache:
+  606,208 bytes
+- Cold cache build: 40 misses, 0.380 s wall, 0.744 s CPU
+- Warm reindex: 40 hits, 0.000587 s wall, 0.000587 s CPU
+- One-record update: 39 hits, 1 miss, 0.00976 s wall, 0.0218 s CPU
 
-Measured process CPU across 20 hybrid queries was 0.368 seconds on the original
-set and 0.377 seconds on held-out. Resource measurements are environment-sensitive;
+Measured process CPU across 20 hybrid queries was 0.188 seconds on the original
+set and 0.215 seconds on held-out. Resource measurements are environment-sensitive;
 the committed reproduction records load, embedding, query, search, end-to-end,
 CPU and process-lifetime peak RSS separately.
 
@@ -172,6 +193,11 @@ champion while Run 005 remained the lightweight fallback.
   means. SQLite fell 69.06% to 512,000 bytes. Search/fusion rose to about 1 ms
   and end-to-end latency rose 16.12% original and 33.09% held-out, but remained
   9.17-9.37 ms and within the fixed 2 ms search gate, so Run 020 is accepted.
+- Run 021 showed that a model- and convention-namespaced content hash is enough
+  to make unchanged reindexing effectively inference-free on this corpus. Warm
+  wall and CPU fell by 99.85% and 99.92%; a one-record edit caused exactly one
+  miss. The cache added 94,208 bytes to the Run 020 database, so retaining old
+  content versions needs an explicit garbage-collection policy before scale-up.
 
 ## Next hypotheses
 
@@ -202,11 +228,15 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
     scaling. It was rejected after a 0.61% held-out context increase despite
     exact original results and unchanged scored quality/evidence.
 13. Run 020 completed a two-stage compact vector path using a max-absolute int8
-    top-20 pool and SQLite-stored FP16 reranking. It is the current champion.
-14. Next: test a content-addressed SQLite embedding cache keyed by normalized
-    text, model revision, and embedding conventions. Reindex the unchanged
-    corpus, then a deterministic one-record update; require Run 020 retrieval
-    parity while measuring avoided inference, update CPU/latency, and cache cost.
+    top-20 pool and SQLite-stored FP16 reranking. It remains the retrieval and
+    vector-storage core.
+14. Run 021 completed a content-addressed SQLite embedding cache keyed by
+    normalized text, model revision, and embedding conventions. It is the
+    current operational champion.
+15. Next: test namespace-safe cache invalidation by changing one embedding
+    convention in a controlled replay. Require zero cross-namespace hits,
+    unchanged Run 021 retrieval after rebuilding, and bounded stale-cache
+    cleanup cost without tuning retrieval against labels.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 

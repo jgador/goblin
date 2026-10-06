@@ -11,6 +11,7 @@ import sqlite3
 import statistics
 import tempfile
 import time
+import unicodedata
 from pathlib import Path
 
 from run_experiment import (
@@ -125,6 +126,11 @@ def main():
         choices=["compact", "query_aware", "rank_one_protected_budget"],
         default="compact",
     )
+    parser.add_argument(
+        "--embedding-cache",
+        choices=["none", "sqlite_content_sha256"],
+        default="none",
+    )
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("threads must be positive")
@@ -134,6 +140,12 @@ def main():
         args.model == "e5" and args.context == "rank_one_protected_budget"
     ):
         parser.error("int8 vector storage extends the Run 017 E5 champion")
+    if args.embedding_cache != "none" and not (
+        args.model == "e5"
+        and args.context == "rank_one_protected_budget"
+        and args.vector_storage == "int8_maxabs_fp16_rerank"
+    ):
+        parser.error("the SQLite embedding cache extends the Run 020 champion")
     if args.model_dir is None:
         model_dirs = {"nomic": "nomic", "nomic_256": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
@@ -286,6 +298,26 @@ def main():
             "query_quantization": "max-absolute int8 for candidate search; FP32 for reranking",
             "selected_before_evaluation": True,
         }
+    if args.embedding_cache == "sqlite_content_sha256":
+        result.update(
+            run=21,
+            followup_to_run=20,
+            method="fts5-e5-small-v2-rrf60-int8-fp16-rerank-content-cache",
+            hypothesis=(
+                "A content-addressed SQLite embedding cache can avoid unchanged-document "
+                "inference and limit a one-record update to one embedding while preserving Run 020 retrieval."
+            ),
+        )
+        result["embedding_cache_rule"] = {
+            "key": "SHA-256 of namespace JSON, NUL, document prefix, NUL, and NFC-normalized stripped text",
+            "namespace": "model name, pinned revision, dimensions, and embedding conventions",
+            "stored_precision": "float32",
+            "warm_reindex_expected": {"hits": len(corpus), "misses": 0},
+            "one_record_update_expected": {"hits": len(corpus) - 1, "misses": 1},
+            "update_document": "d040",
+            "update_suffix": " Cache experiment revision two.",
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -368,13 +400,143 @@ def main():
                 return quantize_maxabs(vector).tobytes()
             return vector.tobytes()
 
-        start = time.perf_counter()
-        cpu = time.process_time()
-        vectors = np.concatenate([embed([d["text"] for d in corpus[i:i+4]], conventions["document_prefix"]) for i in range(0, len(corpus), 4)])
-        seconds = time.perf_counter() - start
-        result["corpus_embedding"] = {"documents": len(corpus), "batch_size": 4,
-                                      "wall_seconds": seconds, "cpu_seconds": time.process_time() - cpu,
-                                      "documents_per_second": len(corpus) / seconds, "peak_rss_mib": rss()}
+        cache_enabled = args.embedding_cache == "sqlite_content_sha256"
+        if cache_enabled:
+            namespace = json.dumps(
+                {
+                    "model": manifest["model"],
+                    "revision": manifest["revision"],
+                    "dimensions": dimensions,
+                    "conventions": conventions,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            namespace_sha256 = hashlib.sha256(namespace.encode()).hexdigest()
+            db.execute(
+                "CREATE TABLE embedding_cache("
+                "cache_key TEXT PRIMARY KEY, namespace_sha256 TEXT NOT NULL, "
+                "content_sha256 TEXT NOT NULL, embedding BLOB NOT NULL)"
+            )
+            db.commit()
+
+            def cached_document_embeddings(texts):
+                started = time.perf_counter()
+                cpu_started = time.process_time()
+                output = [None] * len(texts)
+                missing = {}
+                hits = 0
+                for index, text in enumerate(texts):
+                    normalized = unicodedata.normalize("NFC", text).strip()
+                    content_sha256 = hashlib.sha256(normalized.encode()).hexdigest()
+                    key_input = (
+                        namespace.encode() + b"\0"
+                        + conventions["document_prefix"].encode() + b"\0"
+                        + normalized.encode()
+                    )
+                    cache_key = hashlib.sha256(key_input).hexdigest()
+                    row = db.execute(
+                        "SELECT embedding FROM embedding_cache WHERE cache_key=?",
+                        (cache_key,),
+                    ).fetchone()
+                    if row is not None:
+                        output[index] = np.frombuffer(row[0], dtype=np.float32).copy()
+                        hits += 1
+                    else:
+                        item = missing.setdefault(
+                            cache_key,
+                            {"text": normalized, "content_sha256": content_sha256, "indices": []},
+                        )
+                        item["indices"].append(index)
+                inference_started = time.perf_counter()
+                inference_cpu_started = time.process_time()
+                missing_items = list(missing.items())
+                for offset in range(0, len(missing_items), 4):
+                    batch = missing_items[offset:offset + 4]
+                    embedded = embed(
+                        [item[1]["text"] for item in batch],
+                        conventions["document_prefix"],
+                    )
+                    for (cache_key, item), vector in zip(batch, embedded):
+                        db.execute(
+                            "INSERT INTO embedding_cache VALUES (?,?,?,?)",
+                            (cache_key, namespace_sha256, item["content_sha256"], vector.tobytes()),
+                        )
+                        for index in item["indices"]:
+                            output[index] = vector
+                inference_wall = time.perf_counter() - inference_started
+                inference_cpu = time.process_time() - inference_cpu_started
+                db.commit()
+                vectors_out = np.stack(output).astype(np.float32)
+                assert vectors_out.shape == (len(texts), dimensions)
+                total_wall = time.perf_counter() - started
+                return vectors_out, {
+                    "documents": len(texts),
+                    "hits": hits,
+                    "misses": len(missing_items),
+                    "total_wall_seconds": total_wall,
+                    "total_cpu_seconds": time.process_time() - cpu_started,
+                    "inference_wall_seconds": inference_wall,
+                    "inference_cpu_seconds": inference_cpu,
+                    "documents_per_second": len(texts) / total_wall,
+                    "peak_rss_mib": rss(),
+                }
+
+            corpus_texts = [document["text"] for document in corpus]
+            _, cold_cache = cached_document_embeddings(corpus_texts)
+            cold_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+            vectors, warm_cache = cached_document_embeddings(corpus_texts)
+            warm_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+            updated_texts = corpus_texts.copy()
+            update_index = next(i for i, document in enumerate(corpus) if document["id"] == "d040")
+            updated_texts[update_index] += " Cache experiment revision two."
+            _, incremental_cache = cached_document_embeddings(updated_texts)
+            incremental_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+            cache_entries, cache_payload_bytes = db.execute(
+                "SELECT count(*),coalesce(sum(length(embedding)),0) FROM embedding_cache"
+            ).fetchone()
+            result["embedding_cache"] = {
+                "namespace_sha256": namespace_sha256,
+                "cold_build": cold_cache,
+                "warm_reindex": warm_cache,
+                "one_record_update": incremental_cache,
+                "entries_after_update": cache_entries,
+                "payload_bytes_after_update": cache_payload_bytes,
+                "warm_wall_reduction_percent": (
+                    (cold_cache["total_wall_seconds"] - warm_cache["total_wall_seconds"])
+                    / cold_cache["total_wall_seconds"] * 100
+                ),
+                "warm_cpu_reduction_percent": (
+                    (cold_cache["total_cpu_seconds"] - warm_cache["total_cpu_seconds"])
+                    / cold_cache["total_cpu_seconds"] * 100
+                ),
+            }
+            result["corpus_embedding"] = {
+                "documents": len(corpus),
+                "batch_size": 4,
+                "wall_seconds": cold_cache["total_wall_seconds"],
+                "cpu_seconds": cold_cache["total_cpu_seconds"],
+                "inference_wall_seconds": cold_cache["inference_wall_seconds"],
+                "inference_cpu_seconds": cold_cache["inference_cpu_seconds"],
+                "documents_per_second": cold_cache["documents_per_second"],
+                "peak_rss_mib": cold_cache["peak_rss_mib"],
+            }
+        else:
+            start = time.perf_counter()
+            cpu = time.process_time()
+            vectors = np.concatenate([
+                embed([d["text"] for d in corpus[i:i+4]], conventions["document_prefix"])
+                for i in range(0, len(corpus), 4)
+            ])
+            seconds = time.perf_counter() - start
+            result["corpus_embedding"] = {
+                "documents": len(corpus),
+                "batch_size": 4,
+                "wall_seconds": seconds,
+                "cpu_seconds": time.process_time() - cpu,
+                "documents_per_second": len(corpus) / seconds,
+                "peak_rss_mib": rss(),
+            }
         db.enable_load_extension(True)
         sqlite_vec.load(db)
         db.enable_load_extension(False)
@@ -512,7 +674,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (17 if args.vector_storage != "float32" else
+        reference_run = (20 if cache_enabled else
+                         17 if args.vector_storage != "float32" else
                          14 if args.context == "rank_one_protected_budget" else
                          10 if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm") else
                          8)
@@ -547,8 +710,36 @@ def main():
             result["candidate"][dataset]["search_ms_mean"] < 2.0
             for dataset in ("original", "heldout")
         )
+        cache_gate = None
+        if cache_enabled:
+            cache_metrics = result["embedding_cache"]
+            cold_cache = cache_metrics["cold_build"]
+            warm_cache = cache_metrics["warm_reindex"]
+            incremental_cache = cache_metrics["one_record_update"]
+            cache_gate = {
+                "cold_misses_all_documents": cold_cache["hits"] == 0 and cold_cache["misses"] == len(corpus),
+                "warm_hits_all_documents": warm_cache["hits"] == len(corpus) and warm_cache["misses"] == 0,
+                "incremental_embeds_one_document": (
+                    incremental_cache["hits"] == len(corpus) - 1
+                    and incremental_cache["misses"] == 1
+                ),
+                "warm_wall_at_most_ten_percent_of_cold": (
+                    warm_cache["total_wall_seconds"] <= cold_cache["total_wall_seconds"] * 0.1
+                ),
+                "warm_cpu_at_most_ten_percent_of_cold": (
+                    warm_cache["total_cpu_seconds"] <= cold_cache["total_cpu_seconds"] * 0.1
+                ),
+                "database_growth_at_most_twenty_five_percent": (
+                    result["vector_db_bytes_including_fts_and_raw_records"]
+                    <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.25
+                ),
+            }
         context_extension = args.context != "compact"
         accepted = (quality_match and context_not_increased
+                    and vector_search_below_2ms
+                    and all(cache_gate.values())
+                    if cache_enabled else
+                    quality_match and context_not_increased
                     and resource_improvements["vector_db_bytes"]
                     and vector_search_below_2ms
                     if args.vector_storage != "float32" else
@@ -567,6 +758,8 @@ def main():
             "reference_method": reference["method"],
             "reference_run": reference_run,
         }
+        if cache_gate is not None:
+            result[comparison_key]["cache_gate"] = cache_gate
         if args.model == "nomic_256":
             full_dimension = json.loads((ROOT / "runs" / "008.json").read_text())
             result["matryoshka_comparison"] = {
@@ -582,11 +775,16 @@ def main():
                 "vector_db_bytes_after": result["vector_db_bytes_including_fts_and_raw_records"],
             }
         result.update(
-            status=("accepted-storage-champion" if args.vector_storage != "float32" and accepted else
+            status=("accepted-cache-champion" if cache_enabled and accepted else
+                    "accepted-storage-champion" if args.vector_storage != "float32" and accepted else
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the vector-storage extension to Run {reference_run}: retrieval/evidence and context matched while SQLite storage fell and mean vector search stayed below 2 ms."
+            notes=(f"Accepted as the embedding-cache extension to Run {reference_run}: retrieval/evidence/context matched, warm reindex avoided all inference, and the one-record update embedded only one document within the fixed storage limit."
+                   if cache_enabled and accepted else
+                   f"Rejected as an embedding-cache extension to Run {reference_run}: it did not preserve retrieval/context and meet every fixed cache performance/storage gate."
+                   if cache_enabled else
+                   f"Accepted as the vector-storage extension to Run {reference_run}: retrieval/evidence and context matched while SQLite storage fell and mean vector search stayed below 2 ms."
                    if args.vector_storage != "float32" and accepted else
                    f"Rejected as a vector-storage extension to Run {reference_run}: it did not preserve quality/context with smaller SQLite storage and sub-2 ms vector search."
                    if args.vector_storage != "float32" else
