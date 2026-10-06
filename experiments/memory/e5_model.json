@@ -1,0 +1,23 @@
+{
+  "model": "intfloat/e5-small-v2",
+  "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52",
+  "files": {
+    "tokenizer.json": {
+      "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+      "bytes": 711396
+    },
+    "model.onnx": {
+      "sha256": "4b8205be2a3c5fc53c6534d76a2012064f7309c162b806f2889c6ec8ec4fdcba",
+      "bytes": 133093468
+    }
+  },
+  "conventions": {
+    "dimensions": 384,
+    "max_tokens": 512,
+    "document_prefix": "passage: ",
+    "query_prefix": "query: ",
+    "pooling": "attention-mask-mean",
+    "normalization": "l2",
+    "distance": "cosine"
+  }
+}

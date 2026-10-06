@@ -66,7 +66,7 @@ def evaluate(queries, retrieve, suppressed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=["nomic", "bge"], default="nomic")
+    parser.add_argument("--model", choices=["nomic", "bge", "e5"], default="nomic")
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
@@ -74,7 +74,8 @@ def main():
     if args.threads < 1:
         parser.error("threads must be positive")
     if args.model_dir is None:
-        args.model_dir = ARTIFACTS / ("nomic" if args.model == "nomic" else "bge-small")
+        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small"}
+        args.model_dir = ARTIFACTS / model_dirs[args.model]
     manifest = json.loads((ROOT / f"{args.model}_model.json").read_text())
     conventions = manifest.get("conventions", {
         "dimensions": 768, "max_tokens": 8192,
@@ -93,16 +94,19 @@ def main():
     sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
             "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
     suppressed = set(detect_supersessions(corpus))
-    bge = args.model == "bge"
-    hybrid = args.retrieval == "hybrid" or bge
-    result = {"run": 9 if bge else (8 if hybrid else 7),
-              "method": ("fts5-bge-small-rrf60-sqlite-vec" if bge else
-                         ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec")),
-              "hypothesis": ("BGE-small v1.5 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
-                             if bge else
+    challenger = args.model in ("bge", "e5")
+    hybrid = args.retrieval == "hybrid" or challenger
+    result = {"run": 10 if args.model == "e5" else (9 if args.model == "bge" else (8 if hybrid else 7)),
+              "method": ("fts5-e5-small-v2-rrf60-sqlite-vec" if args.model == "e5" else
+                         ("fts5-bge-small-rrf60-sqlite-vec" if args.model == "bge" else
+                          ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec"))),
+              "hypothesis": ("E5-small-v2 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
+                             if args.model == "e5" else
+                             ("BGE-small v1.5 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
+                             if args.model == "bge" else
                              ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
                               if hybrid else
-                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks.")),
+                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."))),
               "model": manifest, "dimensions": dimensions, "precision": "float32",
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
@@ -159,7 +163,8 @@ def main():
             else:
                 mask = inputs["attention_mask"][..., None]
                 vectors = (output * mask).sum(axis=1) / np.maximum(mask.sum(axis=1), 1)
-                vectors = (vectors - vectors.mean(axis=1, keepdims=True)) / np.sqrt(vectors.var(axis=1, keepdims=True) + 1e-5)
+                if conventions["pooling"] == "attention-mask-mean-layer-norm":
+                    vectors = (vectors - vectors.mean(axis=1, keepdims=True)) / np.sqrt(vectors.var(axis=1, keepdims=True) + 1e-5)
             vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
             vectors = vectors.astype(np.float32)
             assert vectors.shape == (len(texts), dimensions) and np.isfinite(vectors).all()
@@ -229,7 +234,7 @@ def main():
         retrieve = hybrid_retrieve if hybrid else vector
         vector("warmup retrieval")
         result["query_warmup_seconds"] = time.perf_counter() - start
-        if bge:
+        if challenger:
             result["vector_only"] = {name: evaluate(qs, vector, suppressed) for name, qs in sets.items()}
         result["candidate"] = {name: evaluate(qs, retrieve, suppressed) for name, qs in sets.items()}
         if hybrid:
@@ -241,7 +246,7 @@ def main():
         result["vector_db_bytes_including_fts_and_raw_records"] = (Path(td) / "memory.db").stat().st_size
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
-    if bge:
+    if challenger:
         reference = json.loads((ROOT / "runs" / "008.json").read_text())
         quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
         quality_match = all(
@@ -251,9 +256,14 @@ def main():
         )
         resource_improvements = {
             "model_disk_bytes": result["model_disk_bytes"] < reference["model_disk_bytes"],
+            "vector_db_bytes": result["vector_db_bytes_including_fts_and_raw_records"] < reference["vector_db_bytes_including_fts_and_raw_records"],
             "peak_rss_mib": result["candidate"]["original"]["peak_rss_mib"] < reference["candidate"]["original"]["peak_rss_mib"],
+            "original_cpu_seconds": result["candidate"]["original"]["cpu_seconds"] < reference["candidate"]["original"]["cpu_seconds"],
+            "heldout_cpu_seconds": result["candidate"]["heldout"]["cpu_seconds"] < reference["candidate"]["heldout"]["cpu_seconds"],
             "original_end_to_end_ms_mean": result["candidate"]["original"]["end_to_end_ms_mean"] < reference["candidate"]["original"]["end_to_end_ms_mean"],
             "heldout_end_to_end_ms_mean": result["candidate"]["heldout"]["end_to_end_ms_mean"] < reference["candidate"]["heldout"]["end_to_end_ms_mean"],
+            "original_context_tokens": result["candidate"]["original"]["context_tokens_approx_mean"] < reference["candidate"]["original"]["context_tokens_approx_mean"],
+            "heldout_context_tokens": result["candidate"]["heldout"]["context_tokens_approx_mean"] < reference["candidate"]["heldout"]["context_tokens_approx_mean"],
         }
         accepted = quality_match and sum(resource_improvements.values()) >= 3
         result["run008_comparison"] = {

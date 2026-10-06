@@ -91,3 +91,20 @@ infrastructure rather than promoted.
 The model revision, file checksums, 384-dimensional CLS pooling convention,
 query instruction, normalization, and 512-token limit are pinned in
 `bge_model.json`. See `runs/009.json` for complete measurements and rankings.
+
+## E5-small-v2 semantic champion (Run 010)
+
+Run 010 substitutes `intfloat/e5-small-v2` for Nomic under the unchanged fixed
+RRF rule. It matches all Run 008 retrieval/evidence metrics while reducing
+model size, RSS, CPU, latency, SQLite size and assembled context. It is now the
+semantic-quality champion; Run 005 remains the no-embedding fallback.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model e5
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --threads 2
+```
+
+The exact revision, file checksums, 384-dimensional attention-mask mean pooling,
+`query: ` and `passage: ` prefixes, L2 normalization, and 512-token limit are
+pinned in `e5_model.json`. See `runs/010.json` for complete measurements and
+rankings.

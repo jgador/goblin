@@ -2,23 +2,21 @@
 
 ## Current champions
 
-Semantic-quality champion: Run 008, `fts5-nomic-rrf60-sqlite-vec`.
+Semantic-quality champion: Run 010, `fts5-e5-small-v2-rrf60-sqlite-vec`.
 
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 009 hypothesis: BGE-small v1.5 can match Run 008 fixed-RRF semantic
+Run 010 hypothesis: E5-small-v2 can match Run 008 fixed-RRF semantic
 quality while materially reducing local embedding cost.
 
-Run 008 is accepted for semantic retrieval quality. Against Run 005, original
-MRR@5 improved from 0.941667 to 0.975, Recall@5 from 0.95 to 0.975, and
-Hit@1 from 0.90 to 0.95. On the frozen held-out set, MRR@5 and Hit@1 both
-improved from 0.975/0.95 to 1.0/1.0 while Recall@5 and evidence-term coverage
-remained 1.0.
+Run 010 replaces Run 008 as the semantic-quality champion. It matches every
+Run 008 original and held-out retrieval/evidence metric, while reducing model
+size, RSS, CPU, latency, SQLite size and mean context on both frozen sets.
 
 Run 005 remains the operational fallback when embedding cost is not acceptable.
-Its process RSS was 14.965 MiB in the Run 008 environment versus 790.684 MiB
-for hybrid retrieval, and its query latency was about 0.09 ms versus 33 ms.
+Its process RSS was about 15 MiB in the Run 010 environment versus 236.047 MiB
+for hybrid retrieval, and its query latency was about 0.1 ms versus 8 to 9 ms.
 
 Benchmark generation: 1
 Benchmark SHA-256: `c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74`
@@ -27,10 +25,12 @@ Queries: 20
 
 ### Champion behavior
 
-Run 008 uses a fixed, label-independent reciprocal-rank fusion rule: equal-weight
-RRF with `k=60`, combining the top 10 FTS5 and top 10 Nomic candidates before
+Run 010 uses a fixed, label-independent reciprocal-rank fusion rule: equal-weight
+RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
-context assembly. Full original records remain in SQLite for provenance.
+context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
+attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
+distance. Full original records remain in SQLite for provenance.
 
 The compactor removes a conservative set of high-frequency function words. It deliberately preserves negation, conjunctions, modality, temporal words, identifiers, numbers, and content terms. On this benchmark the resulting sketches retain 100% of those content terms.
 
@@ -42,14 +42,17 @@ The full record remains stored. The sketch is generated at context assembly time
 - Original Recall@5: 0.975
 - Original Hit@1: 0.95
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
-- Mean original context: 148.5 approximate tokens
-- Mean held-out context: 156.5 approximate tokens
-- Mean end-to-end retrieval/context latency: about 33 ms
-- Peak process RSS: 790.684 MiB
-- Model and tokenizer: 548,021,671 bytes
-- SQLite with FTS5, records, and vec0: 3,227,648 bytes
+- Mean original context: 147.7 approximate tokens
+- Mean held-out context: 154.35 approximate tokens
+- Mean end-to-end retrieval/context latency: 8.09 ms original, 8.66 ms held-out
+- Peak process RSS: 236.047 MiB
+- Model and tokenizer: 133,804,864 bytes
+- SQLite with FTS5, records, and vec0: 1,654,784 bytes
 
-Comparable process CPU and peak RSS were not exposed by the connector execution runtime for this run. The committed Python reproduction records latency, CPU, and peak RSS when run in the Work sandbox.
+Measured process CPU across 20 hybrid queries was 0.322 seconds on the original
+set and 0.350 seconds on held-out. Resource measurements are environment-sensitive;
+the committed reproduction records load, embedding, query, search, end-to-end,
+CPU and process-lifetime peak RSS separately.
 
 ## Run 006 held-out validation
 
@@ -79,6 +82,10 @@ champion while Run 005 remained the lightweight fallback.
   latency, but the unchanged fixed-RRF hybrid regressed held-out MRR@5/Hit@1
   from 1.0/1.0 to 0.975/0.95. Resource savings alone do not justify replacing
   the semantic-quality champion.
+- Run 010 showed E5-small-v2 preserves all Run 008 hybrid retrieval/evidence
+  metrics while substantially reducing model, memory, CPU, latency, vector
+  storage and assembled context costs. Its vector-only original top-rank score
+  was weaker, confirming that the fixed lexical fusion remains important.
 
 ## Next hypotheses
 
@@ -87,9 +94,10 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
 1. Run 008 completed fixed FTS5 + Nomic RRF; do not tune fusion constants against these labels.
 2. Run 009 completed `BAAI/bge-small-en-v1.5`; do not tune RRF constants to
    repair its single held-out top-rank miss.
-3. Next: test `intfloat/e5-small-v2` with its documented model-specific inputs
-   as a separate vector and unchanged fixed-RRF challenger.
-4. Then test `sentence-transformers/all-MiniLM-L6-v2` in its own bounded run.
+3. Run 010 completed `intfloat/e5-small-v2`; it is the new semantic-quality
+   champion. Do not tune the fixed fusion constants against benchmark labels.
+4. Next: test `sentence-transformers/all-MiniLM-L6-v2` in its own bounded run
+   using its documented symmetric input convention.
 5. Test Nomic Matryoshka dimensions or quantized ONNX only as explicitly separate resource-optimization experiments.
 6. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
 
@@ -212,4 +220,39 @@ Reproduce after installing `embedding_requirements.txt`:
 
 The second command is offline. Revision, checksums, sizes and model conventions
 are pinned in `bge_model.json`; large weights and generated databases stay under
+`.artifacts/` and out of Git.
+
+## Run 010: E5-small-v2 model substitution
+
+Run 010 tested one hypothesis: replace Nomic with CPU-only
+`intfloat/e5-small-v2` while leaving SQLite vec0, supersession handling,
+compact context assembly, and Run 008's equal-weight RRF (`k=60`, top-10 pools)
+unchanged. It used the documented `query: ` and `passage: ` prefixes,
+512-token limit, attention-mask mean pooling, L2 normalization, 384 dimensions
+and cosine distance.
+
+The hybrid exactly matched Run 008 quality. Original MRR@5/Recall@5/Hit@1 were
+0.975/0.975/0.95. Held-out MRR@5, Recall@5, Hit@1 and evidence retention were
+all 1.0. Mean context also fell from 148.5 to 147.7 approximate tokens on the
+original set and from 156.5 to 154.35 on held-out. Vector-only diagnostics were
+mixed: original MRR@5/Hit@1 were 0.9125/0.85 despite Recall@5 of 1.0, while all
+held-out quality/evidence metrics were 1.0. This supports keeping lexical fusion.
+
+The accepted challenger reduced model plus tokenizer size from 548,021,671 to
+133,804,864 bytes, peak RSS from 790.684 to 236.047 MiB, SQLite size from
+3,227,648 to 1,654,784 bytes, original end-to-end latency from 33.08 to 8.09 ms,
+and held-out latency from 32.94 to 8.66 ms. Embedding 40 documents took 0.567 s
+at 70.60 documents/s. Full CPU, query embedding, vec0 search and per-query
+results are in `runs/010.json`. This is retrieval/context evaluation, not
+generated-answer evaluation.
+
+Reproduce after installing `embedding_requirements.txt`:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model e5
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --threads 2
+```
+
+The second command is offline. Revision, checksums, sizes and conventions are
+pinned in `e5_model.json`; large weights and generated databases stay under
 `.artifacts/` and out of Git.
