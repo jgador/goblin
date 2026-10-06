@@ -1,0 +1,6298 @@
+{
+  "answer_generation_evaluated": false,
+  "baseline": {
+    "heldout": {
+      "context_assembly_ms_mean": 0.021108750001985754,
+      "context_tokens_approx_mean": 151.95,
+      "cpu_seconds": 0.0021882199999999907,
+      "details": [
+        {
+          "context_chars": 680,
+          "context_tokens_approx": 170,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h001",
+          "recall": 1.0,
+          "top": [
+            "d006",
+            "d004",
+            "d005",
+            "d025",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 474,
+          "context_tokens_approx": 119,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h002",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d019",
+            "d004",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 690,
+          "context_tokens_approx": 173,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h003",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d034",
+            "d010",
+            "d013",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 618,
+          "context_tokens_approx": 155,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h004",
+          "recall": 1.0,
+          "top": [
+            "d010",
+            "d034",
+            "d011",
+            "d028",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 577,
+          "context_tokens_approx": 145,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h005",
+          "recall": 1.0,
+          "top": [
+            "d011",
+            "d012",
+            "d016",
+            "d017",
+            "d009"
+          ]
+        },
+        {
+          "context_chars": 600,
+          "context_tokens_approx": 150,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h006",
+          "recall": 1.0,
+          "top": [
+            "d015",
+            "d028",
+            "d018",
+            "d024",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 577,
+          "context_tokens_approx": 145,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h007",
+          "recall": 1.0,
+          "top": [
+            "d016",
+            "d017",
+            "d009",
+            "d011",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 641,
+          "context_tokens_approx": 161,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h008",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d023",
+            "d032",
+            "d019",
+            "d013"
+          ]
+        },
+        {
+          "context_chars": 633,
+          "context_tokens_approx": 159,
+          "evidence_preserved": true,
+          "first_relevant_rank": 2,
+          "query": "h009",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d023",
+            "d025",
+            "d031",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 561,
+          "context_tokens_approx": 141,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h010",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d004",
+            "d016",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 642,
+          "context_tokens_approx": 161,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h011",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d030",
+            "d031",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 606,
+          "context_tokens_approx": 152,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h012",
+          "recall": 1.0,
+          "top": [
+            "d031",
+            "d033",
+            "d022",
+            "d030",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 750,
+          "context_tokens_approx": 188,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h013",
+          "recall": 1.0,
+          "top": [
+            "d035",
+            "d033",
+            "d034",
+            "d037",
+            "d036"
+          ]
+        },
+        {
+          "context_chars": 657,
+          "context_tokens_approx": 165,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h014",
+          "recall": 1.0,
+          "top": [
+            "d037",
+            "d036",
+            "d005",
+            "d033",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 613,
+          "context_tokens_approx": 154,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h015",
+          "recall": 1.0,
+          "top": [
+            "d038",
+            "d016",
+            "d011",
+            "d031",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 699,
+          "context_tokens_approx": 175,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h016",
+          "recall": 1.0,
+          "top": [
+            "d039",
+            "d020",
+            "d024",
+            "d040",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 627,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h017",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d030",
+            "d038",
+            "d009",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 467,
+          "context_tokens_approx": 117,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h018",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d014",
+            "d028",
+            "d015",
+            "d011"
+          ]
+        },
+        {
+          "context_chars": 627,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h019",
+          "recall": 1.0,
+          "top": [
+            "d005",
+            "d013",
+            "d009",
+            "d019",
+            "d035"
+          ]
+        },
+        {
+          "context_chars": 377,
+          "context_tokens_approx": 95,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h020",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d010",
+            "d009"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 0.08768825001084224,
+      "end_to_end_ms_p95": 0.13000600000623308,
+      "evidence_at_5": 1.0,
+      "hit_at_1": 0.95,
+      "k": 5,
+      "mrr_at_5": 0.975,
+      "peak_rss_mib": 15.516,
+      "query_count": 20,
+      "query_embedding_ms_mean": 0.0,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.06535440001016468
+    },
+    "original": {
+      "context_assembly_ms_mean": 0.023010650002674993,
+      "context_tokens_approx_mean": 150.5,
+      "cpu_seconds": 0.001955403999999994,
+      "details": [
+        {
+          "context_chars": 621,
+          "context_tokens_approx": 156,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q001",
+          "recall": 1.0,
+          "top": [
+            "d002",
+            "d003",
+            "d007",
+            "d010"
+          ]
+        },
+        {
+          "context_chars": 499,
+          "context_tokens_approx": 125,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q002",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d005",
+            "d004",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 572,
+          "context_tokens_approx": 143,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q003",
+          "recall": 1.0,
+          "top": [
+            "d004",
+            "d009",
+            "d006",
+            "d010",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 560,
+          "context_tokens_approx": 140,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q004",
+          "recall": 1.0,
+          "top": [
+            "d019",
+            "d020",
+            "d016",
+            "d011",
+            "d031"
+          ]
+        },
+        {
+          "context_chars": 585,
+          "context_tokens_approx": 147,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q005",
+          "recall": 1.0,
+          "top": [
+            "d012",
+            "d014",
+            "d011",
+            "d016",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 705,
+          "context_tokens_approx": 177,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q006",
+          "recall": 1.0,
+          "top": [
+            "d013",
+            "d012",
+            "d007",
+            "d040",
+            "d037"
+          ]
+        },
+        {
+          "context_chars": 620,
+          "context_tokens_approx": 155,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q007",
+          "recall": 0.5,
+          "top": [
+            "d021",
+            "d015",
+            "d014",
+            "d024",
+            "d025"
+          ]
+        },
+        {
+          "context_chars": 583,
+          "context_tokens_approx": 146,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q008",
+          "recall": 0.5,
+          "top": [
+            "d022",
+            "d039",
+            "d009",
+            "d005",
+            "d021"
+          ]
+        },
+        {
+          "context_chars": 645,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q009",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d017",
+            "d022",
+            "d015"
+          ]
+        },
+        {
+          "context_chars": 612,
+          "context_tokens_approx": 153,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q010",
+          "recall": 1.0,
+          "top": [
+            "d025",
+            "d011",
+            "d012",
+            "d016",
+            "d017"
+          ]
+        },
+        {
+          "context_chars": 483,
+          "context_tokens_approx": 121,
+          "evidence_preserved": null,
+          "first_relevant_rank": 3,
+          "query": "q011",
+          "recall": 1.0,
+          "top": [
+            "d014",
+            "d028",
+            "d026",
+            "d020",
+            "d027"
+          ]
+        },
+        {
+          "context_chars": 557,
+          "context_tokens_approx": 140,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q012",
+          "recall": 1.0,
+          "top": [
+            "d027",
+            "d026",
+            "d032",
+            "d017",
+            "d036"
+          ]
+        },
+        {
+          "context_chars": 422,
+          "context_tokens_approx": 106,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q013",
+          "recall": 1.0,
+          "top": [
+            "d028",
+            "d015",
+            "d012",
+            "d027",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 664,
+          "context_tokens_approx": 166,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q014",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d020",
+            "d034",
+            "d030"
+          ]
+        },
+        {
+          "context_chars": 627,
+          "context_tokens_approx": 157,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q015",
+          "recall": 1.0,
+          "top": [
+            "d030",
+            "d031",
+            "d014",
+            "d010",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 643,
+          "context_tokens_approx": 161,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q016",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d010",
+            "d030",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 676,
+          "context_tokens_approx": 169,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q017",
+          "recall": 1.0,
+          "top": [
+            "d033",
+            "d035",
+            "d031",
+            "d034",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 675,
+          "context_tokens_approx": 169,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q018",
+          "recall": 1.0,
+          "top": [
+            "d034",
+            "d035",
+            "d011",
+            "d033",
+            "d010"
+          ]
+        },
+        {
+          "context_chars": 710,
+          "context_tokens_approx": 178,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q019",
+          "recall": 1.0,
+          "top": [
+            "d036",
+            "d037",
+            "d017",
+            "d024",
+            "d019"
+          ]
+        },
+        {
+          "context_chars": 554,
+          "context_tokens_approx": 139,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q020",
+          "recall": 1.0,
+          "top": [
+            "d040",
+            "d015",
+            "d018",
+            "d039",
+            "d013"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 0.09317789999840898,
+      "end_to_end_ms_p95": 0.09440200000199184,
+      "evidence_at_5": null,
+      "hit_at_1": 0.9,
+      "k": 5,
+      "mrr_at_5": 0.941667,
+      "peak_rss_mib": 15.516,
+      "query_count": 20,
+      "query_embedding_ms_mean": 0.0,
+      "recall_at_5": 0.95,
+      "search_ms_mean": 0.06782014999657804
+    }
+  },
+  "baseline_db_bytes": 45056,
+  "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+  "budget_rule": {
+    "additional_clause_order": "retrieval ranks two through five, then selected clause order",
+    "approximate_token_target": 128,
+    "overflow": "stop admitting optional clauses before the first overflow; never truncate a clause",
+    "payload_character_target": 512,
+    "protected": "all Run 014 selected clauses from rank one, plus the first selected clause from every lower-rank record",
+    "protected_overflow": "retain protected clauses even if they exceed the target",
+    "provenance": "full records remain in SQLite; the isolated replay records every retained and omitted source clause",
+    "selected_before_evaluation": true
+  },
+  "candidate": {
+    "heldout": {
+      "context_assembly_ms_mean": 0.08986795000396341,
+      "context_tokens_approx_mean": 131.4,
+      "cpu_seconds": 0.28161090400000033,
+      "details": [
+        {
+          "context_chars": 473,
+          "context_tokens_approx": 119,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h001",
+          "recall": 1.0,
+          "top": [
+            "d006",
+            "d004",
+            "d005",
+            "d003",
+            "d025"
+          ]
+        },
+        {
+          "context_chars": 384,
+          "context_tokens_approx": 96,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h002",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d019",
+            "d004",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 561,
+          "context_tokens_approx": 141,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h003",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d034",
+            "d010",
+            "d038",
+            "d005"
+          ]
+        },
+        {
+          "context_chars": 470,
+          "context_tokens_approx": 118,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h004",
+          "recall": 1.0,
+          "top": [
+            "d010",
+            "d032",
+            "d015",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 429,
+          "context_tokens_approx": 108,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h005",
+          "recall": 1.0,
+          "top": [
+            "d011",
+            "d009",
+            "d012",
+            "d017",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 540,
+          "context_tokens_approx": 135,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h006",
+          "recall": 1.0,
+          "top": [
+            "d015",
+            "d024",
+            "d002",
+            "d003",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 567,
+          "context_tokens_approx": 142,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h007",
+          "recall": 1.0,
+          "top": [
+            "d016",
+            "d017",
+            "d009",
+            "d011",
+            "d031"
+          ]
+        },
+        {
+          "context_chars": 494,
+          "context_tokens_approx": 124,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h008",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d023",
+            "d019",
+            "d010",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 572,
+          "context_tokens_approx": 143,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h009",
+          "recall": 1.0,
+          "top": [
+            "d023",
+            "d025",
+            "d009",
+            "d015",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 466,
+          "context_tokens_approx": 117,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h010",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d014",
+            "d028",
+            "d004"
+          ]
+        },
+        {
+          "context_chars": 548,
+          "context_tokens_approx": 137,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h011",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d031",
+            "d028",
+            "d030",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 575,
+          "context_tokens_approx": 144,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h012",
+          "recall": 1.0,
+          "top": [
+            "d031",
+            "d030",
+            "d032",
+            "d029",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 775,
+          "context_tokens_approx": 194,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h013",
+          "recall": 1.0,
+          "top": [
+            "d035",
+            "d033",
+            "d034",
+            "d037",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 475,
+          "context_tokens_approx": 119,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h014",
+          "recall": 1.0,
+          "top": [
+            "d037",
+            "d036",
+            "d035",
+            "d002",
+            "d005"
+          ]
+        },
+        {
+          "context_chars": 563,
+          "context_tokens_approx": 141,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h015",
+          "recall": 1.0,
+          "top": [
+            "d038",
+            "d024",
+            "d032",
+            "d016",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 643,
+          "context_tokens_approx": 161,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h016",
+          "recall": 1.0,
+          "top": [
+            "d039",
+            "d024",
+            "d040",
+            "d034",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 628,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h017",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d030",
+            "d031",
+            "d029",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 459,
+          "context_tokens_approx": 115,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h018",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d011",
+            "d028",
+            "d014",
+            "d009"
+          ]
+        },
+        {
+          "context_chars": 448,
+          "context_tokens_approx": 112,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h019",
+          "recall": 1.0,
+          "top": [
+            "d005",
+            "d009",
+            "d013",
+            "d022",
+            "d006"
+          ]
+        },
+        {
+          "context_chars": 418,
+          "context_tokens_approx": 105,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h020",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d009",
+            "d003"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 7.036810900001456,
+      "end_to_end_ms_p95": 8.621752000010474,
+      "evidence_at_5": 1.0,
+      "hit_at_1": 1.0,
+      "k": 5,
+      "mrr_at_5": 1.0,
+      "peak_rss_mib": 228.238,
+      "query_count": 20,
+      "query_embedding_ms_mean": 6.343034799999714,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.5973567499978572
+    },
+    "original": {
+      "context_assembly_ms_mean": 0.08069614999328678,
+      "context_tokens_approx_mean": 128.8,
+      "cpu_seconds": 0.3142037740000001,
+      "details": [
+        {
+          "context_chars": 471,
+          "context_tokens_approx": 118,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q001",
+          "recall": 1.0,
+          "top": [
+            "d002",
+            "d003",
+            "d018",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 395,
+          "context_tokens_approx": 99,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q002",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d005",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 425,
+          "context_tokens_approx": 107,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q003",
+          "recall": 1.0,
+          "top": [
+            "d004",
+            "d009",
+            "d018",
+            "d011",
+            "d006"
+          ]
+        },
+        {
+          "context_chars": 484,
+          "context_tokens_approx": 121,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q004",
+          "recall": 1.0,
+          "top": [
+            "d019",
+            "d020",
+            "d012",
+            "d032",
+            "d017"
+          ]
+        },
+        {
+          "context_chars": 373,
+          "context_tokens_approx": 94,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q005",
+          "recall": 1.0,
+          "top": [
+            "d012",
+            "d014",
+            "d009",
+            "d032",
+            "d013"
+          ]
+        },
+        {
+          "context_chars": 473,
+          "context_tokens_approx": 119,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q006",
+          "recall": 1.0,
+          "top": [
+            "d013",
+            "d012",
+            "d016",
+            "d024",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 677,
+          "context_tokens_approx": 170,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q007",
+          "recall": 1.0,
+          "top": [
+            "d021",
+            "d024",
+            "d015",
+            "d025",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 507,
+          "context_tokens_approx": 127,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q008",
+          "recall": 0.5,
+          "top": [
+            "d022",
+            "d039",
+            "d009",
+            "d021",
+            "d013"
+          ]
+        },
+        {
+          "context_chars": 645,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q009",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d022",
+            "d017",
+            "d015"
+          ]
+        },
+        {
+          "context_chars": 575,
+          "context_tokens_approx": 144,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q010",
+          "recall": 1.0,
+          "top": [
+            "d025",
+            "d021",
+            "d024",
+            "d011",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 429,
+          "context_tokens_approx": 108,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q011",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d014",
+            "d028",
+            "d027",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 411,
+          "context_tokens_approx": 103,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q012",
+          "recall": 1.0,
+          "top": [
+            "d027",
+            "d026",
+            "d032",
+            "d012",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 422,
+          "context_tokens_approx": 106,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q013",
+          "recall": 1.0,
+          "top": [
+            "d028",
+            "d015",
+            "d012",
+            "d018",
+            "d027"
+          ]
+        },
+        {
+          "context_chars": 646,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q014",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d030",
+            "d031",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 616,
+          "context_tokens_approx": 154,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q015",
+          "recall": 1.0,
+          "top": [
+            "d030",
+            "d031",
+            "d029",
+            "d032",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 553,
+          "context_tokens_approx": 139,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q016",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d029",
+            "d030",
+            "d010"
+          ]
+        },
+        {
+          "context_chars": 500,
+          "context_tokens_approx": 125,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q017",
+          "recall": 1.0,
+          "top": [
+            "d033",
+            "d035",
+            "d034",
+            "d032",
+            "d031"
+          ]
+        },
+        {
+          "context_chars": 469,
+          "context_tokens_approx": 118,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q018",
+          "recall": 1.0,
+          "top": [
+            "d034",
+            "d035",
+            "d033",
+            "d010",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 617,
+          "context_tokens_approx": 155,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q019",
+          "recall": 1.0,
+          "top": [
+            "d036",
+            "d037",
+            "d024",
+            "d033",
+            "d019"
+          ]
+        },
+        {
+          "context_chars": 579,
+          "context_tokens_approx": 145,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q020",
+          "recall": 1.0,
+          "top": [
+            "d040",
+            "d039",
+            "d018",
+            "d015",
+            "d024"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 7.898106949991757,
+      "end_to_end_ms_p95": 8.912090000023909,
+      "evidence_at_5": null,
+      "hit_at_1": 0.95,
+      "k": 5,
+      "mrr_at_5": 0.975,
+      "peak_rss_mib": 228.238,
+      "query_count": 20,
+      "query_embedding_ms_mean": 7.240224249994753,
+      "recall_at_5": 0.975,
+      "search_ms_mean": 0.5696441500049332
+    }
+  },
+  "champion": true,
+  "champion_comparison": {
+    "context_reduced_on_both_sets": true,
+    "quality_match": true,
+    "reference_method": "fts5-e5-small-v2-rrf60-query-aware-clause-context",
+    "reference_run": 14,
+    "resource_improvements": {
+      "heldout_context_tokens": true,
+      "heldout_cpu_seconds": false,
+      "heldout_end_to_end_ms_mean": false,
+      "model_disk_bytes": false,
+      "original_context_tokens": true,
+      "original_cpu_seconds": false,
+      "original_end_to_end_ms_mean": false,
+      "peak_rss_mib": true,
+      "vector_db_bytes": false
+    }
+  },
+  "corpus_embedding": {
+    "batch_size": 4,
+    "cpu_seconds": 1.1903739430000002,
+    "documents": 40,
+    "documents_per_second": 67.75105309823489,
+    "peak_rss_mib": 228.238,
+    "wall_seconds": 0.5903967269999839
+  },
+  "dimensions": 384,
+  "external_inference_api_calls": 0,
+  "followup_to_run": 16,
+  "fusion": {
+    "algorithm": "reciprocal-rank-fusion",
+    "lexical_pool": 10,
+    "output_k_before_supersession_filter": 5,
+    "rrf_k": 60,
+    "selected_before_evaluation": true,
+    "vector_pool": 10,
+    "weights": {
+      "e5": 1,
+      "fts5": 1
+    }
+  },
+  "heldout_sha256": "80d3af75bc7fe4b3b28b8f3076dae5c47d807b6ab48379af94c6ad10b4c0c855",
+  "hypothesis": "Protecting every selected clause in the rank-one record before applying Run 016's fixed 128-token target can retain evidence while reducing Run 014 context.",
+  "load_cpu_seconds": 1.081242353,
+  "load_peak_rss_mib": 228.238,
+  "load_seconds_including_imports": 0.24239175300004945,
+  "logical_cpu_count": 9,
+  "measurement_notes": [
+    "CPU is process CPU time and may exceed wall time with two inference threads.",
+    "RSS is the Linux process-lifetime high-water mark in MiB; baseline runs before loading the embedding runtime.",
+    "End-to-end query time includes query embedding, retrieval, fusion when selected, supersession filtering and compact context assembly; it excludes answer generation.",
+    "The fusion rule and its constants were selected before evaluation and were not tuned against benchmark labels.",
+    "Context tokens use the chars/4 approximation and held-out evidence uses the existing evidence-term subset proxy.",
+    "The 40-document, 40-query experiment does not establish large-corpus scale or broad generalization."
+  ],
+  "method": "fts5-e5-small-v2-rrf60-query-aware-rank-one-protected-budget-128",
+  "model": {
+    "conventions": {
+      "dimensions": 384,
+      "distance": "cosine",
+      "document_prefix": "passage: ",
+      "max_tokens": 512,
+      "normalization": "l2",
+      "pooling": "attention-mask-mean",
+      "query_prefix": "query: "
+    },
+    "files": {
+      "model.onnx": {
+        "bytes": 133093468,
+        "sha256": "4b8205be2a3c5fc53c6534d76a2012064f7309c162b806f2889c6ec8ec4fdcba"
+      },
+      "tokenizer.json": {
+        "bytes": 711396,
+        "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+      }
+    },
+    "model": "intfloat/e5-small-v2",
+    "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52"
+  },
+  "model_disk_bytes": 133804864,
+  "notes": "Accepted as the context-assembly extension to Run 14: retrieval/evidence metrics matched and context fell on both frozen sets.",
+  "orchestration_model_verified": false,
+  "os": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "precision": "float32",
+  "provider": "CPUExecutionProvider",
+  "python_version": "3.12.14",
+  "query_warmup_seconds": 0.006856040000002395,
+  "requested_orchestration_model": "GPT-6.1 Sol",
+  "run": 17,
+  "runtime_versions": {
+    "numpy": "2.2.6",
+    "onnxruntime": "1.23.2",
+    "tokenizers": "0.22.1"
+  },
+  "sqlite_vec_version": "v0.1.9",
+  "sqlite_version": "3.53.1",
+  "status": "accepted-context-champion",
+  "supersessions": {
+    "d001": "d003",
+    "d008": "d007"
+  },
+  "threads": 2,
+  "vector_db_bytes_including_fts_and_raw_records": 1654784,
+  "vector_insert_seconds": 0.0009847449999824676,
+  "vector_only": {
+    "heldout": {
+      "context_assembly_ms_mean": 0.044322350004222244,
+      "context_tokens_approx_mean": 157.3,
+      "cpu_seconds": 0.3213595530000002,
+      "details": [
+        {
+          "context_chars": 704,
+          "context_tokens_approx": 176,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h001",
+          "recall": 1.0,
+          "top": [
+            "d006",
+            "d003",
+            "d004",
+            "d039",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 673,
+          "context_tokens_approx": 169,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h002",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d019",
+            "d012",
+            "d003",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 560,
+          "context_tokens_approx": 140,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h003",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d005",
+            "d034",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 470,
+          "context_tokens_approx": 118,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h004",
+          "recall": 1.0,
+          "top": [
+            "d010",
+            "d032",
+            "d009",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 610,
+          "context_tokens_approx": 153,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h005",
+          "recall": 1.0,
+          "top": [
+            "d011",
+            "d009",
+            "d020",
+            "d013",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 690,
+          "context_tokens_approx": 173,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h006",
+          "recall": 1.0,
+          "top": [
+            "d015",
+            "d024",
+            "d002",
+            "d009",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 660,
+          "context_tokens_approx": 165,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h007",
+          "recall": 1.0,
+          "top": [
+            "d016",
+            "d017",
+            "d029",
+            "d013",
+            "d011"
+          ]
+        },
+        {
+          "context_chars": 701,
+          "context_tokens_approx": 176,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h008",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d023",
+            "d010",
+            "d003",
+            "d014"
+          ]
+        },
+        {
+          "context_chars": 671,
+          "context_tokens_approx": 168,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h009",
+          "recall": 1.0,
+          "top": [
+            "d023",
+            "d025",
+            "d003",
+            "d012",
+            "d009"
+          ]
+        },
+        {
+          "context_chars": 520,
+          "context_tokens_approx": 130,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h010",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d018",
+            "d003",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h011",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d031",
+            "d032",
+            "d030",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h012",
+          "recall": 1.0,
+          "top": [
+            "d031",
+            "d030",
+            "d032",
+            "d029",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 775,
+          "context_tokens_approx": 194,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h013",
+          "recall": 1.0,
+          "top": [
+            "d035",
+            "d033",
+            "d024",
+            "d037",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 810,
+          "context_tokens_approx": 203,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h014",
+          "recall": 1.0,
+          "top": [
+            "d037",
+            "d036",
+            "d002",
+            "d024",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 712,
+          "context_tokens_approx": 178,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h015",
+          "recall": 1.0,
+          "top": [
+            "d038",
+            "d040",
+            "d034",
+            "d009",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 625,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h016",
+          "recall": 1.0,
+          "top": [
+            "d039",
+            "d024",
+            "d040",
+            "d009",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 669,
+          "context_tokens_approx": 168,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h017",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d030",
+            "d029",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 402,
+          "context_tokens_approx": 101,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h018",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d011",
+            "d009",
+            "d028",
+            "d027"
+          ]
+        },
+        {
+          "context_chars": 660,
+          "context_tokens_approx": 165,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h019",
+          "recall": 1.0,
+          "top": [
+            "d005",
+            "d009",
+            "d022",
+            "d006",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 439,
+          "context_tokens_approx": 110,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h020",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d003",
+            "d012"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 8.020612149999806,
+      "end_to_end_ms_p95": 9.140774999991663,
+      "evidence_at_5": 1.0,
+      "hit_at_1": 1.0,
+      "k": 5,
+      "mrr_at_5": 1.0,
+      "peak_rss_mib": 228.238,
+      "query_count": 20,
+      "query_embedding_ms_mean": 7.572877900000208,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.3990398500036463
+    },
+    "original": {
+      "context_assembly_ms_mean": 0.038436299999489165,
+      "context_tokens_approx_mean": 150.7,
+      "cpu_seconds": 0.321638106,
+      "details": [
+        {
+          "context_chars": 403,
+          "context_tokens_approx": 101,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q001",
+          "recall": 1.0,
+          "top": [
+            "d002",
+            "d003",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 451,
+          "context_tokens_approx": 113,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q002",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d005",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 537,
+          "context_tokens_approx": 135,
+          "evidence_preserved": null,
+          "first_relevant_rank": 4,
+          "query": "q003",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d011",
+            "d009",
+            "d004",
+            "d006"
+          ]
+        },
+        {
+          "context_chars": 659,
+          "context_tokens_approx": 165,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q004",
+          "recall": 1.0,
+          "top": [
+            "d019",
+            "d020",
+            "d034",
+            "d012",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 576,
+          "context_tokens_approx": 144,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q005",
+          "recall": 1.0,
+          "top": [
+            "d012",
+            "d013",
+            "d014",
+            "d019",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 555,
+          "context_tokens_approx": 139,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q006",
+          "recall": 1.0,
+          "top": [
+            "d013",
+            "d012",
+            "d014",
+            "d015",
+            "d019"
+          ]
+        },
+        {
+          "context_chars": 677,
+          "context_tokens_approx": 170,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q007",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d025",
+            "d015",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 685,
+          "context_tokens_approx": 172,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q008",
+          "recall": 1.0,
+          "top": [
+            "d022",
+            "d023",
+            "d039",
+            "d024",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 645,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q009",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d022",
+            "d015",
+            "d017"
+          ]
+        },
+        {
+          "context_chars": 714,
+          "context_tokens_approx": 179,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q010",
+          "recall": 1.0,
+          "top": [
+            "d025",
+            "d024",
+            "d021",
+            "d023",
+            "d036"
+          ]
+        },
+        {
+          "context_chars": 429,
+          "context_tokens_approx": 108,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q011",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d018",
+            "d028",
+            "d014"
+          ]
+        },
+        {
+          "context_chars": 501,
+          "context_tokens_approx": 126,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q012",
+          "recall": 1.0,
+          "top": [
+            "d027",
+            "d026",
+            "d018",
+            "d028",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 536,
+          "context_tokens_approx": 134,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q013",
+          "recall": 1.0,
+          "top": [
+            "d028",
+            "d015",
+            "d012",
+            "d018",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q014",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d031",
+            "d030",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q015",
+          "recall": 1.0,
+          "top": [
+            "d030",
+            "d031",
+            "d032",
+            "d029",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q016",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d029",
+            "d030",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 766,
+          "context_tokens_approx": 192,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q017",
+          "recall": 1.0,
+          "top": [
+            "d033",
+            "d035",
+            "d034",
+            "d003",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 662,
+          "context_tokens_approx": 166,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q018",
+          "recall": 1.0,
+          "top": [
+            "d034",
+            "d035",
+            "d009",
+            "d033",
+            "d030"
+          ]
+        },
+        {
+          "context_chars": 810,
+          "context_tokens_approx": 203,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q019",
+          "recall": 1.0,
+          "top": [
+            "d036",
+            "d037",
+            "d003",
+            "d024",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 605,
+          "context_tokens_approx": 152,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q020",
+          "recall": 1.0,
+          "top": [
+            "d040",
+            "d039",
+            "d018",
+            "d024",
+            "d021"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 7.99667789999603,
+      "end_to_end_ms_p95": 8.877358000006552,
+      "evidence_at_5": null,
+      "hit_at_1": 0.85,
+      "k": 5,
+      "mrr_at_5": 0.9125,
+      "peak_rss_mib": 228.238,
+      "query_count": 20,
+      "query_embedding_ms_mean": 7.556737199996633,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.3968178999969041
+    }
+  },
+  "vector_validation": {
+    "corpus_self_neighbors_correct": 40,
+    "stored_vectors": 40,
+    "unit_norm_max_error": 5.960464477539063E-8
+  },
+  "context_budget_replay": {
+    "answer_generation_evaluated": false,
+    "baseline": {
+      "heldout": {
+        "assembly": {
+          "assembled_queries": 20000,
+          "cpu_seconds_total": 1.077839311,
+          "iterations": 1000,
+          "peak_rss_mib": 14.25,
+          "wall_ms_mean_per_query": 0.053658235249702105,
+          "wall_ms_p95_per_query": 0.07248999997955252
+        },
+        "clauses_omitted": 0,
+        "context_chars_mean": 581.4,
+        "context_tokens_approx_mean": 145.65,
+        "details": [
+          {
+            "context_chars": 706,
+            "context_tokens_approx": 177,
+            "evidence_preserved": true,
+            "mandatory_chars": 361,
+            "omitted_provenance": [],
+            "query": "h001",
+            "retained_clauses": 10,
+            "retained_provenance": [
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 2
+              },
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 10,
+            "top": [
+              "d006",
+              "d004",
+              "d005",
+              "d003",
+              "d025"
+            ],
+            "total_clauses": 10
+          },
+          {
+            "context_chars": 384,
+            "context_tokens_approx": 96,
+            "evidence_preserved": true,
+            "mandatory_chars": 207,
+            "omitted_provenance": [],
+            "query": "h002",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d020",
+              "d019",
+              "d004",
+              "d012"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 680,
+            "context_tokens_approx": 170,
+            "evidence_preserved": true,
+            "mandatory_chars": 561,
+            "omitted_provenance": [],
+            "query": "h003",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d038",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d009",
+              "d034",
+              "d010",
+              "d038",
+              "d005"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 470,
+            "context_tokens_approx": 118,
+            "evidence_preserved": true,
+            "mandatory_chars": 433,
+            "omitted_provenance": [],
+            "query": "h004",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d010",
+              "d032",
+              "d015",
+              "d034"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 523,
+            "context_tokens_approx": 131,
+            "evidence_preserved": true,
+            "mandatory_chars": 429,
+            "omitted_provenance": [],
+            "query": "h005",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d011",
+              "d009",
+              "d012",
+              "d017",
+              "d016"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 711,
+            "context_tokens_approx": 178,
+            "evidence_preserved": true,
+            "mandatory_chars": 540,
+            "omitted_provenance": [],
+            "query": "h006",
+            "retained_clauses": 8,
+            "retained_provenance": [
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 2
+              },
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 8,
+            "top": [
+              "d015",
+              "d024",
+              "d002",
+              "d003",
+              "d040"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 567,
+            "context_tokens_approx": 142,
+            "evidence_preserved": true,
+            "mandatory_chars": 473,
+            "omitted_provenance": [],
+            "query": "h007",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d016",
+              "d017",
+              "d009",
+              "d011",
+              "d031"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 587,
+            "context_tokens_approx": 147,
+            "evidence_preserved": true,
+            "mandatory_chars": 438,
+            "omitted_provenance": [],
+            "query": "h008",
+            "retained_clauses": 8,
+            "retained_provenance": [
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 8,
+            "top": [
+              "d020",
+              "d023",
+              "d019",
+              "d010",
+              "d032"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 658,
+            "context_tokens_approx": 165,
+            "evidence_preserved": true,
+            "mandatory_chars": 572,
+            "omitted_provenance": [],
+            "query": "h009",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 5,
+                "selected_clause_index": 2
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d023",
+              "d025",
+              "d009",
+              "d015",
+              "d003"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 466,
+            "context_tokens_approx": 117,
+            "evidence_preserved": true,
+            "mandatory_chars": 401,
+            "omitted_provenance": [],
+            "query": "h010",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d026",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d026",
+              "d027",
+              "d014",
+              "d028",
+              "d004"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 548,
+            "context_tokens_approx": 137,
+            "evidence_preserved": true,
+            "mandatory_chars": 548,
+            "omitted_provenance": [],
+            "query": "h011",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d029",
+              "d031",
+              "d028",
+              "d030",
+              "d032"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 575,
+            "context_tokens_approx": 144,
+            "evidence_preserved": true,
+            "mandatory_chars": 575,
+            "omitted_provenance": [],
+            "query": "h012",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d031",
+              "d030",
+              "d032",
+              "d029",
+              "d022"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 775,
+            "context_tokens_approx": 194,
+            "evidence_preserved": true,
+            "mandatory_chars": 666,
+            "omitted_provenance": [],
+            "query": "h013",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d037",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d035",
+              "d033",
+              "d034",
+              "d037",
+              "d024"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 669,
+            "context_tokens_approx": 168,
+            "evidence_preserved": true,
+            "mandatory_chars": 475,
+            "omitted_provenance": [],
+            "query": "h014",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d037",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d036",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d037",
+              "d036",
+              "d035",
+              "d002",
+              "d005"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 657,
+            "context_tokens_approx": 165,
+            "evidence_preserved": true,
+            "mandatory_chars": 563,
+            "omitted_provenance": [],
+            "query": "h015",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d038",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d038",
+              "d024",
+              "d032",
+              "d016",
+              "d040"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 699,
+            "context_tokens_approx": 175,
+            "evidence_preserved": true,
+            "mandatory_chars": 643,
+            "omitted_provenance": [],
+            "query": "h016",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d039",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d039",
+              "d024",
+              "d040",
+              "d034",
+              "d020"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 628,
+            "context_tokens_approx": 157,
+            "evidence_preserved": true,
+            "mandatory_chars": 575,
+            "omitted_provenance": [],
+            "query": "h017",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d032",
+              "d030",
+              "d031",
+              "d029",
+              "d022"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 459,
+            "context_tokens_approx": 115,
+            "evidence_preserved": true,
+            "mandatory_chars": 459,
+            "omitted_provenance": [],
+            "query": "h018",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d018",
+              "d011",
+              "d028",
+              "d014",
+              "d009"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 448,
+            "context_tokens_approx": 112,
+            "evidence_preserved": true,
+            "mandatory_chars": 366,
+            "omitted_provenance": [],
+            "query": "h019",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d005",
+              "d009",
+              "d013",
+              "d022",
+              "d006"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 418,
+            "context_tokens_approx": 105,
+            "evidence_preserved": true,
+            "mandatory_chars": 251,
+            "omitted_provenance": [],
+            "query": "h020",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 3,
+                "selected_clause_index": 2
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d007",
+              "d009",
+              "d003"
+            ],
+            "total_clauses": 6
+          }
+        ],
+        "evidence_at_5": 1.0,
+        "hit_at_1": 1.0,
+        "mrr_at_5": 1.0,
+        "queries_over_budget_due_to_mandatory_clauses": 9,
+        "query_count": 20,
+        "recall_at_5": 1.0,
+        "retained_clause_fraction": 1.0,
+        "selected_clause_fraction": 0.9142857142857143
+      },
+      "original": {
+        "assembly": {
+          "assembled_queries": 20000,
+          "cpu_seconds_total": 1.127651626,
+          "iterations": 1000,
+          "peak_rss_mib": 14.25,
+          "wall_ms_mean_per_query": 0.056104872100002014,
+          "wall_ms_p95_per_query": 0.09203799999113471
+        },
+        "clauses_omitted": 0,
+        "context_chars_mean": 556.25,
+        "context_tokens_approx_mean": 139.55,
+        "details": [
+          {
+            "context_chars": 552,
+            "context_tokens_approx": 138,
+            "evidence_preserved": null,
+            "mandatory_chars": 282,
+            "omitted_provenance": [],
+            "query": "q001",
+            "retained_clauses": 9,
+            "retained_provenance": [
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 1,
+                "selected_clause_index": 2
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 2,
+                "selected_clause_index": 2
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 9,
+            "top": [
+              "d002",
+              "d003",
+              "d018",
+              "d007"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 395,
+            "context_tokens_approx": 99,
+            "evidence_preserved": null,
+            "mandatory_chars": 232,
+            "omitted_provenance": [],
+            "query": "q002",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d007",
+              "d005",
+              "d022"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 537,
+            "context_tokens_approx": 135,
+            "evidence_preserved": null,
+            "mandatory_chars": 360,
+            "omitted_provenance": [],
+            "query": "q003",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d004",
+              "d009",
+              "d018",
+              "d011",
+              "d006"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 484,
+            "context_tokens_approx": 121,
+            "evidence_preserved": null,
+            "mandatory_chars": 372,
+            "omitted_provenance": [],
+            "query": "q004",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d019",
+              "d020",
+              "d012",
+              "d032",
+              "d017"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 373,
+            "context_tokens_approx": 94,
+            "evidence_preserved": null,
+            "mandatory_chars": 373,
+            "omitted_provenance": [],
+            "query": "q005",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d012",
+              "d014",
+              "d009",
+              "d032",
+              "d013"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 554,
+            "context_tokens_approx": 139,
+            "evidence_preserved": null,
+            "mandatory_chars": 379,
+            "omitted_provenance": [],
+            "query": "q006",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d013",
+              "d012",
+              "d016",
+              "d024",
+              "d007"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 677,
+            "context_tokens_approx": 170,
+            "evidence_preserved": null,
+            "mandatory_chars": 677,
+            "omitted_provenance": [],
+            "query": "q007",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d021",
+              "d024",
+              "d015",
+              "d025",
+              "d023"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 595,
+            "context_tokens_approx": 149,
+            "evidence_preserved": null,
+            "mandatory_chars": 507,
+            "omitted_provenance": [],
+            "query": "q008",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d039",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d022",
+              "d039",
+              "d009",
+              "d021",
+              "d013"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 645,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "mandatory_chars": 645,
+            "omitted_provenance": [],
+            "query": "q009",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d024",
+              "d021",
+              "d022",
+              "d017",
+              "d015"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 629,
+            "context_tokens_approx": 158,
+            "evidence_preserved": null,
+            "mandatory_chars": 575,
+            "omitted_provenance": [],
+            "query": "q010",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d025",
+              "d021",
+              "d024",
+              "d011",
+              "d012"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 429,
+            "context_tokens_approx": 108,
+            "evidence_preserved": null,
+            "mandatory_chars": 429,
+            "omitted_provenance": [],
+            "query": "q011",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d026",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d026",
+              "d014",
+              "d028",
+              "d027",
+              "d018"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 411,
+            "context_tokens_approx": 103,
+            "evidence_preserved": null,
+            "mandatory_chars": 357,
+            "omitted_provenance": [],
+            "query": "q012",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d026",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d027",
+              "d026",
+              "d032",
+              "d012",
+              "d018"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 422,
+            "context_tokens_approx": 106,
+            "evidence_preserved": null,
+            "mandatory_chars": 368,
+            "omitted_provenance": [],
+            "query": "q013",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d028",
+              "d015",
+              "d012",
+              "d018",
+              "d027"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 646,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "mandatory_chars": 646,
+            "omitted_provenance": [],
+            "query": "q014",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d029",
+              "d028",
+              "d030",
+              "d031",
+              "d034"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 616,
+            "context_tokens_approx": 154,
+            "evidence_preserved": null,
+            "mandatory_chars": 616,
+            "omitted_provenance": [],
+            "query": "q015",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d030",
+              "d031",
+              "d029",
+              "d032",
+              "d023"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 590,
+            "context_tokens_approx": 148,
+            "evidence_preserved": null,
+            "mandatory_chars": 553,
+            "omitted_provenance": [],
+            "query": "q016",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d032",
+              "d031",
+              "d029",
+              "d030",
+              "d010"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 609,
+            "context_tokens_approx": 153,
+            "evidence_preserved": null,
+            "mandatory_chars": 500,
+            "omitted_provenance": [],
+            "query": "q017",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d033",
+              "d035",
+              "d034",
+              "d032",
+              "d031"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 709,
+            "context_tokens_approx": 178,
+            "evidence_preserved": null,
+            "mandatory_chars": 469,
+            "omitted_provenance": [],
+            "query": "q018",
+            "retained_clauses": 8,
+            "retained_provenance": [
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 8,
+            "top": [
+              "d034",
+              "d035",
+              "d033",
+              "d010",
+              "d016"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 673,
+            "context_tokens_approx": 169,
+            "evidence_preserved": null,
+            "mandatory_chars": 617,
+            "omitted_provenance": [],
+            "query": "q019",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d036",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d037",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d036",
+              "d037",
+              "d024",
+              "d033",
+              "d019"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 579,
+            "context_tokens_approx": 145,
+            "evidence_preserved": null,
+            "mandatory_chars": 579,
+            "omitted_provenance": [],
+            "query": "q020",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d039",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d040",
+              "d039",
+              "d018",
+              "d015",
+              "d024"
+            ],
+            "total_clauses": 5
+          }
+        ],
+        "evidence_at_5": null,
+        "hit_at_1": 0.95,
+        "mrr_at_5": 0.975,
+        "queries_over_budget_due_to_mandatory_clauses": 8,
+        "query_count": 20,
+        "recall_at_5": 0.975,
+        "retained_clause_fraction": 1.0,
+        "selected_clause_fraction": 0.916030534351145
+      }
+    },
+    "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+    "budget_rule": {
+      "additional_clause_order": "retrieval ranks two through five, then selected clause order",
+      "approximate_token_target": 128,
+      "overflow": "stop admitting optional clauses before the first overflow; never truncate a clause",
+      "payload_character_target": 512,
+      "protected": "all Run 014 selected clauses from rank one, plus the first selected clause from every lower-rank record",
+      "protected_overflow": "retain protected clauses even if they exceed the target",
+      "provenance": "record every retained and omitted source record, rank, and selected-clause index",
+      "selected_before_evaluation": true
+    },
+    "candidate": {
+      "heldout": {
+        "assembly": {
+          "assembled_queries": 20000,
+          "cpu_seconds_total": 1.1107240329999999,
+          "iterations": 1000,
+          "peak_rss_mib": 14.25,
+          "wall_ms_mean_per_query": 0.05525767325011657,
+          "wall_ms_p95_per_query": 0.0750829999844882
+        },
+        "clauses_omitted": 18,
+        "context_chars_mean": 524.4,
+        "context_tokens_approx_mean": 131.4,
+        "details": [
+          {
+            "context_chars": 473,
+            "context_tokens_approx": 119,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 64,
+                "doc_id": "d004",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 81,
+                "doc_id": "d005",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 48,
+                "doc_id": "d003",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 36,
+                "doc_id": "d003",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 2
+              }
+            ],
+            "protected_chars": 473,
+            "query": "h001",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 10,
+            "top": [
+              "d006",
+              "d004",
+              "d005",
+              "d003",
+              "d025"
+            ],
+            "total_clauses": 10
+          },
+          {
+            "context_chars": 384,
+            "context_tokens_approx": 96,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 263,
+            "query": "h002",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d020",
+              "d019",
+              "d004",
+              "d012"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 561,
+            "context_tokens_approx": 141,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 36,
+                "doc_id": "d010",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 81,
+                "doc_id": "d005",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 561,
+            "query": "h003",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d038",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d009",
+              "d034",
+              "d010",
+              "d038",
+              "d005"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 470,
+            "context_tokens_approx": 118,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 470,
+            "query": "h004",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d010",
+              "d032",
+              "d015",
+              "d034"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 429,
+            "context_tokens_approx": 108,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 93,
+                "doc_id": "d016",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 429,
+            "query": "h005",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d011",
+              "d009",
+              "d012",
+              "d017",
+              "d016"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 540,
+            "context_tokens_approx": 135,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 84,
+                "doc_id": "d002",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 48,
+                "doc_id": "d003",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 36,
+                "doc_id": "d003",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 2
+              }
+            ],
+            "protected_chars": 540,
+            "query": "h006",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 8,
+            "top": [
+              "d015",
+              "d024",
+              "d002",
+              "d003",
+              "d040"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 567,
+            "context_tokens_approx": 142,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 567,
+            "query": "h007",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d016",
+              "d017",
+              "d009",
+              "d011",
+              "d031"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 494,
+            "context_tokens_approx": 124,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 55,
+                "doc_id": "d019",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 36,
+                "doc_id": "d010",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 494,
+            "query": "h008",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 8,
+            "top": [
+              "d020",
+              "d023",
+              "d019",
+              "d010",
+              "d032"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 572,
+            "context_tokens_approx": 143,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 48,
+                "doc_id": "d003",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 36,
+                "doc_id": "d003",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 2
+              }
+            ],
+            "protected_chars": 572,
+            "query": "h009",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d023",
+              "d025",
+              "d009",
+              "d015",
+              "d003"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 466,
+            "context_tokens_approx": 117,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 401,
+            "query": "h010",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d026",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d026",
+              "d027",
+              "d014",
+              "d028",
+              "d004"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 548,
+            "context_tokens_approx": 137,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 548,
+            "query": "h011",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d029",
+              "d031",
+              "d028",
+              "d030",
+              "d032"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 575,
+            "context_tokens_approx": 144,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 575,
+            "query": "h012",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d031",
+              "d030",
+              "d032",
+              "d029",
+              "d022"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 775,
+            "context_tokens_approx": 194,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 775,
+            "query": "h013",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d037",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d035",
+              "d033",
+              "d034",
+              "d037",
+              "d024"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 475,
+            "context_tokens_approx": 119,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 108,
+                "doc_id": "d035",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 84,
+                "doc_id": "d002",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 475,
+            "query": "h014",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d037",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d036",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d037",
+              "d036",
+              "d035",
+              "d002",
+              "d005"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 563,
+            "context_tokens_approx": 141,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 93,
+                "doc_id": "d016",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 563,
+            "query": "h015",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d038",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d038",
+              "d024",
+              "d032",
+              "d016",
+              "d040"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 643,
+            "context_tokens_approx": 161,
+            "evidence_preserved": true,
+            "omitted_provenance": [
+              {
+                "chars": 55,
+                "doc_id": "d020",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 643,
+            "query": "h016",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d039",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d039",
+              "d024",
+              "d040",
+              "d034",
+              "d020"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 628,
+            "context_tokens_approx": 157,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 628,
+            "query": "h017",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d032",
+              "d030",
+              "d031",
+              "d029",
+              "d022"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 459,
+            "context_tokens_approx": 115,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 459,
+            "query": "h018",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d018",
+              "d011",
+              "d028",
+              "d014",
+              "d009"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 448,
+            "context_tokens_approx": 112,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 448,
+            "query": "h019",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d005",
+              "d009",
+              "d013",
+              "d022",
+              "d006"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 418,
+            "context_tokens_approx": 105,
+            "evidence_preserved": true,
+            "omitted_provenance": [],
+            "protected_chars": 332,
+            "query": "h020",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 3,
+                "selected_clause_index": 2
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d007",
+              "d009",
+              "d003"
+            ],
+            "total_clauses": 6
+          }
+        ],
+        "evidence_at_5": 1.0,
+        "hit_at_1": 1.0,
+        "mrr_at_5": 1.0,
+        "queries_over_budget_due_to_protected_clauses": 10,
+        "query_count": 20,
+        "recall_at_5": 1.0,
+        "retained_clause_fraction": 0.859375,
+        "selected_clause_fraction": 0.9142857142857143
+      },
+      "original": {
+        "assembly": {
+          "assembled_queries": 20000,
+          "cpu_seconds_total": 1.099079215,
+          "iterations": 1000,
+          "peak_rss_mib": 14.25,
+          "wall_ms_mean_per_query": 0.054711056600051225,
+          "wall_ms_p95_per_query": 0.0852090000194039
+        },
+        "clauses_omitted": 11,
+        "context_chars_mean": 513.35,
+        "context_tokens_approx_mean": 128.8,
+        "details": [
+          {
+            "context_chars": 471,
+            "context_tokens_approx": 118,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 80,
+                "doc_id": "d007",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 385,
+            "query": "q001",
+            "retained_clauses": 8,
+            "retained_provenance": [
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d002",
+                "retrieval_rank": 1,
+                "selected_clause_index": 2
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d003",
+                "retrieval_rank": 2,
+                "selected_clause_index": 2
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 9,
+            "top": [
+              "d002",
+              "d003",
+              "d018",
+              "d007"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 395,
+            "context_tokens_approx": 99,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 313,
+            "query": "q002",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d005",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d007",
+              "d005",
+              "d022"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 425,
+            "context_tokens_approx": 107,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 111,
+                "doc_id": "d006",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 425,
+            "query": "q003",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d004",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d006",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d004",
+              "d009",
+              "d018",
+              "d011",
+              "d006"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 484,
+            "context_tokens_approx": 121,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 428,
+            "query": "q004",
+            "retained_clauses": 7,
+            "retained_provenance": [
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 1,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d020",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d019",
+              "d020",
+              "d012",
+              "d032",
+              "d017"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 373,
+            "context_tokens_approx": 94,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 373,
+            "query": "q005",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d012",
+              "d014",
+              "d009",
+              "d032",
+              "d013"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 473,
+            "context_tokens_approx": 119,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 80,
+                "doc_id": "d007",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 379,
+            "query": "q006",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d007",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 7,
+            "top": [
+              "d013",
+              "d012",
+              "d016",
+              "d024",
+              "d007"
+            ],
+            "total_clauses": 9
+          },
+          {
+            "context_chars": 677,
+            "context_tokens_approx": 170,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 677,
+            "query": "q007",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d021",
+              "d024",
+              "d015",
+              "d025",
+              "d023"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 507,
+            "context_tokens_approx": 127,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 87,
+                "doc_id": "d013",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 507,
+            "query": "q008",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d039",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d009",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d013",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d022",
+              "d039",
+              "d009",
+              "d021",
+              "d013"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 645,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 645,
+            "query": "q009",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d022",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d017",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d024",
+              "d021",
+              "d022",
+              "d017",
+              "d015"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 575,
+            "context_tokens_approx": 144,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 53,
+                "doc_id": "d012",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 575,
+            "query": "q010",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d025",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d021",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d011",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d025",
+              "d021",
+              "d024",
+              "d011",
+              "d012"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 429,
+            "context_tokens_approx": 108,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 429,
+            "query": "q011",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d026",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d014",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d026",
+              "d014",
+              "d028",
+              "d027",
+              "d018"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 411,
+            "context_tokens_approx": 103,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 357,
+            "query": "q012",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d026",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d027",
+              "d026",
+              "d032",
+              "d012",
+              "d018"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 422,
+            "context_tokens_approx": 106,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 368,
+            "query": "q013",
+            "retained_clauses": 6,
+            "retained_provenance": [
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d012",
+                "retrieval_rank": 3,
+                "selected_clause_index": 1
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d027",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d028",
+              "d015",
+              "d012",
+              "d018",
+              "d027"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 646,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 646,
+            "query": "q014",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d028",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d029",
+              "d028",
+              "d030",
+              "d031",
+              "d034"
+            ],
+            "total_clauses": 5
+          },
+          {
+            "context_chars": 616,
+            "context_tokens_approx": 154,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 616,
+            "query": "q015",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d023",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d030",
+              "d031",
+              "d029",
+              "d032",
+              "d023"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 553,
+            "context_tokens_approx": 139,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 36,
+                "doc_id": "d010",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 553,
+            "query": "q016",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d029",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d030",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d032",
+              "d031",
+              "d029",
+              "d030",
+              "d010"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 500,
+            "context_tokens_approx": 125,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 108,
+                "doc_id": "d035",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 500,
+            "query": "q017",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d032",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d031",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d033",
+              "d035",
+              "d034",
+              "d032",
+              "d031"
+            ],
+            "total_clauses": 7
+          },
+          {
+            "context_chars": 469,
+            "context_tokens_approx": 118,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 108,
+                "doc_id": "d035",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 2,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 36,
+                "doc_id": "d010",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 4,
+                "selected_clause_index": 1
+              },
+              {
+                "chars": 93,
+                "doc_id": "d016",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 469,
+            "query": "q018",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d034",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d035",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d010",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d016",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 8,
+            "top": [
+              "d034",
+              "d035",
+              "d033",
+              "d010",
+              "d016"
+            ],
+            "total_clauses": 8
+          },
+          {
+            "context_chars": 617,
+            "context_tokens_approx": 155,
+            "evidence_preserved": null,
+            "omitted_provenance": [
+              {
+                "chars": 55,
+                "doc_id": "d019",
+                "reason": "fixed_budget_exhausted_after_rank_one_protection",
+                "retrieval_rank": 5,
+                "selected_clause_index": 1
+              }
+            ],
+            "protected_chars": 617,
+            "query": "q019",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d036",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d037",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d033",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d019",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 6,
+            "top": [
+              "d036",
+              "d037",
+              "d024",
+              "d033",
+              "d019"
+            ],
+            "total_clauses": 6
+          },
+          {
+            "context_chars": 579,
+            "context_tokens_approx": 145,
+            "evidence_preserved": null,
+            "omitted_provenance": [],
+            "protected_chars": 579,
+            "query": "q020",
+            "retained_clauses": 5,
+            "retained_provenance": [
+              {
+                "doc_id": "d040",
+                "retrieval_rank": 1,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d039",
+                "retrieval_rank": 2,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d018",
+                "retrieval_rank": 3,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d015",
+                "retrieval_rank": 4,
+                "selected_clause_index": 0
+              },
+              {
+                "doc_id": "d024",
+                "retrieval_rank": 5,
+                "selected_clause_index": 0
+              }
+            ],
+            "selected_clauses": 5,
+            "top": [
+              "d040",
+              "d039",
+              "d018",
+              "d015",
+              "d024"
+            ],
+            "total_clauses": 5
+          }
+        ],
+        "evidence_at_5": null,
+        "hit_at_1": 0.95,
+        "mrr_at_5": 0.975,
+        "queries_over_budget_due_to_protected_clauses": 8,
+        "query_count": 20,
+        "recall_at_5": 0.975,
+        "retained_clause_fraction": 0.9083333333333333,
+        "selected_clause_fraction": 0.916030534351145
+      }
+    },
+    "champion": true,
+    "comparison": {
+      "assembly_latency_below_1ms": true,
+      "context_reduced_on_both_sets": true,
+      "persistent_storage_delta_bytes": 0,
+      "provenance_preserved": true,
+      "quality_match": true,
+      "run014_vector_db_bytes": 1654784
+    },
+    "external_inference_api_calls": 0,
+    "followup_to_run": 16,
+    "heldout_sha256": "80d3af75bc7fe4b3b28b8f3076dae5c47d807b6ab48379af94c6ad10b4c0c855",
+    "hypothesis": "Protecting every selected clause in the rank-one record before applying Run 016's fixed 128-token target can retain evidence while reducing Run 014 context.",
+    "measurement_notes": [
+      "Run 014 top-five document IDs are replayed, isolating context assembly from embedding and retrieval.",
+      "Context tokens use the established chars/4 approximation; held-out quality uses the frozen evidence-term subset proxy.",
+      "Retrieval metrics are unchanged by construction; no answer-generating model is evaluated.",
+      "Assembly timing repeats each frozen query and peak RSS is the Linux process-lifetime high-water mark."
+    ],
+    "method": "fts5-e5-small-v2-rrf60-query-aware-rank-one-protected-budget-128",
+    "notes": "Accepted as the context-assembly extension to Run 014: quality and provenance matched, context fell on both frozen sets, and assembly remained below 1 ms per query.",
+    "orchestration_model_verified": false,
+    "reference_run": 14,
+    "requested_orchestration_model": "GPT-6.1 Sol",
+    "retrieval_or_embedding_latency_measured": false,
+    "retrieval_replayed": true,
+    "run": 17,
+    "status": "accepted-context-champion"
+  }
+}

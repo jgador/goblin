@@ -218,3 +218,27 @@ python3 experiments/memory/run_context_budget_experiment.py --iterations 1000
 See `runs/016.json` for the fixed rule, timing, evidence failures, and complete
 retained/omitted provenance. No model weights, remote APIs, or answer generator
 are used by the replay.
+
+## Rank-one protected context champion (Run 017)
+
+Run 017 keeps Run 016's 128 approximate-token target but protects every selected
+clause in the rank-one record before allocating optional lower-rank context. It
+restored held-out evidence from 0.9 to 1.0 while reducing Run 014 context by
+7.70% original and 9.78% held-out. Retrieval quality and provenance invariants
+were unchanged, so Run 017 is the new context champion.
+
+Isolated replay:
+
+```bash
+python3 experiments/memory/run_protected_context_budget_experiment.py --iterations 1000
+```
+
+Complete offline E5 pipeline:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --threads 2
+```
+
+See `runs/017.json` for full model, CPU, memory, SQLite, latency, quality,
+context, and per-query provenance measurements. No external inference API or
+answer generator is used.

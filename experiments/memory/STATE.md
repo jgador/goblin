@@ -2,14 +2,15 @@
 
 ## Current champions
 
-Semantic-quality champion: Run 014,
-`fts5-e5-small-v2-rrf60-query-aware-clause-context`.
+Semantic-quality champion: Run 017,
+`fts5-e5-small-v2-rrf60-query-aware-rank-one-protected-budget-128`.
 
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 014 hypothesis: a fixed query-aware clause selector can reduce Run 010
-context without changing retrieval or losing held-out evidence.
+Run 017 hypothesis: protecting every selected clause in the rank-one record
+before applying a fixed 128-token target can preserve evidence while reducing
+Run 014 context.
 
 Run 014 extends Run 010's accepted E5 retrieval with query-aware context
 assembly. It preserves every original and held-out retrieval/evidence metric
@@ -19,11 +20,12 @@ Run 015 did not replace it. The predeclared conservative cross-record
 near-duplicate rule found no eligible clauses in either frozen set, so it added
 comparison work without reducing context.
 
-Run 016 also did not replace it. A fixed 128-token rank-aware budget reduced
-context, but omitted required held-out evidence for two queries.
+Run 016 did not replace Run 014. A fixed 128-token rank-aware budget reduced
+context, but omitted required held-out evidence for two queries. Run 017's
+rank-one protection restores that evidence and reduces context on both sets.
 
 Run 005 remains the operational fallback when embedding cost is not acceptable.
-Its process RSS was about 15 MiB in the Run 010 environment versus 236.312 MiB
+Its process RSS was about 15 MiB in the Run 010 environment versus 228.238 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
 
 Benchmark generation: 1
@@ -33,16 +35,18 @@ Queries: 20
 
 ### Champion behavior
 
-Run 014 uses Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
+Run 017 uses Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
 RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
 context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
 attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
 distance. Full original records remain in SQLite for provenance.
 
-At context assembly, Run 014 always keeps each retrieved record's first clause,
-keeps later clauses that overlap the query or contain a fixed semantic operator,
-then applies Run 005 compaction. The rule was fixed before evaluation.
+At context assembly, Run 017 first applies Run 014's selector. It protects every
+selected clause from the rank-one record and the first selected clause from each
+lower-rank record. It then admits remaining lower-rank clauses in retrieval
+order up to a 128 approximate-token target. Protected clauses may exceed the
+target and clauses are never truncated. The rule was fixed before evaluation.
 
 The compactor removes a conservative set of high-frequency function words. It deliberately preserves negation, conjunctions, modality, temporal words, identifiers, numbers, and content terms. On this benchmark the resulting sketches retain 100% of those content terms.
 
@@ -54,16 +58,16 @@ The full record remains stored. The sketch is generated at context assembly time
 - Original Recall@5: 0.975
 - Original Hit@1: 0.95
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
-- Mean original context: 139.55 approximate tokens
-- Mean held-out context: 145.65 approximate tokens
-- Mean end-to-end retrieval/context latency: 4.67 ms original, 4.95 ms held-out
-- Mean context assembly latency: 0.082 ms original, 0.089 ms held-out
-- Peak process RSS: 236.312 MiB
+- Mean original context: 128.80 approximate tokens
+- Mean held-out context: 131.40 approximate tokens
+- Mean end-to-end retrieval/context latency: 7.90 ms original, 7.04 ms held-out
+- Mean context assembly latency: 0.081 ms original, 0.090 ms held-out
+- Peak process RSS: 228.238 MiB
 - Model and tokenizer: 133,804,864 bytes
 - SQLite with FTS5, records, and vec0: 1,654,784 bytes
 
-Measured process CPU across 20 hybrid queries was 0.190 seconds on the original
-set and 0.200 seconds on held-out. Resource measurements are environment-sensitive;
+Measured process CPU across 20 hybrid queries was 0.314 seconds on the original
+set and 0.282 seconds on held-out. Resource measurements are environment-sensitive;
 the committed reproduction records load, embedding, query, search, end-to-end,
 CPU and process-lifetime peak RSS separately.
 
@@ -126,6 +130,10 @@ champion while Run 005 remained the lightweight fallback.
   evidence retention fell from 1.0 to 0.9 because second clauses from the
   rank-one records were omitted for h013 and h017. Nine held-out queries already
   exceeded the budget using only one mandatory clause per retrieved record.
+- Run 017 showed that rank-one protection is the missing safety rule. It restored
+  held-out evidence from 0.9 to 1.0 while still reducing Run 014 context by
+  7.70% original and 9.78% held-out. All retrieval metrics and provenance
+  invariants remained unchanged, so Run 017 replaces Run 014 as champion.
 
 ## Next hypotheses
 
@@ -148,10 +156,11 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    candidate was rejected because it found no safe duplicates.
 9. Run 016 completed a fixed 128-token rank-aware budget; it was rejected after
    losing held-out evidence on h013 and h017.
-10. Next: test one specific follow-up with the same 128-token target but protect
-    every query-overlap or semantic-operator clause in the rank-one record before
-    admitting lower-rank context. Permit protected overflow and preserve omitted
-    provenance; do not tune the budget or priorities against individual labels.
+10. Run 017 completed rank-one protection with the same 128-token target and is
+    the current context-assembly champion.
+11. Next: test SQLite `vec0` int8 storage for the accepted E5 embeddings while
+    retaining FP32 model inference, fixed RRF, Run 017 context, and both frozen
+    sets. Treat vector quantization as one separate storage/precision experiment.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -512,3 +521,41 @@ python3 experiments/memory/run_context_budget_experiment.py --iterations 1000
 
 Full metrics and per-query retained/omitted provenance are in `runs/016.json`.
 This is retrieval/evidence evaluation only; no answer generator was evaluated.
+
+## Run 017: rank-one protected context budget
+
+Run 017 tested the specific safety follow-up justified by Run 016. It keeps the
+same 128 approximate-token target, protects every Run 014-selected clause from
+the rank-one record, protects the first selected clause from every lower-rank
+record, then admits lower-rank optional clauses in retrieval order. Protected
+overflow is allowed, clauses are never truncated, and retained plus omitted
+provenance accounts for every selected clause.
+
+Original context fell from 139.55 to 128.80 approximate tokens (7.70%) and
+held-out context fell from 145.65 to 131.40 (9.78%). Original
+MRR@5/Recall@5/Hit@1 remained 0.975/0.975/0.95; all held-out retrieval and
+evidence metrics remained 1.0. A 1,000-iteration isolated replay measured 0.055
+ms candidate assembly on both sets and verified every provenance invariant.
+
+The complete offline E5/SQLite pipeline used FP32, 384 dimensions and two
+threads. Model and tokenizer files occupied 133,804,864 bytes; SQLite with FTS5,
+records and vec0 occupied 1,654,784 bytes; peak process RSS was 228.238 MiB.
+Embedding 40 records took 0.590 seconds at 67.75 records/s. Mean full-pipeline
+latency was 7.90 ms original and 7.04 ms held-out, including query embedding,
+hybrid retrieval, context assembly and no answer generation. Environment-sensitive
+timings are not directly comparable across hosts.
+
+Reproduce the isolated comparison without model weights:
+
+```bash
+python3 experiments/memory/run_protected_context_budget_experiment.py --iterations 1000
+```
+
+Reproduce the complete pipeline after the Run 010 model preparation:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --threads 2
+```
+
+Full pipeline measurements and per-query retained/omitted provenance are in
+`runs/017.json`. No external inference API or answer generator was used.

@@ -20,6 +20,7 @@ from run_experiment import (
     fts_query,
     load_jsonl,
     query_aware_compact,
+    select_query_clauses,
 )
 from run_heldout_validation import terms
 
@@ -32,7 +33,30 @@ def rss():
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 3)
 
 
-def evaluate(queries, retrieve, suppressed, context_transform=None):
+def rank_one_protected_budget_context(rows, query):
+    """Apply Run 017's 128-token target across one ranked result set."""
+    budget_chars = 128 * 4
+    documents = []
+    for _, text in rows:
+        selected, _ = select_query_clauses(text, query)
+        documents.append([compact_text(clause) for clause in selected])
+    retained = [clauses[:] if index == 0 else clauses[:1]
+                for index, clauses in enumerate(documents)]
+    current_chars = sum(sum(map(len, clauses)) + max(0, len(clauses) - 1)
+                        for clauses in retained)
+    budget_exhausted = current_chars > budget_chars
+    for clauses, retained_clauses in zip(documents[1:], retained[1:]):
+        for clause in clauses[1:]:
+            added_chars = len(clause) + 1
+            if not budget_exhausted and current_chars + added_chars <= budget_chars:
+                retained_clauses.append(clause)
+                current_chars += added_chars
+            else:
+                budget_exhausted = True
+    return [" ".join(clauses) for clauses in retained]
+
+
+def evaluate(queries, retrieve, suppressed, context_transform=None, context_assembler=None):
     context_transform = context_transform or (lambda text, _query: compact_text(text))
     details, latency, embed_latency, search_latency, context_latency = [], [], [], [], []
     cpu_start = time.process_time()
@@ -41,7 +65,8 @@ def evaluate(queries, retrieve, suppressed, context_transform=None):
         rows, embedding_ms, search_ms = retrieve(q["query"])
         rows = [row for row in rows if row[0] not in suppressed]
         context_started = time.perf_counter()
-        rendered = [context_transform(row[1], q["query"]) for row in rows]
+        rendered = (context_assembler(rows, q["query"]) if context_assembler else
+                    [context_transform(row[1], q["query"]) for row in rows])
         context_latency.append((time.perf_counter() - context_started) * 1000)
         elapsed = (time.perf_counter() - started) * 1000
         ids = [row[0] for row in rows]
@@ -81,12 +106,16 @@ def main():
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
-    parser.add_argument("--context", choices=["compact", "query_aware"], default="compact")
+    parser.add_argument(
+        "--context",
+        choices=["compact", "query_aware", "rank_one_protected_budget"],
+        default="compact",
+    )
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("threads must be positive")
-    if args.context == "query_aware" and args.model != "e5":
-        parser.error("query-aware context is the Run 014 extension to the E5 champion")
+    if args.context != "compact" and args.model != "e5":
+        parser.error("context extensions apply only to the E5 semantic champion")
     if args.model_dir is None:
         model_dirs = {"nomic": "nomic", "nomic_256": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
@@ -152,6 +181,26 @@ def main():
             "keep_later_query_overlap_clauses": True,
             "keep_later_semantic_operator_clauses": sorted(SEMANTIC_OPERATORS),
             "then_apply_run005_compaction": True,
+            "selected_before_evaluation": True,
+        }
+    elif args.context == "rank_one_protected_budget":
+        result.update(
+            run=17,
+            followup_to_run=16,
+            method="fts5-e5-small-v2-rrf60-query-aware-rank-one-protected-budget-128",
+            hypothesis=(
+                "Protecting every selected clause in the rank-one record before applying "
+                "Run 016's fixed 128-token target can retain evidence while reducing Run 014 context."
+            ),
+        )
+        result["budget_rule"] = {
+            "approximate_token_target": 128,
+            "payload_character_target": 512,
+            "protected": "all Run 014 selected clauses from rank one, plus the first selected clause from every lower-rank record",
+            "additional_clause_order": "retrieval ranks two through five, then selected clause order",
+            "overflow": "stop admitting optional clauses before the first overflow; never truncate a clause",
+            "protected_overflow": "retain protected clauses even if they exceed the target",
+            "provenance": "full records remain in SQLite; the isolated replay records every retained and omitted source clause",
             "selected_before_evaluation": True,
         }
     if args.model == "e5_int8":
@@ -292,8 +341,13 @@ def main():
         if challenger:
             result["vector_only"] = {name: evaluate(qs, vector, suppressed) for name, qs in sets.items()}
         candidate_context = query_aware_compact if args.context == "query_aware" else None
+        candidate_assembler = (
+            rank_one_protected_budget_context
+            if args.context == "rank_one_protected_budget"
+            else None
+        )
         result["candidate"] = {
-            name: evaluate(qs, retrieve, suppressed, candidate_context)
+            name: evaluate(qs, retrieve, suppressed, candidate_context, candidate_assembler)
             for name, qs in sets.items()
         }
         if hybrid:
@@ -306,7 +360,9 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = 10 if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm") else 8
+        reference_run = (14 if args.context == "rank_one_protected_budget" else
+                         10 if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm") else
+                         8)
         reference = json.loads((ROOT / "runs" / f"{reference_run:03}.json").read_text())
         quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
         quality_match = all(
@@ -329,11 +385,12 @@ def main():
             result["candidate"][dataset]["context_tokens_approx_mean"] < reference["candidate"][dataset]["context_tokens_approx_mean"]
             for dataset in ("original", "heldout")
         )
+        context_extension = args.context != "compact"
         accepted = (quality_match and context_reduced
-                    if args.context == "query_aware" else
+                    if context_extension else
                     quality_match and sum(resource_improvements.values()) >= 3)
         comparison_key = ("champion_comparison"
-                          if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm")
+                          if context_extension or args.model in ("nomic_256", "e5_int8", "minilm")
                           else "run008_comparison")
         result[comparison_key] = {
             "quality_match": quality_match,
@@ -357,11 +414,11 @@ def main():
                 "vector_db_bytes_after": result["vector_db_bytes_including_fts_and_raw_records"],
             }
         result.update(
-            status=("accepted-context-champion" if args.context == "query_aware" and accepted else
+            status=("accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
             notes=(f"Accepted as the context-assembly extension to Run {reference_run}: retrieval/evidence metrics matched and context fell on both frozen sets."
-                   if args.context == "query_aware" and accepted else
+                   if context_extension and accepted else
                    f"Accepted as semantic-quality champion: matched every Run {reference_run} retrieval/evidence metric and reduced at least three measured resource costs."
                    if accepted else
                    f"Rejected as semantic-quality champion: the challenger did not match all Run {reference_run} retrieval/evidence metrics with at least three measured resource improvements."),
