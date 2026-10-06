@@ -1,0 +1,20 @@
+{"id":"h001","query":"what coordinates inbox outbox and durable messaging","relevant":["d006"],"evidence_terms":["wolverine","inbox","outbox","durable","messaging"]}
+{"id":"h002","query":"does suspending compute permit deleting the work pvc","relevant":["d020"],"evidence_terms":["does","not","authorize","deleting","work","pvc"]}
+{"id":"h003","query":"what must happen to a repository before an agent can use it","relevant":["d009"],"evidence_terms":["explicitly","enabled","goblin","agent"]}
+{"id":"h004","query":"is a dropdown mandatory for repository selection in slack or teams","relevant":["d010"],"evidence_terms":["dropdown","not","required","slack","teams"]}
+{"id":"h005","query":"where should gh auth login be exposed","relevant":["d011"],"evidence_terms":["gh","auth","login","goblin","web","ui"]}
+{"id":"h006","query":"why was elasticsearch considered unsuitable for the target machine","relevant":["d015"],"evidence_terms":["memory","footprint","too","high","small","vm"]}
+{"id":"h007","query":"what should be visually central in the interface","relevant":["d016"],"evidence_terms":["work","visually","central"]}
+{"id":"h008","query":"what information do git checkpoints store","relevant":["d020"],"evidence_terms":["provenance","metadata","not","filesystem","archives"]}
+{"id":"h009","query":"what status is assigned before vector computation","relevant":["d023"],"evidence_terms":["embedding_status","pending","background","loop","vectors"]}
+{"id":"h010","query":"what dedicated server specs include the raid mirror","relevant":["d026"],"evidence_terms":["i7","7700","4","cores","8","threads","64","gb","512","nvme","raid1"]}
+{"id":"h011","query":"which existing dashboard tools should ak3s link to instead of rebuild","relevant":["d029"],"evidence_terms":["headlamp","victoriametrics","victorialogs","rather","than","rebuilding"]}
+{"id":"h012","query":"which ak3s commands include the dry run workflow","relevant":["d031"],"evidence_terms":["install","dry","run","apply","status","config","render","upgrade","version"]}
+{"id":"h013","query":"which non frontend node tools stay isolated from frontend package json","relevant":["d035"],"evidence_terms":["playwright","prettier","typescript","pinned","codex","npm","runtime"]}
+{"id":"h014","query":"which json cases are intentionally still dynamic","relevant":["d037"],"evidence_terms":["codexclient","json","rpc","envelopes","generated","protocol","arbitrary","converters","generators"]}
+{"id":"h015","query":"what freedom should redistributed modified core software preserve","relevant":["d038"],"evidence_terms":["redistributed","modified","core","software","preserve","downstream","user","freedoms","linux","copyleft"]}
+{"id":"h016","query":"which dependencies does roslynkit intentionally avoid","relevant":["d039"],"evidence_terms":["without","embeddings","network","dependencies","mcp"]}
+{"id":"h017","query":"how can a normal ak3s user obtain the binary","relevant":["d032"],"evidence_terms":["minimal","shell","bootstrap","download","released","binary"]}
+{"id":"h018","query":"what is the self hosted deployment target for goblin services","relevant":["d018"],"evidence_terms":["single","linux","vm","k3s","goblin","services"]}
+{"id":"h019","query":"how long do agent identities live relative to executions","relevant":["d005"],"evidence_terms":["agents","durable","identities","executions","temporary","attempts","runtimes"]}
+{"id":"h020","query":"what is required after a failed work execution before retry","relevant":["d007"],"evidence_terms":["failure","creates","attention","explicit","retry","required","reconciliation"]}
