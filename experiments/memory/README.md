@@ -73,3 +73,21 @@ lightweight fallback because it avoids the roughly 548 MB model and roughly
 
 See `runs/008.json` for full resource measurements and per-query rankings. This
 is retrieval plus context assembly, not end-to-end answer generation.
+
+## BGE-small challenger (Run 009)
+
+Run 009 substitutes `BAAI/bge-small-en-v1.5` for Nomic while preserving the
+fixed Run 008 fusion rule and both frozen benchmark sets. It records vector-only
+diagnostics and the hybrid candidate in one model-substitution experiment. BGE
+was much smaller and faster, but its hybrid lost the champion's perfect
+held-out top-rank score, so it is retained as reproducible comparison
+infrastructure rather than promoted.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model bge
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model bge --threads 2
+```
+
+The model revision, file checksums, 384-dimensional CLS pooling convention,
+query instruction, normalization, and 512-token limit are pinned in
+`bge_model.json`. See `runs/009.json` for complete measurements and rankings.

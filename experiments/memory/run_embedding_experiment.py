@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline CPU-only Nomic vector or hybrid challenger."""
+"""Offline CPU-only vector and fixed-RRF embedding challengers."""
 import argparse
 import hashlib
 import json
@@ -66,13 +66,23 @@ def evaluate(queries, retrieve, suppressed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model-dir", type=Path, default=ARTIFACTS / "nomic")
+    parser.add_argument("--model", choices=["nomic", "bge"], default="nomic")
+    parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("threads must be positive")
-    manifest = json.loads((ROOT / "nomic_model.json").read_text())
+    if args.model_dir is None:
+        args.model_dir = ARTIFACTS / ("nomic" if args.model == "nomic" else "bge-small")
+    manifest = json.loads((ROOT / f"{args.model}_model.json").read_text())
+    conventions = manifest.get("conventions", {
+        "dimensions": 768, "max_tokens": 8192,
+        "document_prefix": "search_document: ", "query_prefix": "search_query: ",
+        "pooling": "attention-mask-mean-layer-norm", "normalization": "l2",
+        "distance": "cosine",
+    })
+    dimensions = conventions["dimensions"]
     for name, expected in manifest["files"].items():
         path = args.model_dir / Path(name).name
         with path.open("rb") as stream:
@@ -83,13 +93,17 @@ def main():
     sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
             "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
     suppressed = set(detect_supersessions(corpus))
-    hybrid = args.retrieval == "hybrid"
-    result = {"run": 8 if hybrid else 7,
-              "method": "fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec",
-              "hypothesis": ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
-                             if hybrid else
-                             "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."),
-              "model": manifest, "dimensions": 768, "precision": "float32",
+    bge = args.model == "bge"
+    hybrid = args.retrieval == "hybrid" or bge
+    result = {"run": 9 if bge else (8 if hybrid else 7),
+              "method": ("fts5-bge-small-rrf60-sqlite-vec" if bge else
+                         ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec")),
+              "hypothesis": ("BGE-small v1.5 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
+                             if bge else
+                             ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
+                              if hybrid else
+                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks.")),
+              "model": manifest, "dimensions": dimensions, "precision": "float32",
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
               "os": platform.platform(), "logical_cpu_count": os.cpu_count(),
@@ -127,7 +141,7 @@ def main():
         session = ort.InferenceSession(str(args.model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"])
         tokenizer = Tokenizer.from_file(str(args.model_dir / "tokenizer.json"))
         tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
-        tokenizer.enable_truncation(max_length=8192)
+        tokenizer.enable_truncation(max_length=conventions["max_tokens"])
         result["load_seconds_including_imports"] = time.perf_counter() - start
         result["load_cpu_seconds"] = time.process_time() - cpu
         result["load_peak_rss_mib"] = rss()
@@ -140,18 +154,20 @@ def main():
                       "attention_mask": np.array([e.attention_mask for e in enc], dtype=np.int64),
                       "token_type_ids": np.array([e.type_ids for e in enc], dtype=np.int64)}
             output = session.run(None, {i.name: inputs[i.name] for i in session.get_inputs()})[0]
-            mask = inputs["attention_mask"][..., None]
-            vectors = (output * mask).sum(axis=1) / np.maximum(mask.sum(axis=1), 1)
-            # Model-card mean pooling -> layer norm -> L2 norm, full dimensions.
-            vectors = (vectors - vectors.mean(axis=1, keepdims=True)) / np.sqrt(vectors.var(axis=1, keepdims=True) + 1e-5)
+            if conventions["pooling"] == "first-token-cls":
+                vectors = output[:, 0, :]
+            else:
+                mask = inputs["attention_mask"][..., None]
+                vectors = (output * mask).sum(axis=1) / np.maximum(mask.sum(axis=1), 1)
+                vectors = (vectors - vectors.mean(axis=1, keepdims=True)) / np.sqrt(vectors.var(axis=1, keepdims=True) + 1e-5)
             vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
             vectors = vectors.astype(np.float32)
-            assert vectors.shape == (len(texts), 768) and np.isfinite(vectors).all()
+            assert vectors.shape == (len(texts), dimensions) and np.isfinite(vectors).all()
             return vectors
 
         start = time.perf_counter()
         cpu = time.process_time()
-        vectors = np.concatenate([embed([d["text"] for d in corpus[i:i+4]], "search_document: ") for i in range(0, len(corpus), 4)])
+        vectors = np.concatenate([embed([d["text"] for d in corpus[i:i+4]], conventions["document_prefix"]) for i in range(0, len(corpus), 4)])
         seconds = time.perf_counter() - start
         result["corpus_embedding"] = {"documents": len(corpus), "batch_size": 4,
                                       "wall_seconds": seconds, "cpu_seconds": time.process_time() - cpu,
@@ -160,7 +176,7 @@ def main():
         sqlite_vec.load(db)
         db.enable_load_extension(False)
         result["sqlite_vec_version"] = db.execute("SELECT vec_version()").fetchone()[0]
-        db.execute("CREATE VIRTUAL TABLE vectors USING vec0(embedding float[768] distance_metric=cosine)")
+        db.execute(f"CREATE VIRTUAL TABLE vectors USING vec0(embedding float[{dimensions}] distance_metric=cosine)")
         start = time.perf_counter()
         db.executemany("INSERT INTO vectors(rowid,embedding) VALUES (?,?)", [(i + 1, v.tobytes()) for i, v in enumerate(vectors)])
         db.commit()
@@ -176,7 +192,7 @@ def main():
 
         def vector(query):
             start = time.perf_counter()
-            v = embed([query], "search_query: ")[0]
+            v = embed([query], conventions["query_prefix"])[0]
             embedded = time.perf_counter()
             neighbors = db.execute("SELECT rowid,distance FROM vectors WHERE embedding MATCH ? AND k=5 ORDER BY distance", (v.tobytes(),)).fetchall()
             rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
@@ -184,7 +200,7 @@ def main():
 
         def hybrid_retrieve(query):
             start = time.perf_counter()
-            v = embed([query], "search_query: ")[0]
+            v = embed([query], conventions["query_prefix"])[0]
             embedded = time.perf_counter()
             vector_rows = db.execute(
                 "SELECT rowid,distance FROM vectors WHERE embedding MATCH ? AND k=10 ORDER BY distance",
@@ -211,19 +227,48 @@ def main():
         # Warm-up is explicit, not included in per-query averages.
         start = time.perf_counter()
         retrieve = hybrid_retrieve if hybrid else vector
-        retrieve("warmup retrieval")
+        vector("warmup retrieval")
         result["query_warmup_seconds"] = time.perf_counter() - start
+        if bge:
+            result["vector_only"] = {name: evaluate(qs, vector, suppressed) for name, qs in sets.items()}
         result["candidate"] = {name: evaluate(qs, retrieve, suppressed) for name, qs in sets.items()}
         if hybrid:
             result["fusion"] = {"algorithm": "reciprocal-rank-fusion", "rrf_k": 60,
                                 "lexical_pool": 10, "vector_pool": 10,
                                 "output_k_before_supersession_filter": 5,
-                                "weights": {"fts5": 1, "nomic": 1},
+                                "weights": {"fts5": 1, args.model: 1},
                                 "selected_before_evaluation": True}
         result["vector_db_bytes_including_fts_and_raw_records"] = (Path(td) / "memory.db").stat().st_size
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
-    if hybrid:
+    if bge:
+        reference = json.loads((ROOT / "runs" / "008.json").read_text())
+        quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
+        quality_match = all(
+            result["candidate"][dataset].get(metric) == reference["candidate"][dataset].get(metric)
+            for dataset in ("original", "heldout") for metric in quality_fields
+            if reference["candidate"][dataset].get(metric) is not None
+        )
+        resource_improvements = {
+            "model_disk_bytes": result["model_disk_bytes"] < reference["model_disk_bytes"],
+            "peak_rss_mib": result["candidate"]["original"]["peak_rss_mib"] < reference["candidate"]["original"]["peak_rss_mib"],
+            "original_end_to_end_ms_mean": result["candidate"]["original"]["end_to_end_ms_mean"] < reference["candidate"]["original"]["end_to_end_ms_mean"],
+            "heldout_end_to_end_ms_mean": result["candidate"]["heldout"]["end_to_end_ms_mean"] < reference["candidate"]["heldout"]["end_to_end_ms_mean"],
+        }
+        accepted = quality_match and sum(resource_improvements.values()) >= 3
+        result["run008_comparison"] = {
+            "quality_match": quality_match,
+            "resource_improvements": resource_improvements,
+            "reference_method": reference["method"],
+        }
+        result.update(
+            status="accepted-semantic-champion" if accepted else "rejected",
+            champion=accepted,
+            notes=("Accepted as semantic-quality champion: matched every Run 008 retrieval/evidence metric and reduced at least three of model size, RSS and latency."
+                   if accepted else
+                   "Rejected as semantic-quality champion: the challenger did not match all Run 008 retrieval/evidence metrics with at least three measured resource improvements."),
+        )
+    elif hybrid:
         result.update(
             status="accepted-semantic-champion",
             champion=True,

@@ -7,7 +7,8 @@ Semantic-quality champion: Run 008, `fts5-nomic-rrf60-sqlite-vec`.
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Hypothesis: a deterministic per-record context sketch can reduce prompt context while preserving retrieval quality and the record's semantic content terms.
+Run 009 hypothesis: BGE-small v1.5 can match Run 008 fixed-RRF semantic
+quality while materially reducing local embedding cost.
 
 Run 008 is accepted for semantic retrieval quality. Against Run 005, original
 MRR@5 improved from 0.941667 to 0.975, Recall@5 from 0.95 to 0.975, and
@@ -74,16 +75,23 @@ champion while Run 005 remained the lightweight fallback.
 - Run 006 showed that Run 005's 9%+ context reduction generalizes to a separate held-out evidence set without losing required answer evidence.
 - Run 007 showed vector-only Nomic has complementary strengths but worsens top-rank accuracy.
 - Run 008 showed fixed FTS5 + Nomic RRF resolves the complementary errors and improves both frozen benchmark sets, at a substantial resource cost.
+- Run 009 showed BGE-small v1.5 substantially reduces model size, RSS and
+  latency, but the unchanged fixed-RRF hybrid regressed held-out MRR@5/Hit@1
+  from 1.0/1.0 to 0.975/0.95. Resource savings alone do not justify replacing
+  the semantic-quality champion.
 
 ## Next hypotheses
 
 User priority updated on 2026-10-06; these are queued experiments, not completed results.
 
 1. Run 008 completed fixed FTS5 + Nomic RRF; do not tune fusion constants against these labels.
-2. Next: test `BAAI/bge-small-en-v1.5` as a separate vector and fixed-RRF challenger, using its documented inputs and the same frozen benchmarks.
-3. Then explore `intfloat/e5-small-v2` and `sentence-transformers/all-MiniLM-L6-v2` in separate bounded runs.
-4. Test Nomic Matryoshka dimensions or quantized ONNX only as explicitly separate resource-optimization experiments.
-5. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
+2. Run 009 completed `BAAI/bge-small-en-v1.5`; do not tune RRF constants to
+   repair its single held-out top-rank miss.
+3. Next: test `intfloat/e5-small-v2` with its documented model-specific inputs
+   as a separate vector and unchanged fixed-RRF challenger.
+4. Then test `sentence-transformers/all-MiniLM-L6-v2` in its own bounded run.
+5. Test Nomic Matryoshka dimensions or quantized ONNX only as explicitly separate resource-optimization experiments.
+6. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -171,3 +179,37 @@ Reproduce Run 008 after the Run 007 setup steps:
 
 Full measurements and per-query rankings are in `runs/008.json`. Run 008 is the
 semantic-quality champion; Run 005 stays available as the low-cost fallback.
+
+## Run 009: BGE-small v1.5 model substitution
+
+Run 009 tested one hypothesis: replace Nomic with the smaller CPU-only
+`BAAI/bge-small-en-v1.5` model while leaving SQLite vec0, supersession handling,
+compact context assembly, and Run 008's equal-weight RRF (`k=60`, top-10 pools)
+unchanged. The experiment used the model's documented 512-token tokenizer,
+query instruction, no passage instruction, first-token CLS pooling, L2
+normalization, 384 dimensions and cosine distance.
+
+BGE's hybrid matched Run 008 on the original benchmark: MRR@5 0.975,
+Recall@5 0.975 and Hit@1 0.95. It did not match the frozen held-out benchmark:
+MRR@5/Hit@1 fell from 1.0/1.0 to 0.975/0.95, although Recall@5 and evidence
+retention remained 1.0. The held-out miss was h016 at rank 2. The candidate is
+therefore rejected and Run 008 remains the semantic-quality champion.
+
+The rejected challenger was materially cheaper: model plus tokenizer was
+133,804,886 bytes instead of 548,021,671; peak RSS was 234.074 MiB instead of
+790.684 MiB; original hybrid end-to-end latency was 8.16 ms instead of 33.08
+ms; and the SQLite database was 1,654,784 bytes instead of 3,227,648. Embedding
+40 documents took 0.600 s at 66.64 documents/s. These are sandbox-specific
+process measurements. Full vector-only diagnostics and per-query rankings are
+in `runs/009.json`; no answer generator was evaluated.
+
+Reproduce after installing `embedding_requirements.txt`:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model bge
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model bge --threads 2
+```
+
+The second command is offline. Revision, checksums, sizes and model conventions
+are pinned in `bge_model.json`; large weights and generated databases stay under
+`.artifacts/` and out of Git.
