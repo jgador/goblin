@@ -108,3 +108,19 @@ The exact revision, file checksums, 384-dimensional attention-mask mean pooling,
 `query: ` and `passage: ` prefixes, L2 normalization, and 512-token limit are
 pinned in `e5_model.json`. See `runs/010.json` for complete measurements and
 rankings.
+
+## MiniLM challenger (Run 011)
+
+Run 011 substitutes `sentence-transformers/all-MiniLM-L6-v2` for E5 under the
+unchanged fixed RRF rule. It is smaller and faster, but its hybrid lost Run
+010's perfect held-out top-rank score. MiniLM remains reproducible comparison
+infrastructure rather than the default semantic champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model minilm
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model minilm --threads 2
+```
+
+The exact revision, checksums, symmetric no-prefix inputs, 384-dimensional
+attention-mask mean pooling, L2 normalization, and 256-word-piece limit are
+pinned in `minilm_model.json`. See `runs/011.json` for complete measurements.

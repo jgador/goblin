@@ -66,7 +66,7 @@ def evaluate(queries, retrieve, suppressed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=["nomic", "bge", "e5"], default="nomic")
+    parser.add_argument("--model", choices=["nomic", "bge", "e5", "minilm"], default="nomic")
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
@@ -74,7 +74,7 @@ def main():
     if args.threads < 1:
         parser.error("threads must be positive")
     if args.model_dir is None:
-        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small"}
+        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
     manifest = json.loads((ROOT / f"{args.model}_model.json").read_text())
     conventions = manifest.get("conventions", {
@@ -94,19 +94,22 @@ def main():
     sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
             "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
     suppressed = set(detect_supersessions(corpus))
-    challenger = args.model in ("bge", "e5")
+    challenger = args.model in ("bge", "e5", "minilm")
     hybrid = args.retrieval == "hybrid" or challenger
-    result = {"run": 10 if args.model == "e5" else (9 if args.model == "bge" else (8 if hybrid else 7)),
-              "method": ("fts5-e5-small-v2-rrf60-sqlite-vec" if args.model == "e5" else
+    result = {"run": 11 if args.model == "minilm" else (10 if args.model == "e5" else (9 if args.model == "bge" else (8 if hybrid else 7))),
+              "method": ("fts5-all-minilm-l6-v2-rrf60-sqlite-vec" if args.model == "minilm" else
+                         ("fts5-e5-small-v2-rrf60-sqlite-vec" if args.model == "e5" else
                          ("fts5-bge-small-rrf60-sqlite-vec" if args.model == "bge" else
-                          ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec"))),
-              "hypothesis": ("E5-small-v2 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
+                          ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec")))),
+              "hypothesis": ("all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality while further reducing local embedding cost."
+                             if args.model == "minilm" else
+                             ("E5-small-v2 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
                              if args.model == "e5" else
                              ("BGE-small v1.5 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
                              if args.model == "bge" else
                              ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
                               if hybrid else
-                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."))),
+                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks.")))),
               "model": manifest, "dimensions": dimensions, "precision": "float32",
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
@@ -247,7 +250,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference = json.loads((ROOT / "runs" / "008.json").read_text())
+        reference_run = 10 if args.model == "minilm" else 8
+        reference = json.loads((ROOT / "runs" / f"{reference_run:03}.json").read_text())
         quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
         quality_match = all(
             result["candidate"][dataset].get(metric) == reference["candidate"][dataset].get(metric)
@@ -266,17 +270,18 @@ def main():
             "heldout_context_tokens": result["candidate"]["heldout"]["context_tokens_approx_mean"] < reference["candidate"]["heldout"]["context_tokens_approx_mean"],
         }
         accepted = quality_match and sum(resource_improvements.values()) >= 3
-        result["run008_comparison"] = {
+        result["champion_comparison" if args.model == "minilm" else "run008_comparison"] = {
             "quality_match": quality_match,
             "resource_improvements": resource_improvements,
             "reference_method": reference["method"],
+            "reference_run": reference_run,
         }
         result.update(
             status="accepted-semantic-champion" if accepted else "rejected",
             champion=accepted,
-            notes=("Accepted as semantic-quality champion: matched every Run 008 retrieval/evidence metric and reduced at least three of model size, RSS and latency."
+            notes=(f"Accepted as semantic-quality champion: matched every Run {reference_run} retrieval/evidence metric and reduced at least three measured resource costs."
                    if accepted else
-                   "Rejected as semantic-quality champion: the challenger did not match all Run 008 retrieval/evidence metrics with at least three measured resource improvements."),
+                   f"Rejected as semantic-quality champion: the challenger did not match all Run {reference_run} retrieval/evidence metrics with at least three measured resource improvements."),
         )
     elif hybrid:
         result.update(

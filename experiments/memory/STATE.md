@@ -7,8 +7,8 @@ Semantic-quality champion: Run 010, `fts5-e5-small-v2-rrf60-sqlite-vec`.
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 010 hypothesis: E5-small-v2 can match Run 008 fixed-RRF semantic
-quality while materially reducing local embedding cost.
+Run 011 hypothesis: all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality
+while further reducing local embedding cost.
 
 Run 010 replaces Run 008 as the semantic-quality champion. It matches every
 Run 008 original and held-out retrieval/evidence metric, while reducing model
@@ -86,6 +86,10 @@ champion while Run 005 remained the lightweight fallback.
   metrics while substantially reducing model, memory, CPU, latency, vector
   storage and assembled context costs. Its vector-only original top-rank score
   was weaker, confirming that the fixed lexical fusion remains important.
+- Run 011 showed all-MiniLM-L6-v2 is smaller and faster than E5, but its hybrid
+  regressed held-out MRR@5/Hit@1 from 1.0/1.0 to 0.975/0.95 on h014. Recall@5
+  and evidence retention stayed 1.0. Resource savings do not outweigh the
+  frozen quality regression, so Run 010 remains champion.
 
 ## Next hypotheses
 
@@ -96,10 +100,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    repair its single held-out top-rank miss.
 3. Run 010 completed `intfloat/e5-small-v2`; it is the new semantic-quality
    champion. Do not tune the fixed fusion constants against benchmark labels.
-4. Next: test `sentence-transformers/all-MiniLM-L6-v2` in its own bounded run
-   using its documented symmetric input convention.
-5. Test Nomic Matryoshka dimensions or quantized ONNX only as explicitly separate resource-optimization experiments.
-6. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
+4. Run 011 completed `sentence-transformers/all-MiniLM-L6-v2`; do not tune the
+   fixed fusion rule to repair its held-out top-rank miss.
+5. Next: test a portable E5-small-v2 INT8 ONNX variant as a separate
+   precision/resource experiment if CPU compatibility can be pinned cleanly.
+6. Test Nomic Matryoshka dimensions only as a separate storage/context experiment.
+7. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -255,4 +261,39 @@ Reproduce after installing `embedding_requirements.txt`:
 
 The second command is offline. Revision, checksums, sizes and conventions are
 pinned in `e5_model.json`; large weights and generated databases stay under
+`.artifacts/` and out of Git.
+
+## Run 011: all-MiniLM-L6-v2 model substitution
+
+Run 011 tested one hypothesis: replace E5 with CPU-only
+`sentence-transformers/all-MiniLM-L6-v2` while preserving SQLite vec0,
+supersession handling, compact context assembly, and the fixed equal-weight RRF
+rule (`k=60`, top-10 pools). It used the model's documented symmetric inputs
+without prefixes, 256-word-piece limit, attention-mask mean pooling, L2
+normalization, 384 dimensions and cosine distance.
+
+MiniLM's hybrid matched Run 010 on the original benchmark at MRR@5 0.975,
+Recall@5 0.975 and Hit@1 0.95. It did not match the held-out benchmark:
+MRR@5/Hit@1 fell from 1.0/1.0 to 0.975/0.95 because h014 ranked its relevant
+record second. Held-out Recall@5 and evidence retention remained 1.0. The
+candidate is rejected and Run 010 remains the semantic-quality champion.
+
+The rejected challenger was cheaper: model plus tokenizer was 90,871,461 bytes
+instead of 133,804,864; peak RSS was 193.996 MiB instead of 236.047 MiB;
+original hybrid latency was 4.75 ms instead of 8.09 ms; and held-out latency
+was 4.19 ms instead of 8.66 ms. SQLite size was unchanged at 1,654,784 bytes.
+Original context increased from 147.7 to 149.35 approximate tokens, while
+held-out context fell from 154.35 to 150.05. Embedding 40 documents took 0.312
+seconds at 128.41 documents/s. Full CPU, vector-only diagnostics and per-query
+results are in `runs/011.json`; no answer generator was evaluated.
+
+Reproduce after installing `embedding_requirements.txt`:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model minilm
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model minilm --threads 2
+```
+
+The second command is offline. Revision, checksums, sizes and conventions are
+pinned in `minilm_model.json`; large weights and generated databases stay under
 `.artifacts/` and out of Git.
