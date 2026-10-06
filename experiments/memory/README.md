@@ -44,3 +44,17 @@ The default now reproduces Run 005: Run 004 supersession filtering plus a
 conservative context-only compact sketch. Use `--method supersession` for Run 004,
 `--method bm25` for the original lexical baseline, or `--method idf-intent` for
 the rejected reconstructed Run 002 candidate.
+
+## Local embedding challenger (Run 007)
+
+Nomic Embed Text v1.5, FP32/768 dimensions, CPU ONNX Runtime, and SQLite
+`sqlite-vec`/`vec0` are now reproducible. See `STATE.md` for installation and
+commands, `nomic_model.json` for pinned files, and `runs/007.json` for results.
+The vector-only candidate lost on original MRR/Hit@1, so Run 005 remains the
+default. The optional embedding harness is retained for hybrid and small-model
+comparisons. It embeds full original records; supersession filtering and compact
+context assembly match the lexical champion. No PostgreSQL, containers, remote
+inference, or answer-generating LLM is used.
+
+Model conventions: https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
+SQLite extension: https://github.com/asg017/sqlite-vec

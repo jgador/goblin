@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Offline, CPU-only Nomic/vec0 challenger; never changes the default champion."""
+import argparse
+import hashlib
+import json
+import math
+import os
+import platform
+import resource
+import sqlite3
+import statistics
+import tempfile
+import time
+from pathlib import Path
+
+from run_experiment import compact_text, detect_supersessions, fts_query, load_jsonl
+from run_heldout_validation import terms
+
+ROOT = Path(__file__).resolve().parent
+ARTIFACTS = ROOT.parents[1] / ".artifacts" / "memory-loop"
+
+
+def rss():
+    # Linux ru_maxrss is KiB, and is a process-lifetime high-water mark.
+    return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 3)
+
+
+def evaluate(queries, retrieve, suppressed):
+    details, latency, embed_latency, search_latency = [], [], [], []
+    cpu_start = time.process_time()
+    for q in queries:
+        started = time.perf_counter()
+        rows, embedding_ms, search_ms = retrieve(q["query"])
+        rows = [row for row in rows if row[0] not in suppressed]
+        rendered = [compact_text(row[1]) for row in rows]
+        elapsed = (time.perf_counter() - started) * 1000
+        ids = [row[0] for row in rows]
+        relevant = set(q["relevant"])
+        rank = next((i + 1 for i, doc in enumerate(ids) if doc in relevant), None)
+        chars = sum(map(len, rendered))
+        evidence = (set(q["evidence_terms"]).issubset(terms(" ".join(rendered)))
+                    if "evidence_terms" in q else None)
+        details.append({"query": q["id"], "top": ids, "first_relevant_rank": rank,
+                        "recall": len(relevant.intersection(ids)) / len(relevant),
+                        "evidence_preserved": evidence, "context_chars": chars,
+                        "context_tokens_approx": math.ceil(chars / 4)})
+        latency.append(elapsed)
+        embed_latency.append(embedding_ms)
+        search_latency.append(search_ms)
+    cpu = time.process_time() - cpu_start
+    measured_evidence = [d["evidence_preserved"] for d in details if d["evidence_preserved"] is not None]
+    return {
+        "query_count": len(queries), "k": 5,
+        "mrr_at_5": round(statistics.fmean(0 if d["first_relevant_rank"] is None else 1 / d["first_relevant_rank"] for d in details), 6),
+        "recall_at_5": round(statistics.fmean(d["recall"] for d in details), 6),
+        "hit_at_1": round(statistics.fmean(d["first_relevant_rank"] == 1 for d in details), 6),
+        "evidence_at_5": statistics.fmean(measured_evidence) if measured_evidence else None,
+        "context_tokens_approx_mean": statistics.fmean(d["context_tokens_approx"] for d in details),
+        "end_to_end_ms_mean": statistics.fmean(latency),
+        "end_to_end_ms_p95": sorted(latency)[math.ceil(.95 * len(latency)) - 1],
+        "query_embedding_ms_mean": statistics.fmean(embed_latency),
+        "search_ms_mean": statistics.fmean(search_latency),
+        "cpu_seconds": cpu, "peak_rss_mib": rss(), "details": details,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--model-dir", type=Path, default=ARTIFACTS / "nomic")
+    parser.add_argument("--threads", type=int, default=2)
+    args = parser.parse_args()
+    if args.threads < 1:
+        parser.error("threads must be positive")
+    manifest = json.loads((ROOT / "nomic_model.json").read_text())
+    for name, expected in manifest["files"].items():
+        path = args.model_dir / Path(name).name
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        if digest != expected["sha256"]:
+            raise ValueError(f"Model checksum mismatch: {name}")
+    corpus = load_jsonl(ROOT / "corpus.jsonl")
+    sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
+            "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
+    suppressed = set(detect_supersessions(corpus))
+    result = {"run": 7, "method": "nomic-fp32-768-sqlite-vec",
+              "hypothesis": "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks.",
+              "model": manifest, "dimensions": 768, "precision": "float32",
+              "threads": args.threads, "provider": "CPUExecutionProvider",
+              "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
+              "os": platform.platform(), "logical_cpu_count": os.cpu_count(),
+              "supersessions": detect_supersessions(corpus),
+              "requested_orchestration_model": "GPT-6.1 Sol", "orchestration_model_verified": False,
+              "external_inference_api_calls": 0, "answer_generation_evaluated": False,
+              "benchmark_sha256": hashlib.sha256((ROOT / "corpus.jsonl").read_bytes() + b"\0" + (ROOT / "queries.jsonl").read_bytes()).hexdigest(),
+              "heldout_sha256": hashlib.sha256((ROOT / "corpus.jsonl").read_bytes() + b"\0" + (ROOT / "heldout_queries.jsonl").read_bytes()).hexdigest()}
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=ARTIFACTS) as td:
+        db = sqlite3.connect(Path(td) / "memory.db")
+        db.execute("CREATE VIRTUAL TABLE memory USING fts5(id UNINDEXED, text, source UNINDEXED, ts UNINDEXED, tokenize='unicode61')")
+        db.executemany("INSERT INTO memory VALUES (?,?,?,?)", [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus])
+        db.commit()
+
+        def lexical(query):
+            start = time.perf_counter()
+            rows = db.execute("SELECT id,text FROM memory WHERE memory MATCH ? ORDER BY bm25(memory) LIMIT 5", (fts_query(query),)).fetchall()
+            return rows, 0, (time.perf_counter() - start) * 1000
+
+        result["baseline"] = {name: evaluate(qs, lexical, suppressed) for name, qs in sets.items()}
+        result["baseline_db_bytes"] = (Path(td) / "memory.db").stat().st_size
+        # Imports/model loading occur after baseline measurement so its RSS does
+        # not inherit the embedding runtime's high-water mark.
+        start = time.perf_counter()
+        cpu = time.process_time()
+        import numpy as np
+        import onnxruntime as ort
+        import sqlite_vec
+        from tokenizers import Tokenizer
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = args.threads
+        options.inter_op_num_threads = 1
+        options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        session = ort.InferenceSession(str(args.model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"])
+        tokenizer = Tokenizer.from_file(str(args.model_dir / "tokenizer.json"))
+        tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
+        tokenizer.enable_truncation(max_length=8192)
+        result["load_seconds_including_imports"] = time.perf_counter() - start
+        result["load_cpu_seconds"] = time.process_time() - cpu
+        result["load_peak_rss_mib"] = rss()
+        result["runtime_versions"] = {"onnxruntime": ort.__version__, "numpy": np.__version__,
+                                       "tokenizers": __import__("tokenizers").__version__}
+
+        def embed(texts, prefix):
+            enc = tokenizer.encode_batch([prefix + text for text in texts])
+            inputs = {"input_ids": np.array([e.ids for e in enc], dtype=np.int64),
+                      "attention_mask": np.array([e.attention_mask for e in enc], dtype=np.int64),
+                      "token_type_ids": np.array([e.type_ids for e in enc], dtype=np.int64)}
+            output = session.run(None, {i.name: inputs[i.name] for i in session.get_inputs()})[0]
+            mask = inputs["attention_mask"][..., None]
+            vectors = (output * mask).sum(axis=1) / np.maximum(mask.sum(axis=1), 1)
+            # Model-card mean pooling -> layer norm -> L2 norm, full dimensions.
+            vectors = (vectors - vectors.mean(axis=1, keepdims=True)) / np.sqrt(vectors.var(axis=1, keepdims=True) + 1e-5)
+            vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
+            vectors = vectors.astype(np.float32)
+            assert vectors.shape == (len(texts), 768) and np.isfinite(vectors).all()
+            return vectors
+
+        start = time.perf_counter()
+        cpu = time.process_time()
+        vectors = np.concatenate([embed([d["text"] for d in corpus[i:i+4]], "search_document: ") for i in range(0, len(corpus), 4)])
+        seconds = time.perf_counter() - start
+        result["corpus_embedding"] = {"documents": len(corpus), "batch_size": 4,
+                                      "wall_seconds": seconds, "cpu_seconds": time.process_time() - cpu,
+                                      "documents_per_second": len(corpus) / seconds, "peak_rss_mib": rss()}
+        db.enable_load_extension(True)
+        sqlite_vec.load(db)
+        db.enable_load_extension(False)
+        result["sqlite_vec_version"] = db.execute("SELECT vec_version()").fetchone()[0]
+        db.execute("CREATE VIRTUAL TABLE vectors USING vec0(embedding float[768] distance_metric=cosine)")
+        start = time.perf_counter()
+        db.executemany("INSERT INTO vectors(rowid,embedding) VALUES (?,?)", [(i + 1, v.tobytes()) for i, v in enumerate(vectors)])
+        db.commit()
+        result["vector_insert_seconds"] = time.perf_counter() - start
+        self_matches = [db.execute(
+            "SELECT rowid FROM vectors WHERE embedding MATCH ? AND k=1 ORDER BY distance",
+            (v.tobytes(),),
+        ).fetchone()[0] == i + 1 for i, v in enumerate(vectors)]
+        assert all(self_matches), "Vector storage/search failed corpus self-neighbor validation"
+        result["vector_validation"] = {"corpus_self_neighbors_correct": sum(self_matches),
+                                       "stored_vectors": len(vectors),
+                                       "unit_norm_max_error": float(np.max(np.abs(np.linalg.norm(vectors, axis=1) - 1)))}
+
+        def vector(query):
+            start = time.perf_counter()
+            v = embed([query], "search_query: ")[0]
+            embedded = time.perf_counter()
+            neighbors = db.execute("SELECT rowid,distance FROM vectors WHERE embedding MATCH ? AND k=5 ORDER BY distance", (v.tobytes(),)).fetchall()
+            rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
+            return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
+
+        # Warm-up is explicit, not included in per-query averages.
+        start = time.perf_counter()
+        vector("warmup retrieval")
+        result["query_warmup_seconds"] = time.perf_counter() - start
+        result["candidate"] = {name: evaluate(qs, vector, suppressed) for name, qs in sets.items()}
+        result["vector_db_bytes_including_fts_and_raw_records"] = (Path(td) / "memory.db").stat().st_size
+        db.close()
+    result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
+    print(json.dumps(result, indent=2, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

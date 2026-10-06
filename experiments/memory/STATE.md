@@ -60,8 +60,8 @@ Run 006 is accepted as validation infrastructure only. It does not replace the r
 
 User priority updated on 2026-10-06; these are queued experiments, not completed results.
 
-1. Start real CPU-only `nomic-ai/nomic-embed-text-v1.5` embeddings with SQLite `sqlite-vec` (`vec0`) storage and search. Evaluate vector-only retrieval against Run 005 on both frozen benchmark sets, keeping supersession and context assembly comparable.
-2. Test FTS5 + vector hybrid retrieval only after a measured vector-only result exists.
+1. Run 007 completed the Nomic FP32/768 vector-only comparison; do not repeat it unchanged. Run 005 remains champion.
+2. Next: test FTS5 + Nomic vector hybrid retrieval as one separate hypothesis; a real vector-only result now exists. Keep the frozen queries/evidence unchanged and avoid tuning fusion weights against held-out labels.
 3. Explore `BAAI/bge-small-en-v1.5`, `intfloat/e5-small-v2`, and `sentence-transformers/all-MiniLM-L6-v2` in separate bounded runs.
 4. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
 
@@ -87,3 +87,39 @@ python3 experiments/memory/run_heldout_validation.py
 ```
 
 Run 006 used GPT-6.1 Sol as the requested orchestration model. The orchestration model is not independently verifiable from the experiment harness; retrieval and evidence scoring use no LLM or external API.
+
+## Run 007: real Nomic embeddings with sqlite-vec
+
+Completed CPU-only ONNX FP32 inference for `nomic-ai/nomic-embed-text-v1.5`,
+revision `e9b6763023c676ca8431644204f50c2b100d9aab`, 768 dimensions, two
+intra-op threads. Used documented query/document prefixes, attention-mask mean
+pooling, layer normalization and L2 normalization. Local checksum-pinned files
+were used during inference. All 40 corpus self-neighbors passed vec0 validation.
+
+Rejected as a replacement champion: original MRR@5 fell 0.941667 -> 0.916667
+and Hit@1 fell 0.90 -> 0.85. Recall@5 rose 0.95 -> 0.975. Held-out MRR@5
+remained 0.975, Recall@5 1.0, Hit@1 0.95 and evidence-term coverage 1.0.
+Original context increased 150.5 -> 151.65 approximate tokens; held-out context
+increased 151.95 -> 158.35. Nomic fixed q011 (rank 3 -> 1) but worsened
+q003 (1 -> 3) and q015 (1 -> 2). These complementary errors justify testing
+hybrid retrieval next, not replacing FTS5.
+
+Full resource measurements and query-level outputs are in `runs/007.json`. The
+model plus tokenizer occupies 548,021,671 bytes, and the SQLite database with
+FTS5/raw records plus vec0 occupies 3,227,648 bytes versus 45,056 bytes before
+vectors. Keep the embedding harness for future comparisons; the default champion
+runner is unchanged. This evaluates retrieval/evidence, not generated answers.
+
+Reproduction (Python 3.12 on Linux; preparation downloads once):
+
+```bash
+python3 -m venv .artifacts/memory-loop/venv
+.artifacts/memory-loop/venv/bin/pip install -r experiments/memory/embedding_requirements.txt
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_nomic_model.py
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --threads 2
+```
+
+The last command is offline. Model revisions, checksums and sizes are in
+`nomic_model.json`; dependency versions are pinned separately from the stdlib-only
+lexical harness. Large model files, vector databases and preparation outputs are
+kept under `.artifacts/` and excluded from Git.
