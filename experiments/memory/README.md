@@ -201,3 +201,20 @@ python3 experiments/memory/run_deduplication_experiment.py --iterations 1000
 
 See `runs/015.json` for the rule, timing, provenance invariant, and per-query
 results. The replay uses no model weights, remote APIs, or answer generator.
+
+## Fixed rank-aware context budget (Run 016)
+
+Run 016 tested a 128 approximate-token target after Run 014, retaining one
+selected clause per retrieved record before admitting later clauses in rank
+order. It reduced original context by 7.70% and held-out context by 11.95%, but
+held-out evidence retention fell from 1.0 to 0.9 when required second clauses
+were omitted for h013 and h017. The candidate was rejected and Run 014 remains
+the context champion.
+
+```bash
+python3 experiments/memory/run_context_budget_experiment.py --iterations 1000
+```
+
+See `runs/016.json` for the fixed rule, timing, evidence failures, and complete
+retained/omitted provenance. No model weights, remote APIs, or answer generator
+are used by the replay.

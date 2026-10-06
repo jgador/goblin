@@ -19,6 +19,9 @@ Run 015 did not replace it. The predeclared conservative cross-record
 near-duplicate rule found no eligible clauses in either frozen set, so it added
 comparison work without reducing context.
 
+Run 016 also did not replace it. A fixed 128-token rank-aware budget reduced
+context, but omitted required held-out evidence for two queries.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
 Its process RSS was about 15 MiB in the Run 010 environment versus 236.312 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
@@ -118,6 +121,11 @@ champion while Run 005 remained the lightweight fallback.
   context unchanged, and increased isolated assembly from about 0.05 ms to
   0.27-0.30 ms per query. Do not loosen similarity thresholds against the
   frozen labels; that would weaken semantic guards and invite overfitting.
+- Run 016 showed that a uniform 128-token context budget is too rigid. It cut
+  original context by 7.70% and held-out context by 11.95%, but held-out
+  evidence retention fell from 1.0 to 0.9 because second clauses from the
+  rank-one records were omitted for h013 and h017. Nine held-out queries already
+  exceeded the budget using only one mandatory clause per retrieved record.
 
 ## Next hypotheses
 
@@ -138,9 +146,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    context-assembly extension to Run 010.
 8. Run 015 completed fixed cross-record near-duplicate clause removal; the
    candidate was rejected because it found no safe duplicates.
-9. Next: test a fixed rank-aware context budget after Run 014 that always keeps
-   one selected clause per retrieved record, admits additional selected clauses
-   in retrieval order up to a predeclared token limit, and preserves provenance.
+9. Run 016 completed a fixed 128-token rank-aware budget; it was rejected after
+   losing held-out evidence on h013 and h017.
+10. Next: test one specific follow-up with the same 128-token target but protect
+    every query-overlap or semantic-operator clause in the rank-one record before
+    admitting lower-rank context. Permit protected overflow and preserve omitted
+    provenance; do not tune the budget or priorities against individual labels.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -470,4 +481,34 @@ python3 experiments/memory/run_deduplication_experiment.py --iterations 1000
 ```
 
 Full metrics and per-query duplicate/provenance results are in `runs/015.json`.
+This is retrieval/evidence evaluation only; no answer generator was evaluated.
+
+## Run 016: fixed rank-aware context budget
+
+Run 016 replayed Run 014 and tested one predeclared 128 approximate-token
+(512-character) context budget. It first retained one selected clause from every
+retrieved record, then admitted later selected clauses in retrieval-rank order
+until the next clause would exceed the budget. Clauses were never truncated;
+mandatory clauses could exceed the target, and every retained or omitted clause
+kept record, rank, and selected-clause provenance.
+
+Original mean context fell from 139.55 to 128.80 approximate tokens (7.70%),
+and held-out context fell from 145.65 to 128.25 (11.95%). Retrieval metrics were
+unchanged by replay, provenance checks passed, and mean candidate assembly was
+0.101 ms original and 0.092 ms held-out. Persistent storage remained 1,654,784
+bytes.
+
+The candidate is rejected because held-out evidence retention fell from 1.0 to
+0.9. The budget omitted required second clauses from the rank-one records for
+h013 and h017. Nine held-out queries exceeded the target using mandatory clauses
+alone, demonstrating that a uniform hard target is not compatible with this
+five-record context policy. Run 014 remains champion.
+
+Reproduce without model weights or external APIs:
+
+```bash
+python3 experiments/memory/run_context_budget_experiment.py --iterations 1000
+```
+
+Full metrics and per-query retained/omitted provenance are in `runs/016.json`.
 This is retrieval/evidence evaluation only; no answer generator was evaluated.
