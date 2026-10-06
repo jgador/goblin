@@ -124,3 +124,23 @@ infrastructure rather than the default semantic champion.
 The exact revision, checksums, symmetric no-prefix inputs, 384-dimensional
 attention-mask mean pooling, L2 normalization, and 256-word-piece limit are
 pinned in `minilm_model.json`. See `runs/011.json` for complete measurements.
+
+## E5 dynamic INT8 challenger (Run 012)
+
+Run 012 dynamically quantizes the pinned E5-small-v2 FP32 ONNX model to a
+portable QInt8-weight graph with ONNX Runtime. It substantially reduces model
+size, measured RSS, CPU time and latency, but q011 falls from rank 1 to rank 2
+under the unchanged fixed RRF rule. The candidate is therefore retained as
+reproducible quantization infrastructure rather than promoted over Run 010.
+
+```bash
+python3 -m venv .artifacts/memory-loop/venv
+.artifacts/memory-loop/venv/bin/pip install -r experiments/memory/quantization_requirements.txt
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_e5_int8_model.py
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5_int8 --threads 2
+```
+
+The generated model checksum, source checksum, quantization settings, runtime
+versions and E5 input/pooling conventions are pinned in `e5_int8_model.json`.
+See `runs/012.json` for complete vector-only and hybrid measurements. The
+benchmark command runs offline and no answer-generating model is evaluated.

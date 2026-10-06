@@ -7,8 +7,8 @@ Semantic-quality champion: Run 010, `fts5-e5-small-v2-rrf60-sqlite-vec`.
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 011 hypothesis: all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality
-while further reducing local embedding cost.
+Run 012 hypothesis: dynamic INT8 E5-small-v2 can preserve Run 010 quality
+while reducing model, memory and latency costs.
 
 Run 010 replaces Run 008 as the semantic-quality champion. It matches every
 Run 008 original and held-out retrieval/evidence metric, while reducing model
@@ -90,6 +90,10 @@ champion while Run 005 remained the lightweight fallback.
   regressed held-out MRR@5/Hit@1 from 1.0/1.0 to 0.975/0.95 on h014. Recall@5
   and evidence retention stayed 1.0. Resource savings do not outweigh the
   frozen quality regression, so Run 010 remains champion.
+- Run 012 showed portable ONNX Runtime dynamic INT8 E5 is substantially smaller,
+  faster and lower-memory than FP32 E5, but q011 moved from rank 1 to rank 2.
+  Original hybrid MRR@5/Hit@1 regressed from 0.975/0.95 to 0.95/0.90, so Run
+  010 remains champion despite perfect held-out quality and evidence retention.
 
 ## Next hypotheses
 
@@ -102,10 +106,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    champion. Do not tune the fixed fusion constants against benchmark labels.
 4. Run 011 completed `sentence-transformers/all-MiniLM-L6-v2`; do not tune the
    fixed fusion rule to repair its held-out top-rank miss.
-5. Next: test a portable E5-small-v2 INT8 ONNX variant as a separate
-   precision/resource experiment if CPU compatibility can be pinned cleanly.
-6. Test Nomic Matryoshka dimensions only as a separate storage/context experiment.
-7. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
+5. Run 012 completed a portable dynamic INT8 E5 experiment; do not tune the
+   fixed fusion rule against q011 to conceal its original-benchmark regression.
+6. Next: test Nomic Matryoshka dimensions as a separate storage/resource
+   experiment while retaining the frozen fusion rule and benchmark.
+7. Return to sentence/clause summaries or supersession improvements after the
+   embedding comparisons.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -297,3 +303,42 @@ Reproduce after installing `embedding_requirements.txt`:
 The second command is offline. Revision, checksums, sizes and conventions are
 pinned in `minilm_model.json`; large weights and generated databases stay under
 `.artifacts/` and out of Git.
+
+## Run 012: portable dynamic INT8 E5 precision experiment
+
+Run 012 tested one hypothesis: dynamically quantizing the pinned E5-small-v2
+ONNX weights from FP32 to signed INT8 can preserve Run 010 quality while
+reducing local resource costs. The tokenizer, 384-dimensional output, E5
+`query: ` and `passage: ` prefixes, attention-mask mean pooling, L2
+normalization, SQLite vec0 storage, supersession behavior, compact context and
+fixed equal-weight RRF rule were unchanged.
+
+The quantized hybrid retained perfect held-out MRR@5, Recall@5, Hit@1 and
+evidence retention. It did not preserve the original benchmark: q011 moved
+from rank 1 to rank 2, lowering MRR@5 from 0.975 to 0.95 and Hit@1 from 0.95
+to 0.90; Recall@5 remained 0.975. The candidate is rejected and Run 010 remains
+the semantic-quality champion.
+
+The resource result was nevertheless strong. Model plus tokenizer size fell
+from 133,804,864 to 34,518,725 bytes; measured peak RSS fell from 236.047 to
+121.637 MiB; original hybrid latency fell from 8.09 to 6.10 ms; and held-out
+latency fell from 8.66 to 4.70 ms. Embedding 40 documents took 0.368 seconds at
+108.72 documents/s. SQLite remained 1,654,784 bytes because stored vectors are
+still normalized FP32. Measurements came from an AVX-512 VNNI-capable x86-64
+host, but the generated ONNX graph is not ISA-specific; target-machine
+performance still requires validation. No answer generator was evaluated.
+
+Reproduce with the pinned quantization toolchain:
+
+```bash
+python3 -m venv .artifacts/memory-loop/venv
+.artifacts/memory-loop/venv/bin/pip install -r experiments/memory/quantization_requirements.txt
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_e5_int8_model.py
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5_int8 --threads 2
+```
+
+Preparation downloads the pinned FP32 model once and deterministically creates
+the local dynamic-QInt8 model. The final benchmark command is offline. Source
+and generated checksums, sizes, quantization parameters, model conventions and
+dependency versions are pinned in `e5_int8_model.json` and
+`quantization_requirements.txt`; large artifacts remain under `.artifacts/`.

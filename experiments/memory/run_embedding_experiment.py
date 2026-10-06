@@ -66,7 +66,7 @@ def evaluate(queries, retrieve, suppressed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=["nomic", "bge", "e5", "minilm"], default="nomic")
+    parser.add_argument("--model", choices=["nomic", "bge", "e5", "e5_int8", "minilm"], default="nomic")
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
@@ -74,7 +74,7 @@ def main():
     if args.threads < 1:
         parser.error("threads must be positive")
     if args.model_dir is None:
-        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small", "minilm": "minilm"}
+        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
     manifest = json.loads((ROOT / f"{args.model}_model.json").read_text())
     conventions = manifest.get("conventions", {
@@ -94,14 +94,17 @@ def main():
     sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
             "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
     suppressed = set(detect_supersessions(corpus))
-    challenger = args.model in ("bge", "e5", "minilm")
+    challenger = args.model in ("bge", "e5", "e5_int8", "minilm")
     hybrid = args.retrieval == "hybrid" or challenger
-    result = {"run": 11 if args.model == "minilm" else (10 if args.model == "e5" else (9 if args.model == "bge" else (8 if hybrid else 7))),
-              "method": ("fts5-all-minilm-l6-v2-rrf60-sqlite-vec" if args.model == "minilm" else
+    result = {"run": 12 if args.model == "e5_int8" else (11 if args.model == "minilm" else (10 if args.model == "e5" else (9 if args.model == "bge" else (8 if hybrid else 7)))),
+              "method": ("fts5-e5-small-v2-dynamic-int8-rrf60-sqlite-vec" if args.model == "e5_int8" else
+                         ("fts5-all-minilm-l6-v2-rrf60-sqlite-vec" if args.model == "minilm" else
                          ("fts5-e5-small-v2-rrf60-sqlite-vec" if args.model == "e5" else
                          ("fts5-bge-small-rrf60-sqlite-vec" if args.model == "bge" else
-                          ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec")))),
-              "hypothesis": ("all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality while further reducing local embedding cost."
+                          ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec"))))),
+              "hypothesis": ("Dynamic INT8 E5-small-v2 can preserve Run 010 quality while reducing model, memory and latency costs."
+                             if args.model == "e5_int8" else
+                             ("all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality while further reducing local embedding cost."
                              if args.model == "minilm" else
                              ("E5-small-v2 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
                              if args.model == "e5" else
@@ -109,8 +112,8 @@ def main():
                              if args.model == "bge" else
                              ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
                               if hybrid else
-                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks.")))),
-              "model": manifest, "dimensions": dimensions, "precision": "float32",
+                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."))))),
+              "model": manifest, "dimensions": dimensions, "precision": manifest.get("precision", "float32"),
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
               "os": platform.platform(), "logical_cpu_count": os.cpu_count(),
@@ -119,6 +122,21 @@ def main():
               "external_inference_api_calls": 0, "answer_generation_evaluated": False,
               "benchmark_sha256": hashlib.sha256((ROOT / "corpus.jsonl").read_bytes() + b"\0" + (ROOT / "queries.jsonl").read_bytes()).hexdigest(),
               "heldout_sha256": hashlib.sha256((ROOT / "corpus.jsonl").read_bytes() + b"\0" + (ROOT / "heldout_queries.jsonl").read_bytes()).hexdigest()}
+    if args.model == "e5_int8":
+        cpu_flags = set()
+        cpuinfo = Path("/proc/cpuinfo")
+        if cpuinfo.exists():
+            for line in cpuinfo.read_text().splitlines():
+                if line.startswith(("flags", "Features")) and ":" in line:
+                    cpu_flags.update(line.split(":", 1)[1].split())
+        result["cpu_capabilities"] = {
+            "architecture": platform.machine(),
+            "avx2": "avx2" in cpu_flags,
+            "avx512f": "avx512f" in cpu_flags,
+            "avx512_vnni": "avx512_vnni" in cpu_flags,
+            "avx_vnni": "avx_vnni" in cpu_flags,
+            "artifact_isa_specific": False,
+        }
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=ARTIFACTS) as td:
         db = sqlite3.connect(Path(td) / "memory.db")
@@ -250,7 +268,7 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = 10 if args.model == "minilm" else 8
+        reference_run = 10 if args.model in ("e5_int8", "minilm") else 8
         reference = json.loads((ROOT / "runs" / f"{reference_run:03}.json").read_text())
         quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
         quality_match = all(
@@ -270,7 +288,7 @@ def main():
             "heldout_context_tokens": result["candidate"]["heldout"]["context_tokens_approx_mean"] < reference["candidate"]["heldout"]["context_tokens_approx_mean"],
         }
         accepted = quality_match and sum(resource_improvements.values()) >= 3
-        result["champion_comparison" if args.model == "minilm" else "run008_comparison"] = {
+        result["champion_comparison" if args.model in ("e5_int8", "minilm") else "run008_comparison"] = {
             "quality_match": quality_match,
             "resource_improvements": resource_improvements,
             "reference_method": reference["method"],
