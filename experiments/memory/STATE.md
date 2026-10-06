@@ -58,10 +58,14 @@ Run 006 is accepted as validation infrastructure only. It does not replace the r
 
 ## Next hypotheses
 
-1. Test sentence- or clause-level compact summaries against Run 005 on both the original benchmark and the held-out evidence set.
-2. Add CPU-only local embeddings as a challenger to the lexical champion and evaluate both benchmark sets.
-3. Try lexical + vector hybrid retrieval only after a vector-only result exists.
-4. Expand supersession semantics only with generic evidence, not query-specific rules.
+User priority updated on 2026-10-06; these are queued experiments, not completed results.
+
+1. Start real CPU-only `nomic-ai/nomic-embed-text-v1.5` embeddings with SQLite `sqlite-vec` (`vec0`) storage and search. Evaluate vector-only retrieval against Run 005 on both frozen benchmark sets, keeping supersession and context assembly comparable.
+2. Test FTS5 + vector hybrid retrieval only after a measured vector-only result exists.
+3. Explore `BAAI/bge-small-en-v1.5`, `intfloat/e5-small-v2`, and `sentence-transformers/all-MiniLM-L6-v2` in separate bounded runs.
+4. Return to sentence/clause summaries or supersession improvements after the embedding comparisons.
+
+Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
 ## Reproduction
 
