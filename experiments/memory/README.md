@@ -32,7 +32,7 @@ The scheduled task requests GPT-6.1 Sol rather than GPT-6 Astra for orchestratio
 The benchmark itself does not call an LLM, so retrieval scoring is deterministic
 and incurs no external model/API cost.
 
-## Reproduce the current champion
+## Reproduce the lightweight fallback
 
 ```bash
 python3 experiments/memory/run_experiment.py
@@ -50,11 +50,26 @@ the rejected reconstructed Run 002 candidate.
 Nomic Embed Text v1.5, FP32/768 dimensions, CPU ONNX Runtime, and SQLite
 `sqlite-vec`/`vec0` are now reproducible. See `STATE.md` for installation and
 commands, `nomic_model.json` for pinned files, and `runs/007.json` for results.
-The vector-only candidate lost on original MRR/Hit@1, so Run 005 remains the
-default. The optional embedding harness is retained for hybrid and small-model
+The vector-only candidate lost on original MRR/Hit@1, so Run 005 stayed the
+default for that run. The optional embedding harness is retained for hybrid and small-model
 comparisons. It embeds full original records; supersession filtering and compact
 context assembly match the lexical champion. No PostgreSQL, containers, remote
 inference, or answer-generating LLM is used.
 
 Model conventions: https://huggingface.co/nomic-ai/nomic-embed-text-v1.5
 SQLite extension: https://github.com/asg017/sqlite-vec
+
+## Hybrid semantic champion (Run 008)
+
+Run 008 combines FTS5 and Nomic with fixed equal-weight reciprocal-rank fusion
+(`k=60`, top 10 from each retriever). It improved ranking quality on both frozen
+benchmark sets and is the semantic-quality champion. Run 005 remains the
+lightweight fallback because it avoids the roughly 548 MB model and roughly
+791 MiB measured peak process RSS.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --retrieval hybrid --threads 2
+```
+
+See `runs/008.json` for full resource measurements and per-query rankings. This
+is retrieval plus context assembly, not end-to-end answer generation.

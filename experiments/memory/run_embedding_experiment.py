@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline, CPU-only Nomic/vec0 challenger; never changes the default champion."""
+"""Offline CPU-only Nomic vector or hybrid challenger."""
 import argparse
 import hashlib
 import json
@@ -68,6 +68,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model-dir", type=Path, default=ARTIFACTS / "nomic")
     parser.add_argument("--threads", type=int, default=2)
+    parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("threads must be positive")
@@ -82,8 +83,12 @@ def main():
     sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
             "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
     suppressed = set(detect_supersessions(corpus))
-    result = {"run": 7, "method": "nomic-fp32-768-sqlite-vec",
-              "hypothesis": "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks.",
+    hybrid = args.retrieval == "hybrid"
+    result = {"run": 8 if hybrid else 7,
+              "method": "fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec",
+              "hypothesis": ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
+                             if hybrid else
+                             "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."),
               "model": manifest, "dimensions": 768, "precision": "float32",
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
@@ -177,14 +182,72 @@ def main():
             rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
             return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
 
+        def hybrid_retrieve(query):
+            start = time.perf_counter()
+            v = embed([query], "search_query: ")[0]
+            embedded = time.perf_counter()
+            vector_rows = db.execute(
+                "SELECT rowid,distance FROM vectors WHERE embedding MATCH ? AND k=10 ORDER BY distance",
+                (v.tobytes(),),
+            ).fetchall()
+            lexical_rows = db.execute(
+                "SELECT id FROM memory WHERE memory MATCH ? ORDER BY bm25(memory) LIMIT 10",
+                (fts_query(query),),
+            ).fetchall()
+            scores = {}
+            best_rank = {}
+            for ranked_ids in (
+                [corpus[rowid - 1]["id"] for rowid, _ in vector_rows],
+                [row[0] for row in lexical_rows],
+            ):
+                for rank, doc_id in enumerate(ranked_ids, 1):
+                    scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (60 + rank)
+                    best_rank[doc_id] = min(best_rank.get(doc_id, rank), rank)
+            ids = sorted(scores, key=lambda doc_id: (-scores[doc_id], best_rank[doc_id], doc_id))[:5]
+            by_id = {doc["id"]: doc["text"] for doc in corpus}
+            rows = [(doc_id, by_id[doc_id]) for doc_id in ids]
+            return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
+
         # Warm-up is explicit, not included in per-query averages.
         start = time.perf_counter()
-        vector("warmup retrieval")
+        retrieve = hybrid_retrieve if hybrid else vector
+        retrieve("warmup retrieval")
         result["query_warmup_seconds"] = time.perf_counter() - start
-        result["candidate"] = {name: evaluate(qs, vector, suppressed) for name, qs in sets.items()}
+        result["candidate"] = {name: evaluate(qs, retrieve, suppressed) for name, qs in sets.items()}
+        if hybrid:
+            result["fusion"] = {"algorithm": "reciprocal-rank-fusion", "rrf_k": 60,
+                                "lexical_pool": 10, "vector_pool": 10,
+                                "output_k_before_supersession_filter": 5,
+                                "weights": {"fts5": 1, "nomic": 1},
+                                "selected_before_evaluation": True}
         result["vector_db_bytes_including_fts_and_raw_records"] = (Path(td) / "memory.db").stat().st_size
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
+    if hybrid:
+        result.update(
+            status="accepted-semantic-champion",
+            champion=True,
+            notes=("Accepted as the semantic-quality champion: original MRR@5/Hit@1 improved "
+                   "from 0.941667/0.90 to 0.975/0.95 and held-out MRR@5/Hit@1 improved "
+                   "from 0.975/0.95 to 1.0/1.0 with evidence_at_5 unchanged at 1.0. "
+                   "Run 005 remains the lightweight no-embedding fallback because hybrid "
+                   "retrieval requires substantially more RAM, disk and latency."),
+        )
+    else:
+        result.update(
+            status="rejected",
+            champion=False,
+            notes=("Rejected as a replacement champion: vector-only retrieval lowered original "
+                   "MRR@5 and Hit@1. Retain the harness for hybrid and model comparisons."),
+        )
+    result["measurement_notes"] = [
+        "CPU is process CPU time and may exceed wall time with two inference threads.",
+        "RSS is the Linux process-lifetime high-water mark in MiB; baseline runs before loading the embedding runtime.",
+        "End-to-end query time includes query embedding, retrieval, fusion when selected, supersession filtering and compact context assembly; it excludes answer generation.",
+        "The fusion rule and its constants were selected before evaluation and were not tuned against benchmark labels.",
+        "Context tokens use the chars/4 approximation and held-out evidence uses the existing evidence-term subset proxy.",
+        "The 40-document, 40-query experiment does not establish large-corpus scale or broad generalization.",
+    ]
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
