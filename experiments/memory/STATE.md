@@ -35,21 +35,33 @@ The full record remains stored. The sketch is generated at context assembly time
 
 Comparable process CPU and peak RSS were not exposed by the connector execution runtime for this run. The committed Python reproduction records latency, CPU, and peak RSS when run in the Work sandbox.
 
+## Run 006 held-out validation
+
+Run 006 tested one hypothesis: the accepted Run 005 compact sketches preserve answer-bearing evidence on unseen queries while retaining their context reduction.
+
+The original generation-1 corpus and query benchmark was not changed. A separate 20-query held-out evidence set was added and is now frozen with SHA-256 `80d3af75bc7fe4b3b28b8f3076dae5c47d807b6ab48379af94c6ad10b4c0c855`.
+
+On the held-out set, full Run 004-style context and compact Run 005-style context produced identical retrieval quality: MRR@5 0.975, Recall@5 1.0, and Hit@1 0.95. Both preserved all required answer evidence at top 5. Compact context fell from 167.95 to 151.95 approximate tokens, a 9.53% reduction.
+
+Measured in the Work sandbox, full-context evaluation used 0.003078 CPU seconds with 0.118191 ms mean retrieval/context latency; compact evaluation used 0.003675 CPU seconds with 0.153664 ms mean latency. Peak process RSS was 92.285 MB for both and the SQLite database remained 45,056 bytes. These process measurements are environment-sensitive.
+
+Run 006 is accepted as validation infrastructure only. It does not replace the retrieval/context algorithm, so Run 005 remains the champion.
+
 ## Lessons so far
 
 - Run 001 established SQLite FTS5 + BM25 as a strong lightweight baseline.
 - Run 002's reconstructed IDF/intent reranker did not improve quality.
 - Run 003's generic source-authority and recency prior did not improve quality.
 - Run 004 showed that lifecycle semantics can suppress stale context without discarding history.
-- Run 005 shows that context assembly can be optimized independently of storage and retrieval. Conservative deterministic sketches cut another 9.39% of approximate context while preserving the benchmark's retrieval scores and all non-function content terms.
+- Run 005 showed that context assembly can be optimized independently of storage and retrieval.
+- Run 006 showed that Run 005's 9%+ context reduction generalizes to a separate held-out evidence set without losing required answer evidence.
 
 ## Next hypotheses
 
-1. Add a held-out answer/evidence benchmark before making compaction more aggressive.
-2. Test sentence- or clause-level compact summaries against Run 005 instead of removing more individual words.
-3. Add CPU-only local embeddings as a challenger to the lexical champion.
-4. Try lexical + vector hybrid retrieval only after a vector-only result exists.
-5. Expand supersession semantics only with generic evidence, not query-specific rules.
+1. Test sentence- or clause-level compact summaries against Run 005 on both the original benchmark and the held-out evidence set.
+2. Add CPU-only local embeddings as a challenger to the lexical champion and evaluate both benchmark sets.
+3. Try lexical + vector hybrid retrieval only after a vector-only result exists.
+4. Expand supersession semantics only with generic evidence, not query-specific rules.
 
 ## Reproduction
 
@@ -63,3 +75,11 @@ The default reproduces Run 005. Previous accepted stages remain available:
 python3 experiments/memory/run_experiment.py --method supersession --json
 python3 experiments/memory/run_experiment.py --method bm25 --json
 ```
+
+Reproduce Run 006 held-out evidence validation:
+
+```bash
+python3 experiments/memory/run_heldout_validation.py
+```
+
+Run 006 used GPT-6.1 Sol as the requested orchestration model. The orchestration model is not independently verifiable from the experiment harness; retrieval and evidence scoring use no LLM or external API.
