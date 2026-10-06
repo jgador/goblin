@@ -319,3 +319,26 @@ See `runs/021.json` for cold, warm, incremental-update, model, CPU, RSS,
 SQLite, latency, quality, context, and per-query measurements. Model inference
 is local and offline after preparation. No external inference API or answer
 generator is used.
+
+## Namespace-safe cache invalidation and cleanup (Run 022)
+
+Run 022 tests whether Run 021's cache namespace prevents embeddings created
+under different conventions from being reused. A controlled change from 512 to
+511 maximum tokens produced a distinct namespace, 0 hits, and 40 misses. The
+benchmark records are short enough that the resulting vectors were identical,
+but the cache still correctly treated them as incompatible.
+
+Deleting the stale namespace and vacuuming SQLite removed exactly 40 of 80
+entries in 0.83 ms, retained all 40 active entries, and restored 40/40 active
+cache hits. Every Run 021 vector-only and hybrid ranking, quality metric,
+evidence score, and context mean matched. Combined SQLite size fell slightly
+from 606,208 to 602,112 bytes, so Run 022 passes the fixed gate and becomes the
+operational cache champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_namespace_gc --threads 2
+```
+
+See `runs/022.json` for namespace, cleanup, cache, model, CPU, RSS, SQLite,
+latency, quality, context, and per-query measurements. No external inference
+API or answer generator is used.
