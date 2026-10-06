@@ -242,3 +242,20 @@ Complete offline E5 pipeline:
 See `runs/017.json` for full model, CPU, memory, SQLite, latency, quality,
 context, and per-query provenance measurements. No external inference API or
 answer generator is used.
+
+## sqlite-vec int8 storage challenger (Run 018)
+
+Run 018 stores normalized FP32 E5 outputs in a native sqlite-vec `int8[384]`
+column using `vec_quantize_int8(vector, 'unit')`; query vectors use the same
+conversion. SQLite shrank 71.29%, from 1,654,784 to 475,136 bytes, and every
+scored retrieval/evidence metric matched Run 017. Quantized ranking changes
+nevertheless increased mean context by 1.98% original and 0.95% held-out, so the
+candidate failed its fixed no-context-increase gate. Run 017 remains champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8 --threads 2
+```
+
+See `runs/018.json` for complete measurements and rankings. FP32 model inference
+is unchanged; only stored and search-query vector precision changes. No external
+inference API or answer generator is used.

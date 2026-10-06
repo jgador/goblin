@@ -106,6 +106,7 @@ def main():
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
+    parser.add_argument("--vector-storage", choices=["float32", "int8"], default="float32")
     parser.add_argument(
         "--context",
         choices=["compact", "query_aware", "rank_one_protected_budget"],
@@ -116,6 +117,10 @@ def main():
         parser.error("threads must be positive")
     if args.context != "compact" and args.model != "e5":
         parser.error("context extensions apply only to the E5 semantic champion")
+    if args.vector_storage == "int8" and not (
+        args.model == "e5" and args.context == "rank_one_protected_budget"
+    ):
+        parser.error("int8 vector storage is the Run 018 extension to the Run 017 E5 champion")
     if args.model_dir is None:
         model_dirs = {"nomic": "nomic", "nomic_256": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
@@ -162,6 +167,8 @@ def main():
               "method": method_by_model[args.model],
               "hypothesis": hypothesis_by_model[args.model],
               "model": manifest, "dimensions": dimensions, "precision": manifest.get("precision", "float32"),
+              "model_precision": manifest.get("precision", "float32"),
+              "vector_storage_precision": args.vector_storage,
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
               "os": platform.platform(), "logical_cpu_count": os.cpu_count(),
@@ -201,6 +208,25 @@ def main():
             "overflow": "stop admitting optional clauses before the first overflow; never truncate a clause",
             "protected_overflow": "retain protected clauses even if they exceed the target",
             "provenance": "full records remain in SQLite; the isolated replay records every retained and omitted source clause",
+            "selected_before_evaluation": True,
+        }
+    if args.vector_storage == "int8":
+        result.update(
+            run=18,
+            followup_to_run=17,
+            method="fts5-e5-small-v2-rrf60-query-aware-rank-one-budget-int8-vec0",
+            hypothesis=(
+                "sqlite-vec unit-range int8 storage can preserve Run 017 quality and context "
+                "while reducing SQLite vector storage without changing FP32 E5 inference."
+            ),
+            precision="float32-model-int8-unit-vector-storage",
+        )
+        result["vector_storage"] = {
+            "type": f"int8[{dimensions}]",
+            "quantizer": "sqlite-vec vec_quantize_int8(vector, 'unit')",
+            "input_range": "normalized FP32 values in [-1, 1]",
+            "distance": "cosine",
+            "query_quantization": "same sqlite-vec unit quantizer immediately before search",
             "selected_before_evaluation": True,
         }
     if args.model == "e5_int8":
@@ -285,13 +311,26 @@ def main():
         sqlite_vec.load(db)
         db.enable_load_extension(False)
         result["sqlite_vec_version"] = db.execute("SELECT vec_version()").fetchone()[0]
-        db.execute(f"CREATE VIRTUAL TABLE vectors USING vec0(embedding float[{dimensions}] distance_metric=cosine)")
+        vector_type = "int8" if args.vector_storage == "int8" else "float"
+        db.execute(
+            f"CREATE VIRTUAL TABLE vectors USING vec0(embedding {vector_type}[{dimensions}] distance_metric=cosine)"
+        )
         start = time.perf_counter()
-        db.executemany("INSERT INTO vectors(rowid,embedding) VALUES (?,?)", [(i + 1, v.tobytes()) for i, v in enumerate(vectors)])
+        insert_sql = (
+            "INSERT INTO vectors(rowid,embedding) VALUES (?,vec_quantize_int8(?, 'unit'))"
+            if args.vector_storage == "int8"
+            else "INSERT INTO vectors(rowid,embedding) VALUES (?,?)"
+        )
+        db.executemany(insert_sql, [(i + 1, v.tobytes()) for i, v in enumerate(vectors)])
         db.commit()
         result["vector_insert_seconds"] = time.perf_counter() - start
+        query_expression = (
+            "vec_quantize_int8(?, 'unit')"
+            if args.vector_storage == "int8"
+            else "?"
+        )
         self_matches = [db.execute(
-            "SELECT rowid FROM vectors WHERE embedding MATCH ? AND k=1 ORDER BY distance",
+            f"SELECT rowid FROM vectors WHERE embedding MATCH {query_expression} AND k=1 ORDER BY distance",
             (v.tobytes(),),
         ).fetchone()[0] == i + 1 for i, v in enumerate(vectors)]
         assert all(self_matches), "Vector storage/search failed corpus self-neighbor validation"
@@ -303,7 +342,10 @@ def main():
             start = time.perf_counter()
             v = embed([query], conventions["query_prefix"])[0]
             embedded = time.perf_counter()
-            neighbors = db.execute("SELECT rowid,distance FROM vectors WHERE embedding MATCH ? AND k=5 ORDER BY distance", (v.tobytes(),)).fetchall()
+            neighbors = db.execute(
+                f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=5 ORDER BY distance",
+                (v.tobytes(),),
+            ).fetchall()
             rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
             return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
 
@@ -312,7 +354,7 @@ def main():
             v = embed([query], conventions["query_prefix"])[0]
             embedded = time.perf_counter()
             vector_rows = db.execute(
-                "SELECT rowid,distance FROM vectors WHERE embedding MATCH ? AND k=10 ORDER BY distance",
+                f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=10 ORDER BY distance",
                 (v.tobytes(),),
             ).fetchall()
             lexical_rows = db.execute(
@@ -360,7 +402,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (14 if args.context == "rank_one_protected_budget" else
+        reference_run = (17 if args.vector_storage == "int8" else
+                         14 if args.context == "rank_one_protected_budget" else
                          10 if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm") else
                          8)
         reference = json.loads((ROOT / "runs" / f"{reference_run:03}.json").read_text())
@@ -385,8 +428,21 @@ def main():
             result["candidate"][dataset]["context_tokens_approx_mean"] < reference["candidate"][dataset]["context_tokens_approx_mean"]
             for dataset in ("original", "heldout")
         )
+        context_not_increased = all(
+            result["candidate"][dataset]["context_tokens_approx_mean"]
+            <= reference["candidate"][dataset]["context_tokens_approx_mean"]
+            for dataset in ("original", "heldout")
+        )
+        vector_search_below_2ms = all(
+            result["candidate"][dataset]["search_ms_mean"] < 2.0
+            for dataset in ("original", "heldout")
+        )
         context_extension = args.context != "compact"
-        accepted = (quality_match and context_reduced
+        accepted = (quality_match and context_not_increased
+                    and resource_improvements["vector_db_bytes"]
+                    and vector_search_below_2ms
+                    if args.vector_storage == "int8" else
+                    quality_match and context_reduced
                     if context_extension else
                     quality_match and sum(resource_improvements.values()) >= 3)
         comparison_key = ("champion_comparison"
@@ -395,6 +451,8 @@ def main():
         result[comparison_key] = {
             "quality_match": quality_match,
             "context_reduced_on_both_sets": context_reduced,
+            "context_not_increased": context_not_increased,
+            "vector_search_below_2ms": vector_search_below_2ms,
             "resource_improvements": resource_improvements,
             "reference_method": reference["method"],
             "reference_run": reference_run,
@@ -414,10 +472,15 @@ def main():
                 "vector_db_bytes_after": result["vector_db_bytes_including_fts_and_raw_records"],
             }
         result.update(
-            status=("accepted-context-champion" if context_extension and accepted else
+            status=("accepted-storage-champion" if args.vector_storage == "int8" and accepted else
+                    "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the context-assembly extension to Run {reference_run}: retrieval/evidence metrics matched and context fell on both frozen sets."
+            notes=(f"Accepted as the vector-storage extension to Run {reference_run}: retrieval/evidence and context matched while SQLite storage fell and mean vector search stayed below 2 ms."
+                   if args.vector_storage == "int8" and accepted else
+                   f"Rejected as a vector-storage extension to Run {reference_run}: it did not preserve quality/context with smaller SQLite storage and sub-2 ms vector search."
+                   if args.vector_storage == "int8" else
+                   f"Accepted as the context-assembly extension to Run {reference_run}: retrieval/evidence metrics matched and context fell on both frozen sets."
                    if context_extension and accepted else
                    f"Accepted as semantic-quality champion: matched every Run {reference_run} retrieval/evidence metric and reduced at least three measured resource costs."
                    if accepted else

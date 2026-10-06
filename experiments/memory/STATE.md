@@ -24,6 +24,10 @@ Run 016 did not replace Run 014. A fixed 128-token rank-aware budget reduced
 context, but omitted required held-out evidence for two queries. Run 017's
 rank-one protection restores that evidence and reduces context on both sets.
 
+Run 018 did not replace Run 017. Native sqlite-vec unit-range int8 vectors cut
+SQLite storage by 71.29% and preserved scored quality, but changed enough top-five
+membership to increase mean assembled context on both frozen sets.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
 Its process RSS was about 15 MiB in the Run 010 environment versus 228.238 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
@@ -134,6 +138,11 @@ champion while Run 005 remained the lightweight fallback.
   held-out evidence from 0.9 to 1.0 while still reducing Run 014 context by
   7.70% original and 9.78% held-out. All retrieval metrics and provenance
   invariants remained unchanged, so Run 017 replaces Run 014 as champion.
+- Run 018 showed that sqlite-vec's unit-range int8 quantizer is exceptionally
+  storage-efficient but not rank-equivalent to FP32 E5. SQLite fell from
+  1,654,784 to 475,136 bytes and all scored retrieval/evidence metrics matched,
+  but original context rose 1.98% and held-out context rose 0.95%. The fixed
+  no-context-increase gate rejected it; Run 017 remains champion.
 
 ## Next hypotheses
 
@@ -158,9 +167,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    losing held-out evidence on h013 and h017.
 10. Run 017 completed rank-one protection with the same 128-token target and is
     the current context-assembly champion.
-11. Next: test SQLite `vec0` int8 storage for the accepted E5 embeddings while
-    retaining FP32 model inference, fixed RRF, Run 017 context, and both frozen
-    sets. Treat vector quantization as one separate storage/precision experiment.
+11. Run 018 completed sqlite-vec unit-range int8 storage; it was rejected because
+    quantized ranking changes increased context despite matching scored quality.
+12. Next: test one specific int8 follow-up using deterministic per-vector
+    symmetric max-absolute scaling before rounding and clipping to [-127, 127].
+    Cosine is scale-invariant, so this should use the int8 range more effectively
+    while retaining Run 018's storage benefit. Keep all other Run 017 rules fixed.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -559,3 +571,33 @@ Reproduce the complete pipeline after the Run 010 model preparation:
 
 Full pipeline measurements and per-query retained/omitted provenance are in
 `runs/017.json`. No external inference API or answer generator was used.
+
+## Run 018: sqlite-vec unit-range int8 vector storage
+
+Run 018 kept Run 017's FP32 E5 inference, fixed FTS5/E5 RRF, supersession rules,
+and protected context assembly. It changed only the vec0 column to `int8[384]`
+and used sqlite-vec v0.1.9 `vec_quantize_int8(vector, 'unit')` for both corpus
+and query vectors. The rule was fixed before evaluation; every corpus vector
+still returned itself as its nearest neighbor.
+
+SQLite with FTS5, records, and vec0 fell from 1,654,784 to 475,136 bytes, a
+71.29% reduction. Mean vector search remained below the fixed 2 ms limit at
+0.505 ms original and 0.578 ms held-out. All original and held-out scored
+retrieval metrics matched Run 017, and held-out evidence remained 1.0.
+
+The candidate is rejected because int8 ranking changes increased original mean
+context from 128.80 to 131.35 tokens (1.98%) and held-out context from 131.40 to
+132.65 (0.95%). This failed the predeclared no-context-increase gate even though
+MRR, Recall, Hit@1, and evidence scores were unchanged. FP32 Run 017 remains the
+champion. These measurements evaluate retrieval and evidence, not generated
+answers.
+
+Reproduce after the Run 010 E5 preparation:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8 --threads 2
+```
+
+Full model, quantizer, CPU, memory, SQLite, latency, quality, context, and
+per-query ranking measurements are in `runs/018.json`. No external inference
+API or answer generator was used.
