@@ -128,7 +128,12 @@ def main():
     )
     parser.add_argument(
         "--embedding-cache",
-        choices=["none", "sqlite_content_sha256", "sqlite_namespace_gc"],
+        choices=[
+            "none",
+            "sqlite_content_sha256",
+            "sqlite_namespace_gc",
+            "sqlite_pending_queue",
+        ],
         default="none",
     )
     args = parser.parse_args()
@@ -342,6 +347,30 @@ def main():
             "post_cleanup_active_expected": {"hits": len(corpus), "misses": 0},
             "selected_before_evaluation": True,
         }
+    elif args.embedding_cache == "sqlite_pending_queue":
+        result.update(
+            run=23,
+            followup_to_run=22,
+            method="fts5-e5-small-v2-rrf60-int8-fp16-rerank-pending-queue",
+            hypothesis=(
+                "A durable SQLite pending queue can make records immediately FTS5-searchable, "
+                "drain embeddings in bounded FIFO batches with cache reuse, and converge to "
+                "Run 022 retrieval."
+            ),
+        )
+        result["embedding_queue_rule"] = {
+            "states": ["pending", "processing", "ready"],
+            "ordering": "ascending ingestion ordinal",
+            "batch_size": 4,
+            "preseeded_cache_documents": len(corpus) // 2,
+            "expected_worker_cache_hits": len(corpus) // 2,
+            "expected_worker_cache_misses": len(corpus) // 2,
+            "enqueue_wall_seconds_at_most": 0.05,
+            "enqueue_cpu_seconds_at_most": 0.05,
+            "worker_wall_seconds_at_most": 1.0,
+            "worker_cpu_seconds_at_most": 2.0,
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -361,8 +390,59 @@ def main():
     with tempfile.TemporaryDirectory(dir=ARTIFACTS) as td:
         db = sqlite3.connect(Path(td) / "memory.db")
         db.execute("CREATE VIRTUAL TABLE memory USING fts5(id UNINDEXED, text, source UNINDEXED, ts UNINDEXED, tokenize='unicode61')")
-        db.executemany("INSERT INTO memory VALUES (?,?,?,?)", [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus])
-        db.commit()
+        queue_enabled = args.embedding_cache == "sqlite_pending_queue"
+        if queue_enabled:
+            db.execute(
+                "CREATE TABLE embedding_jobs("
+                "document_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL UNIQUE, "
+                "content_sha256 TEXT NOT NULL, status TEXT NOT NULL "
+                "CHECK(status IN ('pending','processing','ready')), "
+                "attempts INTEGER NOT NULL DEFAULT 0, "
+                "namespace_sha256 TEXT, cache_key TEXT)"
+            )
+            db.execute(
+                "CREATE INDEX embedding_jobs_status_ordinal "
+                "ON embedding_jobs(status,ordinal)"
+            )
+            enqueue_started = time.perf_counter()
+            enqueue_cpu_started = time.process_time()
+            db.executemany(
+                "INSERT INTO memory VALUES (?,?,?,?)",
+                [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus],
+            )
+            db.executemany(
+                "INSERT INTO embedding_jobs(document_id,ordinal,content_sha256,status) "
+                "VALUES (?,?,?,'pending')",
+                [
+                    (
+                        document["id"],
+                        ordinal,
+                        hashlib.sha256(
+                            unicodedata.normalize("NFC", document["text"]).strip().encode()
+                        ).hexdigest(),
+                    )
+                    for ordinal, document in enumerate(corpus)
+                ],
+            )
+            db.commit()
+            result["ingestion_lifecycle"] = {
+                "enqueue": {
+                    "documents": len(corpus),
+                    "wall_seconds": time.perf_counter() - enqueue_started,
+                    "cpu_seconds": time.process_time() - enqueue_cpu_started,
+                    "database_bytes": (Path(td) / "memory.db").stat().st_size,
+                    "fts_rows": db.execute("SELECT count(*) FROM memory").fetchone()[0],
+                    "pending_jobs": db.execute(
+                        "SELECT count(*) FROM embedding_jobs WHERE status='pending'"
+                    ).fetchone()[0],
+                }
+            }
+        else:
+            db.executemany(
+                "INSERT INTO memory VALUES (?,?,?,?)",
+                [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus],
+            )
+            db.commit()
 
         def lexical(query):
             start = time.perf_counter()
@@ -370,6 +450,38 @@ def main():
             return rows, 0, (time.perf_counter() - start) * 1000
 
         result["baseline"] = {name: evaluate(qs, lexical, suppressed) for name, qs in sets.items()}
+        if queue_enabled:
+            lifecycle = result["ingestion_lifecycle"]
+            lifecycle["fts_while_pending"] = {
+                "model_loaded": False,
+                "pending_jobs_before": len(corpus),
+                "pending_jobs_after": db.execute(
+                    "SELECT count(*) FROM embedding_jobs WHERE status='pending'"
+                ).fetchone()[0],
+                "original": {
+                    key: result["baseline"]["original"][key]
+                    for key in (
+                        "mrr_at_5",
+                        "recall_at_5",
+                        "hit_at_1",
+                        "context_tokens_approx_mean",
+                        "end_to_end_ms_mean",
+                        "cpu_seconds",
+                    )
+                },
+                "heldout": {
+                    key: result["baseline"]["heldout"][key]
+                    for key in (
+                        "mrr_at_5",
+                        "recall_at_5",
+                        "hit_at_1",
+                        "evidence_at_5",
+                        "context_tokens_approx_mean",
+                        "end_to_end_ms_mean",
+                        "cpu_seconds",
+                    )
+                },
+            }
         result["baseline_db_bytes"] = (Path(td) / "memory.db").stat().st_size
         # Imports/model loading occur after baseline measurement so its RSS does
         # not inherit the embedding runtime's high-water mark.
@@ -511,117 +623,243 @@ def main():
                 }
 
             corpus_texts = [document["text"] for document in corpus]
-            _, cold_cache = cached_document_embeddings(
-                corpus_texts, namespace, conventions["document_prefix"]
-            )
-            cold_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
-            vectors, warm_cache = cached_document_embeddings(
-                corpus_texts, namespace, conventions["document_prefix"]
-            )
-            warm_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
-            result["embedding_cache"] = {
-                "namespace_sha256": namespace_sha256,
-                "cold_build": cold_cache,
-                "warm_reindex": warm_cache,
-                "warm_wall_reduction_percent": (
-                    (cold_cache["total_wall_seconds"] - warm_cache["total_wall_seconds"])
-                    / cold_cache["total_wall_seconds"] * 100
-                ),
-                "warm_cpu_reduction_percent": (
-                    (cold_cache["total_cpu_seconds"] - warm_cache["total_cpu_seconds"])
-                    / cold_cache["total_cpu_seconds"] * 100
-                ),
-            }
-            if args.embedding_cache == "sqlite_content_sha256":
-                updated_texts = corpus_texts.copy()
-                update_index = next(
-                    i for i, document in enumerate(corpus) if document["id"] == "d040"
+            if queue_enabled:
+                preseed_count = len(corpus) // 2
+                _, preseed_cache = cached_document_embeddings(
+                    corpus_texts[:preseed_count], namespace, conventions["document_prefix"]
                 )
-                updated_texts[update_index] += " Cache experiment revision two."
-                _, incremental_cache = cached_document_embeddings(
-                    updated_texts, namespace, conventions["document_prefix"]
+                preseed_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+                worker_started = time.perf_counter()
+                worker_cpu_started = time.process_time()
+                batch_metrics = []
+                worker_hits = 0
+                worker_misses = 0
+                worker_inference_wall = 0.0
+                worker_inference_cpu = 0.0
+                while True:
+                    rows = db.execute(
+                        "SELECT j.document_id,j.ordinal,m.text "
+                        "FROM embedding_jobs j JOIN memory m ON m.id=j.document_id "
+                        "WHERE j.status='pending' ORDER BY j.ordinal LIMIT 4"
+                    ).fetchall()
+                    if not rows:
+                        break
+                    db.executemany(
+                        "UPDATE embedding_jobs SET status='processing',attempts=attempts+1 "
+                        "WHERE document_id=? AND status='pending'",
+                        [(row[0],) for row in rows],
+                    )
+                    db.commit()
+                    batch_vectors, measured = cached_document_embeddings(
+                        [row[2] for row in rows], namespace, conventions["document_prefix"]
+                    )
+                    for (document_id, ordinal, text), vector in zip(rows, batch_vectors):
+                        normalized = unicodedata.normalize("NFC", text).strip()
+                        key_input = (
+                            namespace.encode() + b"\0"
+                            + conventions["document_prefix"].encode() + b"\0"
+                            + normalized.encode()
+                        )
+                        cache_key = hashlib.sha256(key_input).hexdigest()
+                        db.execute(
+                            "UPDATE embedding_jobs SET status='ready',namespace_sha256=?,"
+                            "cache_key=? WHERE document_id=? AND status='processing'",
+                            (namespace_sha256, cache_key, document_id),
+                        )
+                    db.commit()
+                    worker_hits += measured["hits"]
+                    worker_misses += measured["misses"]
+                    worker_inference_wall += measured["inference_wall_seconds"]
+                    worker_inference_cpu += measured["inference_cpu_seconds"]
+                    batch_metrics.append(
+                        {
+                            "batch": len(batch_metrics) + 1,
+                            "ordinals": [row[1] for row in rows],
+                            "documents": len(rows),
+                            "hits": measured["hits"],
+                            "misses": measured["misses"],
+                            "wall_seconds": measured["total_wall_seconds"],
+                            "cpu_seconds": measured["total_cpu_seconds"],
+                        }
+                    )
+                worker_wall = time.perf_counter() - worker_started
+                worker_cpu = time.process_time() - worker_cpu_started
+                status_counts = dict(
+                    db.execute(
+                        "SELECT status,count(*) FROM embedding_jobs GROUP BY status"
+                    ).fetchall()
                 )
-                incremental_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+                ready_rows = db.execute(
+                    "SELECT j.ordinal,c.embedding FROM embedding_jobs j "
+                    "JOIN embedding_cache c ON c.cache_key=j.cache_key "
+                    "WHERE j.status='ready' ORDER BY j.ordinal"
+                ).fetchall()
+                vectors = np.stack(
+                    [np.frombuffer(row[1], dtype=np.float32).copy() for row in ready_rows]
+                ).astype(np.float32)
+                assert vectors.shape == (len(corpus), dimensions)
                 cache_entries, cache_payload_bytes = db.execute(
                     "SELECT count(*),coalesce(sum(length(embedding)),0) FROM embedding_cache"
                 ).fetchone()
-                result["embedding_cache"].update(
-                    one_record_update=incremental_cache,
-                    entries_after_update=cache_entries,
-                    payload_bytes_after_update=cache_payload_bytes,
-                )
+                result["embedding_cache"] = {
+                    "namespace_sha256": namespace_sha256,
+                    "preseed": preseed_cache,
+                    "entries_after_worker": cache_entries,
+                    "payload_bytes_after_worker": cache_payload_bytes,
+                }
+                result["ingestion_lifecycle"]["worker"] = {
+                    "batch_size": 4,
+                    "batches": batch_metrics,
+                    "batch_count": len(batch_metrics),
+                    "cache_hits": worker_hits,
+                    "cache_misses": worker_misses,
+                    "inference_wall_seconds": worker_inference_wall,
+                    "inference_cpu_seconds": worker_inference_cpu,
+                    "wall_seconds": worker_wall,
+                    "cpu_seconds": worker_cpu,
+                    "status_counts": {
+                        "pending": status_counts.get("pending", 0),
+                        "processing": status_counts.get("processing", 0),
+                        "ready": status_counts.get("ready", 0),
+                    },
+                    "attempts": dict(
+                        db.execute(
+                            "SELECT attempts,count(*) FROM embedding_jobs GROUP BY attempts"
+                        ).fetchall()
+                    ),
+                    "database_bytes": (Path(td) / "memory.db").stat().st_size,
+                    "peak_rss_mib": rss(),
+                }
+                total_embedding_wall = preseed_cache["total_wall_seconds"] + worker_wall
+                total_embedding_cpu = preseed_cache["total_cpu_seconds"] + worker_cpu
+                result["corpus_embedding"] = {
+                    "documents": len(corpus),
+                    "batch_size": 4,
+                    "wall_seconds": total_embedding_wall,
+                    "cpu_seconds": total_embedding_cpu,
+                    "inference_wall_seconds": (
+                        preseed_cache["inference_wall_seconds"] + worker_inference_wall
+                    ),
+                    "inference_cpu_seconds": (
+                        preseed_cache["inference_cpu_seconds"] + worker_inference_cpu
+                    ),
+                    "documents_per_second": len(corpus) / total_embedding_wall,
+                    "cache_hits_during_worker": worker_hits,
+                    "cache_misses_during_worker": worker_misses,
+                    "peak_rss_mib": rss(),
+                }
             else:
-                alternate_conventions = dict(conventions)
-                alternate_conventions["max_tokens"] = conventions["max_tokens"] - 1
-                alternate_namespace = cache_namespace(alternate_conventions)
-                alternate_namespace_sha256 = hashlib.sha256(
-                    alternate_namespace.encode()
-                ).hexdigest()
-                tokenizer.enable_truncation(max_length=alternate_conventions["max_tokens"])
-                alternate_vectors, stale_namespace_build = cached_document_embeddings(
-                    corpus_texts,
-                    alternate_namespace,
-                    alternate_conventions["document_prefix"],
-                )
-                tokenizer.enable_truncation(max_length=conventions["max_tokens"])
-                stale_namespace_build["database_bytes"] = (
-                    Path(td) / "memory.db"
-                ).stat().st_size
-                entries_before_cleanup = db.execute(
-                    "SELECT count(*) FROM embedding_cache"
-                ).fetchone()[0]
-                cleanup_started = time.perf_counter()
-                cleanup_cpu_started = time.process_time()
-                cleanup_cursor = db.execute(
-                    "DELETE FROM embedding_cache WHERE namespace_sha256<>?",
-                    (namespace_sha256,),
-                )
-                deleted_entries = cleanup_cursor.rowcount
-                db.commit()
-                db.execute("VACUUM")
-                cleanup_wall = time.perf_counter() - cleanup_started
-                cleanup_cpu = time.process_time() - cleanup_cpu_started
-                entries_after_cleanup, payload_bytes_after_cleanup = db.execute(
-                    "SELECT count(*),coalesce(sum(length(embedding)),0) FROM embedding_cache"
-                ).fetchone()
-                cleanup_database_bytes = (Path(td) / "memory.db").stat().st_size
-                active_vectors_after_cleanup, post_cleanup_active = cached_document_embeddings(
+                _, cold_cache = cached_document_embeddings(
                     corpus_texts, namespace, conventions["document_prefix"]
                 )
-                post_cleanup_active["database_bytes"] = (
-                    Path(td) / "memory.db"
-                ).stat().st_size
-                result["embedding_cache"].update(
-                    alternate_namespace_sha256=alternate_namespace_sha256,
-                    namespace_changed=alternate_namespace_sha256 != namespace_sha256,
-                    stale_namespace_build=stale_namespace_build,
-                    alternate_embedding_max_abs_delta=float(
-                        np.max(np.abs(alternate_vectors - vectors))
-                    ),
-                    cleanup={
-                        "entries_before": entries_before_cleanup,
-                        "deleted_entries": deleted_entries,
-                        "entries_after": entries_after_cleanup,
-                        "payload_bytes_after": payload_bytes_after_cleanup,
-                        "database_bytes_after": cleanup_database_bytes,
-                        "wall_seconds": cleanup_wall,
-                        "cpu_seconds": cleanup_cpu,
-                    },
-                    post_cleanup_active=post_cleanup_active,
-                    active_vectors_preserved=bool(
-                        np.array_equal(active_vectors_after_cleanup, vectors)
-                    ),
+                cold_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+                vectors, warm_cache = cached_document_embeddings(
+                    corpus_texts, namespace, conventions["document_prefix"]
                 )
-            result["corpus_embedding"] = {
-                "documents": len(corpus),
-                "batch_size": 4,
-                "wall_seconds": cold_cache["total_wall_seconds"],
-                "cpu_seconds": cold_cache["total_cpu_seconds"],
-                "inference_wall_seconds": cold_cache["inference_wall_seconds"],
-                "inference_cpu_seconds": cold_cache["inference_cpu_seconds"],
-                "documents_per_second": cold_cache["documents_per_second"],
-                "peak_rss_mib": cold_cache["peak_rss_mib"],
-            }
+                warm_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+                result["embedding_cache"] = {
+                    "namespace_sha256": namespace_sha256,
+                    "cold_build": cold_cache,
+                    "warm_reindex": warm_cache,
+                    "warm_wall_reduction_percent": (
+                        (cold_cache["total_wall_seconds"] - warm_cache["total_wall_seconds"])
+                        / cold_cache["total_wall_seconds"] * 100
+                    ),
+                    "warm_cpu_reduction_percent": (
+                        (cold_cache["total_cpu_seconds"] - warm_cache["total_cpu_seconds"])
+                        / cold_cache["total_cpu_seconds"] * 100
+                    ),
+                }
+                if args.embedding_cache == "sqlite_content_sha256":
+                    updated_texts = corpus_texts.copy()
+                    update_index = next(
+                        i for i, document in enumerate(corpus) if document["id"] == "d040"
+                    )
+                    updated_texts[update_index] += " Cache experiment revision two."
+                    _, incremental_cache = cached_document_embeddings(
+                        updated_texts, namespace, conventions["document_prefix"]
+                    )
+                    incremental_cache["database_bytes"] = (Path(td) / "memory.db").stat().st_size
+                    cache_entries, cache_payload_bytes = db.execute(
+                        "SELECT count(*),coalesce(sum(length(embedding)),0) FROM embedding_cache"
+                    ).fetchone()
+                    result["embedding_cache"].update(
+                        one_record_update=incremental_cache,
+                        entries_after_update=cache_entries,
+                        payload_bytes_after_update=cache_payload_bytes,
+                    )
+                else:
+                    alternate_conventions = dict(conventions)
+                    alternate_conventions["max_tokens"] = conventions["max_tokens"] - 1
+                    alternate_namespace = cache_namespace(alternate_conventions)
+                    alternate_namespace_sha256 = hashlib.sha256(
+                        alternate_namespace.encode()
+                    ).hexdigest()
+                    tokenizer.enable_truncation(max_length=alternate_conventions["max_tokens"])
+                    alternate_vectors, stale_namespace_build = cached_document_embeddings(
+                        corpus_texts,
+                        alternate_namespace,
+                        alternate_conventions["document_prefix"],
+                    )
+                    tokenizer.enable_truncation(max_length=conventions["max_tokens"])
+                    stale_namespace_build["database_bytes"] = (
+                        Path(td) / "memory.db"
+                    ).stat().st_size
+                    entries_before_cleanup = db.execute(
+                        "SELECT count(*) FROM embedding_cache"
+                    ).fetchone()[0]
+                    cleanup_started = time.perf_counter()
+                    cleanup_cpu_started = time.process_time()
+                    cleanup_cursor = db.execute(
+                        "DELETE FROM embedding_cache WHERE namespace_sha256<>?",
+                        (namespace_sha256,),
+                    )
+                    deleted_entries = cleanup_cursor.rowcount
+                    db.commit()
+                    db.execute("VACUUM")
+                    cleanup_wall = time.perf_counter() - cleanup_started
+                    cleanup_cpu = time.process_time() - cleanup_cpu_started
+                    entries_after_cleanup, payload_bytes_after_cleanup = db.execute(
+                        "SELECT count(*),coalesce(sum(length(embedding)),0) FROM embedding_cache"
+                    ).fetchone()
+                    cleanup_database_bytes = (Path(td) / "memory.db").stat().st_size
+                    active_vectors_after_cleanup, post_cleanup_active = cached_document_embeddings(
+                        corpus_texts, namespace, conventions["document_prefix"]
+                    )
+                    post_cleanup_active["database_bytes"] = (
+                        Path(td) / "memory.db"
+                    ).stat().st_size
+                    result["embedding_cache"].update(
+                        alternate_namespace_sha256=alternate_namespace_sha256,
+                        namespace_changed=alternate_namespace_sha256 != namespace_sha256,
+                        stale_namespace_build=stale_namespace_build,
+                        alternate_embedding_max_abs_delta=float(
+                            np.max(np.abs(alternate_vectors - vectors))
+                        ),
+                        cleanup={
+                            "entries_before": entries_before_cleanup,
+                            "deleted_entries": deleted_entries,
+                            "entries_after": entries_after_cleanup,
+                            "payload_bytes_after": payload_bytes_after_cleanup,
+                            "database_bytes_after": cleanup_database_bytes,
+                            "wall_seconds": cleanup_wall,
+                            "cpu_seconds": cleanup_cpu,
+                        },
+                        post_cleanup_active=post_cleanup_active,
+                        active_vectors_preserved=bool(
+                            np.array_equal(active_vectors_after_cleanup, vectors)
+                        ),
+                    )
+                result["corpus_embedding"] = {
+                    "documents": len(corpus),
+                    "batch_size": 4,
+                    "wall_seconds": cold_cache["total_wall_seconds"],
+                    "cpu_seconds": cold_cache["total_cpu_seconds"],
+                    "inference_wall_seconds": cold_cache["inference_wall_seconds"],
+                    "inference_cpu_seconds": cold_cache["inference_cpu_seconds"],
+                    "documents_per_second": cold_cache["documents_per_second"],
+                    "peak_rss_mib": cold_cache["peak_rss_mib"],
+                }
         else:
             start = time.perf_counter()
             cpu = time.process_time()
@@ -775,7 +1013,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (21 if args.embedding_cache == "sqlite_namespace_gc" else
+        reference_run = (22 if args.embedding_cache == "sqlite_pending_queue" else
+                         21 if args.embedding_cache == "sqlite_namespace_gc" else
                          20 if cache_enabled else
                          17 if args.vector_storage != "float32" else
                          14 if args.context == "rank_one_protected_budget" else
@@ -815,8 +1054,70 @@ def main():
         cache_gate = None
         if cache_enabled:
             cache_metrics = result["embedding_cache"]
-            cold_cache = cache_metrics["cold_build"]
-            warm_cache = cache_metrics["warm_reindex"]
+            if args.embedding_cache == "sqlite_pending_queue":
+                lifecycle = result["ingestion_lifecycle"]
+                enqueue = lifecycle["enqueue"]
+                pending_fts = lifecycle["fts_while_pending"]
+                worker = lifecycle["worker"]
+                lexical_rankings_exact = all(
+                    [detail["top"] for detail in result["baseline"][dataset]["details"]]
+                    == [detail["top"] for detail in reference["baseline"][dataset]["details"]]
+                    for dataset in ("original", "heldout")
+                )
+                retrieval_rankings_exact = all(
+                    [detail["top"] for detail in result[mode][dataset]["details"]]
+                    == [detail["top"] for detail in reference[mode][dataset]["details"]]
+                    for mode in ("vector_only", "candidate")
+                    for dataset in ("original", "heldout")
+                )
+                context_exact = all(
+                    result["candidate"][dataset]["context_tokens_approx_mean"]
+                    == reference["candidate"][dataset]["context_tokens_approx_mean"]
+                    for dataset in ("original", "heldout")
+                )
+                cache_gate = {
+                    "all_records_fts_visible_while_pending": (
+                        enqueue["fts_rows"] == len(corpus)
+                        and enqueue["pending_jobs"] == len(corpus)
+                        and pending_fts["pending_jobs_before"] == len(corpus)
+                        and pending_fts["pending_jobs_after"] == len(corpus)
+                        and not pending_fts["model_loaded"]
+                        and lexical_rankings_exact
+                    ),
+                    "enqueue_below_fifty_ms": (
+                        enqueue["wall_seconds"] <= 0.05
+                        and enqueue["cpu_seconds"] <= 0.05
+                    ),
+                    "ten_fifo_batches_of_four": (
+                        worker["batch_count"] == 10
+                        and all(batch["documents"] == 4 for batch in worker["batches"])
+                        and [batch["ordinals"] for batch in worker["batches"]]
+                        == [list(range(start, start + 4)) for start in range(0, len(corpus), 4)]
+                    ),
+                    "half_warm_cache_reused": (
+                        worker["cache_hits"] == len(corpus) // 2
+                        and worker["cache_misses"] == len(corpus) // 2
+                    ),
+                    "all_jobs_ready_once": (
+                        worker["status_counts"]
+                        == {"pending": 0, "processing": 0, "ready": len(corpus)}
+                        and worker["attempts"] == {1: len(corpus)}
+                    ),
+                    "worker_within_fixed_bounds": (
+                        worker["wall_seconds"] <= 1.0
+                        and worker["cpu_seconds"] <= 2.0
+                    ),
+                    "run_022_rankings_and_context_exact": (
+                        retrieval_rankings_exact and context_exact
+                    ),
+                    "database_growth_at_most_twenty_five_percent": (
+                        result["vector_db_bytes_including_fts_and_raw_records"]
+                        <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.25
+                    ),
+                }
+            else:
+                cold_cache = cache_metrics["cold_build"]
+                warm_cache = cache_metrics["warm_reindex"]
             if args.embedding_cache == "sqlite_namespace_gc":
                 stale_build = cache_metrics["stale_namespace_build"]
                 cleanup = cache_metrics["cleanup"]
@@ -852,25 +1153,26 @@ def main():
                     ),
                 }
             else:
-                incremental_cache = cache_metrics["one_record_update"]
-                cache_gate = {
-                    "cold_misses_all_documents": cold_cache["hits"] == 0 and cold_cache["misses"] == len(corpus),
-                    "warm_hits_all_documents": warm_cache["hits"] == len(corpus) and warm_cache["misses"] == 0,
-                    "incremental_embeds_one_document": (
-                        incremental_cache["hits"] == len(corpus) - 1
-                        and incremental_cache["misses"] == 1
-                    ),
-                    "warm_wall_at_most_ten_percent_of_cold": (
-                        warm_cache["total_wall_seconds"] <= cold_cache["total_wall_seconds"] * 0.1
-                    ),
-                    "warm_cpu_at_most_ten_percent_of_cold": (
-                        warm_cache["total_cpu_seconds"] <= cold_cache["total_cpu_seconds"] * 0.1
-                    ),
-                    "database_growth_at_most_twenty_five_percent": (
-                        result["vector_db_bytes_including_fts_and_raw_records"]
-                        <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.25
-                    ),
-                }
+                if args.embedding_cache == "sqlite_content_sha256":
+                    incremental_cache = cache_metrics["one_record_update"]
+                    cache_gate = {
+                        "cold_misses_all_documents": cold_cache["hits"] == 0 and cold_cache["misses"] == len(corpus),
+                        "warm_hits_all_documents": warm_cache["hits"] == len(corpus) and warm_cache["misses"] == 0,
+                        "incremental_embeds_one_document": (
+                            incremental_cache["hits"] == len(corpus) - 1
+                            and incremental_cache["misses"] == 1
+                        ),
+                        "warm_wall_at_most_ten_percent_of_cold": (
+                            warm_cache["total_wall_seconds"] <= cold_cache["total_wall_seconds"] * 0.1
+                        ),
+                        "warm_cpu_at_most_ten_percent_of_cold": (
+                            warm_cache["total_cpu_seconds"] <= cold_cache["total_cpu_seconds"] * 0.1
+                        ),
+                        "database_growth_at_most_twenty_five_percent": (
+                            result["vector_db_bytes_including_fts_and_raw_records"]
+                            <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.25
+                        ),
+                    }
         context_extension = args.context != "compact"
         accepted = (quality_match and context_not_increased
                     and vector_search_below_2ms
@@ -917,7 +1219,11 @@ def main():
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the cache-maintenance extension to Run {reference_run}: convention namespaces prevented stale reuse, cleanup retained the active cache, and retrieval/evidence/context matched."
+            notes=(f"Accepted as the pending-ingestion extension to Run {reference_run}: FTS5 remained available before model loading, the bounded FIFO worker reused cache entries, and final retrieval/evidence/context matched."
+                   if args.embedding_cache == "sqlite_pending_queue" and accepted else
+                   f"Rejected as a pending-ingestion extension to Run {reference_run}: immediate lexical availability, bounded draining, cache reuse, final parity, or a resource gate failed."
+                   if args.embedding_cache == "sqlite_pending_queue" else
+                   f"Accepted as the cache-maintenance extension to Run {reference_run}: convention namespaces prevented stale reuse, cleanup retained the active cache, and retrieval/evidence/context matched."
                    if args.embedding_cache == "sqlite_namespace_gc" and accepted else
                    f"Rejected as a cache-maintenance extension to Run {reference_run}: namespace isolation, cleanup, retrieval parity, or a fixed resource gate failed."
                    if args.embedding_cache == "sqlite_namespace_gc" else

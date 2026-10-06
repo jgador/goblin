@@ -342,3 +342,26 @@ operational cache champion.
 See `runs/022.json` for namespace, cleanup, cache, model, CPU, RSS, SQLite,
 latency, quality, context, and per-query measurements. No external inference
 API or answer generator is used.
+
+## Durable pending embedding lifecycle (Run 023)
+
+Run 023 adds a SQLite `pending` / `processing` / `ready` lifecycle around the
+Run 022 cache and vector pipeline. Ingestion commits the full record to FTS5 and
+its pending job before the embedding runtime loads, so lexical retrieval remains
+immediately available.
+
+The enqueue transaction stored all 40 records and jobs in 0.51 ms. With a
+controlled half-warm cache, a FIFO worker processed ten batches of four in
+0.354 seconds, producing exactly 20 cache hits and 20 local inference misses.
+All jobs reached ready after one attempt. Every Run 022 lexical, vector-only,
+and hybrid ranking, quality metric, evidence score, and context mean matched.
+SQLite grew from 602,112 to 630,784 bytes, or 4.76%, so Run 023 passes the fixed
+gate and becomes the operational ingestion/cache champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_queue --threads 2
+```
+
+See `runs/023.json` for enqueue, pending-query, per-batch worker, cache, model,
+CPU, RSS, SQLite, latency, quality, context, and per-query measurements. No
+external inference API or answer generator is used.
