@@ -28,6 +28,10 @@ Run 018 did not replace Run 017. Native sqlite-vec unit-range int8 vectors cut
 SQLite storage by 71.29% and preserved scored quality, but changed enough top-five
 membership to increase mean assembled context on both frozen sets.
 
+Run 019 did not replace Run 017. Per-vector max-absolute int8 scaling restored
+every original hybrid top-five result and its context, but two held-out hybrid
+top-five sets still changed and mean held-out context increased by 0.61%.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
 Its process RSS was about 15 MiB in the Run 010 environment versus 228.238 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
@@ -143,6 +147,11 @@ champion while Run 005 remained the lightweight fallback.
   1,654,784 to 475,136 bytes and all scored retrieval/evidence metrics matched,
   but original context rose 1.98% and held-out context rose 0.95%. The fixed
   no-context-increase gate rejected it; Run 017 remains champion.
+- Run 019 showed that per-vector max-absolute scaling uses int8 resolution much
+  more effectively than unit-range scaling. It exactly reproduced all original
+  Run 017 hybrid top-five results and context while retaining the 71.29% SQLite reduction.
+  Held-out h005 and h014 still changed membership, increasing mean held-out
+  context from 131.40 to 132.20 tokens. The fixed gate rejected it.
 
 ## Next hypotheses
 
@@ -169,10 +178,13 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
     the current context-assembly champion.
 11. Run 018 completed sqlite-vec unit-range int8 storage; it was rejected because
     quantized ranking changes increased context despite matching scored quality.
-12. Next: test one specific int8 follow-up using deterministic per-vector
-    symmetric max-absolute scaling before rounding and clipping to [-127, 127].
-    Cosine is scale-invariant, so this should use the int8 range more effectively
-    while retaining Run 018's storage benefit. Keep all other Run 017 rules fixed.
+12. Run 019 completed deterministic per-vector symmetric max-absolute int8
+    scaling. It was rejected after a 0.61% held-out context increase despite
+    exact original results and unchanged scored quality/evidence.
+13. Next: test a two-stage compact vector path. Use max-absolute int8 vec0 to
+    fetch a fixed top-20 pool, then rerank to the existing top 10 using FP16
+    vectors stored as ordinary SQLite blobs before unchanged RRF. This directly
+    targets Run 019's two boundary errors while retaining most storage savings.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -600,4 +612,34 @@ Reproduce after the Run 010 E5 preparation:
 
 Full model, quantizer, CPU, memory, SQLite, latency, quality, context, and
 per-query ranking measurements are in `runs/018.json`. No external inference
+API or answer generator was used.
+
+## Run 019: per-vector max-absolute int8 storage
+
+Run 019 kept Run 017's FP32 E5 inference, fixed FTS5/E5 RRF, supersession rules,
+and protected context assembly. It changed only vector conversion: each
+L2-normalized corpus and query vector was divided by its maximum absolute
+component, multiplied by 127, rounded with NumPy's deterministic half-to-even
+rule, clipped to [-127, 127], and stored or searched as sqlite-vec `int8[384]`.
+Per-vector scale values are unnecessary for cosine distance because positive
+scaling does not change cosine similarity. All 40 self-neighbor checks passed.
+
+SQLite remained 475,136 bytes, 71.29% below Run 017. Mean vector search was
+0.589 ms original and 0.619 ms held-out. Every scored retrieval and evidence
+metric matched Run 017. Original hybrid top-five results and context matched
+exactly at 128.80 tokens. Held-out hybrid h005 and h014 changed membership,
+increasing mean context from 131.40 to 132.20 tokens, or 0.61%.
+
+The candidate is rejected because it failed the predeclared no-context-increase
+gate. FP32 Run 017 remains champion. These measurements evaluate retrieval and
+evidence, not generated answers.
+
+Reproduce after the Run 010 E5 preparation:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs --threads 2
+```
+
+Full model, quantizer, CPU, memory, SQLite, latency, quality, context, and
+per-query ranking measurements are in `runs/019.json`. No external inference
 API or answer generator was used.

@@ -259,3 +259,20 @@ candidate failed its fixed no-context-increase gate. Run 017 remains champion.
 See `runs/018.json` for complete measurements and rankings. FP32 model inference
 is unchanged; only stored and search-query vector precision changes. No external
 inference API or answer generator is used.
+
+## Per-vector max-absolute int8 challenger (Run 019)
+
+Run 019 scales each normalized FP32 E5 vector independently so its largest
+absolute component maps to 127, then rounds and clips to native sqlite-vec
+`int8[384]`. It retained Run 018's 71.29% SQLite reduction and exactly matched
+Run 017 on every original hybrid top-five result and its context. Two held-out
+hybrid top-five sets still changed, increasing held-out context by 0.61%, so the
+fixed gate rejected the candidate and Run 017 remains champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs --threads 2
+```
+
+See `runs/019.json` for complete measurements and rankings. FP32 model inference
+is unchanged; only stored and search-query vector precision changes. No external
+inference API or answer generator is used.

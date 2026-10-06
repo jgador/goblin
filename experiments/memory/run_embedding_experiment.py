@@ -106,7 +106,11 @@ def main():
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
-    parser.add_argument("--vector-storage", choices=["float32", "int8"], default="float32")
+    parser.add_argument(
+        "--vector-storage",
+        choices=["float32", "int8", "int8_maxabs"],
+        default="float32",
+    )
     parser.add_argument(
         "--context",
         choices=["compact", "query_aware", "rank_one_protected_budget"],
@@ -117,10 +121,10 @@ def main():
         parser.error("threads must be positive")
     if args.context != "compact" and args.model != "e5":
         parser.error("context extensions apply only to the E5 semantic champion")
-    if args.vector_storage == "int8" and not (
+    if args.vector_storage != "float32" and not (
         args.model == "e5" and args.context == "rank_one_protected_budget"
     ):
-        parser.error("int8 vector storage is the Run 018 extension to the Run 017 E5 champion")
+        parser.error("int8 vector storage extends the Run 017 E5 champion")
     if args.model_dir is None:
         model_dirs = {"nomic": "nomic", "nomic_256": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
@@ -229,6 +233,27 @@ def main():
             "query_quantization": "same sqlite-vec unit quantizer immediately before search",
             "selected_before_evaluation": True,
         }
+    elif args.vector_storage == "int8_maxabs":
+        result.update(
+            run=19,
+            followup_to_run=18,
+            method="fts5-e5-small-v2-rrf60-query-aware-rank-one-budget-int8-maxabs-vec0",
+            hypothesis=(
+                "Per-vector symmetric max-absolute int8 scaling can preserve Run 017 "
+                "quality and context while retaining Run 018's SQLite storage reduction."
+            ),
+            precision="float32-model-int8-per-vector-maxabs-storage",
+        )
+        result["vector_storage"] = {
+            "type": f"int8[{dimensions}]",
+            "quantizer": "round(vector / max(abs(vector)) * 127), clipped to [-127, 127]",
+            "rounding": "NumPy rint (round half to even)",
+            "input_range": "L2-normalized FP32 vectors",
+            "distance": "cosine",
+            "scale_storage": "not required because cosine distance is invariant to positive per-vector scaling",
+            "query_quantization": "same deterministic per-vector max-absolute rule immediately before search",
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -300,6 +325,17 @@ def main():
             assert vectors.shape == (len(texts), dimensions) and np.isfinite(vectors).all()
             return vectors
 
+        def quantize_maxabs(vector):
+            maximum = float(np.max(np.abs(vector)))
+            if maximum == 0:
+                return np.zeros(vector.shape, dtype=np.int8)
+            return np.clip(np.rint(vector / maximum * 127), -127, 127).astype(np.int8)
+
+        def stored_vector_bytes(vector):
+            if args.vector_storage == "int8_maxabs":
+                return quantize_maxabs(vector).tobytes()
+            return vector.tobytes()
+
         start = time.perf_counter()
         cpu = time.process_time()
         vectors = np.concatenate([embed([d["text"] for d in corpus[i:i+4]], conventions["document_prefix"]) for i in range(0, len(corpus), 4)])
@@ -311,27 +347,29 @@ def main():
         sqlite_vec.load(db)
         db.enable_load_extension(False)
         result["sqlite_vec_version"] = db.execute("SELECT vec_version()").fetchone()[0]
-        vector_type = "int8" if args.vector_storage == "int8" else "float"
+        vector_type = "int8" if args.vector_storage != "float32" else "float"
         db.execute(
             f"CREATE VIRTUAL TABLE vectors USING vec0(embedding {vector_type}[{dimensions}] distance_metric=cosine)"
         )
         start = time.perf_counter()
-        insert_sql = (
-            "INSERT INTO vectors(rowid,embedding) VALUES (?,vec_quantize_int8(?, 'unit'))"
-            if args.vector_storage == "int8"
-            else "INSERT INTO vectors(rowid,embedding) VALUES (?,?)"
+        insert_expression = (
+            "vec_quantize_int8(?, 'unit')" if args.vector_storage == "int8" else
+            "vec_int8(?)" if args.vector_storage == "int8_maxabs" else
+            "?"
         )
-        db.executemany(insert_sql, [(i + 1, v.tobytes()) for i, v in enumerate(vectors)])
+        insert_sql = f"INSERT INTO vectors(rowid,embedding) VALUES (?,{insert_expression})"
+        db.executemany(insert_sql, [(i + 1, stored_vector_bytes(v)) for i, v in enumerate(vectors)])
         db.commit()
         result["vector_insert_seconds"] = time.perf_counter() - start
         query_expression = (
             "vec_quantize_int8(?, 'unit')"
             if args.vector_storage == "int8"
+            else "vec_int8(?)" if args.vector_storage == "int8_maxabs"
             else "?"
         )
         self_matches = [db.execute(
             f"SELECT rowid FROM vectors WHERE embedding MATCH {query_expression} AND k=1 ORDER BY distance",
-            (v.tobytes(),),
+            (stored_vector_bytes(v),),
         ).fetchone()[0] == i + 1 for i, v in enumerate(vectors)]
         assert all(self_matches), "Vector storage/search failed corpus self-neighbor validation"
         result["vector_validation"] = {"corpus_self_neighbors_correct": sum(self_matches),
@@ -344,7 +382,7 @@ def main():
             embedded = time.perf_counter()
             neighbors = db.execute(
                 f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=5 ORDER BY distance",
-                (v.tobytes(),),
+                (stored_vector_bytes(v),),
             ).fetchall()
             rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
             return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
@@ -355,7 +393,7 @@ def main():
             embedded = time.perf_counter()
             vector_rows = db.execute(
                 f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=10 ORDER BY distance",
-                (v.tobytes(),),
+                (stored_vector_bytes(v),),
             ).fetchall()
             lexical_rows = db.execute(
                 "SELECT id FROM memory WHERE memory MATCH ? ORDER BY bm25(memory) LIMIT 10",
@@ -402,7 +440,7 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (17 if args.vector_storage == "int8" else
+        reference_run = (17 if args.vector_storage != "float32" else
                          14 if args.context == "rank_one_protected_budget" else
                          10 if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm") else
                          8)
@@ -441,7 +479,7 @@ def main():
         accepted = (quality_match and context_not_increased
                     and resource_improvements["vector_db_bytes"]
                     and vector_search_below_2ms
-                    if args.vector_storage == "int8" else
+                    if args.vector_storage != "float32" else
                     quality_match and context_reduced
                     if context_extension else
                     quality_match and sum(resource_improvements.values()) >= 3)
@@ -472,14 +510,14 @@ def main():
                 "vector_db_bytes_after": result["vector_db_bytes_including_fts_and_raw_records"],
             }
         result.update(
-            status=("accepted-storage-champion" if args.vector_storage == "int8" and accepted else
+            status=("accepted-storage-champion" if args.vector_storage != "float32" and accepted else
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
             notes=(f"Accepted as the vector-storage extension to Run {reference_run}: retrieval/evidence and context matched while SQLite storage fell and mean vector search stayed below 2 ms."
-                   if args.vector_storage == "int8" and accepted else
+                   if args.vector_storage != "float32" and accepted else
                    f"Rejected as a vector-storage extension to Run {reference_run}: it did not preserve quality/context with smaller SQLite storage and sub-2 ms vector search."
-                   if args.vector_storage == "int8" else
+                   if args.vector_storage != "float32" else
                    f"Accepted as the context-assembly extension to Run {reference_run}: retrieval/evidence metrics matched and context fell on both frozen sets."
                    if context_extension and accepted else
                    f"Accepted as semantic-quality champion: matched every Run {reference_run} retrieval/evidence metric and reduced at least three measured resource costs."
