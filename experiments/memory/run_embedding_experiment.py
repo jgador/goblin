@@ -66,7 +66,7 @@ def evaluate(queries, retrieve, suppressed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=["nomic", "bge", "e5", "e5_int8", "minilm"], default="nomic")
+    parser.add_argument("--model", choices=["nomic", "nomic_256", "bge", "e5", "e5_int8", "minilm"], default="nomic")
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
@@ -74,7 +74,7 @@ def main():
     if args.threads < 1:
         parser.error("threads must be positive")
     if args.model_dir is None:
-        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
+        model_dirs = {"nomic": "nomic", "nomic_256": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
     manifest = json.loads((ROOT / f"{args.model}_model.json").read_text())
     conventions = manifest.get("conventions", {
@@ -94,25 +94,30 @@ def main():
     sets = {"original": load_jsonl(ROOT / "queries.jsonl"),
             "heldout": load_jsonl(ROOT / "heldout_queries.jsonl")}
     suppressed = set(detect_supersessions(corpus))
-    challenger = args.model in ("bge", "e5", "e5_int8", "minilm")
+    challenger = args.model in ("nomic_256", "bge", "e5", "e5_int8", "minilm")
     hybrid = args.retrieval == "hybrid" or challenger
-    result = {"run": 12 if args.model == "e5_int8" else (11 if args.model == "minilm" else (10 if args.model == "e5" else (9 if args.model == "bge" else (8 if hybrid else 7)))),
-              "method": ("fts5-e5-small-v2-dynamic-int8-rrf60-sqlite-vec" if args.model == "e5_int8" else
-                         ("fts5-all-minilm-l6-v2-rrf60-sqlite-vec" if args.model == "minilm" else
-                         ("fts5-e5-small-v2-rrf60-sqlite-vec" if args.model == "e5" else
-                         ("fts5-bge-small-rrf60-sqlite-vec" if args.model == "bge" else
-                          ("fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec"))))),
-              "hypothesis": ("Dynamic INT8 E5-small-v2 can preserve Run 010 quality while reducing model, memory and latency costs."
-                             if args.model == "e5_int8" else
-                             ("all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality while further reducing local embedding cost."
-                             if args.model == "minilm" else
-                             ("E5-small-v2 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
-                             if args.model == "e5" else
-                             ("BGE-small v1.5 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost."
-                             if args.model == "bge" else
-                             ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
-                              if hybrid else
-                              "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."))))),
+    run_by_model = {"nomic_256": 13, "e5_int8": 12, "minilm": 11, "e5": 10, "bge": 9}
+    method_by_model = {
+        "nomic_256": "fts5-nomic-256d-rrf60-sqlite-vec",
+        "e5_int8": "fts5-e5-small-v2-dynamic-int8-rrf60-sqlite-vec",
+        "minilm": "fts5-all-minilm-l6-v2-rrf60-sqlite-vec",
+        "e5": "fts5-e5-small-v2-rrf60-sqlite-vec",
+        "bge": "fts5-bge-small-rrf60-sqlite-vec",
+        "nomic": "fts5-nomic-rrf60-sqlite-vec" if hybrid else "nomic-fp32-768-sqlite-vec",
+    }
+    hypothesis_by_model = {
+        "nomic_256": "Nomic's documented 256-dimensional Matryoshka projection can preserve fixed-RRF retrieval quality while reducing vec0 storage.",
+        "e5_int8": "Dynamic INT8 E5-small-v2 can preserve Run 010 quality while reducing model, memory and latency costs.",
+        "minilm": "all-MiniLM-L6-v2 can match Run 010 fixed-RRF quality while further reducing local embedding cost.",
+        "e5": "E5-small-v2 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost.",
+        "bge": "BGE-small v1.5 can match Run 008 fixed-RRF semantic quality while materially reducing local embedding cost.",
+        "nomic": ("Fixed reciprocal-rank fusion of FTS5 and Nomic rankings improves relevance without tuning against benchmark labels."
+                  if hybrid else
+                  "Real Nomic vector-only retrieval improves relevance over the lexical champion on both frozen benchmarks."),
+    }
+    result = {"run": run_by_model.get(args.model, 8 if hybrid else 7),
+              "method": method_by_model[args.model],
+              "hypothesis": hypothesis_by_model[args.model],
               "model": manifest, "dimensions": dimensions, "precision": manifest.get("precision", "float32"),
               "threads": args.threads, "provider": "CPUExecutionProvider",
               "python_version": platform.python_version(), "sqlite_version": sqlite3.sqlite_version,
@@ -186,6 +191,8 @@ def main():
                 vectors = (output * mask).sum(axis=1) / np.maximum(mask.sum(axis=1), 1)
                 if conventions["pooling"] == "attention-mask-mean-layer-norm":
                     vectors = (vectors - vectors.mean(axis=1, keepdims=True)) / np.sqrt(vectors.var(axis=1, keepdims=True) + 1e-5)
+            if "matryoshka_dimensions" in conventions:
+                vectors = vectors[:, :conventions["matryoshka_dimensions"]]
             vectors /= np.maximum(np.linalg.norm(vectors, axis=1, keepdims=True), 1e-12)
             vectors = vectors.astype(np.float32)
             assert vectors.shape == (len(texts), dimensions) and np.isfinite(vectors).all()
@@ -268,7 +275,7 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = 10 if args.model in ("e5_int8", "minilm") else 8
+        reference_run = 10 if args.model in ("nomic_256", "e5_int8", "minilm") else 8
         reference = json.loads((ROOT / "runs" / f"{reference_run:03}.json").read_text())
         quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
         quality_match = all(
@@ -288,12 +295,26 @@ def main():
             "heldout_context_tokens": result["candidate"]["heldout"]["context_tokens_approx_mean"] < reference["candidate"]["heldout"]["context_tokens_approx_mean"],
         }
         accepted = quality_match and sum(resource_improvements.values()) >= 3
-        result["champion_comparison" if args.model in ("e5_int8", "minilm") else "run008_comparison"] = {
+        result["champion_comparison" if args.model in ("nomic_256", "e5_int8", "minilm") else "run008_comparison"] = {
             "quality_match": quality_match,
             "resource_improvements": resource_improvements,
             "reference_method": reference["method"],
             "reference_run": reference_run,
         }
+        if args.model == "nomic_256":
+            full_dimension = json.loads((ROOT / "runs" / "008.json").read_text())
+            result["matryoshka_comparison"] = {
+                "reference_run": 8,
+                "reference_dimensions": 768,
+                "candidate_dimensions": dimensions,
+                "quality_match": all(
+                    result["candidate"][dataset].get(metric) == full_dimension["candidate"][dataset].get(metric)
+                    for dataset in ("original", "heldout") for metric in quality_fields
+                    if full_dimension["candidate"][dataset].get(metric) is not None
+                ),
+                "vector_db_bytes_before": full_dimension["vector_db_bytes_including_fts_and_raw_records"],
+                "vector_db_bytes_after": result["vector_db_bytes_including_fts_and_raw_records"],
+            }
         result.update(
             status="accepted-semantic-champion" if accepted else "rejected",
             champion=accepted,

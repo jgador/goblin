@@ -1,0 +1,27 @@
+{
+  "model": "nomic-ai/nomic-embed-text-v1.5",
+  "revision": "e9b6763023c676ca8431644204f50c2b100d9aab",
+  "precision": "float32",
+  "files": {
+    "tokenizer.json": {
+      "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+      "bytes": 711396
+    },
+    "onnx/model.onnx": {
+      "sha256": "147d5aa88c2101237358e17796cf3a227cead1ec304ec34b465bb08e9d952965",
+      "bytes": 547310275
+    }
+  },
+  "conventions": {
+    "native_dimensions": 768,
+    "dimensions": 256,
+    "matryoshka_dimensions": 256,
+    "max_tokens": 8192,
+    "document_prefix": "search_document: ",
+    "query_prefix": "search_query: ",
+    "pooling": "attention-mask-mean-layer-norm",
+    "matryoshka_order": "mean-pool-layer-norm-truncate-l2-normalize",
+    "normalization": "l2",
+    "distance": "cosine"
+  }
+}

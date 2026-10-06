@@ -144,3 +144,20 @@ The generated model checksum, source checksum, quantization settings, runtime
 versions and E5 input/pooling conventions are pinned in `e5_int8_model.json`.
 See `runs/012.json` for complete vector-only and hybrid measurements. The
 benchmark command runs offline and no answer-generating model is evaluated.
+
+## Nomic 256-dimensional Matryoshka challenger (Run 013)
+
+Run 013 truncates Nomic's layer-normalized 768-dimensional embeddings to the
+first 256 dimensions before L2 normalization, following the model's documented
+Matryoshka operation order. The smaller vectors cut the SQLite database by
+64.97% versus Run 008, but q003 fell from rank 1 to rank 2 under the unchanged
+fixed RRF rule. Run 010 E5 remains the semantic-quality champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_nomic_model.py
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model nomic_256 --threads 2
+```
+
+The final command is offline. Exact model revision, file checksums, dimensions,
+prefixes, pooling and normalization order are pinned in `nomic_256_model.json`.
+See `runs/013.json` for complete measurements and rankings.

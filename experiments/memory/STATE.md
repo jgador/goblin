@@ -7,8 +7,8 @@ Semantic-quality champion: Run 010, `fts5-e5-small-v2-rrf60-sqlite-vec`.
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 012 hypothesis: dynamic INT8 E5-small-v2 can preserve Run 010 quality
-while reducing model, memory and latency costs.
+Run 013 hypothesis: Nomic's documented 256-dimensional Matryoshka projection
+can preserve fixed-RRF retrieval quality while reducing vec0 storage.
 
 Run 010 replaces Run 008 as the semantic-quality champion. It matches every
 Run 008 original and held-out retrieval/evidence metric, while reducing model
@@ -94,6 +94,10 @@ champion while Run 005 remained the lightweight fallback.
   faster and lower-memory than FP32 E5, but q011 moved from rank 1 to rank 2.
   Original hybrid MRR@5/Hit@1 regressed from 0.975/0.95 to 0.95/0.90, so Run
   010 remains champion despite perfect held-out quality and evidence retention.
+- Run 013 showed that truncating Nomic from 768 to 256 dimensions reduced the
+  SQLite database by 64.97%, but q003 moved from rank 1 to rank 2. Original
+  hybrid MRR@5/Hit@1 regressed from 0.975/0.95 to 0.95/0.90; the large Nomic
+  model and inference costs also remained. Run 010 therefore stays champion.
 
 ## Next hypotheses
 
@@ -108,10 +112,10 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    fixed fusion rule to repair its held-out top-rank miss.
 5. Run 012 completed a portable dynamic INT8 E5 experiment; do not tune the
    fixed fusion rule against q011 to conceal its original-benchmark regression.
-6. Next: test Nomic Matryoshka dimensions as a separate storage/resource
-   experiment while retaining the frozen fusion rule and benchmark.
-7. Return to sentence/clause summaries or supersession improvements after the
-   embedding comparisons.
+6. Run 013 completed Nomic Matryoshka at 256 dimensions; do not tune fusion
+   against q003 or try another dimension without a specific follow-up reason.
+7. Next: test a fixed query-aware sentence/clause context selector after Run
+   010 retrieval, targeting lower context size without retrieval/evidence loss.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -342,3 +346,39 @@ the local dynamic-QInt8 model. The final benchmark command is offline. Source
 and generated checksums, sizes, quantization parameters, model conventions and
 dependency versions are pinned in `e5_int8_model.json` and
 `quantization_requirements.txt`; large artifacts remain under `.artifacts/`.
+
+## Run 013: Nomic 256-dimensional Matryoshka projection
+
+Run 013 tested one hypothesis: Nomic's documented 256-dimensional Matryoshka
+projection can preserve the fixed Run 008 RRF retrieval quality while reducing
+SQLite vec0 storage. It used the same pinned Nomic FP32 ONNX model and tokenizer,
+`search_document: ` and `search_query: ` prefixes, attention-mask mean pooling,
+full 768-dimensional layer normalization, truncation to the first 256 values,
+then L2 normalization. Supersession handling, compact context, cosine distance
+and equal-weight RRF (`k=60`, top-10 pools) were unchanged.
+
+The projection did not preserve quality. On the original benchmark q003 moved
+from rank 1 to rank 2, reducing hybrid MRR@5/Hit@1 from 0.975/0.95 at 768
+dimensions to 0.95/0.90 at 256 dimensions; Recall@5 remained 0.975. Held-out
+MRR@5, Recall@5, Hit@1 and evidence retention remained 1.0. Run 010 E5 remains
+the semantic-quality champion.
+
+SQLite with FTS5, original records and vec0 fell from 3,227,648 to 1,130,496
+bytes, a 64.97% reduction. Model plus tokenizer remained 548,021,671 bytes and
+measured peak RSS was 889.184 MiB. Embedding 40 records took 2.968 seconds at
+13.48 documents/s; original and held-out hybrid latency averaged 51.68 and
+50.64 ms. These process measurements are environment-sensitive and should not
+be treated as controlled speed comparisons with earlier hosts. No answer
+generator was evaluated.
+
+Reproduce after installing `embedding_requirements.txt`:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_nomic_model.py
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model nomic_256 --threads 2
+```
+
+The final command is offline. Revision, checksums, dimensions, operation order
+and model conventions are pinned in `nomic_256_model.json`; full measurements
+and query rankings are in `runs/013.json`. Large model and database artifacts
+remain under `.artifacts/` and out of Git.
