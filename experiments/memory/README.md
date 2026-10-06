@@ -161,3 +161,27 @@ fixed RRF rule. Run 010 E5 remains the semantic-quality champion.
 The final command is offline. Exact model revision, file checksums, dimensions,
 prefixes, pooling and normalization order are pinned in `nomic_256_model.json`.
 See `runs/013.json` for complete measurements and rankings.
+
+## Query-aware clause context champion (Run 014)
+
+Run 014 preserves Run 010's E5 retrieval and fixed RRF rankings, then applies a
+conservative query-aware context selector. It always keeps each record's first
+clause, retains later query-overlap or semantic-operator clauses, and finally
+applies the existing compact sketch. Original context fell 5.52% and held-out
+context fell 5.64% without changing retrieval quality or evidence retention.
+
+Isolated context comparison without model weights:
+
+```bash
+python3 experiments/memory/run_context_selection_experiment.py --iterations 1000
+```
+
+Complete offline E5 pipeline after model preparation:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context query_aware --threads 2
+```
+
+Run 014 is the semantic-quality champion's current context-assembly strategy.
+See `runs/014.json` for isolated assembly timing, full embedding/search/context
+timing, selection rules and per-query evidence results.

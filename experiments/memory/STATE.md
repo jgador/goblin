@@ -2,21 +2,22 @@
 
 ## Current champions
 
-Semantic-quality champion: Run 010, `fts5-e5-small-v2-rrf60-sqlite-vec`.
+Semantic-quality champion: Run 014,
+`fts5-e5-small-v2-rrf60-query-aware-clause-context`.
 
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 013 hypothesis: Nomic's documented 256-dimensional Matryoshka projection
-can preserve fixed-RRF retrieval quality while reducing vec0 storage.
+Run 014 hypothesis: a fixed query-aware clause selector can reduce Run 010
+context without changing retrieval or losing held-out evidence.
 
-Run 010 replaces Run 008 as the semantic-quality champion. It matches every
-Run 008 original and held-out retrieval/evidence metric, while reducing model
-size, RSS, CPU, latency, SQLite size and mean context on both frozen sets.
+Run 014 extends Run 010's accepted E5 retrieval with query-aware context
+assembly. It preserves every original and held-out retrieval/evidence metric
+while reducing mean assembled context on both frozen sets.
 
 Run 005 remains the operational fallback when embedding cost is not acceptable.
-Its process RSS was about 15 MiB in the Run 010 environment versus 236.047 MiB
-for hybrid retrieval, and its query latency was about 0.1 ms versus 8 to 9 ms.
+Its process RSS was about 15 MiB in the Run 010 environment versus 236.312 MiB
+for the latest full hybrid run. Embeddings remain the dominant cost.
 
 Benchmark generation: 1
 Benchmark SHA-256: `c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74`
@@ -25,12 +26,16 @@ Queries: 20
 
 ### Champion behavior
 
-Run 010 uses a fixed, label-independent reciprocal-rank fusion rule: equal-weight
+Run 014 uses Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
 RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
 context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
 attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
 distance. Full original records remain in SQLite for provenance.
+
+At context assembly, Run 014 always keeps each retrieved record's first clause,
+keeps later clauses that overlap the query or contain a fixed semantic operator,
+then applies Run 005 compaction. The rule was fixed before evaluation.
 
 The compactor removes a conservative set of high-frequency function words. It deliberately preserves negation, conjunctions, modality, temporal words, identifiers, numbers, and content terms. On this benchmark the resulting sketches retain 100% of those content terms.
 
@@ -42,15 +47,16 @@ The full record remains stored. The sketch is generated at context assembly time
 - Original Recall@5: 0.975
 - Original Hit@1: 0.95
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
-- Mean original context: 147.7 approximate tokens
-- Mean held-out context: 154.35 approximate tokens
-- Mean end-to-end retrieval/context latency: 8.09 ms original, 8.66 ms held-out
-- Peak process RSS: 236.047 MiB
+- Mean original context: 139.55 approximate tokens
+- Mean held-out context: 145.65 approximate tokens
+- Mean end-to-end retrieval/context latency: 4.67 ms original, 4.95 ms held-out
+- Mean context assembly latency: 0.082 ms original, 0.089 ms held-out
+- Peak process RSS: 236.312 MiB
 - Model and tokenizer: 133,804,864 bytes
 - SQLite with FTS5, records, and vec0: 1,654,784 bytes
 
-Measured process CPU across 20 hybrid queries was 0.322 seconds on the original
-set and 0.350 seconds on held-out. Resource measurements are environment-sensitive;
+Measured process CPU across 20 hybrid queries was 0.190 seconds on the original
+set and 0.200 seconds on held-out. Resource measurements are environment-sensitive;
 the committed reproduction records load, embedding, query, search, end-to-end,
 CPU and process-lifetime peak RSS separately.
 
@@ -97,7 +103,12 @@ champion while Run 005 remained the lightweight fallback.
 - Run 013 showed that truncating Nomic from 768 to 256 dimensions reduced the
   SQLite database by 64.97%, but q003 moved from rank 1 to rank 2. Original
   hybrid MRR@5/Hit@1 regressed from 0.975/0.95 to 0.95/0.90; the large Nomic
-  model and inference costs also remained. Run 010 therefore stays champion.
+  model and inference costs also remained. Run 010 therefore remained champion
+  at that stage.
+- Run 014 showed that conservative query-aware clause selection can reduce
+  original context by 5.52% and held-out context by 5.64% without changing any
+  retrieval metric or losing held-out evidence. Its isolated assembly overhead
+  was about 0.04 ms per query, so it extends Run 010 as the current champion.
 
 ## Next hypotheses
 
@@ -114,8 +125,10 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
    fixed fusion rule against q011 to conceal its original-benchmark regression.
 6. Run 013 completed Nomic Matryoshka at 256 dimensions; do not tune fusion
    against q003 or try another dimension without a specific follow-up reason.
-7. Next: test a fixed query-aware sentence/clause context selector after Run
-   010 retrieval, targeting lower context size without retrieval/evidence loss.
+7. Run 014 completed fixed query-aware clause selection and is the current
+   context-assembly extension to Run 010.
+8. Next: test fixed cross-record near-duplicate clause removal after Run 014,
+   preserving provenance and the frozen evidence set.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -382,3 +395,41 @@ The final command is offline. Revision, checksums, dimensions, operation order
 and model conventions are pinned in `nomic_256_model.json`; full measurements
 and query rankings are in `runs/013.json`. Large model and database artifacts
 remain under `.artifacts/` and out of Git.
+
+## Run 014: query-aware clause context selection
+
+Run 014 tested one fixed context hypothesis on top of Run 010 retrieval. For
+each retrieved record, it always keeps the first clause, keeps later clauses
+with query-term overlap or fixed semantic operators (`after`, `before`,
+`except`, `instead`, `must`, `never`, `not`, `only`, `required`, `should`,
+`unless`, `until`, `without`), and then applies Run 005 compaction. The rule
+was selected before evaluation and does not use relevance or evidence labels.
+
+The candidate preserved original MRR@5/Recall@5/Hit@1 at 0.975/0.975/0.95 and
+all held-out retrieval and evidence metrics at 1.0. Original mean context fell
+from 147.7 to 139.55 approximate tokens (5.52%); held-out context fell from
+154.35 to 145.65 (5.64%). Persistent storage was unchanged at 1,654,784 bytes.
+
+A 1,000-iteration replay of Run 010 rankings measured 0.067 ms original and
+0.069 ms held-out assembly per query, about 0.04 ms slower than the old compact
+sketch but below the fixed 1 ms limit. A full local E5 run separately measured
+query embedding, vec0 search, context assembly and end-to-end latency; original
+end-to-end latency was 4.67 ms and held-out was 4.95 ms, with 236.312 MiB peak
+RSS. These process timings are environment-sensitive. Retrieval/evidence was
+evaluated, not generated-answer quality.
+
+Reproduce the isolated comparison without model weights:
+
+```bash
+python3 experiments/memory/run_context_selection_experiment.py --iterations 1000
+```
+
+Reproduce the complete pipeline after the Run 010 model preparation:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model e5
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context query_aware --threads 2
+```
+
+The final command is offline. Full pipeline measurements, isolated assembly
+timings, selection rules and per-query contexts are in `runs/014.json`.

@@ -13,7 +13,14 @@ import tempfile
 import time
 from pathlib import Path
 
-from run_experiment import compact_text, detect_supersessions, fts_query, load_jsonl
+from run_experiment import (
+    SEMANTIC_OPERATORS,
+    compact_text,
+    detect_supersessions,
+    fts_query,
+    load_jsonl,
+    query_aware_compact,
+)
 from run_heldout_validation import terms
 
 ROOT = Path(__file__).resolve().parent
@@ -25,14 +32,17 @@ def rss():
     return round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 3)
 
 
-def evaluate(queries, retrieve, suppressed):
-    details, latency, embed_latency, search_latency = [], [], [], []
+def evaluate(queries, retrieve, suppressed, context_transform=None):
+    context_transform = context_transform or (lambda text, _query: compact_text(text))
+    details, latency, embed_latency, search_latency, context_latency = [], [], [], [], []
     cpu_start = time.process_time()
     for q in queries:
         started = time.perf_counter()
         rows, embedding_ms, search_ms = retrieve(q["query"])
         rows = [row for row in rows if row[0] not in suppressed]
-        rendered = [compact_text(row[1]) for row in rows]
+        context_started = time.perf_counter()
+        rendered = [context_transform(row[1], q["query"]) for row in rows]
+        context_latency.append((time.perf_counter() - context_started) * 1000)
         elapsed = (time.perf_counter() - started) * 1000
         ids = [row[0] for row in rows]
         relevant = set(q["relevant"])
@@ -60,6 +70,7 @@ def evaluate(queries, retrieve, suppressed):
         "end_to_end_ms_p95": sorted(latency)[math.ceil(.95 * len(latency)) - 1],
         "query_embedding_ms_mean": statistics.fmean(embed_latency),
         "search_ms_mean": statistics.fmean(search_latency),
+        "context_assembly_ms_mean": statistics.fmean(context_latency),
         "cpu_seconds": cpu, "peak_rss_mib": rss(), "details": details,
     }
 
@@ -70,9 +81,12 @@ def main():
     parser.add_argument("--model-dir", type=Path)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
+    parser.add_argument("--context", choices=["compact", "query_aware"], default="compact")
     args = parser.parse_args()
     if args.threads < 1:
         parser.error("threads must be positive")
+    if args.context == "query_aware" and args.model != "e5":
+        parser.error("query-aware context is the Run 014 extension to the E5 champion")
     if args.model_dir is None:
         model_dirs = {"nomic": "nomic", "nomic_256": "nomic", "bge": "bge-small", "e5": "e5-small", "e5_int8": "e5-int8", "minilm": "minilm"}
         args.model_dir = ARTIFACTS / model_dirs[args.model]
@@ -127,6 +141,19 @@ def main():
               "external_inference_api_calls": 0, "answer_generation_evaluated": False,
               "benchmark_sha256": hashlib.sha256((ROOT / "corpus.jsonl").read_bytes() + b"\0" + (ROOT / "queries.jsonl").read_bytes()).hexdigest(),
               "heldout_sha256": hashlib.sha256((ROOT / "corpus.jsonl").read_bytes() + b"\0" + (ROOT / "heldout_queries.jsonl").read_bytes()).hexdigest()}
+    if args.context == "query_aware":
+        result.update(
+            run=14,
+            method="fts5-e5-small-v2-rrf60-query-aware-clause-context",
+            hypothesis="A fixed query-aware clause selector can reduce Run 010 context without changing retrieval or losing held-out evidence.",
+        )
+        result["selection_rule"] = {
+            "always_keep_first_clause": True,
+            "keep_later_query_overlap_clauses": True,
+            "keep_later_semantic_operator_clauses": sorted(SEMANTIC_OPERATORS),
+            "then_apply_run005_compaction": True,
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -264,7 +291,11 @@ def main():
         result["query_warmup_seconds"] = time.perf_counter() - start
         if challenger:
             result["vector_only"] = {name: evaluate(qs, vector, suppressed) for name, qs in sets.items()}
-        result["candidate"] = {name: evaluate(qs, retrieve, suppressed) for name, qs in sets.items()}
+        candidate_context = query_aware_compact if args.context == "query_aware" else None
+        result["candidate"] = {
+            name: evaluate(qs, retrieve, suppressed, candidate_context)
+            for name, qs in sets.items()
+        }
         if hybrid:
             result["fusion"] = {"algorithm": "reciprocal-rank-fusion", "rrf_k": 60,
                                 "lexical_pool": 10, "vector_pool": 10,
@@ -275,7 +306,7 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = 10 if args.model in ("nomic_256", "e5_int8", "minilm") else 8
+        reference_run = 10 if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm") else 8
         reference = json.loads((ROOT / "runs" / f"{reference_run:03}.json").read_text())
         quality_fields = ("mrr_at_5", "recall_at_5", "hit_at_1", "evidence_at_5")
         quality_match = all(
@@ -294,9 +325,19 @@ def main():
             "original_context_tokens": result["candidate"]["original"]["context_tokens_approx_mean"] < reference["candidate"]["original"]["context_tokens_approx_mean"],
             "heldout_context_tokens": result["candidate"]["heldout"]["context_tokens_approx_mean"] < reference["candidate"]["heldout"]["context_tokens_approx_mean"],
         }
-        accepted = quality_match and sum(resource_improvements.values()) >= 3
-        result["champion_comparison" if args.model in ("nomic_256", "e5_int8", "minilm") else "run008_comparison"] = {
+        context_reduced = all(
+            result["candidate"][dataset]["context_tokens_approx_mean"] < reference["candidate"][dataset]["context_tokens_approx_mean"]
+            for dataset in ("original", "heldout")
+        )
+        accepted = (quality_match and context_reduced
+                    if args.context == "query_aware" else
+                    quality_match and sum(resource_improvements.values()) >= 3)
+        comparison_key = ("champion_comparison"
+                          if args.context == "query_aware" or args.model in ("nomic_256", "e5_int8", "minilm")
+                          else "run008_comparison")
+        result[comparison_key] = {
             "quality_match": quality_match,
+            "context_reduced_on_both_sets": context_reduced,
             "resource_improvements": resource_improvements,
             "reference_method": reference["method"],
             "reference_run": reference_run,
@@ -316,9 +357,12 @@ def main():
                 "vector_db_bytes_after": result["vector_db_bytes_including_fts_and_raw_records"],
             }
         result.update(
-            status="accepted-semantic-champion" if accepted else "rejected",
+            status=("accepted-context-champion" if args.context == "query_aware" and accepted else
+                    "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as semantic-quality champion: matched every Run {reference_run} retrieval/evidence metric and reduced at least three measured resource costs."
+            notes=(f"Accepted as the context-assembly extension to Run {reference_run}: retrieval/evidence metrics matched and context fell on both frozen sets."
+                   if args.context == "query_aware" and accepted else
+                   f"Accepted as semantic-quality champion: matched every Run {reference_run} retrieval/evidence metric and reduced at least three measured resource costs."
                    if accepted else
                    f"Rejected as semantic-quality champion: the challenger did not match all Run {reference_run} retrieval/evidence metrics with at least three measured resource improvements."),
         )

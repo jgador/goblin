@@ -29,6 +29,15 @@ COMPACTION_DROPWORDS = {
     "in", "on", "for", "with", "as", "at", "by", "from", "this", "that", "it",
     "itself", "has", "have", "had",
 }
+CLAUSE_SPLIT_RE = re.compile(r"(?<=[.!?;])\s+")
+QUERY_DROPWORDS = COMPACTION_DROPWORDS | {
+    "what", "which", "who", "where", "when", "how", "does", "did", "can",
+    "could", "would", "about", "into", "through", "every", "there",
+}
+SEMANTIC_OPERATORS = {
+    "after", "before", "except", "instead", "must", "never", "not", "only",
+    "required", "should", "unless", "until", "without",
+}
 
 
 def load_jsonl(path):
@@ -54,6 +63,37 @@ def compact_text(text):
         for token in WORD_RE.findall(text)
         if token.lower() not in COMPACTION_DROPWORDS
     )
+
+
+def split_clauses(text):
+    return [clause.strip() for clause in CLAUSE_SPLIT_RE.split(text) if clause.strip()]
+
+
+def query_content_terms(text):
+    return {
+        token.lower()
+        for token in WORD_RE.findall(text)
+        if len(token) >= 3 and token.lower() not in QUERY_DROPWORDS
+    }
+
+
+def select_query_clauses(text, query):
+    """Select topic, query-overlap, and semantic-operator clauses."""
+    clauses = split_clauses(text)
+    if not clauses:
+        return [], clauses
+    query_terms = query_content_terms(query)
+    selected = [clauses[0]]
+    for clause in clauses[1:]:
+        clause_tokens = {token.lower() for token in WORD_RE.findall(clause)}
+        if query_terms.intersection(clause_tokens) or SEMANTIC_OPERATORS.intersection(clause_tokens):
+            selected.append(clause)
+    return selected, clauses
+
+
+def query_aware_compact(text, query):
+    selected, _ = select_query_clauses(text, query)
+    return " ".join(compact_text(clause) for clause in selected)
 
 
 def make_reranker(corpus):
