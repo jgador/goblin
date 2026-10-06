@@ -389,3 +389,30 @@ See `runs/024.json` for the durable interruption state, reopen observation,
 reclaim timing, attempt distribution, output uniqueness, queue batches, cache,
 model, CPU, RSS, SQLite, latency, quality, context, and per-query measurements.
 No external inference API or answer generator is used.
+
+## Pending content supersession challenger (Run 025)
+
+Run 025 updates `d040` after initial enqueue and before model loading or worker
+claim. One transaction replaces the FTS5 text, marks revision 1 superseded, and
+enqueues revision 2 while retaining the old content hash as job history. The
+update completed in 0.205 ms.
+
+The lifecycle behavior passed: revision 1 had zero attempts and no vector or
+cache-key attachment, revision 2 alone reached ready, and the final state held
+40 unique ready documents plus one superseded historical job. The worker kept
+ten FIFO batches, 20 cache hits, 20 misses, and finished in 0.259 seconds.
+
+The candidate was rejected because the declared content change altered four
+lexical, nine vector-only, and five hybrid query rankings. Hybrid quality and
+held-out evidence remained unchanged, but mean held-out context increased from
+131.40 to 131.85 approximate tokens. The update text was not tuned after seeing
+the result, and Run 024 remains the operational champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_supersession --threads 2
+```
+
+See `runs/025.json` for revision hashes, FTS5 provenance, cache attachments,
+queue metrics, changed rankings, model, CPU, RSS, SQLite, latency, quality, and
+context measurements. This evaluates retrieval and context assembly, not answer
+generation.

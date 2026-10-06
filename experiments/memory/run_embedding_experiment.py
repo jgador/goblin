@@ -134,6 +134,7 @@ def main():
             "sqlite_namespace_gc",
             "sqlite_pending_queue",
             "sqlite_pending_recovery",
+            "sqlite_pending_supersession",
         ],
         default="none",
     )
@@ -399,6 +400,36 @@ def main():
             "worker_cpu_seconds_at_most": 2.0,
             "selected_before_evaluation": True,
         }
+    elif args.embedding_cache == "sqlite_pending_supersession":
+        result.update(
+            run=25,
+            followup_to_run=24,
+            method="fts5-e5-small-v2-rrf60-int8-fp16-rerank-pending-supersession",
+            hypothesis=(
+                "A pending document update can supersede its stale embedding job, expose only "
+                "the latest FTS5 content, and attach only the newest vector and cache key while "
+                "preserving Run 024 retrieval."
+            ),
+        )
+        result["embedding_queue_rule"] = {
+            "states": ["pending", "processing", "ready", "superseded"],
+            "ordering": "ascending ingestion ordinal, then revision",
+            "batch_size": 4,
+            "preseeded_cache_documents": len(corpus) // 2,
+            "update_document": "d040",
+            "update_suffix": " Cache experiment revision two.",
+            "update_timing": "after initial enqueue and before model loading or worker claim",
+            "update_transaction_wall_seconds_at_most": 0.05,
+            "update_transaction_cpu_seconds_at_most": 0.05,
+            "expected_active_jobs": len(corpus),
+            "expected_superseded_jobs": 1,
+            "expected_worker_cache_hits": len(corpus) // 2,
+            "expected_worker_cache_misses": len(corpus) // 2,
+            "database_growth_at_most_percent": 5.0,
+            "worker_wall_seconds_at_most": 1.0,
+            "worker_cpu_seconds_at_most": 2.0,
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -421,17 +452,31 @@ def main():
         queue_enabled = args.embedding_cache in (
             "sqlite_pending_queue",
             "sqlite_pending_recovery",
+            "sqlite_pending_supersession",
         )
         recovery_enabled = args.embedding_cache == "sqlite_pending_recovery"
+        supersession_enabled = args.embedding_cache == "sqlite_pending_supersession"
         if queue_enabled:
-            db.execute(
-                "CREATE TABLE embedding_jobs("
-                "document_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL UNIQUE, "
-                "content_sha256 TEXT NOT NULL, status TEXT NOT NULL "
-                "CHECK(status IN ('pending','processing','ready')), "
-                "attempts INTEGER NOT NULL DEFAULT 0, "
-                "namespace_sha256 TEXT, cache_key TEXT)"
-            )
+            if supersession_enabled:
+                db.execute(
+                    "CREATE TABLE embedding_jobs("
+                    "job_id INTEGER PRIMARY KEY, document_id TEXT NOT NULL, "
+                    "ordinal INTEGER NOT NULL, revision INTEGER NOT NULL, "
+                    "content_sha256 TEXT NOT NULL, status TEXT NOT NULL "
+                    "CHECK(status IN ('pending','processing','ready','superseded')), "
+                    "attempts INTEGER NOT NULL DEFAULT 0, "
+                    "namespace_sha256 TEXT, cache_key TEXT, "
+                    "UNIQUE(document_id,revision))"
+                )
+            else:
+                db.execute(
+                    "CREATE TABLE embedding_jobs("
+                    "document_id TEXT PRIMARY KEY, ordinal INTEGER NOT NULL UNIQUE, "
+                    "content_sha256 TEXT NOT NULL, status TEXT NOT NULL "
+                    "CHECK(status IN ('pending','processing','ready')), "
+                    "attempts INTEGER NOT NULL DEFAULT 0, "
+                    "namespace_sha256 TEXT, cache_key TEXT)"
+                )
             db.execute(
                 "CREATE INDEX embedding_jobs_status_ordinal "
                 "ON embedding_jobs(status,ordinal)"
@@ -442,9 +487,15 @@ def main():
                 "INSERT INTO memory VALUES (?,?,?,?)",
                 [(d["id"], d["text"], d["source"], d["ts"]) for d in corpus],
             )
-            db.executemany(
+            job_insert_sql = (
+                "INSERT INTO embedding_jobs(document_id,ordinal,revision,content_sha256,status) "
+                "VALUES (?,?,1,?,'pending')"
+                if supersession_enabled else
                 "INSERT INTO embedding_jobs(document_id,ordinal,content_sha256,status) "
-                "VALUES (?,?,?,'pending')",
+                "VALUES (?,?,?,'pending')"
+            )
+            db.executemany(
+                job_insert_sql,
                 [
                     (
                         document["id"],
@@ -469,6 +520,70 @@ def main():
                     ).fetchone()[0],
                 }
             }
+            if supersession_enabled:
+                update_document = "d040"
+                update_suffix = " Cache experiment revision two."
+                update_index = next(
+                    index for index, document in enumerate(corpus)
+                    if document["id"] == update_document
+                )
+                old_text = corpus[update_index]["text"]
+                latest_text = old_text + update_suffix
+                old_content_sha256 = hashlib.sha256(
+                    unicodedata.normalize("NFC", old_text).strip().encode()
+                ).hexdigest()
+                latest_content_sha256 = hashlib.sha256(
+                    unicodedata.normalize("NFC", latest_text).strip().encode()
+                ).hexdigest()
+                update_started = time.perf_counter()
+                update_cpu_started = time.process_time()
+                db.execute("BEGIN")
+                fts_updated = db.execute(
+                    "UPDATE memory SET text=? WHERE id=?",
+                    (latest_text, update_document),
+                ).rowcount
+                superseded_jobs = db.execute(
+                    "UPDATE embedding_jobs SET status='superseded' "
+                    "WHERE document_id=? AND status='pending'",
+                    (update_document,),
+                ).rowcount
+                db.execute(
+                    "INSERT INTO embedding_jobs("
+                    "document_id,ordinal,revision,content_sha256,status) "
+                    "VALUES (?,?,?,?, 'pending')",
+                    (update_document, update_index, 2, latest_content_sha256),
+                )
+                db.commit()
+                update_wall = time.perf_counter() - update_started
+                update_cpu = time.process_time() - update_cpu_started
+                corpus[update_index] = {**corpus[update_index], "text": latest_text}
+                fts_rows = db.execute(
+                    "SELECT text FROM memory WHERE id=?",
+                    (update_document,),
+                ).fetchall()
+                result["ingestion_lifecycle"]["pending_update"] = {
+                    "document_id": update_document,
+                    "ordinal": update_index,
+                    "old_revision": 1,
+                    "latest_revision": 2,
+                    "old_content_sha256": old_content_sha256,
+                    "latest_content_sha256": latest_content_sha256,
+                    "content_changed": old_content_sha256 != latest_content_sha256,
+                    "fts_rows_updated": fts_updated,
+                    "jobs_superseded": superseded_jobs,
+                    "wall_seconds": update_wall,
+                    "cpu_seconds": update_cpu,
+                    "fts_rows_for_document": len(fts_rows),
+                    "fts_latest_content_sha256": hashlib.sha256(
+                        unicodedata.normalize("NFC", fts_rows[0][0]).strip().encode()
+                    ).hexdigest(),
+                    "pending_jobs_after_update": db.execute(
+                        "SELECT count(*) FROM embedding_jobs WHERE status='pending'"
+                    ).fetchone()[0],
+                    "superseded_jobs_after_update": db.execute(
+                        "SELECT count(*) FROM embedding_jobs WHERE status='superseded'"
+                    ).fetchone()[0],
+                }
         else:
             db.executemany(
                 "INSERT INTO memory VALUES (?,?,?,?)",
@@ -490,6 +605,9 @@ def main():
                 "pending_jobs_after": db.execute(
                     "SELECT count(*) FROM embedding_jobs WHERE status='pending'"
                 ).fetchone()[0],
+                "superseded_jobs": db.execute(
+                    "SELECT count(*) FROM embedding_jobs WHERE status='superseded'"
+                ).fetchone()[0] if supersession_enabled else 0,
                 "original": {
                     key: result["baseline"]["original"][key]
                     for key in (
@@ -715,23 +833,26 @@ def main():
                 worker_inference_cpu = 0.0
                 while True:
                     rows = db.execute(
-                        "SELECT j.document_id,j.ordinal,m.text "
+                        "SELECT j.rowid,j.document_id,j.ordinal,m.text,j.content_sha256 "
                         "FROM embedding_jobs j JOIN memory m ON m.id=j.document_id "
-                        "WHERE j.status='pending' ORDER BY j.ordinal LIMIT 4"
+                        "WHERE j.status='pending' ORDER BY j.ordinal,j.rowid LIMIT 4"
                     ).fetchall()
                     if not rows:
                         break
                     db.executemany(
                         "UPDATE embedding_jobs SET status='processing',attempts=attempts+1 "
-                        "WHERE document_id=? AND status='pending'",
+                        "WHERE rowid=? AND status='pending'",
                         [(row[0],) for row in rows],
                     )
                     db.commit()
                     batch_vectors, measured = cached_document_embeddings(
-                        [row[2] for row in rows], namespace, conventions["document_prefix"]
+                        [row[3] for row in rows], namespace, conventions["document_prefix"]
                     )
-                    for (document_id, ordinal, text), vector in zip(rows, batch_vectors):
+                    for (job_id, document_id, ordinal, text, content_sha256), vector in zip(
+                        rows, batch_vectors
+                    ):
                         normalized = unicodedata.normalize("NFC", text).strip()
+                        assert hashlib.sha256(normalized.encode()).hexdigest() == content_sha256
                         key_input = (
                             namespace.encode() + b"\0"
                             + conventions["document_prefix"].encode() + b"\0"
@@ -740,8 +861,8 @@ def main():
                         cache_key = hashlib.sha256(key_input).hexdigest()
                         db.execute(
                             "UPDATE embedding_jobs SET status='ready',namespace_sha256=?,"
-                            "cache_key=? WHERE document_id=? AND status='processing'",
-                            (namespace_sha256, cache_key, document_id),
+                            "cache_key=? WHERE rowid=? AND status='processing'",
+                            (namespace_sha256, cache_key, job_id),
                         )
                     db.commit()
                     worker_hits += measured["hits"]
@@ -751,7 +872,7 @@ def main():
                     batch_metrics.append(
                         {
                             "batch": len(batch_metrics) + 1,
-                            "ordinals": [row[1] for row in rows],
+                            "ordinals": [row[2] for row in rows],
                             "documents": len(rows),
                             "hits": measured["hits"],
                             "misses": measured["misses"],
@@ -782,6 +903,51 @@ def main():
                     "SELECT count(*),count(DISTINCT document_id),count(DISTINCT cache_key) "
                     "FROM embedding_jobs WHERE status='ready'"
                 ).fetchone()
+                if supersession_enabled:
+                    pending_update = result["ingestion_lifecycle"]["pending_update"]
+                    update_index = pending_update["ordinal"]
+                    original_text = load_jsonl(ROOT / "corpus.jsonl")[update_index]["text"]
+                    old_cache_key = hashlib.sha256(
+                        namespace.encode() + b"\0"
+                        + conventions["document_prefix"].encode() + b"\0"
+                        + unicodedata.normalize("NFC", original_text).strip().encode()
+                    ).hexdigest()
+                    latest_text = corpus[update_index]["text"]
+                    latest_cache_key = hashlib.sha256(
+                        namespace.encode() + b"\0"
+                        + conventions["document_prefix"].encode() + b"\0"
+                        + unicodedata.normalize("NFC", latest_text).strip().encode()
+                    ).hexdigest()
+                    stale_job = db.execute(
+                        "SELECT status,attempts,namespace_sha256,cache_key,content_sha256 "
+                        "FROM embedding_jobs WHERE document_id='d040' AND revision=1"
+                    ).fetchone()
+                    latest_job = db.execute(
+                        "SELECT status,attempts,namespace_sha256,cache_key,content_sha256 "
+                        "FROM embedding_jobs WHERE document_id='d040' AND revision=2"
+                    ).fetchone()
+                    result["ingestion_lifecycle"]["pending_update"]["final_attachment"] = {
+                        "old_cache_key": old_cache_key,
+                        "latest_cache_key": latest_cache_key,
+                        "old_cache_entry_exists": db.execute(
+                            "SELECT EXISTS(SELECT 1 FROM embedding_cache WHERE cache_key=?)",
+                            (old_cache_key,),
+                        ).fetchone()[0] == 1,
+                        "latest_cache_entry_exists": db.execute(
+                            "SELECT EXISTS(SELECT 1 FROM embedding_cache WHERE cache_key=?)",
+                            (latest_cache_key,),
+                        ).fetchone()[0] == 1,
+                        "superseded_job": {
+                            "status": stale_job[0], "attempts": stale_job[1],
+                            "namespace_sha256": stale_job[2], "cache_key": stale_job[3],
+                            "content_sha256": stale_job[4],
+                        },
+                        "latest_job": {
+                            "status": latest_job[0], "attempts": latest_job[1],
+                            "namespace_sha256": latest_job[2], "cache_key": latest_job[3],
+                            "content_sha256": latest_job[4],
+                        },
+                    }
                 result["embedding_cache"] = {
                     "namespace_sha256": namespace_sha256,
                     "preseed": preseed_cache,
@@ -799,6 +965,11 @@ def main():
                     "wall_seconds": worker_wall,
                     "cpu_seconds": worker_cpu,
                     "status_counts": {
+                        "pending": status_counts.get("pending", 0),
+                        "processing": status_counts.get("processing", 0),
+                        "ready": status_counts.get("ready", 0),
+                        "superseded": status_counts.get("superseded", 0),
+                    } if supersession_enabled else {
                         "pending": status_counts.get("pending", 0),
                         "processing": status_counts.get("processing", 0),
                         "ready": status_counts.get("ready", 0),
@@ -1099,7 +1270,8 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (23 if args.embedding_cache == "sqlite_pending_recovery" else
+        reference_run = (24 if args.embedding_cache == "sqlite_pending_supersession" else
+                         23 if args.embedding_cache == "sqlite_pending_recovery" else
                          22 if args.embedding_cache == "sqlite_pending_queue" else
                          21 if args.embedding_cache == "sqlite_namespace_gc" else
                          20 if cache_enabled else
@@ -1141,7 +1313,11 @@ def main():
         cache_gate = None
         if cache_enabled:
             cache_metrics = result["embedding_cache"]
-            if args.embedding_cache in ("sqlite_pending_queue", "sqlite_pending_recovery"):
+            if args.embedding_cache in (
+                "sqlite_pending_queue",
+                "sqlite_pending_recovery",
+                "sqlite_pending_supersession",
+            ):
                 lifecycle = result["ingestion_lifecycle"]
                 enqueue = lifecycle["enqueue"]
                 pending_fts = lifecycle["fts_while_pending"]
@@ -1169,7 +1345,6 @@ def main():
                         and pending_fts["pending_jobs_before"] == len(corpus)
                         and pending_fts["pending_jobs_after"] == len(corpus)
                         and not pending_fts["model_loaded"]
-                        and lexical_rankings_exact
                     ),
                     "enqueue_below_fifty_ms": (
                         enqueue["wall_seconds"] <= 0.05
@@ -1190,7 +1365,7 @@ def main():
                         and worker["cpu_seconds"] <= 2.0
                     ),
                     f"run_{reference_run:03}_rankings_and_context_exact": (
-                        retrieval_rankings_exact and context_exact
+                        lexical_rankings_exact and retrieval_rankings_exact and context_exact
                     ),
                 }
                 if recovery_enabled:
@@ -1225,6 +1400,64 @@ def main():
                         "database_not_larger_than_run_023": (
                             result["vector_db_bytes_including_fts_and_raw_records"]
                             <= reference["vector_db_bytes_including_fts_and_raw_records"]
+                        ),
+                    })
+                elif supersession_enabled:
+                    update = lifecycle["pending_update"]
+                    attachment = update["final_attachment"]
+                    cache_gate.update({
+                        "pending_update_committed_below_fifty_ms": (
+                            update["wall_seconds"] <= 0.05
+                            and update["cpu_seconds"] <= 0.05
+                            and update["content_changed"]
+                        ),
+                        "one_stale_job_superseded_and_one_latest_pending": (
+                            update["jobs_superseded"] == 1
+                            and update["pending_jobs_after_update"] == len(corpus)
+                            and update["superseded_jobs_after_update"] == 1
+                        ),
+                        "fts_exposes_only_latest_content": (
+                            update["fts_rows_updated"] == 1
+                            and update["fts_rows_for_document"] == 1
+                            and update["fts_latest_content_sha256"]
+                            == update["latest_content_sha256"]
+                        ),
+                        "only_latest_revision_embedded_and_attached": (
+                            not attachment["old_cache_entry_exists"]
+                            and attachment["latest_cache_entry_exists"]
+                            and attachment["superseded_job"] == {
+                                "status": "superseded",
+                                "attempts": 0,
+                                "namespace_sha256": None,
+                                "cache_key": None,
+                                "content_sha256": update["old_content_sha256"],
+                            }
+                            and attachment["latest_job"] == {
+                                "status": "ready",
+                                "attempts": 1,
+                                "namespace_sha256": cache_metrics["namespace_sha256"],
+                                "cache_key": attachment["latest_cache_key"],
+                                "content_sha256": update["latest_content_sha256"],
+                            }
+                        ),
+                        "all_active_jobs_ready_once_with_unique_outputs": (
+                            worker["status_counts"] == {
+                                "pending": 0,
+                                "processing": 0,
+                                "ready": len(corpus),
+                                "superseded": 1,
+                            }
+                            and worker["attempts"] == {0: 1, 1: len(corpus)}
+                            and worker["ready_output"] == {
+                                "rows": len(corpus),
+                                "unique_documents": len(corpus),
+                                "unique_cache_keys": len(corpus),
+                            }
+                            and cache_metrics["entries_after_worker"] == len(corpus)
+                        ),
+                        "database_growth_at_most_five_percent": (
+                            result["vector_db_bytes_including_fts_and_raw_records"]
+                            <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.05
                         ),
                     })
                 else:
@@ -1343,7 +1576,11 @@ def main():
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the pending-recovery extension to Run {reference_run}: four durably stranded processing jobs survived reopen, were reclaimed, completed with unique ready outputs, and final retrieval/evidence/context matched."
+            notes=(f"Accepted as the pending-supersession extension to Run {reference_run}: the stale pending job was retained as history but never embedded, only the latest FTS5 content and cache attachment became active, and retrieval/evidence/context matched."
+                   if args.embedding_cache == "sqlite_pending_supersession" and accepted else
+                   f"Rejected as a pending-supersession extension to Run {reference_run}: latest-content provenance, stale-job isolation, final parity, or a resource gate failed."
+                   if args.embedding_cache == "sqlite_pending_supersession" else
+                   f"Accepted as the pending-recovery extension to Run {reference_run}: four durably stranded processing jobs survived reopen, were reclaimed, completed with unique ready outputs, and final retrieval/evidence/context matched."
                    if args.embedding_cache == "sqlite_pending_recovery" and accepted else
                    f"Rejected as a pending-recovery extension to Run {reference_run}: durable interruption, bounded reclaim, unique completion, final parity, or a resource gate failed."
                    if args.embedding_cache == "sqlite_pending_recovery" else

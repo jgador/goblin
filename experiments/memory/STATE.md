@@ -66,6 +66,13 @@ documents and cache keys, with exactly four second attempts and 36 first
 attempts. Retrieval, evidence, context, and 630,784-byte SQLite size matched Run
 023 exactly.
 
+Run 025 did not replace Run 024. It correctly retained the stale revision as a
+superseded historical job, embedded only the newest `d040` content, and attached
+only the newest cache key. However, changing the content naturally changed four
+lexical, nine vector-only, and five hybrid query rankings. Mean held-out hybrid
+context rose from 131.40 to 131.85 tokens, so the predeclared exact-parity gate
+rejected it. Run 024 remains the operational champion.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
 Its process RSS was about 15 MiB in the Run 010 environment versus 229.668 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
@@ -246,6 +253,13 @@ champion while Run 005 remained the lightweight fallback.
   0.484 ms, resumed the exact interrupted batch first, and preserved all Run
   023 rankings and context. This validates deterministic restart recovery on
   the fixed corpus, not lease expiry or concurrent-worker coordination.
+- Run 025 showed that pending-version supersession can prevent stale embedding
+  work and preserve job provenance, but exact comparison with the pre-update
+  champion is the wrong control for a real content change. The declared `d040`
+  update changed retrieval membership even though hybrid quality and held-out
+  evidence remained intact. A follow-up should compare the asynchronous result
+  against a synchronous reindex of the same updated corpus, not tune the update
+  text against frozen rankings.
 
 ## Next hypotheses
 
@@ -286,9 +300,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
     base ingestion lifecycle.
 17. Run 024 completed deterministic recovery of a stranded `processing` batch
     after SQLite reopen and is the current operational champion.
-18. Next: update one document while its embedding job is still pending, mark
-    the old job superseded, embed only the newest content, and require latest
-    FTS5 provenance plus no stale vector or cache-key attachment.
+18. Run 025 completed pending-update supersession. Correctness and provenance
+    passed, but exact Run 024 ranking/context parity failed, so it was rejected.
+19. Next: build a synchronous updated-corpus control for the same declared
+    `d040` revision and require the asynchronous queue to reproduce that control
+    exactly, while reporting natural drift from the unchanged benchmark
+    separately.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -315,6 +332,12 @@ Reproduce the current Run 024 operational champion after the pinned E5 setup:
 
 ```bash
 .artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_recovery --threads 2
+```
+
+Reproduce rejected Run 025 after the same pinned E5 setup:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_supersession --threads 2
 ```
 
 Run 006 used GPT-6.1 Sol as the requested orchestration model. The orchestration model is not independently verifiable from the experiment harness; retrieval and evidence scoring use no LLM or external API.
