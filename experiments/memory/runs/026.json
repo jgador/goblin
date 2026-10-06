@@ -1,0 +1,4268 @@
+{
+  "answer_generation_evaluated": false,
+  "baseline": {
+    "heldout": {
+      "context_assembly_ms_mean": 0.02188985001794208,
+      "context_tokens_approx_mean": 152.35,
+      "cpu_seconds": 0.0026918310000000056,
+      "details": [
+        {
+          "context_chars": 680,
+          "context_tokens_approx": 170,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h001",
+          "recall": 1.0,
+          "top": [
+            "d006",
+            "d004",
+            "d005",
+            "d025",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 474,
+          "context_tokens_approx": 119,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h002",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d019",
+            "d004",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 690,
+          "context_tokens_approx": 173,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h003",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d034",
+            "d010",
+            "d013",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 618,
+          "context_tokens_approx": 155,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h004",
+          "recall": 1.0,
+          "top": [
+            "d010",
+            "d034",
+            "d011",
+            "d028",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 577,
+          "context_tokens_approx": 145,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h005",
+          "recall": 1.0,
+          "top": [
+            "d011",
+            "d016",
+            "d012",
+            "d017",
+            "d009"
+          ]
+        },
+        {
+          "context_chars": 600,
+          "context_tokens_approx": 150,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h006",
+          "recall": 1.0,
+          "top": [
+            "d015",
+            "d028",
+            "d018",
+            "d024",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 577,
+          "context_tokens_approx": 145,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h007",
+          "recall": 1.0,
+          "top": [
+            "d016",
+            "d017",
+            "d009",
+            "d011",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 641,
+          "context_tokens_approx": 161,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h008",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d023",
+            "d032",
+            "d019",
+            "d013"
+          ]
+        },
+        {
+          "context_chars": 633,
+          "context_tokens_approx": 159,
+          "evidence_preserved": true,
+          "first_relevant_rank": 2,
+          "query": "h009",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d023",
+            "d025",
+            "d031",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 561,
+          "context_tokens_approx": 141,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h010",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d004",
+            "d016",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 642,
+          "context_tokens_approx": 161,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h011",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d030",
+            "d031",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 606,
+          "context_tokens_approx": 152,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h012",
+          "recall": 1.0,
+          "top": [
+            "d031",
+            "d033",
+            "d022",
+            "d030",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 750,
+          "context_tokens_approx": 188,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h013",
+          "recall": 1.0,
+          "top": [
+            "d035",
+            "d033",
+            "d034",
+            "d037",
+            "d036"
+          ]
+        },
+        {
+          "context_chars": 657,
+          "context_tokens_approx": 165,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h014",
+          "recall": 1.0,
+          "top": [
+            "d037",
+            "d036",
+            "d005",
+            "d033",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 613,
+          "context_tokens_approx": 154,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h015",
+          "recall": 1.0,
+          "top": [
+            "d038",
+            "d016",
+            "d011",
+            "d031",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 729,
+          "context_tokens_approx": 183,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h016",
+          "recall": 1.0,
+          "top": [
+            "d039",
+            "d020",
+            "d024",
+            "d034",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 627,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h017",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d030",
+            "d038",
+            "d009",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 467,
+          "context_tokens_approx": 117,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h018",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d014",
+            "d028",
+            "d015",
+            "d011"
+          ]
+        },
+        {
+          "context_chars": 627,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h019",
+          "recall": 1.0,
+          "top": [
+            "d005",
+            "d013",
+            "d009",
+            "d019",
+            "d035"
+          ]
+        },
+        {
+          "context_chars": 377,
+          "context_tokens_approx": 95,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h020",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d010",
+            "d009"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 0.11265164998803812,
+      "end_to_end_ms_p95": 0.18107299979419622,
+      "evidence_at_5": 1.0,
+      "hit_at_1": 0.95,
+      "k": 5,
+      "mrr_at_5": 0.975,
+      "peak_rss_mib": 18.168,
+      "query_count": 20,
+      "query_embedding_ms_mean": 0.0,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.08938989999478508
+    },
+    "original": {
+      "context_assembly_ms_mean": 0.022803349986588728,
+      "context_tokens_approx_mean": 151.25,
+      "cpu_seconds": 0.0023585040000000113,
+      "details": [
+        {
+          "context_chars": 621,
+          "context_tokens_approx": 156,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q001",
+          "recall": 1.0,
+          "top": [
+            "d002",
+            "d003",
+            "d007",
+            "d010"
+          ]
+        },
+        {
+          "context_chars": 499,
+          "context_tokens_approx": 125,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q002",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d005",
+            "d004",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 572,
+          "context_tokens_approx": 143,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q003",
+          "recall": 1.0,
+          "top": [
+            "d004",
+            "d009",
+            "d006",
+            "d010",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 560,
+          "context_tokens_approx": 140,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q004",
+          "recall": 1.0,
+          "top": [
+            "d019",
+            "d020",
+            "d016",
+            "d011",
+            "d031"
+          ]
+        },
+        {
+          "context_chars": 590,
+          "context_tokens_approx": 148,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q005",
+          "recall": 1.0,
+          "top": [
+            "d012",
+            "d014",
+            "d011",
+            "d016",
+            "d017"
+          ]
+        },
+        {
+          "context_chars": 735,
+          "context_tokens_approx": 184,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q006",
+          "recall": 1.0,
+          "top": [
+            "d013",
+            "d012",
+            "d007",
+            "d040",
+            "d037"
+          ]
+        },
+        {
+          "context_chars": 620,
+          "context_tokens_approx": 155,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q007",
+          "recall": 0.5,
+          "top": [
+            "d021",
+            "d015",
+            "d014",
+            "d024",
+            "d025"
+          ]
+        },
+        {
+          "context_chars": 583,
+          "context_tokens_approx": 146,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q008",
+          "recall": 0.5,
+          "top": [
+            "d022",
+            "d039",
+            "d009",
+            "d005",
+            "d021"
+          ]
+        },
+        {
+          "context_chars": 645,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q009",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d017",
+            "d022",
+            "d015"
+          ]
+        },
+        {
+          "context_chars": 612,
+          "context_tokens_approx": 153,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q010",
+          "recall": 1.0,
+          "top": [
+            "d025",
+            "d011",
+            "d016",
+            "d012",
+            "d017"
+          ]
+        },
+        {
+          "context_chars": 483,
+          "context_tokens_approx": 121,
+          "evidence_preserved": null,
+          "first_relevant_rank": 3,
+          "query": "q011",
+          "recall": 1.0,
+          "top": [
+            "d014",
+            "d028",
+            "d026",
+            "d020",
+            "d027"
+          ]
+        },
+        {
+          "context_chars": 557,
+          "context_tokens_approx": 140,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q012",
+          "recall": 1.0,
+          "top": [
+            "d027",
+            "d026",
+            "d032",
+            "d017",
+            "d036"
+          ]
+        },
+        {
+          "context_chars": 422,
+          "context_tokens_approx": 106,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q013",
+          "recall": 1.0,
+          "top": [
+            "d028",
+            "d015",
+            "d012",
+            "d027",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 664,
+          "context_tokens_approx": 166,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q014",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d020",
+            "d034",
+            "d030"
+          ]
+        },
+        {
+          "context_chars": 627,
+          "context_tokens_approx": 157,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q015",
+          "recall": 1.0,
+          "top": [
+            "d030",
+            "d031",
+            "d014",
+            "d010",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 643,
+          "context_tokens_approx": 161,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q016",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d010",
+            "d030",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 676,
+          "context_tokens_approx": 169,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q017",
+          "recall": 1.0,
+          "top": [
+            "d033",
+            "d035",
+            "d031",
+            "d034",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 675,
+          "context_tokens_approx": 169,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q018",
+          "recall": 1.0,
+          "top": [
+            "d034",
+            "d035",
+            "d011",
+            "d033",
+            "d010"
+          ]
+        },
+        {
+          "context_chars": 710,
+          "context_tokens_approx": 178,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q019",
+          "recall": 1.0,
+          "top": [
+            "d036",
+            "d037",
+            "d017",
+            "d024",
+            "d019"
+          ]
+        },
+        {
+          "context_chars": 584,
+          "context_tokens_approx": 146,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q020",
+          "recall": 1.0,
+          "top": [
+            "d040",
+            "d015",
+            "d018",
+            "d039",
+            "d013"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 0.11294520004412334,
+      "end_to_end_ms_p95": 0.22751400001652655,
+      "evidence_at_5": null,
+      "hit_at_1": 0.9,
+      "k": 5,
+      "mrr_at_5": 0.941667,
+      "peak_rss_mib": 18.168,
+      "query_count": 20,
+      "query_embedding_ms_mean": 0.0,
+      "recall_at_5": 0.95,
+      "search_ms_mean": 0.0884355500033962
+    }
+  },
+  "baseline_db_bytes": 57344,
+  "benchmark_sha256": "c4d740bdf833d7c9f6294fb42718354d4c764c35d71b403b325af3434a6ebd74",
+  "budget_rule": {
+    "additional_clause_order": "retrieval ranks two through five, then selected clause order",
+    "approximate_token_target": 128,
+    "overflow": "stop admitting optional clauses before the first overflow; never truncate a clause",
+    "payload_character_target": 512,
+    "protected": "all Run 014 selected clauses from rank one, plus the first selected clause from every lower-rank record",
+    "protected_overflow": "retain protected clauses even if they exceed the target",
+    "provenance": "full records remain in SQLite; the isolated replay records every retained and omitted source clause",
+    "selected_before_evaluation": true
+  },
+  "candidate": {
+    "heldout": {
+      "context_assembly_ms_mean": 0.09231599998429374,
+      "context_tokens_approx_mean": 131.85,
+      "cpu_seconds": 0.32587263499999963,
+      "details": [
+        {
+          "context_chars": 477,
+          "context_tokens_approx": 120,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h001",
+          "recall": 1.0,
+          "top": [
+            "d006",
+            "d004",
+            "d005",
+            "d003",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 384,
+          "context_tokens_approx": 96,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h002",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d019",
+            "d004",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 561,
+          "context_tokens_approx": 141,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h003",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d034",
+            "d010",
+            "d038",
+            "d005"
+          ]
+        },
+        {
+          "context_chars": 470,
+          "context_tokens_approx": 118,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h004",
+          "recall": 1.0,
+          "top": [
+            "d010",
+            "d032",
+            "d015",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 429,
+          "context_tokens_approx": 108,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h005",
+          "recall": 1.0,
+          "top": [
+            "d011",
+            "d009",
+            "d012",
+            "d017",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 540,
+          "context_tokens_approx": 135,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h006",
+          "recall": 1.0,
+          "top": [
+            "d015",
+            "d024",
+            "d002",
+            "d003",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 567,
+          "context_tokens_approx": 142,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h007",
+          "recall": 1.0,
+          "top": [
+            "d016",
+            "d017",
+            "d009",
+            "d011",
+            "d031"
+          ]
+        },
+        {
+          "context_chars": 526,
+          "context_tokens_approx": 132,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h008",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d023",
+            "d019",
+            "d040",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 572,
+          "context_tokens_approx": 143,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h009",
+          "recall": 1.0,
+          "top": [
+            "d023",
+            "d025",
+            "d009",
+            "d015",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 466,
+          "context_tokens_approx": 117,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h010",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d014",
+            "d028",
+            "d004"
+          ]
+        },
+        {
+          "context_chars": 548,
+          "context_tokens_approx": 137,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h011",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d031",
+            "d028",
+            "d030",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 575,
+          "context_tokens_approx": 144,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h012",
+          "recall": 1.0,
+          "top": [
+            "d031",
+            "d030",
+            "d032",
+            "d029",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 775,
+          "context_tokens_approx": 194,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h013",
+          "recall": 1.0,
+          "top": [
+            "d035",
+            "d033",
+            "d034",
+            "d037",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 475,
+          "context_tokens_approx": 119,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h014",
+          "recall": 1.0,
+          "top": [
+            "d037",
+            "d036",
+            "d035",
+            "d002",
+            "d005"
+          ]
+        },
+        {
+          "context_chars": 563,
+          "context_tokens_approx": 141,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h015",
+          "recall": 1.0,
+          "top": [
+            "d038",
+            "d024",
+            "d032",
+            "d016",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 643,
+          "context_tokens_approx": 161,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h016",
+          "recall": 1.0,
+          "top": [
+            "d039",
+            "d024",
+            "d040",
+            "d034",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 628,
+          "context_tokens_approx": 157,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h017",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d030",
+            "d031",
+            "d029",
+            "d022"
+          ]
+        },
+        {
+          "context_chars": 459,
+          "context_tokens_approx": 115,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h018",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d011",
+            "d028",
+            "d014",
+            "d009"
+          ]
+        },
+        {
+          "context_chars": 448,
+          "context_tokens_approx": 112,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h019",
+          "recall": 1.0,
+          "top": [
+            "d005",
+            "d009",
+            "d013",
+            "d022",
+            "d006"
+          ]
+        },
+        {
+          "context_chars": 418,
+          "context_tokens_approx": 105,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h020",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d009",
+            "d003"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 8.05811260001974,
+      "end_to_end_ms_p95": 9.347925999918516,
+      "evidence_at_5": 1.0,
+      "fp16_rerank_ms_mean": 0.16002670000716535,
+      "hit_at_1": 1.0,
+      "int8_candidate_search_ms_mean": 0.2822585499984598,
+      "k": 5,
+      "mrr_at_5": 1.0,
+      "peak_rss_mib": 230.902,
+      "query_count": 20,
+      "query_embedding_ms_mean": 7.339647149990469,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.6211189500163528
+    },
+    "original": {
+      "context_assembly_ms_mean": 0.08856759999389396,
+      "context_tokens_approx_mean": 128.2,
+      "cpu_seconds": 0.280941243,
+      "details": [
+        {
+          "context_chars": 471,
+          "context_tokens_approx": 118,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q001",
+          "recall": 1.0,
+          "top": [
+            "d002",
+            "d003",
+            "d018",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 395,
+          "context_tokens_approx": 99,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q002",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d005",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 425,
+          "context_tokens_approx": 107,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q003",
+          "recall": 1.0,
+          "top": [
+            "d004",
+            "d009",
+            "d018",
+            "d011",
+            "d006"
+          ]
+        },
+        {
+          "context_chars": 484,
+          "context_tokens_approx": 121,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q004",
+          "recall": 1.0,
+          "top": [
+            "d019",
+            "d020",
+            "d012",
+            "d032",
+            "d017"
+          ]
+        },
+        {
+          "context_chars": 373,
+          "context_tokens_approx": 94,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q005",
+          "recall": 1.0,
+          "top": [
+            "d012",
+            "d014",
+            "d009",
+            "d032",
+            "d013"
+          ]
+        },
+        {
+          "context_chars": 442,
+          "context_tokens_approx": 111,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q006",
+          "recall": 1.0,
+          "top": [
+            "d013",
+            "d012",
+            "d040",
+            "d016",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 677,
+          "context_tokens_approx": 170,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q007",
+          "recall": 1.0,
+          "top": [
+            "d021",
+            "d024",
+            "d015",
+            "d025",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 507,
+          "context_tokens_approx": 127,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q008",
+          "recall": 0.5,
+          "top": [
+            "d022",
+            "d039",
+            "d009",
+            "d021",
+            "d013"
+          ]
+        },
+        {
+          "context_chars": 645,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q009",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d022",
+            "d017",
+            "d015"
+          ]
+        },
+        {
+          "context_chars": 557,
+          "context_tokens_approx": 140,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q010",
+          "recall": 1.0,
+          "top": [
+            "d025",
+            "d021",
+            "d024",
+            "d011",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 429,
+          "context_tokens_approx": 108,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q011",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d014",
+            "d028",
+            "d027",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 411,
+          "context_tokens_approx": 103,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q012",
+          "recall": 1.0,
+          "top": [
+            "d027",
+            "d026",
+            "d032",
+            "d012",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 422,
+          "context_tokens_approx": 106,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q013",
+          "recall": 1.0,
+          "top": [
+            "d028",
+            "d015",
+            "d012",
+            "d018",
+            "d027"
+          ]
+        },
+        {
+          "context_chars": 646,
+          "context_tokens_approx": 162,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q014",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d030",
+            "d031",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 616,
+          "context_tokens_approx": 154,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q015",
+          "recall": 1.0,
+          "top": [
+            "d030",
+            "d031",
+            "d029",
+            "d032",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 553,
+          "context_tokens_approx": 139,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q016",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d029",
+            "d030",
+            "d010"
+          ]
+        },
+        {
+          "context_chars": 500,
+          "context_tokens_approx": 125,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q017",
+          "recall": 1.0,
+          "top": [
+            "d033",
+            "d035",
+            "d034",
+            "d032",
+            "d031"
+          ]
+        },
+        {
+          "context_chars": 469,
+          "context_tokens_approx": 118,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q018",
+          "recall": 1.0,
+          "top": [
+            "d034",
+            "d035",
+            "d033",
+            "d010",
+            "d016"
+          ]
+        },
+        {
+          "context_chars": 617,
+          "context_tokens_approx": 155,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q019",
+          "recall": 1.0,
+          "top": [
+            "d036",
+            "d037",
+            "d024",
+            "d033",
+            "d019"
+          ]
+        },
+        {
+          "context_chars": 579,
+          "context_tokens_approx": 145,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q020",
+          "recall": 1.0,
+          "top": [
+            "d040",
+            "d039",
+            "d018",
+            "d015",
+            "d024"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 7.037565249981981,
+      "end_to_end_ms_p95": 8.503981999865573,
+      "evidence_at_5": null,
+      "fp16_rerank_ms_mean": 0.15872284997158204,
+      "hit_at_1": 0.95,
+      "int8_candidate_search_ms_mean": 0.2941256500207601,
+      "k": 5,
+      "mrr_at_5": 0.975,
+      "peak_rss_mib": 230.902,
+      "query_count": 20,
+      "query_embedding_ms_mean": 6.30578064999554,
+      "recall_at_5": 0.975,
+      "search_ms_mean": 0.6380694499853234
+    }
+  },
+  "champion": true,
+  "champion_comparison": {
+    "cache_gate": {
+      "all_active_jobs_ready_once_with_unique_outputs": true,
+      "all_records_fts_visible_while_pending": true,
+      "champion_context_growth_at_most_five_percent": true,
+      "database_growth_at_most_five_percent": true,
+      "enqueue_below_fifty_ms": true,
+      "fts_exposes_only_latest_content": true,
+      "half_warm_cache_reused": true,
+      "one_stale_job_superseded_and_one_latest_pending": true,
+      "only_latest_revision_embedded_and_attached": true,
+      "pending_update_committed_below_fifty_ms": true,
+      "synchronous_control_quality_evidence_context_exact": true,
+      "synchronous_control_rankings_exact": true,
+      "synchronous_control_vectors_exact": true,
+      "ten_fifo_batches_of_four": true,
+      "worker_within_fixed_bounds": true
+    },
+    "context_growth_within_five_percent": true,
+    "context_not_increased": false,
+    "context_reduced_on_both_sets": false,
+    "quality_match": true,
+    "reference_method": "fts5-e5-small-v2-rrf60-int8-fp16-rerank-pending-recovery",
+    "reference_run": 24,
+    "resource_improvements": {
+      "heldout_context_tokens": false,
+      "heldout_cpu_seconds": true,
+      "heldout_end_to_end_ms_mean": true,
+      "model_disk_bytes": false,
+      "original_context_tokens": true,
+      "original_cpu_seconds": true,
+      "original_end_to_end_ms_mean": true,
+      "peak_rss_mib": false,
+      "vector_db_bytes": true
+    },
+    "vector_search_below_2ms": true
+  },
+  "corpus_embedding": {
+    "batch_size": 4,
+    "cache_hits_during_worker": 20,
+    "cache_misses_during_worker": 20,
+    "cpu_seconds": 1.3182443719999999,
+    "documents": 40,
+    "documents_per_second": 60.91467075660928,
+    "inference_cpu_seconds": 1.3099711730000003,
+    "inference_wall_seconds": 0.6523537449998003,
+    "peak_rss_mib": 230.902,
+    "wall_seconds": 0.6566562620000695
+  },
+  "deterministic_compute": true,
+  "dimensions": 384,
+  "embedding_cache": {
+    "entries_after_worker": 40,
+    "namespace_sha256": "2060a8001b7690447c11011780d8bcc8d4d57a09c53697c517ceeaa7c6266e87",
+    "payload_bytes_after_worker": 61440,
+    "preseed": {
+      "database_bytes": 106496,
+      "documents": 20,
+      "documents_per_second": 59.62216142502646,
+      "hits": 0,
+      "inference_cpu_seconds": 0.669938055,
+      "inference_wall_seconds": 0.3350646639999013,
+      "misses": 20,
+      "peak_rss_mib": 230.902,
+      "total_cpu_seconds": 0.6703138150000001,
+      "total_wall_seconds": 0.3354457390000789
+    }
+  },
+  "embedding_queue_rule": {
+    "batch_size": 4,
+    "champion_context_growth_at_most_percent": 5.0,
+    "control": "independent synchronous embedding and SQLite reindex of identical updated corpus",
+    "database_growth_at_most_percent": 5.0,
+    "exact_control_parity": [
+      "fts5",
+      "vector-only",
+      "hybrid",
+      "context",
+      "vectors"
+    ],
+    "ordering": "ascending ingestion ordinal, then revision",
+    "preseeded_cache_documents": 20,
+    "query_vector_comparison": "freeze the first measured query embedding for both indexes while still timing each repeated inference, isolating index parity from CPU reduction-order jitter",
+    "selected_before_evaluation": true,
+    "states": [
+      "pending",
+      "processing",
+      "ready",
+      "superseded"
+    ],
+    "update_document": "d040",
+    "update_suffix": " Cache experiment revision two.",
+    "update_timing": "after initial enqueue and before model loading or worker claim",
+    "worker_cpu_seconds_at_most": 2.0,
+    "worker_wall_seconds_at_most": 1.0
+  },
+  "external_inference_api_calls": 0,
+  "followup_to_run": 25,
+  "fp16_rerank_insert_seconds": 0.00019038700020246324,
+  "fp16_rerank_payload_bytes": 30720,
+  "fusion": {
+    "algorithm": "reciprocal-rank-fusion",
+    "lexical_pool": 10,
+    "output_k_before_supersession_filter": 5,
+    "rrf_k": 60,
+    "selected_before_evaluation": true,
+    "vector_pool": 10,
+    "weights": {
+      "e5": 1,
+      "fts5": 1
+    }
+  },
+  "heldout_sha256": "80d3af75bc7fe4b3b28b8f3076dae5c47d807b6ab48379af94c6ad10b4c0c855",
+  "hypothesis": "The asynchronous pending-supersession path can exactly reproduce an independently embedded synchronous reindex of the same declared update, separating queue correctness from natural content drift.",
+  "ingestion_lifecycle": {
+    "enqueue": {
+      "cpu_seconds": 0.0006309100000000123,
+      "database_bytes": 57344,
+      "documents": 40,
+      "fts_rows": 40,
+      "pending_jobs": 40,
+      "wall_seconds": 0.0006318139999166306
+    },
+    "fts_while_pending": {
+      "heldout": {
+        "context_tokens_approx_mean": 152.35,
+        "cpu_seconds": 0.0026918310000000056,
+        "end_to_end_ms_mean": 0.11265164998803812,
+        "evidence_at_5": 1.0,
+        "hit_at_1": 0.95,
+        "mrr_at_5": 0.975,
+        "recall_at_5": 1.0
+      },
+      "model_loaded": false,
+      "original": {
+        "context_tokens_approx_mean": 151.25,
+        "cpu_seconds": 0.0023585040000000113,
+        "end_to_end_ms_mean": 0.11294520004412334,
+        "hit_at_1": 0.9,
+        "mrr_at_5": 0.941667,
+        "recall_at_5": 0.95
+      },
+      "pending_jobs_after": 40,
+      "pending_jobs_before": 40,
+      "superseded_jobs": 1
+    },
+    "pending_update": {
+      "content_changed": true,
+      "cpu_seconds": 0.0002830919999999848,
+      "document_id": "d040",
+      "final_attachment": {
+        "latest_cache_entry_exists": true,
+        "latest_cache_key": "51781ce35dddd0b8b8f4160164d07245d1d40eb071e5202c4b92b7cc3985a696",
+        "latest_job": {
+          "attempts": 1,
+          "cache_key": "51781ce35dddd0b8b8f4160164d07245d1d40eb071e5202c4b92b7cc3985a696",
+          "content_sha256": "48d55b6995a42b8e689530269fc127c71e7a6964645254dfd6353d41c73a1b58",
+          "namespace_sha256": "2060a8001b7690447c11011780d8bcc8d4d57a09c53697c517ceeaa7c6266e87",
+          "status": "ready"
+        },
+        "old_cache_entry_exists": false,
+        "old_cache_key": "1030b28639a2b6e2c1fff4530d6d8e92c123ee97b999dff6dfe2431e6b59bfc3",
+        "superseded_job": {
+          "attempts": 0,
+          "cache_key": null,
+          "content_sha256": "36f31248f6e4b17535b06ff1bc69a63eb3ec3d221c2c1f3751d05a6894f82070",
+          "namespace_sha256": null,
+          "status": "superseded"
+        }
+      },
+      "fts_latest_content_sha256": "48d55b6995a42b8e689530269fc127c71e7a6964645254dfd6353d41c73a1b58",
+      "fts_rows_for_document": 1,
+      "fts_rows_updated": 1,
+      "jobs_superseded": 1,
+      "latest_content_sha256": "48d55b6995a42b8e689530269fc127c71e7a6964645254dfd6353d41c73a1b58",
+      "latest_revision": 2,
+      "old_content_sha256": "36f31248f6e4b17535b06ff1bc69a63eb3ec3d221c2c1f3751d05a6894f82070",
+      "old_revision": 1,
+      "ordinal": 39,
+      "pending_jobs_after_update": 40,
+      "superseded_jobs_after_update": 1,
+      "wall_seconds": 0.0002826360000653949
+    },
+    "worker": {
+      "attempts": {
+        "0": 1,
+        "1": 40
+      },
+      "batch_count": 10,
+      "batch_size": 4,
+      "batches": [
+        {
+          "batch": 1,
+          "cpu_seconds": 9.548199999986906e-05,
+          "documents": 4,
+          "hits": 4,
+          "misses": 0,
+          "ordinals": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "wall_seconds": 9.575500007485971e-05
+        },
+        {
+          "batch": 2,
+          "cpu_seconds": 5.967899999981263e-05,
+          "documents": 4,
+          "hits": 4,
+          "misses": 0,
+          "ordinals": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "wall_seconds": 5.9911000107604195e-05
+        },
+        {
+          "batch": 3,
+          "cpu_seconds": 8.82119999998654e-05,
+          "documents": 4,
+          "hits": 4,
+          "misses": 0,
+          "ordinals": [
+            8,
+            9,
+            10,
+            11
+          ],
+          "wall_seconds": 8.842400006869866e-05
+        },
+        {
+          "batch": 4,
+          "cpu_seconds": 5.3821000000064956e-05,
+          "documents": 4,
+          "hits": 4,
+          "misses": 0,
+          "ordinals": [
+            12,
+            13,
+            14,
+            15
+          ],
+          "wall_seconds": 5.411099982666201e-05
+        },
+        {
+          "batch": 5,
+          "cpu_seconds": 6.448599999986371e-05,
+          "documents": 4,
+          "hits": 4,
+          "misses": 0,
+          "ordinals": [
+            16,
+            17,
+            18,
+            19
+          ],
+          "wall_seconds": 6.481700006588653e-05
+        },
+        {
+          "batch": 6,
+          "cpu_seconds": 0.16101562499999988,
+          "documents": 4,
+          "hits": 0,
+          "misses": 4,
+          "ordinals": [
+            20,
+            21,
+            22,
+            23
+          ],
+          "wall_seconds": 0.07998069699988264
+        },
+        {
+          "batch": 7,
+          "cpu_seconds": 0.13470159799999992,
+          "documents": 4,
+          "hits": 0,
+          "misses": 4,
+          "ordinals": [
+            24,
+            25,
+            26,
+            27
+          ],
+          "wall_seconds": 0.06592861700005415
+        },
+        {
+          "batch": 8,
+          "cpu_seconds": 0.131286593,
+          "documents": 4,
+          "hits": 0,
+          "misses": 4,
+          "ordinals": [
+            28,
+            29,
+            30,
+            31
+          ],
+          "wall_seconds": 0.0651531559999512
+        },
+        {
+          "batch": 9,
+          "cpu_seconds": 0.10668268399999992,
+          "documents": 4,
+          "hits": 0,
+          "misses": 4,
+          "ordinals": [
+            32,
+            33,
+            34,
+            35
+          ],
+          "wall_seconds": 0.05340542699991602
+        },
+        {
+          "batch": 10,
+          "cpu_seconds": 0.11108108400000027,
+          "documents": 4,
+          "hits": 0,
+          "misses": 4,
+          "ordinals": [
+            36,
+            37,
+            38,
+            39
+          ],
+          "wall_seconds": 0.05358000000001084
+        }
+      ],
+      "cache_hits": 20,
+      "cache_misses": 20,
+      "cpu_seconds": 0.6479305569999998,
+      "database_bytes": 159744,
+      "inference_cpu_seconds": 0.6400331180000003,
+      "inference_wall_seconds": 0.31728908099989894,
+      "peak_rss_mib": 230.902,
+      "ready_output": {
+        "rows": 40,
+        "unique_cache_keys": 40,
+        "unique_documents": 40
+      },
+      "status_counts": {
+        "pending": 0,
+        "processing": 0,
+        "ready": 40,
+        "superseded": 1
+      },
+      "wall_seconds": 0.32121052299999064
+    }
+  },
+  "load_cpu_seconds": 1.0750483860000002,
+  "load_peak_rss_mib": 230.902,
+  "load_seconds_including_imports": 0.2771971299998768,
+  "logical_cpu_count": 9,
+  "measurement_notes": [
+    "CPU is process CPU time and may exceed wall time with two inference threads.",
+    "RSS is the Linux process-lifetime high-water mark in MiB; baseline runs before loading the embedding runtime.",
+    "End-to-end query time includes query embedding, retrieval, fusion when selected, supersession filtering and compact context assembly; it excludes answer generation.",
+    "The fusion rule and its constants were selected before evaluation and were not tuned against benchmark labels.",
+    "Context tokens use the chars/4 approximation and held-out evidence uses the existing evidence-term subset proxy.",
+    "The 40-document, 40-query experiment does not establish large-corpus scale or broad generalization."
+  ],
+  "method": "fts5-e5-small-v2-rrf60-int8-fp16-rerank-supersession-control",
+  "model": {
+    "conventions": {
+      "dimensions": 384,
+      "distance": "cosine",
+      "document_prefix": "passage: ",
+      "max_tokens": 512,
+      "normalization": "l2",
+      "pooling": "attention-mask-mean",
+      "query_prefix": "query: "
+    },
+    "files": {
+      "model.onnx": {
+        "bytes": 133093468,
+        "sha256": "4b8205be2a3c5fc53c6534d76a2012064f7309c162b806f2889c6ec8ec4fdcba"
+      },
+      "tokenizer.json": {
+        "bytes": 711396,
+        "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+      }
+    },
+    "model": "intfloat/e5-small-v2",
+    "revision": "ffb93f3bd4047442299a41ebb6fa998a38507c52"
+  },
+  "model_disk_bytes": 133804864,
+  "model_precision": "float32",
+  "notes": "Accepted as the pending-supersession synchronous-control extension to Run 24: the asynchronous path exactly matched an independently embedded synchronous reindex for FTS5, vector-only, hybrid, context, and vectors while preserving lifecycle and resource bounds.",
+  "orchestration_model_verified": false,
+  "os": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "precision": "float32-model-int8-candidates-fp16-rerank-storage",
+  "provider": "CPUExecutionProvider",
+  "python_version": "3.12.14",
+  "query_warmup_seconds": 0.007116727000038736,
+  "requested_orchestration_model": "GPT-6.1 Sol",
+  "run": 26,
+  "runtime_versions": {
+    "numpy": "2.2.6",
+    "onnxruntime": "1.23.2",
+    "tokenizers": "0.22.1"
+  },
+  "sqlite_vec_version": "v0.1.9",
+  "sqlite_version": "3.53.1",
+  "status": "accepted-cache-champion",
+  "supersessions": {
+    "d001": "d003",
+    "d008": "d007"
+  },
+  "synchronous_control": {
+    "baseline": {
+      "heldout": {
+        "context_assembly_ms_mean": 0.02327919995650518,
+        "context_tokens_approx_mean": 152.35,
+        "cpu_seconds": 0.0026294680000003012,
+        "details": [
+          {
+            "context_chars": 680,
+            "context_tokens_approx": 170,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h001",
+            "recall": 1.0,
+            "top": [
+              "d006",
+              "d004",
+              "d005",
+              "d025",
+              "d029"
+            ]
+          },
+          {
+            "context_chars": 474,
+            "context_tokens_approx": 119,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h002",
+            "recall": 1.0,
+            "top": [
+              "d020",
+              "d019",
+              "d004",
+              "d007"
+            ]
+          },
+          {
+            "context_chars": 690,
+            "context_tokens_approx": 173,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h003",
+            "recall": 1.0,
+            "top": [
+              "d009",
+              "d034",
+              "d010",
+              "d013",
+              "d002"
+            ]
+          },
+          {
+            "context_chars": 618,
+            "context_tokens_approx": 155,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h004",
+            "recall": 1.0,
+            "top": [
+              "d010",
+              "d034",
+              "d011",
+              "d028",
+              "d032"
+            ]
+          },
+          {
+            "context_chars": 577,
+            "context_tokens_approx": 145,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h005",
+            "recall": 1.0,
+            "top": [
+              "d011",
+              "d016",
+              "d012",
+              "d017",
+              "d009"
+            ]
+          },
+          {
+            "context_chars": 600,
+            "context_tokens_approx": 150,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h006",
+            "recall": 1.0,
+            "top": [
+              "d015",
+              "d028",
+              "d018",
+              "d024",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 577,
+            "context_tokens_approx": 145,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h007",
+            "recall": 1.0,
+            "top": [
+              "d016",
+              "d017",
+              "d009",
+              "d011",
+              "d012"
+            ]
+          },
+          {
+            "context_chars": 641,
+            "context_tokens_approx": 161,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h008",
+            "recall": 1.0,
+            "top": [
+              "d020",
+              "d023",
+              "d032",
+              "d019",
+              "d013"
+            ]
+          },
+          {
+            "context_chars": 633,
+            "context_tokens_approx": 159,
+            "evidence_preserved": true,
+            "first_relevant_rank": 2,
+            "query": "h009",
+            "recall": 1.0,
+            "top": [
+              "d009",
+              "d023",
+              "d025",
+              "d031",
+              "d007"
+            ]
+          },
+          {
+            "context_chars": 561,
+            "context_tokens_approx": 141,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h010",
+            "recall": 1.0,
+            "top": [
+              "d026",
+              "d027",
+              "d004",
+              "d016",
+              "d002"
+            ]
+          },
+          {
+            "context_chars": 642,
+            "context_tokens_approx": 161,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h011",
+            "recall": 1.0,
+            "top": [
+              "d029",
+              "d028",
+              "d030",
+              "d031",
+              "d024"
+            ]
+          },
+          {
+            "context_chars": 606,
+            "context_tokens_approx": 152,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h012",
+            "recall": 1.0,
+            "top": [
+              "d031",
+              "d033",
+              "d022",
+              "d030",
+              "d029"
+            ]
+          },
+          {
+            "context_chars": 750,
+            "context_tokens_approx": 188,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h013",
+            "recall": 1.0,
+            "top": [
+              "d035",
+              "d033",
+              "d034",
+              "d037",
+              "d036"
+            ]
+          },
+          {
+            "context_chars": 657,
+            "context_tokens_approx": 165,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h014",
+            "recall": 1.0,
+            "top": [
+              "d037",
+              "d036",
+              "d005",
+              "d033",
+              "d022"
+            ]
+          },
+          {
+            "context_chars": 613,
+            "context_tokens_approx": 154,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h015",
+            "recall": 1.0,
+            "top": [
+              "d038",
+              "d016",
+              "d011",
+              "d031",
+              "d012"
+            ]
+          },
+          {
+            "context_chars": 729,
+            "context_tokens_approx": 183,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h016",
+            "recall": 1.0,
+            "top": [
+              "d039",
+              "d020",
+              "d024",
+              "d034",
+              "d040"
+            ]
+          },
+          {
+            "context_chars": 627,
+            "context_tokens_approx": 157,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h017",
+            "recall": 1.0,
+            "top": [
+              "d032",
+              "d030",
+              "d038",
+              "d009",
+              "d022"
+            ]
+          },
+          {
+            "context_chars": 467,
+            "context_tokens_approx": 117,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h018",
+            "recall": 1.0,
+            "top": [
+              "d018",
+              "d014",
+              "d028",
+              "d015",
+              "d011"
+            ]
+          },
+          {
+            "context_chars": 627,
+            "context_tokens_approx": 157,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h019",
+            "recall": 1.0,
+            "top": [
+              "d005",
+              "d013",
+              "d009",
+              "d019",
+              "d035"
+            ]
+          },
+          {
+            "context_chars": 377,
+            "context_tokens_approx": 95,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h020",
+            "recall": 1.0,
+            "top": [
+              "d007",
+              "d010",
+              "d009"
+            ]
+          }
+        ],
+        "end_to_end_ms_mean": 0.10128415001418034,
+        "end_to_end_ms_p95": 0.125699999898643,
+        "evidence_at_5": 1.0,
+        "hit_at_1": 0.95,
+        "k": 5,
+        "mrr_at_5": 0.975,
+        "peak_rss_mib": 230.902,
+        "query_count": 20,
+        "query_embedding_ms_mean": 0.0,
+        "recall_at_5": 1.0,
+        "search_ms_mean": 0.0766072000146778
+      },
+      "original": {
+        "context_assembly_ms_mean": 0.027412800045567565,
+        "context_tokens_approx_mean": 151.25,
+        "cpu_seconds": 0.002038167000000257,
+        "details": [
+          {
+            "context_chars": 621,
+            "context_tokens_approx": 156,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q001",
+            "recall": 1.0,
+            "top": [
+              "d002",
+              "d003",
+              "d007",
+              "d010"
+            ]
+          },
+          {
+            "context_chars": 499,
+            "context_tokens_approx": 125,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q002",
+            "recall": 1.0,
+            "top": [
+              "d007",
+              "d005",
+              "d004",
+              "d022"
+            ]
+          },
+          {
+            "context_chars": 572,
+            "context_tokens_approx": 143,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q003",
+            "recall": 1.0,
+            "top": [
+              "d004",
+              "d009",
+              "d006",
+              "d010",
+              "d018"
+            ]
+          },
+          {
+            "context_chars": 560,
+            "context_tokens_approx": 140,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q004",
+            "recall": 1.0,
+            "top": [
+              "d019",
+              "d020",
+              "d016",
+              "d011",
+              "d031"
+            ]
+          },
+          {
+            "context_chars": 590,
+            "context_tokens_approx": 148,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q005",
+            "recall": 1.0,
+            "top": [
+              "d012",
+              "d014",
+              "d011",
+              "d016",
+              "d017"
+            ]
+          },
+          {
+            "context_chars": 735,
+            "context_tokens_approx": 184,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q006",
+            "recall": 1.0,
+            "top": [
+              "d013",
+              "d012",
+              "d007",
+              "d040",
+              "d037"
+            ]
+          },
+          {
+            "context_chars": 620,
+            "context_tokens_approx": 155,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q007",
+            "recall": 0.5,
+            "top": [
+              "d021",
+              "d015",
+              "d014",
+              "d024",
+              "d025"
+            ]
+          },
+          {
+            "context_chars": 583,
+            "context_tokens_approx": 146,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q008",
+            "recall": 0.5,
+            "top": [
+              "d022",
+              "d039",
+              "d009",
+              "d005",
+              "d021"
+            ]
+          },
+          {
+            "context_chars": 645,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q009",
+            "recall": 1.0,
+            "top": [
+              "d024",
+              "d021",
+              "d017",
+              "d022",
+              "d015"
+            ]
+          },
+          {
+            "context_chars": 612,
+            "context_tokens_approx": 153,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q010",
+            "recall": 1.0,
+            "top": [
+              "d025",
+              "d011",
+              "d016",
+              "d012",
+              "d017"
+            ]
+          },
+          {
+            "context_chars": 483,
+            "context_tokens_approx": 121,
+            "evidence_preserved": null,
+            "first_relevant_rank": 3,
+            "query": "q011",
+            "recall": 1.0,
+            "top": [
+              "d014",
+              "d028",
+              "d026",
+              "d020",
+              "d027"
+            ]
+          },
+          {
+            "context_chars": 557,
+            "context_tokens_approx": 140,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q012",
+            "recall": 1.0,
+            "top": [
+              "d027",
+              "d026",
+              "d032",
+              "d017",
+              "d036"
+            ]
+          },
+          {
+            "context_chars": 422,
+            "context_tokens_approx": 106,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q013",
+            "recall": 1.0,
+            "top": [
+              "d028",
+              "d015",
+              "d012",
+              "d027",
+              "d018"
+            ]
+          },
+          {
+            "context_chars": 664,
+            "context_tokens_approx": 166,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q014",
+            "recall": 1.0,
+            "top": [
+              "d029",
+              "d028",
+              "d020",
+              "d034",
+              "d030"
+            ]
+          },
+          {
+            "context_chars": 627,
+            "context_tokens_approx": 157,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q015",
+            "recall": 1.0,
+            "top": [
+              "d030",
+              "d031",
+              "d014",
+              "d010",
+              "d029"
+            ]
+          },
+          {
+            "context_chars": 643,
+            "context_tokens_approx": 161,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q016",
+            "recall": 1.0,
+            "top": [
+              "d032",
+              "d031",
+              "d010",
+              "d030",
+              "d029"
+            ]
+          },
+          {
+            "context_chars": 676,
+            "context_tokens_approx": 169,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q017",
+            "recall": 1.0,
+            "top": [
+              "d033",
+              "d035",
+              "d031",
+              "d034",
+              "d016"
+            ]
+          },
+          {
+            "context_chars": 675,
+            "context_tokens_approx": 169,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q018",
+            "recall": 1.0,
+            "top": [
+              "d034",
+              "d035",
+              "d011",
+              "d033",
+              "d010"
+            ]
+          },
+          {
+            "context_chars": 710,
+            "context_tokens_approx": 178,
+            "evidence_preserved": null,
+            "first_relevant_rank": 2,
+            "query": "q019",
+            "recall": 1.0,
+            "top": [
+              "d036",
+              "d037",
+              "d017",
+              "d024",
+              "d019"
+            ]
+          },
+          {
+            "context_chars": 584,
+            "context_tokens_approx": 146,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q020",
+            "recall": 1.0,
+            "top": [
+              "d040",
+              "d015",
+              "d018",
+              "d039",
+              "d013"
+            ]
+          }
+        ],
+        "end_to_end_ms_mean": 0.09797889999845211,
+        "end_to_end_ms_p95": 0.145169999996142,
+        "evidence_at_5": null,
+        "hit_at_1": 0.9,
+        "k": 5,
+        "mrr_at_5": 0.941667,
+        "peak_rss_mib": 230.902,
+        "query_count": 20,
+        "query_embedding_ms_mean": 0.0,
+        "recall_at_5": 0.95,
+        "search_ms_mean": 0.06882040001983114
+      }
+    },
+    "candidate": {
+      "heldout": {
+        "context_assembly_ms_mean": 0.10216519999630691,
+        "context_tokens_approx_mean": 131.85,
+        "cpu_seconds": 0.34972863600000004,
+        "details": [
+          {
+            "context_chars": 477,
+            "context_tokens_approx": 120,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h001",
+            "recall": 1.0,
+            "top": [
+              "d006",
+              "d004",
+              "d005",
+              "d003",
+              "d040"
+            ]
+          },
+          {
+            "context_chars": 384,
+            "context_tokens_approx": 96,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h002",
+            "recall": 1.0,
+            "top": [
+              "d020",
+              "d019",
+              "d004",
+              "d012"
+            ]
+          },
+          {
+            "context_chars": 561,
+            "context_tokens_approx": 141,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h003",
+            "recall": 1.0,
+            "top": [
+              "d009",
+              "d034",
+              "d010",
+              "d038",
+              "d005"
+            ]
+          },
+          {
+            "context_chars": 470,
+            "context_tokens_approx": 118,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h004",
+            "recall": 1.0,
+            "top": [
+              "d010",
+              "d032",
+              "d015",
+              "d034"
+            ]
+          },
+          {
+            "context_chars": 429,
+            "context_tokens_approx": 108,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h005",
+            "recall": 1.0,
+            "top": [
+              "d011",
+              "d009",
+              "d012",
+              "d017",
+              "d016"
+            ]
+          },
+          {
+            "context_chars": 540,
+            "context_tokens_approx": 135,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h006",
+            "recall": 1.0,
+            "top": [
+              "d015",
+              "d024",
+              "d002",
+              "d003",
+              "d040"
+            ]
+          },
+          {
+            "context_chars": 567,
+            "context_tokens_approx": 142,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h007",
+            "recall": 1.0,
+            "top": [
+              "d016",
+              "d017",
+              "d009",
+              "d011",
+              "d031"
+            ]
+          },
+          {
+            "context_chars": 526,
+            "context_tokens_approx": 132,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h008",
+            "recall": 1.0,
+            "top": [
+              "d020",
+              "d023",
+              "d019",
+              "d040",
+              "d032"
+            ]
+          },
+          {
+            "context_chars": 572,
+            "context_tokens_approx": 143,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h009",
+            "recall": 1.0,
+            "top": [
+              "d023",
+              "d025",
+              "d009",
+              "d015",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 466,
+            "context_tokens_approx": 117,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h010",
+            "recall": 1.0,
+            "top": [
+              "d026",
+              "d027",
+              "d014",
+              "d028",
+              "d004"
+            ]
+          },
+          {
+            "context_chars": 548,
+            "context_tokens_approx": 137,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h011",
+            "recall": 1.0,
+            "top": [
+              "d029",
+              "d031",
+              "d028",
+              "d030",
+              "d032"
+            ]
+          },
+          {
+            "context_chars": 575,
+            "context_tokens_approx": 144,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h012",
+            "recall": 1.0,
+            "top": [
+              "d031",
+              "d030",
+              "d032",
+              "d029",
+              "d022"
+            ]
+          },
+          {
+            "context_chars": 775,
+            "context_tokens_approx": 194,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h013",
+            "recall": 1.0,
+            "top": [
+              "d035",
+              "d033",
+              "d034",
+              "d037",
+              "d024"
+            ]
+          },
+          {
+            "context_chars": 475,
+            "context_tokens_approx": 119,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h014",
+            "recall": 1.0,
+            "top": [
+              "d037",
+              "d036",
+              "d035",
+              "d002",
+              "d005"
+            ]
+          },
+          {
+            "context_chars": 563,
+            "context_tokens_approx": 141,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h015",
+            "recall": 1.0,
+            "top": [
+              "d038",
+              "d024",
+              "d032",
+              "d016",
+              "d040"
+            ]
+          },
+          {
+            "context_chars": 643,
+            "context_tokens_approx": 161,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h016",
+            "recall": 1.0,
+            "top": [
+              "d039",
+              "d024",
+              "d040",
+              "d034",
+              "d020"
+            ]
+          },
+          {
+            "context_chars": 628,
+            "context_tokens_approx": 157,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h017",
+            "recall": 1.0,
+            "top": [
+              "d032",
+              "d030",
+              "d031",
+              "d029",
+              "d022"
+            ]
+          },
+          {
+            "context_chars": 459,
+            "context_tokens_approx": 115,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h018",
+            "recall": 1.0,
+            "top": [
+              "d018",
+              "d011",
+              "d028",
+              "d014",
+              "d009"
+            ]
+          },
+          {
+            "context_chars": 448,
+            "context_tokens_approx": 112,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h019",
+            "recall": 1.0,
+            "top": [
+              "d005",
+              "d009",
+              "d013",
+              "d022",
+              "d006"
+            ]
+          },
+          {
+            "context_chars": 418,
+            "context_tokens_approx": 105,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h020",
+            "recall": 1.0,
+            "top": [
+              "d007",
+              "d009",
+              "d003"
+            ]
+          }
+        ],
+        "end_to_end_ms_mean": 8.642513700010568,
+        "end_to_end_ms_p95": 10.371030999976938,
+        "evidence_at_5": 1.0,
+        "fp16_rerank_ms_mean": 0.18339305001973116,
+        "hit_at_1": 1.0,
+        "int8_candidate_search_ms_mean": 0.32824064998067115,
+        "k": 5,
+        "mrr_at_5": 1.0,
+        "peak_rss_mib": 230.902,
+        "query_count": 20,
+        "query_embedding_ms_mean": 7.8538349999917045,
+        "recall_at_5": 1.0,
+        "search_ms_mean": 0.6811459999767067
+      },
+      "original": {
+        "context_assembly_ms_mean": 0.092843799984621,
+        "context_tokens_approx_mean": 128.2,
+        "cpu_seconds": 0.3912630210000003,
+        "details": [
+          {
+            "context_chars": 471,
+            "context_tokens_approx": 118,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q001",
+            "recall": 1.0,
+            "top": [
+              "d002",
+              "d003",
+              "d018",
+              "d007"
+            ]
+          },
+          {
+            "context_chars": 395,
+            "context_tokens_approx": 99,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q002",
+            "recall": 1.0,
+            "top": [
+              "d007",
+              "d005",
+              "d020"
+            ]
+          },
+          {
+            "context_chars": 425,
+            "context_tokens_approx": 107,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q003",
+            "recall": 1.0,
+            "top": [
+              "d004",
+              "d009",
+              "d018",
+              "d011",
+              "d006"
+            ]
+          },
+          {
+            "context_chars": 484,
+            "context_tokens_approx": 121,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q004",
+            "recall": 1.0,
+            "top": [
+              "d019",
+              "d020",
+              "d012",
+              "d032",
+              "d017"
+            ]
+          },
+          {
+            "context_chars": 373,
+            "context_tokens_approx": 94,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q005",
+            "recall": 1.0,
+            "top": [
+              "d012",
+              "d014",
+              "d009",
+              "d032",
+              "d013"
+            ]
+          },
+          {
+            "context_chars": 442,
+            "context_tokens_approx": 111,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q006",
+            "recall": 1.0,
+            "top": [
+              "d013",
+              "d012",
+              "d040",
+              "d016",
+              "d007"
+            ]
+          },
+          {
+            "context_chars": 677,
+            "context_tokens_approx": 170,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q007",
+            "recall": 1.0,
+            "top": [
+              "d021",
+              "d024",
+              "d015",
+              "d025",
+              "d023"
+            ]
+          },
+          {
+            "context_chars": 507,
+            "context_tokens_approx": 127,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q008",
+            "recall": 0.5,
+            "top": [
+              "d022",
+              "d039",
+              "d009",
+              "d021",
+              "d013"
+            ]
+          },
+          {
+            "context_chars": 645,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q009",
+            "recall": 1.0,
+            "top": [
+              "d024",
+              "d021",
+              "d022",
+              "d017",
+              "d015"
+            ]
+          },
+          {
+            "context_chars": 557,
+            "context_tokens_approx": 140,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q010",
+            "recall": 1.0,
+            "top": [
+              "d025",
+              "d021",
+              "d024",
+              "d011",
+              "d016"
+            ]
+          },
+          {
+            "context_chars": 429,
+            "context_tokens_approx": 108,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q011",
+            "recall": 1.0,
+            "top": [
+              "d026",
+              "d014",
+              "d028",
+              "d027",
+              "d018"
+            ]
+          },
+          {
+            "context_chars": 411,
+            "context_tokens_approx": 103,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q012",
+            "recall": 1.0,
+            "top": [
+              "d027",
+              "d026",
+              "d032",
+              "d012",
+              "d018"
+            ]
+          },
+          {
+            "context_chars": 422,
+            "context_tokens_approx": 106,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q013",
+            "recall": 1.0,
+            "top": [
+              "d028",
+              "d015",
+              "d012",
+              "d018",
+              "d027"
+            ]
+          },
+          {
+            "context_chars": 646,
+            "context_tokens_approx": 162,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q014",
+            "recall": 1.0,
+            "top": [
+              "d029",
+              "d028",
+              "d030",
+              "d031",
+              "d034"
+            ]
+          },
+          {
+            "context_chars": 616,
+            "context_tokens_approx": 154,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q015",
+            "recall": 1.0,
+            "top": [
+              "d030",
+              "d031",
+              "d029",
+              "d032",
+              "d023"
+            ]
+          },
+          {
+            "context_chars": 553,
+            "context_tokens_approx": 139,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q016",
+            "recall": 1.0,
+            "top": [
+              "d032",
+              "d031",
+              "d029",
+              "d030",
+              "d010"
+            ]
+          },
+          {
+            "context_chars": 500,
+            "context_tokens_approx": 125,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q017",
+            "recall": 1.0,
+            "top": [
+              "d033",
+              "d035",
+              "d034",
+              "d032",
+              "d031"
+            ]
+          },
+          {
+            "context_chars": 469,
+            "context_tokens_approx": 118,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q018",
+            "recall": 1.0,
+            "top": [
+              "d034",
+              "d035",
+              "d033",
+              "d010",
+              "d016"
+            ]
+          },
+          {
+            "context_chars": 617,
+            "context_tokens_approx": 155,
+            "evidence_preserved": null,
+            "first_relevant_rank": 2,
+            "query": "q019",
+            "recall": 1.0,
+            "top": [
+              "d036",
+              "d037",
+              "d024",
+              "d033",
+              "d019"
+            ]
+          },
+          {
+            "context_chars": 579,
+            "context_tokens_approx": 145,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q020",
+            "recall": 1.0,
+            "top": [
+              "d040",
+              "d039",
+              "d018",
+              "d015",
+              "d024"
+            ]
+          }
+        ],
+        "end_to_end_ms_mean": 9.752978199992413,
+        "end_to_end_ms_p95": 16.52469900000142,
+        "evidence_at_5": null,
+        "fp16_rerank_ms_mean": 0.2954503000069053,
+        "hit_at_1": 0.95,
+        "int8_candidate_search_ms_mean": 0.6753653000487247,
+        "k": 5,
+        "mrr_at_5": 0.975,
+        "peak_rss_mib": 230.902,
+        "query_count": 20,
+        "query_embedding_ms_mean": 8.501390750006976,
+        "recall_at_5": 0.975,
+        "search_ms_mean": 1.152786299996933
+      }
+    },
+    "corpus_embedding_cpu_seconds": 1.2972647949999998,
+    "corpus_embedding_docs_per_second": 62.20125214820875,
+    "corpus_embedding_wall_seconds": 0.6430738710000696,
+    "corpus_self_neighbors_correct": 40,
+    "database_bytes": 512000,
+    "frozen_comparison_query_vectors": 41,
+    "index_neighbor_mismatches": [],
+    "method": "independent synchronous full-corpus embedding and SQLite reindex",
+    "repeated_query_embedding_max_absolute_delta": 0.0,
+    "total_cpu_seconds": 2.7786103370000004,
+    "total_wall_seconds": 1.3869886600000427,
+    "vector_max_absolute_delta": 0.0,
+    "vector_only": {
+      "heldout": {
+        "context_assembly_ms_mean": 0.05110904999128252,
+        "context_tokens_approx_mean": 159.15,
+        "cpu_seconds": 0.3372621459999996,
+        "details": [
+          {
+            "context_chars": 734,
+            "context_tokens_approx": 184,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h001",
+            "recall": 1.0,
+            "top": [
+              "d006",
+              "d003",
+              "d040",
+              "d004",
+              "d039"
+            ]
+          },
+          {
+            "context_chars": 673,
+            "context_tokens_approx": 169,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h002",
+            "recall": 1.0,
+            "top": [
+              "d020",
+              "d019",
+              "d012",
+              "d003",
+              "d024"
+            ]
+          },
+          {
+            "context_chars": 560,
+            "context_tokens_approx": 140,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h003",
+            "recall": 1.0,
+            "top": [
+              "d009",
+              "d005",
+              "d034",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 470,
+            "context_tokens_approx": 118,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h004",
+            "recall": 1.0,
+            "top": [
+              "d010",
+              "d032",
+              "d009",
+              "d020"
+            ]
+          },
+          {
+            "context_chars": 610,
+            "context_tokens_approx": 153,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h005",
+            "recall": 1.0,
+            "top": [
+              "d011",
+              "d009",
+              "d020",
+              "d013",
+              "d002"
+            ]
+          },
+          {
+            "context_chars": 690,
+            "context_tokens_approx": 173,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h006",
+            "recall": 1.0,
+            "top": [
+              "d015",
+              "d024",
+              "d002",
+              "d009",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 660,
+            "context_tokens_approx": 165,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h007",
+            "recall": 1.0,
+            "top": [
+              "d016",
+              "d017",
+              "d029",
+              "d013",
+              "d011"
+            ]
+          },
+          {
+            "context_chars": 757,
+            "context_tokens_approx": 190,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h008",
+            "recall": 1.0,
+            "top": [
+              "d020",
+              "d040",
+              "d023",
+              "d010",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 671,
+            "context_tokens_approx": 168,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h009",
+            "recall": 1.0,
+            "top": [
+              "d023",
+              "d025",
+              "d003",
+              "d012",
+              "d009"
+            ]
+          },
+          {
+            "context_chars": 520,
+            "context_tokens_approx": 130,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h010",
+            "recall": 1.0,
+            "top": [
+              "d026",
+              "d027",
+              "d018",
+              "d003",
+              "d012"
+            ]
+          },
+          {
+            "context_chars": 601,
+            "context_tokens_approx": 151,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h011",
+            "recall": 1.0,
+            "top": [
+              "d029",
+              "d031",
+              "d032",
+              "d030",
+              "d028"
+            ]
+          },
+          {
+            "context_chars": 601,
+            "context_tokens_approx": 151,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h012",
+            "recall": 1.0,
+            "top": [
+              "d031",
+              "d030",
+              "d032",
+              "d029",
+              "d028"
+            ]
+          },
+          {
+            "context_chars": 775,
+            "context_tokens_approx": 194,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h013",
+            "recall": 1.0,
+            "top": [
+              "d035",
+              "d033",
+              "d024",
+              "d037",
+              "d034"
+            ]
+          },
+          {
+            "context_chars": 810,
+            "context_tokens_approx": 203,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h014",
+            "recall": 1.0,
+            "top": [
+              "d037",
+              "d036",
+              "d002",
+              "d024",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 742,
+            "context_tokens_approx": 186,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h015",
+            "recall": 1.0,
+            "top": [
+              "d038",
+              "d040",
+              "d034",
+              "d009",
+              "d024"
+            ]
+          },
+          {
+            "context_chars": 655,
+            "context_tokens_approx": 164,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h016",
+            "recall": 1.0,
+            "top": [
+              "d039",
+              "d040",
+              "d024",
+              "d009",
+              "d032"
+            ]
+          },
+          {
+            "context_chars": 669,
+            "context_tokens_approx": 168,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h017",
+            "recall": 1.0,
+            "top": [
+              "d032",
+              "d031",
+              "d030",
+              "d029",
+              "d023"
+            ]
+          },
+          {
+            "context_chars": 402,
+            "context_tokens_approx": 101,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h018",
+            "recall": 1.0,
+            "top": [
+              "d018",
+              "d011",
+              "d009",
+              "d028",
+              "d027"
+            ]
+          },
+          {
+            "context_chars": 660,
+            "context_tokens_approx": 165,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h019",
+            "recall": 1.0,
+            "top": [
+              "d005",
+              "d009",
+              "d022",
+              "d006",
+              "d007"
+            ]
+          },
+          {
+            "context_chars": 439,
+            "context_tokens_approx": 110,
+            "evidence_preserved": true,
+            "first_relevant_rank": 1,
+            "query": "h020",
+            "recall": 1.0,
+            "top": [
+              "d007",
+              "d003",
+              "d012"
+            ]
+          }
+        ],
+        "end_to_end_ms_mean": 8.407923749973634,
+        "end_to_end_ms_p95": 10.160548999920138,
+        "evidence_at_5": 1.0,
+        "fp16_rerank_ms_mean": 0.1656030499816552,
+        "hit_at_1": 1.0,
+        "int8_candidate_search_ms_mean": 0.2878796000231887,
+        "k": 5,
+        "mrr_at_5": 1.0,
+        "peak_rss_mib": 230.902,
+        "query_count": 20,
+        "query_embedding_ms_mean": 7.890684649999002,
+        "recall_at_5": 1.0,
+        "search_ms_mean": 0.462155899958816
+      },
+      "original": {
+        "context_assembly_ms_mean": 0.046326600011070695,
+        "context_tokens_approx_mean": 151.6,
+        "cpu_seconds": 0.31874551100000037,
+        "details": [
+          {
+            "context_chars": 403,
+            "context_tokens_approx": 101,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q001",
+            "recall": 1.0,
+            "top": [
+              "d002",
+              "d003",
+              "d018"
+            ]
+          },
+          {
+            "context_chars": 451,
+            "context_tokens_approx": 113,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q002",
+            "recall": 1.0,
+            "top": [
+              "d007",
+              "d005",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 537,
+            "context_tokens_approx": 135,
+            "evidence_preserved": null,
+            "first_relevant_rank": 4,
+            "query": "q003",
+            "recall": 1.0,
+            "top": [
+              "d018",
+              "d011",
+              "d009",
+              "d004",
+              "d006"
+            ]
+          },
+          {
+            "context_chars": 659,
+            "context_tokens_approx": 165,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q004",
+            "recall": 1.0,
+            "top": [
+              "d019",
+              "d020",
+              "d034",
+              "d012",
+              "d002"
+            ]
+          },
+          {
+            "context_chars": 576,
+            "context_tokens_approx": 144,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q005",
+            "recall": 1.0,
+            "top": [
+              "d012",
+              "d013",
+              "d014",
+              "d019",
+              "d020"
+            ]
+          },
+          {
+            "context_chars": 555,
+            "context_tokens_approx": 139,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q006",
+            "recall": 1.0,
+            "top": [
+              "d013",
+              "d012",
+              "d014",
+              "d015",
+              "d019"
+            ]
+          },
+          {
+            "context_chars": 676,
+            "context_tokens_approx": 169,
+            "evidence_preserved": null,
+            "first_relevant_rank": 2,
+            "query": "q007",
+            "recall": 0.5,
+            "top": [
+              "d024",
+              "d021",
+              "d025",
+              "d015",
+              "d040"
+            ]
+          },
+          {
+            "context_chars": 685,
+            "context_tokens_approx": 172,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q008",
+            "recall": 1.0,
+            "top": [
+              "d022",
+              "d023",
+              "d039",
+              "d024",
+              "d020"
+            ]
+          },
+          {
+            "context_chars": 670,
+            "context_tokens_approx": 168,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q009",
+            "recall": 1.0,
+            "top": [
+              "d024",
+              "d021",
+              "d022",
+              "d040",
+              "d015"
+            ]
+          },
+          {
+            "context_chars": 738,
+            "context_tokens_approx": 185,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q010",
+            "recall": 1.0,
+            "top": [
+              "d025",
+              "d024",
+              "d021",
+              "d040",
+              "d023"
+            ]
+          },
+          {
+            "context_chars": 429,
+            "context_tokens_approx": 108,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q011",
+            "recall": 1.0,
+            "top": [
+              "d026",
+              "d027",
+              "d018",
+              "d028",
+              "d014"
+            ]
+          },
+          {
+            "context_chars": 501,
+            "context_tokens_approx": 126,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q012",
+            "recall": 1.0,
+            "top": [
+              "d027",
+              "d026",
+              "d018",
+              "d028",
+              "d003"
+            ]
+          },
+          {
+            "context_chars": 536,
+            "context_tokens_approx": 134,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q013",
+            "recall": 1.0,
+            "top": [
+              "d028",
+              "d015",
+              "d012",
+              "d018",
+              "d024"
+            ]
+          },
+          {
+            "context_chars": 601,
+            "context_tokens_approx": 151,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q014",
+            "recall": 1.0,
+            "top": [
+              "d029",
+              "d028",
+              "d031",
+              "d030",
+              "d032"
+            ]
+          },
+          {
+            "context_chars": 601,
+            "context_tokens_approx": 151,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q015",
+            "recall": 1.0,
+            "top": [
+              "d030",
+              "d031",
+              "d032",
+              "d029",
+              "d028"
+            ]
+          },
+          {
+            "context_chars": 601,
+            "context_tokens_approx": 151,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q016",
+            "recall": 1.0,
+            "top": [
+              "d032",
+              "d031",
+              "d029",
+              "d030",
+              "d028"
+            ]
+          },
+          {
+            "context_chars": 766,
+            "context_tokens_approx": 192,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q017",
+            "recall": 1.0,
+            "top": [
+              "d033",
+              "d035",
+              "d034",
+              "d003",
+              "d029"
+            ]
+          },
+          {
+            "context_chars": 662,
+            "context_tokens_approx": 166,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q018",
+            "recall": 1.0,
+            "top": [
+              "d034",
+              "d035",
+              "d009",
+              "d033",
+              "d030"
+            ]
+          },
+          {
+            "context_chars": 810,
+            "context_tokens_approx": 203,
+            "evidence_preserved": null,
+            "first_relevant_rank": 2,
+            "query": "q019",
+            "recall": 1.0,
+            "top": [
+              "d036",
+              "d037",
+              "d003",
+              "d024",
+              "d002"
+            ]
+          },
+          {
+            "context_chars": 635,
+            "context_tokens_approx": 159,
+            "evidence_preserved": null,
+            "first_relevant_rank": 1,
+            "query": "q020",
+            "recall": 1.0,
+            "top": [
+              "d040",
+              "d039",
+              "d018",
+              "d024",
+              "d021"
+            ]
+          }
+        ],
+        "end_to_end_ms_mean": 8.02050055001473,
+        "end_to_end_ms_p95": 9.244849999959115,
+        "evidence_at_5": null,
+        "fp16_rerank_ms_mean": 0.16951389998212107,
+        "hit_at_1": 0.85,
+        "int8_candidate_search_ms_mean": 0.27535134998970534,
+        "k": 5,
+        "mrr_at_5": 0.9125,
+        "peak_rss_mib": 230.902,
+        "query_count": 20,
+        "query_embedding_ms_mean": 7.50969119999354,
+        "recall_at_5": 0.975,
+        "search_ms_mean": 0.45339314998500413
+      }
+    },
+    "vectors_byte_identical": true
+  },
+  "threads": 2,
+  "vector_db_bytes_including_fts_and_raw_records": 626688,
+  "vector_insert_seconds": 0.0008648970001559064,
+  "vector_only": {
+    "heldout": {
+      "context_assembly_ms_mean": 0.05004010001812276,
+      "context_tokens_approx_mean": 159.15,
+      "cpu_seconds": 0.25775581599999997,
+      "details": [
+        {
+          "context_chars": 734,
+          "context_tokens_approx": 184,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h001",
+          "recall": 1.0,
+          "top": [
+            "d006",
+            "d003",
+            "d040",
+            "d004",
+            "d039"
+          ]
+        },
+        {
+          "context_chars": 673,
+          "context_tokens_approx": 169,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h002",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d019",
+            "d012",
+            "d003",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 560,
+          "context_tokens_approx": 140,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h003",
+          "recall": 1.0,
+          "top": [
+            "d009",
+            "d005",
+            "d034",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 470,
+          "context_tokens_approx": 118,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h004",
+          "recall": 1.0,
+          "top": [
+            "d010",
+            "d032",
+            "d009",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 610,
+          "context_tokens_approx": 153,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h005",
+          "recall": 1.0,
+          "top": [
+            "d011",
+            "d009",
+            "d020",
+            "d013",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 690,
+          "context_tokens_approx": 173,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h006",
+          "recall": 1.0,
+          "top": [
+            "d015",
+            "d024",
+            "d002",
+            "d009",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 660,
+          "context_tokens_approx": 165,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h007",
+          "recall": 1.0,
+          "top": [
+            "d016",
+            "d017",
+            "d029",
+            "d013",
+            "d011"
+          ]
+        },
+        {
+          "context_chars": 757,
+          "context_tokens_approx": 190,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h008",
+          "recall": 1.0,
+          "top": [
+            "d020",
+            "d040",
+            "d023",
+            "d010",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 671,
+          "context_tokens_approx": 168,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h009",
+          "recall": 1.0,
+          "top": [
+            "d023",
+            "d025",
+            "d003",
+            "d012",
+            "d009"
+          ]
+        },
+        {
+          "context_chars": 520,
+          "context_tokens_approx": 130,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h010",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d018",
+            "d003",
+            "d012"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h011",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d031",
+            "d032",
+            "d030",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h012",
+          "recall": 1.0,
+          "top": [
+            "d031",
+            "d030",
+            "d032",
+            "d029",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 775,
+          "context_tokens_approx": 194,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h013",
+          "recall": 1.0,
+          "top": [
+            "d035",
+            "d033",
+            "d024",
+            "d037",
+            "d034"
+          ]
+        },
+        {
+          "context_chars": 810,
+          "context_tokens_approx": 203,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h014",
+          "recall": 1.0,
+          "top": [
+            "d037",
+            "d036",
+            "d002",
+            "d024",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 742,
+          "context_tokens_approx": 186,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h015",
+          "recall": 1.0,
+          "top": [
+            "d038",
+            "d040",
+            "d034",
+            "d009",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 655,
+          "context_tokens_approx": 164,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h016",
+          "recall": 1.0,
+          "top": [
+            "d039",
+            "d040",
+            "d024",
+            "d009",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 669,
+          "context_tokens_approx": 168,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h017",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d030",
+            "d029",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 402,
+          "context_tokens_approx": 101,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h018",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d011",
+            "d009",
+            "d028",
+            "d027"
+          ]
+        },
+        {
+          "context_chars": 660,
+          "context_tokens_approx": 165,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h019",
+          "recall": 1.0,
+          "top": [
+            "d005",
+            "d009",
+            "d022",
+            "d006",
+            "d007"
+          ]
+        },
+        {
+          "context_chars": 439,
+          "context_tokens_approx": 110,
+          "evidence_preserved": true,
+          "first_relevant_rank": 1,
+          "query": "h020",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d003",
+            "d012"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 6.438479949963494,
+      "end_to_end_ms_p95": 7.594106999931682,
+      "evidence_at_5": 1.0,
+      "fp16_rerank_ms_mean": 0.15605214999823147,
+      "hit_at_1": 1.0,
+      "int8_candidate_search_ms_mean": 0.27729284998940784,
+      "k": 5,
+      "mrr_at_5": 1.0,
+      "peak_rss_mib": 230.902,
+      "query_count": 20,
+      "query_embedding_ms_mean": 5.943011900001238,
+      "recall_at_5": 1.0,
+      "search_ms_mean": 0.44164135000528404
+    },
+    "original": {
+      "context_assembly_ms_mean": 0.0544322500331873,
+      "context_tokens_approx_mean": 151.6,
+      "cpu_seconds": 0.2719967699999999,
+      "details": [
+        {
+          "context_chars": 403,
+          "context_tokens_approx": 101,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q001",
+          "recall": 1.0,
+          "top": [
+            "d002",
+            "d003",
+            "d018"
+          ]
+        },
+        {
+          "context_chars": 451,
+          "context_tokens_approx": 113,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q002",
+          "recall": 1.0,
+          "top": [
+            "d007",
+            "d005",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 537,
+          "context_tokens_approx": 135,
+          "evidence_preserved": null,
+          "first_relevant_rank": 4,
+          "query": "q003",
+          "recall": 1.0,
+          "top": [
+            "d018",
+            "d011",
+            "d009",
+            "d004",
+            "d006"
+          ]
+        },
+        {
+          "context_chars": 659,
+          "context_tokens_approx": 165,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q004",
+          "recall": 1.0,
+          "top": [
+            "d019",
+            "d020",
+            "d034",
+            "d012",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 576,
+          "context_tokens_approx": 144,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q005",
+          "recall": 1.0,
+          "top": [
+            "d012",
+            "d013",
+            "d014",
+            "d019",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 555,
+          "context_tokens_approx": 139,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q006",
+          "recall": 1.0,
+          "top": [
+            "d013",
+            "d012",
+            "d014",
+            "d015",
+            "d019"
+          ]
+        },
+        {
+          "context_chars": 676,
+          "context_tokens_approx": 169,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q007",
+          "recall": 0.5,
+          "top": [
+            "d024",
+            "d021",
+            "d025",
+            "d015",
+            "d040"
+          ]
+        },
+        {
+          "context_chars": 685,
+          "context_tokens_approx": 172,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q008",
+          "recall": 1.0,
+          "top": [
+            "d022",
+            "d023",
+            "d039",
+            "d024",
+            "d020"
+          ]
+        },
+        {
+          "context_chars": 670,
+          "context_tokens_approx": 168,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q009",
+          "recall": 1.0,
+          "top": [
+            "d024",
+            "d021",
+            "d022",
+            "d040",
+            "d015"
+          ]
+        },
+        {
+          "context_chars": 738,
+          "context_tokens_approx": 185,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q010",
+          "recall": 1.0,
+          "top": [
+            "d025",
+            "d024",
+            "d021",
+            "d040",
+            "d023"
+          ]
+        },
+        {
+          "context_chars": 429,
+          "context_tokens_approx": 108,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q011",
+          "recall": 1.0,
+          "top": [
+            "d026",
+            "d027",
+            "d018",
+            "d028",
+            "d014"
+          ]
+        },
+        {
+          "context_chars": 501,
+          "context_tokens_approx": 126,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q012",
+          "recall": 1.0,
+          "top": [
+            "d027",
+            "d026",
+            "d018",
+            "d028",
+            "d003"
+          ]
+        },
+        {
+          "context_chars": 536,
+          "context_tokens_approx": 134,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q013",
+          "recall": 1.0,
+          "top": [
+            "d028",
+            "d015",
+            "d012",
+            "d018",
+            "d024"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q014",
+          "recall": 1.0,
+          "top": [
+            "d029",
+            "d028",
+            "d031",
+            "d030",
+            "d032"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q015",
+          "recall": 1.0,
+          "top": [
+            "d030",
+            "d031",
+            "d032",
+            "d029",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 601,
+          "context_tokens_approx": 151,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q016",
+          "recall": 1.0,
+          "top": [
+            "d032",
+            "d031",
+            "d029",
+            "d030",
+            "d028"
+          ]
+        },
+        {
+          "context_chars": 766,
+          "context_tokens_approx": 192,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q017",
+          "recall": 1.0,
+          "top": [
+            "d033",
+            "d035",
+            "d034",
+            "d003",
+            "d029"
+          ]
+        },
+        {
+          "context_chars": 662,
+          "context_tokens_approx": 166,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q018",
+          "recall": 1.0,
+          "top": [
+            "d034",
+            "d035",
+            "d009",
+            "d033",
+            "d030"
+          ]
+        },
+        {
+          "context_chars": 810,
+          "context_tokens_approx": 203,
+          "evidence_preserved": null,
+          "first_relevant_rank": 2,
+          "query": "q019",
+          "recall": 1.0,
+          "top": [
+            "d036",
+            "d037",
+            "d003",
+            "d024",
+            "d002"
+          ]
+        },
+        {
+          "context_chars": 635,
+          "context_tokens_approx": 159,
+          "evidence_preserved": null,
+          "first_relevant_rank": 1,
+          "query": "q020",
+          "recall": 1.0,
+          "top": [
+            "d040",
+            "d039",
+            "d018",
+            "d024",
+            "d021"
+          ]
+        }
+      ],
+      "end_to_end_ms_mean": 6.787493850004012,
+      "end_to_end_ms_p95": 7.8580270001111785,
+      "evidence_at_5": null,
+      "fp16_rerank_ms_mean": 0.23304779992940894,
+      "hit_at_1": 0.85,
+      "int8_candidate_search_ms_mean": 0.30189135000000533,
+      "k": 5,
+      "mrr_at_5": 0.9125,
+      "peak_rss_mib": 230.902,
+      "query_count": 20,
+      "query_embedding_ms_mean": 6.182077599987679,
+      "recall_at_5": 0.975,
+      "search_ms_mean": 0.546998450022329
+    }
+  },
+  "vector_storage": {
+    "candidate_index": "sqlite-vec int8[384] with per-vector max-absolute scaling",
+    "candidate_pool": 20,
+    "candidate_quantizer": "round(vector / max(abs(vector)) * 127), clipped to [-127, 127]",
+    "query_quantization": "max-absolute int8 for candidate search; FP32 for reranking",
+    "rerank_corpus_precision": "float16 storage converted to float32 for scoring",
+    "rerank_distance": "cosine computed in FP32 from stored FP16 corpus vectors and FP32 query",
+    "rerank_output": 10,
+    "rerank_query_precision": "float32",
+    "rerank_storage": "SQLite BLOB float16[384]",
+    "selected_before_evaluation": true
+  },
+  "vector_storage_precision": "int8_maxabs_fp16_rerank",
+  "vector_validation": {
+    "corpus_self_neighbors_correct": 40,
+    "stored_vectors": 40,
+    "unit_norm_max_error": 5.960464477539063e-08
+  }
+}

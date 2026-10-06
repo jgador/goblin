@@ -2,8 +2,8 @@
 
 ## Current champions
 
-Operational ingestion and embedding-cache champion: Run 024,
-`fts5-e5-small-v2-rrf60-int8-fp16-rerank-pending-recovery`.
+Operational ingestion and embedding-cache champion: Run 026,
+`fts5-e5-small-v2-rrf60-int8-fp16-rerank-supersession-control`.
 
 Semantic retrieval and compact vector-storage core: Run 020,
 `fts5-e5-small-v2-rrf60-rank-one-budget-int8-maxabs-fp16-rerank`.
@@ -71,10 +71,18 @@ superseded historical job, embedded only the newest `d040` content, and attached
 only the newest cache key. However, changing the content naturally changed four
 lexical, nine vector-only, and five hybrid query rankings. Mean held-out hybrid
 context rose from 131.40 to 131.85 tokens, so the predeclared exact-parity gate
-rejected it. Run 024 remains the operational champion.
+rejected it. Run 024 remained the operational champion at that stage.
+
+Run 026 supplies the missing updated-corpus control and replaces Run 024 as the
+operational champion. The asynchronous supersession path exactly matched an
+independently embedded synchronous reindex for all FTS5, vector-only, and hybrid
+rankings, quality/evidence metrics, assembled context, and 40 stored vectors.
+The stale job still had zero attempts or attachments, while the latest revision
+alone became ready. The declared content drift from Run 024 is retained as a
+separate observation rather than treated as a queue error.
 
 Run 005 remains the operational fallback when embedding cost is not acceptable.
-Its process RSS was about 15 MiB in the Run 010 environment versus 229.668 MiB
+Its process RSS was about 15 MiB in the Run 010 environment versus 230.902 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
 
 Benchmark generation: 1
@@ -84,7 +92,7 @@ Queries: 20
 
 ### Champion behavior
 
-Run 024 uses Run 020's fixed retrieval and context pipeline. That pipeline uses
+Run 026 uses Run 020's fixed retrieval and context pipeline. That pipeline uses
 Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
 RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
@@ -92,13 +100,13 @@ context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
 attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
 distance. Full original records remain in SQLite for provenance.
 
-For semantic retrieval, Run 024 first searches a max-absolute-scaled sqlite-vec
+For semantic retrieval, Run 026 first searches a max-absolute-scaled sqlite-vec
 `int8[384]` index for 20 candidates. It fetches FP16 copies of those vectors
 from ordinary SQLite blobs, computes cosine scores in FP32 against the FP32
 query, and reranks to the top 10 before unchanged RRF. The FP16 payload is
 30,720 bytes for 40 records. The rule was fixed before evaluation.
 
-At context assembly, Run 024 retains Run 017's rules. It first applies Run 014's
+At context assembly, Run 026 retains Run 017's rules. It first applies Run 014's
 selector and protects every selected clause from the rank-one record and the
 first selected clause from each lower-rank record. It then admits remaining
 lower-rank clauses in retrieval order up to a 128 approximate-token target.
@@ -109,7 +117,7 @@ The compactor removes a conservative set of high-frequency function words. It de
 
 The full record remains stored. The sketch is generated at context assembly time, so persistent storage remains unchanged.
 
-Before indexing, Run 024 retains Run 021's FP32 document embedding key: SHA-256 over a
+Before indexing, Run 026 retains Run 021's FP32 document embedding key: SHA-256 over a
 namespace containing the pinned model revision, dimensions, and embedding
 conventions plus the document prefix and NFC-normalized stripped text. The
 cache remains in the same SQLite database as FTS5 and vec0. A cache hit is
@@ -117,7 +125,7 @@ decoded and reused; a miss is locally embedded and inserted. Run 022 removes
 entries outside the active namespace and vacuums the database after a model or
 convention migration.
 
-At ingestion, Run 024 commits the full record to FTS5 and a durable pending job
+At ingestion, Run 026 commits the full record to FTS5 and a durable pending job
 in one SQLite transaction. The local worker claims jobs in ingestion order,
 commits `processing`, resolves each embedding through the active cache namespace,
 and commits `ready` with its cache key. On restart, it atomically requeues jobs
@@ -125,33 +133,43 @@ left in `processing`; content-addressed cache keys make repeated resolution
 idempotent. The benchmark uses a fixed batch size of four and a controlled
 half-warm cache.
 
-### Semantic champion metrics
+Run 026 additionally updates `d040` before any worker claim, atomically marks
+revision 1 superseded, and enqueues revision 2. Its validation control embeds the
+same updated corpus independently, builds a separate cosine `vec0` index, and
+requires exact retrieval, context, and vector parity. The first measured query
+vector is shared across the two indexes to isolate index behavior from repeated
+CPU reduction-order jitter; every repeated query embedding was nevertheless
+timed and was byte-identical in this measured run.
+
+### Current champion metrics
 
 - Original MRR@5: 0.975
 - Original Recall@5: 0.975
 - Original Hit@1: 0.95
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
-- Mean original context: 128.80 approximate tokens
-- Mean held-out context: 131.40 approximate tokens
-- Mean int8 candidate search: 0.462 ms original, 0.428 ms held-out
-- Mean FP16 rerank: 0.234 ms original, 0.268 ms held-out
-- Mean total search/fusion: 1.085 ms original, 0.898 ms held-out
-- Mean end-to-end retrieval/context latency: 13.27 ms original, 20.31 ms held-out
-- Mean context assembly latency: 0.112 ms original, 0.123 ms held-out
-- Peak process RSS: 229.668 MiB
+- Mean original context: 128.20 approximate tokens
+- Mean held-out context: 131.85 approximate tokens
+- Mean int8 candidate search: 0.294 ms original, 0.282 ms held-out
+- Mean FP16 rerank: 0.159 ms original, 0.160 ms held-out
+- Mean total search/fusion: 0.638 ms original, 0.621 ms held-out
+- Mean end-to-end retrieval/context latency: 7.04 ms original, 8.06 ms held-out
+- Mean context assembly latency: 0.089 ms original, 0.092 ms held-out
+- Peak process RSS: 230.902 MiB
 - Model and tokenizer: 133,804,864 bytes
 - SQLite with FTS5, records, int8 vec0, FP16 rerank blobs, and FP32 cache:
-  630,784 bytes
-- FTS5 plus pending-job enqueue: 40 records, 0.0109 s wall, 0.00919 s CPU
-- Recovery after reopen: four processing jobs reclaimed in 0.000484 s wall and CPU
+  626,688 bytes
+- FTS5 plus pending-job enqueue: 40 records, 0.000632 s wall, 0.000631 s CPU
+- Pending update transaction: 0.000283 s wall and CPU
 - Worker: ten FIFO batches of four, 20 cache hits and 20 misses
-- Worker drain: 0.375 s wall, 0.752 s CPU
-- Total controlled preseed plus worker embedding: 0.676 s wall, 1.359 s CPU
-- Final lifecycle: 40 unique ready outputs, zero pending, zero processing; four
-  jobs attempted twice and 36 once
+- Worker drain: 0.321 s wall, 0.648 s CPU
+- Total controlled preseed plus worker embedding: 0.657 s wall, 1.318 s CPU
+- Synchronous control corpus embedding: 0.643 s wall, 1.297 s CPU, 62.20
+  documents/s; complete control including evaluation: 1.387 s wall, 2.779 s CPU
+- Final lifecycle: 40 unique ready outputs, zero pending, zero processing, one
+  superseded job with zero attempts, and 40 ready jobs with one attempt each
 
-Measured process CPU across 20 hybrid queries was 0.534 seconds on the original
-set and 0.813 seconds on held-out. Resource measurements are environment-sensitive;
+Measured process CPU across 20 hybrid queries was 0.281 seconds on the original
+set and 0.326 seconds on held-out. Resource measurements are environment-sensitive;
 the committed reproduction records load, embedding, query, search, end-to-end,
 CPU and process-lifetime peak RSS separately.
 
@@ -260,6 +278,12 @@ champion while Run 005 remained the lightweight fallback.
   evidence remained intact. A follow-up should compare the asynchronous result
   against a synchronous reindex of the same updated corpus, not tune the update
   text against frozen rankings.
+- Run 026 showed that the Run 025 ranking changes were entirely attributable to
+  the declared content update. Once compared with an independent synchronous
+  reindex of that same updated corpus, the asynchronous path had exact vector,
+  FTS5, vector-only, hybrid, evidence, and context parity. A control index must
+  also declare the same distance metric; sqlite-vec's default is not a substitute
+  for the champion's explicit cosine metric.
 
 ## Next hypotheses
 
@@ -299,13 +323,14 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
     immediate FTS5 availability and bounded FIFO embedding batches. It is the
     base ingestion lifecycle.
 17. Run 024 completed deterministic recovery of a stranded `processing` batch
-    after SQLite reopen and is the current operational champion.
+    after SQLite reopen.
 18. Run 025 completed pending-update supersession. Correctness and provenance
     passed, but exact Run 024 ranking/context parity failed, so it was rejected.
-19. Next: build a synchronous updated-corpus control for the same declared
-    `d040` revision and require the asynchronous queue to reproduce that control
-    exactly, while reporting natural drift from the unchanged benchmark
-    separately.
+19. Run 026 completed the synchronous updated-corpus control and is the current
+    operational champion.
+20. Next: test atomic claim coordination with two local SQLite workers and
+    require every active job to be embedded or reused exactly once, with no
+    duplicate ready attachments and unchanged Run 026 retrieval/context.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -328,7 +353,13 @@ Reproduce Run 006 held-out evidence validation:
 python3 experiments/memory/run_heldout_validation.py
 ```
 
-Reproduce the current Run 024 operational champion after the pinned E5 setup:
+Reproduce the current Run 026 operational champion after the pinned E5 setup:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_supersession_control --threads 2
+```
+
+Reproduce the accepted Run 024 recovery stage:
 
 ```bash
 .artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_recovery --threads 2

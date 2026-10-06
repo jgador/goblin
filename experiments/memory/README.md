@@ -406,7 +406,7 @@ The candidate was rejected because the declared content change altered four
 lexical, nine vector-only, and five hybrid query rankings. Hybrid quality and
 held-out evidence remained unchanged, but mean held-out context increased from
 131.40 to 131.85 approximate tokens. The update text was not tuned after seeing
-the result, and Run 024 remains the operational champion.
+the result, and Run 024 remained the operational champion at that stage.
 
 ```bash
 .artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_supersession --threads 2
@@ -416,3 +416,32 @@ See `runs/025.json` for revision hashes, FTS5 provenance, cache attachments,
 queue metrics, changed rankings, model, CPU, RSS, SQLite, latency, quality, and
 context measurements. This evaluates retrieval and context assembly, not answer
 generation.
+
+## Synchronous updated-corpus control (Run 026)
+
+Run 026 repeats the Run 025 `d040` pending update and builds a separate
+synchronous SQLite control from the identical updated corpus. The control uses
+independent local CPU embedding, the same explicit cosine `vec0` schema, int8
+candidate index, FP16 reranker, FTS5 configuration, fusion, supersession filter,
+and context assembler. The first measured query vector is reused across both
+indexes so the comparison isolates index and lifecycle behavior; repeated query
+inference remains timed and produced zero measured vector delta in this run.
+
+The asynchronous and synchronous paths matched exactly for all original and
+held-out FTS5, vector-only, and hybrid top-five rankings, retrieval/evidence
+metrics, context sizes, and all 40 corpus vectors. The asynchronous database was
+626,688 bytes, 0.65% smaller than Run 024 and within the fixed 5% bound. Hybrid
+quality stayed at original MRR@5 0.975 / Hit@1 0.95 and perfect held-out scores
+and evidence. Mean context was 128.20 original and 131.85 held-out, both within
+the fixed 5% bound relative to Run 024. Run 026 is accepted as the operational
+ingestion champion; the changed rankings versus Run 024 remain documented as
+natural content drift, not asynchronous failure.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --embedding-cache sqlite_pending_supersession_control --threads 2
+```
+
+See `runs/026.json` for the exact parity gates, full per-query results, lifecycle
+provenance, model and dependency pins, CPU, RSS, storage, and separated worker,
+control-embedding, vector-search, and end-to-end timings. No answer generator or
+external inference API was evaluated.

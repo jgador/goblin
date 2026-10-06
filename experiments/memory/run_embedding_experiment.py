@@ -135,6 +135,7 @@ def main():
             "sqlite_pending_queue",
             "sqlite_pending_recovery",
             "sqlite_pending_supersession",
+            "sqlite_pending_supersession_control",
         ],
         default="none",
     )
@@ -430,6 +431,37 @@ def main():
             "worker_cpu_seconds_at_most": 2.0,
             "selected_before_evaluation": True,
         }
+    elif args.embedding_cache == "sqlite_pending_supersession_control":
+        result.update(
+            run=26,
+            followup_to_run=25,
+            method="fts5-e5-small-v2-rrf60-int8-fp16-rerank-supersession-control",
+            hypothesis=(
+                "The asynchronous pending-supersession path can exactly reproduce an "
+                "independently embedded synchronous reindex of the same declared update, "
+                "separating queue correctness from natural content drift."
+            ),
+        )
+        result["embedding_queue_rule"] = {
+            "states": ["pending", "processing", "ready", "superseded"],
+            "ordering": "ascending ingestion ordinal, then revision",
+            "batch_size": 4,
+            "preseeded_cache_documents": len(corpus) // 2,
+            "update_document": "d040",
+            "update_suffix": " Cache experiment revision two.",
+            "update_timing": "after initial enqueue and before model loading or worker claim",
+            "control": "independent synchronous embedding and SQLite reindex of identical updated corpus",
+            "exact_control_parity": ["fts5", "vector-only", "hybrid", "context", "vectors"],
+            "query_vector_comparison": (
+                "freeze the first measured query embedding for both indexes while still timing "
+                "each repeated inference, isolating index parity from CPU reduction-order jitter"
+            ),
+            "champion_context_growth_at_most_percent": 5.0,
+            "database_growth_at_most_percent": 5.0,
+            "worker_wall_seconds_at_most": 1.0,
+            "worker_cpu_seconds_at_most": 2.0,
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -453,9 +485,14 @@ def main():
             "sqlite_pending_queue",
             "sqlite_pending_recovery",
             "sqlite_pending_supersession",
+            "sqlite_pending_supersession_control",
         )
         recovery_enabled = args.embedding_cache == "sqlite_pending_recovery"
-        supersession_enabled = args.embedding_cache == "sqlite_pending_supersession"
+        supersession_enabled = args.embedding_cache in (
+            "sqlite_pending_supersession",
+            "sqlite_pending_supersession_control",
+        )
+        control_enabled = args.embedding_cache == "sqlite_pending_supersession_control"
         if queue_enabled:
             if supersession_enabled:
                 db.execute(
@@ -645,6 +682,7 @@ def main():
         options.intra_op_num_threads = args.threads
         options.inter_op_num_threads = 1
         options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        options.use_deterministic_compute = control_enabled
         session = ort.InferenceSession(str(args.model_dir / "model.onnx"), options, providers=["CPUExecutionProvider"])
         tokenizer = Tokenizer.from_file(str(args.model_dir / "tokenizer.json"))
         tokenizer.enable_padding(pad_id=0, pad_token="[PAD]")
@@ -654,6 +692,7 @@ def main():
         result["load_peak_rss_mib"] = rss()
         result["runtime_versions"] = {"onnxruntime": ort.__version__, "numpy": np.__version__,
                                        "tokenizers": __import__("tokenizers").__version__}
+        result["deterministic_compute"] = control_enabled
 
         def embed(texts, prefix):
             enc = tokenizer.encode_batch([prefix + text for text in texts])
@@ -1204,9 +1243,24 @@ def main():
                                        "stored_vectors": len(vectors),
                                        "unit_norm_max_error": float(np.max(np.abs(np.linalg.norm(vectors, axis=1) - 1)))}
 
+        comparison_query_vectors = {} if control_enabled else None
+        repeated_query_vector_deltas = []
+
+        def comparison_query_vector(query):
+            fresh = embed([query], conventions["query_prefix"])[0]
+            if not control_enabled:
+                return fresh
+            reference_vector = comparison_query_vectors.get(query)
+            if reference_vector is None:
+                reference_vector = fresh.copy()
+                comparison_query_vectors[query] = reference_vector
+            else:
+                repeated_query_vector_deltas.append(float(np.max(np.abs(reference_vector - fresh))))
+            return reference_vector
+
         def vector(query):
             start = time.perf_counter()
-            v = embed([query], conventions["query_prefix"])[0]
+            v = comparison_query_vector(query)
             embedded = time.perf_counter()
             neighbors, candidate_ms, rerank_ms = search_vector_rows(v, 5)
             rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
@@ -1218,7 +1272,7 @@ def main():
 
         def hybrid_retrieve(query):
             start = time.perf_counter()
-            v = embed([query], conventions["query_prefix"])[0]
+            v = comparison_query_vector(query)
             embedded = time.perf_counter()
             vector_rows, candidate_ms, rerank_ms = search_vector_rows(v, 10)
             lexical_rows = db.execute(
@@ -1260,6 +1314,175 @@ def main():
             name: evaluate(qs, retrieve, suppressed, candidate_context, candidate_assembler)
             for name, qs in sets.items()
         }
+        if control_enabled:
+            control_started = time.perf_counter()
+            control_cpu_started = time.process_time()
+            control_embed_started = time.perf_counter()
+            control_embed_cpu_started = time.process_time()
+            control_vectors = []
+            for offset in range(0, len(corpus), 4):
+                control_vectors.append(embed(
+                    [doc["text"] for doc in corpus[offset:offset + 4]],
+                    conventions["document_prefix"],
+                ))
+            control_vectors = np.concatenate(control_vectors)
+            control_embed_wall = time.perf_counter() - control_embed_started
+            control_embed_cpu = time.process_time() - control_embed_cpu_started
+
+            control_path = Path(td) / "synchronous-control.db"
+            control_db = sqlite3.connect(control_path)
+            control_db.execute(
+                "CREATE VIRTUAL TABLE memory USING fts5(id UNINDEXED, text, tokenize='unicode61')"
+            )
+            control_db.executemany(
+                "INSERT INTO memory(id,text) VALUES (?,?)",
+                [(doc["id"], doc["text"]) for doc in corpus],
+            )
+            control_db.enable_load_extension(True)
+            sqlite_vec.load(control_db)
+            control_db.enable_load_extension(False)
+            control_db.execute(
+                f"CREATE VIRTUAL TABLE vectors USING vec0("
+                f"embedding int8[{dimensions}] distance_metric=cosine)"
+            )
+            control_db.executemany(
+                "INSERT INTO vectors(rowid,embedding) VALUES (?,vec_int8(?))",
+                [(i + 1, stored_vector_bytes(v)) for i, v in enumerate(control_vectors)],
+            )
+            control_db.execute("CREATE TABLE vector_rerank(rowid INTEGER PRIMARY KEY, embedding BLOB NOT NULL)")
+            control_db.executemany(
+                "INSERT INTO vector_rerank(rowid,embedding) VALUES (?,?)",
+                [(i + 1, v.astype(np.float16).tobytes()) for i, v in enumerate(control_vectors)],
+            )
+            control_db.commit()
+
+            def control_search_vector_rows(vector, output_k):
+                candidate_started = time.perf_counter()
+                neighbors = control_db.execute(
+                    "SELECT rowid,distance FROM vectors "
+                    "WHERE embedding MATCH vec_int8(?) AND k=? ORDER BY distance",
+                    (stored_vector_bytes(vector), 20),
+                ).fetchall()
+                candidate_ms = (time.perf_counter() - candidate_started) * 1000
+                rerank_started = time.perf_counter()
+                rowids = [rowid for rowid, _ in neighbors]
+                placeholders = ",".join("?" for _ in rowids)
+                stored = dict(control_db.execute(
+                    f"SELECT rowid,embedding FROM vector_rerank WHERE rowid IN ({placeholders})",
+                    rowids,
+                ).fetchall())
+                query = vector.astype(np.float32)
+                query_norm = float(np.linalg.norm(query))
+                rescored = []
+                for rowid in rowids:
+                    candidate = np.frombuffer(stored[rowid], dtype=np.float16).astype(np.float32)
+                    similarity = float(np.dot(query, candidate) / max(
+                        query_norm * float(np.linalg.norm(candidate)), 1e-12
+                    ))
+                    rescored.append((rowid, 1.0 - similarity))
+                rescored.sort(key=lambda row: (row[1], row[0]))
+                rerank_ms = (time.perf_counter() - rerank_started) * 1000
+                return rescored[:output_k], candidate_ms, rerank_ms
+
+            control_self_matches = [
+                control_search_vector_rows(v, 1)[0][0][0] == i + 1
+                for i, v in enumerate(control_vectors)
+            ]
+            control_neighbor_mismatches = []
+            for query, query_vector in comparison_query_vectors.items():
+                asynchronous_neighbors = search_vector_rows(query_vector, 20)[0]
+                synchronous_neighbors = control_search_vector_rows(query_vector, 20)[0]
+                if asynchronous_neighbors != synchronous_neighbors:
+                    control_neighbor_mismatches.append({
+                        "query": query,
+                        "asynchronous_rowids": [rowid for rowid, _ in asynchronous_neighbors],
+                        "synchronous_rowids": [rowid for rowid, _ in synchronous_neighbors],
+                        "max_distance_delta": max(
+                            abs(left[1] - right[1])
+                            for left, right in zip(asynchronous_neighbors, synchronous_neighbors)
+                        ),
+                    })
+
+            def control_vector(query):
+                started = time.perf_counter()
+                query_vector = comparison_query_vector(query)
+                embedded = time.perf_counter()
+                neighbors, candidate_ms, rerank_ms = control_search_vector_rows(query_vector, 5)
+                rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
+                return (rows, (embedded - started) * 1000,
+                        (time.perf_counter() - embedded) * 1000,
+                        candidate_ms, rerank_ms)
+
+            def control_hybrid(query):
+                started = time.perf_counter()
+                query_vector = comparison_query_vector(query)
+                embedded = time.perf_counter()
+                vector_rows, candidate_ms, rerank_ms = control_search_vector_rows(query_vector, 10)
+                lexical_rows = control_db.execute(
+                    "SELECT id FROM memory WHERE memory MATCH ? ORDER BY bm25(memory) LIMIT 10",
+                    (fts_query(query),),
+                ).fetchall()
+                scores = {}
+                best_rank = {}
+                for ranked_ids in (
+                    [corpus[rowid - 1]["id"] for rowid, _ in vector_rows],
+                    [row[0] for row in lexical_rows],
+                ):
+                    for rank, doc_id in enumerate(ranked_ids, 1):
+                        scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (60 + rank)
+                        best_rank[doc_id] = min(best_rank.get(doc_id, rank), rank)
+                ids = sorted(
+                    scores,
+                    key=lambda doc_id: (-scores[doc_id], best_rank[doc_id], doc_id),
+                )[:5]
+                by_id = {doc["id"]: doc["text"] for doc in corpus}
+                rows = [(doc_id, by_id[doc_id]) for doc_id in ids]
+                return (rows, (embedded - started) * 1000,
+                        (time.perf_counter() - embedded) * 1000,
+                        candidate_ms, rerank_ms)
+
+            def control_lexical(query):
+                started = time.perf_counter()
+                rows = control_db.execute(
+                    "SELECT id,text FROM memory WHERE memory MATCH ? ORDER BY bm25(memory) LIMIT 5",
+                    (fts_query(query),),
+                ).fetchall()
+                return rows, 0.0, (time.perf_counter() - started) * 1000
+
+            control_baseline = {
+                name: evaluate(qs, control_lexical, suppressed)
+                for name, qs in sets.items()
+            }
+            control_vector_only = {
+                name: evaluate(qs, control_vector, suppressed)
+                for name, qs in sets.items()
+            }
+            control_candidate = {
+                name: evaluate(qs, control_hybrid, suppressed, candidate_context, candidate_assembler)
+                for name, qs in sets.items()
+            }
+            control_db_bytes = control_path.stat().st_size
+            control_db.close()
+            result["synchronous_control"] = {
+                "method": "independent synchronous full-corpus embedding and SQLite reindex",
+                "corpus_embedding_wall_seconds": control_embed_wall,
+                "corpus_embedding_cpu_seconds": control_embed_cpu,
+                "corpus_embedding_docs_per_second": len(corpus) / control_embed_wall,
+                "corpus_self_neighbors_correct": sum(control_self_matches),
+                "index_neighbor_mismatches": control_neighbor_mismatches,
+                "vectors_byte_identical": bool(np.array_equal(control_vectors, vectors)),
+                "vector_max_absolute_delta": float(np.max(np.abs(control_vectors - vectors))),
+                "repeated_query_embedding_max_absolute_delta": max(
+                    repeated_query_vector_deltas, default=0.0
+                ),
+                "frozen_comparison_query_vectors": len(comparison_query_vectors),
+                "database_bytes": control_db_bytes,
+                "total_wall_seconds": time.perf_counter() - control_started,
+                "total_cpu_seconds": time.process_time() - control_cpu_started,
+                "baseline": control_baseline,
+                "vector_only": control_vector_only,
+                "candidate": control_candidate,
+            }
         if hybrid:
             result["fusion"] = {"algorithm": "reciprocal-rank-fusion", "rrf_k": 60,
                                 "lexical_pool": 10, "vector_pool": 10,
@@ -1270,7 +1493,10 @@ def main():
         db.close()
     result["model_disk_bytes"] = sum(f["bytes"] for f in manifest["files"].values())
     if challenger:
-        reference_run = (24 if args.embedding_cache == "sqlite_pending_supersession" else
+        reference_run = (24 if args.embedding_cache in (
+                             "sqlite_pending_supersession",
+                             "sqlite_pending_supersession_control",
+                         ) else
                          23 if args.embedding_cache == "sqlite_pending_recovery" else
                          22 if args.embedding_cache == "sqlite_pending_queue" else
                          21 if args.embedding_cache == "sqlite_namespace_gc" else
@@ -1306,6 +1532,11 @@ def main():
             <= reference["candidate"][dataset]["context_tokens_approx_mean"]
             for dataset in ("original", "heldout")
         )
+        context_growth_within_five_percent = all(
+            result["candidate"][dataset]["context_tokens_approx_mean"]
+            <= reference["candidate"][dataset]["context_tokens_approx_mean"] * 1.05
+            for dataset in ("original", "heldout")
+        )
         vector_search_below_2ms = all(
             result["candidate"][dataset]["search_ms_mean"] < 2.0
             for dataset in ("original", "heldout")
@@ -1317,6 +1548,7 @@ def main():
                 "sqlite_pending_queue",
                 "sqlite_pending_recovery",
                 "sqlite_pending_supersession",
+                "sqlite_pending_supersession_control",
             ):
                 lifecycle = result["ingestion_lifecycle"]
                 enqueue = lifecycle["enqueue"]
@@ -1364,10 +1596,11 @@ def main():
                         worker["wall_seconds"] <= 1.0
                         and worker["cpu_seconds"] <= 2.0
                     ),
-                    f"run_{reference_run:03}_rankings_and_context_exact": (
-                        lexical_rankings_exact and retrieval_rankings_exact and context_exact
-                    ),
                 }
+                if not control_enabled:
+                    cache_gate[f"run_{reference_run:03}_rankings_and_context_exact"] = (
+                        lexical_rankings_exact and retrieval_rankings_exact and context_exact
+                    )
                 if recovery_enabled:
                     recovery = lifecycle["recovery"]
                     cache_gate.update({
@@ -1460,6 +1693,36 @@ def main():
                             <= reference["vector_db_bytes_including_fts_and_raw_records"] * 1.05
                         ),
                     })
+                    if control_enabled:
+                        control = result["synchronous_control"]
+                        control_rankings_exact = all(
+                            [detail["top"] for detail in result[mode][dataset]["details"]]
+                            == [detail["top"] for detail in control[mode][dataset]["details"]]
+                            for mode in ("baseline", "vector_only", "candidate")
+                            for dataset in ("original", "heldout")
+                        )
+                        control_metrics_exact = all(
+                            result[mode][dataset].get(metric)
+                            == control[mode][dataset].get(metric)
+                            for mode in ("baseline", "vector_only", "candidate")
+                            for dataset in ("original", "heldout")
+                            for metric in (
+                                "mrr_at_5", "recall_at_5", "hit_at_1",
+                                "evidence_at_5", "context_tokens_approx_mean",
+                            )
+                        )
+                        cache_gate.update({
+                            "synchronous_control_rankings_exact": control_rankings_exact,
+                            "synchronous_control_quality_evidence_context_exact": control_metrics_exact,
+                            "synchronous_control_vectors_exact": (
+                                control["vectors_byte_identical"]
+                                and control["vector_max_absolute_delta"] == 0.0
+                                and control["corpus_self_neighbors_correct"] == len(corpus)
+                            ),
+                            "champion_context_growth_at_most_five_percent": (
+                                context_growth_within_five_percent
+                            ),
+                        })
                 else:
                     cache_gate.update({
                         "all_jobs_ready_once": (
@@ -1531,7 +1794,9 @@ def main():
                         ),
                     }
         context_extension = args.context != "compact"
-        accepted = (quality_match and context_not_increased
+        accepted = (quality_match
+                    and (context_growth_within_five_percent if control_enabled
+                         else context_not_increased)
                     and vector_search_below_2ms
                     and all(cache_gate.values())
                     if cache_enabled else
@@ -1549,6 +1814,7 @@ def main():
             "quality_match": quality_match,
             "context_reduced_on_both_sets": context_reduced,
             "context_not_increased": context_not_increased,
+            "context_growth_within_five_percent": context_growth_within_five_percent,
             "vector_search_below_2ms": vector_search_below_2ms,
             "resource_improvements": resource_improvements,
             "reference_method": reference["method"],
@@ -1576,7 +1842,11 @@ def main():
                     "accepted-context-champion" if context_extension and accepted else
                     "accepted-semantic-champion" if accepted else "rejected"),
             champion=accepted,
-            notes=(f"Accepted as the pending-supersession extension to Run {reference_run}: the stale pending job was retained as history but never embedded, only the latest FTS5 content and cache attachment became active, and retrieval/evidence/context matched."
+            notes=(f"Accepted as the pending-supersession synchronous-control extension to Run {reference_run}: the asynchronous path exactly matched an independently embedded synchronous reindex for FTS5, vector-only, hybrid, context, and vectors while preserving lifecycle and resource bounds."
+                   if args.embedding_cache == "sqlite_pending_supersession_control" and accepted else
+                   f"Rejected as a pending-supersession synchronous-control extension to Run {reference_run}: exact asynchronous/control parity, lifecycle provenance, champion quality, or a fixed resource gate failed."
+                   if args.embedding_cache == "sqlite_pending_supersession_control" else
+                   f"Accepted as the pending-supersession extension to Run {reference_run}: the stale pending job was retained as history but never embedded, only the latest FTS5 content and cache attachment became active, and retrieval/evidence/context matched."
                    if args.embedding_cache == "sqlite_pending_supersession" and accepted else
                    f"Rejected as a pending-supersession extension to Run {reference_run}: latest-content provenance, stale-job isolation, final parity, or a resource gate failed."
                    if args.embedding_cache == "sqlite_pending_supersession" else
