@@ -2,15 +2,15 @@
 
 ## Current champions
 
-Semantic-quality champion: Run 017,
-`fts5-e5-small-v2-rrf60-query-aware-rank-one-protected-budget-128`.
+Semantic-quality and storage champion: Run 020,
+`fts5-e5-small-v2-rrf60-rank-one-budget-int8-maxabs-fp16-rerank`.
 
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
-Run 017 hypothesis: protecting every selected clause in the rank-one record
-before applying a fixed 128-token target can preserve evidence while reducing
-Run 014 context.
+Run 020 hypothesis: max-absolute int8 vec0 candidate retrieval followed by
+FP16 reranking can match Run 017 quality and context with substantially less
+SQLite storage.
 
 Run 014 extends Run 010's accepted E5 retrieval with query-aware context
 assembly. It preserves every original and held-out retrieval/evidence metric
@@ -32,6 +32,10 @@ Run 019 did not replace Run 017. Per-vector max-absolute int8 scaling restored
 every original hybrid top-five result and its context, but two held-out hybrid
 top-five sets still changed and mean held-out context increased by 0.61%.
 
+Run 020 replaces Run 017 as the overall champion. A fixed int8 top-20 candidate
+pool followed by SQLite-stored FP16 reranking exactly restores every Run 017
+vector-only and hybrid top-five result while reducing SQLite storage by 69.06%.
+
 Run 005 remains the operational fallback when embedding cost is not acceptable.
 Its process RSS was about 15 MiB in the Run 010 environment versus 228.238 MiB
 for the latest full hybrid run. Embeddings remain the dominant cost.
@@ -43,18 +47,25 @@ Queries: 20
 
 ### Champion behavior
 
-Run 017 uses Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
+Run 020 uses Run 010's fixed, label-independent reciprocal-rank fusion rule: equal-weight
 RRF with `k=60`, combining the top 10 FTS5 and top 10 E5 candidates before
 selecting five. It retains Run 004 supersession filtering and Run 005 compact
 context assembly. E5 uses its documented `query: ` and `passage: ` prefixes,
 attention-mask mean pooling, L2 normalization, 384 dimensions and cosine
 distance. Full original records remain in SQLite for provenance.
 
-At context assembly, Run 017 first applies Run 014's selector. It protects every
-selected clause from the rank-one record and the first selected clause from each
-lower-rank record. It then admits remaining lower-rank clauses in retrieval
-order up to a 128 approximate-token target. Protected clauses may exceed the
-target and clauses are never truncated. The rule was fixed before evaluation.
+For semantic retrieval, Run 020 first searches a max-absolute-scaled sqlite-vec
+`int8[384]` index for 20 candidates. It fetches FP16 copies of those vectors
+from ordinary SQLite blobs, computes cosine scores in FP32 against the FP32
+query, and reranks to the top 10 before unchanged RRF. The FP16 payload is
+30,720 bytes for 40 records. The rule was fixed before evaluation.
+
+At context assembly, Run 020 retains Run 017's rules. It first applies Run 014's
+selector and protects every selected clause from the rank-one record and the
+first selected clause from each lower-rank record. It then admits remaining
+lower-rank clauses in retrieval order up to a 128 approximate-token target.
+Protected clauses may exceed the target and clauses are never truncated. The
+rule was fixed before evaluation.
 
 The compactor removes a conservative set of high-frequency function words. It deliberately preserves negation, conjunctions, modality, temporal words, identifiers, numbers, and content terms. On this benchmark the resulting sketches retain 100% of those content terms.
 
@@ -68,14 +79,17 @@ The full record remains stored. The sketch is generated at context assembly time
 - Held-out MRR@5, Recall@5, Hit@1, evidence: 1.0 each
 - Mean original context: 128.80 approximate tokens
 - Mean held-out context: 131.40 approximate tokens
-- Mean end-to-end retrieval/context latency: 7.90 ms original, 7.04 ms held-out
-- Mean context assembly latency: 0.081 ms original, 0.090 ms held-out
-- Peak process RSS: 228.238 MiB
+- Mean int8 candidate search: 0.539 ms original, 0.475 ms held-out
+- Mean FP16 rerank: 0.279 ms original, 0.287 ms held-out
+- Mean total search/fusion: 1.071 ms original, 1.007 ms held-out
+- Mean end-to-end retrieval/context latency: 9.17 ms original, 9.37 ms held-out
+- Mean context assembly latency: 0.147 ms original, 0.137 ms held-out
+- Peak process RSS: 228.352 MiB
 - Model and tokenizer: 133,804,864 bytes
-- SQLite with FTS5, records, and vec0: 1,654,784 bytes
+- SQLite with FTS5, records, int8 vec0, and FP16 rerank blobs: 512,000 bytes
 
-Measured process CPU across 20 hybrid queries was 0.314 seconds on the original
-set and 0.282 seconds on held-out. Resource measurements are environment-sensitive;
+Measured process CPU across 20 hybrid queries was 0.368 seconds on the original
+set and 0.377 seconds on held-out. Resource measurements are environment-sensitive;
 the committed reproduction records load, embedding, query, search, end-to-end,
 CPU and process-lifetime peak RSS separately.
 
@@ -152,6 +166,12 @@ champion while Run 005 remained the lightweight fallback.
   Run 017 hybrid top-five results and context while retaining the 71.29% SQLite reduction.
   Held-out h005 and h014 still changed membership, increasing mean held-out
   context from 131.40 to 132.20 tokens. The fixed gate rejected it.
+- Run 020 showed that inexpensive two-stage retrieval resolves Run 019's
+  boundary errors. Int8 vec0 top-20 candidate search plus FP16 reranking exactly
+  matched every Run 017 vector-only and hybrid top-five result and both context
+  means. SQLite fell 69.06% to 512,000 bytes. Search/fusion rose to about 1 ms
+  and end-to-end latency rose 16.12% original and 33.09% held-out, but remained
+  9.17-9.37 ms and within the fixed 2 ms search gate, so Run 020 is accepted.
 
 ## Next hypotheses
 
@@ -181,10 +201,12 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
 12. Run 019 completed deterministic per-vector symmetric max-absolute int8
     scaling. It was rejected after a 0.61% held-out context increase despite
     exact original results and unchanged scored quality/evidence.
-13. Next: test a two-stage compact vector path. Use max-absolute int8 vec0 to
-    fetch a fixed top-20 pool, then rerank to the existing top 10 using FP16
-    vectors stored as ordinary SQLite blobs before unchanged RRF. This directly
-    targets Run 019's two boundary errors while retaining most storage savings.
+13. Run 020 completed a two-stage compact vector path using a max-absolute int8
+    top-20 pool and SQLite-stored FP16 reranking. It is the current champion.
+14. Next: test a content-addressed SQLite embedding cache keyed by normalized
+    text, model revision, and embedding conventions. Reindex the unchanged
+    corpus, then a deterministic one-record update; require Run 020 retrieval
+    parity while measuring avoided inference, update CPU/latency, and cache cost.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
@@ -642,4 +664,37 @@ Reproduce after the Run 010 E5 preparation:
 
 Full model, quantizer, CPU, memory, SQLite, latency, quality, context, and
 per-query ranking measurements are in `runs/019.json`. No external inference
+API or answer generator was used.
+
+## Run 020: int8 candidates with FP16 reranking
+
+Run 020 kept Run 017's FP32 E5 inference, fixed FTS5/E5 RRF, supersession rules,
+and protected context assembly. Max-absolute int8 sqlite-vec search retrieves a
+fixed 20 candidates. FP16 copies stored as ordinary SQLite blobs are converted
+to FP32 and cosine-reranked against the FP32 query to the existing top 10 before
+RRF. The rule and acceptance gate were fixed before evaluation.
+
+Every Run 017 vector-only and hybrid top-five result matched on both frozen
+sets. All retrieval and evidence metrics matched, and context remained exactly
+128.80 tokens original and 131.40 held-out. All 40 self-neighbor checks passed.
+
+SQLite fell from 1,654,784 to 512,000 bytes, a 69.06% reduction. The FP16
+payload was 30,720 bytes. Mean int8 candidate search was 0.539/0.475 ms and FP16
+reranking was 0.279/0.287 ms on original/held-out. Total search/fusion remained
+below the fixed 2 ms ceiling at 1.071/1.007 ms. End-to-end retrieval/context was
+9.17/9.37 ms, versus 7.90/7.04 ms for Run 017. The absolute latency remains
+small, but the 16.12%/33.09% regression is an explicit storage tradeoff.
+
+Run 020 passes the predeclared quality, context, storage, and search-latency gate
+and replaces Run 017 as champion. These measurements evaluate retrieval and
+evidence, not generated answers.
+
+Reproduce after the Run 010 E5 preparation:
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --threads 2
+```
+
+Full model, precision, CPU, memory, SQLite, stage latency, quality, context, and
+per-query ranking measurements are in `runs/020.json`. No external inference
 API or answer generator was used.

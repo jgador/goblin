@@ -276,3 +276,22 @@ fixed gate rejected the candidate and Run 017 remains champion.
 See `runs/019.json` for complete measurements and rankings. FP32 model inference
 is unchanged; only stored and search-query vector precision changes. No external
 inference API or answer generator is used.
+
+## Int8 candidates with FP16 reranking (Run 020)
+
+Run 020 searches a max-absolute int8 vec0 index for 20 candidates, then reranks
+them to the existing top 10 using FP16 vectors stored as ordinary SQLite blobs
+before unchanged RRF. It exactly matched every Run 017 vector-only and hybrid
+top-five result, evidence score, and context mean on both frozen sets.
+
+SQLite fell 69.06%, from 1,654,784 to 512,000 bytes. Candidate search plus
+reranking remained near 1 ms, below the fixed 2 ms gate. End-to-end latency rose
+to 9.17 ms original and 9.37 ms held-out, an explicit storage tradeoff. Run 020
+passes the predeclared gate and is the current champion.
+
+```bash
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embedding_experiment.py --model e5 --context rank_one_protected_budget --vector-storage int8_maxabs_fp16_rerank --threads 2
+```
+
+See `runs/020.json` for complete measurements and rankings. No external
+inference API or answer generator is used.

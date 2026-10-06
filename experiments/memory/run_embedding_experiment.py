@@ -59,10 +59,15 @@ def rank_one_protected_budget_context(rows, query):
 def evaluate(queries, retrieve, suppressed, context_transform=None, context_assembler=None):
     context_transform = context_transform or (lambda text, _query: compact_text(text))
     details, latency, embed_latency, search_latency, context_latency = [], [], [], [], []
+    candidate_search_latency, rerank_latency = [], []
     cpu_start = time.process_time()
     for q in queries:
         started = time.perf_counter()
-        rows, embedding_ms, search_ms = retrieve(q["query"])
+        retrieved = retrieve(q["query"])
+        rows, embedding_ms, search_ms = retrieved[:3]
+        if len(retrieved) == 5:
+            candidate_search_latency.append(retrieved[3])
+            rerank_latency.append(retrieved[4])
         rows = [row for row in rows if row[0] not in suppressed]
         context_started = time.perf_counter()
         rendered = (context_assembler(rows, q["query"]) if context_assembler else
@@ -84,7 +89,7 @@ def evaluate(queries, retrieve, suppressed, context_transform=None, context_asse
         search_latency.append(search_ms)
     cpu = time.process_time() - cpu_start
     measured_evidence = [d["evidence_preserved"] for d in details if d["evidence_preserved"] is not None]
-    return {
+    metrics = {
         "query_count": len(queries), "k": 5,
         "mrr_at_5": round(statistics.fmean(0 if d["first_relevant_rank"] is None else 1 / d["first_relevant_rank"] for d in details), 6),
         "recall_at_5": round(statistics.fmean(d["recall"] for d in details), 6),
@@ -98,6 +103,10 @@ def evaluate(queries, retrieve, suppressed, context_transform=None, context_asse
         "context_assembly_ms_mean": statistics.fmean(context_latency),
         "cpu_seconds": cpu, "peak_rss_mib": rss(), "details": details,
     }
+    if candidate_search_latency:
+        metrics["int8_candidate_search_ms_mean"] = statistics.fmean(candidate_search_latency)
+        metrics["fp16_rerank_ms_mean"] = statistics.fmean(rerank_latency)
+    return metrics
 
 
 def main():
@@ -108,7 +117,7 @@ def main():
     parser.add_argument("--retrieval", choices=["vector", "hybrid"], default="vector")
     parser.add_argument(
         "--vector-storage",
-        choices=["float32", "int8", "int8_maxabs"],
+        choices=["float32", "int8", "int8_maxabs", "int8_maxabs_fp16_rerank"],
         default="float32",
     )
     parser.add_argument(
@@ -254,6 +263,29 @@ def main():
             "query_quantization": "same deterministic per-vector max-absolute rule immediately before search",
             "selected_before_evaluation": True,
         }
+    elif args.vector_storage == "int8_maxabs_fp16_rerank":
+        result.update(
+            run=20,
+            followup_to_run=19,
+            method="fts5-e5-small-v2-rrf60-rank-one-budget-int8-maxabs-fp16-rerank",
+            hypothesis=(
+                "Max-absolute int8 vec0 candidate retrieval followed by FP16 reranking "
+                "can match Run 017 quality and context with substantially less SQLite storage."
+            ),
+            precision="float32-model-int8-candidates-fp16-rerank-storage",
+        )
+        result["vector_storage"] = {
+            "candidate_index": f"sqlite-vec int8[{dimensions}] with per-vector max-absolute scaling",
+            "candidate_quantizer": "round(vector / max(abs(vector)) * 127), clipped to [-127, 127]",
+            "candidate_pool": 20,
+            "rerank_storage": f"SQLite BLOB float16[{dimensions}]",
+            "rerank_output": 10,
+            "rerank_distance": "cosine computed in FP32 from stored FP16 corpus vectors and FP32 query",
+            "rerank_corpus_precision": "float16 storage converted to float32 for scoring",
+            "rerank_query_precision": "float32",
+            "query_quantization": "max-absolute int8 for candidate search; FP32 for reranking",
+            "selected_before_evaluation": True,
+        }
     if args.model == "e5_int8":
         cpu_flags = set()
         cpuinfo = Path("/proc/cpuinfo")
@@ -332,7 +364,7 @@ def main():
             return np.clip(np.rint(vector / maximum * 127), -127, 127).astype(np.int8)
 
         def stored_vector_bytes(vector):
-            if args.vector_storage == "int8_maxabs":
+            if args.vector_storage in ("int8_maxabs", "int8_maxabs_fp16_rerank"):
                 return quantize_maxabs(vector).tobytes()
             return vector.tobytes()
 
@@ -354,7 +386,7 @@ def main():
         start = time.perf_counter()
         insert_expression = (
             "vec_quantize_int8(?, 'unit')" if args.vector_storage == "int8" else
-            "vec_int8(?)" if args.vector_storage == "int8_maxabs" else
+            "vec_int8(?)" if args.vector_storage in ("int8_maxabs", "int8_maxabs_fp16_rerank") else
             "?"
         )
         insert_sql = f"INSERT INTO vectors(rowid,embedding) VALUES (?,{insert_expression})"
@@ -364,13 +396,51 @@ def main():
         query_expression = (
             "vec_quantize_int8(?, 'unit')"
             if args.vector_storage == "int8"
-            else "vec_int8(?)" if args.vector_storage == "int8_maxabs"
+            else "vec_int8(?)" if args.vector_storage in ("int8_maxabs", "int8_maxabs_fp16_rerank")
             else "?"
         )
-        self_matches = [db.execute(
-            f"SELECT rowid FROM vectors WHERE embedding MATCH {query_expression} AND k=1 ORDER BY distance",
-            (stored_vector_bytes(v),),
-        ).fetchone()[0] == i + 1 for i, v in enumerate(vectors)]
+        rerank_enabled = args.vector_storage == "int8_maxabs_fp16_rerank"
+        if rerank_enabled:
+            db.execute("CREATE TABLE vector_rerank(rowid INTEGER PRIMARY KEY, embedding BLOB NOT NULL)")
+            start = time.perf_counter()
+            db.executemany(
+                "INSERT INTO vector_rerank(rowid,embedding) VALUES (?,?)",
+                [(i + 1, v.astype(np.float16).tobytes()) for i, v in enumerate(vectors)],
+            )
+            db.commit()
+            result["fp16_rerank_insert_seconds"] = time.perf_counter() - start
+            result["fp16_rerank_payload_bytes"] = len(vectors) * dimensions * 2
+
+        def search_vector_rows(vector, output_k):
+            candidate_started = time.perf_counter()
+            pool_k = 20 if rerank_enabled else output_k
+            neighbors = db.execute(
+                f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=? ORDER BY distance",
+                (stored_vector_bytes(vector), pool_k),
+            ).fetchall()
+            candidate_ms = (time.perf_counter() - candidate_started) * 1000
+            if not rerank_enabled:
+                return neighbors, candidate_ms, 0.0
+            rerank_started = time.perf_counter()
+            rowids = [rowid for rowid, _ in neighbors]
+            placeholders = ",".join("?" for _ in rowids)
+            stored = dict(db.execute(
+                f"SELECT rowid,embedding FROM vector_rerank WHERE rowid IN ({placeholders})",
+                rowids,
+            ).fetchall())
+            query = vector.astype(np.float32)
+            query_norm = float(np.linalg.norm(query))
+            rescored = []
+            for rowid in rowids:
+                candidate = np.frombuffer(stored[rowid], dtype=np.float16).astype(np.float32)
+                similarity = float(np.dot(query, candidate) / max(query_norm * float(np.linalg.norm(candidate)), 1e-12))
+                rescored.append((rowid, 1.0 - similarity))
+            rescored.sort(key=lambda row: (row[1], row[0]))
+            rerank_ms = (time.perf_counter() - rerank_started) * 1000
+            return rescored[:output_k], candidate_ms, rerank_ms
+
+        self_matches = [search_vector_rows(v, 1)[0][0][0] == i + 1
+                        for i, v in enumerate(vectors)]
         assert all(self_matches), "Vector storage/search failed corpus self-neighbor validation"
         result["vector_validation"] = {"corpus_self_neighbors_correct": sum(self_matches),
                                        "stored_vectors": len(vectors),
@@ -380,21 +450,19 @@ def main():
             start = time.perf_counter()
             v = embed([query], conventions["query_prefix"])[0]
             embedded = time.perf_counter()
-            neighbors = db.execute(
-                f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=5 ORDER BY distance",
-                (stored_vector_bytes(v),),
-            ).fetchall()
+            neighbors, candidate_ms, rerank_ms = search_vector_rows(v, 5)
             rows = [(corpus[i - 1]["id"], corpus[i - 1]["text"]) for i, _ in neighbors]
-            return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
+            return (rows, (embedded - start) * 1000,
+                    (time.perf_counter() - embedded) * 1000,
+                    candidate_ms, rerank_ms) if rerank_enabled else (
+                    rows, (embedded - start) * 1000,
+                    (time.perf_counter() - embedded) * 1000)
 
         def hybrid_retrieve(query):
             start = time.perf_counter()
             v = embed([query], conventions["query_prefix"])[0]
             embedded = time.perf_counter()
-            vector_rows = db.execute(
-                f"SELECT rowid,distance FROM vectors WHERE embedding MATCH {query_expression} AND k=10 ORDER BY distance",
-                (stored_vector_bytes(v),),
-            ).fetchall()
+            vector_rows, candidate_ms, rerank_ms = search_vector_rows(v, 10)
             lexical_rows = db.execute(
                 "SELECT id FROM memory WHERE memory MATCH ? ORDER BY bm25(memory) LIMIT 10",
                 (fts_query(query),),
@@ -411,7 +479,11 @@ def main():
             ids = sorted(scores, key=lambda doc_id: (-scores[doc_id], best_rank[doc_id], doc_id))[:5]
             by_id = {doc["id"]: doc["text"] for doc in corpus}
             rows = [(doc_id, by_id[doc_id]) for doc_id in ids]
-            return rows, (embedded - start) * 1000, (time.perf_counter() - embedded) * 1000
+            return (rows, (embedded - start) * 1000,
+                    (time.perf_counter() - embedded) * 1000,
+                    candidate_ms, rerank_ms) if rerank_enabled else (
+                    rows, (embedded - start) * 1000,
+                    (time.perf_counter() - embedded) * 1000)
 
         # Warm-up is explicit, not included in per-query averages.
         start = time.perf_counter()
