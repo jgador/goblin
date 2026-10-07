@@ -1,0 +1,54 @@
+{
+  "model": "onnx-community/embeddinggemma-2-ONNX",
+  "revision": "daa72c51243991dfcaf9f9137d2c573d8f7790c0",
+  "source_model": "google/embeddinggemma-2",
+  "source_revision": "914f7f89142e33e77833254d9c9b90c3cef7303b",
+  "precision": "float32",
+  "modality": "text-only",
+  "export_provenance": "Community ONNX conversion of Google weights; not a Google-published ONNX artifact",
+  "files": {
+    "onnx/model.onnx": {
+      "sha256": "bc47de15f81208a5c99e5ab10f746d5e33b51ea228b7dc0bef9c133a94f1c1c3",
+      "bytes": 421421
+    },
+    "onnx/model.onnx_data": {
+      "sha256": "9fd452bfc6916e5a92f080f8dada35598ca4512b21c65897d4c5974d5f9630a2",
+      "bytes": 1084170240
+    },
+    "tokenizer.json": {
+      "sha256": "4d777ef5bdc1aa36227abdfb77c3e49e7b9c892d16e1b6bda41c393504828be4",
+      "bytes": 32170510
+    },
+    "tokenizer_config.json": {
+      "sha256": "17bd5d6e9364ca49a534e1502076593317c298d4a663623091ed45388f004874",
+      "bytes": 1599
+    },
+    "config.json": {
+      "sha256": "8d011bfe08b5e345bbe0b81e5c6fd02c381920b345b986047bc2a33ce7b90d1d",
+      "bytes": 5031
+    },
+    "config_sentence_transformers.json": {
+      "sha256": "031e56a498d33c349ab489a21885bcfe25b4fcba841149dc99e1e90d4a7c28f5",
+      "bytes": 1565
+    }
+  },
+  "conventions": {
+    "dimensions": 768,
+    "max_tokens": 8192,
+    "document_prefix": "title: none | text: ",
+    "query_prefix": "task: search result | query: ",
+    "pooling": "exported-sentence-embedding-mean-pooling-and-projection",
+    "normalization": "l2",
+    "distance": "cosine",
+    "bos_token_id": 2,
+    "eos_token_id": 1,
+    "pad_token_id": 0,
+    "padding_side": "right",
+    "include_prompt_in_pooling": true
+  },
+  "sources": [
+    "https://ai.google.dev/gemma/docs/embeddinggemma/inference-embeddinggemma-with-sentence-transformers",
+    "https://ai.google.dev/gemma/docs/embeddinggemma/model_card_2",
+    "https://huggingface.co/onnx-community/embeddinggemma-2-ONNX/tree/daa72c51243991dfcaf9f9137d2c573d8f7790c0"
+  ]
+}

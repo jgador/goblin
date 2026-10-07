@@ -473,3 +473,51 @@ See `runs/027.json` for worker attribution, claim transactions, per-batch
 timings, vector replay, queue provenance, full per-query measurements, and every
 acceptance gate. This evaluates retrieval and context assembly, not answer
 generation.
+
+## EmbeddingGemma 2 text-only comparison (Run 028)
+
+The user requested Google’s EmbeddingGemma 2 before the next lifecycle-race
+experiment completed. Run 028 instead tests the pinned community ONNX export of
+`google/embeddinggemma-2`, text-only FP32, 768 dimensions and two CPU threads.
+It uses `task: search result | query: ` and `title: none | text: `, the pinned
+tokenizer’s BOS/EOS tokens, masked mean pooling/projection and L2 normalization.
+Only the text graph is loaded. Runtime dependencies retain the existing pins.
+
+The unchanged original benchmark and frozen held-out queries are measured first;
+the identical Run 026-027 `d040` update is then tested as a separate declared
+corpus condition. Both models share the fixed int8 top-20 candidates, FP16
+reranking, equal RRF60 and Run 017 context assembler. An independently measured
+E5 process exactly reproduced all committed Run 020 original-corpus and Run 027
+updated-corpus rankings, scored quality and hybrid context.
+
+| Unchanged original corpus | Paired E5 | EmbeddingGemma 2 |
+| --- | ---: | ---: |
+| Vector-only MRR / Recall / Hit@1 | .9125 / 1.0 / .85 | .95 / .975 / .90 |
+| Hybrid MRR / Recall / Hit@1 | .975 / .975 / .95 | .975 / .95 / .95 |
+| Held-out hybrid quality/evidence | 1.0 each | 1.0 each |
+| Hybrid context, original / held-out | 128.80 / 131.40 | 127.90 / 131.65 |
+| Hybrid end-to-end, original / held-out | 6.81 / 8.19 ms | 57.98 / 55.04 ms |
+| Corpus embedding wall / CPU | .546 / 1.104 s | 2.776 / 5.565 s |
+| Peak process RSS | 229.961 MiB | 938.117 MiB |
+| Model + tokenizer/config files | 133,804,864 B | 1,116,770,366 B |
+| Paired SQLite index database | 512,000 B | 954,368 B |
+
+Gemma improved vector-only ranking but lost one relevant record (`d023`) for
+hybrid query `q007`, dropping aggregate hybrid recall to .95. It also increased
+held-out hybrid context on both corpus conditions. The updated condition used
+132.40 tokens versus 131.85 for E5. RAM grew 4.08x, corpus CPU 4.7-5.0x and
+hybrid latency 6.7-8.5x. The predeclared replacement gates therefore rejected it.
+Run 027 remains the operational champion, and E5 remains the default model.
+
+The database comparison excludes cache and job tables equally, so neither size
+is directly comparable to Run 027’s operational database. The 80 corpus
+self-neighbor checks, exported pooling check, padded-batch versus single-input
+check and all E5 parity checks passed. No weights/caches/databases are committed.
+No external inference API or generator was used. This small English benchmark
+does not evaluate Gemma’s multimodal or multilingual capabilities, and the ONNX
+export is not independently checked against the upstream PyTorch checkpoint.
+
+See `embeddinggemma2_model.json` for pinned source/export revisions, file hashes,
+and conventions; `runs/028.json` for full measured candidate and E5 outputs;
+and `STATE.md` for exact offline reproduction commands. A Q4 model comparison
+would be a separate experiment, with the same quality and evidence requirements.

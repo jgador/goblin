@@ -16,11 +16,11 @@ def digest(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", choices=["nomic", "bge", "e5", "minilm"], default="nomic")
+    parser.add_argument("--model", choices=["nomic", "bge", "e5", "minilm", "embeddinggemma2"], default="nomic")
     parser.add_argument("--model-dir", type=Path)
     args = parser.parse_args()
     if args.model_dir is None:
-        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small", "minilm": "minilm"}
+        model_dirs = {"nomic": "nomic", "bge": "bge-small", "e5": "e5-small", "minilm": "minilm", "embeddinggemma2": "embeddinggemma2"}
         args.model_dir = ROOT.parents[1] / ".artifacts" / "memory-loop" / model_dirs[args.model]
     args.model_dir.mkdir(parents=True, exist_ok=True)
     manifest = json.loads((ROOT / f"{args.model}_model.json").read_text())

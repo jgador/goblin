@@ -11,6 +11,27 @@ Semantic retrieval and compact vector-storage core: Run 020,
 Lightweight no-embedding fallback: Run 005,
 `sqlite-fts5-bm25-supersession-compact-sketch`.
 
+Latest completed experiment: Run 028, text-only FP32 EmbeddingGemma 2, rejected.
+The separate-process E5 control exactly reproduced all committed Run 020
+original-corpus and Run 027 updated-corpus rankings, scored quality, and hybrid
+context. On the unchanged original corpus, Gemma vector-only MRR improved from
+0.9125 to 0.95 and Hit@1 from 0.85 to 0.90, but Recall@5 fell from 1.0 to 0.975.
+Hybrid MRR/Hit@1 stayed 0.975/0.95, while recall fell from 0.975 to 0.95 because
+`q007` lost relevant `d023`. Held-out evidence remained 1.0. Updated-corpus
+held-out hybrid context rose from 131.85 to 132.40 approximate tokens.
+
+The pinned community ONNX export used Google’s documented retrieval prompts,
+special tokens, masked mean pooling/projection and L2 normalization at 768d.
+Pooling and single-versus-padded-batch checks passed, and all 80 corpus
+self-neighbors passed. Gemma used 938.117 MiB peak RSS versus paired E5’s
+229.961 MiB; model files were 1,116,770,366 versus 133,804,864 bytes. Original
+corpus inference took 2.776 s wall / 5.565 s CPU versus 0.546 s / 1.104 s.
+Hybrid retrieval/context took 57.98/55.04 ms original/held-out versus
+6.81/8.19 ms. Paired SQLite index databases were 954,368 versus 512,000 bytes,
+excluding cache and queue equally; these sizes are not operational database
+comparisons. E5 remains the default and Run 027 remains operational champion.
+Reusable Gemma setup/benchmark infrastructure is retained. See `runs/028.json`.
+
 Run 024 hypothesis: a reopened SQLite worker can reclaim a durably stranded
 processing batch and complete with unique ready outputs while preserving Run
 023 retrieval.
@@ -350,13 +371,44 @@ User priority updated on 2026-10-06; these are queued experiments, not completed
 19. Run 026 completed the synchronous updated-corpus control.
 20. Run 027 completed atomic claim coordination with two local SQLite workers
     and is the current operational champion.
-21. Next: supersede a revision after a worker has claimed it but before ready
+21. Deferred before measurement when the user requested EmbeddingGemma 2:
+    supersede a revision after a worker has claimed it but before ready
     attachment, and require the stale worker's guarded completion to fail while
     only the new revision becomes searchable semantically.
+22. Run 028 tested EmbeddingGemma 2 text-only FP32 and rejected it. A separate
+    follow-up may test its portable Q4/FP32-activation ONNX export to reduce the
+    measured 4.08x RSS and 6.7–8.5x hybrid latency costs. It must also restore
+    `q007` recall and avoid increased held-out context; do not promote for size
+    alone. Model precision and dimension changes must remain separate runs.
 
 Use documented model-specific prefixes, pooling and normalization, pin model revisions and dependencies, and run inference locally after downloading weights. Use SQLite rather than PostgreSQL/pgvector or a separate vector database service. Measure model load and embedding costs separately from vector search: CPU, peak RSS, query latency, throughput, model size, SQLite size, quality, evidence retention and context size. Preserve FTS5 as the baseline and promote only on measured benefit. Keep weights/caches/databases out of Git. If real model downloads or inference are blocked, record the blocker and recovery instructions rather than substituting synthetic vectors. The hourly automation has been updated with this priority; GPT-6.1 Sol remains the requested orchestration model.
 
 ## Reproduction
+
+Reproduce Run 028 with Python 3.12 and the existing pinned dependencies (measured
+runtime: Python 3.12.3, ONNX Runtime 1.23.2, NumPy 2.2.6, tokenizers 0.22.1,
+sqlite-vec 0.1.9; two inference threads). Download once, then both runners use
+only local files. Weight, tokenizer and config hashes are checked before loading.
+
+```bash
+python3 -m venv .artifacts/memory-loop/venv
+.artifacts/memory-loop/venv/bin/pip install -r experiments/memory/embedding_requirements.txt
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model embeddinggemma2
+.artifacts/memory-loop/venv/bin/python experiments/memory/prepare_embedding_model.py --model e5
+mkdir -p .artifacts/memory-run028
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embeddinggemma2_experiment.py --threads 2 > .artifacts/memory-run028/embeddinggemma2.json
+.artifacts/memory-loop/venv/bin/python experiments/memory/run_embeddinggemma2_experiment.py --model e5 --threads 2 > .artifacts/memory-run028/e5-control.json
+.artifacts/memory-loop/venv/bin/python experiments/memory/compare_embeddinggemma2_experiment.py --candidate .artifacts/memory-run028/embeddinggemma2.json --control .artifacts/memory-run028/e5-control.json > .artifacts/memory-run028/028.json
+```
+
+The controls run sequentially in separate processes. Use `--model-dir` to reuse
+an existing checksum-matching local download. Gemma inference activates only the
+text ONNX graph, passing zero media features; no audio or vision encoder weights
+are downloaded. The exporter’s `sentence_embedding` includes mean pooling and
+projection. The runner independently validates it against masked mean pooling
+of exported 768d token states. This validates the ONNX export’s pooling, not
+exact numerical parity with upstream PyTorch. No multimodal or answer-generation
+quality was measured. `--summary` on the comparison emits the results row.
 
 ```bash
 python3 experiments/memory/run_experiment.py --json
