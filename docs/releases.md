@@ -146,7 +146,7 @@ Preparation and verification have read permissions. Verification uses a separate
 checkout of the captured source. It checks every candidate hash, the matching
 installer inputs and capabilities, the actual executable's version, metadata and
 installation validator, and reproduces the selected Azure assets byte-for-byte.
-It runs formatting, Clippy, npm test with the candidate executable, and the setup
+It runs formatting, Clippy, `make test` with the candidate executable, and the setup
 and installation browser journeys. Source-check CI and candidate verification are
 both required. Database-dependent tests remain opt-in and report skips.
 
@@ -257,29 +257,29 @@ event. Local provisioning does not freeze the baseline.
 ## Local verification and recovery
 
 ```bash
-cargo xtask dependencies check --locked
-cargo xtask azure                         # writes .artifacts/azure/
-just fmt
-just clippy -p xtask -- -D warnings
-just test -p xtask
-npm test
-npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
+make dependencies-check
+make deploy-generate                      # writes .artifacts/azure/
+make format-rust
+make lint-rust CARGO_ARGS="-p xtask"
+make test-rust CARGO_ARGS="-p xtask"
+make test
+make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
 ```
 
-`cargo xtask azure` generates review assets bound to the current SHA and a
+`make deploy-generate` generates review assets bound to the current SHA and a
 `0.0.0-preview.1` development label. These are local test outputs. Preparation
 creates the actual versioned release assets and requires clean merged source.
 
 To authenticate the pinned installer and exercise its validator locally:
 
 ```bash
-bash scripts/build-goblinctl-release.sh target
+make release-build
 cargo xtask release verify-installer
 ```
 
 The public archive is downloaded and verified; this command does not deploy Azure.
 `cargo xtask release check-installer` validates local compiler input coverage and
-contracts without requiring a published binary. `just release` creates a local
+contracts without requiring a published binary. `make release-local` creates a local
 review archive. Historical release verification remains available after retiring
 the standalone publication workflow.
 

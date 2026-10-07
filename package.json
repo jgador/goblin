@@ -7,56 +7,6 @@
   "engines": {
     "node": ">=24"
   },
-  "workspaces": [
-    "frontend"
-  ],
-  "scripts": {
-    "install:local": "cargo run --locked -q -p goblinctl -- local",
-    "setup:password": "cargo run --locked -q -p goblinctl -- password set",
-    "build:assets": "npm run build --workspace frontend",
-    "build:tools": "node scripts/clean-output.mts && npm run typecheck:scripts && tsc -p tsconfig.json",
-    "build:backend": "dotnet build backend/Goblin.slnx --nologo",
-    "build": "npm run build:native && npm run build:assets && npm run build:tools && npm run build:backend",
-    "typecheck": "npm run contracts:check && npm run typecheck --workspace frontend && npm run typecheck:scripts && tsc -p tsconfig.json --noEmit && npm run build:backend",
-    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
-    "format:typescript": "prettier --write --ignore-path .gitignore \"**/*.{ts,tsx,mts,cts}\"",
-    "prestart": "npm run build",
-    "start": "cargo xtask dev",
-    "pretest": "npm run contracts:check && npm run test:contracts && npm run dependencies:check && npm run build && npm run deploy:generate",
-    "test": "npm run test:rust && npm run test:release && npm run protocol:check && npm run kubernetes:check && dotnet test backend/Goblin.slnx --no-build --nologo && node --test dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
-    "test:frontend": "npm run build:tools && node --test dist/tests/frontend/*.test.js",
-    "protocol:generate": "dotnet run --file backend/scripts/GenerateProtocol.cs",
-    "protocol:check": "dotnet run --file backend/scripts/GenerateProtocol.cs -- --self-test --check",
-    "kubernetes:generate": "dotnet run --file backend/scripts/GenerateKubernetes.cs",
-    "kubernetes:check": "dotnet run --file backend/scripts/GenerateKubernetes.cs -- --self-test --check",
-    "secrets:setup": "node scripts/install-git-hooks.mts",
-    "secrets:scan": "node scripts/check-secrets.mts",
-    "secrets:staged": "node scripts/check-secrets.mts staged",
-    "secrets:history": "node scripts/check-secrets.mts history",
-    "test:secrets": "node --test scripts/check-secrets.test.mts",
-    "pretest:codex": "npm run build",
-    "test:codex": "node dist/scripts/check-codex.js",
-    "pretest:headlamp": "npm run build",
-    "test:headlamp": "node dist/scripts/check-headlamp.js",
-    "pretest:browser": "npm run build",
-    "test:browser": "playwright test",
-    "build:native": "just build --workspace",
-    "format:rust": "just fmt",
-    "format:rust:check": "just fmt-check",
-    "lint:rust": "just clippy --workspace --all-targets -- -D warnings",
-    "test:rust": "just test --workspace && just test-doc --workspace",
-    "deploy:generate": "cargo xtask azure",
-    "pretest:logs-ui": "npm run build",
-    "test:logs-ui": "node dist/scripts/check-logs-ui.js",
-    "pretest:logging": "npm run build",
-    "test:logging": "bash scripts/check-logging.sh",
-    "dependencies:check": "cargo xtask dependencies check --locked",
-    "dependencies:resolve": "cargo xtask dependencies resolve",
-    "test:release": "node --test scripts/release-*.test.mts",
-    "contracts:generate": "node scripts/generate-contract-values.mts",
-    "contracts:check": "node scripts/generate-contract-values.mts --check",
-    "test:contracts": "node --test scripts/generate-contract-values.test.mts"
-  },
   "dependencies": {
     "@openai/codex": "0.155.1"
   },
@@ -65,5 +15,6 @@
     "@types/node": "24.13.4",
     "prettier": "3.9.8",
     "typescript": "7.0.2"
-  }
+  },
+  "description": "Pinned repository Node tooling and Codex runtime; use GNU Make for tasks."
 }

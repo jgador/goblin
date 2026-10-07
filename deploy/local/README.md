@@ -10,7 +10,7 @@ source changes.
 With systemd enabled in WSL, run from the repository root:
 
 ```bash
-npm run install:local -- start
+make local-start
 ```
 
 Open **http://localhost:8788** in your Windows browser. You will see the installation
@@ -72,10 +72,10 @@ WSL distribution if your existing distribution already has one.
 ## Progress and logs
 
 ```bash
-npm run install:local -- status
-npm run install:local -- logs
-npm run install:local -- logs --follow
-npm run install:local -- retry
+make local-status
+make local-logs
+make local-logs ARGS=--follow
+make local-retry
 ```
 
 `retry` restarts an incomplete installation with its retained source snapshot,
@@ -103,7 +103,7 @@ configures tooling for that port. Use `--port` to choose a different local port.
 To enable or repair local access for an already configured database:
 
 ```bash
-npm run install:local -- database
+make local-database
 ```
 
 The endpoint runs as `goblin-local-postgres.socket`/`.service` under systemd and
@@ -116,8 +116,8 @@ Certificate authentication and server verification still apply. Inspect it with
 ## Stop, resume, or start clean
 
 ```bash
-npm run install:local -- stop
-npm run install:local -- start
+make local-stop
+make local-start
 ```
 
 `stop` shuts down this runner's installer, browser/database forwarders, and Kubernetes
@@ -126,8 +126,8 @@ containers while retaining data. `start` resumes them.
 For another installation test with your latest source changes:
 
 ```bash
-npm run install:local -- reset --yes
-npm run install:local -- start
+make local-reset ARGS=--yes
+make local-start
 ```
 
 **Reset deletes this runner's Kubernetes cluster, Goblin application data, logs,
@@ -139,7 +139,7 @@ remove other host services such as PostgreSQL. `destroy --yes` is an alias for
 Choose a different browser port on the first start if necessary:
 
 ```bash
-npm run install:local -- start --http-port 8888
+make local-start ARGS="--http-port 8888"
 ```
 
 ## Password storage
@@ -150,28 +150,28 @@ saved to `.goblin-secrets/owner-password` in this checkout (file mode `0600`,
 directory mode `0700`). Git ignores everything in that folder except the empty
 `.gitkeep`; Docker excludes the entire folder. The password is never prefilled.
 
-Both this installer and `npm start` reuse that verifier. The full installer passes
+Both this installer and `make dev` reuse that verifier. The full installer passes
 its path to the shared Azure bootstrap, which copies the verifier to its private
 installation directory and creates the same Kubernetes Secret and read-only
 container mount as Azure. Local bootstrap scripts contain no original password.
 Azure obtains its password from the deployment form instead of the local prompt.
 
-You can prepare the verifier separately with `npm run setup:password`.
+You can prepare the verifier separately with `make setup-password`.
 For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD` through the process
 environment. It does not override an existing verifier. Starting an older local
 installation imports its retained verifier and removes the old
 `.goblin-local/login-password` plaintext file without changing its password.
-`npm run install:local -- password` now reports the verifier's location; the
+`make local-password` now reports the verifier's location; the
 original password cannot be displayed.
 
 To change the shared local password, run:
 
 ```bash
-npm run setup:password -- --replace
+make setup-password ARGS=--replace
 ```
 
-Restart `npm start` to load it. For a completed full installation, run
-`npm run install:local -- start` to update the Secret and restart its application
+Restart `make dev` to load it. For a completed full installation, run
+`make local-start` to update the Secret and restart its application
 pod. Finish an in-progress installation before changing its password.
 
 The local source snapshot excludes Git-ignored files and rejects symlinks.

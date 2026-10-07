@@ -102,13 +102,13 @@ cleanup, and explicit retries retain their existing recovery contracts.
 
 ## Verification
 
-Run `npm test` and `npm run test:browser`. Browser fixtures cover layout, responsive
+Run `make test` and `make test-browser`. Browser fixtures cover layout, responsive
 drawers, progressive disclosure, search, context isolation, and refresh behavior.
 They do not establish persistence coverage. The durable Work browser journeys and
 real PostgreSQL suites remain opt-in with `GOBLIN_TEST_POSTGRES_APP` and the
 repository's database-test configuration; report skips explicitly.
 
-Validation for this increment (2026-09-23): `npm test` passed (164 .NET tests,
+Validation for this increment (2026-09-23): `make test` passed (164 .NET tests,
 87 HTTP/deployment tests, and protocol checks). The full browser run passed 33
 tests; the final targeted workspace run passed nine, including the additional
 320px layout check. Real PostgreSQL coverage was not run: 24 .NET tests, one HTTP

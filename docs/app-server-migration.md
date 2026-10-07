@@ -81,12 +81,12 @@ operations and notifications use the generated typed models. See the
 ## Build and verification
 
 ```bash
-npm ci
-npm run build                    # browser assets and .NET solution
+make install
+make build                    # browser assets and .NET solution
 dotnet run --no-build --project backend/src/Goblin.Web
-npm test                         # schema drift, .NET tests, HTTP tests
-npm run test:codex                # official pinned Rust binary, synthetic key only
-npm run test:browser              # unchanged UI against the C# test host
+make test                         # schema drift, .NET tests, HTTP tests
+make test-codex                # official pinned Rust binary, synthetic key only
+make test-browser              # unchanged UI against the C# test host
 dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 ```
 

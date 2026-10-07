@@ -128,7 +128,7 @@ terminal or `kubectl port-forward`, and it resumes with the local installation.
 For an existing database, enable or repair it with:
 
 ```bash
-npm run install:local -- database
+make local-database
 ```
 
 In VS Code's WSL window, use:
