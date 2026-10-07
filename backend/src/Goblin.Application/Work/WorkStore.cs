@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Runtime;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -299,13 +300,12 @@ public sealed partial class WorkStore
         {
             if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id &&
                 (x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention)), token)) return null;
-            int occupied = await db.ExecutionAttempts.CountAsync(x => x.Id != attempt.Id && x.GithubConnectionId != null &&
-                (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token);
-            occupied += await db.WorkspaceSessions.CountAsync(x => x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention), token);
+            int occupied = await ResourceReservations.CountSandboxesAsync(db,
+                ResourceReservations.Attempts(db.ExecutionAttempts).Where(x => x.Id != attempt.Id), token);
             if (occupied >= _limits.MaxSandboxes) return null;
         }
-        if (failure is null && await db.ExecutionAttempts.AnyAsync(x => x.Id != attempt.Id && x.ConnectionId == connection.Id &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token))
+        if (failure is null && await ResourceReservations.Attempts(db.ExecutionAttempts)
+            .AnyAsync(x => x.Id != attempt.Id && x.ConnectionId == connection.Id, token))
         {
             // Capacity waiting is not a failed runtime operation. A periodic
             // queue scan will deliver this same unclaimed attempt when free.
@@ -351,8 +351,7 @@ public sealed partial class WorkStore
         if (!Enum.IsDefined(availability)) throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
-        if (requireIdle && await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token))
+        if (requireIdle && await ResourceReservations.Attempts(db.ExecutionAttempts).AnyAsync(x => x.ConnectionId == id, token))
             throw new ApplicationFailure("connection_in_use");
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == nameof(ConnectionAvailability.Changing))
@@ -381,8 +380,7 @@ public sealed partial class WorkStore
         await using IDbContextTransaction transaction = await BeginAsync(db, token);
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == nameof(ConnectionAvailability.Verifying)) throw new ApplicationFailure("prompt_in_progress");
-        if (row.Availability == nameof(ConnectionAvailability.Changing) || await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token))
+        if (row.Availability == nameof(ConnectionAvailability.Changing) || await ResourceReservations.Attempts(db.ExecutionAttempts).AnyAsync(x => x.ConnectionId == id, token))
             throw new ApplicationFailure("connection_in_use");
         row.Availability = nameof(ConnectionAvailability.Verifying);
         row.ChangedAt = DateTime.UtcNow;

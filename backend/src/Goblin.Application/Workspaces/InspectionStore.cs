@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Runtime;
 using Goblin.Application.Work;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
@@ -127,11 +128,10 @@ public sealed class InspectionStore
         await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
         if (row.State != nameof(InspectionState.Queued)) return null;
-        if (await db.ExecutionAttempts.AnyAsync(x => x.WorkId == row.WorkId && x.GithubConnectionId != null &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token)) return null;
-        int occupied = await db.ExecutionAttempts.CountAsync(x => x.GithubConnectionId != null &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token);
-        occupied += await db.WorkspaceSessions.CountAsync(x => x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention), token);
+        if (await ResourceReservations.Attempts(db.ExecutionAttempts)
+            .AnyAsync(x => x.WorkId == row.WorkId && x.GithubConnectionId != null, token)) return null;
+        int occupied = await ResourceReservations.CountSandboxesAsync(db,
+            ResourceReservations.Attempts(db.ExecutionAttempts), token);
         if (occupied >= _limits.MaxSandboxes) return null;
         row.State = nameof(InspectionState.Starting); row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
