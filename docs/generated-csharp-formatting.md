@@ -77,6 +77,6 @@ whitespace verification passed for both actual projects.
 `dotnet test backend/Goblin.slnx --nologo` built the solution and passed all 112
 enabled .NET tests, including 37 protocol tests. The 18 opt-in PostgreSQL tests
 were skipped because test connections are not configured. All six Python
-generator tests passed. `npm run protocol:check` then failed on the expected
-17-file output drift described above. The full `npm test` workflow was not run
+generator tests passed. `make protocol-check` then failed on the expected
+17-file output drift described above. The full `make test` workflow was not run
 because it requires that drift check to pass. `git diff --check` passed.

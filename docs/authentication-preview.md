@@ -23,13 +23,13 @@ set `GOBLIN_WORK_ENABLED=false` before starting Goblin.
 Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run from this checkout:
 
 ```bash
-npm ci
-npm start
+make install
+make dev
 ```
 
-`npm start` builds the C# backend and TypeScript browser assets, provisions the
+`make dev` builds the C# backend and TypeScript browser assets, provisions the
 local password if needed, then starts the ASP.NET Core Minimal API host. After
-editing sources, restart it to rebuild. To build separately, run `npm run build`,
+editing sources, restart it to rebuild. To build separately, run `make build`,
 then launch with `cargo xtask dev`.
 Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
 `obj/` output are ignored by Git.
@@ -55,7 +55,7 @@ credentials are not inherited. You can keep using your normal Codex installation
 
 ### Password setup and storage
 
-`npm start` and the full local installer share `.goblin-secrets/owner-password`.
+`make dev` and the full local installer share `.goblin-secrets/owner-password`.
 They use Azure's hashing helper (PBKDF2-SHA256, 600,000 iterations, random salt).
 Only the verifier is written to disk, with file mode `0600` inside a `0700`
 directory. Git ignores the folder's contents except for `.gitkeep`, which keeps
@@ -64,11 +64,11 @@ the empty folder in the repository. Docker excludes the entire folder.
 To prepare the password before starting the application:
 
 ```bash
-npm run setup:password
-npm start
+make setup-password
+make dev
 ```
 
-Use `npm run setup:password -- --replace` to choose a new password, then restart
+Use `make setup-password ARGS=--replace` to choose a new password, then restart
 Goblin to load it. For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD`
 through the process environment; it never replaces an existing verifier.
 The same verifier can be mounted into Docker. Azure creates its verifier during
@@ -105,7 +105,7 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
 1. Select **Continue with ChatGPT**. Open OpenAI's sign-in page, enter the
    displayed code, and complete sign-in. Goblin should show your account and
    **Verifying connection…**, then **Connected** after a successful background check.
-2. Stop and restart `npm start`, unlock the preview, and confirm the connection
+2. Stop and restart `make dev`, unlock the preview, and confirm the connection
    remains. No second ChatGPT login should be needed while the credentials remain valid.
 3. Select **Lock workspace** and unlock it again. This locks browser access without
    disconnecting Codex.
@@ -314,14 +314,14 @@ contain authentication details. Error messages give safe retry guidance.
 ## Automated checks
 
 ```bash
-npm run typecheck
-npm test
-npm run test:codex
-npx playwright install --with-deps chromium
-npm run test:browser
+make typecheck
+make test
+make test-codex
+make browser-install
+make test-browser
 ```
 
-The test commands build first. `npm test` uses the .NET generators for deterministic
+The test commands build first. `make test` uses the .NET generators for deterministic
 schema-generation check, then runs .NET serialization/transport tests and the HTTP
 integration tests against the C# host. Type checking also covers tests and scripts.
 Playwright loads its TypeScript configuration and browser tests directly. The browser module uses

@@ -75,8 +75,9 @@ fn build_message(line: &str) -> Option<String> {
     {
         let (_, instruction) = record.split_once("] ")?;
         match instruction {
-            "RUN npm ci" => "installing frontend and tool dependencies",
-            "RUN npm run build:assets" => "compiling frontend assets",
+            "RUN npm ci --omit=dev" => "installing runtime dependencies",
+            "RUN npm --prefix frontend ci" => "installing frontend dependencies",
+            "RUN npm --prefix frontend run build" => "compiling frontend assets",
             "RUN node /tmp/install-gh.mjs" => "downloading GitHub CLI",
             s if s.starts_with("RUN dotnet publish backend/src/Goblin.Web/") => {
                 "publishing the .NET application"
@@ -122,8 +123,16 @@ mod tests {
             assert!(!message.contains("private") || message.contains("private installation log"));
         }
         assert_eq!(
-            build_message("#2 [assets 3/8] RUN npm ci").unwrap(),
-            "Build step 2: installing frontend and tool dependencies."
+            build_message("#2 [assets 3/8] RUN npm ci --omit=dev").unwrap(),
+            "Build step 2: installing runtime dependencies."
+        );
+        assert_eq!(
+            build_message("#3 [assets 4/8] RUN npm --prefix frontend ci").unwrap(),
+            "Build step 3: installing frontend dependencies."
+        );
+        assert_eq!(
+            build_message("#4 [assets 5/8] RUN npm --prefix frontend run build").unwrap(),
+            "Build step 4: compiling frontend assets."
         );
         assert_eq!(
             build_message("#2 DONE 12.5s").unwrap(),

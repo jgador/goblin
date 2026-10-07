@@ -507,7 +507,7 @@ and `portal.bicep` aligned:
 cargo xtask azure
 bash -n deploy/azure/bootstrap.sh deploy/azure/install-app.sh deploy/azure/setup/installer.sh
 sh -n deploy/azure/missing-ssh-key.sh
-npm test
+make test
 ```
 
 Embedded setup changes require a new native release and a dependency pin update.

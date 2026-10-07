@@ -22,23 +22,23 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
-      - name: Check formatting and Rust lints
-        run: |
-          just fmt-check
-          just clippy --workspace --all-targets -- -D warnings
+      - name: Install locked development dependencies
+        run: make install
       - name: Test source and deployment contracts
         run: |
-          npm ci
-          npm test
-          bash scripts/build-goblinctl-release.sh target
-          cargo xtask release check-installer
-          npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/setup.spec.ts tests/e2e/install.spec.ts
+          make check
+          make release-build
+          make release-check-installer
+          make browser-install
+          make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
           git diff --exit-code
   gate:
     name: goblin-checks

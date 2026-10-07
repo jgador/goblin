@@ -44,7 +44,7 @@ pod and completing its restart. Passwords and verifiers never enter CLI argument
 Dedicated local installations retain ownership checks and a checkout association:
 
 ```bash
-npm run install:local -- start                 # builds the current CLI for development
+make local-start                 # builds the current CLI for development
 sudo goblinctl --repo "$PWD" local start      # uses a precompiled binary
 sudo goblinctl local stop                     # retains application data and PVCs
 sudo goblinctl local reset --yes              # deletes only this owned local cluster
@@ -119,19 +119,19 @@ The root Rust workspace has two crates:
   and optional PostgreSQL tests. It reuses the CLI library.
 
 ```bash
-just build --workspace
-just test --workspace
-just test-doc --workspace
-just clippy --workspace --all-targets -- -D warnings
-just fmt-check
-npm test
-npm run test:browser -- tests/e2e/setup.spec.ts
+make build-native
+make test-rust
+make test-rust-doc
+make lint-rust
+make format-rust-check
+make test
+make test-browser ARGS=tests/e2e/setup.spec.ts
 ```
 
 Install the pinned helpers and configure your editor using the
 [Rust development guide](rust-development.md).
 
-`npm start` prepares credentials and launches .NET through `cargo xtask dev`.
+`make dev` prepares credentials and launches .NET through `cargo xtask dev`.
 Protocol/Kubernetes generators, EF scaffolding, and the .NET SQL migration engine
 remain authoritative. Production shell helpers find the installed CLI via
 `GOBLINCTL` or PATH; developer scripts can use `GOBLINCTL="$PWD/target/debug/goblinctl"`.
@@ -167,7 +167,7 @@ the same isolated build for its frozen release source;
 `package` alone does not prove an arbitrary supplied binary came from this checkout.
 
 Local packages are written to `.artifacts/goblinctl/`, outside the test-output
-directory that `npm run build:tools` cleans.
+directory that `make build-tools` cleans.
 
 The archive contains `goblinctl` and its license documents; setup assets are compiled into that binary.
 Archive order, timestamps, ownership, modes and compression are deterministic for
@@ -188,8 +188,8 @@ changing Work lifecycle behavior or inventing upgrade semantics is outside this 
 Local verification passed:
 
 - Seven Rust contract tests through nextest, rustfmt, and the shared Codex Clippy
-  rules with warnings denied. The complete Stop hook passed after the just migration.
-- `npm test`: 246 .NET tests passed and 39 database-dependent tests skipped;
+  rules with warnings denied. The complete Stop hook passed after the Rust tooling migration.
+- `make test`: 246 .NET tests passed and 39 database-dependent tests skipped;
   84 HTTP/deployment cases passed and one database-dependent HTTP case skipped.
 - All 42 deployment cases also passed against the initial packaged musl executable after
   moving the worker's database operations to embedded CLI assets. A further

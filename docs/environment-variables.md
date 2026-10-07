@@ -115,7 +115,7 @@ default. No installer release or dependency pin is changed by this refactor.
    into application and core APIs. Do not add environment access to Work rules.
 4. Update affected deployment templates and operator documentation together.
    Recheck explicit subprocess allowlists before forwarding any new value.
-5. Run `npm test`, `just fmt-check`, and Clippy. Review real PostgreSQL skips;
+5. Run `make test`, `make format-rust-check`, and Clippy. Review real PostgreSQL skips;
    configure the opt-in connections when persistence behavior needs verification.
 
 `tests/deployment/environment.test.ts` checks catalog metadata, matching shared

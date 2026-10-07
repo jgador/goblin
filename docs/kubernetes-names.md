@@ -34,8 +34,8 @@ Goblin is unreleased. Recreate local test installations when the workspace or
 database format changes:
 
 ```bash
-npm run install:local -- reset --yes
-npm run install:local -- start
+make local-reset ARGS=--yes
+make local-start
 ```
 
 Reset deletes the local cluster and its persistent data. Use the repository's

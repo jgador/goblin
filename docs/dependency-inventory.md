@@ -33,10 +33,11 @@ digests would make those build inputs individually reviewable.
 
 ## npm packages
 
-There are five unique directly declared external npm packages. The frontend
-workspace also declares TypeScript. Sources: [package.json](../package.json),
-[frontend/package.json](../frontend/package.json), and
-[package-lock.json](../package-lock.json).
+There are five unique directly declared external npm packages. The standalone frontend
+package also declares TypeScript. Sources: [package.json](../package.json),
+[frontend/package.json](../frontend/package.json),
+[package-lock.json](../package-lock.json), and
+[frontend/package-lock.json](../frontend/package-lock.json).
 
 | Package | Declared version | Use |
 | --- | --- | --- |
@@ -109,7 +110,7 @@ There are nineteen unique direct external crates. Sources:
 
 | Software | Selected version | Source |
 | --- | --- | --- |
-| just | `1.51.0` | [Rust setup](../scripts/setup-rust.sh), [CI setup action](../.github/actions/setup-rust/action.yml) |
+| GNU Make | System package, no repository version pin | [Makefile](../Makefile) |
 | cargo-nextest | `0.9.103` | [Rust setup](../scripts/setup-rust.sh), [CI setup action](../.github/actions/setup-rust/action.yml) |
 | cargo-insta | `1.46.3` | [Rust setup](../scripts/setup-rust.sh) |
 | DotSlash | `0.5.7` | [Rust setup](../scripts/setup-rust.sh) |
@@ -217,7 +218,7 @@ Configuration work should include:
 - Stable releases by default, visible major upgrades for deliberate review, and
   no automatic merging. Keep vulnerability monitoring enabled separately.
 - Full PR validation before upgrades are accepted. Current ordinary PR CI runs
-  Rust checks; the broader `npm test` and setup-browser checks are currently in
+  Rust checks; the broader `make test` and setup-browser checks are currently in
   the release workflow. Extend PR CI before relying on automated dependency PRs.
   Run the relevant browser/runtime checks for affected integrations and explicitly
   configure real PostgreSQL tests when persistence coverage is needed.
@@ -229,13 +230,13 @@ useful here.
 
 ## Complete resolved inventories
 
-The committed npm lockfile contains 34 external package entries, including
+The root tooling lockfile contains 34 external package entries, including
 optional platform-specific packages. The Cargo lockfile contains 121 external
 package entries, including transitive/platform dependencies. Those entries are
 not all installed or shipped on every platform.
 
 Generate the full software bill of materials from the actual restore/build
-inputs: npm's lockfile, Cargo's locked dependency graph, the restored NuGet graph,
+inputs: both npm lockfiles, Cargo's locked dependency graph, the restored NuGet graph,
 and built container images. Include OS packages and bundled native runtime
 components when describing a production image. This document is not a complete
 image SBOM. Preserve the generated inventories as build artifacts rather than

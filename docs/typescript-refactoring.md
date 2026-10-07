@@ -123,7 +123,7 @@ line counts is not an objective.
 Frontend and tooling compilation, 42 frontend behavioral tests, contract and
 dependency checks, nine contract/release tests, browser asset dependency checks,
 and protocol/Kubernetes generator checks pass. The backend builds without warnings.
-The full `npm test` run passed, including 142 JavaScript cases and one skipped
+The full `make test` run passed, including 142 JavaScript cases and one skipped
 PostgreSQL-dependent HTTP case.
 
 All 54 relevant browser cases pass across Work, model selection, connections,

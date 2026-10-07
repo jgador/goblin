@@ -190,13 +190,13 @@ isolated credential-storage, restart, and logout checks passed; the test instanc
 now reports runtime readiness. An AI account still needs to be connected before
 an explicitly requested retry can execute the saved Work.
 
-`npm test` passed. The additional full PostgreSQL run passed 123 application tests
+`make test` passed. The additional full PostgreSQL run passed 123 application tests
 and four persistence tests; six certificate tests were skipped because that local
 fixture does not provide mutual TLS. Seven browser journeys passed. The final
 linking-acknowledgement change also passed the focused PostgreSQL and Slack tests.
 Administrator-approval recovery and live channel mentions remain unexercised.
 
-Run `npm test` plus the relevant browser checks. PostgreSQL tests are opt-in;
+Run `make test` plus the relevant browser checks. PostgreSQL tests are opt-in;
 report their results separately. See [Work lifecycle](work-lifecycle.md),
 [repository authority](git-repository-intent.md), and the
 [architecture plan](architecture-refactoring-plan.md).
