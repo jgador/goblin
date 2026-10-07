@@ -122,8 +122,7 @@ public sealed class ConversationStore
         if (command.ConversationId <= 0 || command.MessageId <= 0 || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
-        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(716352019)");
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, default);
         Persistence.Entities.Conversation? conversation = await db.Conversations.SingleOrDefaultAsync(x => x.Id == command.ConversationId);
         if (conversation is null)
         {

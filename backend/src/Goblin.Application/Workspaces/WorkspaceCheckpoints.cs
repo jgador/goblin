@@ -53,7 +53,7 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
         if (attempt.TurnNumber != turn || attempt.Status is not (AttemptStatus.Starting or AttemptStatus.Running)) throw new ApplicationFailure("workspace_changed");
         await broker.VerifyCheckpointAsync(work, commit, token);
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         Persistence.Entities.WorkspaceCheckpoint? previous = await db.WorkspaceCheckpoints.SingleOrDefaultAsync(x => x.AttemptId == attemptId && x.TurnNumber == turn, token);
         if (previous is not null)
         {

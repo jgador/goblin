@@ -102,7 +102,7 @@ public sealed partial class WorkStore
         if (replay is not null) return replay;
         GitRepositoryProposal? proposal = await ProposalAsync(command, token);
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         WorkView view = await ApplyInTransactionAsync(db, outbox, command, proposal, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
@@ -279,7 +279,7 @@ public sealed partial class WorkStore
         Func<ExecutionTarget, bool> supportsRuntime, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         Row? row = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == command.WorkId, token);
         if (row is null) return null;
@@ -321,7 +321,7 @@ public sealed partial class WorkStore
     public async Task MutateAsync(long workId, Action<WorkItem> transition, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         Row row = await db.WorkItems.SingleAsync(x => x.Id == workId, token);
         WorkItem work = Restore(row);
@@ -350,7 +350,7 @@ public sealed partial class WorkStore
     {
         if (!Enum.IsDefined(availability)) throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         if (requireIdle && await ResourceReservations.Attempts(db.ExecutionAttempts).AnyAsync(x => x.ConnectionId == id, token))
             throw new ApplicationFailure("connection_in_use");
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
@@ -377,7 +377,7 @@ public sealed partial class WorkStore
     public async Task BeginVerificationAsync(long id, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
         if (row.Availability == nameof(ConnectionAvailability.Verifying)) throw new ApplicationFailure("prompt_in_progress");
         if (row.Availability == nameof(ConnectionAvailability.Changing) || await ResourceReservations.Attempts(db.ExecutionAttempts).AnyAsync(x => x.ConnectionId == id, token))
@@ -391,7 +391,7 @@ public sealed partial class WorkStore
     public async Task EndVerificationAsync(long id, bool available)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await BeginAsync(db, default);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, default);
         Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id);
         // A waiting account change owns the reservation until its operation ends.
         if (row.Availability != nameof(ConnectionAvailability.Verifying)) return;
@@ -406,21 +406,10 @@ public sealed partial class WorkStore
     public async Task RecoverConnectionReservationsAsync(CancellationToken token)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         await db.Connections.Where(x => x.Availability == nameof(ConnectionAvailability.Changing) || x.Availability == nameof(ConnectionAvailability.Verifying))
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, nameof(ConnectionAvailability.Unavailable)).SetProperty(x => x.ChangedAt, DateTime.UtcNow), token);
         await transaction.CommitAsync(token);
-    }
-
-    internal static async Task<IDbContextTransaction> BeginAsync(GoblinDbContext db, CancellationToken token)
-    {
-        IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(token);
-        try
-        {
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(716352019)", token);
-            return transaction;
-        }
-        catch { await transaction.DisposeAsync(); throw; }
     }
 
     private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)

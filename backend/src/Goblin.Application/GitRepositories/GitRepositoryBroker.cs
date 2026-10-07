@@ -187,7 +187,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
             }
             fingerprint = kind.WireValue() + ":" + Convert.ToHexString(hash.GetHashAndReset());
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-            await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+            await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
             GitRepositoryOperation? previous = await db.GitRepositoryOperations.SingleOrDefaultAsync(x => x.Id == id, token);
             if (previous is not null)
             {
@@ -233,7 +233,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         long attemptId;
         await using (GoblinDbContext db = await _factory.CreateDbContextAsync(token))
         {
-            await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+            await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
             GitRepositoryOperation row = await db.GitRepositoryOperations.SingleAsync(x => x.Id == id, token);
             if (row.State != nameof(GitRepositoryOperationState.Queued)) return;
             row.State = nameof(GitRepositoryOperationState.Running); row.UpdatedAt = DateTime.UtcNow; attemptId = row.AttemptId;

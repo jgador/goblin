@@ -90,7 +90,7 @@ public sealed class ExternalConversationStore
     public async Task<ExternalLinkCode> StartLinkAsync(ExternalInstallation installation, string localSession, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         await db.ExternalLinkRequests.Where(x => x.SessionId == localSession).ExecuteDeleteAsync(token);
         string code = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
         var link = new ExternalLinkRequest
@@ -117,7 +117,7 @@ public sealed class ExternalConversationStore
     public async Task ConfirmLinkAsync(ExternalInstallation installation, string session, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         ExternalLinkRequest request = await db.ExternalLinkRequests.SingleOrDefaultAsync(x => x.Id == id && x.InstallationId == installation.Id &&
             x.SessionId == session && !x.Consumed && x.ExpiresAt > DateTime.UtcNow && x.UserId != null, token)
             ?? throw new ApplicationFailure("external_link_expired");
@@ -147,7 +147,7 @@ public sealed class ExternalConversationStore
     public async Task RevokeAsync(ExternalInstallation installation, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         await db.ExternalIdentities.Where(x => x.Id == id && x.InstallationId == installation.Id)
             .ExecuteUpdateAsync(x => x.SetProperty(y => y.Enabled, false), token);
         await transaction.CommitAsync(token);
@@ -156,7 +156,7 @@ public sealed class ExternalConversationStore
     public async Task AcceptAsync(ExternalMessage message, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         if (await db.ExternalMessages.AnyAsync(x => x.InstallationId == message.Installation.Id &&
             (x.EventId == message.EventId || x.WorkspaceId == message.Installation.WorkspaceId && x.ChannelId == message.ChannelId && x.MessageId == message.MessageId), token)) return;
         bool linking = message.Direct && message.Text.StartsWith("link ", StringComparison.Ordinal);
@@ -194,7 +194,7 @@ public sealed class ExternalConversationStore
         try
         {
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-            await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+            await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
             ExternalMessageRow? message = await NextAsync(db, installation.Id, token);
             if (message is null) return null;
             rejectedId = message.Id;
@@ -264,7 +264,7 @@ public sealed class ExternalConversationStore
         catch (Exception error) when (rejectedId is not null && error is ApplicationFailure or WorkRuleException)
         {
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-            await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+            await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
             ExternalMessageRow? message = await db.ExternalMessages.SingleOrDefaultAsync(x => x.Id == rejectedId && x.State == nameof(ExternalMessageState.Pending), token);
             if (message is null) return null;
             message.State = nameof(ExternalMessageState.Rejected);

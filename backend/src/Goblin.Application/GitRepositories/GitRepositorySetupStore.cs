@@ -70,7 +70,7 @@ public sealed class GitRepositorySetupStore
             JsonSerializer.SerializeToUtf8Bytes(request, WorkStore.Json).Length > GitRepositorySetupRules.MaxPayloadBytes)
             throw new ApplicationFailure("repository_setup_invalid");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         WorkSnapshot work = await CurrentAsync(db, attemptId, token);
         AttemptSnapshot attempt = work.Attempts[^1];
         GitRepositoryGrant grant = attempt.Target.GitRepository!.Grant!;

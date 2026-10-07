@@ -40,7 +40,7 @@ public sealed class GitHubStore
     public async Task BeginChangeAsync(CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         await RequireIdleAsync(db, token);
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
         connection.Availability = nameof(ConnectionAvailability.Changing);
@@ -51,7 +51,7 @@ public sealed class GitHubStore
     public async Task ObserveAsync(GitRepositoryAccount? account, GitHubConnectionStatus status, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
         if (connection.Generation != account?.Generation)
         {
@@ -77,7 +77,7 @@ public sealed class GitHubStore
     public async Task SetGitRepositoryAsync(GitRepositoryInfo gitRepository, bool enabled, string generation, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         await RequireIdleAsync(db, token);
         GithubConnection connection = await db.GithubConnections.SingleAsync(x => x.Id == 1, token);
         if (connection.Generation != generation || connection.Availability != nameof(GitHubConnectionStatus.Connected))

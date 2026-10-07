@@ -74,7 +74,7 @@ public sealed class InspectionStore
     {
         if (id <= 0) throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession? row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id, token);
         if (row is not null)
         {
@@ -113,7 +113,7 @@ public sealed class InspectionStore
     public async Task StopAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id && x.WorkId == workId, token) ?? throw new ApplicationFailure("workspace_not_found");
         if (row.State == nameof(InspectionState.Stopped)) return;
         row.State = nameof(InspectionState.Stopping); row.UpdatedAt = DateTime.UtcNow;
@@ -125,7 +125,7 @@ public sealed class InspectionStore
     public async Task<InspectionAllocation?> ClaimAsync(long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
         if (row.State != nameof(InspectionState.Queued)) return null;
         if (await ResourceReservations.Attempts(db.ExecutionAttempts)
@@ -155,7 +155,7 @@ public sealed class InspectionStore
     public async Task ObserveAsync(long id, InspectionObservation observed, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
         row.State = WorkspaceSessionRules.Observe(ContractValue.Parse<InspectionState>(row.State), observed).ToString(); row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);

@@ -130,7 +130,7 @@ public sealed class ModelCatalogStore
         catch { /* A sanitized refresh state is persisted below. */ }
 
         await using GoblinDbContext write = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(write, default);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(write, default);
         Connection current = await write.Connections.SingleAsync(x => x.Id == connectionId);
         if (current.AuthGeneration != generation || current.Availability != "Available") return;
         ConnectionModelCatalog? row = await write.ConnectionModelCatalogs.SingleOrDefaultAsync(x => x.ConnectionId == connectionId);
