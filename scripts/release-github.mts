@@ -128,205 +128,208 @@ export function assertApprovalEnvironment(environment: any) {
     );
 }
 function preflight() {
-    assertApprovalEnvironment(api("environments/goblin-release"));
-    const pages = api("pages");
-    assert.equal(
-        pages?.build_type,
-        "workflow",
-        "Configure GitHub Pages with GitHub Actions as its source",
-    );
-    summary("Release approval and installation hosting are configured.");
-}
-function pinPr(version: string) {
-    assert.match(version, /^\d+\.\d+\.\d+$/);
-    const allowed = ["dependencies.lock.json", "dependencies.toml"];
-    const changed = run("git", ["diff", "--name-only"])
-        .split("\n")
-        .filter(Boolean);
-    assert.ok(
-        changed.every((path) => allowed.includes(path)),
-        "Pin PR contains unrelated changes",
-    );
-    assert.equal(
-        json("dependencies.lock.json").goblinctl.release.version,
-        version,
-    );
-    const branch = `automation/goblinctl-v${version}`;
-    const existing = api(`git/ref/heads/${branch}`);
-    if (existing) {
-        for (const path of allowed) {
-            const remote = api(
-                `contents/${path}?ref=${encodeURIComponent(branch)}`,
-            );
-            assert.equal(
-                Buffer.from(remote.content, "base64").toString(),
-                readFileSync(path, "utf8"),
-                "Existing pin branch differs; review it before creating another update",
-            );
-        }
-    } else {
-        assert.ok(changed.length, "Installer is already pinned");
-        run("git", ["checkout", "-b", branch]);
-        run("git", ["add", "--", ...allowed]);
-        run("git", [
-            "-c",
-            "user.name=github-actions[bot]",
-            "-c",
-            "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-            "commit",
-            "-m",
-            `Pin goblinctl ${version}`,
-        ]);
-        run("git", ["push", "origin", `HEAD:refs/heads/${branch}`]);
-    }
-    let pull = api(
-        `pulls?state=open&head=${encodeURIComponent(`jgador:${branch}`)}`,
-    )?.[0];
-    if (!pull)
-        pull = api("pulls", "POST", {
-            title: `Pin goblinctl ${version}`,
-            head: branch,
-            base: "master",
-            body: `Select the authenticated published goblinctl ${version}. Image dependencies are unchanged.\n\nAfter merging, run **Prepare Goblin release** again.`,
-        });
-    // GITHUB_TOKEN-created PRs do not emit a new pull_request workflow run.
-    run("gh", [
-        "workflow",
-        "run",
-        "checks.yml",
-        "--repo",
-        githubRepository,
-        "--ref",
-        branch,
-    ]);
-    summary(
-        `Installer dependency update: ${pull.html_url}\n\nMerge this PR, then run **Prepare Goblin release**.`,
-    );
-}
-function publish(directory: string) {
-    verify(directory);
-    const record = json(join(directory, "release.json"));
-    assert.equal(record.sourceRevision, process.env[Env.RELEASE_SOURCE.name]);
-    assert.equal(record.runId, process.env[Env.GITHUB_RUN_ID.name]);
-    // Publish may be retried; the expected preparation attempt is a job output.
-    assert.equal(record.runAttempt, process.env[Env.PREPARED_ATTEMPT.name]);
-    const tag = `goblin-v${validVersion(record.version)}`;
-    publishAssets(
-        directory,
-        tag,
-        record.sourceRevision,
-        record.channel === "preview",
-        `Goblin ${record.version}`,
-        `Installer: goblinctl ${record.installer.version}\n\nSource: ${record.sourceRevision}\n\nDeployment checks passed. Azure installation is performed manually and was not verified by this workflow.\n\n[Install Goblin ${record.version}](${siteUrl}/?version=${record.version})\n\n[Verification run](https://github.com/${githubRepository}/actions/runs/${record.runId})`,
-        releaseFiles,
-    );
-}
-function publishInstaller(directory: string) {
-    const record = json(join(directory, "release.json"));
-    const archive = "goblinctl-x86_64-unknown-linux-musl.tar.gz";
-    assert.equal(record.schemaVersion, 1);
-    assert.match(record.version, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
-    assert.equal(record.sourceRevision, process.env[Env.RELEASE_SOURCE.name]);
-    assert.equal(record.sourceDirty, false);
-    assert.equal(record.target, "x86_64-unknown-linux-musl");
-    assert.equal(record.sha256, sha(join(directory, archive)));
-    assert.equal(
-        readFileSync(join(directory, "SHA256SUMS"), "utf8"),
-        `${record.sha256}  ${archive}\n`,
-    );
-    publishAssets(
-        directory,
-        `goblinctl-v${record.version}`,
-        record.sourceRevision,
-        false,
-        `goblinctl ${record.version}`,
-        `Native installer built and tested from ${record.sourceRevision}.`,
-        [archive, "release.json", "SHA256SUMS"],
-    );
-}
-function publishAssets(
-    directory: string,
-    tag: string,
-    source: string,
-    prerelease: boolean,
-    title: string,
-    notes: string,
-    namesToPublish: string[],
-) {
-    const hashes = Object.fromEntries(
-        namesToPublish.map((name) => [name, sha(join(directory, name))]),
-    );
-    const reference = api(`git/ref/tags/${tag}`);
-    if (!reference)
-        api("git/refs", "POST", { ref: `refs/tags/${tag}`, sha: source });
-    assertTag(tag, source);
-    let published = api(`releases/tags/${tag}`);
-    if (!published)
-        published = api("releases", "POST", {
-            tag_name: tag,
-            name: title,
-            draft: true,
-            prerelease: prerelease,
-            make_latest: "false",
-            body: notes,
-        });
-    assert.equal(published.prerelease, prerelease);
-    const staging = mkdtempSync(join(tmpdir(), "goblin-publication-"));
-    try {
-        const names = published.assets.map(
-            (asset: any) => asset.name,
-        ) as string[];
+    const environment = api("environments/goblin-release");
+    assertApprovalEnvironment(environment);
+    if (environment.deployment_branch_policy?.custom_branch_policies) {
+        const policies = api(
+            "environments/goblin-release/deployment-branch-policies",
+        );
         assert.ok(
-            names.every((name) => namesToPublish.includes(name)),
+            policies.branch_policies.some(
+                (policy: any) =>
+                    policy.name === "master" && policy.type === "branch",
+            ),
+            "Allow master on the goblin-release approval environment; release source is selected separately",
+        );
+    }
+    summary(
+        "Coordinated release approval is configured. Installation-site delivery is reported separately.",
+    );
+}
+export interface Publication {
+    directory: string;
+    tag: string;
+    source: string;
+    prerelease: boolean;
+    title: string;
+    notes: string;
+    names: string[];
+}
+export interface PublicationHost {
+    api: typeof api;
+    run: typeof run;
+    download: typeof download;
+    summary: typeof summary;
+}
+const github: PublicationHost = { api, run, download, summary };
+function publicationScratch(): string {
+    const base = resolve(".artifacts/release-publication");
+    mkdirSync(base, { recursive: true });
+    return mkdtempSync(join(base, "assets-"));
+}
+function desiredHashes(spec: Publication) {
+    return Object.fromEntries(
+        spec.names.map((name) => [name, sha(join(spec.directory, name))]),
+    );
+}
+function publicationMarker(spec: Publication) {
+    return (
+        "<!-- goblin-manifest:" +
+        sha(join(spec.directory, "release.json")) +
+        " -->"
+    );
+}
+function findPublication(tag: string, host: PublicationHost) {
+    const published = host.api("releases/tags/" + tag);
+    if (published) return published;
+    // The tag endpoint excludes drafts, even for their author. The release list
+    // includes drafts visible to this token, including interrupted publications.
+    for (let page = 1; ; page++) {
+        const releases = host.api("releases?per_page=100&page=" + page);
+        assert.ok(Array.isArray(releases), "Could not list release drafts");
+        const released = releases.find((entry: any) => entry.tag_name === tag);
+        if (released) return released;
+        if (releases.length < 100) return null;
+    }
+}
+export function inspectPublication(
+    spec: Publication,
+    host: PublicationHost = github,
+) {
+    const reference = host.api("git/ref/tags/" + spec.tag);
+    if (reference) {
+        assert.equal(
+            reference.object?.type,
+            "commit",
+            "Release tag must point directly to a commit",
+        );
+        assert.equal(
+            reference.object.sha,
+            spec.source,
+            "Release tag identifies another source",
+        );
+    }
+    const released = findPublication(spec.tag, host);
+    if (!released) return null;
+    assert.ok(reference, "Existing release has no source tag");
+    assert.equal(
+        released.prerelease,
+        spec.prerelease,
+        "Release channel differs",
+    );
+    if (released.draft)
+        assert.ok(
+            released.body?.includes(publicationMarker(spec)),
+            "Draft belongs to another candidate; recover the original run",
+        );
+    const names = released.assets.map((asset: any) => asset.name) as string[];
+    assert.equal(new Set(names).size, names.length, "Duplicate release asset");
+    const staging = publicationScratch();
+    try {
+        assert.ok(
+            names.every((name) => spec.names.includes(name)),
             "Release contains unexpected assets",
         );
-        download(tag, staging, names);
+        host.download(spec.tag, staging, names);
         const missing = missingAssets(
             Object.fromEntries(
                 names.map((name) => [name, sha(join(staging, name))]),
             ),
-            hashes,
+            desiredHashes(spec),
         );
-        if (!published.draft)
+        if (!released.draft)
             assert.equal(
                 missing.length,
                 0,
                 "Published release is incomplete; never overwrite it",
             );
-        if (missing.length)
-            run("gh", [
-                "release",
-                "upload",
-                tag,
-                "--repo",
-                githubRepository,
-                ...missing.map((name) => join(directory, name)),
-            ]);
-        if (published.draft)
-            api(`releases/${published.id}`, "PATCH", {
-                draft: false,
-                make_latest: "false",
-            });
-        rmSync(staging, { recursive: true, force: true });
-        download(tag, staging, namesToPublish);
-        assert.deepEqual(
-            Object.fromEntries(
-                namesToPublish.map((name) => [name, sha(join(staging, name))]),
-            ),
-            hashes,
-        );
+        return { released, missing };
     } finally {
         rmSync(staging, { recursive: true, force: true });
     }
-    summary(
-        `Published [${title}](https://github.com/${githubRepository}/releases/tag/${tag}). Installation-site delivery and dependency updates are reported separately.`,
+}
+export function publishAssets(
+    spec: Publication,
+    host: PublicationHost = github,
+) {
+    let state = inspectPublication(spec, host);
+    if (!host.api("git/ref/tags/" + spec.tag))
+        host.api("git/refs", "POST", {
+            ref: "refs/tags/" + spec.tag,
+            sha: spec.source,
+        });
+    if (!state) {
+        const released = host.api("releases", "POST", {
+            tag_name: spec.tag,
+            name: spec.title,
+            draft: true,
+            prerelease: spec.prerelease,
+            make_latest: "false",
+            body: spec.notes + "\n\n" + publicationMarker(spec),
+        });
+        state = { released, missing: spec.names };
+    }
+    if (state.missing.length)
+        host.run("gh", [
+            "release",
+            "upload",
+            spec.tag,
+            "--repo",
+            githubRepository,
+            ...state.missing.map((name) => join(spec.directory, name)),
+        ]);
+    // Verify every uploaded byte while still a draft. Only then expose the release.
+    const verified = inspectPublication(spec, host);
+    assert.ok(
+        verified,
+        `Release ${spec.tag} could not be found after uploading assets; recover the original run`,
+    );
+    assert.equal(verified.missing.length, 0, "Uploaded release is incomplete");
+    if (verified.released.draft)
+        host.api("releases/" + verified.released.id, "PATCH", {
+            draft: false,
+            make_latest: "false",
+        });
+    const published = inspectPublication(spec, host);
+    assert.ok(
+        published && !published.released.draft,
+        "Publication did not complete",
+    );
+    host.summary(
+        "Published [" +
+            spec.title +
+            "](https://github.com/" +
+            githubRepository +
+            "/releases/tag/" +
+            spec.tag +
+            "). Installation-site delivery and recommendation are reported separately.",
     );
 }
-function publishedRelease(version: string, directory: string) {
-    const tag = `goblin-v${validVersion(version)}`;
-    const released = api(`releases/tags/${tag}`);
-    assert.ok(released && !released.draft, "Choose a published Goblin release");
-    download(tag, directory, releaseFiles);
+export function publishPair(
+    installer: Publication,
+    goblin: Publication,
+    origin: "built" | "published",
+    host: PublicationHost = github,
+) {
+    // Reject conflicts in either version before publishing either component.
+    const existing = inspectPublication(installer, host);
+    inspectPublication(goblin, host);
+    switch (origin) {
+        case "built":
+            publishAssets(installer, host);
+            break;
+        case "published":
+            assert.ok(
+                existing && !existing.released.draft,
+                "The reused installer must remain fully published",
+            );
+            break;
+        default:
+            throw new Error("Unknown installer origin");
+    }
+    publishAssets(goblin, host);
+}
+function authenticateCandidate(directory: string, record: any) {
     run("gh", [
         "attestation",
         "verify",
@@ -334,14 +337,156 @@ function publishedRelease(version: string, directory: string) {
         "--repo",
         githubRepository,
         "--signer-workflow",
-        `${githubRepository}/.github/workflows/goblin-release.yml`,
+        githubRepository + "/.github/workflows/goblin-release.yml",
+        "--signer-digest",
+        record.workflowRevision,
+        "--source-ref",
+        "refs/heads/master",
         "--deny-self-hosted-runners",
     ]);
+}
+function publish(directory: string) {
     verify(directory);
     const record = json(join(directory, "release.json"));
+    assert.equal(
+        record.schemaVersion,
+        2,
+        "Only coordinated candidates can be published",
+    );
+    assert.equal(
+        sha(join(directory, "release.json")),
+        process.env[Env.CANDIDATE_SHA256.name],
+        "Approved candidate changed",
+    );
+    assert.equal(record.source.revision, process.env[Env.RELEASE_SOURCE.name]);
+    assert.equal(record.runId, process.env[Env.GITHUB_RUN_ID.name]);
+    assert.equal(record.runAttempt, process.env[Env.PREPARED_ATTEMPT.name]);
+    assert.equal(record.workflowRevision, run("git", ["rev-parse", "HEAD"]));
+    authenticateCandidate(directory, record);
+    preflight();
+    const check = api("check-runs/" + record.source.checkRunId);
+    assert.equal(check?.name, "goblin-checks");
+    assert.equal(check?.app?.id, 15368);
+    assert.equal(check?.head_sha, record.source.revision);
+    assert.equal(check?.status, "completed");
+    assert.equal(
+        check?.conclusion,
+        "success",
+        "The recorded source checks no longer pass",
+    );
+    run("git", [
+        "fetch",
+        "--no-tags",
+        "origin",
+        "refs/heads/" + record.source.branch,
+    ]);
+    run("git", [
+        "merge-base",
+        "--is-ancestor",
+        record.source.revision,
+        "FETCH_HEAD",
+    ]);
+    run("cargo", [
+        "xtask",
+        "release",
+        "authenticate-installer",
+        "--directory",
+        join(directory, "installer"),
+    ]);
+    publishPair(
+        {
+            directory: join(directory, "installer"),
+            tag: "goblinctl-v" + record.installer.version,
+            source: record.installer.sourceRevision,
+            prerelease: false,
+            title: "goblinctl " + record.installer.version,
+            notes:
+                "Native installer built and tested from " +
+                record.installer.sourceRevision +
+                ".",
+            names: [
+                "goblinctl-x86_64-unknown-linux-musl.tar.gz",
+                "release.json",
+                "SHA256SUMS",
+            ],
+        },
+        {
+            directory,
+            tag: "goblin-v" + validVersion(record.version),
+            source: record.source.revision,
+            prerelease: record.channel === "preview",
+            title: "Goblin " + record.version,
+            notes:
+                "Installer: goblinctl " +
+                record.installer.version +
+                "\n\nSource: " +
+                record.source.branch +
+                " at " +
+                record.source.revision +
+                "\n\nDeployment checks passed. Azure installation remains manual.\n\n[Install Goblin](" +
+                siteUrl +
+                "/?version=" +
+                record.version +
+                ")\n\n[Verification run](https://github.com/" +
+                githubRepository +
+                "/actions/runs/" +
+                record.runId +
+                ")",
+            names: releaseFiles,
+        },
+        record.installerOrigin,
+    );
+}
+function publishedRelease(version: string, directory: string) {
+    const tag = `goblin-v${validVersion(version)}`;
+    const released = api(`releases/tags/${tag}`);
+    assert.ok(released && !released.draft, "Choose a published Goblin release");
+    download(tag, directory, releaseFiles);
+    const record = json(join(directory, "release.json"));
+    if (record.schemaVersion === 2) {
+        authenticateCandidate(directory, record);
+        const installerDirectory = join(directory, "installer");
+        const installerTag = "goblinctl-v" + record.installer.version;
+        assert.match(
+            record.installer.version,
+            /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/,
+        );
+        const installerRelease = api("releases/tags/" + installerTag);
+        assert.ok(
+            installerRelease &&
+                !installerRelease.draft &&
+                !installerRelease.prerelease,
+            "Installer publication is incomplete",
+        );
+        assertTag(installerTag, record.installer.sourceRevision);
+        download(installerTag, installerDirectory, [
+            "goblinctl-x86_64-unknown-linux-musl.tar.gz",
+            "release.json",
+            "SHA256SUMS",
+        ]);
+        run("cargo", [
+            "xtask",
+            "release",
+            "authenticate-installer",
+            "--directory",
+            installerDirectory,
+        ]);
+    } else {
+        run("gh", [
+            "attestation",
+            "verify",
+            join(directory, "release.json"),
+            "--repo",
+            githubRepository,
+            "--signer-workflow",
+            `${githubRepository}/.github/workflows/goblin-release.yml`,
+            "--deny-self-hosted-runners",
+        ]);
+    }
+    verify(directory);
     assert.equal(record.version, version);
     assert.equal(released.prerelease, record.channel === "preview");
-    assertTag(tag, record.sourceRevision);
+    assertTag(tag, record.source?.revision ?? record.sourceRevision);
     return record;
 }
 export function updateCatalog(catalog: any, entry: any, recommend: boolean) {
@@ -400,7 +545,11 @@ function site(version: string, recommendation: string) {
                     sha(join(downloadDir, name)),
                     "Versioned site assets changed",
                 );
-        } else cpSync(downloadDir, destination, { recursive: true });
+        } else {
+            mkdirSync(destination, { recursive: true });
+            for (const name of releaseFiles)
+                cpSync(join(downloadDir, name), join(destination, name));
+        }
         cpSync("deploy/install", path, { recursive: true });
         mkdirSync(join(path, "assets"), { recursive: true });
         cpSync(
@@ -414,7 +563,7 @@ function site(version: string, recommendation: string) {
         const entry = {
             version,
             channel: record.channel,
-            sourceRevision: record.sourceRevision,
+            sourceRevision: record.source?.revision ?? record.sourceRevision,
             manifestSha256: sha(join(downloadDir, "release.json")),
         };
         writeFileSync(
@@ -503,14 +652,8 @@ async function main() {
         case "preflight":
             preflight();
             break;
-        case "pin-pr":
-            pinPr(value);
-            break;
         case "publish":
             publish(resolve(value));
-            break;
-        case "publish-installer":
-            publishInstaller(resolve(value));
             break;
         case "site":
             site(validVersion(value), mode);
@@ -519,9 +662,7 @@ async function main() {
             await checkSite(validVersion(value), mode);
             break;
         default:
-            throw new Error(
-                "Expected preflight, pin-pr, publish, site, or check-site",
-            );
+            throw new Error("Expected preflight, publish, site, or check-site");
     }
 }
 if (import.meta.main) await main();

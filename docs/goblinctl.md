@@ -143,11 +143,13 @@ retains its existing `repo` JSON key.
 
 ## Releases
 
-[Prepare Goblin release](releases.md) reports when a new installer is needed.
-Review and merge its Cargo version bump, run **Publish goblinctl**, then merge the
-generated dependency PR. Goblin and goblinctl keep independent versions.
+[Prepare Goblin release](releases.md) reuses a matching published installer or
+builds one from the selected release branch. Goblin and goblinctl keep independent
+versions; preparation supplies an unused installer version without a Cargo bump or
+dependency-pin PR. After verification, one approval publishes the exact pair,
+with any new goblinctl published first.
 
-Local pin recovery uses `cargo xtask release pin-installer --version X.Y.Z`.
+An optional development pin update uses `cargo xtask release pin-installer --version X.Y.Z`.
 It authenticates the archive and manifest, verifies matching inputs/capabilities,
 and updates `dependencies.toml` and `dependencies.lock.json` together.
 
@@ -160,13 +162,14 @@ cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl
 ```
 
 `cargo xtask release build-installer` instead requires a clean checkout and compiles into a
-fresh temporary target directory before packaging. Release CI uses that command;
+fresh temporary target directory before packaging. Coordinated preparation performs
+the same isolated build for its frozen release source;
 `package` alone does not prove an arbitrary supplied binary came from this checkout.
 
 Local packages are written to `.artifacts/goblinctl/`, outside the test-output
 directory that `npm run build:tools` cleans.
 
-The archive contains only `goblinctl`; setup assets are compiled into that binary.
+The archive contains `goblinctl` and its license documents; setup assets are compiled into that binary.
 Archive order, timestamps, ownership, modes and compression are deterministic for
 the same binary. Compiler-level reproducibility across machines is not claimed.
 The checksum covers final archive bytes. Bootstrap downloads the exact pinned

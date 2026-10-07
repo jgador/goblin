@@ -10,6 +10,16 @@ export interface EnvironmentVariableDefinition {
 
 /** See docs/environment-variables.md before adding or forwarding a variable. */
 export const environmentVariables = {
+    CANDIDATE_SHA256: {
+        name: "CANDIDATE_SHA256",
+        purpose:
+            "Digest of the sealed release manifest selected for publication approval.",
+        format: "Lowercase SHA-256 hex",
+        fallback:
+            "No fallback; publication rejects a missing or different digest",
+        required: "Required for coordinated release publication",
+        sensitive: false,
+    },
     GOBLIN_TEST_POSTGRES_ADMIN: {
         name: "GOBLIN_TEST_POSTGRES_ADMIN",
         purpose:

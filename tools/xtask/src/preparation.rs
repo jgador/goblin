@@ -1,5 +1,8 @@
 //! A read-only GitHub operation producing one unpublished Goblin/goblinctl candidate.
 use crate::azure;
+use crate::candidate::Candidate;
+use crate::candidate::InstallerOrigin;
+use crate::candidate::Source;
 use crate::dependencies;
 use crate::goblin_release::Channel;
 use crate::goblin_release::Check;
@@ -16,8 +19,6 @@ use clap::Args;
 use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
-use serde::Deserialize;
-use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -48,39 +49,6 @@ pub struct Options {
     output: PathBuf,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Source {
-    branch: String,
-    revision: String,
-    branch_tip: String,
-    check_run_id: u64,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum InstallerOrigin {
-    Published,
-    Built,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Candidate {
-    schema_version: u32,
-    version: String,
-    channel: Channel,
-    source: Source,
-    workflow_revision: String,
-    installer: release::Release,
-    installer_origin: InstallerOrigin,
-    changed_installer_inputs: Vec<String>,
-    run_id: String,
-    run_attempt: String,
-    assets: BTreeMap<String, String>,
-    deployment_checks: Check,
-}
-
 #[derive(Default)]
 struct Inventory {
     reserved: BTreeSet<String>,
@@ -93,7 +61,7 @@ enum Selection {
     Build(String),
 }
 
-fn line(branch: &str) -> Result<[u64; 2]> {
+pub(crate) fn line(branch: &str) -> Result<[u64; 2]> {
     let text = branch
         .strip_prefix("release/")
         .context("Select release/<major>.<minor>, for example release/0.1")?;
@@ -181,7 +149,7 @@ fn select_installer(
     workspace: &str,
     inventory: &Inventory,
     requested: Option<&str>,
-    mut authenticate: impl FnMut(&str) -> Result<Option<release::Release>>,
+    mut inspect: impl FnMut(&str) -> Result<Option<release::Release>>,
 ) -> Result<Selection> {
     ensure!(
         required.is_subset(&snapshot.capabilities),
@@ -193,7 +161,7 @@ fn select_installer(
     if let Some(version) = requested {
         release::validate_version(version)?;
         if inventory.published_installers.contains(version) {
-            let published = authenticate(version)?.context("Requested installer has no supported dependency manifest; choose an unused version")?;
+            let published = inspect(version)?.context("Requested installer has no supported dependency manifest; choose an unused version")?;
             ensure!(
                 release::compare(snapshot, &published.installer, required).outcome
                     == release::Outcome::Ready,
@@ -227,7 +195,7 @@ fn select_installer(
     {
         if inventory.published_installers.contains(version)
             && seen.insert(version)
-            && let Some(published) = authenticate(version)?
+            && let Some(published) = inspect(version)?
             && release::compare(snapshot, &published.installer, required).outcome
                 == release::Outcome::Ready
         {
@@ -349,7 +317,7 @@ fn export_source(root: &Path, revision: &str, destination: &Path) -> Result<()> 
     Ok(())
 }
 
-fn authenticated_manifest(version: &str, directory: &Path) -> Result<Option<release::Release>> {
+fn published_manifest(version: &str, directory: &Path) -> Result<Option<release::Release>> {
     fs::create_dir_all(directory)?;
     release::download_files(
         release::GITHUB_REPOSITORY,
@@ -357,32 +325,51 @@ fn authenticated_manifest(version: &str, directory: &Path) -> Result<Option<rele
         directory,
         &["release.json"],
     )?;
-    // Historical manifests without fingerprints cannot establish compatibility.
-    // They are never reused; an authentication failure on a supported manifest
-    // remains an error instead of silently switching to a build.
-    if files::json(&directory.join("release.json"))?
-        .get("schemaVersion")
-        .is_none()
-    {
+    // Metadata can rule out incompatible releases without trusting their claims.
+    // Only the selected installer is authenticated, before any executable is used.
+    let metadata = files::json(&directory.join("release.json"))?;
+    if metadata.get("schemaVersion").is_none() {
         return Ok(None);
     }
-    let record = release::verify_manifest(release::GITHUB_REPOSITORY, directory)
-        .with_context(|| format!("Cannot authenticate goblinctl {version}; repair its provenance or explicitly select an unused installer version"))?;
+    let record: release::Release = serde_json::from_value(metadata)
+        .with_context(|| format!("Invalid goblinctl {version} dependency manifest"))?;
+    release::validate(&record)?;
     ensure!(record.version == version, "Installer tag/version mismatch");
-    let tag = api(&format!("git/ref/tags/goblinctl-v{version}"))?;
-    ensure!(
-        tag["object"]["type"] == "commit" && tag["object"]["sha"] == record.source_revision,
-        "Published installer tag does not identify its authenticated source"
-    );
     Ok(Some(record))
 }
 
-fn validate_executable(root: &Path, directory: &Path, version: &str) -> Result<()> {
-    let executable = directory.join("executable");
-    fs::create_dir_all(&executable)?;
+fn validate_installer_tag(record: &release::Release, tag: &Value) -> Result<()> {
+    let kind = tag["object"]["type"].as_str().unwrap_or("missing");
+    let revision = tag["object"]["sha"].as_str().unwrap_or("missing");
+    ensure!(
+        kind == "commit" && revision == record.source_revision,
+        "Published goblinctl {} cannot be reused: its tag points to {kind} {revision}, but its authenticated manifest records commit {}. Start a new preparation with an unused --installer-version (Optional goblinctl version in Actions); keep existing tags and assets unchanged",
+        record.version,
+        record.source_revision
+    );
+    Ok(())
+}
+
+fn verify_reused_installer(
+    selected: &release::Release,
+    authenticate: impl FnOnce() -> Result<release::Release>,
+    tag: impl FnOnce() -> Result<Value>,
+) -> Result<release::Release> {
+    let verified = authenticate()
+        .with_context(|| format!("Cannot verify selected goblinctl {}; investigate its provenance or start a new preparation with an unused --installer-version (Optional goblinctl version in Actions)", selected.version))?;
+    ensure!(
+        &verified == selected,
+        "Published installer changed during preparation; investigate before preparing again"
+    );
+    validate_installer_tag(&verified, &tag()?)?;
+    Ok(verified)
+}
+
+pub(crate) fn validate_executable(root: &Path, directory: &Path, version: &str) -> Result<()> {
+    let executable = tempfile::tempdir_in(directory)?;
     let archive = flate2::read::GzDecoder::new(fs::File::open(directory.join(release::ARCHIVE))?);
-    tar::Archive::new(archive).unpack(&executable)?;
-    let binary = executable.join("goblinctl");
+    tar::Archive::new(archive).unpack(executable.path())?;
+    let binary = executable.path().join("goblinctl");
     ensure!(
         files::output(Command::new(&binary).arg("--version"))?.trim()
             == format!("goblinctl {version}"),
@@ -460,7 +447,7 @@ fn prepare(root: &Path, options: &Options) -> Result<()> {
         workspace,
         &inventory,
         options.installer_version.as_deref(),
-        |version| authenticated_manifest(version, &staging.path().join("published").join(version)),
+        |version| published_manifest(version, &staging.path().join("published").join(version)),
     )?;
     let installer_directory = staging.path().join("installer");
     fs::create_dir_all(&installer_directory)?;
@@ -471,12 +458,11 @@ fn prepare(root: &Path, options: &Options) -> Result<()> {
                 &published.version,
                 &installer_directory,
             )?;
-            let verified =
-                release::verify_artifacts(release::GITHUB_REPOSITORY, &installer_directory)?;
-            ensure!(
-                verified == published,
-                "Published installer changed during preparation; investigate before preparing again"
-            );
+            let verified = verify_reused_installer(
+                &published,
+                || release::verify_artifacts(release::GITHUB_REPOSITORY, &installer_directory),
+                || api(&format!("git/ref/tags/goblinctl-v{}", published.version)),
+            )?;
             (verified, InstallerOrigin::Published)
         }
         Selection::Build(version) => {
@@ -573,13 +559,20 @@ fn prepare(root: &Path, options: &Options) -> Result<()> {
     output("outcome", "prepared")?;
     output("version", &candidate.version)?;
     output("installer", &candidate.installer.version)?;
+    output(
+        "installer-origin",
+        match candidate.installer_origin {
+            InstallerOrigin::Published => "published",
+            InstallerOrigin::Built => "built",
+        },
+    )?;
     output("source", &candidate.source.revision)?;
     let disposition = match candidate.installer_origin {
         InstallerOrigin::Published => "reused",
         InstallerOrigin::Built => "built, unpublished",
     };
     summary(&format!(
-        "## Candidate prepared\n\nGoblin {}\n\ngoblinctl {} — {disposition}\n\nSource: `{}` at `{}`\n\nThe candidate contains the installer archive, its manifest, generated Azure assets, and their checksums. Full candidate verification, approval, and publication remain pending (step 4). Azure installation is manual.",
+        "## Candidate prepared\n\nGoblin {}\n\ngoblinctl {} — {disposition}\n\nSource: `{}` at `{}`\n\nThe candidate contains the installer archive, its manifest, generated Azure assets, and their checksums. The workflow must finish candidate verification before requesting publication approval. Azure installation is manual.",
         candidate.version,
         candidate.installer.version,
         candidate.source.branch,

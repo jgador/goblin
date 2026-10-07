@@ -1,4 +1,4 @@
-//! Verification and compatibility for the original published Goblin release format.
+//! Release commands and compatibility with historical Goblin records.
 use crate::azure;
 #[cfg(test)]
 use crate::dependencies;
@@ -35,6 +35,21 @@ pub enum Task {
     /// Record successful deployment tests and seal the candidate for publication.
     Seal {
         #[arg(long, default_value = ".artifacts/goblin")]
+        directory: PathBuf,
+        /// Preparation attempt retained when failed verification jobs are rerun.
+        #[arg(long)]
+        expected_attempt: String,
+    },
+    /// Check a candidate against its frozen source and reproduce its Azure assets.
+    CheckCandidate {
+        #[arg(long)]
+        directory: PathBuf,
+        #[arg(long)]
+        source_root: PathBuf,
+    },
+    /// Authenticate published installer assets, including historical publications.
+    AuthenticateInstaller {
+        #[arg(long)]
         directory: PathBuf,
     },
     /// Verify all prepared bytes and evidence before publishing or serving them.
@@ -175,6 +190,7 @@ fn read<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
         &fs::read(path).with_context(|| path.display().to_string())?,
     )?)
 }
+#[cfg(test)]
 fn write(path: &Path, value: &impl Serialize) -> Result<()> {
     files::write_json(path, &serde_json::to_value(value)?, 0o644)
 }
@@ -216,14 +232,30 @@ fn clean_source() -> Result<String> {
 pub fn execute(root: &Path, task: Task) -> Result<()> {
     match task {
         Task::Prepare(options) => crate::preparation::execute(root, options),
-        Task::Seal { directory } => {
-            let record = seal(
+        Task::CheckCandidate {
+            directory,
+            source_root,
+        } => crate::candidate::check_source(&directory, &source_root),
+        Task::AuthenticateInstaller { directory } => {
+            release::verify_artifacts(release::GITHUB_REPOSITORY, &directory).map(|_| ())
+        }
+        Task::Seal {
+            directory,
+            expected_attempt,
+        } => {
+            let workflow = files::output(
+                Command::new("git")
+                    .current_dir(root)
+                    .args(["rev-parse", "HEAD"]),
+            )?;
+            let record = crate::candidate::seal(
                 &directory,
                 &std::env::var(environment::GITHUB_RUN_ID)?,
-                &std::env::var(environment::GITHUB_RUN_ATTEMPT)?,
+                &expected_attempt,
+                workflow.trim(),
             )?;
             summary(&format!(
-                "```text\nGoblin {}\nInstaller: goblinctl {} — reused\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin**. Source: `{}`.",
+                "```text\nGoblin {}\nInstaller: goblinctl {}\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin and goblinctl**. Approval publishes this exact pair. Source: `{}`.",
                 record.version, record.installer.version, record.source_revision
             ))
         }
@@ -278,7 +310,7 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
     }
 }
 
-fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
+pub(crate) fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
     ensure!(
         record.schema_version == 1,
         "Unsupported Goblin release schema"
@@ -341,6 +373,7 @@ fn validate_assets(directory: &Path, record: &Record) -> Result<()> {
     );
     Ok(())
 }
+#[cfg(test)]
 fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<Record> {
     let mut record: Record = read(&directory.join("release.json"))?;
     validate_assets(directory, &record)?;
@@ -365,6 +398,9 @@ fn seal(directory: &Path, run_id: &str, run_attempt: &str) -> Result<Record> {
     verify(directory)
 }
 pub fn verify(directory: &Path) -> Result<Record> {
+    if crate::candidate::coordinated(directory)? {
+        return crate::candidate::verify(directory);
+    }
     let record: Record = read(&directory.join("release.json"))?;
     validate_assets(directory, &record)?;
     ensure!(
