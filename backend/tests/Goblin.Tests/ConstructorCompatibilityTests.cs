@@ -35,12 +35,12 @@ public sealed class ConstructorCompatibilityTests
     {
         string currentName = name.Replace("Repository", "GitRepository", StringComparison.Ordinal);
         Type type = Type.GetType(currentName + ", " + string.Join('.', name.Split('.').Take(2)), throwOnError: true)!;
-        JsonSerializerOptions options = web ? new JsonSerializerOptions(WorkStore.Json) : GitRepositoryJson.CreateOptions();
+        JsonSerializerOptions options = web ? new JsonSerializerOptions(ContractJson.Options) : GitRepositoryJson.CreateOptions();
         object value = JsonSerializer.Deserialize(input, type, options)!;
         string actual = JsonSerializer.Serialize(value, type, options);
         Assert.True(string.Equals(expected, actual, StringComparison.Ordinal),
             $"{name} ({scenario}, Web={web}) changed serialized bytes.\nExpected: {expected}\nActual: {actual}");
         if (web && value is Api.WorkCommand command)
-            Assert.Equal(expected, JsonSerializer.Serialize(command.ToApplication(), WorkStore.Json));
+            Assert.Equal(expected, JsonSerializer.Serialize(command.ToApplication(), ContractJson.Options));
     }
 }

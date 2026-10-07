@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
@@ -150,7 +151,7 @@ public sealed class ModelCatalogStore
             var previousNames = previous.Select(x => x.Model).ToHashSet(StringComparer.Ordinal);
             row.Catalog = JsonSerializer.Serialize(models.Select(x => new RuntimeModel(
                 x.Id, x.Model, x.DisplayName, x.DefaultReasoningEffort, x.SupportedReasoningEfforts,
-                x.IsDefault, previous.Length > 0 && !previousNames.Contains(x.Model))).ToArray(), WorkStore.Json);
+                x.IsDefault, previous.Length > 0 && !previousNames.Contains(x.Model))).ToArray(), ContractJson.Options);
             row.ExecutableStamp = stamp;
             row.FetchedAt = DateTime.UtcNow;
             row.RetryAfter = null;
@@ -161,7 +162,7 @@ public sealed class ModelCatalogStore
     }
 
     private static RuntimeModel[] Parse(string json) =>
-        JsonSerializer.Deserialize<RuntimeModel[]>(json, WorkStore.Json) ?? [];
+        JsonSerializer.Deserialize<RuntimeModel[]>(json, ContractJson.Options) ?? [];
 
     private static RuntimeModel[] Order(RuntimeModel[] models, string? selected) =>
         [.. models.OrderByDescending(x => x.Model == selected)

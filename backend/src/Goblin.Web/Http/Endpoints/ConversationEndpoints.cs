@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -22,7 +23,7 @@ internal static class ConversationEndpoints
 
     private static async Task<IResult> ApplyAsync(HttpContext context, ConversationStore store)
     {
-        Api.ConversationCommand command = ApiRequest.Body<Api.ConversationCommand>(context, WorkStore.Json);
+        Api.ConversationCommand command = ApiRequest.Body<Api.ConversationCommand>(context, ContractJson.Options);
         return WorkResponse.Json(Api.ConversationView.From(await store.ApplyAsync(command.ToApplication())));
     }
 }

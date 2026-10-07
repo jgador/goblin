@@ -1,12 +1,12 @@
 using System.Text.Json;
-using Goblin.Application.Work;
+using Goblin.Contracts;
 using Microsoft.AspNetCore.Http;
 
 namespace Goblin.Web;
 
 internal static class WorkResponse
 {
-    private static readonly JsonSerializerOptions WorkJson = new(WorkStore.Json)
+    private static readonly JsonSerializerOptions WorkJson = new(ContractJson.Options)
     {
         Converters = { new LongJsonConverter() }
     };

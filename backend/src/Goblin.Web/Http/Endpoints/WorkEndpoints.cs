@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 
@@ -28,7 +29,7 @@ internal static class WorkEndpoints
 
     private static async Task<IResult> ApplyAsync(HttpContext context, WorkStore store)
     {
-        Api.WorkCommand command = ApiRequest.Body<Api.WorkCommand>(context, WorkStore.Json);
+        Api.WorkCommand command = ApiRequest.Body<Api.WorkCommand>(context, ContractJson.Options);
         // Once accepted, the command has an independent transaction and
         // execution lifecycle. RequestAborted is deliberately not passed.
         return WorkResponse.Json(Api.WorkView.From(await store.ApplyAsync(command.ToApplication())));
@@ -36,7 +37,7 @@ internal static class WorkEndpoints
 
     private static async Task<IResult> ReserveIdentitiesAsync(HttpContext context, IdentityStore store, CancellationToken token)
     {
-        Api.IdentityRequest request = ApiRequest.Body<Api.IdentityRequest>(context, WorkStore.Json);
+        Api.IdentityRequest request = ApiRequest.Body<Api.IdentityRequest>(context, ContractJson.Options);
         return WorkResponse.Json(Api.ReservedIdentities.From(await store.ReserveAsync(request.ToApplication(), token)));
     }
 

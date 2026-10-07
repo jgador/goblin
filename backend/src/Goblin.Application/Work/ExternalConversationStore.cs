@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Conversations;
 using Goblin.Core.Work;
 using Goblin.Persistence;
@@ -245,7 +246,7 @@ public sealed class ExternalConversationStore
             {
                 conversation = await db.Conversations.SingleAsync(x => x.Id == source.ConversationId, token);
                 Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == conversation.WorkId, token);
-                WorkSnapshot snapshot = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(row.State!, WorkStore.Json)!;
+                WorkSnapshot snapshot = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(row.State!, ContractJson.Options)!;
                 WorkDecision? decision = snapshot.Decisions.LastOrDefault(x => x.AnsweredAt is null);
                 // Only an existing question may consume a conversational answer.
                 // Repository approval, retry, completion and cancellation stay in the local UI.

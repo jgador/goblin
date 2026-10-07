@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Runtime;
@@ -40,7 +39,9 @@ public sealed partial class WorkStore
     }
 
     public static readonly long DefaultAgentId = 1;
-    public static readonly JsonSerializerOptions Json = GitRepositoryJson.CreateOptions(JsonSerializerDefaults.Web);
+    // Retained for source compatibility. New consumers should take serialization
+    // policy from the contracts boundary rather than from this persistence service.
+    public static readonly JsonSerializerOptions Json = ContractJson.Options;
 
     public async Task<WorkView[]> ListAsync(CancellationToken token = default)
     {
@@ -128,7 +129,7 @@ public sealed partial class WorkStore
         if (receipt is not null)
         {
             if (receipt.Fingerprint != fingerprint) throw new ApplicationFailure("command_id_reused");
-            return JsonSerializer.Deserialize<WorkView>(receipt.Response, Json)!;
+            return JsonSerializer.Deserialize<WorkView>(receipt.Response, ContractJson.Options)!;
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -262,7 +263,7 @@ public sealed partial class WorkStore
             Id = command.CommandId,
             WorkId = work.Id,
             Fingerprint = fingerprint,
-            Response = JsonSerializer.Serialize(view, Json),
+            Response = JsonSerializer.Serialize(view, ContractJson.Options),
             CreatedAt = now.UtcDateTime
         });
         await db.SaveChangesAsync(token);
@@ -414,7 +415,7 @@ public sealed partial class WorkStore
 
     private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
     {
-        row.State = JsonSerializer.Serialize(work.Snapshot(), Json);
+        row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
         row.Status = work.Status.ToString();
         row.AgentId = work.AgentId;
         row.Version++;
@@ -449,11 +450,11 @@ public sealed partial class WorkStore
 
     internal static WorkItem Restore(Row row) => row.State is null
         ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
-        : WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State, Json)!);
+        : WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State, ContractJson.Options)!);
 
     private static WorkView View(Row row) => new(row.Version, new(row.CreatedAt, TimeSpan.Zero),
         new(row.UpdatedAt, TimeSpan.Zero), Restore(row).Snapshot());
 
     private static string Hash(WorkCommand command) => Convert.ToHexString(SHA256.HashData(
-        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(command, Json))));
+        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(command, ContractJson.Options))));
 }

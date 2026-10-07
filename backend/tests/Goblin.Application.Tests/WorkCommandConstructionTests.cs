@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 using Xunit;
 
 namespace Goblin.Application.Tests;
@@ -18,17 +19,17 @@ public sealed class WorkCommandConstructionTests
         WorkCommand inherited = Construct(null);
         WorkCommand cleared = Construct(new(null, null));
         WorkCommand selected = Construct(new("chosen-model", "high"));
-        string inheritedJson = JsonSerializer.Serialize(inherited, WorkStore.Json);
-        string clearedJson = JsonSerializer.Serialize(cleared, WorkStore.Json);
+        string inheritedJson = JsonSerializer.Serialize(inherited, ContractJson.Options);
+        string clearedJson = JsonSerializer.Serialize(cleared, ContractJson.Options);
         Assert.NotEqual(inheritedJson, clearedJson);
-        Assert.False(JsonSerializer.Deserialize<WorkCommand>(inheritedJson, WorkStore.Json)!.ModelSelectionProvided);
-        WorkCommand restored = JsonSerializer.Deserialize<WorkCommand>(clearedJson, WorkStore.Json)!;
+        Assert.False(JsonSerializer.Deserialize<WorkCommand>(inheritedJson, ContractJson.Options)!.ModelSelectionProvided);
+        WorkCommand restored = JsonSerializer.Deserialize<WorkCommand>(clearedJson, ContractJson.Options)!;
         Assert.True(restored.ModelSelectionProvided);
         Assert.Null(restored.Model);
         Assert.Null(restored.ReasoningEffort);
         Assert.Equal(action, restored.Action);
         Assert.Equal(33, restored.ExpectedVersion);
-        restored = JsonSerializer.Deserialize<WorkCommand>(JsonSerializer.Serialize(selected, WorkStore.Json), WorkStore.Json)!;
+        restored = JsonSerializer.Deserialize<WorkCommand>(JsonSerializer.Serialize(selected, ContractJson.Options), ContractJson.Options)!;
         Assert.True(restored.ModelSelectionProvided);
         Assert.Equal("chosen-model", restored.Model);
         Assert.Equal("high", restored.ReasoningEffort);

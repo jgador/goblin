@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Core.Work;
 using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -153,7 +154,7 @@ public sealed class ConversationStore
                 AgentId = work.AgentId,
                 Status = work.Status.ToString(),
                 Version = 1,
-                State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json),
+                State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             });
@@ -162,9 +163,9 @@ public sealed class ConversationStore
         else if (conversation.WorkId is { } linked && existing is null && !string.IsNullOrWhiteSpace(command.Text))
         {
             Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
-            var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, WorkStore.Json)!);
+            var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, ContractJson.Options)!);
             work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
-            row.State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json);
+            row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
             row.Version++;
             row.UpdatedAt = DateTime.UtcNow;
         }
