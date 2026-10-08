@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,55 +23,17 @@ public sealed class PromptRunner
     {
         if (cancellationToken.IsCancellationRequested) throw Cancelled();
         var elapsed = Stopwatch.StartNew();
-        object gate = new();
-        string? threadId = null, turnId = null;
-        bool finished = false;
-        var messages = new OrderedDictionary<string, string>();
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        void Save(ThreadItem item)
-        {
-            if (item is not AgentMessageThreadItem message || message.Phase == MessagePhase.Commentary) return;
-            messages[message.Id] = message.Text;
-            if (messages.Count > 32 || string.Join("\n\n", messages.Values).Length > 8000)
-                completion.TrySetException(new IntegrationFailure("prompt_reply_too_large",
-                    "The reply was too long. Try a shorter prompt."));
-        }
-
-        void Notification(ServerNotification notification)
-        {
-            lock (gate)
-            {
-                (string? eventThreadId, string? eventTurnId) = notification switch
-                {
-                    TurnStartedServerNotification e => (e.Params.ThreadId, e.Params.Turn.Id),
-                    ItemCompletedServerNotification e => (e.Params.ThreadId, e.Params.TurnId),
-                    TurnCompletedServerNotification e => (e.Params.ThreadId, e.Params.Turn.Id),
-                    _ => (null, null)
-                };
-                if (threadId is null || threadId != eventThreadId || eventTurnId is null ||
-                    (turnId is not null && turnId != eventTurnId)) return;
-                turnId ??= eventTurnId;
-                if (notification is ItemCompletedServerNotification item) Save(item.Params.Item);
-                if (notification is TurnCompletedServerNotification ended)
-                {
-                    finished = true;
-                    Turn turn = ended.Params.Turn;
-                    if (turn.Status == TurnStatus.Failed) { completion.TrySetException(GenerationError(turn.Error)); return; }
-                    if (turn.Status != TurnStatus.Completed) { completion.TrySetException(Cancelled()); return; }
-                    foreach (ThreadItem value in turn.Items) Save(value);
-                    string reply = string.Join("\n\n", messages.Values).Trim();
-                    if (reply.Length == 0)
-                        completion.TrySetException(new IntegrationFailure("prompt_empty_reply", "The model finished without a text reply. Please retry."));
-                    else completion.TrySetResult(reply);
-                }
-            }
-        }
-
-        void Disconnected() => completion.TrySetException(IntegrationFailure.RuntimeUnavailable());
-        _codex.Notification += Notification;
+        var transcript = new CodexTurnTranscript(32, 8000, "\n\n", countSeparators: true,
+            trimResult: true, progressLimit: 0,
+            tooLarge: () => new IntegrationFailure("prompt_reply_too_large", "The reply was too long. Try a shorter prompt."),
+            completionError: turn => turn.Status == TurnStatus.Failed ? GenerationError(turn.Error) :
+                turn.Status != TurnStatus.Completed ? Cancelled() : null,
+            resultError: reply => reply.Length == 0
+                ? new IntegrationFailure("prompt_empty_reply", "The model finished without a text reply. Please retry.") : null);
+        void Disconnected() => transcript.Fail(IntegrationFailure.RuntimeUnavailable());
+        _codex.Notification += transcript.Handle;
         _codex.Disconnected += Disconnected;
-        using CancellationTokenRegistration cancellation = cancellationToken.Register(() => completion.TrySetException(Cancelled()));
+        using CancellationTokenRegistration cancellation = cancellationToken.Register(() => transcript.Fail(Cancelled()));
         try
         {
             ThreadStartResponse thread = await _codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
@@ -83,7 +44,7 @@ public sealed class PromptRunner
                 Sandbox = SandboxMode.ReadOnly,
                 BaseInstructions = "Answer the user's prompt briefly, using only the text in this conversation. Do not call tools, inspect files, browse, or perform any actions."
             });
-            lock (gate) threadId = thread.Thread.Id;
+            transcript.SetThread(thread.Thread.Id);
             if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" ||
                 thread.Sandbox is not ReadOnlySandboxPolicy ||
                 thread.ApprovalPolicy is not StringAskForApproval { Value: AskForApprovalValue.Never })
@@ -91,18 +52,14 @@ public sealed class PromptRunner
             if (cancellationToken.IsCancellationRequested) throw Cancelled();
             TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
-                ThreadId = threadId,
+                ThreadId = transcript.ThreadId!,
                 Input = [new TextUserInput { Text = prompt }],
                 ApprovalPolicy = AskForApproval.Never,
                 SandboxPolicy = new ReadOnlySandboxPolicy { NetworkAccess = false }
             });
-            lock (gate)
-            {
-                if (turnId is not null && turnId != started.Turn.Id) throw IntegrationFailure.RuntimeUnavailable();
-                turnId = started.Turn.Id;
-            }
+            transcript.SetTurn(started.Turn.Id);
             string reply;
-            try { reply = await completion.Task.WaitAsync(_timeout); }
+            try { reply = await transcript.Completion.Task.WaitAsync(_timeout); }
             catch (TimeoutException)
             {
                 throw new IntegrationFailure("prompt_timeout", "The prompt took too long and was cancelled. Please retry.");
@@ -111,13 +68,15 @@ public sealed class PromptRunner
         }
         finally
         {
-            _codex.Notification -= Notification;
+            _codex.Notification -= transcript.Handle;
             _codex.Disconnected -= Disconnected;
             // Observe faults even if thread/start or turn/start failed before the completion wait.
-            _ = completion.Task.Exception;
+            _ = transcript.Completion.Task.Exception;
+            string? threadId = transcript.ThreadId;
+            string? turnId = transcript.TurnId;
             if (threadId is not null && _codex.Ready)
             {
-                if (turnId is not null && !finished)
+                if (turnId is not null && !transcript.Finished)
                     try { await _codex.RequestAsync<TurnInterruptParams, TurnInterruptResponse>("turn/interrupt", new() { ThreadId = threadId, TurnId = turnId }); }
                     catch { _codex.Fail(); }
                 if (_codex.Ready)
