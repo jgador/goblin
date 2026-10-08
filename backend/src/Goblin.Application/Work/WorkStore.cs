@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Runtime;
+using Goblin.Application.Workspaces;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -281,8 +282,8 @@ public sealed partial class WorkStore
             x.Name == attempt.Target.GitRepository.GitRepository, token)) failure = FailureKind.ConnectionUnavailable;
         if (failure is null && attempt.Target.GitRepository is not null && !attempt.ReasoningOnly)
         {
-            if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id &&
-                (x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention)), token)) return null;
+            if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions)
+                .AnyAsync(x => x.WorkId == work.Id, token)) return null;
             int occupied = await ResourceReservations.CountSandboxesAsync(db,
                 ResourceReservations.Attempts(db.ExecutionAttempts).Where(x => x.Id != attempt.Id), token);
             if (occupied >= _limits.MaxSandboxes) return null;

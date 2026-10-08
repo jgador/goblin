@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Goblin.Application.Runtime;
+using Goblin.Application.Workspaces;
 using Goblin.Core.Work;
 using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +51,20 @@ public sealed class ResourceReservationTests
     }
 
     [Fact]
+    public void InspectionQueriesAgreeWithEachLifecycleMeaning()
+    {
+        foreach (InspectionState state in Enum.GetValues<InspectionState>())
+        {
+            var row = new SessionRow { State = state.ToString() };
+            IQueryable<SessionRow> sessions = new[] { row }.AsQueryable();
+            Assert.Equal(WorkspaceSessionRules.IsActive(state),
+                WorkspaceSessionQueries.Active(sessions).Any());
+            Assert.Equal(WorkspaceSessionRules.RequiresObservation(state),
+                WorkspaceSessionQueries.RequiringObservation(sessions).Any());
+        }
+    }
+
+    [Fact]
     public void ConnectionReservationsIncludeTextAttemptsButSandboxCountsExcludeThem()
     {
         var rows = new[]
@@ -79,5 +94,13 @@ public sealed class ResourceReservationTests
         string inspections = ResourceReservations.Inspections(db.WorkspaceSessions).ToQueryString();
         Assert.Contains("NeedsAttention", inspections);
         Assert.DoesNotContain("Queued", inspections);
+        string active = WorkspaceSessionQueries.Active(db.WorkspaceSessions)
+            .Where(x => x.WorkId == 42).ToQueryString();
+        Assert.Contains("NeedsAttention", active);
+        Assert.Contains("Queued", active);
+        Assert.Contains("42", active);
+        string observable = WorkspaceSessionQueries.RequiringObservation(db.WorkspaceSessions).ToQueryString();
+        Assert.Contains("Queued", observable);
+        Assert.DoesNotContain("NeedsAttention", observable);
     }
 }

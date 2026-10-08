@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Workspaces;
 using Goblin.Core.Work;
 using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -20,9 +21,7 @@ internal static class ResourceReservations
             x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained);
 
     internal static IQueryable<SessionRow> Inspections(IQueryable<SessionRow> sessions) =>
-        sessions.Where(x => x.State == nameof(InspectionState.Starting) ||
-            x.State == nameof(InspectionState.Available) ||
-            x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention));
+        WorkspaceSessionQueries.HoldingCapacity(sessions);
 
     internal static async Task<int> CountSandboxesAsync(GoblinDbContext db,
         IQueryable<AttemptRow> reservedAttempts, CancellationToken token)

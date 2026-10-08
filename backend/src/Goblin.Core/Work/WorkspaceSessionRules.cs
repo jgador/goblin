@@ -22,7 +22,11 @@ public enum InspectionObservation
 
 public static class WorkspaceSessionRules
 {
+    public static bool IsActive(InspectionState state) => state != InspectionState.Stopped;
+
     public static bool HoldsCapacity(InspectionState state) => state is InspectionState.Starting or InspectionState.Available or InspectionState.Stopping or InspectionState.NeedsAttention;
+
+    public static bool RequiresObservation(InspectionState state) => state is InspectionState.Queued or InspectionState.Starting or InspectionState.Available or InspectionState.Stopping;
 
     public static InspectionState Observe(InspectionState current, InspectionObservation observed) => current switch
     {

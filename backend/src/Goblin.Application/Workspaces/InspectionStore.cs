@@ -81,7 +81,7 @@ public sealed class InspectionStore
             if (row.WorkId != workId || row.AttemptId != attemptId) throw new ApplicationFailure("command_id_reused");
             return View(row);
         }
-        if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == workId && (x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention)), token))
+        if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions).AnyAsync(x => x.WorkId == workId, token))
             throw new ApplicationFailure("workspace_session_exists");
         Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
         WorkSnapshot work = WorkStore.Restore(workRow).Snapshot();
@@ -164,7 +164,7 @@ public sealed class InspectionStore
     public async Task<InspectionView[]> PendingAsync(CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        return await db.WorkspaceSessions.AsNoTracking().Where(x => x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping))
+        return await WorkspaceSessionQueries.RequiringObservation(db.WorkspaceSessions.AsNoTracking())
             .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, ContractValue.Parse<InspectionState>(x.State))).ToArrayAsync(token);
     }
 
