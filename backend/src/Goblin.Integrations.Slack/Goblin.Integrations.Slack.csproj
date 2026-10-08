@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="Goblin.Application.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <EmbeddedResource Include="manifest.json" />
