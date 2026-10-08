@@ -75,6 +75,30 @@ public interface IExternalConversations
     Task AcceptAsync(ExternalMessage message, CancellationToken token);
 
     Task<ExternalReply?> ProcessNextAsync(ExternalInstallation installation, CancellationToken token);
+
+    Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token);
+
+    Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token);
+}
+
+public sealed class ExternalQuestion
+{
+    public ExternalQuestion(long conversationId, long workId, long decisionId, string channelId, string threadId, string text)
+    {
+        ConversationId = conversationId;
+        WorkId = workId;
+        DecisionId = decisionId;
+        ChannelId = channelId;
+        ThreadId = threadId;
+        Text = text;
+    }
+
+    public long ConversationId { get; }
+    public long WorkId { get; }
+    public long DecisionId { get; }
+    public string ChannelId { get; }
+    public string ThreadId { get; }
+    public string Text { get; }
 }
 
 public enum SlackConnectionStatus

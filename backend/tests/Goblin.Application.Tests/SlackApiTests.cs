@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
@@ -99,6 +100,58 @@ public sealed class SlackApiTests
     }
 
     private static HttpResponseMessage Response(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json) };
+
+    [Fact]
+    public async Task QuestionsPostInTheirThreadEscapeMentionsAndMarkOnlySuccessfulDelivery()
+    {
+        string? repo = Environment.CurrentDirectory;
+        while (repo is not null && !Directory.Exists(Path.Combine(repo, ".git"))) repo = Path.GetDirectoryName(repo);
+        if (repo is null) throw new InvalidOperationException("Repository directory not found");
+        string directory = Path.Combine(repo, ".artifacts", "slack-questions", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var conversations = new Questions();
+            bool fail = true;
+            string? body = null;
+            using var api = new SlackApi(new Handler(async request =>
+            {
+                body = await request.Content!.ReadAsStringAsync();
+                return Response(fail ? "{\"ok\":false}" : "{\"ok\":true}");
+            }));
+            var store = new SlackCredentialStore(directory);
+            await store.SaveAsync(Credentials, default);
+            using var connection = new SlackConnection(api, store, conversations, "http://localhost:8788");
+            await connection.DeliverQuestionAsync(Credentials, default);
+            Assert.Equal(0, conversations.Deliveries);
+            fail = false;
+            await connection.DeliverQuestionAsync(Credentials, default);
+            Assert.Equal(1, conversations.Deliveries);
+            string posted = System.Net.WebUtility.UrlDecode(body)!;
+            Assert.Contains("channel=D123&thread_ts=123.4&", posted);
+            Assert.Contains("Which &lt;@U456&gt; &amp; region?", posted);
+            Assert.Contains("Reply in this thread", posted);
+            Assert.Contains("http://localhost:8788/work?item=2", posted);
+            await connection.DisconnectAsync(default);
+            await connection.DeliverQuestionAsync(Credentials, default);
+            Assert.Equal(1, conversations.Deliveries);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    private sealed class Questions : IExternalConversations
+    {
+        public int Deliveries { get; private set; }
+        public Task AcceptAsync(ExternalMessage message, CancellationToken token) => throw new InvalidOperationException();
+        public Task<ExternalReply?> ProcessNextAsync(ExternalInstallation installation, CancellationToken token) => throw new InvalidOperationException();
+        public Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token) =>
+            Task.FromResult<ExternalQuestion?>(new(1, 2, 3, "D123", "123.4", "Which <@U456> & region?"));
+        public Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token)
+        {
+            Deliveries++;
+            return Task.CompletedTask;
+        }
+    }
 
     private sealed class Handler : HttpMessageHandler
     {

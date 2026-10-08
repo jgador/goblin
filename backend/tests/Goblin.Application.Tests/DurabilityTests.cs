@@ -109,6 +109,77 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
+    public async Task ExternalQuestionsSurviveRestartAndSlackAnswersContinueTheSameAttempt()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var installation = new ExternalInstallation("question-installation", "T123", "A123", "U123");
+        long workId;
+        long attemptId;
+        ExternalQuestion question;
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
+        {
+            ExternalConversationStore store = scope.ServiceProvider.GetRequiredService<ExternalConversationStore>();
+            ExternalLinkCode code = await store.StartLinkAsync(installation, "owner-session", default);
+            ExternalMessage Message(string eventId, string timestamp, string text) => new()
+            {
+                Installation = installation,
+                EventId = eventId,
+                UserId = "U456",
+                ChannelId = "D123",
+                ThreadId = "10.000001",
+                MessageId = timestamp,
+                Text = text,
+                Direct = true
+            };
+            await store.AcceptAsync(Message("link-event", "9.000001", "link " + code.Code), default);
+            await store.ProcessNextAsync(installation, default);
+            await store.ConfirmLinkAsync(installation, "owner-session", code.Id, default);
+            await store.AcceptAsync(Message("request-event", "10.000001", "Explain the design"), default);
+            workId = (await store.ProcessNextAsync(installation, default))!.WorkId!.Value;
+            WorkView running = await fixture.Until(workId, view => view.Work.Attempts[^1].Status == AttemptStatus.Starting);
+            attemptId = running.Work.Attempts[^1].Id;
+            fixture.Runtime.Observations[attemptId] = new(ObservationKind.Paused, Text: "Which environment?");
+            await fixture.Reconcile(workId, attemptId);
+            question = (await store.NextQuestionAsync(installation, default))!;
+            Assert.Equal("Which environment?", question.Text);
+            Assert.Equal(workId, question.WorkId);
+            Assert.Equal("D123", question.ChannelId);
+            Assert.Equal("10.000001", question.ThreadId);
+            Assert.Null(await store.NextQuestionAsync(new("another-installation", "T123", "A123", "U123"), default));
+        }
+        await fixture.RestartAsync();
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
+        {
+            ExternalConversationStore store = scope.ServiceProvider.GetRequiredService<ExternalConversationStore>();
+            Assert.Equal(question.DecisionId, (await store.NextQuestionAsync(installation, default))!.DecisionId);
+            await store.QuestionSentAsync(installation, question, default);
+            Assert.Null(await store.NextQuestionAsync(installation, default));
+            await store.AcceptAsync(new()
+            {
+                Installation = installation,
+                EventId = "answer-event",
+                UserId = "U456",
+                ChannelId = "D123",
+                ThreadId = "10.000001",
+                MessageId = "10.000002",
+                Text = "Development",
+                Direct = true
+            }, default);
+            Assert.Equal(workId, (await store.ProcessNextAsync(installation, default))!.WorkId);
+            WorkView answered = await fixture.Get(workId);
+            Assert.Equal("Development", answered.Work.Decisions[^1].Answer);
+            Assert.Equal(attemptId, Assert.Single(answered.Work.Attempts).Id);
+            await fixture.Until(workId, view => view.Work.Attempts[^1].TurnNumber == 2 && view.Work.Attempts[^1].Status == AttemptStatus.Starting);
+            fixture.Runtime.Observations[attemptId] = new(ObservationKind.Paused, Text: "Which region?") { TurnNumber = 2 };
+            await fixture.Reconcile(workId, attemptId);
+            Assert.Equal("Which region?", (await store.NextQuestionAsync(installation, default))!.Text);
+            ExternalIdentityView identity = Assert.Single(await store.IdentitiesAsync(installation, default));
+            await store.RevokeAsync(installation, identity.Id, default);
+            Assert.Null(await store.NextQuestionAsync(installation, default));
+        }
+    }
+
+    [DatabaseFact]
     public async Task DefaultCoworkerIsSavedAtCreationAndUsedForExplicitStart()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
@@ -1669,7 +1740,10 @@ public sealed class DurabilityTests
                     """, db).ExecuteNonQueryAsync();
             }
             await SqlMigrations.ApplyAsync(admin.ConnectionString, Path.Combine(AppContext.BaseDirectory, "migrations"), TextWriter.Null);
-            var fixture = new Fixture(app.ConnectionString, name, Path.Combine(Path.GetTempPath(), name), catalog);
+            string? repo = Environment.CurrentDirectory;
+            while (repo is not null && !Directory.Exists(Path.Combine(repo, ".git"))) repo = Path.GetDirectoryName(repo);
+            if (repo is null) throw new InvalidOperationException("Repository directory not found");
+            var fixture = new Fixture(app.ConnectionString, name, Path.Combine(repo, ".artifacts", "durability-tests", name), catalog);
             await fixture.StartAsync();
             using IServiceScope scope = fixture.Host.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Available);

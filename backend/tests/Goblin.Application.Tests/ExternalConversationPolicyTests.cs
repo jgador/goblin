@@ -83,6 +83,17 @@ public sealed class ExternalConversationPolicyTests
         Direct = direct
     };
 
+    [Fact]
+    public void QuestionsRemainPendingUntilDeliveredAndDisappearAfterAnswering()
+    {
+        WorkItem work = RunningWork();
+        work.RequestInput(3, 5, 6, "Which environment?", Now);
+        Assert.Equal(6, ExternalConversationPolicy.PendingQuestion(work.Snapshot(), null)!.Id);
+        Assert.Null(ExternalConversationPolicy.PendingQuestion(work.Snapshot(), 6));
+        work.AnswerDecision(6, "Development", Now);
+        Assert.Null(ExternalConversationPolicy.PendingQuestion(work.Snapshot(), null));
+    }
+
     private static WorkItem RunningWork()
     {
         var work = new WorkItem(1, "Inspect", Now);

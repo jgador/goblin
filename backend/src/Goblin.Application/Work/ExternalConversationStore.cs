@@ -152,6 +152,41 @@ public sealed class ExternalConversationStore
         await transaction.CommitAsync(token);
     }
 
+    public async Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        // Read committed Work, never a runtime notification or an uncommitted transition.
+        // Only the current installation and an enabled originating actor may share questions.
+        var sources = await db.ExternalConversations.AsNoTracking()
+            .Where(x => x.InstallationId == installation.Id && x.WorkspaceId == installation.WorkspaceId &&
+                x.Conversation.Work != null && x.Conversation.Work.Status == nameof(WorkStatus.NeedsAttention))
+            .OrderBy(x => x.Id)
+            .Select(x => new { Source = x, Work = x.Conversation.Work! }).ToArrayAsync(token);
+        foreach (var item in sources)
+        {
+            ExternalConversation source = item.Source;
+            string? user = await db.ExternalMessages.Where(x => x.InstallationId == installation.Id &&
+                x.WorkspaceId == installation.WorkspaceId && x.ChannelId == source.ChannelId &&
+                x.ThreadId == source.ThreadId && x.WorkId == item.Work.Id && x.State == nameof(ExternalMessageState.Accepted))
+                .OrderBy(x => x.Id).Select(x => x.UserId).FirstOrDefaultAsync(token);
+            if (user is null || !await AuthorizedAsync(db, installation.Id, installation.WorkspaceId, user, token)) continue;
+            WorkSnapshot snapshot = WorkStatePersistence.Restore(item.Work).Snapshot();
+            WorkDecision? decision = ExternalConversationPolicy.PendingQuestion(snapshot, source.NotifiedDecisionId);
+            if (decision is not null)
+                return new(source.Id, snapshot.Id, decision.Id, source.ChannelId, source.ThreadId, decision.Question);
+        }
+        return null;
+    }
+
+    public async Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        await db.ExternalConversations.Where(x => x.Id == question.ConversationId && x.InstallationId == installation.Id &&
+            x.WorkspaceId == installation.WorkspaceId && x.ChannelId == question.ChannelId && x.ThreadId == question.ThreadId &&
+            x.Conversation.WorkId == question.WorkId)
+            .ExecuteUpdateAsync(x => x.SetProperty(y => y.NotifiedDecisionId, question.DecisionId), token);
+    }
+
     public async Task AcceptAsync(ExternalMessage message, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);

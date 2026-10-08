@@ -192,5 +192,7 @@ public sealed class SlackTests
     {
         public Task AcceptAsync(ExternalMessage message, CancellationToken token) => throw new InvalidOperationException();
         public Task<ExternalReply?> ProcessNextAsync(ExternalInstallation installation, CancellationToken token) => throw new InvalidOperationException();
+        public Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token) => throw new InvalidOperationException();
+        public Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token) => throw new InvalidOperationException();
     }
 }

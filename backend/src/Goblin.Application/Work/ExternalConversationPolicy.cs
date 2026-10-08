@@ -42,6 +42,12 @@ internal static class ExternalConversationPolicy
             : WorkCommands.AddContext(commandId, workId, version, text);
     }
 
+    internal static WorkDecision? PendingQuestion(WorkSnapshot snapshot, long? notifiedDecisionId)
+    {
+        WorkDecision? decision = snapshot.Decisions.LastOrDefault(value => value.AnsweredAt is null);
+        return snapshot.Attention?.Reason == AttentionReason.InputRequired && decision?.Id != notifiedDecisionId ? decision : null;
+    }
+
     private static string Hash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
