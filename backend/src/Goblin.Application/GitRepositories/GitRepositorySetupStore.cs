@@ -114,7 +114,7 @@ public sealed class GitRepositorySetupStore
             .Select(x => new { x.Work.State, x.Status, x.TurnNumber }).SingleOrDefaultAsync(token);
         if (owner is null || owner.Status is not ("Starting" or "Running") || owner.State is null)
             throw new ApplicationFailure("repository_setup_unavailable");
-        WorkSnapshot work = JsonSerializer.Deserialize<WorkSnapshot>(owner.State, ContractJson.Options)!;
+        WorkSnapshot work = WorkStatePersistence.Snapshot(owner.State);
         await GitRepositoryAccess.RequireSetupAsync(db, work, attemptId, owner.TurnNumber, token);
         return work;
     }

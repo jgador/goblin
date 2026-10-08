@@ -350,6 +350,6 @@ public sealed partial class WorkStore
     }
 
     private static WorkView View(Row row) => new(row.Version, new(row.CreatedAt, TimeSpan.Zero),
-        new(row.UpdatedAt, TimeSpan.Zero), WorkStatePersistence.Restore(row).Snapshot());
+        new(row.UpdatedAt, TimeSpan.Zero), WorkStatePersistence.Snapshot(row));
 
 }

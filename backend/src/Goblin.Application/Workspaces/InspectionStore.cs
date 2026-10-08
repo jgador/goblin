@@ -84,7 +84,7 @@ public sealed class InspectionStore
         if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions).AnyAsync(x => x.WorkId == workId, token))
             throw new ApplicationFailure("workspace_session_exists");
         Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
-        WorkSnapshot work = WorkStatePersistence.Restore(workRow).Snapshot();
+        WorkSnapshot work = WorkStatePersistence.Snapshot(workRow);
         AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.GitRepository is not null) ?? throw new ApplicationFailure("workspace_not_found");
         WorkWorkspace workspace = work.Workspace ?? throw new ApplicationFailure("workspace_not_found");
         WorkspaceSessionRules.RequireOpenable(attempt.Status);

@@ -170,7 +170,7 @@ public sealed class ExternalConversationStore
                 x.ThreadId == source.ThreadId && x.WorkId == item.Work.Id && x.State == nameof(ExternalMessageState.Accepted))
                 .OrderBy(x => x.Id).Select(x => x.UserId).FirstOrDefaultAsync(token);
             if (user is null || !await AuthorizedAsync(db, installation.Id, installation.WorkspaceId, user, token)) continue;
-            WorkSnapshot snapshot = WorkStatePersistence.Restore(item.Work).Snapshot();
+            WorkSnapshot snapshot = WorkStatePersistence.Snapshot(item.Work);
             WorkDecision? decision = ExternalConversationPolicy.PendingQuestion(snapshot, source.NotifiedDecisionId);
             if (decision is not null)
                 return new(source.Id, snapshot.Id, decision.Id, source.ChannelId, source.ThreadId, decision.Question);
@@ -279,7 +279,7 @@ public sealed class ExternalConversationStore
             {
                 conversation = await db.Conversations.SingleAsync(x => x.Id == source.ConversationId, token);
                 Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == conversation.WorkId, token);
-                WorkSnapshot snapshot = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(row.State!, ContractJson.Options)!;
+                WorkSnapshot snapshot = WorkStatePersistence.Snapshot(row);
                 long commandId = await IdentitySequence.NextAsync(db, IdentityKind.Command, token);
                 WorkCommand command = ExternalConversationPolicy.Continue(snapshot, commandId, row.Id, row.Version, message.Body);
                 view = await _work.ApplyConversationCommandAsync(db, outbox, command, token);
