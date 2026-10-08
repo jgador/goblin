@@ -7,7 +7,7 @@ dotnet tool restore
 # the administrator-only migration journal, which are not part of this model.
 dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFrameworkCore.PostgreSQL \
   --project backend/src/Goblin.Persistence \
-  --startup-project backend/tools/Goblin.Database \
+  --startup-project backend/tools/Goblin.Database.Scaffolding \
   --context GoblinDbContext \
   --context-dir Generated \
   --output-dir Generated/Entities \

@@ -189,7 +189,8 @@ to issue certificates and read Secrets in the `goblin` namespace.
 | `backend/database/migrations/` | Unreleased initial baseline; ordered, immutable migrations after deployment |
 | `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
 | `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime `IDbContextFactory<GoblinDbContext>` registration |
-| `backend/tools/Goblin.Database/` | SQL migration runner and isolated host for dotnet ef |
+| `backend/tools/Goblin.Database/` | SQL migration runner using Npgsql and administrator configuration |
+| `backend/tools/Goblin.Database.Scaffolding/` | Developer-only host and naming services for dotnet ef |
 | `backend/scripts/scaffold-database.sh` | Repeatable reverse-engineering command |
 
 Use .NET 10, Bash, goblinctl, and a configured kubectl. EF Core and dotnet-ef are
@@ -242,13 +243,19 @@ repository's whitespace and style rules, including regular constructors. It read
 ordinary application access is enough to inspect the mapped schema. It starts
 neither the web server nor Codex.
 
+The scaffolding host links that existing settings file into its build output;
+configuration providers and environment overrides remain unchanged. Docker
+publishes only the migration runner, which has no EF or application-model dependency.
+Scaffolding services and their tests live in separate projects so the scaffolding
+host's dependency graph does not enter application and persistence test builds.
+
 The equivalent `dotnet ef` invocation is:
 
 ```bash
 dotnet tool restore
 dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFrameworkCore.PostgreSQL \
   --project backend/src/Goblin.Persistence \
-  --startup-project backend/tools/Goblin.Database \
+  --startup-project backend/tools/Goblin.Database.Scaffolding \
   --context GoblinDbContext \
   --context-dir Generated \
   --output-dir Generated/Entities \

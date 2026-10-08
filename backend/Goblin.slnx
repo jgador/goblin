@@ -14,10 +14,12 @@
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Goblin.Database/Goblin.Database.csproj" />
+    <Project Path="tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Goblin.Application.Tests/Goblin.Application.Tests.csproj" />
     <Project Path="tests/Goblin.Core.Tests/Goblin.Core.Tests.csproj" />
+    <Project Path="tests/Goblin.Database.Tests/Goblin.Database.Tests.csproj" />
     <Project Path="tests/Goblin.LoggingSmoke/Goblin.LoggingSmoke.csproj" />
     <Project Path="tests/Goblin.Persistence.Tests/Goblin.Persistence.Tests.csproj" />
     <Project Path="tests/Goblin.Protocol.Tests/Goblin.Protocol.Tests.csproj" />

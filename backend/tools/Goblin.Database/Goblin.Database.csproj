@@ -4,11 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
-    <ProjectReference Include="../../src/Goblin.Persistence/Goblin.Persistence.csproj" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>compile; runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
   </ItemGroup>
 </Project>

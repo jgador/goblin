@@ -18,7 +18,8 @@ backend/
   src/Goblin.Protocol/     Generated Codex protocol models and serialization
   src/Goblin.Persistence/  Database-first EF Core context, entities, and registration
   database/migrations/    Ordered SQL schema changes
-  tools/Goblin.Database/  SQL migration runner and EF tooling host
+  tools/Goblin.Database/  SQL migration runner
+  tools/Goblin.Database.Scaffolding/  Developer-only EF tooling host
   tests/                  .NET tests and the test-only application host
   schemas/codex/           Checked-in inputs to protocol generation
   schemas/kubernetes/      Pinned schemas and selected execution fields

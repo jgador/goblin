@@ -1,21 +1,17 @@
 using System;
 using System.IO;
 using Goblin.Database;
-using Goblin.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-// EF tools resolve Name=ConnectionStrings:Goblin from this host. Building it
-// neither opens a database connection nor starts the web server or Codex.
+// Load administrator configuration for the separately invoked SQL migration runner.
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
     Args = args,
     ContentRootPath = AppContext.BaseDirectory
 });
 builder.Logging.ClearProviders();
-string? connection = builder.Configuration.GetConnectionString("Goblin");
-if (!string.IsNullOrWhiteSpace(connection)) builder.Services.AddGoblinPersistence(connection);
 using IHost host = builder.Build();
 
 if (args.Length != 2 || args[0] != "apply")
