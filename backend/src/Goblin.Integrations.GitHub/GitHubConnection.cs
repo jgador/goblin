@@ -1,15 +1,12 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Integrations.GitHub;
 
@@ -25,7 +22,6 @@ public sealed class GitHubFailure : Exception
 public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
 {
     private readonly string _directory;
-    private readonly string _command;
     private readonly Lock _gate = new();
     private readonly SemaphoreSlim _changes = new(1);
     private CancellationTokenSource? _cancellation;
@@ -34,6 +30,7 @@ public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
     private GitHubState _state = new(true, null, null, null, null);
 
     public string Profile => Path.Combine(_directory, "active");
+    internal GitHubCommandRunner Commands { get; }
     private string LegacyFile => Path.Combine(Path.GetDirectoryName(_directory)!, "github.json");
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -41,7 +38,7 @@ public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
     public GitHubConnection(string directory, string command = "gh")
     {
         _directory = Path.GetFullPath(directory);
-        _command = command;
+        Commands = new(command, Profile);
         PrivateDirectory(_directory);
         string accountFile = Path.Combine(Profile, "account.json");
         if (File.Exists(accountFile))
@@ -84,7 +81,7 @@ public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
     {
         try
         {
-            await RunAsync(_command, ["auth", "login", "--hostname", "github.com", "--web", "--git-protocol", "https", "--skip-ssh-key", "--insecure-storage"], staging, token,
+            await Commands.RunCliAsync(["auth", "login", "--hostname", "github.com", "--web", "--git-protocol", "https", "--skip-ssh-key", "--insecure-storage"], token, staging,
                 line =>
                 {
                     // gh has no JSON device-login output. Pin and test this narrow parser.
@@ -92,7 +89,7 @@ public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
                     lock (_gate) if (epoch == _epoch && code.Success)
                         _state = _state with { UserCode = code.Groups[1].Value, VerificationUrl = "https://github.com/login/device" };
                 });
-            GitHubUserResponse viewer = JsonSerializer.Deserialize<GitHubUserResponse>(await CliAsync(["api", "user"], token, staging)) ?? throw new GitHubFailure();
+            GitHubUserResponse viewer = JsonSerializer.Deserialize<GitHubUserResponse>(await Commands.RunCliAsync(["api", "user"], token, staging)) ?? throw new GitHubFailure();
             var account = new GitRepositoryAccount(Guid.NewGuid().ToString("N"), viewer.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), viewer.Login);
             await File.WriteAllTextAsync(Path.Combine(staging, "account.json"), JsonSerializer.Serialize(account, Json), token);
             foreach (string file in Directory.GetFiles(staging, "*", SearchOption.AllDirectories))
@@ -140,7 +137,7 @@ public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
         if (before.Account is null) return before;
         try
         {
-            GitHubUserResponse viewer = JsonSerializer.Deserialize<GitHubUserResponse>(await CliAsync(["api", "user"], token)) ?? throw new GitHubFailure();
+            GitHubUserResponse viewer = JsonSerializer.Deserialize<GitHubUserResponse>(await Commands.RunCliAsync(["api", "user"], token)) ?? throw new GitHubFailure();
             if (viewer.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) != before.Account.AccountId) throw new GitHubFailure();
             lock (_gate) if (_state.Account?.Generation == before.Account.Generation) _state = _state with { Status = GitHubConnectionStatus.Connected, Notice = null };
         }
@@ -157,59 +154,25 @@ public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
     public async Task<GitRepositoryInfo[]> GitRepositoriesAsync(int page, CancellationToken token)
     {
         if (page is < 1 or > 1000) throw new GitHubFailure();
-        GitHubRepositoryResponse[] result = JsonSerializer.Deserialize<GitHubRepositoryResponse[]>(await CliAsync(["api", $"user/repos?per_page=100&page={page}&sort=full_name"], token)) ?? throw new GitHubFailure();
+        GitHubRepositoryResponse[] result = JsonSerializer.Deserialize<GitHubRepositoryResponse[]>(await Commands.RunCliAsync(["api", $"user/repos?per_page=100&page={page}&sort=full_name"], token)) ?? throw new GitHubFailure();
         return [.. result.Select(GitRepository)];
     }
 
     public async Task<GitRepositoryInfo> GitRepositoryAsync(string name, CancellationToken token)
     {
         _ = new Goblin.Core.Work.GitRepositoryChange(name, "Goblin", "goblin@example.invalid");
-        GitHubRepositoryResponse result = JsonSerializer.Deserialize<GitHubRepositoryResponse>(await CliAsync(["api", "repos/" + name], token)) ?? throw new GitHubFailure();
+        GitHubRepositoryResponse result = JsonSerializer.Deserialize<GitHubRepositoryResponse>(await Commands.RunCliAsync(["api", "repos/" + name], token)) ?? throw new GitHubFailure();
         return GitRepository(result);
     }
 
     private static GitRepositoryInfo GitRepository(GitHubRepositoryResponse row) =>
         new(row.Id, row.FullName, row.DefaultBranch, row.Permissions?.Push == true);
 
-    public Task<string> CliAsync(string[] arguments, CancellationToken token, string? profile = null) => RunAsync(_command, arguments, profile ?? Profile, token);
+    public Task<string> CliAsync(string[] arguments, CancellationToken token, string? profile = null) =>
+        Commands.RunCliAsync(arguments, token, profile);
 
     public Task<string> GitAsync(string directory, string[] arguments, CancellationToken token) =>
-        RunAsync("git", ["-c", "core.hooksPath=/dev/null", "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", .. arguments], Profile, token, workingDirectory: directory);
-
-    private static async Task<string> RunAsync(string command, string[] arguments, string profile, CancellationToken token,
-        Action<string>? progress = null, string? workingDirectory = null)
-    {
-        bool watchdog = OperatingSystem.IsLinux();
-        var info = new ProcessStartInfo(watchdog ? "/usr/bin/timeout" : command) { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, WorkingDirectory = workingDirectory ?? profile };
-        if (watchdog) foreach (string prefix in new[] { "--kill-after=5s", progress is null ? "120s" : "900s", command }) info.ArgumentList.Add(prefix);
-        info.Environment.Clear();
-        foreach ((string, string) pair in new[] { (Env.Path, Environment.GetEnvironmentVariable(Env.Path) ?? "/usr/bin:/bin"), (Env.Home, profile), (Env.GhConfigDir, profile),
-            (Env.GhPromptDisabled, "1"), (Env.GhNoUpdateNotifier, "1"), (Env.NoColor, "1"), (Env.LcAll, "C"),
-            (Env.GitTerminalPrompt, "0"), (Env.GitConfigNosystem, "1"), (Env.GitConfigGlobal, "/dev/null") }) info.Environment[pair.Item1] = pair.Item2;
-        foreach (string argument in arguments) info.ArgumentList.Add(argument);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(progress is null ? TimeSpan.FromMinutes(2) : TimeSpan.FromMinutes(15));
-        using Process process = Process.Start(info) ?? throw new GitHubFailure();
-        process.StandardInput.Close();
-        Task<string> output = ReadAsync(process.StandardOutput, null), errors = ReadAsync(process.StandardError, progress);
-        try { await process.WaitForExitAsync(deadline.Token); }
-        catch { try { process.Kill(true); } catch (InvalidOperationException) { } await process.WaitForExitAsync(); throw new GitHubFailure(); }
-        string result = await output;
-        await errors;
-        if (process.ExitCode != 0) throw new GitHubFailure();
-        return result;
-    }
-
-    private static async Task<string> ReadAsync(StreamReader reader, Action<string>? progress)
-    {
-        var text = new StringBuilder();
-        while (await reader.ReadLineAsync() is { } line)
-        {
-            progress?.Invoke(line);
-            if (text.Length < 4 * 1024 * 1024) text.AppendLine(line);
-        }
-        return text.ToString();
-    }
+        Commands.RunGitAsync(directory, arguments, token);
 
     public static void PrivateDirectory(string directory)
     {
