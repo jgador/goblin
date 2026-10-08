@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -62,7 +61,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
     private readonly IGitRepositoryRemote _remote;
     private readonly IWorkspaceCheckpoints? _checkpoints;
     private readonly string _directory;
-    private readonly byte[] _key;
+    private readonly GitRepositoryCapability _capability;
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _locks = new();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _active = new();
 
@@ -73,15 +72,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         _directory = Path.GetFullPath(options.Directory);
         Directory.CreateDirectory(_directory);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(_directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        string key = Path.Combine(_directory, "capability-key");
-        if (!File.Exists(key))
-        {
-            var fileOptions = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
-            if (!OperatingSystem.IsWindows()) fileOptions.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-            using FileStream file = new(key, fileOptions);
-            file.Write(RandomNumberGenerator.GetBytes(32));
-        }
-        _key = File.ReadAllBytes(key);
+        _capability = new(Path.Combine(_directory, "capability-key"));
     }
 
     private string DirectoryFor(long attemptId) => Path.Combine(_directory, attemptId.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -91,7 +82,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
     private string Capability(WorkSnapshot work)
     {
         AttemptSnapshot attempt = work.Attempts[^1];
-        return Convert.ToHexString(HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes($"{work.Id}/{attempt.Id}/{attempt.Target.GitRepository!.Grant!.Generation}")));
+        return _capability.Issue(work.Id, attempt.Id, attempt.Target.GitRepository!.Grant!.Generation);
     }
 
     private async Task<WorkSnapshot> WorkAsync(long attemptId, CancellationToken token)
@@ -128,11 +119,9 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
     public async Task AuthorizeAsync(long attemptId, string capability, bool write, CancellationToken token)
     {
         WorkSnapshot work = await WorkAsync(attemptId, token);
-        byte[] supplied;
-        try { supplied = Convert.FromHexString(capability); } catch { throw new ApplicationFailure("repository_operation_unavailable"); }
-        if (!CryptographicOperations.FixedTimeEquals(supplied, Convert.FromHexString(Capability(work))))
-            throw new ApplicationFailure("repository_operation_unavailable");
         AttemptSnapshot attempt = work.Attempts[^1];
+        if (!_capability.IsValid(capability, work.Id, attempt.Id, attempt.Target.GitRepository!.Grant!.Generation))
+            throw new ApplicationFailure("repository_operation_unavailable");
         if (write && attempt.Status is not (AttemptStatus.Starting or AttemptStatus.Running))
             throw new ApplicationFailure("repository_operation_unavailable");
     }
