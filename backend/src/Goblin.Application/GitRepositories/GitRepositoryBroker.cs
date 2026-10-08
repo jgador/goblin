@@ -62,6 +62,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
     private readonly IWorkspaceCheckpoints? _checkpoints;
     private readonly string _directory;
     private readonly GitRepositoryCapability _capability;
+    private readonly GitRepositoryOperationEvidence _evidence;
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _locks = new();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _active = new();
 
@@ -73,6 +74,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         Directory.CreateDirectory(_directory);
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(_directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         _capability = new(Path.Combine(_directory, "capability-key"));
+        _evidence = new(_directory);
     }
 
     private string DirectoryFor(long attemptId) => Path.Combine(_directory, attemptId.ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -212,7 +214,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         catch
         {
             // Preserve failed dispatch evidence through a database outage. Never replay it.
-            await File.WriteAllTextAsync(Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed"), "failed", CancellationToken.None);
+            await _evidence.RecordDispatchFailureAsync(id);
             throw;
         }
     }
@@ -252,8 +254,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
                 await db.SaveChangesAsync(cancellation.Token);
                 return;
             }
-            await File.WriteAllLinesAsync(Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external"),
-                [File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim(), File.ReadAllText("/proc/uptime").Split(' ')[0]], cancellation.Token);
+            await _evidence.RecordExternalLaunchAsync(id, cancellation.Token);
             external = true;
             GitRepositoryOperationResult result = await _remote.ExecuteAsync(gitRepository, DirectoryFor(attemptId), GitRepositoryOperationNames.Parse(row.Kind), commit, cancellation.Token);
             row.State = nameof(GitRepositoryOperationState.Succeeded); row.ResultUrl = result.Url; row.UpdatedAt = DateTime.UtcNow;
@@ -275,12 +276,11 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         if (rows.Length == 0) return null;
         foreach (GitRepositoryOperation? row in rows)
         {
-            string evidence = Path.Combine(_directory, row.Id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed");
-            if (File.Exists(evidence))
+            if (_evidence.HasDispatchFailure(row.Id))
             {
                 row.State = row.CommitSha is null ? nameof(GitRepositoryOperationState.Failed) : nameof(GitRepositoryOperationState.Uncertain);
                 await db.SaveChangesAsync(token);
-                File.Delete(evidence);
+                _evidence.ClearDispatchFailure(row.Id);
             }
             if (_active.ContainsKey(attempt.Id) || row.State == nameof(GitRepositoryOperationState.Queued)) return new(ObservationKind.Pending);
             await db.Entry(row).ReloadAsync(token);
@@ -308,23 +308,11 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
                 if (result is not null) { row.State = nameof(GitRepositoryOperationState.Succeeded); row.ResultUrl = result.Url; }
                 // Each external subprocess has a 120s watchdog; the entire operation also has
                 // a 120s limit. After a controller crash no child can survive this bound.
-                else if (ExternalProcessStopped(row.Id)) row.State = nameof(GitRepositoryOperationState.Failed);
+                else if (_evidence.ExternalProcessStopped(row.Id)) row.State = nameof(GitRepositoryOperationState.Failed);
                 await db.SaveChangesAsync(token);
             }
         }
         return rows.All(x => x.State == nameof(GitRepositoryOperationState.Succeeded)) ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
-    }
-
-    private bool ExternalProcessStopped(long id)
-    {
-        string marker = Path.Combine(_directory, id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".external");
-        if (!File.Exists(marker)) return true; // The external launch was never authorized.
-        if (!OperatingSystem.IsLinux()) return false;
-        string[] lifetime = File.ReadAllLines(marker);
-        if (lifetime.Length != 2) return false;
-        if (lifetime[0] != File.ReadAllText("/proc/sys/kernel/random/boot_id").Trim()) return true;
-        return double.TryParse(lifetime[1], System.Globalization.CultureInfo.InvariantCulture, out double started) &&
-            double.TryParse(File.ReadAllText("/proc/uptime").Split(' ')[0], System.Globalization.CultureInfo.InvariantCulture, out double now) && now - started > 300;
     }
 
     public async Task StopAsync(WorkSnapshot work, CancellationToken token)
