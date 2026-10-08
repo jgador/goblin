@@ -43,6 +43,7 @@ public static class ApplicationServices
         services.AddScoped<GitHubStore>();
         services.AddScoped<GitRepositorySetupStore>();
         services.AddSingleton<GitRepositoryOperationStore>();
+        services.AddSingleton<WorkspaceCheckpointCoordinator>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ExternalConversationStore>();
         services.AddSingleton<ExecutionCoordinator>();

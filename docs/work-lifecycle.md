@@ -140,6 +140,11 @@ typed operation snapshots with the store and holds no tracked operation or datab
 context across remote calls. An uncertain publication remains subject to
 reconciliation; delivery never authorizes replaying it.
 
+`WorkspaceCheckpointCoordinator` owns checkpoint authorization and verification
+before asking `WorkspaceCheckpoints` to persist metadata. The store has no broker
+dependency. It rechecks attempt/turn ownership in its transaction after remote
+verification, preserving duplicate-save handling and local checkpoint behavior.
+
 Public HTTP requests and responses use classes with explicit `JsonPropertyName`
 attributes. `Http/Contracts/` maps application and core types into those classes,
 including every nested Work snapshot, so C# property renames cannot silently rename

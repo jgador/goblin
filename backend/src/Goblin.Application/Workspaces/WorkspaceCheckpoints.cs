@@ -3,7 +3,6 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Application.GitRepositories;
 using Goblin.Application.Work;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -48,13 +47,10 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
         return await db.WorkspaceCheckpoints.AnyAsync(x => x.Id == id && x.AttemptId == attemptId && x.TurnNumber == turnNumber, token);
     }
 
-    public async Task<WorkspaceCheckpoint> SaveAsync(long attemptId, int turn, string commit,
-        GitRepositoryBroker broker, CancellationToken token)
+    internal async Task<WorkspaceCheckpoint> SaveVerifiedAsync(WorkSnapshot work, int turn, string commit, CancellationToken token)
     {
-        WorkSnapshot work = await broker.CurrentAsync(attemptId, token);
         AttemptSnapshot attempt = work.Attempts[^1];
-        if (attempt.TurnNumber != turn || attempt.Status is not (AttemptStatus.Starting or AttemptStatus.Running)) throw new ApplicationFailure("workspace_changed");
-        await broker.VerifyCheckpointAsync(work, commit, token);
+        long attemptId = attempt.Id;
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         Persistence.Entities.WorkspaceCheckpoint? previous = await db.WorkspaceCheckpoints.SingleOrDefaultAsync(x => x.AttemptId == attemptId && x.TurnNumber == turn, token);

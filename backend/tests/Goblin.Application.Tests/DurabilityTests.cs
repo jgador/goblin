@@ -728,10 +728,11 @@ public sealed class DurabilityTests
         Assert.Equal(0, fixture.Remote.CheckpointPreparations);
         IDbContextFactory<GoblinDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
         var store = new WorkspaceCheckpoints(factory);
-        WorkspaceCheckpoint saved = await store.SaveAsync(attempt, 1, new string('a', 40), broker, default);
+        WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
+        WorkspaceCheckpoint saved = await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default);
         AssertCheckpoint(saved, (await store.LatestAsync(id, "owner/repo", default))!);
         AssertCheckpoint(saved, Assert.Single(await store.ListAsync(id, default)));
-        Assert.Equal(saved.Id, (await store.SaveAsync(attempt, 1, new string('a', 40), broker, default)).Id);
+        Assert.Equal(saved.Id, (await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default)).Id);
         await using (GoblinDbContext db = await factory.CreateDbContextAsync())
             Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='workspace_checkpoints' AND data_type='bytea'").SingleAsync());
         Assert.True(await store.VerifiedAsync(saved.Id, attempt, 1, default));
@@ -755,6 +756,77 @@ public sealed class DurabilityTests
                 actual.GitRepository, actual.Branch, actual.CommitSha));
         // PostgreSQL timestamps retain microseconds; the immediate save response has .NET ticks.
         Assert.Equal(expected.CreatedAt.UtcTicks / 10, actual.CreatedAt.UtcTicks / 10);
+    }
+
+    [DatabaseFact]
+    public async Task CheckpointCoordinatorRejectsUnconfirmedCommitsAndCoalescesIdenticalSaves()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo");
+        long attempt = work.Work.Attempts[^1].Id;
+        WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
+        WorkspaceCheckpoints store = fixture.Host.Services.GetRequiredService<WorkspaceCheckpoints>();
+        ApplicationFailure invalid = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, "invalid", default));
+        Assert.Equal("workspace_changed", invalid.Code);
+        ApplicationFailure unconfirmed = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, new string('a', 40), default));
+        Assert.Equal("workspace_checkpoint_unconfirmed", unconfirmed.Code);
+        ApplicationFailure wrongTurn = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 2, new string('a', 40), default));
+        Assert.Equal("workspace_changed", wrongTurn.Code);
+        Assert.Empty(await store.ListAsync(work.Work.Id, default));
+
+        WorkspaceCheckpoint saved = await fixture.SaveCheckpoint(work.Work);
+        WorkspaceCheckpoint[] duplicates = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            checkpoints.SaveAsync(attempt, 1, saved.CommitSha, default)));
+        Assert.All(duplicates, x => AssertCheckpoint(saved, x));
+        AssertCheckpoint(saved, Assert.Single(await store.ListAsync(work.Work.Id, default)));
+        Assert.Equal(0, fixture.Remote.Calls);
+        Assert.Equal(0, fixture.Remote.ReconciliationCalls);
+
+        // A different verified commit for the same turn must not replace its checkpoint.
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        fixture.Remote.InspectedCommit = new string('b', 40);
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Checkpoint, new MemoryStream([4, 5, 6]), default);
+        for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, operation, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(25);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
+        ApplicationFailure changed = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, fixture.Remote.InspectedCommit, default));
+        Assert.Equal("workspace_changed", changed.Code);
+        AssertCheckpoint(saved, Assert.Single(await store.ListAsync(work.Work.Id, default)));
+    }
+
+    [DatabaseFact]
+    public async Task PublishedCheckpointRequiresConfirmationAndRechecksOwnershipAfterRemoteVerification()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo", "Publish repository");
+        long attempt = work.Work.Attempts[^1].Id;
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
+        WorkspaceCheckpoints store = fixture.Host.Services.GetRequiredService<WorkspaceCheckpoints>();
+        await broker.PrepareAsync(work.Work, default);
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+        for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, operation, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(25);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
+        ApplicationFailure unconfirmed = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, fixture.Remote.InspectedCommit, default));
+        Assert.Equal("workspace_checkpoint_unconfirmed", unconfirmed.Code);
+        Assert.Empty(await store.ListAsync(work.Work.Id, default));
+
+        var verifying = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var confirmed = new TaskCompletionSource<GitRepositoryOperationResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Remote.Reconcile = token => { verifying.SetResult(); return confirmed.Task.WaitAsync(token); };
+        Task<WorkspaceCheckpoint> pending = checkpoints.SaveAsync(attempt, 1, fixture.Remote.InspectedCommit, default);
+        await verifying.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        WorkView cancelled = await fixture.Apply(new(NextId(), work.Work.Id, WorkAction.Cancel) { ExpectedVersion = work.Version })
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AttemptStatus.CancellationRequested, cancelled.Work.Attempts[^1].Status);
+        confirmed.SetResult(new(fixture.Remote.InspectedCommit, "https://github.com/owner/repo/tree/verified"));
+        ApplicationFailure changed = await Assert.ThrowsAsync<ApplicationFailure>(() => pending);
+        Assert.Equal("workspace_changed", changed.Code);
+        Assert.Empty(await store.ListAsync(work.Work.Id, default));
+        Assert.Equal(1, fixture.Remote.Calls);
     }
 
     [DatabaseFact]
@@ -1489,6 +1561,9 @@ public sealed class DurabilityTests
         public bool Fail { get; set; }
         public bool Reconciled { get; set; }
         public Func<CancellationToken, Task<GitRepositoryOperationResult>>? Execute { get; set; }
+        public Func<CancellationToken, Task<GitRepositoryOperationResult?>>? Reconcile { get; set; }
+        public string InspectedCommit { get; set; } = new string('a', 40);
+        public int ReconciliationCalls { get; private set; }
         public int Calls { get; private set; }
         public int CheckpointPreparations { get; private set; }
 
@@ -1497,7 +1572,7 @@ public sealed class DurabilityTests
 
         public Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? checkpoint, CancellationToken token) { Directory.CreateDirectory(directory); return Task.CompletedTask; }
 
-        public Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token) => Task.FromResult(new string('a', 40));
+        public Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token) => Task.FromResult(InspectedCommit);
 
         public Task<GitRepositoryOperationResult> ExecuteAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)
         {
@@ -1507,8 +1582,12 @@ public sealed class DurabilityTests
             return Task.FromResult(new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch));
         }
 
-        public Task<GitRepositoryOperationResult?> ReconcileAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token) =>
-            Task.FromResult(Reconciled ? new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch) : null);
+        public Task<GitRepositoryOperationResult?> ReconcileAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)
+        {
+            ReconciliationCalls++;
+            return Reconcile is not null ? Reconcile(token) :
+                Task.FromResult(Reconciled ? new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch) : null);
+        }
     }
 
     private sealed class Runtime : IExecutionHost
@@ -1710,9 +1789,8 @@ public sealed class DurabilityTests
             await broker.EnqueueAsync(attempt, publication, work.Attempts[^1].Target.GitRepository!.Grant!.AllowPush ? GitRepositoryOperationKind.Publish : GitRepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default);
             for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, publication, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(50);
             Assert.Equal(Goblin.Contracts.GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, publication, default)).State);
-            using IServiceScope scope = Host.Services.CreateScope();
-            var store = new WorkspaceCheckpoints(scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
-            return await store.SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), broker, default);
+            return await Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>()
+                .SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), default);
         }
 
         public async Task<WorkView> Until(long id, Func<WorkView, bool> ready)

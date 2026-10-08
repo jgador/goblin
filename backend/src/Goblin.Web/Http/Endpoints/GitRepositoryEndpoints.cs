@@ -53,9 +53,9 @@ internal static class GitRepositoryEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> CheckpointAsync(long attemptId, HttpContext context, GitRepositoryBroker broker, WorkspaceCheckpoints checkpoints)
+    private static async Task<IResult> CheckpointAsync(long attemptId, HttpContext context, WorkspaceCheckpointCoordinator checkpoints)
     {
         WorkspaceCheckpointWrite request = await ApiRequest.ReadBodyAsync<WorkspaceCheckpointWrite>(context.Request, ExecutionFiles.Json);
-        return Results.Json(await checkpoints.SaveAsync(attemptId, request.TurnNumber, request.CommitSha, broker, context.RequestAborted), ExecutionFiles.Json);
+        return Results.Json(await checkpoints.SaveAsync(attemptId, request.TurnNumber, request.CommitSha, context.RequestAborted), ExecutionFiles.Json);
     }
 }
