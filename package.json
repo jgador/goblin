@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@openai/codex": "0.155.1"
+    "@openai/codex": "0.161.0"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

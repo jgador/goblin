@@ -75,6 +75,8 @@ public sealed class CodexClientTests
         string args = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "arguments.json"));
         Assert.Contains("app-server", args);
         Assert.Contains("features.multi_agent=false", args);
+        Assert.Contains("features.browser_use=false", args);
+        Assert.Contains("features.computer_use=false", args);
         Assert.Contains("skills.include_instructions=false", args);
     }
 
@@ -244,6 +246,8 @@ public sealed class CodexClientTests
     [InlineData("prompt-fail", "prompt_unauthorized")]
     [InlineData("prompt-usage-limit", "prompt_limit_reached")]
     [InlineData("prompt-rate-limit", "prompt_limit_reached")]
+    [InlineData("prompt-unknown-string-error", "prompt_failed")]
+    [InlineData("prompt-unknown-object-error", "prompt_failed")]
     [InlineData("prompt-large", "prompt_reply_too_large")]
     [InlineData("prompt-empty", "prompt_empty_reply")]
     public async Task PromptAdapterPreservesBoundedAndSanitizedFailurePolicy(string scenario, string expected)
@@ -255,6 +259,23 @@ public sealed class CodexClientTests
         Assert.Equal(expected, failure.Code);
         Assert.DoesNotContain("THIS-MUST-NOT-LEAK", failure.Message);
         Assert.DoesNotContain("PRIVATE-DETAILS", failure.Message);
+    }
+
+    [Theory]
+    [InlineData("prompt-unknown-string-error")]
+    [InlineData("prompt-unknown-object-error")]
+    public async Task UnknownCodexErrorsFailWorkWithoutRetryingOrLeakingDetails(string scenario)
+    {
+        await using Fixture fixture = await Fixture.CreateAsync(scenario);
+        var work = new WorkItem(NextId(), "Surface unknown runtime failures", DateTimeOffset.UtcNow);
+        work.Assign(NextId(), DateTimeOffset.UtcNow);
+        work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
+        IntegrationFailure failure = await Assert.ThrowsAsync<IntegrationFailure>(() =>
+            new CodexWorkRunner(fixture.Client).RunAsync(work.Snapshot(), false, _ => Task.CompletedTask, default));
+        Assert.DoesNotContain("THIS-MUST-NOT-LEAK", failure.Message);
+        Assert.DoesNotContain("PRIVATE-DETAILS", failure.Message);
+        string[] calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl"));
+        Assert.Single(calls, x => x.Contains("turn/start", StringComparison.Ordinal));
     }
 
     private static bool IsAlive(int pid)

@@ -117,6 +117,38 @@ public sealed class ProtocolSerializationTests
     }
 
     [Theory]
+    [InlineData("\"futureError\"")]
+    [InlineData("""{"futureError":{"details":[1,"two",null]}}""")]
+    public void UnknownCodexErrorsPreserveTheirPermittedWireValues(string json)
+    {
+        CodexErrorInfo error = Read<CodexErrorInfo>(json);
+        CodexErrorInfoVariant7ValueVariant fallback = Assert.IsType<CodexErrorInfoVariant7ValueVariant>(error);
+        if (json[0] == '"')
+            Assert.Equal("futureError", Assert.IsType<StringCodexErrorInfoVariant7Value>(fallback.Value).Value);
+        else
+            Assert.Equal(JsonValueKind.Object,
+                Assert.IsType<ObjectCodexErrorInfoVariant7Value>(fallback.Value).Value["futureError"].ValueKind);
+        Assert.Equal(json, Write(error));
+    }
+
+    [Theory]
+    [InlineData("42")]
+    [InlineData("true")]
+    [InlineData("[]")]
+    public void CodexErrorFallbackRejectsValuesOutsideTheUpstreamSchema(string json)
+        => Assert.Throws<JsonException>(() => Read<CodexErrorInfo>(json));
+
+    [Theory]
+    [InlineData("flexUnavailable", CodexErrorInfoValue.FlexUnavailable)]
+    [InlineData("tooManyDenials", CodexErrorInfoValue.TooManyDenials)]
+    public void NewKnownCodexErrorsKeepTheirTypedRepresentation(string wireValue, CodexErrorInfoValue expected)
+    {
+        string json = JsonSerializer.Serialize(wireValue);
+        Assert.Equal(expected, Assert.IsType<StringCodexErrorInfo>(Read<CodexErrorInfo>(json)).Value);
+        Assert.Equal(json, Write(Read<CodexErrorInfo>(json)));
+    }
+
+    [Theory]
     [InlineData("\"request-1\"")]
     [InlineData("0")]
     [InlineData("-9223372036854775808")]

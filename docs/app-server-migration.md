@@ -54,13 +54,13 @@ period expires. HTTP prompt cancellation requests `turn/interrupt` and then
 
 ## Protocol regeneration
 
-The 312 checked-in schema files from Codex CLI **0.155.1** are authoritative.
+The 315 checked-in schema files from Codex CLI **0.161.0** are authoritative.
 [`selection.json`](../backend/schemas/codex/selection.json) identifies the requests,
 responses, notifications, fields, and variants Goblin uses. The C# file-based
 [`GenerateProtocol.cs`](../backend/scripts/GenerateProtocol.cs) generates only
 that selection and its referenced types. It verifies that the aggregate and
 individual schemas agree and records separate schema and selection hashes. The
-105 generated model files are checked in; an ordinary .NET build does not run
+109 generated model files are checked in; an ordinary .NET build does not run
 the generator or need a Codex installation.
 
 ```bash

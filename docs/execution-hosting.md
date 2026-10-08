@@ -1,7 +1,7 @@
 # Execution hosting and recovery
 
 Goblin runs one application controller with PostgreSQL and isolated repository
-executions. Work is durable whether or not it needs a sandbox. Codex 0.155.1 is
+executions. Work is durable whether or not it needs a sandbox. Codex 0.161.0 is
 the implemented runtime; the Work core and orchestration do not reference its
 protocol. Agent, Work, attempt, connection, and native session IDs stay distinct.
 
@@ -60,6 +60,7 @@ and execute inside that sandbox without interactive command approval. Repository
 workers enable Codex's `shell_tool`, `unified_exec`, and `code_mode_host` features;
 the command host is required for model-directed commands even with the optional
 `code_mode` feature disabled. Text workers keep all three execution features off.
+Browser and computer-use tools remain disabled for both worker kinds.
 The pod has no application data volume, database certificate, or service-account token.
 Network policy allows DNS, public HTTP(S), and the controller’s internal repository
 port (8788). Other private network access and inbound traffic are blocked. The

@@ -78,6 +78,19 @@ if (config.RealCodex)
         if ((await auth.StatusAsync()).Account is not ApiKeyAccountView) throw new Exception("Key was not saved.");
         if (!OperatingSystem.IsWindows() && File.GetUnixFileMode(Path.Combine(config.DataDir, "codex/auth.json")) != (UnixFileMode.UserRead | UnixFileMode.UserWrite))
             throw new Exception("Credential file permissions are incorrect.");
+        ThreadStartResponse thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
+        {
+            Ephemeral = true,
+            ApprovalPolicy = AskForApproval.Never,
+            Sandbox = SandboxMode.ReadOnly
+        });
+        if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" || thread.Sandbox is not ReadOnlySandboxPolicy
+            || thread.ApprovalPolicy is not StringAskForApproval { Value: AskForApprovalValue.Never })
+            throw new Exception("The pinned runtime did not retain the isolated thread policy.");
+        await codex.RequestAsync<ThreadUnsubscribeParams, ThreadUnsubscribeResponse>("thread/unsubscribe", new()
+        {
+            ThreadId = thread.Thread.Id
+        });
     }
     else
     {

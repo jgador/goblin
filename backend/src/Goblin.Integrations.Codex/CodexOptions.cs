@@ -86,7 +86,7 @@ public sealed record CodexOptions
         // code_mode feature is off. Only isolated repository workers may run them.
         foreach (string feature in new[] { "shell_tool", "unified_exec", "code_mode_host" })
             Config($"features.{feature}={(GitRepositoryExecution ? "true" : "false")}");
-        string[] disabled = ["shell_snapshot", "view_image", "image_generation",
+        string[] disabled = ["shell_snapshot", "view_image", "image_generation", "browser_use", "computer_use",
             "apps", "plugins", "remote_plugin", "multi_agent", "hooks", "memories", "goals",
             "code_mode", "skill_search", "skill_mcp_dependency_install",
             "sleep_tool", "request_permissions_tool", "workspace_dependencies"];

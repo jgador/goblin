@@ -15,9 +15,11 @@ public abstract class CodexErrorInfo
     public static CodexErrorInfo SessionBudgetExceeded { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.SessionBudgetExceeded);
     public static CodexErrorInfo UsageLimitExceeded { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.UsageLimitExceeded);
     public static CodexErrorInfo RateLimitExceeded { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.RateLimitExceeded);
+    public static CodexErrorInfo FlexUnavailable { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.FlexUnavailable);
     public static CodexErrorInfo ServerOverloaded { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.ServerOverloaded);
     public static CodexErrorInfo CyberPolicy { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.CyberPolicy);
     public static CodexErrorInfo MisalignmentPolicyViolation { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.MisalignmentPolicyViolation);
+    public static CodexErrorInfo TooManyDenials { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.TooManyDenials);
     public static CodexErrorInfo InternalServerError { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.InternalServerError);
     public static CodexErrorInfo Unauthorized { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.Unauthorized);
     public static CodexErrorInfo BadRequest { get; } = new StringCodexErrorInfo(CodexErrorInfoValue.BadRequest);
@@ -109,6 +111,19 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
                 // This branch does not match; try the next schema alternative.
             }
         }
+        {
+            Utf8JsonReader candidate = reader;
+            try
+            {
+                CodexErrorInfoVariant7Value value = JsonSerializer.Deserialize<CodexErrorInfoVariant7Value>(ref candidate, options) ?? throw new JsonException("Expected a non-null union value.");
+                reader = candidate;
+                return new CodexErrorInfoVariant7ValueVariant(value);
+            }
+            catch (JsonException)
+            {
+                // This branch does not match; try the next schema alternative.
+            }
+        }
         throw new JsonException("Value does not match any CodexErrorInfo schema alternative.");
     }
 
@@ -133,6 +148,9 @@ public sealed class CodexErrorInfoJsonConverter : JsonConverter<CodexErrorInfo>
                 break;
             case ActiveTurnNotSteerableCodexErrorInfo typed:
                 JsonSerializer.Serialize(writer, typed, options);
+                break;
+            case CodexErrorInfoVariant7ValueVariant typed:
+                JsonSerializer.Serialize(writer, typed.Value, options);
                 break;
             default:
                 throw new JsonException("Unknown CodexErrorInfo implementation.");

@@ -85,7 +85,7 @@ for await (const line of createInterface({ input: process.stdin })) {
         if (scenario === "hang-initialize") continue;
         initialized = true;
         result(id, {
-            userAgent: "fake-codex/0.155.1",
+            userAgent: "fake-codex/0.161.0",
             codexHome: root,
             platformFamily: "unix",
             platformOs: "linux",
@@ -261,7 +261,7 @@ for await (const line of createInterface({ input: process.stdin })) {
             thread: {
                 id: `test-thread-${++threadNumber}`,
                 ephemeral: params.ephemeral,
-                cliVersion: "0.155.1",
+                cliVersion: "0.161.0",
                 createdAt: 1,
                 updatedAt: 1,
                 cwd: process.cwd(),
@@ -312,6 +312,8 @@ for await (const line of createInterface({ input: process.stdin })) {
                 scenario === "prompt-partial-failure" ||
                 scenario === "prompt-usage-limit" ||
                 scenario === "prompt-rate-limit" ||
+                scenario === "prompt-unknown-string-error" ||
+                scenario === "prompt-unknown-object-error" ||
                 prompt === "Trigger a simulated failure.";
             const message = {
                 type: "agentMessage",
@@ -367,11 +369,15 @@ for await (const line of createInterface({ input: process.stdin })) {
                 });
             }
             const codexErrorInfo =
-                scenario === "prompt-usage-limit"
-                    ? "usageLimitExceeded"
-                    : scenario === "prompt-rate-limit"
-                      ? "rateLimitExceeded"
-                      : "unauthorized";
+                scenario === "prompt-unknown-string-error"
+                    ? "futureError"
+                    : scenario === "prompt-unknown-object-error"
+                      ? { futureError: { detail: "PRIVATE-DETAILS" } }
+                      : scenario === "prompt-usage-limit"
+                        ? "usageLimitExceeded"
+                        : scenario === "prompt-rate-limit"
+                          ? "rateLimitExceeded"
+                          : "unauthorized";
             const error = failed
                 ? {
                       message: "Upstream secret THIS-MUST-NOT-LEAK",

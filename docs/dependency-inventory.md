@@ -41,7 +41,7 @@ package also declares TypeScript. Sources: [package.json](../package.json),
 
 | Package | Declared version | Use |
 | --- | --- | --- |
-| `@openai/codex` | `0.155.1` | Agent runtime, distributed with native platform bundles |
+| `@openai/codex` | `0.161.0` | Agent runtime, distributed with native platform bundles |
 | `@playwright/test` | `1.63.0` | Browser tests |
 | `@types/node` | `24.13.4` | Node type definitions |
 | `prettier` | `3.9.8` | TypeScript formatting |
