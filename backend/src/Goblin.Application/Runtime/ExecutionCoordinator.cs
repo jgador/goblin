@@ -191,14 +191,14 @@ public sealed class WorkRecovery : BackgroundService
             {
                 await _coordinator.DrainFailuresAsync(stoppingToken);
                 using IServiceScope scope = _scopes.CreateScope();
-                Persistence.Entities.ExecutionAttempt[] attempts = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
-                foreach (Persistence.Entities.ExecutionAttempt attempt in attempts)
+                ExecutionRecoveryRequest[] requests = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
+                foreach (ExecutionRecoveryRequest request in requests)
                 {
                     try
                     {
-                        if (attempt.Status == nameof(AttemptStatus.Queued))
-                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(attempt.WorkId, attempt.Id, attempt.TurnNumber));
-                        else await _coordinator.ReconcileAsync(new(attempt.WorkId, attempt.Id, attempt.TurnNumber), stoppingToken);
+                        if (request.Action == ExecutionRecoveryAction.Dispatch)
+                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(request.WorkId, request.AttemptId, request.TurnNumber));
+                        else await _coordinator.ReconcileAsync(new(request.WorkId, request.AttemptId, request.TurnNumber), stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
                     catch { /* One unavailable host must not hide other Work. */ }

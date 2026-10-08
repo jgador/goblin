@@ -312,13 +312,10 @@ public sealed partial class WorkStore
         await outbox.SaveChangesAndFlushMessagesAsync(token);
     }
 
-    public async Task<AttemptRow[]> RecoverableAsync(CancellationToken token = default)
+    internal async Task<ExecutionRecoveryRequest[]> RecoverableAsync(CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        return await db.ExecutionAttempts.AsNoTracking()
-            .Where(x => x.Status == nameof(AttemptStatus.Queued) || x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) ||
-                x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || (x.CleanupPending && !x.CleanupFailed) || x.WorkspaceRetained)
-            .OrderBy(x => x.QueuedAt).ToArrayAsync(token);
+        return await ExecutionRecoveryQuery.Select(db.ExecutionAttempts.AsNoTracking()).ToArrayAsync(token);
     }
 
     private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
