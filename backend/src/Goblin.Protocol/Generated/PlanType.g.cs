@@ -26,6 +26,9 @@ public enum PlanType
     [JsonStringEnumMemberName("prolite")]
     Prolite,
 
+    [JsonStringEnumMemberName("promax")]
+    Promax,
+
     [JsonStringEnumMemberName("team")]
     Team,
 

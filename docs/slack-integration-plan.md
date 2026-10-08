@@ -157,10 +157,29 @@ Disconnecting retains durable Work and history. Reconnecting creates a fresh
 installation identity and requires linking Slack identities again.
 
 Slack replies contain only an acknowledgement and a link to the authenticated
-local Work view. Work contents, repository data, and runtime results are not
-published into channels or DMs. An outgoing acknowledgement is best effort;
+local Work view when a request is saved. When Slack-originated Work needs an
+answer, Goblin also posts the pending question in its original Slack thread.
+The question remains visible in Goblin, and an authorized reply in the same
+thread answers it through the existing application command. Channel replies
+must mention `@goblin` again. Repository approvals and runtime results remain
+in the authenticated Goblin interface. An outgoing acknowledgement is best effort;
 losing it cannot roll back or repeat accepted Work. Rich Slack result sharing
 and completion notifications remain deferred.
+
+Question delivery uses the existing connection's polling loop and persisted
+Work decisions; it adds no service bus or separate service. Each external
+conversation records the last delivered decision. Failed posts leave delivery
+pending, and restart resumes pending questions. Questions already answered in
+Goblin are skipped. Delivery requires the current installation and the
+originating Slack user's enabled local owner grant. A crash after Slack accepts
+a post but before its delivery marker commits can duplicate a notification;
+it cannot repeat Work execution. Question text is escaped for Slack and bounded
+to 3,000 characters, with a link to the full question in Goblin.
+
+The unreleased schema baseline adds `external_conversations.notified_decision_id`.
+An existing development database needs schema reconciliation before running
+the updated application; restarting the old installed image does not enable
+question delivery. The migration runner still rejects edited applied baselines.
 
 Runtime credentials use AES-256-GCM in the deployment's private persistent data
 directory, with a locally generated key and owner-only file permissions.
@@ -173,6 +192,10 @@ There is no token endpoint in public settings responses.
 Implemented checks cover manifest/event restrictions, authenticated actor
 filtering, encrypted storage and tamper detection, interrupted-setup recovery,
 browser command/code entry, linking confirmation, and logo delivery.
+Question delivery tests cover Slack thread targeting, escaping, failed-post
+handling, restart recovery, delivery markers, access revocation, and an answer
+continuing the same attempt. Actual question delivery through Slack remains a
+live validation step.
 A real PostgreSQL test verifies local-session proof confirmation, concurrent
 duplicate delivery, one durable dispatch, thread continuity, and revocation.
 

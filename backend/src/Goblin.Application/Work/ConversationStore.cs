@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Core.Work;
@@ -122,8 +121,7 @@ public sealed class ConversationStore
         if (command.ConversationId <= 0 || command.MessageId <= 0 || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
-        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(716352019)");
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, default);
         Persistence.Entities.Conversation? conversation = await db.Conversations.SingleOrDefaultAsync(x => x.Id == command.ConversationId);
         if (conversation is null)
         {
@@ -146,28 +144,16 @@ public sealed class ConversationStore
             var work = new WorkItem(workId, messages[0].Body, DateTimeOffset.UtcNow);
             work.Assign(WorkStore.DefaultAgentId, DateTimeOffset.UtcNow);
             foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1))
-                work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
-            db.WorkItems.Add(new()
-            {
-                Id = workId,
-                Objective = work.Objective,
-                AgentId = work.AgentId,
-                Status = work.Status.ToString(),
-                Version = 1,
-                State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
+                work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
+            db.WorkItems.Add(WorkStatePersistence.Create(work, DateTimeOffset.UtcNow));
             conversation.WorkId = workId;
         }
         else if (conversation.WorkId is { } linked && existing is null && !string.IsNullOrWhiteSpace(command.Text))
         {
             Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
-            var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, WorkStore.Json)!);
-            work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
-            row.State = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json);
-            row.Version++;
-            row.UpdatedAt = DateTime.UtcNow;
+            WorkItem work = WorkStatePersistence.Restore(row.State!);
+            work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
+            WorkStatePersistence.Update(row, work, DateTimeOffset.UtcNow);
         }
         await db.SaveChangesAsync();
         await transaction.CommitAsync();

@@ -29,7 +29,15 @@ public sealed class BoundaryTests
                 x.Name!.Contains("Protocol", StringComparison.Ordinal) || x.Name.Contains("Integrations", StringComparison.Ordinal) ||
                 x.Name.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal));
         Assert.Equal("{\"type\":\"chatgpt\",\"email\":\"user@example.test\",\"planType\":\"self_serve_business_prolite\"}",
-            JsonSerializer.Serialize<AccountView>(new ChatGPTAccountView("user@example.test", "self_serve_business_prolite"), WorkStore.Json));
+            JsonSerializer.Serialize<AccountView>(new ChatGPTAccountView("user@example.test", "self_serve_business_prolite"), ContractJson.Options));
+    }
+
+    [Fact]
+    public void RuntimeHostsDoNotDependOnConcreteIntegrations()
+    {
+        Assert.DoesNotContain(typeof(LocalTextHost).Assembly.GetReferencedAssemblies(), x =>
+            x.Name!.StartsWith("Goblin.Integrations.", StringComparison.Ordinal));
+        Assert.NotEqual(typeof(LocalTextHost).Assembly, typeof(ExecutionWorker).Assembly);
     }
 
     [Fact]

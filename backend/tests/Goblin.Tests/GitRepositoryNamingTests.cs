@@ -28,7 +28,7 @@ public sealed class GitRepositoryNamingTests
     [MemberData(nameof(NamedValues))]
     public void RenamedMembersKeepExistingWireValues(object value, string wire)
     {
-        foreach (JsonSerializerOptions options in new[] { WorkStore.Json, ExecutionFiles.Json, GitRepositoryJson.CreateOptions() })
+        foreach (JsonSerializerOptions options in new[] { ContractJson.Options, ExecutionFiles.Json, GitRepositoryJson.CreateOptions() })
         {
             Type type = value.GetType();
             string json = JsonSerializer.Serialize(wire);
@@ -59,7 +59,7 @@ public sealed class GitRepositoryNamingTests
         work.PrepareGitRepositoryAuthorization(5, new ExecutionTarget("codex", 6, gitRepository: change),
             true, false, DateTimeOffset.UnixEpoch);
 
-        string json = JsonSerializer.Serialize(work.Snapshot(), WorkStore.Json);
+        string json = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
         using JsonDocument document = JsonDocument.Parse(json);
         JsonElement snapshot = document.RootElement;
         Assert.Equal("RepositoryRequired", snapshot.GetProperty("attention").GetProperty("reason").GetString());

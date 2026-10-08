@@ -1,11 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.GitRepositories;
 using Goblin.Core.Work;
@@ -57,20 +57,15 @@ public sealed class GitRepositorySetupStore
             Commit = x.Commit,
             Environment = x.Environment,
             VerifiedAt = x.VerifiedAt,
-            Observation = JsonSerializer.Deserialize<VerifiedGitRepositorySetup>(x.Observation, WorkStore.Json)!
+            Observation = JsonSerializer.Deserialize<VerifiedGitRepositorySetup>(x.Observation, ContractJson.Options)!
         })];
     }
 
     public async Task SaveAsync(long attemptId, SetupMemoryWrite request, CancellationToken token)
     {
-        if (!GitRepositorySetupRules.SafeText(request.Environment, 1000) || request.TurnNumber <= 0 ||
-            request.Observations is not { Length: > 0 and <= GitRepositorySetupRules.MaxObservations } ||
-            !request.Observations.All(GitRepositorySetupRules.Valid) ||
-            request.Observations.Select(x => x.Setup.Topic).Distinct(StringComparer.Ordinal).Count() != request.Observations.Length ||
-            JsonSerializer.SerializeToUtf8Bytes(request, WorkStore.Json).Length > GitRepositorySetupRules.MaxPayloadBytes)
-            throw new ApplicationFailure("repository_setup_invalid");
+        GitRepositorySetupMemoryPolicy.Validate(request);
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         WorkSnapshot work = await CurrentAsync(db, attemptId, token);
         AttemptSnapshot attempt = work.Attempts[^1];
         GitRepositoryGrant grant = attempt.Target.GitRepository!.Grant!;
@@ -84,15 +79,12 @@ public sealed class GitRepositorySetupStore
         {
             if (previous.Length != request.Observations.Length || request.Observations.Any(observation => !previous.Any(row =>
                 row.Topic == observation.Setup.Topic && row.CheckpointId == request.CheckpointId && row.Environment == request.Environment &&
-                JsonSerializer.Serialize(JsonSerializer.Deserialize<VerifiedGitRepositorySetup>(row.Observation, WorkStore.Json), WorkStore.Json) ==
-                JsonSerializer.Serialize(observation, WorkStore.Json))))
+                GitRepositorySetupMemoryPolicy.Equivalent(row.Observation, observation))))
                 throw new ApplicationFailure("repository_setup_changed");
             return;
         }
         foreach (VerifiedGitRepositorySetup observation in request.Observations)
         {
-            string fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-            { observation.ConfigurationHash, Files = observation.Files.OrderBy(x => x.Path, StringComparer.Ordinal) }, WorkStore.Json)));
             db.GitRepositorySetupMemories.Add(new()
             {
                 GitRepositoryId = grant.GitRepositoryId,
@@ -104,8 +96,8 @@ public sealed class GitRepositorySetupStore
                 TurnNumber = request.TurnNumber,
                 Topic = observation.Setup.Topic,
                 Environment = request.Environment,
-                Fingerprint = fingerprint,
-                Observation = JsonSerializer.Serialize(observation, WorkStore.Json),
+                Fingerprint = GitRepositorySetupMemoryPolicy.Fingerprint(observation),
+                Observation = JsonSerializer.Serialize(observation, ContractJson.Options),
                 VerifiedAt = DateTime.UtcNow
             });
         }
@@ -114,19 +106,7 @@ public sealed class GitRepositorySetupStore
     }
 
     public async Task SaveAsync(long attemptId, Stream input, CancellationToken token)
-    {
-        using var buffer = new MemoryStream();
-        byte[] chunk = new byte[4096]; int count;
-        while ((count = await input.ReadAsync(chunk, token)) > 0)
-        {
-            if (buffer.Length + count > GitRepositorySetupRules.MaxPayloadBytes) throw new ApplicationFailure("repository_setup_invalid");
-            await buffer.WriteAsync(chunk.AsMemory(0, count), token);
-        }
-        SetupMemoryWrite request;
-        try { request = JsonSerializer.Deserialize<SetupMemoryWrite>(buffer.ToArray(), WorkStore.Json) ?? throw new JsonException(); }
-        catch (JsonException) { throw new ApplicationFailure("repository_setup_invalid"); }
-        await SaveAsync(attemptId, request, token);
-    }
+        => await SaveAsync(attemptId, await GitRepositorySetupMemoryPolicy.ReadAsync(input, token), token);
 
     private static async Task<WorkSnapshot> CurrentAsync(GoblinDbContext db, long attemptId, CancellationToken token)
     {
@@ -134,14 +114,8 @@ public sealed class GitRepositorySetupStore
             .Select(x => new { x.Work.State, x.Status, x.TurnNumber }).SingleOrDefaultAsync(token);
         if (owner is null || owner.Status is not ("Starting" or "Running") || owner.State is null)
             throw new ApplicationFailure("repository_setup_unavailable");
-        WorkSnapshot work = JsonSerializer.Deserialize<WorkSnapshot>(owner.State, WorkStore.Json)!;
-        AttemptSnapshot attempt = work.Attempts[^1];
-        GitRepositoryGrant? grant = attempt.Target.GitRepository?.Grant;
-        if (attempt.Id != attemptId || attempt.TurnNumber != owner.TurnNumber || grant is null ||
-            !await db.GithubRepositories.AnyAsync(x => x.Id == grant.GitRepositoryId && x.ConnectionId == grant.ConnectionId &&
-                x.Name == attempt.Target.GitRepository!.GitRepository && x.Enabled && x.Connection.AccountId == grant.AccountId &&
-                x.Connection.Generation == grant.Generation && x.Connection.Availability == "Connected", token))
-            throw new ApplicationFailure("repository_setup_unavailable");
+        WorkSnapshot work = JsonSerializer.Deserialize<WorkSnapshot>(owner.State, ContractJson.Options)!;
+        await GitRepositoryAccess.RequireSetupAsync(db, work, attemptId, owner.TurnNumber, token);
         return work;
     }
 }

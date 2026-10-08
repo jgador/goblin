@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Connections;
 using Goblin.Application.Work;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
@@ -55,8 +56,8 @@ internal sealed class ConnectionEndpoints
 
     private async Task<IResult> PromptAsync(HttpContext context)
     {
-        WorkStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<WorkStore>() : null;
-        if (store is not null) await store.BeginVerificationAsync(WorkStore.DefaultAgentId, context.RequestAborted);
+        ConnectionStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<ConnectionStore>() : null;
+        if (store is not null) await store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId, context.RequestAborted);
         bool available = false;
         try
         {
@@ -64,13 +65,13 @@ internal sealed class ConnectionEndpoints
             available = true;
             return Results.Json(Api.PromptResult.From(result));
         }
-        finally { if (store is not null) await store.EndVerificationAsync(WorkStore.DefaultAgentId, available); }
+        finally { if (store is not null) await store.EndVerificationAsync(ConnectionStore.DefaultConnectionId, available); }
     }
 
-    private async Task<IResult> ListAsync(HttpContext context, WorkStore store, CancellationToken token)
+    private async Task<IResult> ListAsync(HttpContext context, ConnectionStore store, CancellationToken token)
     {
         try { await StatusAsync(context); } catch (IntegrationFailure) { }
-        return WorkResponse.Json(Array.ConvertAll(await store.ConnectionsAsync(token), Api.ConnectionView.From));
+        return WorkResponse.Json(Array.ConvertAll(await store.ListAsync(token), Api.ConnectionView.From));
     }
 
     private static async Task<IResult> ModelsAsync(long id, int? limit, string? selected, ModelCatalogStore catalogs, CancellationToken token) =>
@@ -86,24 +87,25 @@ internal sealed class ConnectionEndpoints
 
     private async Task<Api.AuthenticationState> ConnectionAsync(HttpContext context, bool changing, Func<Task<AuthenticationState>> action)
     {
-        WorkStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<WorkStore>() : null;
-        if (changing && store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, ConnectionAvailability.Changing, requireIdle: true);
+        ConnectionStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<ConnectionStore>() : null;
+        if (changing && store is not null) await store.BeginChangeAsync(ConnectionStore.DefaultConnectionId);
         try
         {
             AuthenticationState state = await action();
             if (store is not null)
             {
                 bool available = state.Account is not null && state.RuntimeReady;
-                bool changed = await store.SetConnectionAsync(WorkStore.DefaultAgentId,
-                    available ? ConnectionAvailability.Available : ConnectionAvailability.Disconnected, requireIdle: false,
-                    completeChange: changing, observeAccount: true,
-                    accountSignature: AccountSignature(state.Account));
+                ConnectionAvailability availability = available ? ConnectionAvailability.Available : ConnectionAvailability.Disconnected;
+                string? signature = AccountSignature(state.Account);
+                bool changed = changing
+                    ? await store.CompleteChangeAsync(ConnectionStore.DefaultConnectionId, availability, signature)
+                    : await store.ObserveAccountAsync(ConnectionStore.DefaultConnectionId, availability, signature);
                 if (available)
                 {
                     ModelCatalogStore catalogs = context.RequestServices.GetRequiredService<ModelCatalogStore>();
-                    if (changed) catalogs.ScheduleRefresh(WorkStore.DefaultAgentId);
+                    if (changed) catalogs.ScheduleRefresh(ConnectionStore.DefaultConnectionId);
                     else
-                        try { await catalogs.ObserveExecutableAsync(WorkStore.DefaultAgentId, context.RequestAborted); }
+                        try { await catalogs.ObserveExecutableAsync(ConnectionStore.DefaultConnectionId, context.RequestAborted); }
                         catch { /* Discovery cannot change the connection result. */ }
                 }
             }
@@ -111,7 +113,11 @@ internal sealed class ConnectionEndpoints
         }
         catch
         {
-            if (store is not null) await store.SetConnectionAsync(WorkStore.DefaultAgentId, ConnectionAvailability.Unavailable, requireIdle: false, completeChange: changing);
+            if (store is not null)
+            {
+                if (changing) await store.CompleteChangeAsync(ConnectionStore.DefaultConnectionId, ConnectionAvailability.Unavailable, null);
+                else await store.ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, ConnectionAvailability.Unavailable);
+            }
             throw;
         }
     }

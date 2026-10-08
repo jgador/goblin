@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Connections;
 using Goblin.Application.Work;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -96,64 +97,8 @@ public sealed class ExecutionCoordinator
                 ? await store.GitRepositorySuggestionsAsync(work, token) : [];
             long decisionId = observation.Kind is ObservationKind.InputRequired or ObservationKind.Paused
                 ? await scope.ServiceProvider.GetRequiredService<IdentityStore>().NextEventAsync(token) : 0;
-            await store.MutateAsync(work.Id, current =>
-            {
-                ExecutionAttempt? a = current.CurrentAttempt;
-                if (a is null || a.Id != attempt.Id || a.OwnerId != attempt.OwnerId || observation.TurnNumber != a.TurnNumber ||
-                    a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled) return;
-                if (a.Status == AttemptStatus.Waiting && observation.Kind is ObservationKind.Paused or ObservationKind.InputRequired or ObservationKind.Pending or ObservationKind.WorkspaceRequired) return;
-                DateTimeOffset now = DateTimeOffset.UtcNow;
-                if (a.StartedAt is null && observation.Session is not null)
-                    current.ExecutionStarted(a.Id, a.OwnerId!.Value, observation.Session, now);
-                if (observation.CheckpointId is not null)
-                    current.SaveWorkspace(a.Id, a.OwnerId!.Value, observation.CheckpointId.Value, now);
-                switch (observation.Kind)
-                {
-                    case ObservationKind.Running:
-                        if (!string.IsNullOrWhiteSpace(observation.Text) && a.Status != AttemptStatus.Uncertain &&
-                            current.History.LastOrDefault(x => x.AttemptId == a.Id && x.Kind == WorkEventKind.ProgressReported)?.Text != observation.Text)
-                            current.ReportProgress(a.Id, a.OwnerId!.Value, observation.Text, now);
-                        break;
-                    case ObservationKind.Result:
-                        current.ProposeResult(a.Id, a.OwnerId!.Value, observation.Text!, now);
-                        if (observation.ArtifactReference is not null)
-                            current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
-                        break;
-                    case ObservationKind.WorkspaceRequired:
-                        if (a.Status == AttemptStatus.CancellationRequested && a.Target.GitRepository is null)
-                            current.ConfirmExecutionStopped(a.Id, a.OwnerId!.Value, now);
-                        else if (a.Target.GitRepository is null)
-                            current.RequestGitRepositorySetupFromExecution(a.Id, a.OwnerId!.Value, gitRepositories, now);
-                        else current.RequireGitRepositoryExecution(a.Id, a.OwnerId!.Value, now);
-                        break;
-                    case ObservationKind.Paused:
-                        current.PauseForInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, observation.ReleaseWorkspace, now);
-                        if (observation.ReleaseWorkspace) current.RequireCleanup(a.Id, a.OwnerId.Value, now);
-                        break;
-                    case ObservationKind.InputRequired:
-                        current.RequestInput(a.Id, a.OwnerId!.Value, decisionId, observation.Text!, now);
-                        if (observation.ArtifactReference is not null)
-                            current.AddArtifact(a.Id, a.OwnerId.Value, observation.ArtifactReference, "Execution workspace", now);
-                        break;
-                    case ObservationKind.Failed:
-                        // The host only reports Failed after proving the process stopped.
-                        if (a.Status == AttemptStatus.Uncertain)
-                            current.ConfirmExecutionStopped(a.Id, a.OwnerId!.Value, now);
-                        else current.ExecutionFailed(a.Id, a.OwnerId!.Value, observation.Failure ?? FailureKind.ExecutionFailed, now);
-                        break;
-                    case ObservationKind.Uncertain:
-                        if (a.Status != AttemptStatus.Uncertain)
-                            current.ExecutionUncertain(a.Id, a.OwnerId!.Value, observation.Failure ?? FailureKind.RuntimeDisconnected, now);
-                        break;
-                    case ObservationKind.Stopped:
-                        if (a.Status is not (AttemptStatus.Uncertain or AttemptStatus.CancellationRequested))
-                            current.ExecutionUncertain(a.Id, a.OwnerId!.Value, FailureKind.RuntimeDisconnected, now);
-                        current.ConfirmExecutionStopped(a.Id, a.OwnerId!.Value, now);
-                        break;
-                }
-                if (a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled)
-                    current.RequireCleanup(a.Id, a.OwnerId!.Value, now);
-            }, token);
+            await store.MutateAsync(work.Id, current => ExecutionObservationTransition.Apply(current, attempt,
+                observation, gitRepositories, decisionId, DateTimeOffset.UtcNow), token);
         }
         if (observation.Kind is ObservationKind.Result or ObservationKind.InputRequired or ObservationKind.Failed or ObservationKind.Stopped ||
             observation.Kind == ObservationKind.Paused && observation.ReleaseWorkspace ||
@@ -233,7 +178,7 @@ public sealed class WorkRecovery : BackgroundService
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         using IServiceScope scope = _scopes.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverConnectionReservationsAsync(cancellationToken);
+        await scope.ServiceProvider.GetRequiredService<ConnectionStore>().RecoverReservationsAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
 
@@ -246,14 +191,14 @@ public sealed class WorkRecovery : BackgroundService
             {
                 await _coordinator.DrainFailuresAsync(stoppingToken);
                 using IServiceScope scope = _scopes.CreateScope();
-                Persistence.Entities.ExecutionAttempt[] attempts = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
-                foreach (Persistence.Entities.ExecutionAttempt attempt in attempts)
+                ExecutionRecoveryRequest[] requests = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
+                foreach (ExecutionRecoveryRequest request in requests)
                 {
                     try
                     {
-                        if (attempt.Status == nameof(AttemptStatus.Queued))
-                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(attempt.WorkId, attempt.Id, attempt.TurnNumber));
-                        else await _coordinator.ReconcileAsync(new(attempt.WorkId, attempt.Id, attempt.TurnNumber), stoppingToken);
+                        if (request.Action == ExecutionRecoveryAction.Dispatch)
+                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(request.WorkId, request.AttemptId, request.TurnNumber));
+                        else await _coordinator.ReconcileAsync(new(request.WorkId, request.AttemptId, request.TurnNumber), stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
                     catch { /* One unavailable host must not hide other Work. */ }

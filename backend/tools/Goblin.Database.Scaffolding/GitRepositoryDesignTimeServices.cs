@@ -2,12 +2,12 @@ using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Scaffolding.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Goblin.Database;
+namespace Goblin.Database.Scaffolding;
 
 // EF exposes candidate naming through its design-time internal API. Its version
 // is pinned with the existing scaffolding dependency in this tooling project.
 #pragma warning disable EF1001
-// EF discovers this in the existing scaffolding startup project. Keep CLR names
+// EF discovers this in the scaffolding startup project. Keep CLR names
 // explicit when regenerating from the unchanged database table/column names.
 public sealed class GitRepositoryDesignTimeServices : IDesignTimeServices
 {

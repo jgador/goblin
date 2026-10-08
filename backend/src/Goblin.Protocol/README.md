@@ -4,8 +4,10 @@ This project contains generated C# classes with explicit `System.Text.Json`
 attributes for the official Rust `codex app-server` protocol.
 It implements no conversation, turn, model, token, or compaction behavior.
 
-The schemas target Codex CLI **0.155.1**, matching the runtime pinned in the root
+The schemas target Codex CLI **0.161.0**, matching the runtime pinned in the root
 `package.json`. They use the default API export without `--experimental`.
+The aggregate schemas retain the full upstream export. Individual schemas for
+unused Gateway OAuth messages and thread prediction updates are omitted.
 
 The checked-in files in `backend/schemas/codex` are the contract.
 [`selection.json`](../../schemas/codex/selection.json) lists the requests,
@@ -41,8 +43,10 @@ make codex ARGS="app-server generate-json-schema --out backend/schemas/codex"
 dotnet run --file backend/scripts/GenerateProtocol.cs
 ```
 
-Review the schema diff and remove any obsolete schema files. Changes to the
-generated files should come from the generator or selection and schema inputs.
+Review the schema diff, remove any obsolete schema files, and omit the unused
+Gateway OAuth and thread prediction update individual schemas before regenerating.
+Changes to the generated files should come from the generator or selection and
+schema inputs.
 When Goblin starts using another Codex field or message, add it to the selection,
 regenerate, and update the protocol and adapter tests.
 
@@ -68,6 +72,12 @@ schema alternatives without constructing an ad-hoc JSON document. Request IDs
 preserve the distinction between strings and signed 64-bit integers. Scalar and
 array wrappers use type-level `JsonConverter` attributes; their `Value` properties
 have `JsonIgnore` because the converter writes the underlying value directly.
+
+JSON Schema `type` arrays retain each permitted non-null alternative as a typed
+union. Codex error details include an upstream fallback for unknown strings or
+objects. The object branch preserves arbitrary fields in a JSON-value dictionary;
+known errors still use their specific enum or object types. The adapters map
+unknown errors to sanitized failures and never automatically retry failed Work.
 
 Protocol payload classes use reference equality. Compare their relevant properties
 or enum values explicitly. `RequestId` implements value equality and hashing so a

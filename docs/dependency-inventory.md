@@ -41,7 +41,7 @@ package also declares TypeScript. Sources: [package.json](../package.json),
 
 | Package | Declared version | Use |
 | --- | --- | --- |
-| `@openai/codex` | `0.155.1` | Agent runtime, distributed with native platform bundles |
+| `@openai/codex` | `0.161.0` | Agent runtime, distributed with native platform bundles |
 | `@playwright/test` | `1.63.0` | Browser tests |
 | `@types/node` | `24.13.4` | Node type definitions |
 | `prettier` | `3.9.8` | TypeScript formatting |
@@ -53,15 +53,16 @@ upgrading Chromium to an arbitrary release.
 
 ## C# / NuGet packages
 
-There are eleven unique directly referenced NuGet packages across the projects,
+There are twelve unique directly referenced NuGet packages across the projects,
 plus the separately installed `dotnet-ef` tool.
 
 | Package | Declared version | Source |
 | --- | --- | --- |
 | `Microsoft.EntityFrameworkCore` | `10.0.12` | [Persistence project](../backend/src/Goblin.Persistence/Goblin.Persistence.csproj) |
 | `Npgsql.EntityFrameworkCore.PostgreSQL` | `10.0.3` | [Persistence project](../backend/src/Goblin.Persistence/Goblin.Persistence.csproj) |
-| `Microsoft.EntityFrameworkCore.Design` | `10.0.12` | [Database tool](../backend/tools/Goblin.Database/Goblin.Database.csproj) |
-| `Microsoft.Extensions.Hosting` | `10.0.12` | [Database tool](../backend/tools/Goblin.Database/Goblin.Database.csproj) |
+| `Npgsql` | `10.0.3` | [Migration runner](../backend/tools/Goblin.Database/Goblin.Database.csproj); matches the previously resolved driver version |
+| `Microsoft.EntityFrameworkCore.Design` | `10.0.12` | [Scaffolding host](../backend/tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj), [database tooling tests](../backend/tests/Goblin.Database.Tests/Goblin.Database.Tests.csproj) |
+| `Microsoft.Extensions.Hosting` | `10.0.12` | [Migration runner](../backend/tools/Goblin.Database/Goblin.Database.csproj), [scaffolding host](../backend/tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj) |
 | `WolverineFx.EntityFrameworkCore` | `6.39.1` | [Application project](../backend/src/Goblin.Application/Goblin.Application.csproj) |
 | `WolverineFx.Postgresql` | `6.39.1` | [Application project](../backend/src/Goblin.Application/Goblin.Application.csproj) |
 | `WolverineFx.RuntimeCompilation` | `6.39.1` | [Application project](../backend/src/Goblin.Application/Goblin.Application.csproj) |

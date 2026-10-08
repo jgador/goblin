@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="../Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />
+    <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
   </ItemGroup>
 </Project>

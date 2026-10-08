@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="Goblin.Application.Tests" />
     <ProjectReference Include="../Goblin.Core/Goblin.Core.csproj" />
     <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
     <ProjectReference Include="../Goblin.Persistence/Goblin.Persistence.csproj" />

@@ -1,9 +1,10 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Runtime;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
@@ -16,17 +17,16 @@ namespace Goblin.Application.Work;
 // across controller restarts. Refresh failures never replace successful data.
 public sealed class ModelCatalogStore
 {
-    private static readonly TimeSpan Lifetime = TimeSpan.FromHours(24);
-    private static readonly TimeSpan FailureCooldown = TimeSpan.FromMinutes(1);
     private readonly IDbContextFactory<GoblinDbContext> _dbFactory;
     private readonly IModelCatalogSource _source;
-    private readonly Lock _gate = new();
-    private readonly Dictionary<long, Task> _refreshes = [];
+    private readonly ModelCatalogRefreshCoordinator _refreshes;
 
-    public ModelCatalogStore(IDbContextFactory<GoblinDbContext> dbFactory, IModelCatalogSource source)
+    public ModelCatalogStore(IDbContextFactory<GoblinDbContext> dbFactory, IModelCatalogSource source,
+        ModelCatalogRefreshCoordinator refreshes)
     {
         _dbFactory = dbFactory;
         _source = source;
+        _refreshes = refreshes;
     }
 
     public async Task<ModelCatalogView> GetAsync(long connectionId, int limit, string? selected,
@@ -40,15 +40,15 @@ public sealed class ModelCatalogStore
         ConnectionModelCatalog? saved = await db.ConnectionModelCatalogs.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ConnectionId == connectionId, token);
         string stamp = _source.ExecutableStamp();
-        bool sameAccount = saved?.AuthGeneration == connection.AuthGeneration;
-        RuntimeModel[] all = sameAccount && saved?.Catalog is not null ? Parse(saved.Catalog) : [];
-        bool due = saved?.FetchedAt is null || saved.RefreshFailed || saved.FetchedAt.Value.Add(Lifetime) <= DateTime.UtcNow ||
-            saved.ExecutableStamp != stamp;
+        bool sameAccount = ModelCatalogPolicy.SameAccount(saved?.AuthGeneration, connection.AuthGeneration);
+        RuntimeModel[] all = sameAccount ? ModelCatalogPolicy.Read(saved?.Catalog) : [];
+        bool due = ModelCatalogPolicy.Due(saved?.FetchedAt, saved?.RefreshFailed == true,
+            saved?.ExecutableStamp, stamp, DateTime.UtcNow);
         bool canRefresh = connection.Availability == "Available" &&
-            (saved?.RetryAfter is null || saved.RetryAfter <= DateTime.UtcNow);
-        if (canRefresh && (!sameAccount || due) && !IsRefreshing(connectionId)) ScheduleRefresh(connectionId);
-        bool refreshing = IsRefreshing(connectionId);
-        RuntimeModel[] ordered = Order(all, selected);
+            ModelCatalogPolicy.CanAttempt(saved?.RetryAfter, DateTime.UtcNow);
+        if (canRefresh && (!sameAccount || due)) ScheduleRefresh(connectionId);
+        bool refreshing = _refreshes.IsRefreshing(connectionId);
+        RuntimeModel[] ordered = ModelCatalogPolicy.Order(all, selected);
         return new([.. ordered.Take(limit)], ordered.Length > limit,
             all.FirstOrDefault(x => x.IsDefault)?.Model,
             saved?.FetchedAt is { } fetched && sameAccount ? new DateTimeOffset(fetched, TimeSpan.Zero) : null,
@@ -58,23 +58,8 @@ public sealed class ModelCatalogStore
 
     // Called after sign-in/account changes and when a status check notices a new
     // executable. Neither path waits for model discovery to answer the user.
-    public void ScheduleRefresh(long connectionId, bool force = false)
-    {
-        lock (_gate)
-        {
-            if (_refreshes.ContainsKey(connectionId)) return;
-            Task task = Task.Run(async () =>
-            {
-                try { await RefreshAsync(connectionId, force); }
-                catch { /* Database recovery remains owned by the normal health path. */ }
-            });
-            _refreshes[connectionId] = task;
-            _ = task.ContinueWith(_ =>
-            {
-                lock (_gate) _refreshes.Remove(connectionId);
-            }, TaskScheduler.Default);
-        }
-    }
+    public void ScheduleRefresh(long connectionId, bool force = false) =>
+        _refreshes.Schedule(connectionId, token => RefreshAsync(connectionId, force, token));
 
     public async Task ObserveExecutableAsync(long connectionId, CancellationToken token = default)
     {
@@ -83,9 +68,9 @@ public sealed class ModelCatalogStore
         if (connection.Availability != "Available") return;
         ConnectionModelCatalog? saved = await db.ConnectionModelCatalogs.AsNoTracking()
             .SingleOrDefaultAsync(x => x.ConnectionId == connectionId, token);
-        if ((saved is null || saved.AuthGeneration != connection.AuthGeneration ||
-            saved.ExecutableStamp != _source.ExecutableStamp()) &&
-            (saved?.RetryAfter is null || saved.RetryAfter <= DateTime.UtcNow))
+        if ((!ModelCatalogPolicy.SameAccount(saved?.AuthGeneration, connection.AuthGeneration) ||
+            saved?.ExecutableStamp != _source.ExecutableStamp()) &&
+            ModelCatalogPolicy.CanAttempt(saved?.RetryAfter, DateTime.UtcNow))
             ScheduleRefresh(connectionId);
     }
 
@@ -97,43 +82,36 @@ public sealed class ModelCatalogStore
             .SingleOrDefaultAsync(x => x.ConnectionId == connection.Id, token);
         if (saved?.Catalog is null || saved.AuthGeneration != connection.AuthGeneration)
             throw new ApplicationFailure("models_unavailable");
-        RuntimeModel? choice = (model is null
-            ? Parse(saved.Catalog).FirstOrDefault(x => x.IsDefault)
-            : Parse(saved.Catalog).FirstOrDefault(x => x.Model == model)) ?? throw new ApplicationFailure("model_unavailable");
-        if (effort is not null && !choice.SupportedReasoningEfforts.Contains(effort, StringComparer.Ordinal))
-            throw new ApplicationFailure("reasoning_effort_unavailable");
+        ModelCatalogPolicy.ValidateSelection(ModelCatalogPolicy.Read(saved.Catalog), model, effort);
     }
 
-    private bool IsRefreshing(long connectionId)
-    {
-        lock (_gate) return _refreshes.ContainsKey(connectionId);
-    }
-
-    private async Task RefreshAsync(long connectionId, bool force)
+    private async Task RefreshAsync(long connectionId, bool force, CancellationToken token)
     {
         long generation;
         string stamp = _source.ExecutableStamp();
-        await using (GoblinDbContext db = await _dbFactory.CreateDbContextAsync())
+        await using (GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token))
         {
-            Connection? connection = await db.Connections.AsNoTracking().SingleOrDefaultAsync(x => x.Id == connectionId);
+            Connection? connection = await db.Connections.AsNoTracking().SingleOrDefaultAsync(x => x.Id == connectionId, token);
             if (connection is null || connection.Runtime != _source.Runtime || connection.Availability != "Available") return;
             generation = connection.AuthGeneration;
             ConnectionModelCatalog? saved = await db.ConnectionModelCatalogs.AsNoTracking()
-                .SingleOrDefaultAsync(x => x.ConnectionId == connectionId);
-            if (!force && saved?.AuthGeneration == generation && !saved.RefreshFailed &&
-                saved.ExecutableStamp == stamp && saved.FetchedAt?.Add(Lifetime) > DateTime.UtcNow) return;
-            if (!force && saved?.RetryAfter > DateTime.UtcNow) return;
+                .SingleOrDefaultAsync(x => x.ConnectionId == connectionId, token);
+            if (!force && ModelCatalogPolicy.Fresh(saved?.AuthGeneration, generation, saved?.FetchedAt,
+                saved?.RefreshFailed == true, saved?.ExecutableStamp, stamp, DateTime.UtcNow)) return;
+            if (!force && !ModelCatalogPolicy.CanAttempt(saved?.RetryAfter, DateTime.UtcNow)) return;
         }
 
         RuntimeModel[]? models = null;
-        try { models = await _source.ListAsync(CancellationToken.None); }
+        try { models = await _source.ListAsync(token); }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch { /* A sanitized refresh state is persisted below. */ }
 
-        await using GoblinDbContext write = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await WorkStore.BeginAsync(write, default);
-        Connection current = await write.Connections.SingleAsync(x => x.Id == connectionId);
+        token.ThrowIfCancellationRequested();
+        await using GoblinDbContext write = await _dbFactory.CreateDbContextAsync(token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(write, token);
+        Connection current = await write.Connections.SingleAsync(x => x.Id == connectionId, token);
         if (current.AuthGeneration != generation || current.Availability != "Available") return;
-        ConnectionModelCatalog? row = await write.ConnectionModelCatalogs.SingleOrDefaultAsync(x => x.ConnectionId == connectionId);
+        ConnectionModelCatalog? row = await write.ConnectionModelCatalogs.SingleOrDefaultAsync(x => x.ConnectionId == connectionId, token);
         if (row is null)
         {
             row = new() { ConnectionId = connectionId, AuthGeneration = generation, ExecutableStamp = stamp };
@@ -141,30 +119,20 @@ public sealed class ModelCatalogStore
         }
         if (models is null)
         {
-            row.RetryAfter = DateTime.UtcNow.Add(FailureCooldown);
+            row.RetryAfter = ModelCatalogPolicy.RetryAfter(DateTime.UtcNow);
             row.RefreshFailed = true;
         }
         else
         {
-            RuntimeModel[] previous = row.Catalog is null ? [] : Parse(row.Catalog);
-            var previousNames = previous.Select(x => x.Model).ToHashSet(StringComparer.Ordinal);
-            row.Catalog = JsonSerializer.Serialize(models.Select(x => new RuntimeModel(
-                x.Id, x.Model, x.DisplayName, x.DefaultReasoningEffort, x.SupportedReasoningEfforts,
-                x.IsDefault, previous.Length > 0 && !previousNames.Contains(x.Model))).ToArray(), WorkStore.Json);
+            RuntimeModel[] previous = ModelCatalogPolicy.Read(row.Catalog);
+            row.Catalog = JsonSerializer.Serialize(ModelCatalogPolicy.MarkNew(models, previous), ContractJson.Options);
             row.ExecutableStamp = stamp;
             row.FetchedAt = DateTime.UtcNow;
             row.RetryAfter = null;
             row.RefreshFailed = false;
         }
-        await write.SaveChangesAsync();
-        await transaction.CommitAsync();
+        await write.SaveChangesAsync(token);
+        await transaction.CommitAsync(token);
     }
 
-    private static RuntimeModel[] Parse(string json) =>
-        JsonSerializer.Deserialize<RuntimeModel[]>(json, WorkStore.Json) ?? [];
-
-    private static RuntimeModel[] Order(RuntimeModel[] models, string? selected) =>
-        [.. models.OrderByDescending(x => x.Model == selected)
-            .ThenByDescending(x => x.IsDefault)
-            .ThenByDescending(x => x.IsNew)];
 }

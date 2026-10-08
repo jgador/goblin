@@ -52,7 +52,7 @@ public sealed partial class WorkStore
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         Persistence.Entities.WorkCommand? receipt = await db.WorkCommands.AsNoTracking().SingleOrDefaultAsync(x => x.Id == command.CommandId, token);
         if (receipt is null) return null;
-        if (receipt.Fingerprint != Hash(command)) throw new ApplicationFailure("command_id_reused");
+        if (receipt.Fingerprint != WorkCommandPolicy.Fingerprint(command)) throw new ApplicationFailure("command_id_reused");
         return JsonSerializer.Deserialize<WorkView>(receipt.Response, Json)!;
     }
 

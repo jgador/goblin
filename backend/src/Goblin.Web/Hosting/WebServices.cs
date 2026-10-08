@@ -16,27 +16,26 @@ using Goblin.Persistence;
 using Goblin.Web.Monitoring;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Wolverine;
 using Yarp.ReverseProxy.Forwarder;
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Web;
 
 internal static class WebServices
 {
-    public static void Configure(WebApplicationBuilder builder, ApplicationOptions options, Workspace workspace, CodexOptions runtimeOptions)
+    public static WebRuntimeConfiguration Configure(WebApplicationBuilder builder, ApplicationOptions options,
+        Workspace workspace, CodexOptions runtimeOptions)
     {
+        WebRuntimeConfiguration configuration = WebRuntimeConfiguration.Read(builder.Configuration, options.EnableWork);
         builder.Logging.AddGoblinJsonConsole();
-        ConfigureMonitoring(builder, options);
+        ConfigureMonitoring(builder, options, configuration);
         ConfigureProxies(builder, options);
-        string? databaseConnection = builder.Configuration.GetConnectionString("Goblin");
-        if (!string.IsNullOrWhiteSpace(databaseConnection)) builder.Services.AddGoblinPersistence(databaseConnection);
+        if (!string.IsNullOrWhiteSpace(configuration.DatabaseConnection))
+            builder.Services.AddGoblinPersistence(configuration.DatabaseConnection);
         builder.Services.ConfigureHttpJsonOptions(json => GitRepositoryJson.Configure(json.SerializerOptions));
-        string? executionNamespace = builder.Configuration[Env.GoblinExecutionNamespace];
         builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
-        if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, databaseConnection, executionNamespace);
+        if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, configuration);
         if (options.EnableWork)
         {
             builder.Services.AddSingleton<SlackApi>();
@@ -61,28 +60,24 @@ internal static class WebServices
         if (options.EnableWork)
         {
             builder.Services.AddSingleton<IModelCatalogSource, CodexModelCatalogSource>();
-            builder.Services.AddSingleton<ModelCatalogStore>();
+            builder.Services.AddModelCatalog();
         }
         builder.Services.AddSingleton(_ => ApiKeyVerifier.CreateClient());
         builder.Services.AddSingleton<ApiKeyVerifier>();
         builder.Services.AddSingleton(services => new Authentication(services.GetRequiredService<CodexClient>(),
             options.VerifyApiKey ?? services.GetRequiredService<ApiKeyVerifier>().VerifyAsync, options.PromptTimeout));
         if (options.RecoverRuntime) builder.Services.AddHostedService<CodexRecovery>();
+        return configuration;
     }
 
-    private static void ConfigureMonitoring(WebApplicationBuilder builder, ApplicationOptions options)
+    private static void ConfigureMonitoring(WebApplicationBuilder builder, ApplicationOptions options,
+        WebRuntimeConfiguration configuration)
     {
-        string? nodeName = builder.Configuration[Env.GoblinNodeName];
         if (options.SystemSource is not null) builder.Services.AddSingleton(options.SystemSource);
-        else if (!string.IsNullOrWhiteSpace(nodeName))
-            builder.Services.AddSingleton<ISystemSource>(_ =>
-            {
-                string tokenFile = builder.Configuration[Env.GoblinKubernetesTokenFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token";
-                string caFile = builder.Configuration[Env.GoblinKubernetesCaFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
-                return new KubernetesSystemSource(builder.Configuration[Env.GoblinKubernetesUrl],
-                    nodeName, builder.Configuration[Env.GoblinNamespace] ?? "goblin",
-                    builder.Configuration[Env.GoblinExecutionNamespace] ?? "agents", tokenFile, caFile);
-            });
+        else if (!string.IsNullOrWhiteSpace(configuration.NodeName))
+            builder.Services.AddSingleton<ISystemSource>(_ => new KubernetesSystemSource(configuration.KubernetesUrl,
+                configuration.NodeName, configuration.KubernetesNamespace, configuration.MonitoringExecutionNamespace,
+                configuration.KubernetesTokenFile, configuration.KubernetesCaFile));
         builder.Services.AddSingleton(services => new SystemMonitor(services.GetService<ISystemSource>()));
         builder.Services.AddHostedService(services => services.GetRequiredService<SystemMonitor>());
     }
@@ -103,16 +98,14 @@ internal static class WebServices
     }
 
     private static void ConfigureWork(WebApplicationBuilder builder, Workspace workspace, ApplicationOptions options,
-        CodexOptions runtimeOptions, string? databaseConnection, string? executionNamespace)
+        CodexOptions runtimeOptions, WebRuntimeConfiguration configuration)
     {
-        if (string.IsNullOrWhiteSpace(databaseConnection)) throw new InvalidOperationException("Durable Work requires PostgreSQL.");
-        builder.Host.UseWolverine(messaging => ApplicationServices.ConfigureMessaging(messaging, databaseConnection, !string.IsNullOrWhiteSpace(executionNamespace)));
+        if (string.IsNullOrWhiteSpace(configuration.DatabaseConnection))
+            throw new InvalidOperationException("Durable Work requires PostgreSQL.");
+        builder.Host.UseWolverine(messaging => ApplicationServices.ConfigureMessaging(messaging,
+            configuration.DatabaseConnection, !string.IsNullOrWhiteSpace(configuration.ExecutionNamespace)));
         builder.Services.AddWorkApplication();
-        var workspaceLimits = new WorkspaceLimits(
-            builder.Configuration.GetValue(Env.GoblinMaxSandboxes, 2),
-            builder.Configuration.GetValue(Env.GoblinMaxCachedWorkspaces, 4));
-        if (workspaceLimits.MaxSandboxes < 1 || workspaceLimits.MaxCachedVolumes < 1)
-            throw new InvalidOperationException("Invalid workspace capacity configuration.");
+        WorkspaceLimits workspaceLimits = configuration.WorkspaceLimits;
         builder.Services.AddSingleton(workspaceLimits);
         builder.Services.AddSingleton<WorkspaceCheckpoints>();
         builder.Services.AddSingleton<IWorkspaceCheckpoints>(services => services.GetRequiredService<WorkspaceCheckpoints>());
@@ -124,18 +117,16 @@ internal static class WebServices
         builder.Services.AddSingleton(new GitRepositoryBrokerOptions(Path.Combine(workspace.DataDirectory, "repositories")));
         builder.Services.AddSingleton<GitRepositoryBroker>();
         builder.Services.AddSingleton<IGitRepositoryBroker>(services => services.GetRequiredService<GitRepositoryBroker>());
-        if (!string.IsNullOrWhiteSpace(executionNamespace))
+        if (!string.IsNullOrWhiteSpace(configuration.ExecutionNamespace))
         {
-            var kubernetes = new KubernetesApi(builder.Configuration[Env.GoblinKubernetesUrl],
-                builder.Configuration[Env.GoblinKubernetesTokenFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/token",
-                builder.Configuration[Env.GoblinKubernetesCaFile] ?? "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt");
+            var kubernetes = new KubernetesApi(configuration.KubernetesUrl,
+                configuration.KubernetesTokenFile, configuration.KubernetesCaFile);
             builder.Services.AddSingleton(kubernetes);
-            var sandboxOptions = new SandboxOptions(executionNamespace,
-                builder.Configuration[Env.GoblinExecutionImage] ?? "goblin-auth:0.1.0", workspace.CodexHome,
-                builder.Configuration[Env.GoblinGitRepositoryUrl] ?? "http://goblin-repository.goblin.svc:8788")
+            var sandboxOptions = new SandboxOptions(configuration.ExecutionNamespace,
+                configuration.ExecutionImage, workspace.CodexHome, configuration.GitRepositoryUrl)
             {
-                CpuLimit = builder.Configuration[Env.GoblinSandboxCpuLimit] ?? "2",
-                MemoryLimit = builder.Configuration[Env.GoblinSandboxMemoryLimit] ?? "2Gi"
+                CpuLimit = configuration.SandboxCpuLimit,
+                MemoryLimit = configuration.SandboxMemoryLimit
             };
             builder.Services.AddSingleton(sandboxOptions);
             builder.Services.AddSingleton<IInspectionHost, InspectionHost>();

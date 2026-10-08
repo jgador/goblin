@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO;
 using System.IO.Compression;
@@ -29,6 +28,7 @@ public sealed class SlackSetup : IAsyncDisposable
     private readonly string _directory;
     private readonly SlackApi _api;
     private readonly SlackConnection _connection;
+    private readonly SlackSetupCommandRunner _commands;
 
     private readonly Lock _gate = new();
     private CancellationTokenSource? _cancellation;
@@ -54,6 +54,7 @@ public sealed class SlackSetup : IAsyncDisposable
     public SlackSetup(string directory, SlackApi api, SlackConnection connection)
     {
         _directory = Path.GetFullPath(directory); _api = api; _connection = connection;
+        _commands = new SlackSetupCommandRunner(Active);
         SlackCredentialStore.PrivateDirectory(_directory);
         SlackCredentialStore.SafePath(Active);
         SlackCredentialStore.SafePath(RecoveryPath);
@@ -135,7 +136,7 @@ public sealed class SlackSetup : IAsyncDisposable
             string hooks = JsonSerializer.Serialize(new { hooks = new System.Collections.Generic.Dictionary<string, string> { ["get-hooks"] = HookCommand("hooks") } });
             await SlackCredentialStore.WriteAsync(Path.Combine(Project, ".slack", "hooks.json"), Encoding.UTF8.GetBytes(hooks), token);
             await SlackCredentialStore.WriteAsync(Path.Combine(Project, "manifest.json"), Encoding.UTF8.GetBytes(Assets.Manifest), token);
-            string output = await RunAsync(["auth", "login", "--no-prompt"], token);
+            string output = await _commands.RunAsync(["auth", "login", "--no-prompt"], token);
             Match ticket = Regex.Match(output, @"/slackauthticket ([A-Za-z0-9._~+/=-]+)", RegexOptions.CultureInvariant);
             if (!ticket.Success) throw new SlackFailure("Slack did not return an authorization command. Try setup again.");
             lock (_gate)
@@ -164,9 +165,9 @@ public sealed class SlackSetup : IAsyncDisposable
     {
         try
         {
-            await RunAsync(["auth", "login", "--no-prompt", "--ticket", _ticket!, "--challenge", challenge], token);
+            await _commands.RunAsync(["auth", "login", "--no-prompt", "--ticket", _ticket!, "--challenge", challenge], token);
             _ticket = null;
-            string accounts = await RunAsync(["auth", "list"], token);
+            string accounts = await _commands.RunAsync(["auth", "list"], token);
             Match team = Regex.Match(accounts, @"Team ID: (T[A-Z0-9]+)", RegexOptions.CultureInvariant);
             if (!team.Success) throw new SlackFailure();
             _team = team.Groups[1].Value;
@@ -198,7 +199,7 @@ public sealed class SlackSetup : IAsyncDisposable
         // A crash or unknown creation outcome must remain visible after restart,
         // even if Slack did not yet return an app ID.
         await SaveRecoveryAsync(ReadAppId());
-        await RunAsync(["deploy", "--team", _team!, "--app", ReadAppId() ?? "deployed", "--manifest-source", "local", "--hide-triggers", "--force"], token);
+        await _commands.RunAsync(["deploy", "--team", _team!, "--app", ReadAppId() ?? "deployed", "--manifest-source", "local", "--hide-triggers", "--force"], token);
         string? appId = ReadAppId();
         lock (_gate) _view = _view with { AppId = appId };
         string path = Path.Combine(Project, "runtime.json");
@@ -217,7 +218,7 @@ public sealed class SlackSetup : IAsyncDisposable
             { await _api.SetIconAsync(account.Token, verified.AppId, token); icon = true; }
         }
         catch (Exception error) when (error is not OperationCanceledException) { }
-        await RunAsync(["auth", "logout", "--all"], token);
+        await _commands.RunAsync(["auth", "logout", "--all"], token);
         // Reverify after revoking setup authorization: runtime independence is
         // part of connection success, not an assumption about Slack's token model.
         await _connection.ConnectAsync(appToken, botToken, token);
@@ -255,7 +256,7 @@ public sealed class SlackSetup : IAsyncDisposable
             if (File.Exists(Executable))
             {
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-                try { await RunAsync(["auth", "logout", "--all"], timeout.Token); } catch { revoked = false; }
+                try { await _commands.RunAsync(["auth", "logout", "--all"], timeout.Token); } catch { revoked = false; }
             }
             if (Directory.Exists(Active)) Directory.Delete(Active, true);
             lock (_gate)
@@ -283,64 +284,6 @@ public sealed class SlackSetup : IAsyncDisposable
         }
         catch (JsonException) { }
         return null;
-    }
-
-    private async Task<string> RunAsync(string[] args, CancellationToken token)
-    {
-        // The pinned CLI logs command arguments, including ticket/challenge
-        // values. Discard its daily logs before any process starts. Cover a UTC
-        // midnight boundary for the short-lived setup as well.
-        string logs = Path.Combine(Profile, "logs");
-        SlackCredentialStore.PrivateDirectory(logs);
-        foreach (int offset in new[] { -1, 0, 1 })
-        {
-            string path = Path.Combine(logs, "slack-debug-" + DateTime.UtcNow.AddDays(offset).ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture) + ".log");
-            if (new FileInfo(path).LinkTarget == "/dev/null") continue;
-            if (File.Exists(path)) File.Delete(path);
-            File.CreateSymbolicLink(path, "/dev/null");
-        }
-        var start = new ProcessStartInfo(Executable)
-        {
-            WorkingDirectory = Project,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = true,
-            UseShellExecute = false
-        };
-        start.Environment.Clear();
-        start.Environment[Env.Home] = Active;
-        start.Environment[Env.TmpDir] = Active;
-        start.Environment[Env.SlackDisableTelemetry] = "true";
-        start.Environment[Env.Path] = "/usr/local/bin:/usr/bin:/bin";
-        foreach (string argument in args.Concat(["--config-dir", Profile, "--no-color", "--skip-update"])) start.ArgumentList.Add(argument);
-        using var process = new Process { StartInfo = start };
-        if (!process.Start()) throw new SlackFailure();
-        process.StandardInput.Close();
-        Task<string> output = ReadBoundedAsync(process.StandardOutput, token), errors = ReadBoundedAsync(process.StandardError, token);
-        try
-        {
-            Task exited = process.WaitForExitAsync(token);
-            Task reads = Task.WhenAll(output, errors);
-            await Task.WhenAny(exited, reads);
-            if (reads.IsFaulted) await reads;
-            await exited;
-            string text = await output + "\n" + await errors;
-            if (process.ExitCode != 0) throw new SlackFailure();
-            return text;
-        }
-        finally
-        {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
-            try { await Task.WhenAll(output, errors); } catch (OperationCanceledException) { }
-        }
-    }
-
-    private static async Task<string> ReadBoundedAsync(StreamReader reader, CancellationToken token)
-    {
-        var text = new StringBuilder(); char[] buffer = new char[4096]; int count;
-        while ((count = await reader.ReadAsync(buffer, token)) > 0)
-        { if (text.Length + count > 1024 * 1024) throw new SlackFailure(); text.Append(buffer, 0, count); }
-        return text.ToString();
     }
 
     private static string HookCommand(string action) => Quote(Environment.ProcessPath!) + " " +

@@ -115,6 +115,69 @@ public sealed class SlackTests
         Assert.DoesNotContain("request_url", Assets.Manifest);
     }
 
+    [Fact]
+    public async Task SetupCommandsRunInAnIsolatedProfileWithSensitiveLogsDisabled()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        string directory = TemporaryDirectory();
+        try
+        {
+            string active = Path.Combine(directory, "active");
+            string project = Path.Combine(active, "project");
+            Directory.CreateDirectory(project);
+            string executable = Path.Combine(active, "slack");
+            await WriteExecutableAsync(executable, """
+                #!/bin/sh
+                printf 'home=%s\ntmp=%s\ntelemetry=%s\ncwd=%s\n' "$HOME" "$TMPDIR" "$SLACK_DISABLE_TELEMETRY" "$PWD"
+                printf 'args='
+                printf '<%s>' "$@"
+                """);
+
+            var runner = new SlackSetupCommandRunner(active);
+            string output = await runner.RunAsync(["auth", "list"], CancellationToken.None);
+
+            Assert.Contains($"home={active}", output);
+            Assert.Contains($"tmp={active}", output);
+            Assert.Contains("telemetry=true", output);
+            Assert.Contains($"cwd={project}", output);
+            Assert.Contains($"args=<auth><list><--config-dir><{Path.Combine(active, "profile")}><--no-color><--skip-update>", output);
+            foreach (int offset in new[] { -1, 0, 1 })
+            {
+                string date = DateTime.UtcNow.AddDays(offset).ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.Equal("/dev/null", new FileInfo(Path.Combine(active, "profile", "logs", "slack-debug-" + date + ".log")).LinkTarget);
+            }
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Fact]
+    public async Task SetupCommandsRejectFailuresAndUnboundedOutput()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        string directory = TemporaryDirectory();
+        try
+        {
+            string active = Path.Combine(directory, "active");
+            Directory.CreateDirectory(Path.Combine(active, "project"));
+            string executable = Path.Combine(active, "slack");
+            var runner = new SlackSetupCommandRunner(active);
+
+            await WriteExecutableAsync(executable, "#!/bin/sh\nexit 7\n");
+            await Assert.ThrowsAsync<SlackFailure>(() => runner.RunAsync(["auth", "list"], CancellationToken.None));
+
+            await WriteExecutableAsync(executable, "#!/bin/sh\nhead -c 1048577 /dev/zero\n");
+            await Assert.ThrowsAsync<SlackFailure>(() => runner.RunAsync(["auth", "list"], CancellationToken.None));
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    private static async Task WriteExecutableAsync(string path, string contents)
+    {
+        if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException();
+        await File.WriteAllTextAsync(path, contents);
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+    }
+
     private static string TemporaryDirectory()
     {
         string? repo = Environment.CurrentDirectory;
@@ -129,5 +192,7 @@ public sealed class SlackTests
     {
         public Task AcceptAsync(ExternalMessage message, CancellationToken token) => throw new InvalidOperationException();
         public Task<ExternalReply?> ProcessNextAsync(ExternalInstallation installation, CancellationToken token) => throw new InvalidOperationException();
+        public Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token) => throw new InvalidOperationException();
+        public Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token) => throw new InvalidOperationException();
     }
 }

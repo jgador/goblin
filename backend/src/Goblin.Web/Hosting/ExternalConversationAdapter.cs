@@ -23,4 +23,16 @@ internal sealed class ExternalConversationAdapter : IExternalConversations
         using IServiceScope scope = _scopes.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().ProcessNextAsync(installation, token);
     }
+
+    public async Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token)
+    {
+        using IServiceScope scope = _scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().NextQuestionAsync(installation, token);
+    }
+
+    public async Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token)
+    {
+        using IServiceScope scope = _scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().QuestionSentAsync(installation, question, token);
+    }
 }

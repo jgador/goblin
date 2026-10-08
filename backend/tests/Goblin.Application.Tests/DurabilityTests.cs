@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application;
+using Goblin.Application.Connections;
 using Goblin.Application.GitRepositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
@@ -105,6 +106,77 @@ public sealed class DurabilityTests
         Assert.Single((await fixture.Get(reply.WorkId.Value)).Work.Messages);
         await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
         Assert.False(await db.ExternalMessages.AnyAsync(x => x.Body != null && x.Body.Contains(code.Code)));
+    }
+
+    [DatabaseFact]
+    public async Task ExternalQuestionsSurviveRestartAndSlackAnswersContinueTheSameAttempt()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var installation = new ExternalInstallation("question-installation", "T123", "A123", "U123");
+        long workId;
+        long attemptId;
+        ExternalQuestion question;
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
+        {
+            ExternalConversationStore store = scope.ServiceProvider.GetRequiredService<ExternalConversationStore>();
+            ExternalLinkCode code = await store.StartLinkAsync(installation, "owner-session", default);
+            ExternalMessage Message(string eventId, string timestamp, string text) => new()
+            {
+                Installation = installation,
+                EventId = eventId,
+                UserId = "U456",
+                ChannelId = "D123",
+                ThreadId = "10.000001",
+                MessageId = timestamp,
+                Text = text,
+                Direct = true
+            };
+            await store.AcceptAsync(Message("link-event", "9.000001", "link " + code.Code), default);
+            await store.ProcessNextAsync(installation, default);
+            await store.ConfirmLinkAsync(installation, "owner-session", code.Id, default);
+            await store.AcceptAsync(Message("request-event", "10.000001", "Explain the design"), default);
+            workId = (await store.ProcessNextAsync(installation, default))!.WorkId!.Value;
+            WorkView running = await fixture.Until(workId, view => view.Work.Attempts[^1].Status == AttemptStatus.Starting);
+            attemptId = running.Work.Attempts[^1].Id;
+            fixture.Runtime.Observations[attemptId] = new(ObservationKind.Paused, Text: "Which environment?");
+            await fixture.Reconcile(workId, attemptId);
+            question = (await store.NextQuestionAsync(installation, default))!;
+            Assert.Equal("Which environment?", question.Text);
+            Assert.Equal(workId, question.WorkId);
+            Assert.Equal("D123", question.ChannelId);
+            Assert.Equal("10.000001", question.ThreadId);
+            Assert.Null(await store.NextQuestionAsync(new("another-installation", "T123", "A123", "U123"), default));
+        }
+        await fixture.RestartAsync();
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
+        {
+            ExternalConversationStore store = scope.ServiceProvider.GetRequiredService<ExternalConversationStore>();
+            Assert.Equal(question.DecisionId, (await store.NextQuestionAsync(installation, default))!.DecisionId);
+            await store.QuestionSentAsync(installation, question, default);
+            Assert.Null(await store.NextQuestionAsync(installation, default));
+            await store.AcceptAsync(new()
+            {
+                Installation = installation,
+                EventId = "answer-event",
+                UserId = "U456",
+                ChannelId = "D123",
+                ThreadId = "10.000001",
+                MessageId = "10.000002",
+                Text = "Development",
+                Direct = true
+            }, default);
+            Assert.Equal(workId, (await store.ProcessNextAsync(installation, default))!.WorkId);
+            WorkView answered = await fixture.Get(workId);
+            Assert.Equal("Development", answered.Work.Decisions[^1].Answer);
+            Assert.Equal(attemptId, Assert.Single(answered.Work.Attempts).Id);
+            await fixture.Until(workId, view => view.Work.Attempts[^1].TurnNumber == 2 && view.Work.Attempts[^1].Status == AttemptStatus.Starting);
+            fixture.Runtime.Observations[attemptId] = new(ObservationKind.Paused, Text: "Which region?") { TurnNumber = 2 };
+            await fixture.Reconcile(workId, attemptId);
+            Assert.Equal("Which region?", (await store.NextQuestionAsync(installation, default))!.Text);
+            ExternalIdentityView identity = Assert.Single(await store.IdentitiesAsync(installation, default));
+            await store.RevokeAsync(installation, identity.Id, default);
+            Assert.Null(await store.NextQuestionAsync(installation, default));
+        }
     }
 
     [DatabaseFact]
@@ -391,7 +463,8 @@ public sealed class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         var source = new CatalogSource();
         IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
-        var catalogs = new ModelCatalogStore(factory, source);
+        var catalogs = new ModelCatalogStore(factory, source,
+            fixture.Host.Services.GetRequiredService<ModelCatalogRefreshCoordinator>());
         await catalogs.GetAsync(1, 3, null);
         ModelCatalogView first = await UntilCatalog(catalogs, x => !x.Refreshing && x.Models.Length == 3);
         Assert.True(first.HasMore);
@@ -432,10 +505,79 @@ public sealed class DurabilityTests
         Assert.Equal(2, source.Calls); // Failure cooldown prevents another upstream request.
 
         using IServiceScope scope = fixture.Host.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(1, Goblin.Contracts.ConnectionAvailability.Available, false,
-            observeAccount: true, accountSignature: "new-account");
+        await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAccountAsync(1, Goblin.Contracts.ConnectionAvailability.Available, "new-account");
         ModelCatalogView changed = await catalogs.GetAsync(1, 3, null);
         Assert.Empty(changed.Models); // A different account never sees the old catalog.
+    }
+
+    [DatabaseFact]
+    public async Task ModelDiscoveryBelongsToTheHostAndShutdownPreservesTheSavedCatalog()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var source = new CatalogSource();
+        IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
+        var catalogs = new ModelCatalogStore(factory, source,
+            fixture.Host.Services.GetRequiredService<ModelCatalogRefreshCoordinator>());
+        await catalogs.GetAsync(1, 3, null);
+        ModelCatalogView first = await UntilCatalog(catalogs, x => !x.Refreshing && x.Models.Length == 3);
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.Stamp = "v2";
+        source.Discover = async token =>
+        {
+            started.SetResult(token);
+            try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+            finally { cancelled.SetResult(); }
+            return [];
+        };
+        using var request = new CancellationTokenSource();
+        await catalogs.GetAsync(1, 3, null, request.Token);
+        CancellationToken discovery = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        request.Cancel();
+        Assert.True(discovery.CanBeCanceled);
+        Assert.False(discovery.IsCancellationRequested);
+        for (int i = 0; i < 10; i++) catalogs.ScheduleRefresh(1, force: true);
+        Assert.Equal(2, source.Calls);
+
+        await fixture.Host.StopAsync();
+        Assert.True(discovery.IsCancellationRequested);
+        Assert.True(cancelled.Task.IsCompletedSuccessfully);
+        await using GoblinDbContext db = await factory.CreateDbContextAsync();
+        Persistence.Entities.ConnectionModelCatalog saved = await db.ConnectionModelCatalogs.SingleAsync(x => x.ConnectionId == 1);
+        Assert.Equal("v1", saved.ExecutableStamp);
+        Assert.False(saved.RefreshFailed);
+        Assert.Null(saved.RetryAfter);
+        Assert.Equal(first.FetchedAt, new DateTimeOffset(saved.FetchedAt!.Value, TimeSpan.Zero));
+        Assert.Equal(12, ModelCatalogPolicy.Read(saved.Catalog).Length);
+        catalogs.ScheduleRefresh(1, force: true);
+        Assert.False((await catalogs.GetAsync(1, 3, null)).Refreshing);
+        Assert.Equal(2, source.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task ModelRefreshDiscardsAResponseFromAnAccountThatChangedDuringDiscovery()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<RuntimeModel[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new CatalogSource
+        {
+            Discover = token => { started.SetResult(); return response.Task.WaitAsync(token); }
+        };
+        IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
+        ModelCatalogRefreshCoordinator refreshes = fixture.Host.Services.GetRequiredService<ModelCatalogRefreshCoordinator>();
+        var catalogs = new ModelCatalogStore(factory, source, refreshes);
+        await catalogs.GetAsync(1, 3, null);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAccountAsync(1,
+                ConnectionAvailability.Disconnected, "changed-account");
+        response.SetResult([new("old-id", "old-model", "Old account model", "medium", ["medium"], true)]);
+        for (int i = 0; i < 100 && refreshes.IsRefreshing(1); i++) await Task.Delay(25);
+        Assert.False(refreshes.IsRefreshing(1));
+        await using GoblinDbContext db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.ConnectionModelCatalogs.ToArrayAsync());
+        Assert.Empty((await catalogs.GetAsync(1, 3, null)).Models);
     }
 
     private static async Task<ModelCatalogView> UntilCatalog(ModelCatalogStore catalogs, Func<ModelCatalogView, bool> ready)
@@ -456,6 +598,7 @@ public sealed class DurabilityTests
         public string Runtime => "codex";
         public string Stamp { get; set; } = "v1";
         public bool Fail { get; set; }
+        public Func<CancellationToken, Task<RuntimeModel[]>>? Discover { get; set; }
         public int Calls => Volatile.Read(ref _calls);
 
         public string ExecutableStamp() => Stamp;
@@ -463,6 +606,7 @@ public sealed class DurabilityTests
         public Task<RuntimeModel[]> ListAsync(CancellationToken token)
         {
             Interlocked.Increment(ref _calls);
+            if (Discover is not null) return Discover(token);
             if (Fail) throw new InvalidOperationException("private upstream failure");
             return Task.FromResult(Enumerable.Range(0, 12).Select(i => new RuntimeModel(
                 $"id-{i}", $"gpt-test-{i}", $"Test model {i}", "medium", ["low", "medium", "high"], i == 0)).ToArray());
@@ -655,9 +799,11 @@ public sealed class DurabilityTests
         Assert.Equal(0, fixture.Remote.CheckpointPreparations);
         IDbContextFactory<GoblinDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
         var store = new WorkspaceCheckpoints(factory);
-        WorkspaceCheckpoint saved = await store.SaveAsync(attempt, 1, new string('a', 40), broker, default);
-        Assert.Equal(saved.Id, (await store.LatestAsync(id, "owner/repo", default))!.Id);
-        Assert.Equal(saved.Id, (await store.SaveAsync(attempt, 1, new string('a', 40), broker, default)).Id);
+        WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
+        WorkspaceCheckpoint saved = await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default);
+        AssertCheckpoint(saved, (await store.LatestAsync(id, "owner/repo", default))!);
+        AssertCheckpoint(saved, Assert.Single(await store.ListAsync(id, default)));
+        Assert.Equal(saved.Id, (await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default)).Id);
         await using (GoblinDbContext db = await factory.CreateDbContextAsync())
             Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='workspace_checkpoints' AND data_type='bytea'").SingleAsync());
         Assert.True(await store.VerifiedAsync(saved.Id, attempt, 1, default));
@@ -665,12 +811,93 @@ public sealed class DurabilityTests
         await fixture.RestartAsync();
         using IServiceScope restartedScope = fixture.Host.Services.CreateScope();
         var reopened = new WorkspaceCheckpoints(restartedScope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
-        Assert.Equal(saved.Id, (await reopened.LatestAsync(id, "owner/repo", default))!.Id);
+        AssertCheckpoint(saved, (await reopened.LatestAsync(id, "owner/repo", default))!);
         Assert.Equal(work.Work.Workspace, (await fixture.Get(id)).Work.Workspace);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
         await fixture.Apply(WorkCommands.Approve(NextId(), id, work.Version, attempt));
+    }
+
+    private static void AssertCheckpoint(WorkspaceCheckpoint expected, WorkspaceCheckpoint actual)
+    {
+        Assert.Equal((expected.Id, expected.WorkId, expected.AttemptId, expected.TurnNumber, expected.WorkspaceNumber,
+            expected.GitRepository, expected.Branch, expected.CommitSha),
+            (actual.Id, actual.WorkId, actual.AttemptId, actual.TurnNumber, actual.WorkspaceNumber,
+                actual.GitRepository, actual.Branch, actual.CommitSha));
+        // PostgreSQL timestamps retain microseconds; the immediate save response has .NET ticks.
+        Assert.Equal(expected.CreatedAt.UtcTicks / 10, actual.CreatedAt.UtcTicks / 10);
+    }
+
+    [DatabaseFact]
+    public async Task CheckpointCoordinatorRejectsUnconfirmedCommitsAndCoalescesIdenticalSaves()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo");
+        long attempt = work.Work.Attempts[^1].Id;
+        WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
+        WorkspaceCheckpoints store = fixture.Host.Services.GetRequiredService<WorkspaceCheckpoints>();
+        ApplicationFailure invalid = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, "invalid", default));
+        Assert.Equal("workspace_changed", invalid.Code);
+        ApplicationFailure unconfirmed = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, new string('a', 40), default));
+        Assert.Equal("workspace_checkpoint_unconfirmed", unconfirmed.Code);
+        ApplicationFailure wrongTurn = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 2, new string('a', 40), default));
+        Assert.Equal("workspace_changed", wrongTurn.Code);
+        Assert.Empty(await store.ListAsync(work.Work.Id, default));
+
+        WorkspaceCheckpoint saved = await fixture.SaveCheckpoint(work.Work);
+        WorkspaceCheckpoint[] duplicates = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            checkpoints.SaveAsync(attempt, 1, saved.CommitSha, default)));
+        Assert.All(duplicates, x => AssertCheckpoint(saved, x));
+        AssertCheckpoint(saved, Assert.Single(await store.ListAsync(work.Work.Id, default)));
+        Assert.Equal(0, fixture.Remote.Calls);
+        Assert.Equal(0, fixture.Remote.ReconciliationCalls);
+
+        // A different verified commit for the same turn must not replace its checkpoint.
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        fixture.Remote.InspectedCommit = new string('b', 40);
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Checkpoint, new MemoryStream([4, 5, 6]), default);
+        for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, operation, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(25);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
+        ApplicationFailure changed = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, fixture.Remote.InspectedCommit, default));
+        Assert.Equal("workspace_changed", changed.Code);
+        AssertCheckpoint(saved, Assert.Single(await store.ListAsync(work.Work.Id, default)));
+    }
+
+    [DatabaseFact]
+    public async Task PublishedCheckpointRequiresConfirmationAndRechecksOwnershipAfterRemoteVerification()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo", "Publish repository");
+        long attempt = work.Work.Attempts[^1].Id;
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
+        WorkspaceCheckpoints store = fixture.Host.Services.GetRequiredService<WorkspaceCheckpoints>();
+        await broker.PrepareAsync(work.Work, default);
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+        for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, operation, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(25);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
+        ApplicationFailure unconfirmed = await Assert.ThrowsAsync<ApplicationFailure>(() => checkpoints.SaveAsync(attempt, 1, fixture.Remote.InspectedCommit, default));
+        Assert.Equal("workspace_checkpoint_unconfirmed", unconfirmed.Code);
+        Assert.Empty(await store.ListAsync(work.Work.Id, default));
+
+        var verifying = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var confirmed = new TaskCompletionSource<GitRepositoryOperationResult?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Remote.Reconcile = token => { verifying.SetResult(); return confirmed.Task.WaitAsync(token); };
+        Task<WorkspaceCheckpoint> pending = checkpoints.SaveAsync(attempt, 1, fixture.Remote.InspectedCommit, default);
+        await verifying.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        WorkView cancelled = await fixture.Apply(new(NextId(), work.Work.Id, WorkAction.Cancel) { ExpectedVersion = work.Version })
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(AttemptStatus.CancellationRequested, cancelled.Work.Attempts[^1].Status);
+        confirmed.SetResult(new(fixture.Remote.InspectedCommit, "https://github.com/owner/repo/tree/verified"));
+        ApplicationFailure changed = await Assert.ThrowsAsync<ApplicationFailure>(() => pending);
+        Assert.Equal("workspace_changed", changed.Code);
+        Assert.Empty(await store.ListAsync(work.Work.Id, default));
+        Assert.Equal(1, fixture.Remote.Calls);
     }
 
     [DatabaseFact]
@@ -776,6 +1003,64 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
+    public async Task RepositoryAccessPreservesOperationApprovalAndSetupProvenanceChecks()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        fixture.Runtime.GitRepositoryExecution = true;
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
+        await settings.ObserveAsync(new("first", "42", "owner"), GitHubConnectionStatus.Connected);
+        await settings.SetGitRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
+        WorkSnapshot work = (await fixture.StartGitRepositoryWork("owner/repo")).Work;
+        AttemptSnapshot attempt = work.Attempts[^1];
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        await GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id, default);
+        await GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber, default);
+
+        async Task RejectedByBoth()
+        {
+            Assert.Equal("repository_operation_unavailable", (await Assert.ThrowsAsync<ApplicationFailure>(() =>
+                GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id, default))).Code);
+            Assert.Equal("repository_setup_unavailable", (await Assert.ThrowsAsync<ApplicationFailure>(() =>
+                GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber, default))).Code);
+        }
+        foreach (string availability in new[] { "Changing", "Disconnected", "Unavailable" })
+        {
+            await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, availability));
+            await RejectedByBoth();
+        }
+        await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, "Connected").SetProperty(x => x.Generation, "changed"));
+        await RejectedByBoth();
+        await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Generation, "first").SetProperty(x => x.AccountId, "99"));
+        await RejectedByBoth();
+        await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.AccountId, "42"));
+        await db.GithubRepositories.Where(x => x.Id == 22).ExecuteUpdateAsync(s => s.SetProperty(x => x.Enabled, false));
+        await RejectedByBoth();
+        await db.GithubRepositories.Where(x => x.Id == 22).ExecuteUpdateAsync(s => s.SetProperty(x => x.Enabled, true).SetProperty(x => x.Name, "owner/renamed"));
+        await GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id, default);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber, default));
+        await db.GithubRepositories.Where(x => x.Id == 22).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, "owner/repo"));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id + 1, default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber + 1, default));
+
+        var unapproved = new WorkSnapshot { Attempts = work.Attempts };
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, unapproved, attempt.Id, default));
+        await GitRepositoryAccess.RequireSetupAsync(db, unapproved, attempt.Id, attempt.TurnNumber, default);
+        GitRepositoryChange repository = attempt.Target.GitRepository!;
+        var legacy = new WorkSnapshot
+        {
+            Attempts = [new AttemptSnapshot
+            {
+                Id = attempt.Id,
+                Target = new(attempt.Target.Runtime, attempt.Target.ConnectionId, attempt.Target.RequestedModel,
+                    new(repository.GitRepository, repository.GitAuthorName, repository.GitAuthorEmail,
+                        repository.Grant! with { PolicyVersion = 1 }), attempt.Target.RequestedEffort)
+            }]
+        };
+        await GitRepositoryAccess.RequireOperationAsync(db, legacy, attempt.Id, default);
+    }
+
+    [DatabaseFact]
     public async Task GitRepositoryPublicationIsDurableDeduplicatedAndReconciledWithoutReplay()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
@@ -804,8 +1089,8 @@ public sealed class DurabilityTests
         await Assert.ThrowsAsync<ApplicationFailure>(() => broker.AuthorizeAsync(attempt, "00", true, default));
         long operation = await broker.ReserveOperationIdAsync(attempt, default);
         fixture.Remote.Fail = true;
-        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
-        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default)));
         for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, operation, default)).State is GitRepositoryOperationState.Queued or GitRepositoryOperationState.Running; i++) await Task.Delay(50);
         if ((await broker.StatusAsync(attempt, operation, default)).State == GitRepositoryOperationState.Queued)
         {
@@ -816,12 +1101,109 @@ public sealed class DurabilityTests
         Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
         Assert.Equal(1, fixture.Remote.Calls);
         Assert.Equal(ObservationKind.Uncertain, (await broker.ObserveAsync(w.Work, default))!.Kind);
-        await broker.ExecuteAsync(operation, default);
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => broker.ExecuteAsync(operation, default)));
         Assert.Equal(1, fixture.Remote.Calls);
         fixture.Remote.Reconciled = true;
         Assert.Null(await broker.ObserveAsync(w.Work, default));
         Assert.Equal(Goblin.Contracts.GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
         await Assert.ThrowsAsync<ApplicationFailure>(() => broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([4]), default));
+        Assert.Equal(1, fixture.Remote.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task RejectedRepositoryOperationRollsBackDispatchAndDoesNotLeakIntoTheNextUpload()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo");
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        await broker.PrepareAsync(work.Work, default);
+        long attempt = work.Work.Attempts[^1].Id;
+        long rejected = await broker.ReserveOperationIdAsync(attempt, default);
+        await fixture.RejectId("repository_operations", rejected);
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            broker.EnqueueAsync(attempt, rejected, GitRepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default));
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        Assert.False(await db.GitRepositoryOperations.AnyAsync(x => x.Id == rejected));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<int>("""
+            SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelopes
+            WHERE message_type LIKE '%ExecuteGitRepositoryOperation%'
+            """).SingleAsync());
+        Assert.Equal(0, fixture.Remote.Calls);
+        long accepted = await broker.ReserveOperationIdAsync(attempt, default);
+        await broker.EnqueueAsync(attempt, accepted, GitRepositoryOperationKind.Checkpoint, new MemoryStream([4, 5, 6]), default);
+        for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, accepted, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(25);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, accepted, default)).State);
+        Assert.Equal(0, fixture.Remote.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task CancellationDuringRepositoryPublicationRetainsUncertaintyUntilReconciled()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo", "Publish repository");
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        await broker.PrepareAsync(work.Work, default);
+        long attempt = work.Work.Attempts[^1].Id;
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Remote.Execute = async token =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            throw new InvalidOperationException("Publication was expected to be cancelled");
+        };
+        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => broker.StopAsync(work.Work, default));
+        Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
+        await broker.ExecuteAsync(operation, default);
+        Assert.Equal(1, fixture.Remote.Calls);
+        fixture.Remote.Reconciled = true;
+        await broker.StopAsync(work.Work, default);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
+        Assert.Equal(1, fixture.Remote.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task RepositoryPublicationOutageEvidenceSurvivesRestartWithoutReplayingTheRemoteCall()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo", "Publish repository");
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        await broker.PrepareAsync(work.Work, default);
+        long attempt = work.Work.Attempts[^1].Id;
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        var unavailable = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Remote.Execute = async _ =>
+        {
+            await fixture.SetDatabaseAvailable(false);
+            unavailable.SetResult();
+            throw new IOException("Lost publication response");
+        };
+        string evidence = Path.Combine(fixture.Host.Services.GetRequiredService<GitRepositoryBrokerOptions>().Directory,
+            operation.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed");
+        try
+        {
+            await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+            await unavailable.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            for (int i = 0; i < 200 && !File.Exists(evidence); i++) await Task.Delay(25);
+            Assert.True(File.Exists(evidence));
+        }
+        finally { await fixture.SetDatabaseAvailable(true); }
+        await fixture.RestartAsync();
+        broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        Assert.Equal(ObservationKind.Uncertain, (await broker.ObserveAsync(work.Work, default))!.Kind);
+        Assert.False(File.Exists(evidence));
+        Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
+        await broker.ExecuteAsync(operation, default);
+        Assert.Equal(1, fixture.Remote.Calls);
+        fixture.Remote.Reconciled = true;
+        Assert.Null(await broker.ObserveAsync(work.Work, default));
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
         Assert.Equal(1, fixture.Remote.Calls);
     }
 
@@ -916,7 +1298,7 @@ public sealed class DurabilityTests
         WorkView uncertain = await fixture.Get(id);
         await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(WorkCommands.Retry(NextId(), id, uncertain.Version)));
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
-            await Assert.ThrowsAsync<ApplicationFailure>(() => scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Changing, true));
+            await Assert.ThrowsAsync<ApplicationFailure>(() => scope.ServiceProvider.GetRequiredService<ConnectionStore>().BeginChangeAsync(ConnectionStore.DefaultConnectionId));
         await fixture.RestartAsync();
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Stopped);
@@ -1023,6 +1405,61 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
+    public async Task ConversationAndWorkCommandsPreserveSharedHistoryAcrossRestart()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConversationStore conversations = scope.ServiceProvider.GetRequiredService<ConversationStore>();
+        long conversationId = NextId(), workId = NextId();
+        await conversations.ApplyAsync(new(conversationId, NextId(), "Track shared history"));
+        await conversations.ApplyAsync(new(conversationId, NextId(), "Context before tracking"));
+        var track = new ConversationCommand(conversationId, NextId(), null, workId);
+        await conversations.ApplyAsync(track);
+        await conversations.ApplyAsync(track);
+        WorkView tracked = await fixture.Get(workId);
+        Assert.Equal(1, tracked.Version);
+        Assert.Equal("Context before tracking", Assert.Single(tracked.Work.Messages).Text);
+
+        WorkView commandContext = await fixture.Apply(new(NextId(), workId, WorkAction.AddContext)
+        {
+            ExpectedVersion = tracked.Version,
+            Text = "Context from a Work command"
+        });
+        await fixture.Apply(WorkCommands.Execute(NextId(), workId, commandContext.Version));
+        WorkView running = await fixture.Until(workId, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        AttemptSnapshot original = Assert.Single(running.Work.Attempts);
+        var message = new ConversationCommand(conversationId, NextId(), "Context during execution");
+        await conversations.ApplyAsync(message);
+        await conversations.ApplyAsync(message);
+        WorkView updated = await fixture.Get(workId);
+        Assert.Equal(running.Version + 1, updated.Version);
+        Assert.Equal(running.Work.Status, updated.Work.Status);
+        Assert.Equal(JsonSerializer.Serialize(original, ContractJson.Options),
+            JsonSerializer.Serialize(Assert.Single(updated.Work.Attempts), ContractJson.Options));
+        Assert.Equal(new[] { "Context before tracking", "Context from a Work command", "Context during execution" },
+            updated.Work.Messages.Select(x => x.Text));
+
+        await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
+        {
+            Persistence.Entities.WorkItem row = await db.WorkItems.AsNoTracking().SingleAsync(x => x.Id == workId);
+            Persistence.Entities.ExecutionAttempt attempt = await db.ExecutionAttempts.AsNoTracking().SingleAsync(x => x.Id == original.Id);
+            Assert.Equal(updated.Version, row.Version);
+            Assert.Equal(updated.Work.Status.ToString(), row.Status);
+            Assert.Equal(updated.Work.AgentId, row.AgentId);
+            Assert.Equal(original.Status.ToString(), attempt.Status);
+            Assert.Equal(original.OwnerId, attempt.OwnerId);
+            Assert.Equal(original.EnvironmentReference, attempt.EnvironmentReference);
+        }
+
+        await fixture.RestartAsync();
+        WorkView recovered = await fixture.Get(workId);
+        Assert.Equal(updated.Version, recovered.Version);
+        Assert.Equal(JsonSerializer.Serialize(updated.Work, ContractJson.Options),
+            JsonSerializer.Serialize(recovered.Work, ContractJson.Options));
+        Assert.Equal(1, fixture.Runtime.Starts[original.Id]);
+    }
+
+    [DatabaseFact]
     public async Task CancellationWaitsForStoppingEvidenceAndFailureIsNeverRetried()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
@@ -1047,7 +1484,7 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Disconnected, false);
+            await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Disconnected);
         long id = NextId();
         WorkView w = await fixture.Apply(WorkCommands.Create(NextId(), id, "Unavailable connection"));
         w = await fixture.Apply(new(NextId(), id, WorkAction.Assign)
@@ -1092,9 +1529,9 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         using IServiceScope scope = fixture.Host.Services.CreateScope();
-        WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
-        await store.BeginVerificationAsync(WorkStore.DefaultAgentId);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
+        ConnectionStore store = scope.ServiceProvider.GetRequiredService<ConnectionStore>();
+        await store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId));
         long id = NextId();
         WorkView work = await fixture.Apply(WorkCommands.Create(NextId(), id, "Wait for verification"));
         work = await fixture.Apply(new(NextId(), id, WorkAction.Assign)
@@ -1108,13 +1545,68 @@ public sealed class DurabilityTests
         await coordinator.DispatchAsync(new(id, attempt), CancellationToken.None);
         Assert.Empty(fixture.Runtime.Starts);
         Assert.Equal(WorkStatus.Queued, (await fixture.Get(id)).Work.Status);
-        await store.SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Changing, requireIdle: true);
-        await store.EndVerificationAsync(WorkStore.DefaultAgentId, true);
-        Assert.Equal(Goblin.Contracts.ConnectionAvailability.Changing, (await store.ConnectionsAsync()).Single().Availability);
-        await store.SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Available, false, completeChange: true);
+        await store.BeginChangeAsync(ConnectionStore.DefaultConnectionId);
+        await store.EndVerificationAsync(ConnectionStore.DefaultConnectionId, true);
+        Assert.Equal(Goblin.Contracts.ConnectionAvailability.Changing, (await store.ListAsync()).Single().Availability);
+        await store.CompleteChangeAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Available, null);
         await coordinator.DispatchAsync(new(id, attempt), CancellationToken.None);
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId));
+    }
+
+    [DatabaseFact]
+    public async Task ConnectionObservationsPreserveReservationsUntilRestartRecovery()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConnectionStore store = scope.ServiceProvider.GetRequiredService<ConnectionStore>();
+        long id = ConnectionStore.DefaultConnectionId;
+        await store.BeginVerificationAsync(id);
+        Assert.False(await store.ObserveAccountAsync(id, ConnectionAvailability.Disconnected, "other-account"));
+        await store.ObserveAvailabilityAsync(id, ConnectionAvailability.Unavailable);
+        Assert.Equal(ConnectionAvailability.Verifying, (await store.ListAsync()).Single().Availability);
+        await store.BeginChangeAsync(id);
+        Assert.False(await store.ObserveAccountAsync(id, ConnectionAvailability.Available, "other-account"));
+        await store.ObserveAvailabilityAsync(id, ConnectionAvailability.Unavailable);
+        await store.EndVerificationAsync(id, true);
+        Assert.Equal(ConnectionAvailability.Changing, (await store.ListAsync()).Single().Availability);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginChangeAsync(id));
+        await fixture.RestartAsync();
+        using IServiceScope recovered = fixture.Host.Services.CreateScope();
+        Assert.Equal(ConnectionAvailability.Unavailable,
+            (await recovered.ServiceProvider.GetRequiredService<ConnectionStore>().ListAsync()).Single().Availability);
+    }
+
+    [DatabaseFact]
+    public async Task ConnectionAccountChangesInvalidateCatalogsWithoutChangingWorkHistory()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        WorkView work = await fixture.Apply(WorkCommands.Create(NextId(), NextId(), "Preserve durable history"));
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConnectionStore store = scope.ServiceProvider.GetRequiredService<ConnectionStore>();
+        long id = ConnectionStore.DefaultConnectionId;
+        Assert.True(await store.ObserveAccountAsync(id, ConnectionAvailability.Available, "first-account"));
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        long generation = await db.Connections.Where(x => x.Id == id).Select(x => x.AuthGeneration).SingleAsync();
+        db.ConnectionModelCatalogs.Add(new()
+        {
+            ConnectionId = id,
+            AuthGeneration = generation,
+            Catalog = "[]",
+            ExecutableStamp = "test"
+        });
+        await db.SaveChangesAsync();
+        Assert.False(await store.ObserveAccountAsync(id, ConnectionAvailability.Available, "first-account"));
+        await store.ObserveAvailabilityAsync(id, ConnectionAvailability.Unavailable);
+        Assert.True(await db.ConnectionModelCatalogs.AnyAsync(x => x.ConnectionId == id));
+        await store.BeginChangeAsync(id);
+        // Completing an explicit change invalidates discovery even if the
+        // provider presents the same account signature again.
+        Assert.True(await store.CompleteChangeAsync(id, ConnectionAvailability.Available, "first-account"));
+        Assert.False(await db.ConnectionModelCatalogs.AnyAsync(x => x.ConnectionId == id));
+        Assert.Equal(generation + 1, await db.Connections.Where(x => x.Id == id).Select(x => x.AuthGeneration).SingleAsync());
+        Assert.Equal(work.Version, (await fixture.Get(work.Work.Id)).Version);
+        Assert.Equal(work.Work.History, (await fixture.Get(work.Work.Id)).Work.History);
     }
 
     [DatabaseFact]
@@ -1139,6 +1631,10 @@ public sealed class DurabilityTests
     {
         public bool Fail { get; set; }
         public bool Reconciled { get; set; }
+        public Func<CancellationToken, Task<GitRepositoryOperationResult>>? Execute { get; set; }
+        public Func<CancellationToken, Task<GitRepositoryOperationResult?>>? Reconcile { get; set; }
+        public string InspectedCommit { get; set; } = new string('a', 40);
+        public int ReconciliationCalls { get; private set; }
         public int Calls { get; private set; }
         public int CheckpointPreparations { get; private set; }
 
@@ -1147,17 +1643,22 @@ public sealed class DurabilityTests
 
         public Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? checkpoint, CancellationToken token) { Directory.CreateDirectory(directory); return Task.CompletedTask; }
 
-        public Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token) => Task.FromResult(new string('a', 40));
+        public Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token) => Task.FromResult(InspectedCommit);
 
         public Task<GitRepositoryOperationResult> ExecuteAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)
         {
             Calls++;
+            if (Execute is not null) return Execute(token);
             if (Fail) throw new IOException("Lost upstream response");
             return Task.FromResult(new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch));
         }
 
-        public Task<GitRepositoryOperationResult?> ReconcileAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token) =>
-            Task.FromResult(Reconciled ? new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch) : null);
+        public Task<GitRepositoryOperationResult?> ReconcileAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)
+        {
+            ReconciliationCalls++;
+            return Reconcile is not null ? Reconcile(token) :
+                Task.FromResult(Reconciled ? new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch) : null);
+        }
     }
 
     private sealed class Runtime : IExecutionHost
@@ -1239,10 +1740,13 @@ public sealed class DurabilityTests
                     """, db).ExecuteNonQueryAsync();
             }
             await SqlMigrations.ApplyAsync(admin.ConnectionString, Path.Combine(AppContext.BaseDirectory, "migrations"), TextWriter.Null);
-            var fixture = new Fixture(app.ConnectionString, name, Path.Combine(Path.GetTempPath(), name), catalog);
+            string? repo = Environment.CurrentDirectory;
+            while (repo is not null && !Directory.Exists(Path.Combine(repo, ".git"))) repo = Path.GetDirectoryName(repo);
+            if (repo is null) throw new InvalidOperationException("Repository directory not found");
+            var fixture = new Fixture(app.ConnectionString, name, Path.Combine(repo, ".artifacts", "durability-tests", name), catalog);
             await fixture.StartAsync();
             using IServiceScope scope = fixture.Host.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Available, false);
+            await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Available);
             return fixture;
         }
 
@@ -1252,6 +1756,8 @@ public sealed class DurabilityTests
             builder.Logging.ClearProviders();
             builder.Services.AddGoblinPersistence(_app);
             builder.Services.AddWorkApplication();
+            builder.Services.AddSingleton<IModelCatalogSource, CatalogSource>();
+            builder.Services.AddModelCatalog();
             if (_catalog is not null) builder.Services.AddSingleton(_catalog);
             builder.Services.AddSingleton<IExecutionHost>(Runtime);
             builder.Services.AddSingleton(new WorkspaceLimits());
@@ -1328,10 +1834,13 @@ public sealed class DurabilityTests
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
 
-        public async Task<WorkView> StartGitRepositoryWork(string gitRepository)
+        public Task<WorkView> StartGitRepositoryWork(string gitRepository) =>
+            StartGitRepositoryWork(gitRepository, "Repository setup memory");
+
+        public async Task<WorkView> StartGitRepositoryWork(string gitRepository, string objective)
         {
             long id = NextId();
-            WorkView work = await Apply(WorkCommands.Create(NextId(), id, "Repository setup memory"));
+            WorkView work = await Apply(WorkCommands.Create(NextId(), id, objective));
             work = await Apply(new(NextId(), id, WorkAction.Assign)
             {
                 ExpectedVersion = work.Version,
@@ -1354,9 +1863,8 @@ public sealed class DurabilityTests
             await broker.EnqueueAsync(attempt, publication, work.Attempts[^1].Target.GitRepository!.Grant!.AllowPush ? GitRepositoryOperationKind.Publish : GitRepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default);
             for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, publication, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(50);
             Assert.Equal(Goblin.Contracts.GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, publication, default)).State);
-            using IServiceScope scope = Host.Services.CreateScope();
-            var store = new WorkspaceCheckpoints(scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
-            return await store.SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), broker, default);
+            return await Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>()
+                .SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), default);
         }
 
         public async Task<WorkView> Until(long id, Func<WorkView, bool> ready)

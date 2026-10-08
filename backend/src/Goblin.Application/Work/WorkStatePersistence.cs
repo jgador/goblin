@@ -1,0 +1,35 @@
+using System;
+using System.Text.Json;
+using Goblin.Contracts;
+using Goblin.Core.Work;
+using Row = Goblin.Persistence.Entities.WorkItem;
+
+namespace Goblin.Application.Work;
+
+// Maps the core snapshot and its durable summary together. Callers own tracking,
+// attempt records, saving, and the transaction that commits related changes.
+internal static class WorkStatePersistence
+{
+    internal static Row Create(WorkItem work, DateTimeOffset now)
+    {
+        var row = new Row { Id = work.Id, Objective = work.Objective, CreatedAt = now.UtcDateTime };
+        Update(row, work, now);
+        return row;
+    }
+
+    internal static void Update(Row row, WorkItem work, DateTimeOffset now)
+    {
+        row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
+        row.Status = work.Status.ToString();
+        row.AgentId = work.AgentId;
+        row.Version++;
+        row.UpdatedAt = now.UtcDateTime;
+    }
+
+    internal static WorkItem Restore(Row row) => row.State is null
+        ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
+        : Restore(row.State);
+
+    internal static WorkItem Restore(string state) =>
+        WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(state, ContractJson.Options)!);
+}

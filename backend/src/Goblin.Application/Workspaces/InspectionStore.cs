@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Runtime;
 using Goblin.Application.Work;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
@@ -73,17 +74,17 @@ public sealed class InspectionStore
     {
         if (id <= 0) throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession? row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id, token);
         if (row is not null)
         {
             if (row.WorkId != workId || row.AttemptId != attemptId) throw new ApplicationFailure("command_id_reused");
             return View(row);
         }
-        if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == workId && (x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention)), token))
+        if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions).AnyAsync(x => x.WorkId == workId, token))
             throw new ApplicationFailure("workspace_session_exists");
         Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
-        WorkSnapshot work = WorkStore.Restore(workRow).Snapshot();
+        WorkSnapshot work = WorkStatePersistence.Restore(workRow).Snapshot();
         AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.GitRepository is not null) ?? throw new ApplicationFailure("workspace_not_found");
         WorkWorkspace workspace = work.Workspace ?? throw new ApplicationFailure("workspace_not_found");
         WorkspaceSessionRules.RequireOpenable(attempt.Status);
@@ -112,7 +113,7 @@ public sealed class InspectionStore
     public async Task StopAsync(long workId, long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleOrDefaultAsync(x => x.Id == id && x.WorkId == workId, token) ?? throw new ApplicationFailure("workspace_not_found");
         if (row.State == nameof(InspectionState.Stopped)) return;
         row.State = nameof(InspectionState.Stopping); row.UpdatedAt = DateTime.UtcNow;
@@ -124,14 +125,13 @@ public sealed class InspectionStore
     public async Task<InspectionAllocation?> ClaimAsync(long id, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
         if (row.State != nameof(InspectionState.Queued)) return null;
-        if (await db.ExecutionAttempts.AnyAsync(x => x.WorkId == row.WorkId && x.GithubConnectionId != null &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token)) return null;
-        int occupied = await db.ExecutionAttempts.CountAsync(x => x.GithubConnectionId != null &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token);
-        occupied += await db.WorkspaceSessions.CountAsync(x => x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention), token);
+        if (await ResourceReservations.Attempts(db.ExecutionAttempts)
+            .AnyAsync(x => x.WorkId == row.WorkId && x.GithubConnectionId != null, token)) return null;
+        int occupied = await ResourceReservations.CountSandboxesAsync(db,
+            ResourceReservations.Attempts(db.ExecutionAttempts), token);
         if (occupied >= _limits.MaxSandboxes) return null;
         row.State = nameof(InspectionState.Starting); row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
@@ -155,7 +155,7 @@ public sealed class InspectionStore
     public async Task ObserveAsync(long id, InspectionObservation observed, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        await using IDbContextTransaction tx = await WorkStore.BeginAsync(db, token);
+        await using IDbContextTransaction tx = await ApplicationTransaction.BeginAsync(db, token);
         WorkspaceSession row = await db.WorkspaceSessions.SingleAsync(x => x.Id == id, token);
         row.State = WorkspaceSessionRules.Observe(ContractValue.Parse<InspectionState>(row.State), observed).ToString(); row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token); await tx.CommitAsync(token);
@@ -164,7 +164,7 @@ public sealed class InspectionStore
     public async Task<InspectionView[]> PendingAsync(CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        return await db.WorkspaceSessions.AsNoTracking().Where(x => x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping))
+        return await WorkspaceSessionQueries.RequiringObservation(db.WorkspaceSessions.AsNoTracking())
             .Select(x => new InspectionView(x.Id, x.WorkId, x.AttemptId, ContractValue.Parse<InspectionState>(x.State))).ToArrayAsync(token);
     }
 

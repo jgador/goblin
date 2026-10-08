@@ -32,8 +32,8 @@ public sealed class ContractValueTests
     {
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<VerificationState>(json));
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<GitHubConnectionStatus>(json));
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<WorkAction>(json, WorkStore.Json));
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<WorkStatus>(json, WorkStore.Json));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<WorkAction>(json, ContractJson.Options));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<WorkStatus>(json, ContractJson.Options));
     }
 
     [Theory]

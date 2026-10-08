@@ -1,12 +1,9 @@
 using System;
 using System.Linq;
-using System.Reflection;
-using Goblin.Database;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Goblin.Persistence.Tests;
@@ -34,25 +31,5 @@ public sealed class GitRepositoryMappingTests
         Assert.Contains("repository_id", sql, StringComparison.Ordinal);
         Assert.Contains("github_repositories", sql, StringComparison.Ordinal);
         Assert.Contains(".repository", sql, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ScaffoldingUsesGitNamesWithoutRenamingDatabaseObjects()
-    {
-        var services = new ServiceCollection();
-        new GitRepositoryDesignTimeServices().ConfigureDesignTimeServices(services);
-        ServiceDescriptor registration = Assert.Single(services);
-        Assert.Equal("Microsoft.EntityFrameworkCore.Scaffolding.Internal.ICandidateNamingService", registration.ServiceType.FullName);
-        // Keep the EF design-time internal API out of this test project's references.
-        object naming = Activator.CreateInstance(registration.ImplementationType!)!;
-        MethodInfo generate = naming.GetType().GetMethod("GenerateCandidateIdentifier", [typeof(string)])!;
-        string Name(string input) => (string)generate.Invoke(naming, [input])!;
-
-        Assert.Equal("GitRepositorySetupMemories", Name("repository_setup_memories"));
-        Assert.Equal("GitRepositoryOperations", Name("repository_operations"));
-        Assert.Equal("GitRepositoryId", Name("repository_id"));
-        Assert.Equal("GitRepository", Name("repository"));
-        Assert.Equal("GithubRepositories", Name("github_repositories"));
-        Assert.Equal("WorkItems", Name("work_items"));
     }
 }

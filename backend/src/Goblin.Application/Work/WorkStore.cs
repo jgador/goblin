@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Runtime;
+using Goblin.Application.Workspaces;
 using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -39,7 +38,9 @@ public sealed partial class WorkStore
     }
 
     public static readonly long DefaultAgentId = 1;
-    public static readonly JsonSerializerOptions Json = GitRepositoryJson.CreateOptions(JsonSerializerDefaults.Web);
+    // Retained for source compatibility. New consumers should take serialization
+    // policy from the contracts boundary rather than from this persistence service.
+    public static readonly JsonSerializerOptions Json = ContractJson.Options;
 
     public async Task<WorkView[]> ListAsync(CancellationToken token = default)
     {
@@ -63,13 +64,6 @@ public sealed partial class WorkStore
             .Select(x => new AgentView(x.Id, x.Name, x.ConnectionId, x.Model)).ToArrayAsync(token);
     }
 
-    public async Task<ConnectionView[]> ConnectionsAsync(CancellationToken token = default)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        return await db.Connections.AsNoTracking().OrderBy(x => x.Name)
-            .Select(x => new ConnectionView(x.Id, x.Runtime, x.Name, ContractValue.Parse<ConnectionAvailability>(x.Availability))).ToArrayAsync(token);
-    }
-
     public async Task<string[]> GitRepositorySuggestionsAsync(WorkSnapshot work, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
@@ -82,26 +76,12 @@ public sealed partial class WorkStore
 
     public async Task<WorkView> ApplyAsync(WorkCommand command, CancellationToken token = default)
     {
-        if (command.CommandId <= 0 || command.WorkId <= 0 || !Enum.IsDefined(command.Action))
-            throw new ApplicationFailure("invalid_command");
-        if (command.Text?.Length > 4000) throw new ApplicationFailure("text_too_long");
-        if (command.GitRepository is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareGitRepository))
-            throw new ApplicationFailure("invalid_command");
-        if (command.Model?.Length > 128 || command.ReasoningEffort?.Length > 32 ||
-            (command.Action is not (WorkAction.Execute or WorkAction.Retry) &&
-                (command.Model is not null || command.ReasoningEffort is not null || command.ModelSelectionProvided)))
-            throw new ApplicationFailure("invalid_model_selection");
-        if (command.Delivery is not null && command.Action is not (WorkAction.Execute or WorkAction.Retry or WorkAction.PrepareGitRepository) ||
-            command.AuthorizationId is not null && command.Action is not (WorkAction.AuthorizeGitRepository or WorkAction.DenyGitRepository))
-            throw new ApplicationFailure("invalid_command");
-        if (command.Action is WorkAction.AuthorizeGitRepository or WorkAction.DenyGitRepository &&
-            (command.Text is not null || command.AgentId is not null || command.AttemptId is not null || command.DecisionId is not null))
-            throw new ApplicationFailure("invalid_command");
+        WorkCommandPolicy.Validate(command);
         WorkView? replay = await ReplayAsync(command, token);
         if (replay is not null) return replay;
         GitRepositoryProposal? proposal = await ProposalAsync(command, token);
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         WorkView view = await ApplyInTransactionAsync(db, outbox, command, proposal, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
@@ -113,21 +93,19 @@ public sealed partial class WorkStore
     internal Task<WorkView> ApplyConversationCommandAsync(GoblinDbContext db, IDbContextOutbox outbox,
         WorkCommand command, CancellationToken token)
     {
-        if (command.Action is not (WorkAction.Create or WorkAction.Execute or WorkAction.Answer or WorkAction.AddContext) ||
-            command.GitRepository is not null || command.AuthorizationId is not null || command.Text?.Length > 4000)
-            throw new ApplicationFailure("invalid_command");
+        WorkCommandPolicy.ValidateConversation(command);
         return ApplyInTransactionAsync(db, outbox, command, null, token);
     }
 
     private async Task<WorkView> ApplyInTransactionAsync(GoblinDbContext db, IDbContextOutbox outbox,
         WorkCommand command, GitRepositoryProposal? proposal, CancellationToken token)
     {
-        string fingerprint = Hash(command);
+        string fingerprint = WorkCommandPolicy.Fingerprint(command);
         Receipt? receipt = await db.WorkCommands.SingleOrDefaultAsync(x => x.Id == command.CommandId, token);
         if (receipt is not null)
         {
             if (receipt.Fingerprint != fingerprint) throw new ApplicationFailure("command_id_reused");
-            return JsonSerializer.Deserialize<WorkView>(receipt.Response, Json)!;
+            return JsonSerializer.Deserialize<WorkView>(receipt.Response, ContractJson.Options)!;
         }
 
         DateTimeOffset now = DateTimeOffset.UtcNow;
@@ -145,7 +123,7 @@ public sealed partial class WorkStore
         {
             if (row is null) throw new ApplicationFailure("work_not_found");
             if (command.ExpectedVersion != row.Version) throw new ApplicationFailure("work_changed");
-            work = Restore(row);
+            work = WorkStatePersistence.Restore(row);
         }
 
         switch (command.Action)
@@ -161,7 +139,7 @@ public sealed partial class WorkStore
                 Persistence.Entities.Agent agent = await db.Agents.SingleOrDefaultAsync(x => x.Id == work.AgentId, token)
                     ?? throw new ApplicationFailure("agent_required");
                 Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
-                long attemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
+                long attemptId = await IdentitySequence.NextAsync(db, IdentityKind.Attempt, token);
                 GitRepositoryChange? gitRepository = null; // Bound only by a verified proposal.
                 string? model = command.ModelSelectionProvided ? command.Model :
                     command.Model ?? (command.Action == WorkAction.Retry ? work.CurrentAttempt?.Target.RequestedModel : agent.Model);
@@ -192,7 +170,7 @@ public sealed partial class WorkStore
             case WorkAction.PrepareGitRepository:
                 ExecutionTarget previous = work.GitRepositoryRequest?.Target ?? work.CurrentAttempt?.Target
                     ?? throw new ApplicationFailure("invalid_command");
-                await SaveProposalAsync(db, work, await IdentityStore.NextAsync(db, IdentityKind.Attempt, token), previous,
+                await SaveProposalAsync(db, work, await IdentitySequence.NextAsync(db, IdentityKind.Attempt, token), previous,
                     proposal ?? throw new ApplicationFailure("repository_ambiguous"), work.CurrentAttempt?.Status == AttemptStatus.Failed && work.GitRepositoryAuthorization?.Retry == true, now, token);
                 break;
             case WorkAction.AuthorizeGitRepository:
@@ -245,7 +223,7 @@ public sealed partial class WorkStore
                 work.ApproveResult(command.AttemptId ?? 0, now);
                 break;
             case WorkAction.AddContext:
-                work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event, token), command.Text ?? "", now);
+                work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event, token), command.Text ?? "", now);
                 break;
             case WorkAction.Reconcile:
                 ExecutionAttempt? uncertain = work.CurrentAttempt;
@@ -261,7 +239,7 @@ public sealed partial class WorkStore
             Id = command.CommandId,
             WorkId = work.Id,
             Fingerprint = fingerprint,
-            Response = JsonSerializer.Serialize(view, Json),
+            Response = JsonSerializer.Serialize(view, ContractJson.Options),
             CreatedAt = now.UtcDateTime
         });
         await db.SaveChangesAsync(token);
@@ -278,11 +256,11 @@ public sealed partial class WorkStore
         Func<ExecutionTarget, bool> supportsRuntime, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         Row? row = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == command.WorkId, token);
         if (row is null) return null;
-        WorkItem work = Restore(row);
+        WorkItem work = WorkStatePersistence.Restore(row);
         if (work.CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != command.AttemptId || attempt.TurnNumber != command.TurnNumber) return null;
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == attempt.Target.ConnectionId, token);
@@ -297,22 +275,21 @@ public sealed partial class WorkStore
             x.Name == attempt.Target.GitRepository.GitRepository, token)) failure = FailureKind.ConnectionUnavailable;
         if (failure is null && attempt.Target.GitRepository is not null && !attempt.ReasoningOnly)
         {
-            if (await db.WorkspaceSessions.AnyAsync(x => x.WorkId == work.Id &&
-                (x.State == nameof(InspectionState.Queued) || x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention)), token)) return null;
-            int occupied = await db.ExecutionAttempts.CountAsync(x => x.Id != attempt.Id && x.GithubConnectionId != null &&
-                (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token);
-            occupied += await db.WorkspaceSessions.CountAsync(x => x.State == nameof(InspectionState.Starting) || x.State == nameof(InspectionState.Available) || x.State == nameof(InspectionState.Stopping) || x.State == nameof(InspectionState.NeedsAttention), token);
+            if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions)
+                .AnyAsync(x => x.WorkId == work.Id, token)) return null;
+            int occupied = await ResourceReservations.CountSandboxesAsync(db,
+                ResourceReservations.Attempts(db.ExecutionAttempts).Where(x => x.Id != attempt.Id), token);
             if (occupied >= _limits.MaxSandboxes) return null;
         }
-        if (failure is null && await db.ExecutionAttempts.AnyAsync(x => x.Id != attempt.Id && x.ConnectionId == connection.Id &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token))
+        if (failure is null && await ResourceReservations.Attempts(db.ExecutionAttempts)
+            .AnyAsync(x => x.Id != attempt.Id && x.ConnectionId == connection.Id, token))
         {
             // Capacity waiting is not a failed runtime operation. A periodic
             // queue scan will deliver this same unclaimed attempt when free.
             return null;
         }
         if (failure is not null) work.DispatchFailed(attempt.Id, failure.Value, now);
-        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), environmentFor(work.Snapshot()), now)) return null;
+        else if (!work.TryClaimExecution(attempt.Id, await IdentitySequence.NextAsync(db, IdentityKind.Event, token), environmentFor(work.Snapshot()), now)) return null;
         await SaveAsync(db, row, work, now, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return failure is null ? work.Snapshot() : null;
@@ -321,10 +298,10 @@ public sealed partial class WorkStore
     public async Task MutateAsync(long workId, Action<WorkItem> transition, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
+        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         Row row = await db.WorkItems.SingleAsync(x => x.Id == workId, token);
-        WorkItem work = Restore(row);
+        WorkItem work = WorkStatePersistence.Restore(row);
         long before = work.History.Count;
         int turnBefore = work.CurrentAttempt?.TurnNumber ?? 0;
         transition(work);
@@ -335,103 +312,15 @@ public sealed partial class WorkStore
         await outbox.SaveChangesAndFlushMessagesAsync(token);
     }
 
-    public async Task<AttemptRow[]> RecoverableAsync(CancellationToken token = default)
+    internal async Task<ExecutionRecoveryRequest[]> RecoverableAsync(CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        return await db.ExecutionAttempts.AsNoTracking()
-            .Where(x => x.Status == nameof(AttemptStatus.Queued) || x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) ||
-                x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || (x.CleanupPending && !x.CleanupFailed) || x.WorkspaceRetained)
-            .OrderBy(x => x.QueuedAt).ToArrayAsync(token);
-    }
-
-    public async Task<bool> SetConnectionAsync(long id, ConnectionAvailability availability, bool requireIdle,
-        CancellationToken token = default, bool completeChange = false,
-        bool observeAccount = false, string? accountSignature = null)
-    {
-        if (!Enum.IsDefined(availability)) throw new ApplicationFailure("invalid_command");
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
-        if (requireIdle && await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token))
-            throw new ApplicationFailure("connection_in_use");
-        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
-        if (row.Availability == nameof(ConnectionAvailability.Changing))
-        {
-            if (requireIdle) throw new ApplicationFailure("connection_in_use");
-            if (!completeChange) return false;
-        }
-        if (row.Availability == nameof(ConnectionAvailability.Verifying) && !requireIdle && !completeChange) return false;
-        bool changedAccount = (observeAccount && row.AccountSignature != accountSignature) || completeChange;
-        if (changedAccount)
-        {
-            row.AuthGeneration++;
-            row.AccountSignature = accountSignature;
-            await db.ConnectionModelCatalogs.Where(x => x.ConnectionId == id).ExecuteDeleteAsync(token);
-        }
-        row.Availability = availability.ToString();
-        row.ChangedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        return changedAccount;
-    }
-
-    public async Task BeginVerificationAsync(long id, CancellationToken token = default)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
-        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
-        if (row.Availability == nameof(ConnectionAvailability.Verifying)) throw new ApplicationFailure("prompt_in_progress");
-        if (row.Availability == nameof(ConnectionAvailability.Changing) || await db.ExecutionAttempts.AnyAsync(x => x.ConnectionId == id &&
-            (x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) || x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || x.CleanupPending || x.WorkspaceRetained), token))
-            throw new ApplicationFailure("connection_in_use");
-        row.Availability = nameof(ConnectionAvailability.Verifying);
-        row.ChangedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-    }
-
-    public async Task EndVerificationAsync(long id, bool available)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await BeginAsync(db, default);
-        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id);
-        // A waiting account change owns the reservation until its operation ends.
-        if (row.Availability != nameof(ConnectionAvailability.Verifying)) return;
-        row.Availability = available ? nameof(ConnectionAvailability.Available) : nameof(ConnectionAvailability.Unavailable);
-        row.ChangedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
-    }
-
-    // The self-hosted application has a single controller. Its verification
-    // process cannot survive a controller restart; durable attempts can.
-    public async Task RecoverConnectionReservationsAsync(CancellationToken token)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await BeginAsync(db, token);
-        await db.Connections.Where(x => x.Availability == nameof(ConnectionAvailability.Changing) || x.Availability == nameof(ConnectionAvailability.Verifying))
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, nameof(ConnectionAvailability.Unavailable)).SetProperty(x => x.ChangedAt, DateTime.UtcNow), token);
-        await transaction.CommitAsync(token);
-    }
-
-    internal static async Task<IDbContextTransaction> BeginAsync(GoblinDbContext db, CancellationToken token)
-    {
-        IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(token);
-        try
-        {
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(716352019)", token);
-            return transaction;
-        }
-        catch { await transaction.DisposeAsync(); throw; }
+        return await ExecutionRecoveryQuery.Select(db.ExecutionAttempts.AsNoTracking()).ToArrayAsync(token);
     }
 
     private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
     {
-        row.State = JsonSerializer.Serialize(work.Snapshot(), Json);
-        row.Status = work.Status.ToString();
-        row.AgentId = work.AgentId;
-        row.Version++;
-        row.UpdatedAt = now.UtcDateTime;
+        WorkStatePersistence.Update(row, work, now);
         foreach (ExecutionAttempt attempt in work.Attempts)
         {
             AttemptRow? saved = await db.ExecutionAttempts.SingleOrDefaultAsync(x => x.Id == attempt.Id, token);
@@ -460,13 +349,7 @@ public sealed partial class WorkStore
         }
     }
 
-    internal static WorkItem Restore(Row row) => row.State is null
-        ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
-        : WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State, Json)!);
-
     private static WorkView View(Row row) => new(row.Version, new(row.CreatedAt, TimeSpan.Zero),
-        new(row.UpdatedAt, TimeSpan.Zero), Restore(row).Snapshot());
+        new(row.UpdatedAt, TimeSpan.Zero), WorkStatePersistence.Restore(row).Snapshot());
 
-    private static string Hash(WorkCommand command) => Convert.ToHexString(SHA256.HashData(
-        Encoding.UTF8.GetBytes(JsonSerializer.Serialize(command, Json))));
 }

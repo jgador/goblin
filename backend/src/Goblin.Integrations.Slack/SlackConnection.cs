@@ -87,9 +87,10 @@ public sealed class SlackConnection : BackgroundService
                 SetView(credentials, SlackConnectionStatus.Connected);
                 Task receive = ReceiveAsync(socket, credentials, cancellation.Token);
                 Task process = ProcessAsync(credentials, cancellation.Token);
-                await Task.WhenAny(receive, process);
+                Task questions = QuestionsAsync(credentials, cancellation.Token);
+                await Task.WhenAny(receive, process, questions);
                 await cancellation.CancelAsync();
-                try { await Task.WhenAll(receive, process); } catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+                try { await Task.WhenAll(receive, process, questions); } catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             }
             catch (Exception) when (!stoppingToken.IsCancellationRequested)
             {
@@ -129,8 +130,7 @@ public sealed class SlackConnection : BackgroundService
         {
             ExternalReply? reply = await _conversations.ProcessNextAsync(credentials.Installation, token);
             if (reply is null) { await Task.Delay(500, token); continue; }
-            // Never publish Work contents into a channel or DM. Local sign-in
-            // remains required to inspect results and authorize repositories.
+            // Results and repository authorizations still require local sign-in.
             string text = reply.Kind switch
             {
                 ExternalReplyKind.WorkSaved => $"Saved in Goblin. <{_origin}/work?item={reply.WorkId}|Open Work> to follow progress and respond.",
@@ -142,5 +142,32 @@ public sealed class SlackConnection : BackgroundService
             try { await _api.PostAsync(credentials, reply.ChannelId, reply.ThreadId, text, token); }
             catch (SlackFailure) { /* A reply failure cannot roll back or repeat accepted Work. */ }
         }
+    }
+
+    private async Task QuestionsAsync(SlackCredentials credentials, CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            await DeliverQuestionAsync(credentials, token);
+            await Task.Delay(TimeSpan.FromSeconds(3), token);
+        }
+    }
+
+    internal async Task DeliverQuestionAsync(SlackCredentials credentials, CancellationToken token)
+    {
+        if (Installation?.Id != credentials.InstallationId) return;
+        ExternalQuestion? question = await _conversations.NextQuestionAsync(credentials.Installation, token);
+        if (question is null) return;
+        // Escape Slack's special characters so question text cannot inject mentions or links.
+        string text = question.Text.Length > 3000 ? question.Text[..3000] + "…" : question.Text;
+        text = text.Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
+        text = $"Goblin needs your answer:\n{text}\n\nReply in this thread to answer. In a channel, mention @goblin in your reply. You can also <{_origin}/work?item={question.WorkId}|answer in Goblin>.";
+        if (Installation?.Id != credentials.InstallationId) return;
+        try { await _api.PostAsync(credentials, question.ChannelId, question.ThreadId, text, token); }
+        catch (SlackFailure) { return; } // Keep the saved question pending for the next poll.
+        // A crash between posting and saving this marker can duplicate a notification,
+        // but cannot repeat Work execution or change its decision.
+        await _conversations.QuestionSentAsync(credentials.Installation, question, token);
     }
 }

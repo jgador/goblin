@@ -1,3 +1,4 @@
+using Goblin.Application.Connections;
 using Goblin.Application.GitRepositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
@@ -37,12 +38,22 @@ public static class ApplicationServices
         services.AddScoped<WorkOutboxFactory>();
         services.AddScoped<IdentityStore>();
         services.AddScoped<WorkStore>();
+        services.AddScoped<ConnectionStore>();
         services.AddScoped<InspectionStore>();
         services.AddScoped<GitHubStore>();
         services.AddScoped<GitRepositorySetupStore>();
+        services.AddSingleton<GitRepositoryOperationStore>();
+        services.AddSingleton<WorkspaceCheckpointCoordinator>();
         services.AddScoped<ConversationStore>();
         services.AddScoped<ExternalConversationStore>();
         services.AddSingleton<ExecutionCoordinator>();
         services.AddHostedService<WorkRecovery>();
+    }
+
+    public static void AddModelCatalog(this IServiceCollection services)
+    {
+        services.AddSingleton<ModelCatalogRefreshCoordinator>();
+        services.AddHostedService(services => services.GetRequiredService<ModelCatalogRefreshCoordinator>());
+        services.AddSingleton<ModelCatalogStore>();
     }
 }

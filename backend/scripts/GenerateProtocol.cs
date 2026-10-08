@@ -454,11 +454,19 @@ internal sealed class ProtocolGenerator
         if (Get(schema, "type") is JsonArray types)
         {
             var typeNames = Strings(types).ToList();
-            if (typeNames.Count != 2 || !typeNames.Contains("null"))
+            if (typeNames.Count < 2 || typeNames.Distinct(StringComparer.Ordinal).Count() != typeNames.Count
+                || typeNames.Any(name => name is not ("string" or "object" or "array" or "boolean" or "integer" or "number" or "null")))
                 throw new InvalidOperationException("Unsupported type union: " + types.ToJsonString());
-            var copy = (JsonObject)schema!.DeepClone();
-            copy["type"] = typeNames.Single(name => name != "null");
-            return (true, copy);
+            var nonnull = typeNames.Where(name => name != "null").ToList();
+            var alternatives = new JsonArray();
+            foreach (var type in nonnull)
+            {
+                var copy = (JsonObject)schema!.DeepClone();
+                copy["type"] = type;
+                alternatives.Add((JsonNode)copy);
+            }
+            return (typeNames.Contains("null"), nonnull.Count == 1
+                ? alternatives[0] : new JsonObject { ["anyOf"] = alternatives });
         }
         foreach (var key in new[] { "anyOf", "oneOf" })
         {
@@ -538,15 +546,17 @@ internal sealed class ProtocolGenerator
                 },
                 "number" => "double",
                 "array" => $"List<{TypeName(Get(value, "items"), hint + "Item")}>",
-                "object" when !Has(value, "properties") && Has(value, "additionalProperties")
-                    && !Bool(Get(value, "additionalProperties"), false)
-                    => $"Dictionary<string, {TypeName(Get(value, "additionalProperties"), hint + "Value")}>",
+                "object" when IsDictionary(value)
+                    => $"Dictionary<string, {TypeName(Get(value, "additionalProperties") ?? JsonValue.Create(true), hint + "Value")}>",
                 "object" => Emit(Register(hint, value)),
                 _ => throw new InvalidOperationException("Unsupported schema at " + hint),
             };
         }
         return nullable && !name.EndsWith('?') ? name + "?" : name;
     }
+
+    private static bool IsDictionary(JsonNode schema) =>
+        !Has(schema, "properties") && !Bool(Get(schema, "additionalProperties"), false);
 
     private string Emit(string name)
     {
@@ -719,7 +729,7 @@ internal sealed class ProtocolGenerator
                 _generated[variant] = ObjectBody(variant, branch, name, discriminator);
                 variants.Add(new ProtocolVariant(variant, variant, false, value));
             }
-            else if (Str(Get(branch, "type")) == "object")
+            else if (Str(Get(branch, "type")) == "object" && !IsDictionary(branch))
             {
                 var rawName = Str(Get(branch, "title"));
                 if (rawName is null)
@@ -736,7 +746,8 @@ internal sealed class ProtocolGenerator
                 var enumValues = EnumValues(branch);
                 var inner = TypeName(branch, name + (enumValues is not null ? "Value" : $"Variant{index + 1}Value"));
                 var label = enumValues is not null || inner == "string" ? "String"
-                    : inner.StartsWith("List<", StringComparison.Ordinal) ? "Array" : Pascal(inner);
+                    : inner.StartsWith("List<", StringComparison.Ordinal) ? "Array"
+                    : inner.StartsWith("Dictionary<", StringComparison.Ordinal) ? "Object" : Pascal(inner);
                 var variant = Register(VariantTypeName(label, name, true), new JsonObject
                 {
                     ["type"] = "object",
@@ -970,6 +981,18 @@ internal static class ProtocolGeneratorTests
         Check(variants["SharedVariant.g.cs"].Contains("class SharedVariant : FirstResult", StringComparison.Ordinal)
             && variants["SharedVariant2.g.cs"].Contains("class SharedVariant2 : SecondResult", StringComparison.Ordinal),
             "variants retain their base class");
+
+        var typeUnion = Generate("""
+            {"ErrorValue":{"type":["string","object"]},
+             "Reply":{"type":"object","properties":{"value":{"type":["string","number","null"]}},"required":["value"]}}
+            """);
+        Check(typeUnion["StringErrorValue.g.cs"].Contains("string Value", StringComparison.Ordinal)
+            && typeUnion["ObjectErrorValue.g.cs"].Contains("Dictionary<string, JsonElement> Value", StringComparison.Ordinal),
+            "type unions preserve open object contents in typed branches");
+        Check(typeUnion["Reply.g.cs"].Contains("required ReplyValue? Value", StringComparison.Ordinal)
+            && typeUnion["ReplyValue.g.cs"].Contains("JsonSerializer.Deserialize<double>", StringComparison.Ordinal),
+            "nullable type unions retain all non-null alternatives");
+        ExpectFailure(() => Generate("""{"Invalid":{"type":["string","string"]}}"""), "Unsupported type union");
     }
 
     private static Dictionary<string, string> Generate(string definitions, string? selection = null)

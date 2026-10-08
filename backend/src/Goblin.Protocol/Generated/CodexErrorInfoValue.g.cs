@@ -23,6 +23,9 @@ public enum CodexErrorInfoValue
     [JsonStringEnumMemberName("rateLimitExceeded")]
     RateLimitExceeded,
 
+    [JsonStringEnumMemberName("flexUnavailable")]
+    FlexUnavailable,
+
     [JsonStringEnumMemberName("serverOverloaded")]
     ServerOverloaded,
 
@@ -31,6 +34,9 @@ public enum CodexErrorInfoValue
 
     [JsonStringEnumMemberName("misalignmentPolicyViolation")]
     MisalignmentPolicyViolation,
+
+    [JsonStringEnumMemberName("tooManyDenials")]
+    TooManyDenials,
 
     [JsonStringEnumMemberName("internalServerError")]
     InternalServerError,

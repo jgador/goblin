@@ -126,6 +126,25 @@ This first Web refactor keeps Minimal APIs, the public contracts, and applicatio
 service ownership intact. Connection handlers still coordinate integration calls
 with request-scoped stores; Work lifecycle rules remain in Core.
 
+Model catalog persistence and selection stay in `ModelCatalogStore`.
+`ModelCatalogRefreshCoordinator` owns background discovery through the host
+lifetime, coalesces refreshes per connection, and cancels and awaits them on
+shutdown. Request cancellation does not cancel shared discovery. Host shutdown
+does not mark a saved catalog as a failed refresh or discard its last complete
+response; account-generation checks still reject obsolete discovery results.
+
+Repository-operation admission, deduplication, history updates and atomic Wolverine
+dispatch belong to `GitRepositoryOperationStore`. The broker owns authorization,
+uploads, remote execution, cancellation and reconciliation evidence. It exchanges
+typed operation snapshots with the store and holds no tracked operation or database
+context across remote calls. An uncertain publication remains subject to
+reconciliation; delivery never authorizes replaying it.
+
+`WorkspaceCheckpointCoordinator` owns checkpoint authorization and verification
+before asking `WorkspaceCheckpoints` to persist metadata. The store has no broker
+dependency. It rechecks attempt/turn ownership in its transaction after remote
+verification, preserving duplicate-save handling and local checkpoint behavior.
+
 Public HTTP requests and responses use classes with explicit `JsonPropertyName`
 attributes. `Http/Contracts/` maps application and core types into those classes,
 including every nested Work snapshot, so C# property renames cannot silently rename

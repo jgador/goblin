@@ -8,7 +8,8 @@ backend/
   src/Goblin.Core/         Work lifecycle rules and Goblin-owned execution types
   src/Goblin.Contracts/   Public account/runtime contracts and environment names
   src/Goblin.Application/ Durable commands, conversations, dispatch, and recovery
-  src/Goblin.Execution/   Text workers and isolated repository sandboxes
+  src/Goblin.Execution/   Runtime hosts, process evidence, and isolated sandboxes
+  src/Goblin.Execution.Codex/     Codex worker entry points for those hosts
   src/Goblin.Integrations.Codex/   Codex account, transport, and Work adapter
   src/Goblin.Integrations.GitHub/  GitHub device sign-in and private credentials
   src/Goblin.Web/          ASP.NET Core composition and HTTP adapters
@@ -17,7 +18,8 @@ backend/
   src/Goblin.Protocol/     Generated Codex protocol models and serialization
   src/Goblin.Persistence/  Database-first EF Core context, entities, and registration
   database/migrations/    Ordered SQL schema changes
-  tools/Goblin.Database/  SQL migration runner and EF tooling host
+  tools/Goblin.Database/  SQL migration runner
+  tools/Goblin.Database.Scaffolding/  Developer-only EF tooling host
   tests/                  .NET tests and the test-only application host
   schemas/codex/           Checked-in inputs to protocol generation
   schemas/kubernetes/      Pinned schemas and selected execution fields

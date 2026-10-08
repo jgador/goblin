@@ -17,7 +17,7 @@ namespace Goblin.Tests;
 
 public sealed class PublicApiContractTests
 {
-    private static readonly JsonSerializerOptions WorkJson = new(WorkStore.Json)
+    private static readonly JsonSerializerOptions WorkJson = new(ContractJson.Options)
     {
         Converters = { new LongJsonConverter() },
         TypeInfoResolver = new DefaultJsonTypeInfoResolver()
@@ -118,8 +118,8 @@ public sealed class PublicApiContractTests
               "delivery": { "baseBranch":"main", "push":true, "openPullRequest":true }
             }
             """;
-        Api.WorkCommand request = JsonSerializer.Deserialize<Api.WorkCommand>(body, WorkStore.Json)!;
-        Assert.Equivalent(JsonSerializer.Deserialize<WorkCommand>(body, WorkStore.Json), request.ToApplication(), strict: true);
+        Api.WorkCommand request = JsonSerializer.Deserialize<Api.WorkCommand>(body, ContractJson.Options)!;
+        Assert.Equivalent(JsonSerializer.Deserialize<WorkCommand>(body, ContractJson.Options), request.ToApplication(), strict: true);
         JsonElement json = JsonSerializer.SerializeToElement(request, WorkJson);
         Assert.Equal("9223372036854775807", json.GetProperty("commandId").GetString());
         Assert.Equal("9007199254740993", json.GetProperty("workId").GetString());
@@ -130,16 +130,16 @@ public sealed class PublicApiContractTests
     public void RequestsPreserveOmittedValuesAndNumericIds()
     {
         Api.WorkCommand work = JsonSerializer.Deserialize<Api.WorkCommand>(
-            """{"commandId":1,"workId":2,"action":"Create"}""", WorkStore.Json)!;
+            """{"commandId":1,"workId":2,"action":"Create"}""", ContractJson.Options)!;
         Assert.Equivalent(new WorkCommand(1, 2, WorkAction.Create), work.ToApplication(), strict: true);
         Api.ConversationCommand conversation = JsonSerializer.Deserialize<Api.ConversationCommand>(
-            """{"conversationId":"3","messageId":"4","text":"Hello"}""", WorkStore.Json)!;
+            """{"conversationId":"3","messageId":"4","text":"Hello"}""", ContractJson.Options)!;
         Assert.Equivalent(new ConversationCommand(3, 4, "Hello"), conversation.ToApplication(), strict: true);
         Api.IdentityRequest identities = JsonSerializer.Deserialize<Api.IdentityRequest>(
-            """{"kinds":["Work","Attempt"]}""", WorkStore.Json)!;
+            """{"kinds":["Work","Attempt"]}""", ContractJson.Options)!;
         Assert.Equal([IdentityKind.Work, IdentityKind.Attempt], identities.ToApplication().Kinds);
         InspectionRequest inspection = JsonSerializer.Deserialize<InspectionRequest>(
-            """{"id":"9007199254740993","attemptId":"9223372036854775807"}""", WorkStore.Json)!;
+            """{"id":"9007199254740993","attemptId":"9223372036854775807"}""", ContractJson.Options)!;
         Assert.Equal(9007199254740993L, inspection.Id);
         Assert.Equal(long.MaxValue, inspection.AttemptId);
     }
@@ -151,7 +151,7 @@ public sealed class PublicApiContractTests
     [InlineData("\"not-an-id\"")]
     public void WorkRequestRejectsInvalidInt64Ids(string value) =>
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Api.WorkCommand>(
-            "{\"commandId\":" + value + ",\"workId\":1,\"action\":\"Create\"}", WorkStore.Json));
+            "{\"commandId\":" + value + ",\"workId\":1,\"action\":\"Create\"}", ContractJson.Options));
 
     [Fact]
     public void AccountDiscriminatorsAndNullStateRemainStable()

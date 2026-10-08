@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Execution;
 using Microsoft.AspNetCore.Builder;
@@ -40,7 +41,7 @@ internal sealed class WorkspaceEndpoints
 
     private static async Task<IResult> OpenAsync(long id, HttpContext context, InspectionStore sessions)
     {
-        InspectionRequest request = ApiRequest.Body<InspectionRequest>(context, WorkStore.Json);
+        InspectionRequest request = ApiRequest.Body<InspectionRequest>(context, ContractJson.Options);
         return WorkResponse.Json(Api.InspectionView.From(await sessions.OpenAsync(id, request.Id, request.AttemptId, CancellationToken.None)));
     }
 

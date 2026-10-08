@@ -8,6 +8,7 @@
     <ProjectReference Include="../Goblin.Persistence/Goblin.Persistence.csproj" />
     <ProjectReference Include="../Goblin.Application/Goblin.Application.csproj" />
     <ProjectReference Include="../Goblin.Execution/Goblin.Execution.csproj" />
+    <ProjectReference Include="../Goblin.Execution.Codex/Goblin.Execution.Codex.csproj" />
     <ProjectReference Include="../Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj" />
     <ProjectReference Include="../Goblin.Integrations.Slack/Goblin.Integrations.Slack.csproj" />
     <ProjectReference Include="../Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />

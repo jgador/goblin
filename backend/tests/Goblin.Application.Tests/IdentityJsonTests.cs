@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Goblin.Application.Work;
+using Goblin.Contracts;
 using Goblin.Web;
 using Xunit;
 
@@ -12,7 +13,7 @@ public sealed class IdentityJsonTests
     [InlineData(long.MaxValue)]
     public void HttpIdsAreDecimalStringsAndCommandsReadThemWithoutRounding(long id)
     {
-        var json = new JsonSerializerOptions(WorkStore.Json);
+        var json = new JsonSerializerOptions(ContractJson.Options);
         json.Converters.Add(new LongJsonConverter());
         var command = new WorkCommand(id, id - 1, WorkAction.Assign)
         {
@@ -23,7 +24,7 @@ public sealed class IdentityJsonTests
         using JsonDocument document = JsonDocument.Parse(body);
         Assert.Equal(JsonValueKind.String, document.RootElement.GetProperty("commandId").ValueKind);
         Assert.Equal(id, long.Parse(document.RootElement.GetProperty("commandId").GetString()!));
-        Assert.Equivalent(command, JsonSerializer.Deserialize<WorkCommand>(body, WorkStore.Json), strict: true);
+        Assert.Equivalent(command, JsonSerializer.Deserialize<WorkCommand>(body, ContractJson.Options), strict: true);
         Assert.Equivalent(command, JsonSerializer.Deserialize<WorkCommand>(body, json), strict: true);
     }
 

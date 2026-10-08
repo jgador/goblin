@@ -33,7 +33,7 @@ public sealed class TypedJsonBoundaryTests
              "text":"Keep the objective","ignored":{"nested":true}}
             """);
         context.Items[ApiRequest.BodyKey] = await ApiRequest.ReadBodyAsync(context.Request);
-        Api.WorkCommand command = ApiRequest.Body<Api.WorkCommand>(context, WorkStore.Json);
+        Api.WorkCommand command = ApiRequest.Body<Api.WorkCommand>(context, ContractJson.Options);
         Assert.Equal(9007199254740993, command.CommandId);
         Assert.Equal(9007199254740995, command.WorkId);
         Assert.Equal("Keep the objective", command.Text);
@@ -83,7 +83,7 @@ public sealed class TypedJsonBoundaryTests
         Assert.Equal("secret", ApiRequest.Body<UnlockRequest>(context, DifferentPolicy).Password);
         context = Request("{\"commandId\":[]}");
         context.Items[ApiRequest.BodyKey] = await ApiRequest.ReadBodyAsync(context.Request);
-        Assert.Throws<JsonException>(() => ApiRequest.Body<Api.WorkCommand>(context, WorkStore.Json));
+        Assert.Throws<JsonException>(() => ApiRequest.Body<Api.WorkCommand>(context, ContractJson.Options));
     }
 
     [Fact]

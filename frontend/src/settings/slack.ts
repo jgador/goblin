@@ -90,7 +90,7 @@ export function mountSlack(root: HTMLElement) {
                 content += `${setup.notice && setup.status !== SlackSetupStatus.NeedsAttention ? `<p class="settings-notice">${e(setup.notice)}</p>` : ""}${manual}${branding}`;
             }
         }
-        root.innerHTML = `<h3>Slack</h3><p class="settings-description">Talk to your self-hosted AI coworker from Slack. Your workspace owns its app; Goblin connects from your deployment.</p>${error ? `<p class="settings-notice" role="alert">${e(error)}</p>` : ""}<div class="slack-settings">${content}</div>`;
+        root.innerHTML = `<h3>Slack</h3><p class="settings-description">Talk to your self-hosted AI coworker from Slack. Your workspace owns its app; Goblin connects from your deployment. Agent questions appear in the original Slack thread, where linked users can reply. Results and repository approvals open in Goblin.</p>${error ? `<p class="settings-notice" role="alert">${e(error)}</p>` : ""}<div class="slack-settings">${content}</div>`;
         if (focus)
             [...root.querySelectorAll<HTMLElement>("[data-slack]")]
                 .find((element) => element.dataset.slack === focus)

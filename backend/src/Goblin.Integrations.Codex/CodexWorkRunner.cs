@@ -22,57 +22,15 @@ public sealed class CodexWorkRunner
     public async Task<ExecutionObservation> RunAsync(WorkSnapshot work, bool gitRepositoryChanges,
         Func<ExecutionObservation, Task> progress, CancellationToken token, GitRepositorySetupMemory[]? setupMemory = null)
     {
-        object gate = new();
-        string? threadId = null, turnId = null;
-        string? latestProgress = null;
-        var messages = new OrderedDictionary<string, string>();
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        void Save(ThreadItem item)
-        {
-            if (item is not AgentMessageThreadItem message) return;
-            if (message.Phase == MessagePhase.Commentary)
-            {
-                latestProgress = message.Text[..Math.Min(message.Text.Length, 4000)];
-                return;
-            }
-            messages[message.Id] = message.Text;
-            if (messages.Count > 128 || messages.Values.Sum(x => x.Length) > 64000)
-                completion.TrySetException(new IntegrationFailure("work_result_too_large", "The result exceeded the supported size."));
-        }
-        void Notification(ServerNotification notification)
-        {
-            lock (gate)
-            {
-                (string? thread, string? turn) = notification switch
-                {
-                    TurnStartedServerNotification e => (e.Params.ThreadId, e.Params.Turn.Id),
-                    ItemCompletedServerNotification e => (e.Params.ThreadId, e.Params.TurnId),
-                    TurnCompletedServerNotification e => (e.Params.ThreadId, e.Params.Turn.Id),
-                    ErrorServerNotification e => (e.Params.ThreadId, e.Params.TurnId),
-                    _ => (null, null)
-                };
-                if (threadId is null || thread != threadId || turn is null || (turnId is not null && turn != turnId)) return;
-                turnId ??= turn;
-                if (notification is ErrorServerNotification)
-                {
-                    completion.TrySetException(new IntegrationFailure("work_execution_failed", "Execution needs attention."));
-                    return;
-                }
-                if (notification is ItemCompletedServerNotification item) Save(item.Params.Item);
-                if (notification is TurnCompletedServerNotification done)
-                {
-                    if (done.Params.Turn.Status != TurnStatus.Completed)
-                    {
-                        completion.TrySetException(new IntegrationFailure("work_execution_failed", "Execution did not complete."));
-                        return;
-                    }
-                    foreach (ThreadItem value in done.Params.Turn.Items) Save(value);
-                    completion.TrySetResult(string.Join("\n", messages.Values));
-                }
-            }
-        }
-        void Disconnected() => completion.TrySetException(IntegrationFailure.RuntimeUnavailable());
-        _codex.Notification += Notification;
+        var transcript = new CodexTurnTranscript(128, 64000, "\n", countSeparators: false,
+            trimResult: false, progressLimit: 4000,
+            tooLarge: () => new IntegrationFailure("work_result_too_large", "The result exceeded the supported size."),
+            completionError: turn => turn.Status != TurnStatus.Completed
+                ? new IntegrationFailure("work_execution_failed", "Execution did not complete.") : null,
+            resultError: _ => null,
+            notificationError: () => new IntegrationFailure("work_execution_failed", "Execution needs attention."));
+        void Disconnected() => transcript.Fail(IntegrationFailure.RuntimeUnavailable());
+        _codex.Notification += transcript.Handle;
         _codex.Disconnected += Disconnected;
         try
         {
@@ -103,7 +61,7 @@ public sealed class CodexWorkRunner
                         "Do not ask the user to attach a checkout, enable network access, or change filesystem permissions. " +
                         "Otherwise answer or ask clarifying questions using the saved Work context.")
             }, token);
-            lock (gate) threadId = thread.Thread.Id;
+            transcript.SetThread(thread.Thread.Id);
             string context = JsonSerializer.Serialize(new CodexWorkContext(work.Objective, work.Messages,
                 work.Decisions, work.Results, work.Artifacts)
             {
@@ -127,7 +85,7 @@ public sealed class CodexWorkRunner
             });
             TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
-                ThreadId = threadId,
+                ThreadId = transcript.ThreadId!,
                 Input = [new TextUserInput { Text = context }],
                 Effort = work.Attempts[^1].Target.RequestedEffort,
                 ApprovalPolicy = AskForApproval.Never,
@@ -135,21 +93,16 @@ public sealed class CodexWorkRunner
                 SandboxPolicy = gitRepositoryChanges ? new ExternalSandboxSandboxPolicy { NetworkAccess = NetworkAccess.Enabled }
                     : new ReadOnlySandboxPolicy { NetworkAccess = false }
             }, token);
-            lock (gate)
-            {
-                if (turnId is not null && turnId != started.Turn.Id) throw IntegrationFailure.RuntimeUnavailable();
-                turnId = started.Turn.Id;
-            }
-            var session = new ExecutionSession(thread.Model, threadId, turnId);
+            transcript.SetTurn(started.Turn.Id);
+            var session = new ExecutionSession(thread.Model, transcript.ThreadId!, transcript.TurnId!);
             await progress(new(ObservationKind.Running, session) { TurnNumber = work.Attempts[^1].TurnNumber });
-            Task<string> completed = completion.Task.WaitAsync(TimeSpan.FromMinutes(30), token);
+            Task<string> completed = transcript.Completion.Task.WaitAsync(TimeSpan.FromMinutes(30), token);
             string? reported = null;
             while (!completed.IsCompleted)
             {
                 await Task.WhenAny(completed, Task.Delay(TimeSpan.FromSeconds(1), token));
                 token.ThrowIfCancellationRequested();
-                string? next;
-                lock (gate) next = latestProgress;
+                string? next = transcript.LatestProgress;
                 if (!string.IsNullOrWhiteSpace(next) && next != reported)
                 {
                     await progress(new(ObservationKind.Running, session, next) { TurnNumber = work.Attempts[^1].TurnNumber });
@@ -171,10 +124,12 @@ public sealed class CodexWorkRunner
         }
         finally
         {
-            _codex.Notification -= Notification;
+            _codex.Notification -= transcript.Handle;
             _codex.Disconnected -= Disconnected;
-            _ = completion.Task.Exception;
-            if (threadId is not null && turnId is not null && !completion.Task.IsCompletedSuccessfully && _codex.Ready)
+            _ = transcript.Completion.Task.Exception;
+            string? threadId = transcript.ThreadId;
+            string? turnId = transcript.TurnId;
+            if (threadId is not null && turnId is not null && !transcript.Completion.Task.IsCompletedSuccessfully && _codex.Ready)
                 try { await _codex.RequestAsync<TurnInterruptParams, TurnInterruptResponse>("turn/interrupt", new() { ThreadId = threadId, TurnId = turnId }); }
                 catch { _codex.Fail(); }
         }

@@ -29,6 +29,9 @@ public partial class ExternalConversation
     [Column("conversation_id")]
     public long ConversationId { get; set; }
 
+    [Column("notified_decision_id")]
+    public long? NotifiedDecisionId { get; set; }
+
     [ForeignKey("ConversationId")]
     [InverseProperty("ExternalConversations")]
     public virtual Conversation Conversation { get; set; } = null!;
