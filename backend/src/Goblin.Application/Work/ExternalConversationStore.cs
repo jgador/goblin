@@ -1,7 +1,5 @@
 using System;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts;
@@ -93,14 +91,14 @@ public sealed class ExternalConversationStore
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         await db.ExternalLinkRequests.Where(x => x.SessionId == localSession).ExecuteDeleteAsync(token);
-        string code = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+        (string code, string codeHash, DateTime expiresAt) = ExternalConversationPolicy.NewLink(DateTime.UtcNow);
         var link = new ExternalLinkRequest
         {
             InstallationId = installation.Id,
             WorkspaceId = installation.WorkspaceId,
             SessionId = localSession,
-            CodeHash = Hash(code),
-            ExpiresAt = DateTime.UtcNow.AddMinutes(5)
+            CodeHash = codeHash,
+            ExpiresAt = expiresAt
         };
         db.ExternalLinkRequests.Add(link);
         await db.SaveChangesAsync(token);
@@ -160,17 +158,17 @@ public sealed class ExternalConversationStore
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         if (await db.ExternalMessages.AnyAsync(x => x.InstallationId == message.Installation.Id &&
             (x.EventId == message.EventId || x.WorkspaceId == message.Installation.WorkspaceId && x.ChannelId == message.ChannelId && x.MessageId == message.MessageId), token)) return;
-        bool linking = message.Direct && message.Text.StartsWith("link ", StringComparison.Ordinal);
+        ExternalLinkAttempt link = ExternalConversationPolicy.LinkAttempt(message);
         bool validProof = false;
-        if (linking)
+        if (link.IsLinking)
         {
-            string hash = Hash(message.Text[5..].Trim());
             ExternalLinkRequest? request = await db.ExternalLinkRequests.SingleOrDefaultAsync(x => x.InstallationId == message.Installation.Id &&
-                x.WorkspaceId == message.Installation.WorkspaceId && x.CodeHash == hash && !x.Consumed && x.ExpiresAt > DateTime.UtcNow, token);
+                x.WorkspaceId == message.Installation.WorkspaceId && x.CodeHash == link.CodeHash && !x.Consumed && x.ExpiresAt > DateTime.UtcNow, token);
             if (request is not null && request.UserId is null) request.UserId = message.UserId;
             validProof = request?.UserId == message.UserId;
         }
-        bool authorized = !linking && await AuthorizedAsync(db, message.Installation.Id, message.Installation.WorkspaceId, message.UserId, token);
+        bool authorized = !link.IsLinking && await AuthorizedAsync(db, message.Installation.Id, message.Installation.WorkspaceId, message.UserId, token);
+        ExternalMessageAcceptance acceptance = ExternalConversationPolicy.Accept(message.Text, link.IsLinking, validProof, authorized);
         db.ExternalMessages.Add(new()
         {
             InstallationId = message.Installation.Id,
@@ -181,8 +179,8 @@ public sealed class ExternalConversationStore
             ChannelId = message.ChannelId,
             ThreadId = message.ThreadId,
             MessageId = message.MessageId,
-            Body = authorized ? message.Text : null,
-            State = validProof ? nameof(ExternalMessageState.PendingLink) : nameof(ExternalMessageState.Pending),
+            Body = acceptance.Body,
+            State = acceptance.State.ToString(),
             ReceivedAt = DateTime.UtcNow
         });
         await db.SaveChangesAsync(token);
@@ -247,13 +245,8 @@ public sealed class ExternalConversationStore
                 conversation = await db.Conversations.SingleAsync(x => x.Id == source.ConversationId, token);
                 Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == conversation.WorkId, token);
                 WorkSnapshot snapshot = System.Text.Json.JsonSerializer.Deserialize<WorkSnapshot>(row.State!, ContractJson.Options)!;
-                WorkDecision? decision = snapshot.Decisions.LastOrDefault(x => x.AnsweredAt is null);
-                // Only an existing question may consume a conversational answer.
-                // Repository approval, retry, completion and cancellation stay in the local UI.
                 long commandId = await IdentitySequence.NextAsync(db, IdentityKind.Command, token);
-                WorkCommand command = snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
-                    ? WorkCommands.Answer(commandId, row.Id, row.Version, decision.Id, message.Body)
-                    : WorkCommands.AddContext(commandId, row.Id, row.Version, message.Body);
+                WorkCommand command = ExternalConversationPolicy.Continue(snapshot, commandId, row.Id, row.Version, message.Body);
                 view = await _work.ApplyConversationCommandAsync(db, outbox, command, token);
             }
             long messageId = await IdentitySequence.NextAsync(db, IdentityKind.Message, token);
@@ -282,6 +275,4 @@ public sealed class ExternalConversationStore
     private static Task<bool> AuthorizedAsync(GoblinDbContext db, string installation, string workspace, string user, CancellationToken token) =>
         db.ExternalIdentities.AnyAsync(x => x.InstallationId == installation && x.WorkspaceId == workspace && x.UserId == user &&
             x.Enabled && x.LocalActor == nameof(LocalActor.Owner), token);
-
-    private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
