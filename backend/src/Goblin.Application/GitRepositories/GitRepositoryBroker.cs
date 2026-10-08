@@ -161,7 +161,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         if (work.Attempts[^1].Status is not (AttemptStatus.Starting or AttemptStatus.Running))
             throw new ApplicationFailure("repository_operation_unavailable");
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
-        return await IdentityStore.NextAsync(db, IdentityKind.GitRepositoryOperation, token);
+        return await IdentitySequence.NextAsync(db, IdentityKind.GitRepositoryOperation, token);
     }
 
     public async Task<GitRepositoryOperationView> EnqueueAsync(long attemptId, long id, GitRepositoryOperationKind kind, Stream input, CancellationToken token)

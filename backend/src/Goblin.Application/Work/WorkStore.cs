@@ -163,7 +163,7 @@ public sealed partial class WorkStore
                 Persistence.Entities.Agent agent = await db.Agents.SingleOrDefaultAsync(x => x.Id == work.AgentId, token)
                     ?? throw new ApplicationFailure("agent_required");
                 Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == agent.ConnectionId, token);
-                long attemptId = await IdentityStore.NextAsync(db, IdentityKind.Attempt, token);
+                long attemptId = await IdentitySequence.NextAsync(db, IdentityKind.Attempt, token);
                 GitRepositoryChange? gitRepository = null; // Bound only by a verified proposal.
                 string? model = command.ModelSelectionProvided ? command.Model :
                     command.Model ?? (command.Action == WorkAction.Retry ? work.CurrentAttempt?.Target.RequestedModel : agent.Model);
@@ -194,7 +194,7 @@ public sealed partial class WorkStore
             case WorkAction.PrepareGitRepository:
                 ExecutionTarget previous = work.GitRepositoryRequest?.Target ?? work.CurrentAttempt?.Target
                     ?? throw new ApplicationFailure("invalid_command");
-                await SaveProposalAsync(db, work, await IdentityStore.NextAsync(db, IdentityKind.Attempt, token), previous,
+                await SaveProposalAsync(db, work, await IdentitySequence.NextAsync(db, IdentityKind.Attempt, token), previous,
                     proposal ?? throw new ApplicationFailure("repository_ambiguous"), work.CurrentAttempt?.Status == AttemptStatus.Failed && work.GitRepositoryAuthorization?.Retry == true, now, token);
                 break;
             case WorkAction.AuthorizeGitRepository:
@@ -247,7 +247,7 @@ public sealed partial class WorkStore
                 work.ApproveResult(command.AttemptId ?? 0, now);
                 break;
             case WorkAction.AddContext:
-                work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event, token), command.Text ?? "", now);
+                work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event, token), command.Text ?? "", now);
                 break;
             case WorkAction.Reconcile:
                 ExecutionAttempt? uncertain = work.CurrentAttempt;
@@ -313,7 +313,7 @@ public sealed partial class WorkStore
             return null;
         }
         if (failure is not null) work.DispatchFailed(attempt.Id, failure.Value, now);
-        else if (!work.TryClaimExecution(attempt.Id, await IdentityStore.NextAsync(db, IdentityKind.Event, token), environmentFor(work.Snapshot()), now)) return null;
+        else if (!work.TryClaimExecution(attempt.Id, await IdentitySequence.NextAsync(db, IdentityKind.Event, token), environmentFor(work.Snapshot()), now)) return null;
         await SaveAsync(db, row, work, now, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return failure is null ? work.Snapshot() : null;

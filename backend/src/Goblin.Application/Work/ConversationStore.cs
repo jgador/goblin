@@ -146,7 +146,7 @@ public sealed class ConversationStore
             var work = new WorkItem(workId, messages[0].Body, DateTimeOffset.UtcNow);
             work.Assign(WorkStore.DefaultAgentId, DateTimeOffset.UtcNow);
             foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1))
-                work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
+                work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
             db.WorkItems.Add(new()
             {
                 Id = workId,
@@ -164,7 +164,7 @@ public sealed class ConversationStore
         {
             Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
             var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, ContractJson.Options)!);
-            work.AddContext(await IdentityStore.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
+            work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
             row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
             row.Version++;
             row.UpdatedAt = DateTime.UtcNow;
