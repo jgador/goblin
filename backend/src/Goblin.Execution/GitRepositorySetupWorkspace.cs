@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,10 +16,13 @@ namespace Goblin.Execution;
 public sealed class GitRepositorySetupWorkspace
 {
     private readonly string _checkout;
-    private readonly Dictionary<string, string> _environment;
+    private readonly GitRepositorySetupCommandRunner _commands;
 
     public GitRepositorySetupWorkspace(string checkout, Dictionary<string, string> environment)
-    { _checkout = Path.GetFullPath(checkout); _environment = environment; }
+    {
+        _checkout = Path.GetFullPath(checkout);
+        _commands = new(_checkout, environment);
+    }
 
     public static string EnvironmentIdentity(string image) => image + " | " +
         System.Runtime.InteropServices.RuntimeInformation.OSDescription + " | " +
@@ -66,7 +67,7 @@ public sealed class GitRepositorySetupWorkspace
             if (!files.Any(x => x.Sha256 is not null)) throw new IOException("Setup has no repository evidence.");
             foreach (SetupCheck check in setup.Checks)
             {
-                string output = await RunAsync("/bin/sh", ["-c", check.Command], 16384, deadline.Token);
+                string output = await _commands.RunAsync("/bin/sh", ["-c", check.Command], 16384, deadline.Token);
                 if (output.Trim() != check.ExpectedOutput.Trim()) throw new IOException("Repository setup verification failed.");
             }
             observations.Add(new(setup, files, configuration));
@@ -105,7 +106,7 @@ public sealed class GitRepositorySetupWorkspace
 
     private async Task<string> ConfigurationHashAsync(CancellationToken token)
     {
-        string listing = await RunAsync("git", ["-c", "core.hooksPath=/dev/null", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], 4 * 1024 * 1024, token);
+        string listing = await _commands.RunAsync("git", ["-c", "core.hooksPath=/dev/null", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], 4 * 1024 * 1024, token);
         string[] paths = [.. listing.Split('\0', StringSplitOptions.RemoveEmptyEntries).Where(IsConfiguration)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
         if (paths.Length > 2048) throw new IOException("Too many setup inputs.");
@@ -126,47 +127,4 @@ public sealed class GitRepositorySetupWorkspace
             (name.StartsWith("requirements", StringComparison.Ordinal) && name.EndsWith(".txt", StringComparison.Ordinal));
     }
 
-    private async Task<string> RunAsync(string command, string[] arguments, int outputLimit, CancellationToken token)
-    {
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
-        deadline.CancelAfter(TimeSpan.FromSeconds(30));
-        token = deadline.Token;
-        var start = new ProcessStartInfo(command)
-        { WorkingDirectory = _checkout, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.Environment.Clear();
-        foreach (KeyValuePair<string, string> entry in _environment) start.Environment[entry.Key] = entry.Value;
-        foreach (string argument in arguments) start.ArgumentList.Add(argument);
-        using Process process = Process.Start(start) ?? throw new IOException("Setup verification unavailable.");
-        try
-        {
-            Task<string> output = ReadAsync(process.StandardOutput, outputLimit, token);
-            Task<string> error = ReadAsync(process.StandardError, 16384, token);
-            // A failed reader must retire the process before awaiting the other
-            // pipe; otherwise an oversized output could deadlock verification.
-            var pending = new List<Task> { output, error, process.WaitForExitAsync(token) };
-            while (pending.Count > 0)
-            {
-                Task completed = await Task.WhenAny(pending);
-                await completed; pending.Remove(completed);
-            }
-            if (process.ExitCode != 0) throw new IOException("Repository setup verification failed.");
-            return await output;
-        }
-        finally
-        {
-            if (!process.HasExited) { process.Kill(entireProcessTree: true); await process.WaitForExitAsync(CancellationToken.None); }
-        }
-    }
-
-    private static async Task<string> ReadAsync(StreamReader reader, int maximum, CancellationToken token)
-    {
-        var text = new StringBuilder();
-        char[] buffer = new char[4096]; int count;
-        while ((count = await reader.ReadAsync(buffer.AsMemory(), token)) != 0)
-        {
-            if (text.Length + count > maximum) throw new IOException("Setup verification output is too large.");
-            text.Append(buffer, 0, count);
-        }
-        return text.ToString();
-    }
 }
