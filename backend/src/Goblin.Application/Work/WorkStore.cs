@@ -64,13 +64,6 @@ public sealed partial class WorkStore
             .Select(x => new AgentView(x.Id, x.Name, x.ConnectionId, x.Model)).ToArrayAsync(token);
     }
 
-    public async Task<ConnectionView[]> ConnectionsAsync(CancellationToken token = default)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        return await db.Connections.AsNoTracking().OrderBy(x => x.Name)
-            .Select(x => new ConnectionView(x.Id, x.Runtime, x.Name, ContractValue.Parse<ConnectionAvailability>(x.Availability))).ToArrayAsync(token);
-    }
-
     public async Task<string[]> GitRepositorySuggestionsAsync(WorkSnapshot work, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
@@ -326,74 +319,6 @@ public sealed partial class WorkStore
             .Where(x => x.Status == nameof(AttemptStatus.Queued) || x.Status == nameof(AttemptStatus.Starting) || x.Status == nameof(AttemptStatus.Running) ||
                 x.Status == nameof(AttemptStatus.CancellationRequested) || x.Status == nameof(AttemptStatus.Uncertain) || (x.CleanupPending && !x.CleanupFailed) || x.WorkspaceRetained)
             .OrderBy(x => x.QueuedAt).ToArrayAsync(token);
-    }
-
-    public async Task<bool> SetConnectionAsync(long id, ConnectionAvailability availability, bool requireIdle,
-        CancellationToken token = default, bool completeChange = false,
-        bool observeAccount = false, string? accountSignature = null)
-    {
-        if (!Enum.IsDefined(availability)) throw new ApplicationFailure("invalid_command");
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
-        if (requireIdle && await ResourceReservations.Attempts(db.ExecutionAttempts).AnyAsync(x => x.ConnectionId == id, token))
-            throw new ApplicationFailure("connection_in_use");
-        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
-        if (row.Availability == nameof(ConnectionAvailability.Changing))
-        {
-            if (requireIdle) throw new ApplicationFailure("connection_in_use");
-            if (!completeChange) return false;
-        }
-        if (row.Availability == nameof(ConnectionAvailability.Verifying) && !requireIdle && !completeChange) return false;
-        bool changedAccount = (observeAccount && row.AccountSignature != accountSignature) || completeChange;
-        if (changedAccount)
-        {
-            row.AuthGeneration++;
-            row.AccountSignature = accountSignature;
-            await db.ConnectionModelCatalogs.Where(x => x.ConnectionId == id).ExecuteDeleteAsync(token);
-        }
-        row.Availability = availability.ToString();
-        row.ChangedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-        return changedAccount;
-    }
-
-    public async Task BeginVerificationAsync(long id, CancellationToken token = default)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
-        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id, token);
-        if (row.Availability == nameof(ConnectionAvailability.Verifying)) throw new ApplicationFailure("prompt_in_progress");
-        if (row.Availability == nameof(ConnectionAvailability.Changing) || await ResourceReservations.Attempts(db.ExecutionAttempts).AnyAsync(x => x.ConnectionId == id, token))
-            throw new ApplicationFailure("connection_in_use");
-        row.Availability = nameof(ConnectionAvailability.Verifying);
-        row.ChangedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(token);
-        await transaction.CommitAsync(token);
-    }
-
-    public async Task EndVerificationAsync(long id, bool available)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
-        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, default);
-        Persistence.Entities.Connection row = await db.Connections.SingleAsync(x => x.Id == id);
-        // A waiting account change owns the reservation until its operation ends.
-        if (row.Availability != nameof(ConnectionAvailability.Verifying)) return;
-        row.Availability = available ? nameof(ConnectionAvailability.Available) : nameof(ConnectionAvailability.Unavailable);
-        row.ChangedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
-        await transaction.CommitAsync();
-    }
-
-    // The self-hosted application has a single controller. Its verification
-    // process cannot survive a controller restart; durable attempts can.
-    public async Task RecoverConnectionReservationsAsync(CancellationToken token)
-    {
-        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
-        await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
-        await db.Connections.Where(x => x.Availability == nameof(ConnectionAvailability.Changing) || x.Availability == nameof(ConnectionAvailability.Verifying))
-            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, nameof(ConnectionAvailability.Unavailable)).SetProperty(x => x.ChangedAt, DateTime.UtcNow), token);
-        await transaction.CommitAsync(token);
     }
 
     private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)

@@ -1,3 +1,4 @@
+using Goblin.Application.Connections;
 using Goblin.Application.GitRepositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
@@ -37,6 +38,7 @@ public static class ApplicationServices
         services.AddScoped<WorkOutboxFactory>();
         services.AddScoped<IdentityStore>();
         services.AddScoped<WorkStore>();
+        services.AddScoped<ConnectionStore>();
         services.AddScoped<InspectionStore>();
         services.AddScoped<GitHubStore>();
         services.AddScoped<GitRepositorySetupStore>();

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application;
+using Goblin.Application.Connections;
 using Goblin.Application.GitRepositories;
 using Goblin.Application.Runtime;
 using Goblin.Application.Work;
@@ -432,8 +433,7 @@ public sealed class DurabilityTests
         Assert.Equal(2, source.Calls); // Failure cooldown prevents another upstream request.
 
         using IServiceScope scope = fixture.Host.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(1, Goblin.Contracts.ConnectionAvailability.Available, false,
-            observeAccount: true, accountSignature: "new-account");
+        await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAccountAsync(1, Goblin.Contracts.ConnectionAvailability.Available, "new-account");
         ModelCatalogView changed = await catalogs.GetAsync(1, 3, null);
         Assert.Empty(changed.Models); // A different account never sees the old catalog.
     }
@@ -916,7 +916,7 @@ public sealed class DurabilityTests
         WorkView uncertain = await fixture.Get(id);
         await Assert.ThrowsAsync<WorkRuleException>(() => fixture.Apply(WorkCommands.Retry(NextId(), id, uncertain.Version)));
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
-            await Assert.ThrowsAsync<ApplicationFailure>(() => scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Changing, true));
+            await Assert.ThrowsAsync<ApplicationFailure>(() => scope.ServiceProvider.GetRequiredService<ConnectionStore>().BeginChangeAsync(ConnectionStore.DefaultConnectionId));
         await fixture.RestartAsync();
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Stopped);
@@ -1047,7 +1047,7 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         using (IServiceScope scope = fixture.Host.Services.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Disconnected, false);
+            await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Disconnected);
         long id = NextId();
         WorkView w = await fixture.Apply(WorkCommands.Create(NextId(), id, "Unavailable connection"));
         w = await fixture.Apply(new(NextId(), id, WorkAction.Assign)
@@ -1092,9 +1092,9 @@ public sealed class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         using IServiceScope scope = fixture.Host.Services.CreateScope();
-        WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
-        await store.BeginVerificationAsync(WorkStore.DefaultAgentId);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
+        ConnectionStore store = scope.ServiceProvider.GetRequiredService<ConnectionStore>();
+        await store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId));
         long id = NextId();
         WorkView work = await fixture.Apply(WorkCommands.Create(NextId(), id, "Wait for verification"));
         work = await fixture.Apply(new(NextId(), id, WorkAction.Assign)
@@ -1108,13 +1108,68 @@ public sealed class DurabilityTests
         await coordinator.DispatchAsync(new(id, attempt), CancellationToken.None);
         Assert.Empty(fixture.Runtime.Starts);
         Assert.Equal(WorkStatus.Queued, (await fixture.Get(id)).Work.Status);
-        await store.SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Changing, requireIdle: true);
-        await store.EndVerificationAsync(WorkStore.DefaultAgentId, true);
-        Assert.Equal(Goblin.Contracts.ConnectionAvailability.Changing, (await store.ConnectionsAsync()).Single().Availability);
-        await store.SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Available, false, completeChange: true);
+        await store.BeginChangeAsync(ConnectionStore.DefaultConnectionId);
+        await store.EndVerificationAsync(ConnectionStore.DefaultConnectionId, true);
+        Assert.Equal(Goblin.Contracts.ConnectionAvailability.Changing, (await store.ListAsync()).Single().Availability);
+        await store.CompleteChangeAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Available, null);
         await coordinator.DispatchAsync(new(id, attempt), CancellationToken.None);
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
-        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(WorkStore.DefaultAgentId));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId));
+    }
+
+    [DatabaseFact]
+    public async Task ConnectionObservationsPreserveReservationsUntilRestartRecovery()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConnectionStore store = scope.ServiceProvider.GetRequiredService<ConnectionStore>();
+        long id = ConnectionStore.DefaultConnectionId;
+        await store.BeginVerificationAsync(id);
+        Assert.False(await store.ObserveAccountAsync(id, ConnectionAvailability.Disconnected, "other-account"));
+        await store.ObserveAvailabilityAsync(id, ConnectionAvailability.Unavailable);
+        Assert.Equal(ConnectionAvailability.Verifying, (await store.ListAsync()).Single().Availability);
+        await store.BeginChangeAsync(id);
+        Assert.False(await store.ObserveAccountAsync(id, ConnectionAvailability.Available, "other-account"));
+        await store.ObserveAvailabilityAsync(id, ConnectionAvailability.Unavailable);
+        await store.EndVerificationAsync(id, true);
+        Assert.Equal(ConnectionAvailability.Changing, (await store.ListAsync()).Single().Availability);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => store.BeginChangeAsync(id));
+        await fixture.RestartAsync();
+        using IServiceScope recovered = fixture.Host.Services.CreateScope();
+        Assert.Equal(ConnectionAvailability.Unavailable,
+            (await recovered.ServiceProvider.GetRequiredService<ConnectionStore>().ListAsync()).Single().Availability);
+    }
+
+    [DatabaseFact]
+    public async Task ConnectionAccountChangesInvalidateCatalogsWithoutChangingWorkHistory()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        WorkView work = await fixture.Apply(WorkCommands.Create(NextId(), NextId(), "Preserve durable history"));
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConnectionStore store = scope.ServiceProvider.GetRequiredService<ConnectionStore>();
+        long id = ConnectionStore.DefaultConnectionId;
+        Assert.True(await store.ObserveAccountAsync(id, ConnectionAvailability.Available, "first-account"));
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        long generation = await db.Connections.Where(x => x.Id == id).Select(x => x.AuthGeneration).SingleAsync();
+        db.ConnectionModelCatalogs.Add(new()
+        {
+            ConnectionId = id,
+            AuthGeneration = generation,
+            Catalog = "[]",
+            ExecutableStamp = "test"
+        });
+        await db.SaveChangesAsync();
+        Assert.False(await store.ObserveAccountAsync(id, ConnectionAvailability.Available, "first-account"));
+        await store.ObserveAvailabilityAsync(id, ConnectionAvailability.Unavailable);
+        Assert.True(await db.ConnectionModelCatalogs.AnyAsync(x => x.ConnectionId == id));
+        await store.BeginChangeAsync(id);
+        // Completing an explicit change invalidates discovery even if the
+        // provider presents the same account signature again.
+        Assert.True(await store.CompleteChangeAsync(id, ConnectionAvailability.Available, "first-account"));
+        Assert.False(await db.ConnectionModelCatalogs.AnyAsync(x => x.ConnectionId == id));
+        Assert.Equal(generation + 1, await db.Connections.Where(x => x.Id == id).Select(x => x.AuthGeneration).SingleAsync());
+        Assert.Equal(work.Version, (await fixture.Get(work.Work.Id)).Version);
+        Assert.Equal(work.Work.History, (await fixture.Get(work.Work.Id)).Work.History);
     }
 
     [DatabaseFact]
@@ -1242,7 +1297,7 @@ public sealed class DurabilityTests
             var fixture = new Fixture(app.ConnectionString, name, Path.Combine(Path.GetTempPath(), name), catalog);
             await fixture.StartAsync();
             using IServiceScope scope = fixture.Host.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().SetConnectionAsync(WorkStore.DefaultAgentId, Goblin.Contracts.ConnectionAvailability.Available, false);
+            await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Available);
             return fixture;
         }
 

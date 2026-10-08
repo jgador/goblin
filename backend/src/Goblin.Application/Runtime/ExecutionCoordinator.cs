@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Connections;
 using Goblin.Application.Work;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -177,7 +178,7 @@ public sealed class WorkRecovery : BackgroundService
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
         using IServiceScope scope = _scopes.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverConnectionReservationsAsync(cancellationToken);
+        await scope.ServiceProvider.GetRequiredService<ConnectionStore>().RecoverReservationsAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
 
