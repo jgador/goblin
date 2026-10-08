@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -64,12 +63,7 @@ public sealed class GitRepositorySetupStore
 
     public async Task SaveAsync(long attemptId, SetupMemoryWrite request, CancellationToken token)
     {
-        if (!GitRepositorySetupRules.SafeText(request.Environment, 1000) || request.TurnNumber <= 0 ||
-            request.Observations is not { Length: > 0 and <= GitRepositorySetupRules.MaxObservations } ||
-            !request.Observations.All(GitRepositorySetupRules.Valid) ||
-            request.Observations.Select(x => x.Setup.Topic).Distinct(StringComparer.Ordinal).Count() != request.Observations.Length ||
-            JsonSerializer.SerializeToUtf8Bytes(request, ContractJson.Options).Length > GitRepositorySetupRules.MaxPayloadBytes)
-            throw new ApplicationFailure("repository_setup_invalid");
+        GitRepositorySetupMemoryPolicy.Validate(request);
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         WorkSnapshot work = await CurrentAsync(db, attemptId, token);
@@ -85,15 +79,12 @@ public sealed class GitRepositorySetupStore
         {
             if (previous.Length != request.Observations.Length || request.Observations.Any(observation => !previous.Any(row =>
                 row.Topic == observation.Setup.Topic && row.CheckpointId == request.CheckpointId && row.Environment == request.Environment &&
-                JsonSerializer.Serialize(JsonSerializer.Deserialize<VerifiedGitRepositorySetup>(row.Observation, ContractJson.Options), ContractJson.Options) ==
-                JsonSerializer.Serialize(observation, ContractJson.Options))))
+                GitRepositorySetupMemoryPolicy.Equivalent(row.Observation, observation))))
                 throw new ApplicationFailure("repository_setup_changed");
             return;
         }
         foreach (VerifiedGitRepositorySetup observation in request.Observations)
         {
-            string fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new
-            { observation.ConfigurationHash, Files = observation.Files.OrderBy(x => x.Path, StringComparer.Ordinal) }, ContractJson.Options)));
             db.GitRepositorySetupMemories.Add(new()
             {
                 GitRepositoryId = grant.GitRepositoryId,
@@ -105,7 +96,7 @@ public sealed class GitRepositorySetupStore
                 TurnNumber = request.TurnNumber,
                 Topic = observation.Setup.Topic,
                 Environment = request.Environment,
-                Fingerprint = fingerprint,
+                Fingerprint = GitRepositorySetupMemoryPolicy.Fingerprint(observation),
                 Observation = JsonSerializer.Serialize(observation, ContractJson.Options),
                 VerifiedAt = DateTime.UtcNow
             });
@@ -115,19 +106,7 @@ public sealed class GitRepositorySetupStore
     }
 
     public async Task SaveAsync(long attemptId, Stream input, CancellationToken token)
-    {
-        using var buffer = new MemoryStream();
-        byte[] chunk = new byte[4096]; int count;
-        while ((count = await input.ReadAsync(chunk, token)) > 0)
-        {
-            if (buffer.Length + count > GitRepositorySetupRules.MaxPayloadBytes) throw new ApplicationFailure("repository_setup_invalid");
-            await buffer.WriteAsync(chunk.AsMemory(0, count), token);
-        }
-        SetupMemoryWrite request;
-        try { request = JsonSerializer.Deserialize<SetupMemoryWrite>(buffer.ToArray(), ContractJson.Options) ?? throw new JsonException(); }
-        catch (JsonException) { throw new ApplicationFailure("repository_setup_invalid"); }
-        await SaveAsync(attemptId, request, token);
-    }
+        => await SaveAsync(attemptId, await GitRepositorySetupMemoryPolicy.ReadAsync(input, token), token);
 
     private static async Task<WorkSnapshot> CurrentAsync(GoblinDbContext db, long attemptId, CancellationToken token)
     {
