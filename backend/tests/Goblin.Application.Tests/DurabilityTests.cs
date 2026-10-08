@@ -776,6 +776,64 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
+    public async Task RepositoryAccessPreservesOperationApprovalAndSetupProvenanceChecks()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        fixture.Runtime.GitRepositoryExecution = true;
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        GitHubStore settings = scope.ServiceProvider.GetRequiredService<GitHubStore>();
+        await settings.ObserveAsync(new("first", "42", "owner"), GitHubConnectionStatus.Connected);
+        await settings.SetGitRepositoryAsync(new(22, "owner/repo", "main", true), true, "first");
+        WorkSnapshot work = (await fixture.StartGitRepositoryWork("owner/repo")).Work;
+        AttemptSnapshot attempt = work.Attempts[^1];
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        await GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id, default);
+        await GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber, default);
+
+        async Task RejectedByBoth()
+        {
+            Assert.Equal("repository_operation_unavailable", (await Assert.ThrowsAsync<ApplicationFailure>(() =>
+                GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id, default))).Code);
+            Assert.Equal("repository_setup_unavailable", (await Assert.ThrowsAsync<ApplicationFailure>(() =>
+                GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber, default))).Code);
+        }
+        foreach (string availability in new[] { "Changing", "Disconnected", "Unavailable" })
+        {
+            await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, availability));
+            await RejectedByBoth();
+        }
+        await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, "Connected").SetProperty(x => x.Generation, "changed"));
+        await RejectedByBoth();
+        await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.Generation, "first").SetProperty(x => x.AccountId, "99"));
+        await RejectedByBoth();
+        await db.GithubConnections.Where(x => x.Id == 1).ExecuteUpdateAsync(s => s.SetProperty(x => x.AccountId, "42"));
+        await db.GithubRepositories.Where(x => x.Id == 22).ExecuteUpdateAsync(s => s.SetProperty(x => x.Enabled, false));
+        await RejectedByBoth();
+        await db.GithubRepositories.Where(x => x.Id == 22).ExecuteUpdateAsync(s => s.SetProperty(x => x.Enabled, true).SetProperty(x => x.Name, "owner/renamed"));
+        await GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id, default);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber, default));
+        await db.GithubRepositories.Where(x => x.Id == 22).ExecuteUpdateAsync(s => s.SetProperty(x => x.Name, "owner/repo"));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, work, attempt.Id + 1, default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireSetupAsync(db, work, attempt.Id, attempt.TurnNumber + 1, default));
+
+        var unapproved = new WorkSnapshot { Attempts = work.Attempts };
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, unapproved, attempt.Id, default));
+        await GitRepositoryAccess.RequireSetupAsync(db, unapproved, attempt.Id, attempt.TurnNumber, default);
+        GitRepositoryChange repository = attempt.Target.GitRepository!;
+        var legacy = new WorkSnapshot
+        {
+            Attempts = [new AttemptSnapshot
+            {
+                Id = attempt.Id,
+                Target = new(attempt.Target.Runtime, attempt.Target.ConnectionId, attempt.Target.RequestedModel,
+                    new(repository.GitRepository, repository.GitAuthorName, repository.GitAuthorEmail,
+                        repository.Grant! with { PolicyVersion = 1 }), attempt.Target.RequestedEffort)
+            }]
+        };
+        await GitRepositoryAccess.RequireOperationAsync(db, legacy, attempt.Id, default);
+    }
+
+    [DatabaseFact]
     public async Task GitRepositoryPublicationIsDurableDeduplicatedAndReconciledWithoutReplay()
     {
         await using Fixture fixture = await Fixture.CreateAsync();

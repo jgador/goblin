@@ -115,13 +115,7 @@ public sealed class GitRepositorySetupStore
         if (owner is null || owner.Status is not ("Starting" or "Running") || owner.State is null)
             throw new ApplicationFailure("repository_setup_unavailable");
         WorkSnapshot work = JsonSerializer.Deserialize<WorkSnapshot>(owner.State, ContractJson.Options)!;
-        AttemptSnapshot attempt = work.Attempts[^1];
-        GitRepositoryGrant? grant = attempt.Target.GitRepository?.Grant;
-        if (attempt.Id != attemptId || attempt.TurnNumber != owner.TurnNumber || grant is null ||
-            !await db.GithubRepositories.AnyAsync(x => x.Id == grant.GitRepositoryId && x.ConnectionId == grant.ConnectionId &&
-                x.Name == attempt.Target.GitRepository!.GitRepository && x.Enabled && x.Connection.AccountId == grant.AccountId &&
-                x.Connection.Generation == grant.Generation && x.Connection.Availability == "Connected", token))
-            throw new ApplicationFailure("repository_setup_unavailable");
+        await GitRepositoryAccess.RequireSetupAsync(db, work, attemptId, owner.TurnNumber, token);
         return work;
     }
 }

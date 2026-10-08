@@ -94,15 +94,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
             ?? throw new ApplicationFailure("repository_operation_unavailable");
         using IServiceScope scope = _scopes.CreateScope();
         WorkSnapshot work = (await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(attempt.WorkId, token)).Work;
-        if (work.Attempts[^1].Id != attemptId || work.Attempts[^1].Target.GitRepository?.Grant is null)
-            throw new ApplicationFailure("repository_operation_unavailable");
-        GitRepositoryGrant grant = work.Attempts[^1].Target.GitRepository!.Grant!;
-        if (grant.PolicyVersion == 2 && (work.GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approved ||
-            approved.Id != attemptId || approved.Target != work.Attempts[^1].Target) ||
-            !await db.GithubRepositories.AnyAsync(x => x.Id == grant.GitRepositoryId && x.Enabled &&
-                x.ConnectionId == grant.ConnectionId && x.Connection.Generation == grant.Generation &&
-                x.Connection.AccountId == grant.AccountId && x.Connection.Availability == nameof(GitHubConnectionStatus.Connected), token))
-            throw new ApplicationFailure("repository_operation_unavailable");
+        await GitRepositoryAccess.RequireOperationAsync(db, work, attemptId, token);
         return work;
     }
 
