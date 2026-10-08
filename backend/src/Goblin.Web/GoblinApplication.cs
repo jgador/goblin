@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Web;
 
@@ -23,8 +22,8 @@ public static class GoblinApplication
             ApplicationName = typeof(GoblinApplication).Assembly.FullName,
             ContentRootPath = AppContext.BaseDirectory
         });
-        WebServices.Configure(builder, options, workspace, runtimeOptions);
-        bool gitRepositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(builder.Configuration[Env.GoblinExecutionNamespace]);
+        WebRuntimeConfiguration configuration = WebServices.Configure(builder, options, workspace, runtimeOptions);
+        bool gitRepositoryListener = options.EnableWork && !string.IsNullOrWhiteSpace(configuration.ExecutionNamespace);
         builder.WebHost.UseUrls(gitRepositoryListener ? [options.ListenUrl, "http://0.0.0.0:8788"] : [options.ListenUrl]);
 
         WebApplication app = builder.Build();
