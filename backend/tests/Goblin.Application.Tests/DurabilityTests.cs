@@ -935,8 +935,8 @@ public sealed class DurabilityTests
         await Assert.ThrowsAsync<ApplicationFailure>(() => broker.AuthorizeAsync(attempt, "00", true, default));
         long operation = await broker.ReserveOperationIdAsync(attempt, default);
         fixture.Remote.Fail = true;
-        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
-        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default)));
         for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, operation, default)).State is GitRepositoryOperationState.Queued or GitRepositoryOperationState.Running; i++) await Task.Delay(50);
         if ((await broker.StatusAsync(attempt, operation, default)).State == GitRepositoryOperationState.Queued)
         {
@@ -947,12 +947,109 @@ public sealed class DurabilityTests
         Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
         Assert.Equal(1, fixture.Remote.Calls);
         Assert.Equal(ObservationKind.Uncertain, (await broker.ObserveAsync(w.Work, default))!.Kind);
-        await broker.ExecuteAsync(operation, default);
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => broker.ExecuteAsync(operation, default)));
         Assert.Equal(1, fixture.Remote.Calls);
         fixture.Remote.Reconciled = true;
         Assert.Null(await broker.ObserveAsync(w.Work, default));
         Assert.Equal(Goblin.Contracts.GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
         await Assert.ThrowsAsync<ApplicationFailure>(() => broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([4]), default));
+        Assert.Equal(1, fixture.Remote.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task RejectedRepositoryOperationRollsBackDispatchAndDoesNotLeakIntoTheNextUpload()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo");
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        await broker.PrepareAsync(work.Work, default);
+        long attempt = work.Work.Attempts[^1].Id;
+        long rejected = await broker.ReserveOperationIdAsync(attempt, default);
+        await fixture.RejectId("repository_operations", rejected);
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            broker.EnqueueAsync(attempt, rejected, GitRepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default));
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
+        Assert.False(await db.GitRepositoryOperations.AnyAsync(x => x.Id == rejected));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<int>("""
+            SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelopes
+            WHERE message_type LIKE '%ExecuteGitRepositoryOperation%'
+            """).SingleAsync());
+        Assert.Equal(0, fixture.Remote.Calls);
+        long accepted = await broker.ReserveOperationIdAsync(attempt, default);
+        await broker.EnqueueAsync(attempt, accepted, GitRepositoryOperationKind.Checkpoint, new MemoryStream([4, 5, 6]), default);
+        for (int i = 0; i < 100 && (await broker.StatusAsync(attempt, accepted, default)).State != GitRepositoryOperationState.Succeeded; i++) await Task.Delay(25);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, accepted, default)).State);
+        Assert.Equal(0, fixture.Remote.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task CancellationDuringRepositoryPublicationRetainsUncertaintyUntilReconciled()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo", "Publish repository");
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        await broker.PrepareAsync(work.Work, default);
+        long attempt = work.Work.Attempts[^1].Id;
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Remote.Execute = async token =>
+        {
+            started.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            throw new InvalidOperationException("Publication was expected to be cancelled");
+        };
+        await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => broker.StopAsync(work.Work, default));
+        Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
+        await broker.ExecuteAsync(operation, default);
+        Assert.Equal(1, fixture.Remote.Calls);
+        fixture.Remote.Reconciled = true;
+        await broker.StopAsync(work.Work, default);
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
+        Assert.Equal(1, fixture.Remote.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task RepositoryPublicationOutageEvidenceSurvivesRestartWithoutReplayingTheRemoteCall()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo", "Publish repository");
+        GitRepositoryBroker broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        await broker.PrepareAsync(work.Work, default);
+        long attempt = work.Work.Attempts[^1].Id;
+        long operation = await broker.ReserveOperationIdAsync(attempt, default);
+        var unavailable = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Remote.Execute = async _ =>
+        {
+            await fixture.SetDatabaseAvailable(false);
+            unavailable.SetResult();
+            throw new IOException("Lost publication response");
+        };
+        string evidence = Path.Combine(fixture.Host.Services.GetRequiredService<GitRepositoryBrokerOptions>().Directory,
+            operation.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".failed");
+        try
+        {
+            await broker.EnqueueAsync(attempt, operation, GitRepositoryOperationKind.Publish, new MemoryStream([1, 2, 3]), default);
+            await unavailable.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            for (int i = 0; i < 200 && !File.Exists(evidence); i++) await Task.Delay(25);
+            Assert.True(File.Exists(evidence));
+        }
+        finally { await fixture.SetDatabaseAvailable(true); }
+        await fixture.RestartAsync();
+        broker = fixture.Host.Services.GetRequiredService<GitRepositoryBroker>();
+        Assert.Equal(ObservationKind.Uncertain, (await broker.ObserveAsync(work.Work, default))!.Kind);
+        Assert.False(File.Exists(evidence));
+        Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
+        await broker.ExecuteAsync(operation, default);
+        Assert.Equal(1, fixture.Remote.Calls);
+        fixture.Remote.Reconciled = true;
+        Assert.Null(await broker.ObserveAsync(work.Work, default));
+        Assert.Equal(GitRepositoryOperationState.Succeeded, (await broker.StatusAsync(attempt, operation, default)).State);
         Assert.Equal(1, fixture.Remote.Calls);
     }
 
@@ -1380,6 +1477,7 @@ public sealed class DurabilityTests
     {
         public bool Fail { get; set; }
         public bool Reconciled { get; set; }
+        public Func<CancellationToken, Task<GitRepositoryOperationResult>>? Execute { get; set; }
         public int Calls { get; private set; }
         public int CheckpointPreparations { get; private set; }
 
@@ -1393,6 +1491,7 @@ public sealed class DurabilityTests
         public Task<GitRepositoryOperationResult> ExecuteAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)
         {
             Calls++;
+            if (Execute is not null) return Execute(token);
             if (Fail) throw new IOException("Lost upstream response");
             return Task.FromResult(new GitRepositoryOperationResult(commit, "https://github.com/owner/repo/tree/" + gitRepository.Grant!.Branch));
         }
@@ -1571,10 +1670,13 @@ public sealed class DurabilityTests
             return await Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         }
 
-        public async Task<WorkView> StartGitRepositoryWork(string gitRepository)
+        public Task<WorkView> StartGitRepositoryWork(string gitRepository) =>
+            StartGitRepositoryWork(gitRepository, "Repository setup memory");
+
+        public async Task<WorkView> StartGitRepositoryWork(string gitRepository, string objective)
         {
             long id = NextId();
-            WorkView work = await Apply(WorkCommands.Create(NextId(), id, "Repository setup memory"));
+            WorkView work = await Apply(WorkCommands.Create(NextId(), id, objective));
             work = await Apply(new(NextId(), id, WorkAction.Assign)
             {
                 ExpectedVersion = work.Version,
