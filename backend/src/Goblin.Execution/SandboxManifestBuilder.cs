@@ -19,19 +19,19 @@ internal sealed class SandboxManifestBuilder
 
     internal K.ObjectMeta Metadata(string name, WorkSnapshot work, string? ns = null,
         string? resourceVersion = null, string? phase = null) => new()
-    {
-        Name = name,
-        Namespace = ns,
-        ResourceVersion = resourceVersion,
-        Labels = new Dictionary<string, string>
         {
-            ["goblin-attempt"] = work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture),
-            ["goblin-work"] = work.Id.ToString(CultureInfo.InvariantCulture),
-            ["app"] = "goblin-execution",
-            ["goblin-workspace"] = work.Attempts[^1].WorkspaceNumber.ToString(CultureInfo.InvariantCulture),
-            ["goblin-phase"] = phase ?? "running"
-        }
-    };
+            Name = name,
+            Namespace = ns,
+            ResourceVersion = resourceVersion,
+            Labels = new Dictionary<string, string>
+            {
+                ["goblin-attempt"] = work.Attempts[^1].Id.ToString(CultureInfo.InvariantCulture),
+                ["goblin-work"] = work.Id.ToString(CultureInfo.InvariantCulture),
+                ["app"] = "goblin-execution",
+                ["goblin-workspace"] = work.Attempts[^1].WorkspaceNumber.ToString(CultureInfo.InvariantCulture),
+                ["goblin-phase"] = phase ?? "running"
+            }
+        };
 
     internal K.Sandbox Create(WorkSnapshot work, string ns, string name, bool suspended,
         string? resourceVersion = null, string? phase = null)

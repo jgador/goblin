@@ -64,8 +64,8 @@ public sealed class GitRepositorySetupMemoryPolicyTests
         GitRepositorySetup setup = Observation.Setup with { Files = ["a.props", "b.props"] };
         var first = new VerifiedGitRepositorySetup(setup,
             [new("a.props", new string('a', 64)), new("b.props", new string('b', 64))], new string('c', 64));
-        var reordered = first with { Files = [first.Files[1], first.Files[0]] };
-        var changed = first with { ConfigurationHash = new string('d', 64) };
+        VerifiedGitRepositorySetup reordered = first with { Files = [first.Files[1], first.Files[0]] };
+        VerifiedGitRepositorySetup changed = first with { ConfigurationHash = new string('d', 64) };
 
         Assert.Equal(GitRepositorySetupMemoryPolicy.Fingerprint(first), GitRepositorySetupMemoryPolicy.Fingerprint(reordered));
         Assert.NotEqual(GitRepositorySetupMemoryPolicy.Fingerprint(first), GitRepositorySetupMemoryPolicy.Fingerprint(changed));

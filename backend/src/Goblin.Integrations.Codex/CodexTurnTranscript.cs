@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
 
@@ -9,7 +10,7 @@ namespace Goblin.Integrations.Codex;
 // collection. Callers retain endpoint-specific completion and failure policy.
 internal sealed class CodexTurnTranscript
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly int _maxMessages;
     private readonly int _maxCharacters;
     private readonly string _separator;
@@ -20,11 +21,9 @@ internal sealed class CodexTurnTranscript
     private readonly Func<Turn, Exception?> _completionError;
     private readonly Func<string, Exception?> _resultError;
     private readonly Func<Exception>? _notificationError;
-    private readonly OrderedDictionary<string, string> _messages = new();
+    private readonly OrderedDictionary<string, string> _messages = [];
     private string? _threadId;
     private string? _turnId;
-    private string? _latestProgress;
-    private bool _finished;
 
     internal CodexTurnTranscript(int maxMessages, int maxCharacters, string separator,
         bool countSeparators, bool trimResult, int progressLimit, Func<Exception> tooLarge,
@@ -50,9 +49,19 @@ internal sealed class CodexTurnTranscript
 
     internal string? TurnId { get { lock (_gate) return _turnId; } }
 
-    internal string? LatestProgress { get { lock (_gate) return _latestProgress; } }
+    internal string? LatestProgress
+    {
+        get { lock (_gate) return field; }
 
-    internal bool Finished { get { lock (_gate) return _finished; } }
+        private set;
+    }
+
+    internal bool Finished
+    {
+        get { lock (_gate) return field; }
+
+        private set;
+    }
 
     internal void SetThread(string threadId)
     {
@@ -92,7 +101,7 @@ internal sealed class CodexTurnTranscript
             }
             if (notification is ItemCompletedServerNotification item) Save(item.Params.Item);
             if (notification is not TurnCompletedServerNotification completed) return;
-            _finished = true;
+            Finished = true;
             Turn turn = completed.Params.Turn;
             Exception? completionError = _completionError(turn);
             if (completionError is not null)
@@ -115,7 +124,7 @@ internal sealed class CodexTurnTranscript
         if (message.Phase == MessagePhase.Commentary)
         {
             if (_progressLimit > 0)
-                _latestProgress = message.Text[..Math.Min(message.Text.Length, _progressLimit)];
+                LatestProgress = message.Text[..Math.Min(message.Text.Length, _progressLimit)];
             return;
         }
         _messages[message.Id] = message.Text;

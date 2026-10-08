@@ -47,7 +47,7 @@ public sealed class ExecutionRecoveryQueryTests
             WorkspaceRetained = retained
         };
 
-        ExecutionRecoveryRequest[] requests = ExecutionRecoveryQuery.Select(new[] { row }.AsQueryable()).ToArray();
+        ExecutionRecoveryRequest[] requests = [.. ExecutionRecoveryQuery.Select(new[] { row }.AsQueryable())];
 
         if (!expected)
         {
@@ -66,19 +66,18 @@ public sealed class ExecutionRecoveryQueryTests
     public void RecoveryPreservesQueueOrderAcrossWorkItemsAndTurns()
     {
         DateTime now = new(2026, 10, 8, 8, 0, 0, DateTimeKind.Utc);
-        var rows = new[]
-        {
+        AttemptRow[] rows =
+        [
             new AttemptRow { Id = 9, WorkId = 3, TurnNumber = 2, Status = "Queued", QueuedAt = now.AddMinutes(2) },
             new AttemptRow { Id = 8, WorkId = 2, TurnNumber = 1, Status = "Running", QueuedAt = now },
             new AttemptRow { Id = 7, WorkId = 1, TurnNumber = 3, Status = "Failed", QueuedAt = now.AddMinutes(1) }
-        };
+        ];
 
-        Assert.Equal(new[]
-        {
+        Assert.Equal(
+        [
             (2L, 8L, 1, ExecutionRecoveryAction.Reconcile),
             (3L, 9L, 2, ExecutionRecoveryAction.Dispatch)
-        }, ExecutionRecoveryQuery.Select(rows.AsQueryable()).AsEnumerable()
-            .Select(x => (x.WorkId, x.AttemptId, x.TurnNumber, x.Action)).ToArray());
+        ], [.. ExecutionRecoveryQuery.Select(rows.AsQueryable()).AsEnumerable().Select(x => (x.WorkId, x.AttemptId, x.TurnNumber, x.Action))]);
     }
 
     [Fact]

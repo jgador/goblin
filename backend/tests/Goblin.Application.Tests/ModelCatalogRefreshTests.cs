@@ -19,7 +19,7 @@ public sealed class ModelCatalogRefreshTests
         refreshes.Schedule(1, async token =>
         {
             started.SetResult();
-            using var registration = token.Register(() => cancelled.SetResult());
+            using CancellationTokenRegistration registration = token.Register(() => cancelled.SetResult());
             await released.Task;
         });
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));

@@ -33,8 +33,10 @@ public sealed class ResourceReservationTests
     {
         var row = new AttemptRow
         {
-            Status = status.ToString(), CleanupPending = cleanup,
-            CleanupFailed = cleanup, WorkspaceRetained = retained
+            Status = status.ToString(),
+            CleanupPending = cleanup,
+            CleanupFailed = cleanup,
+            WorkspaceRetained = retained
         };
         Assert.Equal(expected, ResourceReservations.Attempts(new[] { row }.AsQueryable()).Any());
     }
@@ -67,14 +69,14 @@ public sealed class ResourceReservationTests
     [Fact]
     public void ConnectionReservationsIncludeTextAttemptsButSandboxCountsExcludeThem()
     {
-        var rows = new[]
+        IQueryable<AttemptRow> rows = new[]
         {
             new AttemptRow { Id = 1, ConnectionId = 7, Status = "Running" },
             new AttemptRow { Id = 2, ConnectionId = 8, GithubConnectionId = 9, Status = "Waiting", WorkspaceRetained = true },
             new AttemptRow { Id = 3, ConnectionId = 8, GithubConnectionId = 9, Status = "Queued" },
             new AttemptRow { Id = 4, ConnectionId = 8, GithubConnectionId = 9, Status = "Failed", CleanupPending = true }
         }.AsQueryable();
-        var reservations = ResourceReservations.Attempts(rows);
+        IQueryable<AttemptRow> reservations = ResourceReservations.Attempts(rows);
         Assert.Equal(new long[] { 1 }, reservations.Where(x => x.ConnectionId == 7).Select(x => x.Id));
         Assert.Equal(new long[] { 2, 4 }, reservations.Where(x => x.GithubConnectionId != null).Select(x => x.Id));
         Assert.Equal(new long[] { 4 }, reservations.Where(x => x.Id != 2 && x.GithubConnectionId != null).Select(x => x.Id));

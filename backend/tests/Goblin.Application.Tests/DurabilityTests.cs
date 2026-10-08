@@ -472,7 +472,7 @@ public sealed class DurabilityTests
         Assert.True(discovery.IsCancellationRequested);
         Assert.True(cancelled.Task.IsCompletedSuccessfully);
         await using GoblinDbContext db = await factory.CreateDbContextAsync();
-        var saved = await db.ConnectionModelCatalogs.SingleAsync(x => x.ConnectionId == 1);
+        Persistence.Entities.ConnectionModelCatalog saved = await db.ConnectionModelCatalogs.SingleAsync(x => x.ConnectionId == 1);
         Assert.Equal("v1", saved.ExecutableStamp);
         Assert.False(saved.RefreshFailed);
         Assert.Null(saved.RetryAfter);
