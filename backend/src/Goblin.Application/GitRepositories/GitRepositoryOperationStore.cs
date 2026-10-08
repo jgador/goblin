@@ -27,18 +27,6 @@ internal sealed class GitRepositoryOperationSnapshot
     internal string? Url { get; init; }
 }
 
-internal sealed class GitRepositoryOperationUpload
-{
-    internal GitRepositoryOperationUpload() { }
-
-    internal required long Id { get; init; }
-    internal required long AttemptId { get; init; }
-    internal required GitRepositoryOperationKind Kind { get; init; }
-    internal required string Fingerprint { get; init; }
-    internal required string UploadPath { get; init; }
-    internal required string BundlePath { get; init; }
-}
-
 // Owns durable operation admission, dispatch and history. Runtime/network calls
 // use snapshots and never retain a database context or tracked entity.
 public sealed class GitRepositoryOperationStore

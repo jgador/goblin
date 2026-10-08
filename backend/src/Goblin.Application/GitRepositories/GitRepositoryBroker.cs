@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Work;
@@ -61,6 +60,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
     private readonly string _directory;
     private readonly GitRepositoryCapability _capability;
     private readonly GitRepositoryOperationEvidence _evidence;
+    private readonly GitRepositoryOperationUploadStager _uploads;
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _locks = new();
     private readonly ConcurrentDictionary<long, CancellationTokenSource> _active = new();
 
@@ -73,11 +73,8 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         if (!OperatingSystem.IsWindows()) File.SetUnixFileMode(_directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         _capability = new(Path.Combine(_directory, "capability-key"));
         _evidence = new(_directory);
+        _uploads = new(_directory);
     }
-
-    private string DirectoryFor(long attemptId) => Path.Combine(_directory, attemptId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-
-    private string BundleFor(long attemptId, long id) => Path.Combine(DirectoryFor(attemptId), id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".bundle");
 
     private string Capability(WorkSnapshot work)
     {
@@ -103,7 +100,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         if (string.IsNullOrEmpty(commit) || commit.Length != 40 || !commit.All(Uri.IsHexDigit)) throw new ApplicationFailure("workspace_changed");
         if (!await _operations.HasCheckpointAsync(attempt.Id, commit, token) ||
-            (attempt.Target.GitRepository!.Grant!.PolicyVersion == 1 || attempt.Target.GitRepository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.GitRepository!, DirectoryFor(attempt.Id), GitRepositoryOperationKind.Publish, commit, token) is null)
+            (attempt.Target.GitRepository!.Grant!.PolicyVersion == 1 || attempt.Target.GitRepository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.GitRepository!, _uploads.DirectoryFor(attempt.Id), GitRepositoryOperationKind.Publish, commit, token) is null)
             throw new ApplicationFailure("workspace_checkpoint_unconfirmed");
     }
 
@@ -128,12 +125,12 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         Goblin.Contracts.Runtime.WorkspaceCheckpoint? saved = _checkpoints is null ? null : await _checkpoints.LatestAsync(work.Id, gitRepository.GitRepository, token);
         bool published = saved is not null && work.Attempts.Any(x => x.Id == saved.AttemptId &&
             (x.Target.GitRepository?.Grant?.PolicyVersion == 1 || x.Target.GitRepository?.Grant?.AllowPush == true));
-        if (saved is not null && published) await _remote.PrepareCheckpointAsync(gitRepository, DirectoryFor(attempt.Id), saved, token);
-        else await _remote.PrepareAsync(gitRepository, DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
+        if (saved is not null && published) await _remote.PrepareCheckpointAsync(gitRepository, _uploads.DirectoryFor(attempt.Id), saved, token);
+        else await _remote.PrepareAsync(gitRepository, _uploads.DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
         return Capability(work);
     }
 
-    public string InputPath(long attemptId) => Path.Combine(DirectoryFor(attemptId), "input.bundle");
+    public string InputPath(long attemptId) => Path.Combine(_uploads.DirectoryFor(attemptId), "input.bundle");
 
     public async Task<long> ReserveOperationIdAsync(long attemptId, CancellationToken token)
     {
@@ -149,33 +146,8 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         WorkSnapshot work = await WorkAsync(attemptId, token);
         GitRepositoryChange gitRepository = work.Attempts[^1].Target.GitRepository!;
         gitRepository.Grant!.Authorize(work.Id, attemptId, gitRepository.GitRepository, gitRepository.GitRepository, gitRepository.Grant.Branch, kind);
-        string temporary = Path.Combine(DirectoryFor(attemptId), Guid.NewGuid().ToString("N") + ".upload");
-        string fingerprint;
-        try
-        {
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            await using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            {
-                byte[] buffer = new byte[65536]; long length = 0; int count;
-                while ((count = await input.ReadAsync(buffer, token)) != 0)
-                {
-                    length += count;
-                    if (length > 128 * 1024 * 1024) throw new ApplicationFailure("repository_operation_unavailable");
-                    hash.AppendData(buffer, 0, count); await file.WriteAsync(buffer.AsMemory(0, count), token);
-                }
-            }
-            fingerprint = kind.WireValue() + ":" + Convert.ToHexString(hash.GetHashAndReset());
-            return await _operations.EnqueueAsync(new()
-            {
-                Id = id,
-                AttemptId = attemptId,
-                Kind = kind,
-                Fingerprint = fingerprint,
-                UploadPath = temporary,
-                BundlePath = BundleFor(attemptId, id)
-            }, token);
-        }
-        finally { File.Delete(temporary); }
+        using GitRepositoryOperationUpload upload = await _uploads.StageAsync(attemptId, id, kind, input, token);
+        return await _operations.EnqueueAsync(upload, token);
     }
 
     public Task<GitRepositoryOperationView> StatusAsync(long attemptId, long id, CancellationToken token) =>
@@ -210,7 +182,8 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
             GitRepositoryChange gitRepository = work.Attempts[^1].Target.GitRepository!;
             GitRepositoryOperationSnapshot operation = await _operations.RequireRunningAsync(id, cancellation.Token);
             gitRepository.Grant!.Authorize(work.Id, attemptId, gitRepository.GitRepository, gitRepository.GitRepository, gitRepository.Grant.Branch, operation.Kind);
-            string commit = operation.Kind == GitRepositoryOperationKind.Fetch ? "read" : await _remote.InspectBundleAsync(gitRepository, DirectoryFor(attemptId), BundleFor(attemptId, id), cancellation.Token);
+            string commit = operation.Kind == GitRepositoryOperationKind.Fetch ? "read" : await _remote.InspectBundleAsync(gitRepository,
+                _uploads.DirectoryFor(attemptId), _uploads.BundleFor(attemptId, id), cancellation.Token);
             await _operations.RecordInspectedCommitAsync(id, commit, cancellation.Token);
             if (operation.Kind == GitRepositoryOperationKind.Checkpoint)
             {
@@ -219,7 +192,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
             }
             await _evidence.RecordExternalLaunchAsync(id, cancellation.Token);
             external = true;
-            GitRepositoryOperationResult result = await _remote.ExecuteAsync(gitRepository, DirectoryFor(attemptId), operation.Kind, commit, cancellation.Token);
+            GitRepositoryOperationResult result = await _remote.ExecuteAsync(gitRepository, _uploads.DirectoryFor(attemptId), operation.Kind, commit, cancellation.Token);
             await _operations.CompleteAsync(id, result.Url, cancellation.Token);
         }
         catch
@@ -262,7 +235,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
                 try
                 {
                     if (row.Commit is not null)
-                        result = await _remote.ReconcileAsync(attempt.Target.GitRepository!, DirectoryFor(attempt.Id), row.Kind, row.Commit, token);
+                        result = await _remote.ReconcileAsync(attempt.Target.GitRepository!, _uploads.DirectoryFor(attempt.Id), row.Kind, row.Commit, token);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
                 catch
@@ -304,7 +277,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         await StopAsync(work, token);
         // Called only after sandbox termination is confirmed. Published GitHub
         // checkpoints and the retained sandbox PVC own recovery; discard duplicates.
-        string directory = DirectoryFor(work.Attempts[^1].Id);
+        string directory = _uploads.DirectoryFor(work.Attempts[^1].Id);
         if (Directory.Exists(directory)) Directory.Delete(directory, true);
     }
 }
