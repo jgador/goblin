@@ -19,6 +19,12 @@ the table distinguishes those reasons. Test-only copies and comparisons did not
 justify retaining transfer objects. Record equality is shallow for array members;
 this audit does not claim deep immutability or structural array equality.
 
+The later repository-operation store follows the same distinction.
+`GitRepositoryOperationSnapshot` and `GitRepositoryOperationUpload` are internal
+transfer classes with named initialization. Operation IDs and scalar fields drive
+their use; neither requires value equality. Reconciliation tracks its combined
+outcome directly rather than cloning snapshots just to summarize completion.
+
 ## Converted types
 
 All names in each row were converted. The initial conversion preserved namespaces,

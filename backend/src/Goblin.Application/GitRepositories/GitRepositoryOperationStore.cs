@@ -15,8 +15,10 @@ using Wolverine.EntityFrameworkCore;
 
 namespace Goblin.Application.GitRepositories;
 
-internal sealed record GitRepositoryOperationSnapshot
+internal sealed class GitRepositoryOperationSnapshot
 {
+    internal GitRepositoryOperationSnapshot() { }
+
     internal required long Id { get; init; }
     internal required long AttemptId { get; init; }
     internal required GitRepositoryOperationKind Kind { get; init; }
@@ -25,8 +27,10 @@ internal sealed record GitRepositoryOperationSnapshot
     internal string? Url { get; init; }
 }
 
-internal sealed record GitRepositoryOperationUpload
+internal sealed class GitRepositoryOperationUpload
 {
+    internal GitRepositoryOperationUpload() { }
+
     internal required long Id { get; init; }
     internal required long AttemptId { get; init; }
     internal required GitRepositoryOperationKind Kind { get; init; }

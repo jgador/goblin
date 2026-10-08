@@ -235,9 +235,10 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         GitRepositoryOperationSnapshot[] rows = await _operations.IncompleteAsync(attempt.Id, token);
         if (rows.Length == 0) return null;
-        for (int index = 0; index < rows.Length; index++)
+        bool allSucceeded = true;
+        foreach (GitRepositoryOperationSnapshot initial in rows)
         {
-            GitRepositoryOperationSnapshot row = rows[index];
+            GitRepositoryOperationSnapshot row = initial;
             if (_evidence.HasDispatchFailure(row.Id))
             {
                 await _operations.RecoverDispatchFailureAsync(row.Id, token);
@@ -245,17 +246,18 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
                 row = await _operations.ReadAsync(row.Id, token);
             }
             if (_active.ContainsKey(attempt.Id) || row.State == GitRepositoryOperationState.Queued) return new(ObservationKind.Pending);
-            row = rows[index] = await _operations.ReadAsync(row.Id, token);
+            row = await _operations.ReadAsync(row.Id, token);
             if (row.State == GitRepositoryOperationState.Succeeded) continue;
             if (row.Kind == GitRepositoryOperationKind.Checkpoint && row.State is GitRepositoryOperationState.Running or GitRepositoryOperationState.Uncertain)
             {
                 await _operations.RecordReconciliationAsync(row.Id, GitRepositoryOperationState.Failed, row.Url, token);
-                rows[index] = row with { State = GitRepositoryOperationState.Failed };
+                allSucceeded = false;
                 continue;
             }
+            GitRepositoryOperationState state = row.State;
             if (row.State is GitRepositoryOperationState.Running or GitRepositoryOperationState.Uncertain)
             {
-                GitRepositoryOperationState state = GitRepositoryOperationState.Uncertain;
+                state = GitRepositoryOperationState.Uncertain;
                 GitRepositoryOperationResult? result = null;
                 try
                 {
@@ -275,10 +277,10 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
                 else if (_evidence.ExternalProcessStopped(row.Id)) state = GitRepositoryOperationState.Failed;
                 string? url = result is not null ? result.Url : row.Url;
                 await _operations.RecordReconciliationAsync(row.Id, state, url, token);
-                rows[index] = row with { State = state, Url = url };
             }
+            if (state != GitRepositoryOperationState.Succeeded) allSucceeded = false;
         }
-        return rows.All(x => x.State == GitRepositoryOperationState.Succeeded) ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
+        return allSucceeded ? null : new(ObservationKind.Uncertain, Failure: FailureKind.ExecutionFailed);
     }
 
     public async Task StopAsync(WorkSnapshot work, CancellationToken token)
