@@ -38,8 +38,13 @@ public sealed class ExecutionRecoveryQueryTests
     {
         var row = new AttemptRow
         {
-            Id = 7, WorkId = 3, TurnNumber = 4, Status = status.ToString(),
-            CleanupPending = cleanupPending, CleanupFailed = cleanupFailed, WorkspaceRetained = retained
+            Id = 7,
+            WorkId = 3,
+            TurnNumber = 4,
+            Status = status.ToString(),
+            CleanupPending = cleanupPending,
+            CleanupFailed = cleanupFailed,
+            WorkspaceRetained = retained
         };
 
         ExecutionRecoveryRequest[] requests = ExecutionRecoveryQuery.Select(new[] { row }.AsQueryable()).ToArray();
@@ -70,9 +75,10 @@ public sealed class ExecutionRecoveryQueryTests
 
         Assert.Equal(new[]
         {
-            new ExecutionRecoveryRequest(2, 8, 1, ExecutionRecoveryAction.Reconcile),
-            new ExecutionRecoveryRequest(3, 9, 2, ExecutionRecoveryAction.Dispatch)
-        }, ExecutionRecoveryQuery.Select(rows.AsQueryable()).ToArray());
+            (2L, 8L, 1, ExecutionRecoveryAction.Reconcile),
+            (3L, 9L, 2, ExecutionRecoveryAction.Dispatch)
+        }, ExecutionRecoveryQuery.Select(rows.AsQueryable()).AsEnumerable()
+            .Select(x => (x.WorkId, x.AttemptId, x.TurnNumber, x.Action)).ToArray());
     }
 
     [Fact]

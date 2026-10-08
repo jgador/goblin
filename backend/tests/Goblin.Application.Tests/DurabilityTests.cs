@@ -729,7 +729,8 @@ public sealed class DurabilityTests
         IDbContextFactory<GoblinDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
         var store = new WorkspaceCheckpoints(factory);
         WorkspaceCheckpoint saved = await store.SaveAsync(attempt, 1, new string('a', 40), broker, default);
-        Assert.Equal(saved.Id, (await store.LatestAsync(id, "owner/repo", default))!.Id);
+        AssertCheckpoint(saved, (await store.LatestAsync(id, "owner/repo", default))!);
+        AssertCheckpoint(saved, Assert.Single(await store.ListAsync(id, default)));
         Assert.Equal(saved.Id, (await store.SaveAsync(attempt, 1, new string('a', 40), broker, default)).Id);
         await using (GoblinDbContext db = await factory.CreateDbContextAsync())
             Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='workspace_checkpoints' AND data_type='bytea'").SingleAsync());
@@ -738,12 +739,22 @@ public sealed class DurabilityTests
         await fixture.RestartAsync();
         using IServiceScope restartedScope = fixture.Host.Services.CreateScope();
         var reopened = new WorkspaceCheckpoints(restartedScope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
-        Assert.Equal(saved.Id, (await reopened.LatestAsync(id, "owner/repo", default))!.Id);
+        AssertCheckpoint(saved, (await reopened.LatestAsync(id, "owner/repo", default))!);
         Assert.Equal(work.Work.Workspace, (await fixture.Get(id)).Work.Workspace);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
         await fixture.Apply(WorkCommands.Approve(NextId(), id, work.Version, attempt));
+    }
+
+    private static void AssertCheckpoint(WorkspaceCheckpoint expected, WorkspaceCheckpoint actual)
+    {
+        Assert.Equal((expected.Id, expected.WorkId, expected.AttemptId, expected.TurnNumber, expected.WorkspaceNumber,
+            expected.GitRepository, expected.Branch, expected.CommitSha),
+            (actual.Id, actual.WorkId, actual.AttemptId, actual.TurnNumber, actual.WorkspaceNumber,
+                actual.GitRepository, actual.Branch, actual.CommitSha));
+        // PostgreSQL timestamps retain microseconds; the immediate save response has .NET ticks.
+        Assert.Equal(expected.CreatedAt.UtcTicks / 10, actual.CreatedAt.UtcTicks / 10);
     }
 
     [DatabaseFact]

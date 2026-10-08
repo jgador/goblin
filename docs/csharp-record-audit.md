@@ -24,6 +24,8 @@ The later repository-operation store follows the same distinction.
 transfer classes with named initialization. Operation IDs and scalar fields drive
 their use; neither requires value equality. Reconciliation tracks its combined
 outcome directly rather than cloning snapshots just to summarize completion.
+`ExecutionRecoveryRequest` also uses a class: recovery routing reads its IDs, turn
+number and action, while queue-order tests compare those fields explicitly.
 
 ## Converted types
 

@@ -7,5 +7,18 @@ internal enum ExecutionRecoveryAction
 }
 
 // Recovery schedules delivery or observation; it does not grant execution ownership.
-internal sealed record ExecutionRecoveryRequest(long WorkId, long AttemptId, int TurnNumber,
-    ExecutionRecoveryAction Action);
+internal sealed class ExecutionRecoveryRequest
+{
+    internal ExecutionRecoveryRequest(long workId, long attemptId, int turnNumber, ExecutionRecoveryAction action)
+    {
+        WorkId = workId;
+        AttemptId = attemptId;
+        TurnNumber = turnNumber;
+        Action = action;
+    }
+
+    internal long WorkId { get; init; }
+    internal long AttemptId { get; init; }
+    internal int TurnNumber { get; init; }
+    internal ExecutionRecoveryAction Action { get; init; }
+}
