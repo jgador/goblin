@@ -33,6 +33,14 @@ public sealed class BoundaryTests
     }
 
     [Fact]
+    public void RuntimeHostsDoNotDependOnConcreteIntegrations()
+    {
+        Assert.DoesNotContain(typeof(LocalTextHost).Assembly.GetReferencedAssemblies(), x =>
+            x.Name!.StartsWith("Goblin.Integrations.", StringComparison.Ordinal));
+        Assert.NotEqual(typeof(LocalTextHost).Assembly, typeof(ExecutionWorker).Assembly);
+    }
+
+    [Fact]
     public void GitRepositorySandboxMountsOnlyItsOwnInputsWorkspaceAndCredentials()
     {
         var work = new WorkItem(NextId(), "Edit assigned repository", DateTimeOffset.UtcNow);

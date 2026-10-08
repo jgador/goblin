@@ -4,6 +4,7 @@
     <Project Path="src/Goblin.Contracts/Goblin.Contracts.csproj" />
     <Project Path="src/Goblin.Core/Goblin.Core.csproj" />
     <Project Path="src/Goblin.Execution/Goblin.Execution.csproj" />
+    <Project Path="src/Goblin.Execution.Codex/Goblin.Execution.Codex.csproj" />
     <Project Path="src/Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />
     <Project Path="src/Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj" />
     <Project Path="src/Goblin.Integrations.Slack/Goblin.Integrations.Slack.csproj" />
