@@ -1023,6 +1023,61 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
+    public async Task ConversationAndWorkCommandsPreserveSharedHistoryAcrossRestart()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using IServiceScope scope = fixture.Host.Services.CreateScope();
+        ConversationStore conversations = scope.ServiceProvider.GetRequiredService<ConversationStore>();
+        long conversationId = NextId(), workId = NextId();
+        await conversations.ApplyAsync(new(conversationId, NextId(), "Track shared history"));
+        await conversations.ApplyAsync(new(conversationId, NextId(), "Context before tracking"));
+        var track = new ConversationCommand(conversationId, NextId(), null, workId);
+        await conversations.ApplyAsync(track);
+        await conversations.ApplyAsync(track);
+        WorkView tracked = await fixture.Get(workId);
+        Assert.Equal(1, tracked.Version);
+        Assert.Equal("Context before tracking", Assert.Single(tracked.Work.Messages).Text);
+
+        WorkView commandContext = await fixture.Apply(new(NextId(), workId, WorkAction.AddContext)
+        {
+            ExpectedVersion = tracked.Version,
+            Text = "Context from a Work command"
+        });
+        await fixture.Apply(WorkCommands.Execute(NextId(), workId, commandContext.Version));
+        WorkView running = await fixture.Until(workId, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
+        AttemptSnapshot original = Assert.Single(running.Work.Attempts);
+        var message = new ConversationCommand(conversationId, NextId(), "Context during execution");
+        await conversations.ApplyAsync(message);
+        await conversations.ApplyAsync(message);
+        WorkView updated = await fixture.Get(workId);
+        Assert.Equal(running.Version + 1, updated.Version);
+        Assert.Equal(running.Work.Status, updated.Work.Status);
+        Assert.Equal(JsonSerializer.Serialize(original, ContractJson.Options),
+            JsonSerializer.Serialize(Assert.Single(updated.Work.Attempts), ContractJson.Options));
+        Assert.Equal(new[] { "Context before tracking", "Context from a Work command", "Context during execution" },
+            updated.Work.Messages.Select(x => x.Text));
+
+        await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
+        {
+            Persistence.Entities.WorkItem row = await db.WorkItems.AsNoTracking().SingleAsync(x => x.Id == workId);
+            Persistence.Entities.ExecutionAttempt attempt = await db.ExecutionAttempts.AsNoTracking().SingleAsync(x => x.Id == original.Id);
+            Assert.Equal(updated.Version, row.Version);
+            Assert.Equal(updated.Work.Status.ToString(), row.Status);
+            Assert.Equal(updated.Work.AgentId, row.AgentId);
+            Assert.Equal(original.Status.ToString(), attempt.Status);
+            Assert.Equal(original.OwnerId, attempt.OwnerId);
+            Assert.Equal(original.EnvironmentReference, attempt.EnvironmentReference);
+        }
+
+        await fixture.RestartAsync();
+        WorkView recovered = await fixture.Get(workId);
+        Assert.Equal(updated.Version, recovered.Version);
+        Assert.Equal(JsonSerializer.Serialize(updated.Work, ContractJson.Options),
+            JsonSerializer.Serialize(recovered.Work, ContractJson.Options));
+        Assert.Equal(1, fixture.Runtime.Starts[original.Id]);
+    }
+
+    [DatabaseFact]
     public async Task CancellationWaitsForStoppingEvidenceAndFailureIsNeverRetried()
     {
         await using Fixture fixture = await Fixture.CreateAsync();

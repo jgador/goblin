@@ -1,9 +1,7 @@
 using System;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Contracts;
 using Goblin.Core.Work;
 using Goblin.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -147,27 +145,15 @@ public sealed class ConversationStore
             work.Assign(WorkStore.DefaultAgentId, DateTimeOffset.UtcNow);
             foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1))
                 work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
-            db.WorkItems.Add(new()
-            {
-                Id = workId,
-                Objective = work.Objective,
-                AgentId = work.AgentId,
-                Status = work.Status.ToString(),
-                Version = 1,
-                State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options),
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            });
+            db.WorkItems.Add(WorkStatePersistence.Create(work, DateTimeOffset.UtcNow));
             conversation.WorkId = workId;
         }
         else if (conversation.WorkId is { } linked && existing is null && !string.IsNullOrWhiteSpace(command.Text))
         {
             Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
-            var work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State!, ContractJson.Options)!);
+            WorkItem work = WorkStatePersistence.Restore(row.State!);
             work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
-            row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
-            row.Version++;
-            row.UpdatedAt = DateTime.UtcNow;
+            WorkStatePersistence.Update(row, work, DateTimeOffset.UtcNow);
         }
         await db.SaveChangesAsync();
         await transaction.CommitAsync();

@@ -123,7 +123,7 @@ public sealed partial class WorkStore
         {
             if (row is null) throw new ApplicationFailure("work_not_found");
             if (command.ExpectedVersion != row.Version) throw new ApplicationFailure("work_changed");
-            work = Restore(row);
+            work = WorkStatePersistence.Restore(row);
         }
 
         switch (command.Action)
@@ -260,7 +260,7 @@ public sealed partial class WorkStore
         IDbContextOutbox outbox = _outboxes.Create(db);
         Row? row = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == command.WorkId, token);
         if (row is null) return null;
-        WorkItem work = Restore(row);
+        WorkItem work = WorkStatePersistence.Restore(row);
         if (work.CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != command.AttemptId || attempt.TurnNumber != command.TurnNumber) return null;
         DateTimeOffset now = DateTimeOffset.UtcNow;
         Persistence.Entities.Connection connection = await db.Connections.SingleAsync(x => x.Id == attempt.Target.ConnectionId, token);
@@ -301,7 +301,7 @@ public sealed partial class WorkStore
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
         Row row = await db.WorkItems.SingleAsync(x => x.Id == workId, token);
-        WorkItem work = Restore(row);
+        WorkItem work = WorkStatePersistence.Restore(row);
         long before = work.History.Count;
         int turnBefore = work.CurrentAttempt?.TurnNumber ?? 0;
         transition(work);
@@ -323,11 +323,7 @@ public sealed partial class WorkStore
 
     private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
     {
-        row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
-        row.Status = work.Status.ToString();
-        row.AgentId = work.AgentId;
-        row.Version++;
-        row.UpdatedAt = now.UtcDateTime;
+        WorkStatePersistence.Update(row, work, now);
         foreach (ExecutionAttempt attempt in work.Attempts)
         {
             AttemptRow? saved = await db.ExecutionAttempts.SingleOrDefaultAsync(x => x.Id == attempt.Id, token);
@@ -356,11 +352,7 @@ public sealed partial class WorkStore
         }
     }
 
-    internal static WorkItem Restore(Row row) => row.State is null
-        ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
-        : WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(row.State, ContractJson.Options)!);
-
     private static WorkView View(Row row) => new(row.Version, new(row.CreatedAt, TimeSpan.Zero),
-        new(row.UpdatedAt, TimeSpan.Zero), Restore(row).Snapshot());
+        new(row.UpdatedAt, TimeSpan.Zero), WorkStatePersistence.Restore(row).Snapshot());
 
 }
