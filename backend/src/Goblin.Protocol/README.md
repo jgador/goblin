@@ -6,6 +6,8 @@ It implements no conversation, turn, model, token, or compaction behavior.
 
 The schemas target Codex CLI **0.161.0**, matching the runtime pinned in the root
 `package.json`. They use the default API export without `--experimental`.
+The aggregate schemas retain the full upstream export. Individual schemas for
+unused Gateway OAuth messages and thread prediction updates are omitted.
 
 The checked-in files in `backend/schemas/codex` are the contract.
 [`selection.json`](../../schemas/codex/selection.json) lists the requests,
@@ -41,8 +43,10 @@ make codex ARGS="app-server generate-json-schema --out backend/schemas/codex"
 dotnet run --file backend/scripts/GenerateProtocol.cs
 ```
 
-Review the schema diff and remove any obsolete schema files. Changes to the
-generated files should come from the generator or selection and schema inputs.
+Review the schema diff, remove any obsolete schema files, and omit the unused
+Gateway OAuth and thread prediction update individual schemas before regenerating.
+Changes to the generated files should come from the generator or selection and
+schema inputs.
 When Goblin starts using another Codex field or message, add it to the selection,
 regenerate, and update the protocol and adapter tests.
 

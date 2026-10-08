@@ -1,7 +1,7 @@
 {
-  "schemaSha256": "09ebcbbfaec45e6822e8db0a37b1463b494ab84965828e913d5e061d421d5c03",
+  "schemaSha256": "1721ff441dd287e53dafcc099943f9ae73e8bb3a5e92d59adcfe84235318960e",
   "selectionSha256": "9e3e327ac6052c4b72839843be7809ee8c70843638666303af72459ea85d76aa",
-  "schemaFiles": 315,
+  "schemaFiles": 310,
   "namedDefinitions": 724,
   "selectedRoots": [
     "CancelLoginAccountParams",
