@@ -60,7 +60,7 @@ internal static class WebServices
         if (options.EnableWork)
         {
             builder.Services.AddSingleton<IModelCatalogSource, CodexModelCatalogSource>();
-            builder.Services.AddSingleton<ModelCatalogStore>();
+            builder.Services.AddModelCatalog();
         }
         builder.Services.AddSingleton(_ => ApiKeyVerifier.CreateClient());
         builder.Services.AddSingleton<ApiKeyVerifier>();

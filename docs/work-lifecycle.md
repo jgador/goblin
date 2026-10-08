@@ -126,6 +126,13 @@ This first Web refactor keeps Minimal APIs, the public contracts, and applicatio
 service ownership intact. Connection handlers still coordinate integration calls
 with request-scoped stores; Work lifecycle rules remain in Core.
 
+Model catalog persistence and selection stay in `ModelCatalogStore`.
+`ModelCatalogRefreshCoordinator` owns background discovery through the host
+lifetime, coalesces refreshes per connection, and cancels and awaits them on
+shutdown. Request cancellation does not cancel shared discovery. Host shutdown
+does not mark a saved catalog as a failed refresh or discard its last complete
+response; account-generation checks still reject obsolete discovery results.
+
 Public HTTP requests and responses use classes with explicit `JsonPropertyName`
 attributes. `Http/Contracts/` maps application and core types into those classes,
 including every nested Work snapshot, so C# property renames cannot silently rename

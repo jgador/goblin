@@ -47,4 +47,11 @@ public static class ApplicationServices
         services.AddSingleton<ExecutionCoordinator>();
         services.AddHostedService<WorkRecovery>();
     }
+
+    public static void AddModelCatalog(this IServiceCollection services)
+    {
+        services.AddSingleton<ModelCatalogRefreshCoordinator>();
+        services.AddHostedService(services => services.GetRequiredService<ModelCatalogRefreshCoordinator>());
+        services.AddSingleton<ModelCatalogStore>();
+    }
 }

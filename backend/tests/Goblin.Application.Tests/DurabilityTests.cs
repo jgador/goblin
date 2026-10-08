@@ -392,7 +392,8 @@ public sealed class DurabilityTests
         await using Fixture fixture = await Fixture.CreateAsync();
         var source = new CatalogSource();
         IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
-        var catalogs = new ModelCatalogStore(factory, source);
+        var catalogs = new ModelCatalogStore(factory, source,
+            fixture.Host.Services.GetRequiredService<ModelCatalogRefreshCoordinator>());
         await catalogs.GetAsync(1, 3, null);
         ModelCatalogView first = await UntilCatalog(catalogs, x => !x.Refreshing && x.Models.Length == 3);
         Assert.True(first.HasMore);
@@ -438,6 +439,76 @@ public sealed class DurabilityTests
         Assert.Empty(changed.Models); // A different account never sees the old catalog.
     }
 
+    [DatabaseFact]
+    public async Task ModelDiscoveryBelongsToTheHostAndShutdownPreservesTheSavedCatalog()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var source = new CatalogSource();
+        IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
+        var catalogs = new ModelCatalogStore(factory, source,
+            fixture.Host.Services.GetRequiredService<ModelCatalogRefreshCoordinator>());
+        await catalogs.GetAsync(1, 3, null);
+        ModelCatalogView first = await UntilCatalog(catalogs, x => !x.Refreshing && x.Models.Length == 3);
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        source.Stamp = "v2";
+        source.Discover = async token =>
+        {
+            started.SetResult(token);
+            try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+            finally { cancelled.SetResult(); }
+            return [];
+        };
+        using var request = new CancellationTokenSource();
+        await catalogs.GetAsync(1, 3, null, request.Token);
+        CancellationToken discovery = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        request.Cancel();
+        Assert.True(discovery.CanBeCanceled);
+        Assert.False(discovery.IsCancellationRequested);
+        for (int i = 0; i < 10; i++) catalogs.ScheduleRefresh(1, force: true);
+        Assert.Equal(2, source.Calls);
+
+        await fixture.Host.StopAsync();
+        Assert.True(discovery.IsCancellationRequested);
+        Assert.True(cancelled.Task.IsCompletedSuccessfully);
+        await using GoblinDbContext db = await factory.CreateDbContextAsync();
+        var saved = await db.ConnectionModelCatalogs.SingleAsync(x => x.ConnectionId == 1);
+        Assert.Equal("v1", saved.ExecutableStamp);
+        Assert.False(saved.RefreshFailed);
+        Assert.Null(saved.RetryAfter);
+        Assert.Equal(first.FetchedAt, new DateTimeOffset(saved.FetchedAt!.Value, TimeSpan.Zero));
+        Assert.Equal(12, ModelCatalogPolicy.Read(saved.Catalog).Length);
+        catalogs.ScheduleRefresh(1, force: true);
+        Assert.False((await catalogs.GetAsync(1, 3, null)).Refreshing);
+        Assert.Equal(2, source.Calls);
+    }
+
+    [DatabaseFact]
+    public async Task ModelRefreshDiscardsAResponseFromAnAccountThatChangedDuringDiscovery()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<RuntimeModel[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new CatalogSource
+        {
+            Discover = token => { started.SetResult(); return response.Task.WaitAsync(token); }
+        };
+        IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
+        ModelCatalogRefreshCoordinator refreshes = fixture.Host.Services.GetRequiredService<ModelCatalogRefreshCoordinator>();
+        var catalogs = new ModelCatalogStore(factory, source, refreshes);
+        await catalogs.GetAsync(1, 3, null);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        using (IServiceScope scope = fixture.Host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAccountAsync(1,
+                ConnectionAvailability.Disconnected, "changed-account");
+        response.SetResult([new("old-id", "old-model", "Old account model", "medium", ["medium"], true)]);
+        for (int i = 0; i < 100 && refreshes.IsRefreshing(1); i++) await Task.Delay(25);
+        Assert.False(refreshes.IsRefreshing(1));
+        await using GoblinDbContext db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.ConnectionModelCatalogs.ToArrayAsync());
+        Assert.Empty((await catalogs.GetAsync(1, 3, null)).Models);
+    }
+
     private static async Task<ModelCatalogView> UntilCatalog(ModelCatalogStore catalogs, Func<ModelCatalogView, bool> ready)
     {
         for (int i = 0; i < 100; i++)
@@ -456,6 +527,7 @@ public sealed class DurabilityTests
         public string Runtime => "codex";
         public string Stamp { get; set; } = "v1";
         public bool Fail { get; set; }
+        public Func<CancellationToken, Task<RuntimeModel[]>>? Discover { get; set; }
         public int Calls => Volatile.Read(ref _calls);
 
         public string ExecutableStamp() => Stamp;
@@ -463,6 +535,7 @@ public sealed class DurabilityTests
         public Task<RuntimeModel[]> ListAsync(CancellationToken token)
         {
             Interlocked.Increment(ref _calls);
+            if (Discover is not null) return Discover(token);
             if (Fail) throw new InvalidOperationException("private upstream failure");
             return Task.FromResult(Enumerable.Range(0, 12).Select(i => new RuntimeModel(
                 $"id-{i}", $"gpt-test-{i}", $"Test model {i}", "medium", ["low", "medium", "high"], i == 0)).ToArray());
@@ -1420,6 +1493,8 @@ public sealed class DurabilityTests
             builder.Logging.ClearProviders();
             builder.Services.AddGoblinPersistence(_app);
             builder.Services.AddWorkApplication();
+            builder.Services.AddSingleton<IModelCatalogSource, CatalogSource>();
+            builder.Services.AddModelCatalog();
             if (_catalog is not null) builder.Services.AddSingleton(_catalog);
             builder.Services.AddSingleton<IExecutionHost>(Runtime);
             builder.Services.AddSingleton(new WorkspaceLimits());
