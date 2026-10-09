@@ -73,7 +73,7 @@ public sealed class ExternalIdentityView
     public string UserId { get; init; }
 }
 
-public sealed class ExternalConversationStore
+public sealed partial class ExternalConversationStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
     private readonly WorkStore _work;
