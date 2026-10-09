@@ -10,7 +10,6 @@ using Goblin.Persistence;
 using Goblin.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.DependencyInjection;
 using Wolverine.EntityFrameworkCore;
 
 namespace Goblin.Application.GitRepositories;
@@ -32,12 +31,12 @@ internal sealed class GitRepositoryOperationSnapshot
 public sealed class GitRepositoryOperationStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _factory;
-    private readonly IServiceScopeFactory _scopes;
+    private readonly WorkOutboxFactory _outboxes;
 
-    public GitRepositoryOperationStore(IDbContextFactory<GoblinDbContext> factory, IServiceScopeFactory scopes)
+    public GitRepositoryOperationStore(IDbContextFactory<GoblinDbContext> factory, WorkOutboxFactory outboxes)
     {
         _factory = factory;
-        _scopes = scopes;
+        _outboxes = outboxes;
     }
 
     internal async Task<long> ReserveIdAsync(CancellationToken token)
@@ -76,8 +75,7 @@ public sealed class GitRepositoryOperationStore
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         });
-        using IServiceScope scope = _scopes.CreateScope();
-        IDbContextOutbox outbox = scope.ServiceProvider.GetRequiredService<WorkOutboxFactory>().Create(db);
+        IDbContextOutbox outbox = _outboxes.Create(db);
         await outbox.PublishAsync(new ExecuteGitRepositoryOperation(upload.Id));
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return new(upload.Id, GitRepositoryOperationState.Queued, null);
