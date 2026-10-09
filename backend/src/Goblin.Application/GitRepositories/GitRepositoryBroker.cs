@@ -98,7 +98,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         if (string.IsNullOrEmpty(commit) || commit.Length != 40 || !commit.All(Uri.IsHexDigit)) throw new ApplicationFailure("workspace_changed");
         if (!await _operations.HasCheckpointAsync(attempt.Id, commit, token) ||
-            (attempt.Target.GitRepository!.Grant!.PolicyVersion == 1 || attempt.Target.GitRepository.Grant.AllowPush) && await _remote.ReconcileAsync(attempt.Target.GitRepository!, _uploads.DirectoryFor(attempt.Id), GitRepositoryOperationKind.Publish, commit, token) is null)
+            attempt.Target.GitRepository!.Grant!.PublishesChanges() && await _remote.ReconcileAsync(attempt.Target.GitRepository!, _uploads.DirectoryFor(attempt.Id), GitRepositoryOperationKind.Publish, commit, token) is null)
             throw new ApplicationFailure("workspace_checkpoint_unconfirmed");
     }
 
@@ -122,7 +122,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
             work.Artifacts.Any(a => a.AttemptId == x.Id))?.Target.GitRepository?.Grant?.Branch;
         Goblin.Contracts.Runtime.WorkspaceCheckpoint? saved = _checkpoints is null ? null : await _checkpoints.LatestAsync(work.Id, gitRepository.GitRepository, token);
         bool published = saved is not null && work.Attempts.Any(x => x.Id == saved.AttemptId &&
-            (x.Target.GitRepository?.Grant?.PolicyVersion == 1 || x.Target.GitRepository?.Grant?.AllowPush == true));
+            x.Target.GitRepository?.Grant?.PublishesChanges() == true);
         if (saved is not null && published) await _remote.PrepareCheckpointAsync(gitRepository, _uploads.DirectoryFor(attempt.Id), saved, token);
         else await _remote.PrepareAsync(gitRepository, _uploads.DirectoryFor(attempt.Id), work.Workspace is not null ? null : checkpoint, token);
         return Capability(work);

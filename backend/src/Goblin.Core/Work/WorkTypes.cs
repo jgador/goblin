@@ -206,14 +206,25 @@ public sealed record GitRepositoryGrant
     public bool AllowPush { get; init; }
     public bool AllowPullRequest { get; init; }
 
+    public bool RequiresApproval() => PolicyVersion != 1;
+
+    public bool PublishesChanges() => PolicyVersion == 1 || PolicyVersion == 2 && AllowPush;
+
+    public bool AllowsOperation(GitRepositoryOperationKind operation) =>
+        Enum.IsDefined(operation) && PolicyVersion is 1 or 2 &&
+        (PolicyVersion == 1 || operation switch
+        {
+            GitRepositoryOperationKind.Publish => AllowPush,
+            GitRepositoryOperationKind.PullRequest => AllowPush && AllowPullRequest,
+            _ => true
+        });
+
     public void Authorize(long workId, long attemptId, string gitRepository, string requestedGitRepository, string branch, GitRepositoryOperationKind operation)
     {
-        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion is not (1 or 2) ||
+        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) ||
             Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
             !string.Equals(gitRepository, requestedGitRepository, StringComparison.OrdinalIgnoreCase) ||
-            !Enum.IsDefined(operation) ||
-            PolicyVersion == 2 && (operation == GitRepositoryOperationKind.Publish && !AllowPush ||
-                operation == GitRepositoryOperationKind.PullRequest && (!AllowPush || !AllowPullRequest)))
+            !AllowsOperation(operation))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }

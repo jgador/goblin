@@ -32,7 +32,7 @@ public sealed class GitHubRepositoryRemote : IGitRepositoryRemote
         if (state.Status != Goblin.Contracts.GitHubConnectionStatus.Connected || state.Account?.Generation != grant.Generation || state.Account.AccountId != grant.AccountId)
             throw new GitHubFailure();
         GitRepositoryInfo info = await _github.GitRepositoryAsync(gitRepository.GitRepository, token);
-        if (info.Id != grant.GitRepositoryId || ((grant.PolicyVersion == 1 || grant.AllowPush) && !info.CanPush) || info.DefaultBranch == grant.Branch) throw new GitHubFailure();
+        if (info.Id != grant.GitRepositoryId || (grant.PublishesChanges() && !info.CanPush) || info.DefaultBranch == grant.Branch) throw new GitHubFailure();
     }
 
     public async Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? checkpoint, CancellationToken token)
@@ -70,10 +70,8 @@ public sealed class GitHubRepositoryRemote : IGitRepositoryRemote
 
     public async Task<GitRepositoryOperationResult> ExecuteAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)
     {
-        if (!Enum.IsDefined(operation)) throw new GitHubFailure();
         GitRepositoryGrant grant = gitRepository.Grant ?? throw new GitHubFailure();
-        if (grant.PolicyVersion == 2 && (operation == GitRepositoryOperationKind.Publish && !grant.AllowPush || operation == GitRepositoryOperationKind.PullRequest && (!grant.AllowPush || !grant.AllowPullRequest)))
-            throw new GitHubFailure();
+        if (!grant.AllowsOperation(operation)) throw new GitHubFailure();
         await VerifyAsync(gitRepository, token);
         if (operation == GitRepositoryOperationKind.Fetch)
         {

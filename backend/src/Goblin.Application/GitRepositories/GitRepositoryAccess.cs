@@ -20,7 +20,7 @@ internal static class GitRepositoryAccess
         AttemptSnapshot attempt = work.Attempts[^1];
         if (attempt.Id != attemptId || attempt.Target.GitRepository?.Grant is not { } grant)
             throw new ApplicationFailure("repository_operation_unavailable");
-        if (grant.PolicyVersion == 2 &&
+        if (grant.RequiresApproval() &&
             (work.GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approved ||
                 approved.Id != attemptId || approved.Target != attempt.Target) ||
             !await EnabledFor(db, grant).AnyAsync(token))

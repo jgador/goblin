@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json;
 using Goblin.Core.Work;
 using Xunit;
@@ -38,6 +39,35 @@ public sealed class GitRepositoryPolicyTests
     [Fact]
     public void AnotherAttemptCannotReuseTheGrant() =>
         Assert.Throws<WorkRuleException>(() => Grant.Authorize(10, 21, "owner/repo", "owner/repo", Grant.Branch, GitRepositoryOperationKind.Publish));
+
+    [Fact]
+    public void GrantOwnsVersionedApprovalPublicationAndOperationPolicy()
+    {
+        GitRepositoryGrant legacy = Grant with { PolicyVersion = 1, AllowPush = false, AllowPullRequest = false };
+        Assert.False(legacy.RequiresApproval());
+        Assert.True(legacy.PublishesChanges());
+        Assert.All(Enum.GetValues<GitRepositoryOperationKind>(), operation => Assert.True(legacy.AllowsOperation(operation)));
+
+        GitRepositoryGrant local = Grant with { AllowPush = false, AllowPullRequest = false };
+        Assert.True(local.RequiresApproval());
+        Assert.False(local.PublishesChanges());
+        Assert.True(local.AllowsOperation(GitRepositoryOperationKind.Fetch));
+        Assert.True(local.AllowsOperation(GitRepositoryOperationKind.Checkpoint));
+        Assert.False(local.AllowsOperation(GitRepositoryOperationKind.Publish));
+        Assert.False(local.AllowsOperation(GitRepositoryOperationKind.PullRequest));
+
+        GitRepositoryGrant push = local with { AllowPush = true };
+        Assert.True(push.PublishesChanges());
+        Assert.True(push.AllowsOperation(GitRepositoryOperationKind.Publish));
+        Assert.False(push.AllowsOperation(GitRepositoryOperationKind.PullRequest));
+        Assert.True((push with { AllowPullRequest = true }).AllowsOperation(GitRepositoryOperationKind.PullRequest));
+
+        GitRepositoryGrant unknown = Grant with { PolicyVersion = 3 };
+        Assert.True(unknown.RequiresApproval());
+        Assert.False(unknown.PublishesChanges());
+        Assert.All(Enum.GetValues<GitRepositoryOperationKind>(), operation => Assert.False(unknown.AllowsOperation(operation)));
+        Assert.False(Grant.AllowsOperation((GitRepositoryOperationKind)99));
+    }
 
     [Fact]
     public void RestoredAuthorityHasValueEqualityAndEveryGrantFieldParticipates()

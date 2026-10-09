@@ -86,7 +86,7 @@ public static class SandboxWorker
                 await GitAsync(checkout, environment, "add", "--all");
                 if (!string.IsNullOrWhiteSpace(await GitAsync(checkout, environment, "diff", "--cached", "--name-only")))
                     await GitAsync(checkout, environment, "commit", "-m", "Goblin Work " + work.Id.ToString(CultureInfo.InvariantCulture));
-                bool publish = gitRepository.Grant!.PolicyVersion == 1 || gitRepository.Grant.AllowPush;
+                bool publish = gitRepository.Grant!.PublishesChanges();
                 stage = publish ? "Publish" : "Verify local Git checkpoint";
                 string? artifact = await GitRepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? GitRepositoryOperationKind.Publish : GitRepositoryOperationKind.Checkpoint);
                 if (gitRepository.Grant.AllowPullRequest && outcome.Kind == ObservationKind.Result)
