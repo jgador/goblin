@@ -136,15 +136,7 @@ public sealed class ExecutionCoordinator
         {
             using IServiceScope scope = _scopes.CreateScope();
             await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(failure.WorkId, work =>
-            {
-                ExecutionAttempt? a = work.CurrentAttempt;
-                if (a is null || a.Id != failure.AttemptId || (failure.TurnNumber != 0 && failure.TurnNumber != a.TurnNumber)) return;
-                if (a.CleanupPending && a.Status is AttemptStatus.Succeeded or AttemptStatus.Failed or AttemptStatus.Cancelled or AttemptStatus.Waiting)
-                    work.ReportCleanupFailure(a.Id, a.OwnerId!.Value, DateTimeOffset.UtcNow);
-                else if (a.Status == AttemptStatus.Queued) work.DispatchFailed(a.Id, failure.Failure, DateTimeOffset.UtcNow);
-                else if (a.Status is AttemptStatus.Starting or AttemptStatus.Running or AttemptStatus.CancellationRequested or AttemptStatus.Waiting)
-                    work.ExecutionUncertain(a.Id, a.OwnerId!.Value, failure.Failure, DateTimeOffset.UtcNow);
-            }, token);
+                DispatchFailureTransition.Apply(work, failure, DateTimeOffset.UtcNow), token);
             await _failures.RemoveAsync(failure.AttemptId, token);
         }
     }
