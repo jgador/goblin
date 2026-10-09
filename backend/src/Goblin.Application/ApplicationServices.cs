@@ -39,7 +39,7 @@ public static class ApplicationServices
         services.AddScoped<IdentityStore>();
         services.AddScoped<WorkStore>();
         services.AddScoped<ConnectionStore>();
-        services.AddScoped<InspectionStore>();
+        services.AddSingleton<InspectionStore>();
         services.AddScoped<GitHubStore>();
         services.AddScoped<GitRepositorySetupStore>();
         services.AddSingleton<GitRepositoryOperationStore>();

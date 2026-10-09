@@ -11,28 +11,30 @@ namespace Goblin.Application.Workspaces;
 
 public sealed class InspectionCoordinator : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopes;
+    private readonly InspectionStore _store;
     private readonly IInspectionHost _host;
+    private readonly IServiceScopeFactory _scopes;
 
-    public InspectionCoordinator(IServiceScopeFactory scopes, IInspectionHost host) { _scopes = scopes; _host = host; }
+    public InspectionCoordinator(InspectionStore store, IInspectionHost host, IServiceScopeFactory scopes)
+    {
+        _store = store;
+        _host = host;
+        _scopes = scopes;
+    }
 
     public async Task StartAsync(long id, CancellationToken token)
     {
-        using IServiceScope scope = _scopes.CreateScope();
-        InspectionStore store = scope.ServiceProvider.GetRequiredService<InspectionStore>();
-        InspectionAllocation? allocation = await store.ClaimAsync(id, token);
+        InspectionAllocation? allocation = await _store.ClaimAsync(id, token);
         if (allocation is null) return;
         try { await _host.StartAsync(allocation, token); }
-        catch { await store.ObserveAsync(id, InspectionObservation.Failed, CancellationToken.None); }
+        catch { await _store.ObserveAsync(id, InspectionObservation.Failed, CancellationToken.None); }
     }
 
     public async Task StopAsync(long id, CancellationToken token)
     {
-        using IServiceScope scope = _scopes.CreateScope();
-        InspectionStore store = scope.ServiceProvider.GetRequiredService<InspectionStore>();
-        InspectionAllocation allocation = await store.GetAsync(id, token);
+        InspectionAllocation allocation = await _store.GetAsync(id, token);
         await _host.StopAsync(allocation, token);
-        await store.ObserveAsync(id, await _host.ObserveAsync(allocation, token), token);
+        await _store.ObserveAsync(id, await _host.ObserveAsync(allocation, token), token);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,15 +44,14 @@ public sealed class InspectionCoordinator : BackgroundService
         {
             try
             {
-                using IServiceScope scope = _scopes.CreateScope();
-                InspectionStore store = scope.ServiceProvider.GetRequiredService<InspectionStore>();
-                foreach (InspectionView session in await store.PendingAsync(stoppingToken))
+                foreach (InspectionView session in await _store.PendingAsync(stoppingToken))
                 {
                     try
                     {
-                        if (session.State == InspectionState.Queued) await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new StartInspection(session.Id));
+                        if (session.State == InspectionState.Queued) await PublishStartAsync(session.Id);
                         else if (session.State == InspectionState.Stopping) await StopAsync(session.Id, stoppingToken);
-                        else await store.ObserveAsync(session.Id, await _host.ObserveAsync(await store.GetAsync(session.Id, stoppingToken), stoppingToken), stoppingToken);
+                        else await _store.ObserveAsync(session.Id,
+                            await _host.ObserveAsync(await _store.GetAsync(session.Id, stoppingToken), stoppingToken), stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
                     catch { /* Unknown control-plane state retains its capacity reservation. */ }
@@ -59,6 +60,14 @@ public sealed class InspectionCoordinator : BackgroundService
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch { /* A storage outage cannot authorize a new allocation. */ }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    private async Task PublishStartAsync(long id)
+    {
+        // Wolverine's bus is scoped because it carries the active message
+        // context. Keep that scope boundary limited to publication.
+        using IServiceScope scope = _scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new StartInspection(id));
     }
 }
 
