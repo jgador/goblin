@@ -1,13 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Formats.Tar;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -119,20 +116,9 @@ public sealed class SlackSetup : IAsyncDisposable
             string expected = arch == "arm64" ? LinuxArm64Sha256 : LinuxX64Sha256;
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(2), MaxResponseContentBufferSize = 100 * 1024 * 1024 };
             byte[] archive = await http.GetByteArrayAsync($"https://github.com/slackapi/slack-cli/releases/download/v{Version}/slack_cli_{Version}_linux_{arch}.tar.gz", token);
-            if (!Convert.ToHexString(SHA256.HashData(archive)).Equals(expected, StringComparison.OrdinalIgnoreCase)) throw new SlackFailure("The Slack setup helper failed checksum verification.");
-            using var gzip = new GZipStream(new MemoryStream(archive), CompressionMode.Decompress);
-            using var reader = new TarReader(gzip);
-            bool found = false;
-            while (await reader.GetNextEntryAsync(cancellationToken: token) is { } entry)
-                if (Path.GetFileName(entry.Name) == "slack" && entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile && entry.DataStream is not null)
-                {
-                    if (found || entry.Length > 150 * 1024 * 1024) throw new SlackFailure();
-                    using var memory = new MemoryStream();
-                    await entry.DataStream.CopyToAsync(memory, token);
-                    await SlackCredentialStore.WriteAsync(Executable, memory.ToArray(), token);
-                    File.SetUnixFileMode(Executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute); found = true;
-                }
-            if (!found) throw new SlackFailure();
+            await SlackCredentialStore.WriteAsync(Executable,
+                await SlackCliPackage.ExtractExecutableAsync(archive, expected, token), token);
+            File.SetUnixFileMode(Executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             string hooks = JsonSerializer.Serialize(new { hooks = new System.Collections.Generic.Dictionary<string, string> { ["get-hooks"] = HookCommand("hooks") } });
             await SlackCredentialStore.WriteAsync(Path.Combine(Project, ".slack", "hooks.json"), Encoding.UTF8.GetBytes(hooks), token);
             await SlackCredentialStore.WriteAsync(Path.Combine(Project, "manifest.json"), Encoding.UTF8.GetBytes(Assets.Manifest), token);
