@@ -10,16 +10,13 @@ using Goblin.Contracts.Runtime;
 
 namespace Goblin.Integrations.GitHub;
 
-public sealed record GitHubState(bool Configured, string? Login, string? UserCode,
-    string? VerificationUrl, string? Notice, GitHubConnectionStatus Status = GitHubConnectionStatus.Disconnected, GitRepositoryAccount? Account = null);
-
 public sealed class GitHubFailure : Exception
 {
     public GitHubFailure() : base("GitHub could not complete this operation. Check the connection and repository access, then try again.") { }
 }
 
 // A private CLI profile, never the host's credentials or configuration.
-public sealed class GitHubConnection : IGitRepositoryCatalog, IDisposable
+public sealed class GitHubConnection : IGitHubConnection, IDisposable
 {
     private readonly string _directory;
     private readonly Lock _gate = new();

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
@@ -15,6 +16,7 @@ namespace Goblin.Execution;
 public static class GitRepositoryProcess
 {
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromMinutes(5);
+    private const int MaximumCapturedLength = 4 * 1024 * 1024;
 
     public static Dictionary<string, string> CreateEnvironment() =>
         CreateEnvironment(Environment.GetEnvironmentVariable(Env.Home) ?? "/runtime/home");
@@ -34,6 +36,43 @@ public static class GitRepositoryProcess
 
     public static async Task<string> RunAsync(string directory, IReadOnlyDictionary<string, string> environment,
         TimeSpan timeout, CancellationToken token, params string[] arguments)
+    {
+        string output = "";
+        await RunProcessAsync(directory, environment, timeout, async (reader, cancellation) =>
+        {
+            var text = new StringBuilder();
+            char[] buffer = new char[4096];
+            int count;
+            while ((count = await reader.ReadAsync(buffer.AsMemory(), cancellation)) != 0)
+            {
+                if (text.Length + count > MaximumCapturedLength)
+                    throw new IOException("Repository operation output is too large.");
+                text.Append(buffer, 0, count);
+            }
+            output = text.ToString();
+        }, token, arguments);
+        return output;
+    }
+
+    // Full patches stay on the workspace filesystem. Publish the file only
+    // after Git succeeds, preserving an existing patch if the command fails.
+    public static async Task WriteOutputAsync(string directory, IReadOnlyDictionary<string, string> environment,
+        string destination, CancellationToken token, params string[] arguments)
+    {
+        string temporary = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await using (var file = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                65536, FileOptions.Asynchronous))
+                await RunProcessAsync(directory, environment, DefaultTimeout,
+                    (reader, cancellation) => reader.BaseStream.CopyToAsync(file, cancellation), token, arguments);
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally { File.Delete(temporary); }
+    }
+
+    private static async Task RunProcessAsync(string directory, IReadOnlyDictionary<string, string> environment,
+        TimeSpan timeout, Func<StreamReader, CancellationToken, Task> readOutput, CancellationToken token, string[] arguments)
     {
         if (timeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeout));
         bool watchdog = OperatingSystem.IsLinux() && File.Exists("/usr/bin/timeout");
@@ -57,18 +96,24 @@ public static class GitRepositoryProcess
         foreach (string argument in arguments) start.ArgumentList.Add(argument);
 
         using Process process = Process.Start(start) ?? throw new IOException("Repository operation failed.");
-        Task<string> output = process.StandardOutput.ReadToEndAsync();
-        Task<string> error = process.StandardError.ReadToEndAsync();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(watchdog ? timeout + TimeSpan.FromSeconds(6) : timeout);
+        Task output = readOutput(process.StandardOutput, deadline.Token);
+        // Upstream stderr is neither returned nor retained. Drain it with a
+        // fixed buffer so it cannot block Git or exhaust worker memory.
+        Task error = process.StandardError.BaseStream.CopyToAsync(Stream.Null, deadline.Token);
         try
         {
-            await process.WaitForExitAsync(deadline.Token);
-            await error;
+            var pending = new List<Task> { output, error, process.WaitForExitAsync(deadline.Token) };
+            while (pending.Count > 0)
+            {
+                Task completed = await Task.WhenAny(pending);
+                await completed;
+                pending.Remove(completed);
+            }
             if (watchdog && process.ExitCode is 124 or 137)
                 throw new TimeoutException("Repository operation timed out.");
             if (process.ExitCode != 0) throw new IOException("Repository operation failed.");
-            return await output;
         }
         catch (OperationCanceledException) when (!token.IsCancellationRequested)
         {
@@ -76,12 +121,15 @@ public static class GitRepositoryProcess
         }
         finally
         {
+            await deadline.CancelAsync();
             if (!process.HasExited)
             {
-                process.Kill(entireProcessTree: true);
+                try { process.Kill(entireProcessTree: true); }
+                catch (InvalidOperationException) { /* The process exited before the kill. */ }
                 await process.WaitForExitAsync(CancellationToken.None);
             }
-            await Task.WhenAll(output, error);
+            try { await Task.WhenAll(output, error); }
+            catch { /* Preserve the command, output-limit, or cancellation failure. */ }
         }
     }
 }

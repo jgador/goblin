@@ -1,6 +1,26 @@
+using System;
 using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Goblin.Contracts;
+
+// Codex account operations cross the application boundary using product summaries,
+// independently of its transport and generated protocol.
+public interface ICodexAuthentication
+{
+    Task<AuthenticationState> StatusAsync();
+    Task<AuthenticationState> LoginChatGPTAsync();
+    Task<AuthenticationState> LoginApiKeyAsync(string? value);
+    Task<AuthenticationState> CancelLoginAsync();
+    Task<AuthenticationState> LogoutAsync();
+    Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default);
+}
+
+public abstract class ConnectionFailure : Exception
+{
+    protected ConnectionFailure(string message) : base(message) { }
+}
 
 // Goblin's public HTTP contract intentionally exposes only account summaries and final replies.
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "type")]

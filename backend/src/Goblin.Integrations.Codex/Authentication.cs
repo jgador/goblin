@@ -6,7 +6,7 @@ using Goblin.Protocol;
 
 namespace Goblin.Integrations.Codex;
 
-public sealed class Authentication : IDisposable
+public sealed class Authentication : ICodexAuthentication, IDisposable
 {
     private readonly CodexClient _codex;
     private readonly Func<string, Task<VerificationState>> _verifyApiKey;

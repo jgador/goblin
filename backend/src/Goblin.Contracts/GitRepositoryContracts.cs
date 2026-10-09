@@ -4,6 +4,17 @@ using Goblin.Core.Work;
 
 namespace Goblin.Contracts.Runtime;
 
+public sealed record GitHubState(bool Configured, string? Login, string? UserCode,
+    string? VerificationUrl, string? Notice, GitHubConnectionStatus Status = GitHubConnectionStatus.Disconnected, GitRepositoryAccount? Account = null);
+
+public interface IGitHubConnection : IGitRepositoryCatalog
+{
+    Task<GitHubState> StatusAsync();
+    Task<GitHubState> StartAsync();
+    Task<GitHubState> DisconnectAsync();
+    Task<GitHubState> CheckAsync(CancellationToken token = default);
+}
+
 public sealed class GitRepositoryAccount
 {
     public GitRepositoryAccount(string generation, string accountId, string login)

@@ -14,13 +14,15 @@ namespace Goblin.Application.Runtime;
 
 public sealed class ExecutionCoordinator
 {
-    private readonly IServiceScopeFactory _scopes;
+    private readonly WorkStore _store;
+    private readonly IdentityStore _identities;
     private readonly IExecutionHost _host;
     private readonly IDispatchFailureJournal _failures;
 
-    public ExecutionCoordinator(IServiceScopeFactory scopes, IExecutionHost host, IDispatchFailureJournal failures)
+    public ExecutionCoordinator(WorkStore store, IdentityStore identities, IExecutionHost host, IDispatchFailureJournal failures)
     {
-        _scopes = scopes;
+        _store = store;
+        _identities = identities;
         _host = host;
         _failures = failures;
     }
@@ -32,8 +34,7 @@ public sealed class ExecutionCoordinator
         {
             // Evidence written during a database outage wins over redelivery.
             if ((await _failures.ReadAsync(token)).Any(x => x.AttemptId == command.AttemptId)) return;
-            using IServiceScope scope = _scopes.CreateScope();
-            claimed = await scope.ServiceProvider.GetRequiredService<WorkStore>().ClaimAsync(command,
+            claimed = await _store.ClaimAsync(command,
                 _host.EnvironmentFor,
                 target => _host.Capabilities.Any(x => x.Runtime == target.Runtime &&
                     (target.GitRepository is null ? x.TextExecution : x.GitRepositoryExecution)), token);
@@ -70,9 +71,7 @@ public sealed class ExecutionCoordinator
 
     private async Task ObserveAndSaveAsync(ReconcileWork command, CancellationToken token)
     {
-        WorkSnapshot work;
-        using (IServiceScope scope = _scopes.CreateScope())
-            work = (await scope.ServiceProvider.GetRequiredService<WorkStore>().GetAsync(command.WorkId, token)).Work;
+        WorkSnapshot work = (await _store.GetAsync(command.WorkId, token)).Work;
         AttemptSnapshot? attempt = work.Attempts.LastOrDefault();
         if (attempt is null || attempt.Id != command.AttemptId || attempt.OwnerId is null || (command.TurnNumber != 0 && command.TurnNumber != attempt.TurnNumber)) return;
         bool active = attempt.Status is AttemptStatus.Starting or AttemptStatus.Running or
@@ -90,16 +89,12 @@ public sealed class ExecutionCoordinator
             observation = new(ObservationKind.Uncertain, Failure: attempt.CancellationRequestedAt is not null
                 ? FailureKind.CancellationFailed : FailureKind.HostUnavailable);
         }
-        using (IServiceScope scope = _scopes.CreateScope())
-        {
-            WorkStore store = scope.ServiceProvider.GetRequiredService<WorkStore>();
-            string[] gitRepositories = observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.GitRepository is null
-                ? await store.GitRepositorySuggestionsAsync(work, token) : [];
-            long decisionId = observation.Kind is ObservationKind.InputRequired or ObservationKind.Paused
-                ? await scope.ServiceProvider.GetRequiredService<IdentityStore>().NextEventAsync(token) : 0;
-            await store.MutateAsync(work.Id, current => ExecutionObservationTransition.Apply(current, attempt,
-                observation, gitRepositories, decisionId, DateTimeOffset.UtcNow), token);
-        }
+        string[] gitRepositories = observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.GitRepository is null
+            ? await _store.GitRepositorySuggestionsAsync(work, token) : [];
+        long decisionId = observation.Kind is ObservationKind.InputRequired or ObservationKind.Paused
+            ? await _identities.NextEventAsync(token) : 0;
+        await _store.MutateAsync(work.Id, current => ExecutionObservationTransition.Apply(current, attempt,
+            observation, gitRepositories, decisionId, DateTimeOffset.UtcNow), token);
         if (observation.Kind is ObservationKind.Result or ObservationKind.InputRequired or ObservationKind.Failed or ObservationKind.Stopped ||
             observation.Kind == ObservationKind.Paused && observation.ReleaseWorkspace ||
             observation.Kind == ObservationKind.WorkspaceRequired && attempt.Target.GitRepository is null)
@@ -114,8 +109,7 @@ public sealed class ExecutionCoordinator
         try
         {
             await _host.CleanupAsync(work, token);
-            using IServiceScope scope = _scopes.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(work.Id, current =>
+            await _store.MutateAsync(work.Id, current =>
             {
                 if (current.CurrentAttempt is { } currentAttempt && currentAttempt.Id == attempt.Id &&
                     currentAttempt.OwnerId == attempt.OwnerId && currentAttempt.TurnNumber == attempt.TurnNumber)
@@ -134,8 +128,7 @@ public sealed class ExecutionCoordinator
     {
         foreach (DispatchFailureEvidence failure in await _failures.ReadAsync(token))
         {
-            using IServiceScope scope = _scopes.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<WorkStore>().MutateAsync(failure.WorkId, work =>
+            await _store.MutateAsync(failure.WorkId, work =>
                 DispatchFailureTransition.Apply(work, failure, DateTimeOffset.UtcNow), token);
             await _failures.RemoveAsync(failure.AttemptId, token);
         }
@@ -158,19 +151,22 @@ public static class ReconcileWorkHandler
 // The persisted claim is authoritative even after all in-memory state is lost.
 public sealed class WorkRecovery : BackgroundService
 {
+    private readonly WorkStore _store;
+    private readonly ConnectionStore _connections;
     private readonly IServiceScopeFactory _scopes;
     private readonly ExecutionCoordinator _coordinator;
 
-    public WorkRecovery(IServiceScopeFactory scopes, ExecutionCoordinator coordinator)
+    public WorkRecovery(WorkStore store, ConnectionStore connections, IServiceScopeFactory scopes, ExecutionCoordinator coordinator)
     {
+        _store = store;
+        _connections = connections;
         _scopes = scopes;
         _coordinator = coordinator;
     }
 
     public override async Task StartAsync(CancellationToken cancellationToken)
     {
-        using IServiceScope scope = _scopes.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<ConnectionStore>().RecoverReservationsAsync(cancellationToken);
+        await _connections.RecoverReservationsAsync(cancellationToken);
         await base.StartAsync(cancellationToken);
     }
 
@@ -182,14 +178,13 @@ public sealed class WorkRecovery : BackgroundService
             try
             {
                 await _coordinator.DrainFailuresAsync(stoppingToken);
-                using IServiceScope scope = _scopes.CreateScope();
-                ExecutionRecoveryRequest[] requests = await scope.ServiceProvider.GetRequiredService<WorkStore>().RecoverableAsync(stoppingToken);
+                ExecutionRecoveryRequest[] requests = await _store.RecoverableAsync(stoppingToken);
                 foreach (ExecutionRecoveryRequest request in requests)
                 {
                     try
                     {
                         if (request.Action == ExecutionRecoveryAction.Dispatch)
-                            await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(request.WorkId, request.AttemptId, request.TurnNumber));
+                            await PublishDispatchAsync(request);
                         else await _coordinator.ReconcileAsync(new(request.WorkId, request.AttemptId, request.TurnNumber), stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { throw; }
@@ -199,5 +194,13 @@ public sealed class WorkRecovery : BackgroundService
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch { /* Keep history/readiness available; persisted ownership forbids relaunch. */ }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    private async Task PublishDispatchAsync(ExecutionRecoveryRequest request)
+    {
+        // The bus carries a scoped message context; stores own their contexts
+        // per operation and do not need this publication scope.
+        using IServiceScope scope = _scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new DispatchWork(request.WorkId, request.AttemptId, request.TurnNumber));
     }
 }

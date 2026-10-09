@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json.Serialization;
 using Goblin.Application;
+using Goblin.Application.Connections;
 using Goblin.Application.GitRepositories;
 using Goblin.Application.Work;
 using Goblin.Application.Workspaces;
@@ -35,6 +36,10 @@ internal static class WebServices
             builder.Services.AddGoblinPersistence(configuration.DatabaseConnection);
         builder.Services.ConfigureHttpJsonOptions(json => GitRepositoryJson.Configure(json.SerializerOptions));
         builder.Services.AddSingleton(new GitHubConnection(Path.Combine(workspace.DataDirectory, "github-cli"), options.GitHubCommand));
+        builder.Services.AddSingleton<IGitHubConnection>(services => services.GetRequiredService<GitHubConnection>());
+        builder.Services.AddSingleton(services => options.EnableWork
+            ? new GitHubConnectionService(services.GetRequiredService<IGitHubConnection>(), services.GetRequiredService<GitHubStore>())
+            : new GitHubConnectionService(services.GetRequiredService<IGitHubConnection>()));
         if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, configuration);
         if (options.EnableWork)
         {
@@ -66,6 +71,11 @@ internal static class WebServices
         builder.Services.AddSingleton<ApiKeyVerifier>();
         builder.Services.AddSingleton(services => new Authentication(services.GetRequiredService<CodexClient>(),
             options.VerifyApiKey ?? services.GetRequiredService<ApiKeyVerifier>().VerifyAsync, options.PromptTimeout));
+        builder.Services.AddSingleton<ICodexAuthentication>(services => services.GetRequiredService<Authentication>());
+        builder.Services.AddSingleton(services => options.EnableWork
+            ? new ConnectionService(services.GetRequiredService<ICodexAuthentication>(),
+                services.GetRequiredService<ConnectionStore>(), services.GetRequiredService<ModelCatalogStore>())
+            : new ConnectionService(services.GetRequiredService<ICodexAuthentication>()));
         if (options.RecoverRuntime) builder.Services.AddHostedService<CodexRecovery>();
         return configuration;
     }

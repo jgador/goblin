@@ -88,8 +88,8 @@ public static class SandboxWorker
                     artifact = await GitRepositoryClient.SubmitAsync(attempt.Id, branch, checkout, GitRepositoryOperationKind.PullRequest);
                 string commit = (await GitRepositoryProcess.RunAsync(checkout, environment, CancellationToken.None,
                     "rev-parse", "HEAD")).Trim();
-                await File.WriteAllTextAsync(Path.Combine(state, "changes.patch"),
-                    await GitRepositoryProcess.RunAsync(checkout, environment, CancellationToken.None, "diff", baseline, commit));
+                await GitRepositoryProcess.WriteOutputAsync(checkout, environment, Path.Combine(state, "changes.patch"),
+                    CancellationToken.None, "diff", baseline, commit);
                 stage = "Git checkpoint";
                 WorkspaceCheckpoint saved = await GitRepositoryClient.SaveCheckpointAsync(work, commit);
                 if (observations.Length > 0)

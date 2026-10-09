@@ -1627,6 +1627,66 @@ public sealed class DurabilityTests
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
     }
 
+    [DatabaseFact]
+    public async Task ConnectionServiceOwnsVerificationReservationsAndCompletesChangesAfterCancellation()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var authentication = new CodexAuthentication();
+        var service = new ConnectionService(authentication, fixture.Host.Services.GetRequiredService<ConnectionStore>(),
+            fixture.Host.Services.GetRequiredService<ModelCatalogStore>());
+        ConnectionStore store = fixture.Host.Services.GetRequiredService<ConnectionStore>();
+        Task<PromptResult> prompt = service.PromptAsync("Verify", default);
+        await authentication.PromptEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(ConnectionAvailability.Verifying, (await store.ListAsync()).Single().Availability);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => service.PromptAsync("Overlap", default));
+        Assert.Equal(1, authentication.PromptCalls);
+
+        using var cancelled = new CancellationTokenSource();
+        Task<AuthenticationState> change = service.LogoutAsync(cancelled.Token);
+        try
+        {
+            await fixture.UntilConnection(ConnectionAvailability.Changing);
+            cancelled.Cancel();
+        }
+        finally { authentication.PromptRelease.TrySetResult(); }
+        await prompt;
+        await change;
+        Assert.Equal(ConnectionAvailability.Disconnected, (await store.ListAsync()).Single().Availability);
+
+        authentication.FailPrompt = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PromptAsync("Fail", default));
+        Assert.Equal(ConnectionAvailability.Unavailable, (await store.ListAsync()).Single().Availability);
+        Assert.Equal(2, authentication.PromptCalls);
+    }
+
+    private sealed class CodexAuthentication : ICodexAuthentication
+    {
+        public TaskCompletionSource PromptEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource PromptRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int PromptCalls { get; private set; }
+        public bool FailPrompt { get; set; }
+
+        public async Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
+        {
+            PromptCalls++;
+            if (FailPrompt) throw new InvalidOperationException("Test prompt failure");
+            PromptEntered.TrySetResult();
+            await PromptRelease.Task.WaitAsync(cancellationToken);
+            return new("Verified", "model", 1, AuthenticationMethod.ApiKey);
+        }
+
+        public async Task<AuthenticationState> LogoutAsync()
+        {
+            await PromptRelease.Task;
+            return new(null, null, null, null, true);
+        }
+
+        public Task<AuthenticationState> StatusAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> LoginChatGPTAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> LoginApiKeyAsync(string? value) => throw new NotSupportedException();
+        public Task<AuthenticationState> CancelLoginAsync() => throw new NotSupportedException();
+    }
+
     private sealed class GitRepositoryRemote : IGitRepositoryRemote
     {
         public bool Fail { get; set; }
@@ -1775,6 +1835,17 @@ public sealed class DurabilityTests
         }
 
         public async Task RestartAsync() { await Host.StopAsync(); Host.Dispose(); await StartAsync(); }
+
+        public async Task UntilConnection(ConnectionAvailability availability)
+        {
+            ConnectionStore store = Host.Services.GetRequiredService<ConnectionStore>();
+            for (int i = 0; i < 100; i++)
+            {
+                if ((await store.ListAsync()).Single().Availability == availability) return;
+                await Task.Delay(25);
+            }
+            throw new TimeoutException("Connection did not reach the expected state.");
+        }
 
         public async Task RejectId(string table, long id)
         {

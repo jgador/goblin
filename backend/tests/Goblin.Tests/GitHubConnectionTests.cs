@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Goblin.Contracts.Runtime;
 using Goblin.Integrations.GitHub;
 using Xunit;
 using Env = Goblin.Contracts.Configuration.EnvironmentVariables;

@@ -36,11 +36,11 @@ public static class ApplicationServices
     public static void AddWorkApplication(this IServiceCollection services)
     {
         services.AddSingleton<WorkOutboxFactory>();
-        services.AddScoped<IdentityStore>();
-        services.AddScoped<WorkStore>();
-        services.AddScoped<ConnectionStore>();
+        services.AddSingleton<IdentityStore>();
+        services.AddSingleton<WorkStore>();
+        services.AddSingleton<ConnectionStore>();
         services.AddSingleton<InspectionStore>();
-        services.AddScoped<GitHubStore>();
+        services.AddSingleton<GitHubStore>();
         services.AddScoped<GitRepositorySetupStore>();
         services.AddSingleton<GitRepositoryOperationStore>();
         services.AddSingleton<WorkspaceCheckpointCoordinator>();
