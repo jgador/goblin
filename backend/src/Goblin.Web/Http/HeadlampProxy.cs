@@ -1,5 +1,4 @@
 using System;
-using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,19 +21,10 @@ public sealed class HeadlampProxy : IDisposable
 
     public HeadlampProxy(IHttpForwarder forwarder, string destination)
     {
-        if (!Uri.TryCreate(destination, UriKind.Absolute, out Uri? uri) || uri.Scheme is not ("http" or "https") ||
-            uri.UserInfo.Length != 0 || uri.AbsolutePath != "/" || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-            throw new ArgumentException("GOBLIN_HEADLAMP_URL must be the internal Headlamp HTTP origin.");
         _forwarder = forwarder;
-        _destination = uri.AbsoluteUri;
-        _client = new HttpMessageInvoker(new SocketsHttpHandler
-        {
-            UseProxy = false,
-            UseCookies = false,
-            AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.None,
-            ConnectTimeout = TimeSpan.FromSeconds(10)
-        });
+        _destination = FixedProxyBoundary.Destination(destination,
+            "GOBLIN_HEADLAMP_URL must be the internal Headlamp HTTP origin.");
+        _client = FixedProxyBoundary.CreateClient();
     }
 
     public async Task SendAsync(HttpContext context, Workspace workspace)
@@ -59,8 +49,7 @@ public sealed class HeadlampProxy : IDisposable
     private static bool Allowed(string path, bool read, bool post)
     {
         // Keep escaped separators and dot segments from changing the allowed upstream route.
-        if (path.Contains('%') || path.Contains('\\') || path.Contains("//", StringComparison.Ordinal)) return false;
-        foreach (string segment in path.Split('/')) if (segment is "." or "..") return false;
+        if (!FixedProxyBoundary.SafePath(path)) return false;
         if (post) return path is
             "/headlamp/clusters/goblin/apis/authorization.k8s.io/v1/selfsubjectaccessreviews" or
             "/headlamp/clusters/goblin/apis/authorization.k8s.io/v1/selfsubjectrulesreviews" or
@@ -109,19 +98,13 @@ public sealed class HeadlampProxy : IDisposable
             CancellationToken cancellationToken)
         {
             bool copy = await base.TransformResponseAsync(context, proxyResponse, cancellationToken);
-            context.Response.Headers.Remove("Set-Cookie");
-            context.Response.Headers.Remove("Server");
-            context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers.XContentTypeOptions = "nosniff";
-            context.Response.Headers.XFrameOptions = "DENY";
-            context.Response.Headers["Referrer-Policy"] = "no-referrer";
             // Headlamp's two inline bootstrap scripts are pinned with its image.
             // Their hashes are verified against the real UI when upgrading Headlamp.
-            context.Response.Headers.ContentSecurityPolicy =
+            FixedProxyBoundary.ProtectResponse(context.Response,
                 "default-src 'self'; script-src 'self' 'sha256-IGC9pIbAmiVjV5wzaAgJ2CWGUph0A9ngnNPySh6ZP/U=' " +
                 "'sha256-a/I3uOpd1JHbda9Yul+v1pGVdTvTpXn8D84n1wc++Iw='; style-src 'self' 'unsafe-inline'; " +
                 "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; " +
-                "object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+                "object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
             return copy;
         }
     }
