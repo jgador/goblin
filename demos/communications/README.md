@@ -1,7 +1,7 @@
 # Goblin: In the loop
 
 A standalone, one-minute interactive concept film with Goblin at the center of
-Slack, Microsoft Teams, GitHub, Discord, and email conversations. Open
+Slack, Microsoft Teams, GitHub, Discord, and Gmail conversations. Open
 `index.html` directly in a modern browser; no build, server, dependencies, or
 account connections are required.
 
@@ -21,9 +21,10 @@ The Goblin icons are unchanged copies of the official artwork in
 remain outside the repository's Apache license grant. Inter fonts are supplied
 with the brand assets and retain their SIL Open Font License in `assets/OFL.txt`.
 Slack, Teams, and GitHub artwork is copied from the existing frontend provider
-assets with their license notice. The Discord mark identifies the depicted
-channel; channel names and marks belong to their respective owners. The email
-icon is original SVG artwork.
+assets with their license notice. The Gmail mark in `assets/email.svg` comes from the
+[gilbarbara/logos collection](https://github.com/gilbarbara/logos) under the same
+provider license notice. The Discord mark identifies the depicted channel;
+channel names and marks belong to their respective owners.
 
 The production application, its asset map, and its security policy are independent
 of this demo. Changes to this directory can be checked with

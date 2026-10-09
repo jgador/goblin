@@ -36,7 +36,7 @@
       ],
     },
     {
-      id: "email", name: "Email", location: "Re: A quick project check-in", sender: "Taylor",
+      id: "email", name: "Gmail", location: "Re: A quick project check-in", sender: "Taylor",
       prompts: [
         { label: "Draft a project recap", request: "Hi Goblin, help me summarize our next steps for the team.", reply: "Here’s a starting point: review the login fix, agree on the settings scope, and gather feedback on shortcuts.", receipt: "A thoughtful follow-up, ready to edit." },
         { label: "Prepare a handoff", request: "What should we include in a handoff note for this feature?", reply: "Include the goal, what changed, how to check it, and any open questions. Link the relevant discussion for context.", receipt: "The useful details, all in one place." },
