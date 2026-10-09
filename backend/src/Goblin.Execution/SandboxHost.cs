@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts;
@@ -51,7 +50,7 @@ public sealed class SandboxHost : IExecutionHost
 
     public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IGitRepositoryBroker gitRepositories, IWorkspaceCheckpoints? checkpoints = null, WorkspaceLimits? limits = null)
     {
-        if (!ValidNamespace(options.Namespace))
+        if (!KubernetesWorkspaceAddress.IsValidNamespace(options.Namespace))
             throw new ArgumentException("Invalid execution namespace.", nameof(options));
         _api = api;
         _options = options;
@@ -64,21 +63,17 @@ public sealed class SandboxHost : IExecutionHost
 
     public RuntimeCapabilities[] Capabilities => [new(RuntimeIds.Codex, true, true, true, false, false)];
 
-    public string EnvironmentFor(long workId, long attemptId) => "k8s/" + _options.Namespace + "/work-" +
-        workId.ToString(CultureInfo.InvariantCulture);
+    public string EnvironmentFor(long workId, long attemptId) =>
+        KubernetesWorkspaceAddress.Create(_options.Namespace, workId).Reference;
 
     public string EnvironmentFor(WorkSnapshot work) => work.Attempts[^1] is { Target.GitRepository: null } or { ReasoningOnly: true }
         ? _textHost.EnvironmentFor(work) : EnvironmentFor(work.Id, work.Attempts[^1].Id);
 
-    private static bool ValidNamespace(string value) => Regex.IsMatch(value, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
-
-    private SandboxAddress Address(WorkSnapshot work)
+    private static KubernetesWorkspaceAddress Address(WorkSnapshot work)
     {
         string reference = work.Workspace?.EnvironmentReference ?? throw new IOException("Work has no workspace.");
-        string[] parts = reference.Split('/');
-        if (parts.Length == 3 && parts[0] == "k8s" && ValidNamespace(parts[1]) &&
-            parts[2] == "work-" + work.Id.ToString(CultureInfo.InvariantCulture))
-            return new(parts[1], parts[2]);
+        if (KubernetesWorkspaceAddress.TryParse(reference, work.Id, out KubernetesWorkspaceAddress? address))
+            return address;
         throw new IOException("Unrecognized execution environment reference.");
     }
 
@@ -109,12 +104,6 @@ public sealed class SandboxHost : IExecutionHost
         finally { gate.Release(); }
     }
 
-    private sealed record SandboxAddress(string Namespace, string Name)
-    {
-        public string Core => "/api/v1/namespaces/" + Namespace;
-        public string Sandboxes => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + Namespace + "/sandboxes";
-    }
-
     public async Task StartAsync(WorkSnapshot work, CancellationToken token) =>
         await ExclusiveAsync(work.Id, async () => { await StartCoreAsync(work, token); return true; }, token);
 
@@ -123,7 +112,7 @@ public sealed class SandboxHost : IExecutionHost
         AttemptSnapshot attempt = work.Attempts[^1];
         if (attempt.Target.GitRepository is null || attempt.ReasoningOnly) { await _textHost.StartAsync(work, token); return; }
         if (attempt.Status != AttemptStatus.Starting || attempt.OwnerId is null) return;
-        SandboxAddress address = Address(work);
+        KubernetesWorkspaceAddress address = Address(work);
         string path = address.Sandboxes + "/" + address.Name;
         K.Sandbox? existing = await _api.GetAsync<K.Sandbox>(path, token);
         bool requiresVolume = existing?.Metadata?.Labels?.GetValueOrDefault("goblin-volume") == "created";
@@ -228,7 +217,7 @@ public sealed class SandboxHost : IExecutionHost
     {
         if (work.Attempts[^1].Target.GitRepository is null || work.Attempts[^1].ReasoningOnly) return await _textHost.ObserveAsync(work, stop, token);
         if (work.Attempts[^1].Status == AttemptStatus.Uncertain) stop = true;
-        SandboxAddress address = Address(work);
+        KubernetesWorkspaceAddress address = Address(work);
         string name = address.Name;
         ExecutionObservation? gitRepositoryObservation = await _gitRepositories.ObserveAsync(work, token);
         if (gitRepositoryObservation?.Kind == ObservationKind.Uncertain) stop = true;
@@ -303,7 +292,7 @@ public sealed class SandboxHost : IExecutionHost
     private async Task CleanupCoreAsync(WorkSnapshot work, CancellationToken token)
     {
         if (work.Attempts[^1].Target.GitRepository is null || work.Attempts[^1].ReasoningOnly) { await _textHost.CleanupAsync(work, token); return; }
-        SandboxAddress address = Address(work);
+        KubernetesWorkspaceAddress address = Address(work);
         string path = address.Sandboxes + "/" + address.Name;
         K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(path, token);
         if (sandbox is null)
@@ -334,14 +323,14 @@ public sealed class SandboxHost : IExecutionHost
         }, token)) throw new IOException("Workspace ownership changed.");
     }
 
-    private Task<bool> SuspendAsync(SandboxAddress address, K.Sandbox sandbox, CancellationToken token) =>
+    private Task<bool> SuspendAsync(KubernetesWorkspaceAddress address, K.Sandbox sandbox, CancellationToken token) =>
         _api.TryPatchAsync(address.Sandboxes + "/" + address.Name, new
         {
             metadata = new { resourceVersion = Version(sandbox), labels = new Dictionary<string, string> { ["goblin-phase"] = "stopping" } },
             spec = new { operatingMode = "Suspended" }
         }, token);
 
-    private async Task RequireVolumeCapacityAsync(SandboxAddress address, CancellationToken token)
+    private async Task RequireVolumeCapacityAsync(KubernetesWorkspaceAddress address, CancellationToken token)
     {
         K.PersistentVolumeClaimList? volumes = await _api.GetAsync<K.PersistentVolumeClaimList>(address.Core + "/persistentvolumeclaims?labelSelector=app%3Dgoblin-execution", token);
         // Git checkpoints do not preserve ignored/untracked files. No automatic
@@ -352,7 +341,7 @@ public sealed class SandboxHost : IExecutionHost
 
     public K.Sandbox Manifest(WorkSnapshot work, bool suspended, string? resourceVersion = null, string? phase = null)
     {
-        SandboxAddress address = Address(work);
+        KubernetesWorkspaceAddress address = Address(work);
         return _manifests.Create(work, address.Namespace, address.Name, suspended, resourceVersion, phase);
     }
 }
