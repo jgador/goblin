@@ -80,7 +80,7 @@ public static class SandboxWorker
                 if (!string.IsNullOrWhiteSpace(await GitRepositoryProcess.RunAsync(checkout, environment,
                     CancellationToken.None, "diff", "--cached", "--name-only")))
                     await GitRepositoryProcess.RunAsync(checkout, environment, CancellationToken.None,
-                        "commit", "-m", "Goblin Work " + work.Id.ToString(CultureInfo.InvariantCulture));
+                        "commit", "-m", CommitMessage(work.Id, gitRepository));
                 bool publish = gitRepository.Grant!.PublishesChanges();
                 stage = publish ? "Publish" : "Verify local Git checkpoint";
                 string? artifact = await GitRepositoryClient.SubmitAsync(attempt.Id, branch, checkout, publish ? GitRepositoryOperationKind.Publish : GitRepositoryOperationKind.Checkpoint);
@@ -126,6 +126,10 @@ public static class SandboxWorker
 
     public static string ClaimPrefix(string state, long attemptId, int turnNumber) => Path.Combine(state,
         "attempt-" + attemptId.ToString(CultureInfo.InvariantCulture) + "-turn-" + turnNumber.ToString(CultureInfo.InvariantCulture));
+
+    public static string CommitMessage(long workId, GitRepositoryChange repository) =>
+        "Goblin Work " + workId.ToString(CultureInfo.InvariantCulture) +
+        (repository.RequestedBy is { } requester ? "\n\nRequested-by: " + requester : "");
 
     public static async Task PrepareCheckoutAsync(string checkout, Dictionary<string, string> environment, GitRepositoryChange gitRepository)
     {

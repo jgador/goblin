@@ -60,6 +60,8 @@ public sealed class ExternalReply
     public long? WorkId { get; init; }
 
     public ExternalReplyKind Kind { get; init; }
+
+    public string? Notice { get; init; }
 }
 
 public enum ExternalReplyKind

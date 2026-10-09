@@ -17,13 +17,13 @@ cloud relay, OAuth callback, public inbound endpoint, or Slack-specific DNS/TLS
 requirement. Local Goblin remains authoritative for users, permissions, Work,
 agents, repositories, identity mappings, history, and execution decisions.
 
-The primary experience is **Settings → Integrations → Slack**. The app is named
+The primary experience is **Integrations → Slack**. Settings also links to the directory. The app is named
 **Goblin**, the bot is **goblin**, and the description identifies it as the
 self-hosted AI coworker.
 
 ## Automatic setup
 
-1. Select **Set up Slack**, then **Connect Slack**.
+1. Select **Connect** beside Slack, then **Connect Slack** in its settings.
 2. Copy the displayed `/slackauthticket …` command into the intended Slack workspace.
 3. Approve Slack's setup permissions and enter its confirmation code in Goblin.
 4. Goblin creates and installs the app using its embedded manifest, collects the
@@ -139,7 +139,11 @@ cancellation, and execution decisions retain their local application boundary.
 
 A new DM or mention thread starts a conversation and Work. Replies continue that
 Work; a reply answers an existing input question when one is pending, otherwise
-it adds context. Ordinary text such as `yes` never approves repository access.
+it adds context. Naming an enabled repository can start its isolated execution
+directly, including in an answer to a repository question. The default branch and
+GitHub no-reply commit identity are automatic; push and draft PR permissions come
+from explicit delivery instructions. Ordinary text such as `yes` never approves
+repository access, and Slack cannot enable repositories or retry failed Work.
 
 PostgreSQL stores external identities, link requests, thread associations, and
 normalized event receipts. Receipt uniqueness covers both event identity and
@@ -161,7 +165,7 @@ local Work view when a request is saved. When Slack-originated Work needs an
 answer, Goblin also posts the pending question in its original Slack thread.
 The question remains visible in Goblin, and an authorized reply in the same
 thread answers it through the existing application command. Channel replies
-must mention `@goblin` again. Repository approvals and runtime results remain
+must mention `@goblin` again. Repository enablement and runtime results remain
 in the authenticated Goblin interface. An outgoing acknowledgement is best effort;
 losing it cannot roll back or repeat accepted Work. Rich Slack result sharing
 and completion notifications remain deferred.

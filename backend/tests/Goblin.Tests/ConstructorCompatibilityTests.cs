@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Goblin.Application.Work;
 using Goblin.Contracts;
@@ -41,6 +42,16 @@ public sealed class ConstructorCompatibilityTests
         Assert.True(string.Equals(expected, actual, StringComparison.Ordinal),
             $"{name} ({scenario}, Web={web}) changed serialized bytes.\nExpected: {expected}\nActual: {actual}");
         if (web && value is Api.WorkCommand command)
-            Assert.Equal(expected, JsonSerializer.Serialize(command.ToApplication(), ContractJson.Options));
+        {
+            // Repository selections intentionally no longer carry a submitted
+            // executable grant. Every other request field keeps its mapping.
+            JsonNode mapped = JsonNode.Parse(expected)!;
+            if (mapped["repository"] is JsonObject repository)
+            {
+                repository.Remove("grant");
+                repository.Remove("requestedBy");
+            }
+            Assert.Equal(mapped.ToJsonString(), JsonSerializer.Serialize(command.ToApplication(), ContractJson.Options));
+        }
     }
 }

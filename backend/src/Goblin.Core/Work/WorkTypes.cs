@@ -170,11 +170,24 @@ public sealed record GitRepositoryChange
     public string GitAuthorEmail { get; }
     public GitRepositoryGrant? Grant { get; }
 
+    // An authenticated requester's opaque source reference, supplied by the
+    // application adapter. It is attribution, never repository authority.
+    public string? RequestedBy
+    {
+        get;
+        init
+        {
+            if (value is not null && (value.Length is 0 or > 256 || Array.Exists(value.ToCharArray(), char.IsControl)))
+                throw new WorkRuleException(WorkRule.InvalidValue);
+            field = value;
+        }
+    }
+
     public GitRepositoryChange(string gitRepository, string gitAuthorName, string gitAuthorEmail, GitRepositoryGrant? grant = null)
     {
         string[] parts = (gitRepository ?? "").Split('/');
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(gitAuthorName) || string.IsNullOrWhiteSpace(gitAuthorEmail) ||
-            gitAuthorName.Contains('\n') || gitAuthorEmail.Contains('\n')) throw new WorkRuleException(WorkRule.InvalidValue);
+            Array.Exists(gitAuthorName.ToCharArray(), char.IsControl) || Array.Exists(gitAuthorEmail.ToCharArray(), char.IsControl)) throw new WorkRuleException(WorkRule.InvalidValue);
         foreach (string part in parts)
         {
             if (part.Length == 0 || part is "." or "..") throw new WorkRuleException(WorkRule.InvalidValue);

@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
+using Goblin.Core.Work;
 
 namespace Goblin.Contracts;
 
@@ -18,6 +20,13 @@ public static class GitRepositoryJson
         options.PropertyNamingPolicy = new GitRepositoryPropertyNamingPolicy(options.PropertyNamingPolicy);
         options.Converters.Add(new GitRepositoryEnumJsonConverterFactory());
         options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
+        options.TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver()).WithAddedModifier(info =>
+        {
+            if (info.Type == typeof(GitRepositoryChange))
+                foreach (JsonPropertyInfo property in info.Properties)
+                    if (property.Name == options.PropertyNamingPolicy.ConvertName(nameof(GitRepositoryChange.RequestedBy)))
+                        property.ShouldSerialize = (_, value) => value is not null;
+        });
         return options;
     }
 }

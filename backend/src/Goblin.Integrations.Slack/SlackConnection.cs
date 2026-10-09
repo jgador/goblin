@@ -139,6 +139,8 @@ public sealed class SlackConnection : BackgroundService
                 ExternalReplyKind.CommandRejected => "This message could not be applied. Open Goblin to review Work before sending another request.",
                 _ => throw new InvalidOperationException("Unknown conversation reply kind.")
             };
+            if (reply.Notice is { } notice)
+                text += "\n\n" + notice.Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
             try { await _api.PostAsync(credentials, reply.ChannelId, reply.ThreadId, text, token); }
             catch (SlackFailure) { /* A reply failure cannot roll back or repeat accepted Work. */ }
         }

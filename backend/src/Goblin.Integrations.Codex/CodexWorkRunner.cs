@@ -51,13 +51,15 @@ public sealed class CodexWorkRunner
                     (gitRepositoryChanges ? GitRepositorySetupInstructions.Text + "Work only on the assigned repository and branch in this isolated environment. " +
                         "This Work's workspace can contain edits and local commits from earlier attempts. Inspect git status and git diff before editing; preserve unfinished changes and use the supplied Work context to continue. " +
                         "Commit locally. The approved repository grant controls publication: " +
+                        (work.Attempts[^1].Target.GitRepository?.RequestedBy is { } requester
+                            ? $"Include the exact trailer 'Requested-by: {requester}' in every new commit. This identifies the authenticated requester; do not invent a Co-authored-by email. " : "") +
                         $"push allowed={work.Attempts[^1].Target.GitRepository?.Grant?.AllowPush}; draft PR allowed={work.Attempts[^1].Target.GitRepository?.Grant?.AllowPullRequest}. " +
                         "Use goblin-github publish or goblin-github pull-request only when allowed. Goblin saves local checkpoints without publishing when push is not approved. " +
                         "Use goblin-github fetch to refresh origin branches before incorporating upstream changes locally. " +
                         "GitHub credentials are held by Goblin. Main and other branches cannot be published or merged through these operations. " :
                         "Use only the supplied context. Do not call tools, inspect files, browse, or run commands. " +
                         "If the latest request requires cloning, inspecting, running, or changing repository files, return kind workspace with a short reason. " +
-                        "Goblin will collect repository selection, Git identity, and authorization, then provision the workspace. " +
+                        "Goblin uses the enabled repository's default branch and connected GitHub commit identity. Ask only for missing repository or task information; do not ask for Git author settings. " +
                         "Do not ask the user to attach a checkout, enable network access, or change filesystem permissions. " +
                         "Otherwise answer or ask clarifying questions using the saved Work context.")
             }, token);

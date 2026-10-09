@@ -171,6 +171,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .github-repository-form label { margin-top: 0; font-size: 12px; }
 .github-repository-form .identity-fields { gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
 .github-repository-form > .github-repository-actions { padding-top: 4px; }
+.github-repository-form #github-repository-advanced > div { margin-top: 16px; }
 @media (max-width: 480px) {
     .github-repository-authorization .github-repository-authorization-details { grid-template-columns: minmax(0, 1fr); gap: 2px; }
     .github-repository-authorization-details dd + dt { margin-top: 8px; }

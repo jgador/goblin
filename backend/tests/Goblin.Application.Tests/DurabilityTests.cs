@@ -40,7 +40,7 @@ public sealed class DatabaseFactAttribute : FactAttribute
     }
 }
 
-public sealed class DurabilityTests
+public sealed partial class DurabilityTests
 {
     private static long _nextId = int.MaxValue;
 
@@ -316,7 +316,7 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task GitRepositoryIntentWaitsForAuthorizationAndSurvivesRestartAndDuplicateCommands()
+    public async Task EnabledGitRepositoryIntentStartsDirectlyAndSurvivesRestartAndDuplicateCommands()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         await EnableHandoffGitRepository(fixture);
@@ -329,27 +329,22 @@ public sealed class DurabilityTests
         });
         WorkCommand start = WorkCommands.Execute(NextId(), id, work.Version);
         work = await fixture.Apply(start);
-        Assert.Equal(AttentionReason.GitRepositoryRequired, work.Work.Attention!.Reason);
-        Assert.Empty(work.Work.Attempts);
-        Assert.Null(work.Work.Workspace);
+        Assert.Null(work.Work.Attention);
+        Assert.Single(work.Work.Attempts);
+        Assert.Equal(GitRepositoryAuthorizationStatus.Authorized, work.Work.GitRepositoryAuthorization!.Status);
+        Assert.Equal("owner", work.Work.Attempts[0].Target.GitRepository!.GitAuthorName);
+        Assert.Equal("42+owner@users.noreply.github.com", work.Work.Attempts[0].Target.GitRepository!.GitAuthorEmail);
         Assert.Equal(work.Version, (await fixture.Apply(start)).Version);
         await fixture.RestartAsync();
         work = await fixture.Get(id);
-        Assert.Equal("owner/repo", Assert.Single(work.Work.GitRepositoryRequest!.GitRepositories));
+        Assert.Equal("owner/repo", Assert.Single(work.Work.Attempts).Target.GitRepository!.GitRepository);
         ApplicationFailure rejected = await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id, WorkAction.AuthorizeGitRepository)
         {
             ExpectedVersion = work.Version,
             GitRepository = new("unapproved/repo", "Goblin", "agent@example.com")
         }));
         Assert.Equal("invalid_command", rejected.Code);
-        Assert.Empty((await fixture.Get(id)).Work.Attempts);
-        var authorize = new WorkCommand(NextId(), id, WorkAction.AuthorizeGitRepository)
-        {
-            ExpectedVersion = work.Version,
-            AuthorizationId = work.Work.GitRepositoryAuthorization!.Id
-        };
-        WorkView accepted = await fixture.Apply(authorize);
-        Assert.Equal(accepted.Version, (await fixture.Apply(authorize)).Version);
+        Assert.Single((await fixture.Get(id)).Work.Attempts);
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         Assert.Single(work.Work.Attempts);
         Assert.Equal("handoff", work.Work.Attempts[0].Target.GitRepository!.Grant!.Generation);
@@ -371,15 +366,9 @@ public sealed class DurabilityTests
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.InputRequired && !x.Work.Attempts[^1].CleanupPending);
         WorkCommand answer = WorkCommands.Answer(NextId(), id, work.Version, work.Work.Decisions[^1].Id, "Clone https://github.com/owner/repo");
         work = await fixture.Apply(answer);
-        Assert.Equal(AttentionReason.GitRepositoryRequired, work.Work.Attention!.Reason);
-        Assert.Single(work.Work.Attempts);
+        Assert.Null(work.Work.Attention);
+        Assert.Equal(2, work.Work.Attempts.Length);
         Assert.Equal(1, work.Work.Attempts[0].TurnNumber);
-        work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareGitRepository)
-        {
-            ExpectedVersion = work.Version,
-            GitRepository = new("owner/repo", "Goblin", "agent@example.com")
-        });
-        work = await fixture.Authorize(work);
         Assert.Equal(2, work.Work.Attempts.Length);
         Assert.Equal(original, work.Work.Attempts[0].Id);
         Assert.Equal("conversation-session", work.Work.Attempts[0].Session!.SessionReference);
@@ -1876,11 +1865,12 @@ public sealed class DurabilityTests
 
         public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
 
-        public Task<WorkView> Authorize(WorkView work) => Apply(new(NextId(), work.Work.Id, WorkAction.AuthorizeGitRepository)
-        {
-            ExpectedVersion = work.Version,
-            AuthorizationId = work.Work.GitRepositoryAuthorization!.Id
-        });
+        public Task<WorkView> Authorize(WorkView work) => work.Work.GitRepositoryAuthorization?.Status == GitRepositoryAuthorizationStatus.Authorized
+            ? Task.FromResult(work) : Apply(new(NextId(), work.Work.Id, WorkAction.AuthorizeGitRepository)
+            {
+                ExpectedVersion = work.Version,
+                AuthorizationId = work.Work.GitRepositoryAuthorization!.Id
+            });
 
         public async Task<WorkView> ExecuteAndAuthorize(WorkCommand command)
         {

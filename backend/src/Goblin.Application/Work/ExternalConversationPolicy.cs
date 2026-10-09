@@ -35,8 +35,8 @@ internal static class ExternalConversationPolicy
         long version, string text)
     {
         WorkDecision? decision = snapshot.Decisions.LastOrDefault(value => value.AnsweredAt is null);
-        // External conversations may answer an explicit question, but cannot
-        // approve a repository, retry, complete, or cancel Work.
+        // Repository selection in authenticated input can use an enabled
+        // repository. It cannot enable repositories, retry, complete, or cancel Work.
         return snapshot.Attention?.Reason == AttentionReason.InputRequired && decision is not null
             ? WorkCommands.Answer(commandId, workId, version, decision.Id, text)
             : WorkCommands.AddContext(commandId, workId, version, text);
@@ -46,6 +46,15 @@ internal static class ExternalConversationPolicy
     {
         WorkDecision? decision = snapshot.Decisions.LastOrDefault(value => value.AnsweredAt is null);
         return snapshot.Attention?.Reason == AttentionReason.InputRequired && decision?.Id != notifiedDecisionId ? decision : null;
+    }
+
+    internal static string? RepositoryNotice(WorkSnapshot work)
+    {
+        if (work.Attention?.Reason != AttentionReason.GitRepositoryRequired) return null;
+        string[] names = work.GitRepositoryRequest?.GitRepositories ?? [];
+        return names.Length == 1
+            ? $"Repository access is still needed for {names[0]}. Enable it in Goblin’s GitHub integration if needed, then reply here with ‘Use {names[0]}’. Branch and commit identity defaults are automatic."
+            : "Reply in this thread with the full owner/repository name of an enabled GitHub repository. Goblin will use its default branch and your connected GitHub commit identity.";
     }
 
     private static string Hash(string value) =>

@@ -26,6 +26,10 @@ const icons: Record<string, string> = {
     spark: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
     branch: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10M18 7v3a4 4 0 0 1-4 4H6"/>',
     book: '<path d="M12 5v16M12 5C9 2 4 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-2-1-7-2-10 1Z"/>',
+    integrations:
+        '<path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4M9 11h6"/>',
+    knowledge:
+        '<path d="M12 5v16M12 5C9 3 6 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1ZM6 8h3m-3 4h3m6-4h3m-3 4h3"/>',
     inbox: '<path d="M4 3h16l2 12v6H2v-6Z"/><path d="M2 15h6l2 3h4l2-3h6"/>',
     goal: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="m15 9 5-5M17 4h3v3"/>',
     cube: '<path d="m12 3 9 5v9l-9 5-9-5V8Zm0 9 9-4M12 12 3 8m9 4v10"/>',

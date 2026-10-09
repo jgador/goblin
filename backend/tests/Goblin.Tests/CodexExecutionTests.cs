@@ -165,7 +165,7 @@ public sealed class CodexExecutionTests
             else
             {
                 if (!requestWorkspace) Assert.Contains("code-mode host is disabled", toolOutput);
-                Assert.Contains("collect repository selection", requests);
+                Assert.Contains("connected GitHub commit identity", requests);
                 Assert.False(File.Exists(marker));
                 Assert.DoesNotContain("RepositorySetupMemory", requests);
                 Assert.Null(result.Setup);

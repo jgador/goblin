@@ -49,8 +49,8 @@ internal sealed class WorkspaceMiddleware
                 await _next(context); return;
             }
             if (_gitRepositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);
-            // Endpoint routing treats /work and /work/ as the same route.
-            if (path == "/work/") path = "/work";
+            // Endpoint routing treats page routes with trailing slashes as the same route.
+            if (path is "/work/" or "/integrations/" or "/knowledge/") path = path.TrimEnd('/');
             bool get = HttpMethods.IsGet(request.Method);
             bool post = HttpMethods.IsPost(request.Method);
             if (get && path is "/healthz" or "/readyz") { await _next(context); return; }

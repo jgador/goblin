@@ -272,6 +272,10 @@ public sealed class ExternalConversationStore
                     ThreadId = message.ThreadId,
                     ConversationId = conversation.Id
                 });
+                // Bind authenticated provenance before preparing the attempt, in
+                // the same transaction as its command, receipt, and dispatch.
+                message.WorkId = workId;
+                await db.SaveChangesAsync(token);
                 view = await _work.ApplyConversationCommandAsync(db, outbox,
                     WorkCommands.Execute(await IdentitySequence.NextAsync(db, IdentityKind.Command, token), workId, view.Version), token);
             }
@@ -288,7 +292,10 @@ public sealed class ExternalConversationStore
             db.ConversationMessages.Add(new() { Id = messageId, ConversationId = conversation.Id, Body = message.Body, CreatedAt = message.ReceivedAt });
             message.ConversationMessageId = messageId; message.WorkId = view.Work.Id; message.State = nameof(ExternalMessageState.Accepted);
             await outbox.SaveChangesAndFlushMessagesAsync(token);
-            return new(message.Id, message.ChannelId, message.ThreadId, view.Work.Id, ExternalReplyKind.WorkSaved);
+            return new(message.Id, message.ChannelId, message.ThreadId, view.Work.Id, ExternalReplyKind.WorkSaved)
+            {
+                Notice = ExternalConversationPolicy.RepositoryNotice(view.Work)
+            };
         }
         catch (Exception error) when (rejectedId is not null && error is ApplicationFailure or WorkRuleException)
         {

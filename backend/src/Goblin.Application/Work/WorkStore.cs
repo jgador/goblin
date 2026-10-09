@@ -149,9 +149,11 @@ public sealed partial class WorkStore
                 if (command.ModelSelectionProvided || command.Model is not null || command.ReasoningEffort is not null)
                     await ModelCatalogStore.ValidateSelectionAsync(db, connection, model, effort, token);
                 var target = new ExecutionTarget(connection.Runtime, connection.Id, model, gitRepository, effort);
+                proposal ??= await EnabledProposalAsync(db, work.Snapshot(), command, token);
                 if (proposal is not null)
                 {
                     await SaveProposalAsync(db, work, attemptId, target, proposal, command.Action == WorkAction.Retry, now, token);
+                    await AuthorizeEnabledProposalAsync(db, outbox, work, now, token);
                     break;
                 }
                 if (command.Action == WorkAction.Execute && gitRepository is null)
@@ -172,6 +174,7 @@ public sealed partial class WorkStore
                     ?? throw new ApplicationFailure("invalid_command");
                 await SaveProposalAsync(db, work, await IdentitySequence.NextAsync(db, IdentityKind.Attempt, token), previous,
                     proposal ?? throw new ApplicationFailure("repository_ambiguous"), work.CurrentAttempt?.Status == AttemptStatus.Failed && work.GitRepositoryAuthorization?.Retry == true, now, token);
+                await AuthorizeEnabledProposalAsync(db, outbox, work, now, token);
                 break;
             case WorkAction.AuthorizeGitRepository:
                 GitRepositoryAuthorization approval = work.GitRepositoryAuthorization
@@ -209,6 +212,7 @@ public sealed partial class WorkStore
                     if (suggestions.Length > 0)
                     {
                         work.RequestGitRepositorySetupForAnswer(command.DecisionId ?? 0, command.Text ?? "", suggestions, now);
+                        await ContinueEnabledGitRepositoryAsync(db, outbox, work, command, now, token);
                         break;
                     }
                 }
@@ -224,6 +228,7 @@ public sealed partial class WorkStore
                 break;
             case WorkAction.AddContext:
                 work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event, token), command.Text ?? "", now);
+                await ContinueEnabledGitRepositoryAsync(db, outbox, work, command, now, token);
                 break;
             case WorkAction.Reconcile:
                 ExecutionAttempt? uncertain = work.CurrentAttempt;
