@@ -60,6 +60,8 @@ public sealed class ExternalReply
     public long? WorkId { get; init; }
 
     public ExternalReplyKind Kind { get; init; }
+
+    public string? Notice { get; init; }
 }
 
 public enum ExternalReplyKind
@@ -79,6 +81,42 @@ public interface IExternalConversations
     Task<ExternalQuestion?> NextQuestionAsync(ExternalInstallation installation, CancellationToken token);
 
     Task QuestionSentAsync(ExternalInstallation installation, ExternalQuestion question, CancellationToken token);
+
+    Task<ExternalWorkUpdate[]> PendingUpdatesAsync(ExternalInstallation installation, CancellationToken token);
+
+    Task<bool> UpdateIsCurrentAsync(ExternalInstallation installation, ExternalWorkUpdate update, CancellationToken token);
+
+    Task UpdateSentAsync(ExternalInstallation installation, ExternalWorkUpdate update, CancellationToken token);
+}
+
+public enum ExternalWorkUpdateKind
+{
+    ResultReady,
+    Completed,
+    Failed,
+    Uncertain,
+    CleanupFailed,
+    Cancelled
+}
+
+public sealed record ExternalWorkUpdateContent(long Sequence, ExternalWorkUpdateKind Kind, string Text);
+
+public sealed class ExternalWorkUpdate
+{
+    public ExternalWorkUpdate(long conversationId, long workId, string channelId, string threadId, ExternalWorkUpdateContent content)
+    {
+        ConversationId = conversationId;
+        WorkId = workId;
+        ChannelId = channelId;
+        ThreadId = threadId;
+        Content = content;
+    }
+
+    public long ConversationId { get; }
+    public long WorkId { get; }
+    public string ChannelId { get; }
+    public string ThreadId { get; }
+    public ExternalWorkUpdateContent Content { get; }
 }
 
 public sealed class ExternalQuestion

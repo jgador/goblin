@@ -2,7 +2,7 @@
   "schemaSha256": {
     "sandbox-v1beta1.json": "9cb46ae1317deccb41617fb0a83ad1ca407cd141aec32c0c85fd594689a767af",
     "kubernetes-v1.37.0-swagger.json.gz": "f6a43a5d55affa9a77c3bd9b4c5b090c986a738bf77a608c85e533e11628852a",
-    "selection.json": "71000a1f3914eb0bb4b3cc4fc57b79ad476154a02421de8f597e5cbfc9024fab"
+    "selection.json": "7a8eb068ffe6048b8aa6a5c1edcdd7f345de7b5669159f716a1e6db175b63fbc"
   },
   "generatedClasses": 41,
   "generatedEnums": 3,

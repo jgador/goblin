@@ -50,7 +50,7 @@ test.describe("durable Work", () => {
         expect(saved.attempts).toEqual([]);
     }
     for (const fromConversation of [false, true]) {
-        test(`repository authorization continues the same Work ${fromConversation ? "after a conversation" : "from its objective"}`, async ({
+        test(`enabled repository defaults continue the same Work ${fromConversation ? "after a conversation" : "from its objective"}`, async ({
             page,
         }) => {
             await page.route("**/api/github", (route) =>
@@ -84,47 +84,50 @@ test.describe("durable Work", () => {
             await page
                 .getByRole("button", { name: "Start work", exact: true })
                 .click();
-            await expect(
-                page.getByRole("heading", {
-                    name: fromConversation
-                        ? "Repository access needed"
-                        : "Authorize GitHub access",
-                }),
-            ).toBeVisible();
+            if (fromConversation)
+                await expect(
+                    page.getByRole("heading", {
+                        name: "Repository access needed",
+                    }),
+                ).toBeVisible();
             const id = new URL(page.url()).searchParams.get("item");
+            await expect
+                .poll(
+                    async () =>
+                        (
+                            await (
+                                await page.request.get(`/api/work/${id}`)
+                            ).json()
+                        ).work.attempts.length,
+                )
+                .toBe(1);
             const before = (
                 await (await page.request.get(`/api/work/${id}`)).json()
             ).work;
-            expect(before.attempts).toHaveLength(fromConversation ? 1 : 0);
-            expect(before.workspace).toBeNull();
+            expect(before.attempts).toHaveLength(1);
             await page.reload();
-            await expect(
-                page.getByRole("heading", {
-                    name: fromConversation
-                        ? "Repository access needed"
-                        : "Authorize GitHub access",
-                }),
-            ).toBeVisible();
             if (fromConversation) {
+                await expect(
+                    page.getByRole("heading", {
+                        name: "Repository access needed",
+                    }),
+                ).toBeVisible();
                 await page
                     .getByLabel("Repository", { exact: true })
                     .fill("owner/repo");
                 await page
-                    .getByLabel("Agent Git email")
-                    .fill("agent@example.com");
-                await page
                     .getByRole("button", {
-                        name: "Review repository access",
+                        name: "Use repository",
                         exact: true,
                     })
                     .click();
             }
-            await page
-                .getByRole("button", {
+            await expect(
+                page.getByRole("button", {
                     name: "Authorize this Work",
                     exact: true,
-                })
-                .click();
+                }),
+            ).toHaveCount(0);
             await expect
                 .poll(
                     async () =>
@@ -153,6 +156,16 @@ test.describe("durable Work", () => {
                     exact: true,
                 }),
             ).toBeVisible({ timeout: 15000 });
+            await expect
+                .poll(
+                    async () =>
+                        (
+                            await (
+                                await page.request.get(`/api/work/${id}`)
+                            ).json()
+                        ).work.attempts.at(-1)?.cleanupPending,
+                )
+                .toBe(false);
         });
     }
     test("model and reasoning choices are saved on the execution attempt", async ({

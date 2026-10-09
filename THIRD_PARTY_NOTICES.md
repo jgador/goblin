@@ -14,6 +14,7 @@ replace those terms or grant rights to hosted services.
 | `backend/schemas/kubernetes/sandbox-v1beta1.json` and models generated from it | [Kubernetes SIGs Agent Sandbox v1.0.4](https://github.com/kubernetes-sigs/agent-sandbox/tree/v1.0.4), Apache-2.0. Goblin extracts the schema from the release CRD and generates selected C# models. |
 | `assets/branding/fonts/inter-18pt-*.ttf` | [Inter 4.001, revision 66647c0bb](https://github.com/rsms/inter/tree/66647c0bb), SIL Open Font License 1.1. The original copyright and full terms accompany the fonts in `assets/branding/fonts/OFL.txt`. The fonts remain under OFL-1.1. |
 | `frontend/src/settings/timezone-places.ts` | Generated from `zone.tab` and `tzdata.zi` in [IANA tzdb 2026c](https://github.com/eggert/tz/tree/2026c). These timezone data are public domain; the generated file records their provenance. |
+| `frontend/public/assets/providers/*.svg` | GitHub, Slack, and Microsoft Teams logos from [SVG Logos, revision 37a6b807](https://github.com/gilbarbara/logos/tree/37a6b807fd71c622efea27a9309b5d4edc792969/logos), CC0-1.0. Unmodified copies of `github-icon.svg`, `slack-icon.svg`, and `microsoft-teams.svg`; the full license is preserved in `frontend/public/assets/providers/LICENSE.txt`. Provider trademarks remain the property of their respective owners. |
 
 ## Brand artwork
 

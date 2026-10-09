@@ -44,26 +44,25 @@ public sealed class ConnectionStore
     }
 
     public Task<bool> CompleteChangeAsync(long id, ConnectionAvailability availability, string? accountSignature,
-        CancellationToken token = default) => UpdateAsync(id, availability, UpdateKind.CompleteChange, accountSignature, token);
+        CancellationToken token = default) => UpdateAsync(id, availability, ConnectionObservationKind.ChangeCompletion, accountSignature, token);
 
     public Task<bool> ObserveAccountAsync(long id, ConnectionAvailability availability, string? accountSignature,
-        CancellationToken token = default) => UpdateAsync(id, availability, UpdateKind.Account, accountSignature, token);
+        CancellationToken token = default) => UpdateAsync(id, availability, ConnectionObservationKind.Account, accountSignature, token);
 
     public Task ObserveAvailabilityAsync(long id, ConnectionAvailability availability, CancellationToken token = default) =>
-        UpdateAsync(id, availability, UpdateKind.Availability, null, token);
+        UpdateAsync(id, availability, ConnectionObservationKind.Availability, null, token);
 
-    private async Task<bool> UpdateAsync(long id, ConnectionAvailability availability, UpdateKind kind,
+    private async Task<bool> UpdateAsync(long id, ConnectionAvailability availability, ConnectionObservationKind kind,
         string? accountSignature, CancellationToken token)
     {
         if (!Enum.IsDefined(availability)) throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         Row row = await db.Connections.SingleAsync(x => x.Id == id, token);
-        if (row.Availability is nameof(ConnectionAvailability.Changing) or nameof(ConnectionAvailability.Verifying) &&
-            kind != UpdateKind.CompleteChange) return false;
-        bool changedAccount = kind == UpdateKind.CompleteChange ||
-            kind == UpdateKind.Account && row.AccountSignature != accountSignature;
-        if (changedAccount)
+        ConnectionObservationDecision decision = ConnectionObservationPolicy.Decide(
+            ContractValue.Parse<ConnectionAvailability>(row.Availability), row.AccountSignature, kind, accountSignature);
+        if (!decision.Apply) return false;
+        if (decision.AccountChanged)
         {
             row.AuthGeneration++;
             row.AccountSignature = accountSignature;
@@ -73,7 +72,7 @@ public sealed class ConnectionStore
         row.ChangedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(token);
         await transaction.CommitAsync(token);
-        return changedAccount;
+        return decision.AccountChanged;
     }
 
     public async Task BeginVerificationAsync(long id, CancellationToken token = default)
@@ -113,6 +112,4 @@ public sealed class ConnectionStore
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.Availability, nameof(ConnectionAvailability.Unavailable)).SetProperty(x => x.ChangedAt, DateTime.UtcNow), token);
         await transaction.CommitAsync(token);
     }
-
-    private enum UpdateKind { Availability, Account, CompleteChange }
 }

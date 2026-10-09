@@ -69,6 +69,23 @@ module through its existing static asset allowlist. The Work and conversation
 stores persist default coworker assignment through the existing core command.
 Runtime adapters and the database schema remain unchanged.
 
+## Integrations and Knowledge
+
+The sidebar opens dedicated `/integrations` and `/knowledge` pages without losing
+the current Work draft. Integrations is an ungrouped, searchable directory with
+All and Connected tabs. GitHub and Slack status comes from their existing APIs;
+connection actions reuse Settings authentication, repository selection, and
+explicit Slack identity grants. Failed status reads are shown as unavailable,
+and Teams is labeled planned with no connection action. AI runtime connections
+remain under Agents and Settings.
+
+Knowledge currently shows an unavailable search and empty sources. There is no
+public knowledge indexing, synchronization, or retrieval endpoint, so the page
+does not invent sources, record counts, sync times, or attributed search results.
+Existing repository setup memory remains behind its account/repository-scoped
+execution grant; Work conversations, decisions, and outputs stay with Work.
+No database, execution, or external permission contracts change.
+
 ## Workspace inspection and continuation
 
 The Work page does not currently expose workspace file inspection or a terminal.

@@ -59,6 +59,17 @@ public sealed class WorkspaceContinuationTests
             Assert.Equal(status, await Git("status", "--porcelain"));
             Assert.Equal(staged, await Git("diff", "--cached")); Assert.Equal(dirty, await Git("diff"));
             Assert.Equal("ignored output\n", await File.ReadAllTextAsync(Path.Combine(root, "output.log")));
+            var attributed = new GitRepositoryChange("owner/repo", "connected-user", "42+connected-user@users.noreply.github.com", gitRepository.Grant)
+            {
+                RequestedBy = "slack:T123/U456"
+            };
+            await SandboxWorker.PrepareCheckoutAsync(root, GitRepositoryProcess.CreateEnvironment(root), attributed);
+            await Git("add", "--all");
+            await Git("commit", "-m", SandboxWorker.CommitMessage(1, attributed));
+            Assert.Equal("connected-user", await Git("log", "-1", "--format=%an"));
+            Assert.Equal("42+connected-user@users.noreply.github.com", await Git("log", "-1", "--format=%ae"));
+            Assert.Contains("Requested-by: slack:T123/U456", await Git("log", "-1", "--format=%B"));
+            Assert.DoesNotContain("Co-authored-by:", await Git("log", "-1", "--format=%B"));
             string first = SandboxWorker.ClaimPrefix(root, 1, 1), next = SandboxWorker.ClaimPrefix(root, 2, 1);
             using (File.Open(first + ".claimed", FileMode.CreateNew)) { }
             using (File.Open(next + ".claimed", FileMode.CreateNew)) { }

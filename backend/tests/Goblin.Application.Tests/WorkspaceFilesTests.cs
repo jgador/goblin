@@ -32,6 +32,22 @@ public sealed class WorkspaceFilesTests
     }
 
     [Theory]
+    [InlineData(".goblin/runtime/home/cache.bin")]
+    [InlineData(".goblin/tmp/scratch.bin")]
+    public void InspectionExcludesPersistentRuntimeAndScratchFiles(string path)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "goblin-private-files-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(root, path))!);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, path), "private worker data");
+            Assert.Empty(WorkspaceFiles.Read(root, null).Files!);
+            Assert.Throws<IOException>(() => WorkspaceFiles.Read(root, path));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
     [InlineData("../outside")]
     [InlineData("/etc/passwd")]
     [InlineData("repository/../../outside")]

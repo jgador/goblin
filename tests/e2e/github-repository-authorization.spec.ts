@@ -98,7 +98,8 @@ test("chat shows enablement and exact Git scope before submitting only the saved
         "enables the repository in Goblin for future requests",
     );
     expect(commands).toEqual([]);
-    await page.locator("#github-repository-options summary").click();
+    await page.locator("#github-repository-options > summary").click();
+    await page.locator("#github-repository-advanced > summary").click();
     await page.getByLabel("Git actions").selectOption("pr");
     work.repositoryAuthorization.status = "Invalidated";
     await expect(

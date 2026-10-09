@@ -109,7 +109,7 @@ public sealed partial class WorkItem
         string environment = RequireText(environmentReference);
         if (CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != attemptId ||
             Status != WorkStatus.Queued) return false;
-        if (attempt.Target.GitRepository?.Grant is { PolicyVersion: 2 } &&
+        if (attempt.Target.GitRepository?.Grant is { } grant && grant.RequiresApproval() &&
             (GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approval ||
              approval.Id != attempt.Id || approval.Target != attempt.Target)) return false;
         if (attempt.Target.GitRepository is { } gitRepository && !attempt.ReasoningOnly)

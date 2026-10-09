@@ -1,13 +1,9 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Application.Work;
-using Goblin.Contracts.Runtime;
-using Goblin.Integrations.GitHub;
+using Goblin.Application.Connections;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
-
 using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Web;
@@ -15,18 +11,16 @@ namespace Goblin.Web;
 internal sealed class GitHubEndpoints
 {
     private readonly ApplicationOptions _options;
-    // One gate per application, shared by every GitHub connection request.
-    private readonly SemaphoreSlim _gate = new(1);
 
     public GitHubEndpoints(ApplicationOptions options) => _options = options;
 
     public void Map(WebApplication app)
     {
-        app.MapGet("/api/github", (Delegate)StatusAsync);
-        app.MapPost("/api/github/connect", (Delegate)ConnectAsync);
-        app.MapPost("/api/github/disconnect", (Delegate)DisconnectAsync);
-        app.MapPost("/api/github/cancel", (Delegate)CancelAsync);
-        app.MapPost("/api/github/check", (Delegate)CheckAsync);
+        app.MapGet("/api/github", StatusAsync);
+        app.MapPost("/api/github/connect", ConnectAsync);
+        app.MapPost("/api/github/disconnect", DisconnectAsync);
+        app.MapPost("/api/github/cancel", CancelAsync);
+        app.MapPost("/api/github/check", CheckAsync);
         if (_options.EnableWork)
         {
             app.MapGet("/api/github/repositories", GitRepositoriesAsync);
@@ -35,52 +29,31 @@ internal sealed class GitHubEndpoints
         }
     }
 
-    private Task<Api.GitHubState> StatusAsync(HttpContext context) => GitHubAsync(context, "status");
+    private static async Task<Api.GitHubState> StatusAsync(GitHubConnectionService service, CancellationToken token) =>
+        Api.GitHubState.From(await service.StatusAsync(token));
 
-    private Task<Api.GitHubState> ConnectAsync(HttpContext context) => GitHubAsync(context, "connect");
+    private static async Task<Api.GitHubState> ConnectAsync(GitHubConnectionService service, CancellationToken token) =>
+        Api.GitHubState.From(await service.ConnectAsync(token));
 
-    private Task<Api.GitHubState> DisconnectAsync(HttpContext context) => GitHubAsync(context, "disconnect");
+    private static async Task<Api.GitHubState> DisconnectAsync(GitHubConnectionService service, CancellationToken token) =>
+        Api.GitHubState.From(await service.DisconnectAsync(token));
 
-    private Task<Api.GitHubState> CancelAsync(HttpContext context) => GitHubAsync(context, "cancel");
+    private static async Task<Api.GitHubState> CancelAsync(GitHubConnectionService service, CancellationToken token) =>
+        Api.GitHubState.From(await service.CancelAsync(token));
 
-    private Task<Api.GitHubState> CheckAsync(HttpContext context) => GitHubAsync(context, "check");
+    private static async Task<Api.GitHubState> CheckAsync(GitHubConnectionService service, CancellationToken token) =>
+        Api.GitHubState.From(await service.CheckAsync(token));
 
-    private async Task<Api.GitHubState> GitHubAsync(HttpContext context, string action)
+    private static async Task<IResult> GitRepositoriesAsync(GitHubConnectionService service, CancellationToken token) =>
+        WorkResponse.Json(Array.ConvertAll(await service.GitRepositoriesAsync(token), Api.EnabledGitRepository.From));
+
+    private static async Task<IResult> AvailableGitRepositoriesAsync(GitHubConnectionService service, int? page, CancellationToken token) =>
+        WorkResponse.Json(Array.ConvertAll(await service.AvailableGitRepositoriesAsync(page ?? 1, token), Api.GitRepositoryInfo.From));
+
+    private static async Task<IResult> SetGitRepositoryAsync(HttpContext context, GitHubConnectionService service)
     {
-        await _gate.WaitAsync(context.RequestAborted);
-        GitHubConnection github = context.RequestServices.GetRequiredService<GitHubConnection>();
-        GitHubStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<GitHubStore>() : null;
-        try
-        {
-            if (action is "connect" or "disconnect" or "cancel")
-            {
-                if (store is not null) await store.BeginChangeAsync(context.RequestAborted);
-            }
-            GitHubState state = action switch
-            {
-                "connect" => await github.StartAsync(),
-                "disconnect" or "cancel" => await github.DisconnectAsync(),
-                "check" => await github.CheckAsync(context.RequestAborted),
-                _ => await github.StatusAsync()
-            };
-            if (store is not null) await store.ObserveAsync(state.Account, state.Status);
-            return Api.GitHubState.From(state);
-        }
-        finally { _gate.Release(); }
-    }
-
-    private static async Task<IResult> GitRepositoriesAsync(GitHubStore store, CancellationToken token) =>
-        WorkResponse.Json(Array.ConvertAll(await store.GitRepositoriesAsync(token), Api.EnabledGitRepository.From));
-
-    private static async Task<IResult> AvailableGitRepositoriesAsync(GitHubConnection github, int? page, CancellationToken token) =>
-        WorkResponse.Json(Array.ConvertAll(await github.GitRepositoriesAsync(page ?? 1, token), Api.GitRepositoryInfo.From));
-
-    private static async Task<IResult> SetGitRepositoryAsync(HttpContext context, GitHubConnection github, GitHubStore store)
-    {
-        GitRepositoryAccount account = (await github.StatusAsync()).Account ?? throw new PublicError("repository_unavailable", "Connect GitHub first.", 409);
         GitRepositorySelectionRequest request = ApiRequest.Body<GitRepositorySelectionRequest>(context);
-        GitRepositoryInfo gitRepository = await github.GitRepositoryAsync(request.GitRepository ?? "", context.RequestAborted);
-        await store.SetGitRepositoryAsync(gitRepository, request.Enabled == "true", account.Generation, context.RequestAborted);
-        return WorkResponse.Json(Array.ConvertAll(await store.GitRepositoriesAsync(), Api.EnabledGitRepository.From));
+        return WorkResponse.Json(Array.ConvertAll(await service.SetGitRepositoryAsync(request.GitRepository ?? "",
+            request.Enabled == "true", context.RequestAborted), Api.EnabledGitRepository.From));
     }
 }

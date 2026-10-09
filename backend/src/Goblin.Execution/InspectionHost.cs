@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts.Runtime;
@@ -21,24 +20,21 @@ public sealed class InspectionHost : IInspectionHost
 
     public static string NamespaceFor(InspectionAllocation session) => Source(session).Namespace;
 
-    private static (string Namespace, string Volume) Source(InspectionAllocation session)
+    private static KubernetesWorkspaceAddress Source(InspectionAllocation session)
     {
-        string[] parts = session.SourceVolume.Split('/');
-        if (parts.Length == 3 && parts[0] == "k8s" && ValidName(parts[1]) &&
-            parts[2] == "work-" + session.WorkId.ToString(System.Globalization.CultureInfo.InvariantCulture)) return (parts[1], parts[2]);
+        if (KubernetesWorkspaceAddress.TryParse(session.SourceVolume, session.WorkId, out KubernetesWorkspaceAddress? address))
+            return address;
         throw new IOException("Unrecognized workspace reference.");
     }
 
-    private static bool ValidName(string name) => Regex.IsMatch(name, "\\A[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\z", RegexOptions.CultureInvariant);
+    private static string Core(InspectionAllocation session) => Source(session).Core;
 
-    private string Core(InspectionAllocation session) => "/api/v1/namespaces/" + NamespaceFor(session);
-
-    private string Sandboxes(InspectionAllocation session) => "/apis/agents.x-k8s.io/v1beta1/namespaces/" + NamespaceFor(session) + "/sandboxes";
+    private static string Sandboxes(InspectionAllocation session) => Source(session).Sandboxes;
 
     public async Task StartAsync(InspectionAllocation session, CancellationToken token)
     {
         if (!await _api.CreateAsync(Sandboxes(session), Manifest(session, false), token)) return;
-        if (await _api.GetAsync<K.PersistentVolumeClaim>(Core(session) + "/persistentvolumeclaims/" + Source(session).Volume, token) is null)
+        if (await _api.GetAsync<K.PersistentVolumeClaim>(Core(session) + "/persistentvolumeclaims/" + Source(session).Name, token) is null)
             throw new IOException("Saved workspace is unavailable.");
     }
 
@@ -75,7 +71,7 @@ public sealed class InspectionHost : IInspectionHost
             new()
             {
                 Name = "workspace",
-                PersistentVolumeClaim = new() { ClaimName = Source(session).Volume, ReadOnly = true }
+                PersistentVolumeClaim = new() { ClaimName = Source(session).Name, ReadOnly = true }
             },
             new() { Name = "temporary", EmptyDir = new() { SizeLimit = "128Mi" } }
         };

@@ -122,9 +122,30 @@ dependencies and `Hosting/CodexRecovery.cs` owns the existing runtime startup lo
 `Http/WorkspaceMiddleware.cs` centralizes session, host/origin, repository-listener,
 proxy, and public-error handling. `Http/ApiRequest.cs` retains the JSON request
 limits, and `Http/WorkResponse.cs` retains string serialization of Work IDs.
-This first Web refactor keeps Minimal APIs, the public contracts, and application
-service ownership intact. Connection handlers still coordinate integration calls
-with request-scoped stores; Work lifecycle rules remain in Core.
+Minimal APIs and public contracts remain intact. `ConnectionService` and
+`GitHubConnectionService` own account operations, durable reservations, catalog
+refresh coordination, and the shared GitHub operation gate. HTTP handlers parse
+requests and translate their results. Goblin-owned `ICodexAuthentication` and
+`IGitHubConnection` contracts describe each integration's supported account
+operations, including its sign-in methods. Application services do not reference
+runtime implementations or generated protocols. Work lifecycle rules remain in Core.
+
+`ExecutionCoordinator` and `WorkRecovery` take their stores explicitly. Work,
+connection, GitHub, and identity stores can be shared because each operation owns
+its context and transaction; they retain no tracked entities between calls.
+Recovery creates a service scope only for Wolverine message publication.
+
+Repository Git commands capture at most 4 Mi characters of stdout and
+drain stderr without retaining upstream errors. Full patches stream to a temporary
+file on the Work workspace and replace the saved patch only after Git succeeds.
+Output overflow, cancellation, and timeout retire the process tree; none authorize
+another execution attempt or remove workspace files.
+
+The GitHub connection state record now belongs to
+`Goblin.Contracts.Runtime.GitHubState`; its properties, serialized representation,
+and record semantics are unchanged. C# consumers of the former integration
+namespace must update their imports. Execution coordinator and recovery
+constructors also now require their explicit stores; HTTP contracts are unchanged.
 
 Model catalog persistence and selection stay in `ModelCatalogStore`.
 `ModelCatalogRefreshCoordinator` owns background discovery through the host

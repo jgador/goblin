@@ -1,14 +1,7 @@
 import { GitHubConnectionStatus } from "../api/values.js";
 import { requestJson, errorMessage } from "../api/client.js";
 import { escapeHtml as e } from "../work/presentation.js";
-export type GitHubState = {
-    configured: boolean;
-    login?: string;
-    userCode?: string;
-    verificationUrl?: string;
-    notice?: string;
-    status: GitHubConnectionStatus;
-};
+import type { GitHubState } from "../api/integration-contracts.js";
 export type GitRepositoryInfo = {
     id: string;
     name: string;

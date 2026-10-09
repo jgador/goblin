@@ -151,7 +151,7 @@ public sealed class ConversationStore
         else if (conversation.WorkId is { } linked && existing is null && !string.IsNullOrWhiteSpace(command.Text))
         {
             Persistence.Entities.WorkItem row = await db.WorkItems.SingleAsync(x => x.Id == linked);
-            WorkItem work = WorkStatePersistence.Restore(row.State!);
+            WorkItem work = WorkStatePersistence.Restore(row);
             work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), command.Text, DateTimeOffset.UtcNow);
             WorkStatePersistence.Update(row, work, DateTimeOffset.UtcNow);
         }

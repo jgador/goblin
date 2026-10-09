@@ -40,7 +40,7 @@ public sealed class DatabaseFactAttribute : FactAttribute
     }
 }
 
-public sealed class DurabilityTests
+public sealed partial class DurabilityTests
 {
     private static long _nextId = int.MaxValue;
 
@@ -316,7 +316,7 @@ public sealed class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task GitRepositoryIntentWaitsForAuthorizationAndSurvivesRestartAndDuplicateCommands()
+    public async Task EnabledGitRepositoryIntentStartsDirectlyAndSurvivesRestartAndDuplicateCommands()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         await EnableHandoffGitRepository(fixture);
@@ -329,27 +329,22 @@ public sealed class DurabilityTests
         });
         WorkCommand start = WorkCommands.Execute(NextId(), id, work.Version);
         work = await fixture.Apply(start);
-        Assert.Equal(AttentionReason.GitRepositoryRequired, work.Work.Attention!.Reason);
-        Assert.Empty(work.Work.Attempts);
-        Assert.Null(work.Work.Workspace);
+        Assert.Null(work.Work.Attention);
+        Assert.Single(work.Work.Attempts);
+        Assert.Equal(GitRepositoryAuthorizationStatus.Authorized, work.Work.GitRepositoryAuthorization!.Status);
+        Assert.Equal("owner", work.Work.Attempts[0].Target.GitRepository!.GitAuthorName);
+        Assert.Equal("42+owner@users.noreply.github.com", work.Work.Attempts[0].Target.GitRepository!.GitAuthorEmail);
         Assert.Equal(work.Version, (await fixture.Apply(start)).Version);
         await fixture.RestartAsync();
         work = await fixture.Get(id);
-        Assert.Equal("owner/repo", Assert.Single(work.Work.GitRepositoryRequest!.GitRepositories));
+        Assert.Equal("owner/repo", Assert.Single(work.Work.Attempts).Target.GitRepository!.GitRepository);
         ApplicationFailure rejected = await Assert.ThrowsAsync<ApplicationFailure>(() => fixture.Apply(new(NextId(), id, WorkAction.AuthorizeGitRepository)
         {
             ExpectedVersion = work.Version,
             GitRepository = new("unapproved/repo", "Goblin", "agent@example.com")
         }));
         Assert.Equal("invalid_command", rejected.Code);
-        Assert.Empty((await fixture.Get(id)).Work.Attempts);
-        var authorize = new WorkCommand(NextId(), id, WorkAction.AuthorizeGitRepository)
-        {
-            ExpectedVersion = work.Version,
-            AuthorizationId = work.Work.GitRepositoryAuthorization!.Id
-        };
-        WorkView accepted = await fixture.Apply(authorize);
-        Assert.Equal(accepted.Version, (await fixture.Apply(authorize)).Version);
+        Assert.Single((await fixture.Get(id)).Work.Attempts);
         work = await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
         Assert.Single(work.Work.Attempts);
         Assert.Equal("handoff", work.Work.Attempts[0].Target.GitRepository!.Grant!.Generation);
@@ -371,15 +366,9 @@ public sealed class DurabilityTests
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.InputRequired && !x.Work.Attempts[^1].CleanupPending);
         WorkCommand answer = WorkCommands.Answer(NextId(), id, work.Version, work.Work.Decisions[^1].Id, "Clone https://github.com/owner/repo");
         work = await fixture.Apply(answer);
-        Assert.Equal(AttentionReason.GitRepositoryRequired, work.Work.Attention!.Reason);
-        Assert.Single(work.Work.Attempts);
+        Assert.Null(work.Work.Attention);
+        Assert.Equal(2, work.Work.Attempts.Length);
         Assert.Equal(1, work.Work.Attempts[0].TurnNumber);
-        work = await fixture.Apply(new(NextId(), id, WorkAction.PrepareGitRepository)
-        {
-            ExpectedVersion = work.Version,
-            GitRepository = new("owner/repo", "Goblin", "agent@example.com")
-        });
-        work = await fixture.Authorize(work);
         Assert.Equal(2, work.Work.Attempts.Length);
         Assert.Equal(original, work.Work.Attempts[0].Id);
         Assert.Equal("conversation-session", work.Work.Attempts[0].Session!.SessionReference);
@@ -1627,6 +1616,66 @@ public sealed class DurabilityTests
         Assert.Equal(1, fixture.Runtime.Starts[attempt]);
     }
 
+    [DatabaseFact]
+    public async Task ConnectionServiceOwnsVerificationReservationsAndCompletesChangesAfterCancellation()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        var authentication = new CodexAuthentication();
+        var service = new ConnectionService(authentication, fixture.Host.Services.GetRequiredService<ConnectionStore>(),
+            fixture.Host.Services.GetRequiredService<ModelCatalogStore>());
+        ConnectionStore store = fixture.Host.Services.GetRequiredService<ConnectionStore>();
+        Task<PromptResult> prompt = service.PromptAsync("Verify", default);
+        await authentication.PromptEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(ConnectionAvailability.Verifying, (await store.ListAsync()).Single().Availability);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => service.PromptAsync("Overlap", default));
+        Assert.Equal(1, authentication.PromptCalls);
+
+        using var cancelled = new CancellationTokenSource();
+        Task<AuthenticationState> change = service.LogoutAsync(cancelled.Token);
+        try
+        {
+            await fixture.UntilConnection(ConnectionAvailability.Changing);
+            cancelled.Cancel();
+        }
+        finally { authentication.PromptRelease.TrySetResult(); }
+        await prompt;
+        await change;
+        Assert.Equal(ConnectionAvailability.Disconnected, (await store.ListAsync()).Single().Availability);
+
+        authentication.FailPrompt = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.PromptAsync("Fail", default));
+        Assert.Equal(ConnectionAvailability.Unavailable, (await store.ListAsync()).Single().Availability);
+        Assert.Equal(2, authentication.PromptCalls);
+    }
+
+    private sealed class CodexAuthentication : ICodexAuthentication
+    {
+        public TaskCompletionSource PromptEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource PromptRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int PromptCalls { get; private set; }
+        public bool FailPrompt { get; set; }
+
+        public async Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
+        {
+            PromptCalls++;
+            if (FailPrompt) throw new InvalidOperationException("Test prompt failure");
+            PromptEntered.TrySetResult();
+            await PromptRelease.Task.WaitAsync(cancellationToken);
+            return new("Verified", "model", 1, AuthenticationMethod.ApiKey);
+        }
+
+        public async Task<AuthenticationState> LogoutAsync()
+        {
+            await PromptRelease.Task;
+            return new(null, null, null, null, true);
+        }
+
+        public Task<AuthenticationState> StatusAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> LoginChatGPTAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> LoginApiKeyAsync(string? value) => throw new NotSupportedException();
+        public Task<AuthenticationState> CancelLoginAsync() => throw new NotSupportedException();
+    }
+
     private sealed class GitRepositoryRemote : IGitRepositoryRemote
     {
         public bool Fail { get; set; }
@@ -1776,6 +1825,17 @@ public sealed class DurabilityTests
 
         public async Task RestartAsync() { await Host.StopAsync(); Host.Dispose(); await StartAsync(); }
 
+        public async Task UntilConnection(ConnectionAvailability availability)
+        {
+            ConnectionStore store = Host.Services.GetRequiredService<ConnectionStore>();
+            for (int i = 0; i < 100; i++)
+            {
+                if ((await store.ListAsync()).Single().Availability == availability) return;
+                await Task.Delay(25);
+            }
+            throw new TimeoutException("Connection did not reach the expected state.");
+        }
+
         public async Task RejectId(string table, long id)
         {
             var admin = new NpgsqlConnectionStringBuilder(Environment.GetEnvironmentVariable(Env.GoblinTestPostgresAdmin)) { Database = _name };
@@ -1805,11 +1865,12 @@ public sealed class DurabilityTests
 
         public async Task<WorkView> Apply(WorkCommand command) { using IServiceScope scope = Host.Services.CreateScope(); return await scope.ServiceProvider.GetRequiredService<WorkStore>().ApplyAsync(command); }
 
-        public Task<WorkView> Authorize(WorkView work) => Apply(new(NextId(), work.Work.Id, WorkAction.AuthorizeGitRepository)
-        {
-            ExpectedVersion = work.Version,
-            AuthorizationId = work.Work.GitRepositoryAuthorization!.Id
-        });
+        public Task<WorkView> Authorize(WorkView work) => work.Work.GitRepositoryAuthorization?.Status == GitRepositoryAuthorizationStatus.Authorized
+            ? Task.FromResult(work) : Apply(new(NextId(), work.Work.Id, WorkAction.AuthorizeGitRepository)
+            {
+                ExpectedVersion = work.Version,
+                AuthorizationId = work.Work.GitRepositoryAuthorization!.Id
+            });
 
         public async Task<WorkView> ExecuteAndAuthorize(WorkCommand command)
         {

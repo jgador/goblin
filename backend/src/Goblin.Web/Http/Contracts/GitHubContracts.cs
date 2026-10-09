@@ -39,7 +39,7 @@ public sealed class GitHubState
     [JsonPropertyName("account")]
     public GitRepositoryAccount? Account { get; init; }
 
-    public static GitHubState From(Goblin.Integrations.GitHub.GitHubState value) =>
+    public static GitHubState From(Goblin.Contracts.Runtime.GitHubState value) =>
         new(value.Configured, value.Login, value.UserCode, value.VerificationUrl, value.Notice, value.Status,
             value.Account is null ? null : GitRepositoryAccount.From(value.Account));
 }

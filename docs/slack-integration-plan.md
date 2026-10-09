@@ -17,13 +17,13 @@ cloud relay, OAuth callback, public inbound endpoint, or Slack-specific DNS/TLS
 requirement. Local Goblin remains authoritative for users, permissions, Work,
 agents, repositories, identity mappings, history, and execution decisions.
 
-The primary experience is **Settings → Integrations → Slack**. The app is named
+The primary experience is **Integrations → Slack**. Settings also links to the directory. The app is named
 **Goblin**, the bot is **goblin**, and the description identifies it as the
 self-hosted AI coworker.
 
 ## Automatic setup
 
-1. Select **Set up Slack**, then **Connect Slack**.
+1. Select **Connect** beside Slack, then **Connect Slack** in its settings.
 2. Copy the displayed `/slackauthticket …` command into the intended Slack workspace.
 3. Approve Slack's setup permissions and enter its confirmation code in Goblin.
 4. Goblin creates and installs the app using its embedded manifest, collects the
@@ -139,7 +139,11 @@ cancellation, and execution decisions retain their local application boundary.
 
 A new DM or mention thread starts a conversation and Work. Replies continue that
 Work; a reply answers an existing input question when one is pending, otherwise
-it adds context. Ordinary text such as `yes` never approves repository access.
+it adds context. Naming an enabled repository can start its isolated execution
+directly, including in an answer to a repository question. The default branch and
+GitHub no-reply commit identity are automatic; push and draft PR permissions come
+from explicit delivery instructions. Ordinary text such as `yes` never approves
+repository access, and Slack cannot enable repositories or retry failed Work.
 
 PostgreSQL stores external identities, link requests, thread associations, and
 normalized event receipts. Receipt uniqueness covers both event identity and
@@ -161,10 +165,39 @@ local Work view when a request is saved. When Slack-originated Work needs an
 answer, Goblin also posts the pending question in its original Slack thread.
 The question remains visible in Goblin, and an authorized reply in the same
 thread answers it through the existing application command. Channel replies
-must mention `@goblin` again. Repository approvals and runtime results remain
-in the authenticated Goblin interface. An outgoing acknowledgement is best effort;
-losing it cannot roll back or repeat accepted Work. Rich Slack result sharing
-and completion notifications remain deferred.
+must mention `@goblin` again. Repository enablement, result approval, and retries
+remain in the authenticated Goblin interface. An outgoing acknowledgement is best
+effort; losing it cannot roll back or repeat accepted Work.
+
+Slack-originated Work also posts saved outcomes in its original DM or channel
+thread. Successful execution sends a result excerpt labelled **ready for review**;
+approving the result in Goblin sends **Work completed**. Confirmed execution
+failures, uncertain execution, cleanup failures, and cancellation have distinct
+messages. Errors use Goblin-owned failure descriptions and link to the permitted
+recovery actions; raw runtime errors and credentials are not shared. The model
+does not decide whether or when to send these notifications. The existing
+connection polls committed Work every three seconds, independently of model
+commentary and without requiring a new Slack message.
+
+`external_conversations.notified_work_sequence` records successful outcome
+delivery using the durable Work history sequence. Pending outcomes survive
+restarts and disconnected Slack sessions. Before posting, Goblin rechecks the
+current outcome, installation, original thread, and originating user's enabled
+owner grant. Superseded outcomes are skipped: for example, a result approved
+while Slack is offline produces a completion notification with the saved result,
+not a stale request to approve it. Cleanup failure temporarily replaces outcome
+attention; when cleanup recovers, the actionable result or failure can notify
+again. A failed post remains pending without blocking other outcome notifications.
+No delivery operation starts, retries, approves, or cancels Work.
+
+Outcome delivery has the same crash window as question delivery: Slack can
+accept a post before Goblin saves its marker, so a restart can duplicate a
+notification. Markers advance monotonically, and normal polling does not repeat
+an already delivered outcome. Result excerpts use the same 3,000-character
+limit and Slack escaping as questions, with links to full authenticated details.
+Rich artifact sharing and proactive progress commentary remain outside this flow.
+Active-turn delivery of incoming follow-ups is tracked separately in
+[issue #54](https://github.com/jgador/goblin/issues/54).
 
 Question delivery uses the existing connection's polling loop and persisted
 Work decisions; it adds no service bus or separate service. Each external
@@ -176,10 +209,13 @@ a post but before its delivery marker commits can duplicate a notification;
 it cannot repeat Work execution. Question text is escaped for Slack and bounded
 to 3,000 characters, with a link to the full question in Goblin.
 
-The unreleased schema baseline adds `external_conversations.notified_decision_id`.
+The unreleased schema baseline adds `external_conversations.notified_decision_id`
+and `external_conversations.notified_work_sequence`.
 An existing development database needs schema reconciliation before running
 the updated application; restarting the old installed image does not enable
-question delivery. The migration runner still rejects edited applied baselines.
+notification delivery. Existing eligible outcomes without a delivery marker are
+sent after the updated app connects. The migration runner still rejects edited
+applied baselines.
 
 Runtime credentials use AES-256-GCM in the deployment's private persistent data
 directory, with a locally generated key and owner-only file permissions.
@@ -192,6 +228,10 @@ There is no token endpoint in public settings responses.
 Implemented checks cover manifest/event restrictions, authenticated actor
 filtering, encrypted storage and tamper detection, interrupted-setup recovery,
 browser command/code entry, linking confirmation, and logo delivery.
+Notification tests cover result versus approval messages, every failure category,
+uncertain execution, cleanup recovery, bounded excerpts, monotonic delivery markers,
+restart recovery, access revocation, superseded outcomes, and independent delivery
+when one channel fails. Real PostgreSQL tests exercise the saved outcome markers.
 Question delivery tests cover Slack thread targeting, escaping, failed-post
 handling, restart recovery, delivery markers, access revocation, and an answer
 continuing the same attempt. Actual question delivery through Slack remains a

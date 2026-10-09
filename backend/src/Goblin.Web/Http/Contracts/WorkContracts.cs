@@ -65,7 +65,7 @@ public sealed class WorkCommand
             AgentId = AgentId,
             AttemptId = AttemptId,
             DecisionId = DecisionId,
-            GitRepository = GitRepository?.ToCore(),
+            GitRepository = GitRepository is null ? null : new(GitRepository.GitRepository, GitRepository.GitAuthorName, GitRepository.GitAuthorEmail),
             Model = Model,
             ReasoningEffort = ReasoningEffort,
             ModelSelectionProvided = ModelSelectionProvided,

@@ -7,6 +7,8 @@ import {
     ConnectionAvailability,
 } from "../api/values.js";
 import { Settings } from "../settings/settings.js";
+import { IntegrationsDirectory } from "../integrations/directory.js";
+import { renderKnowledge } from "../knowledge/page.js";
 import { requestJson, errorMessage } from "../api/client.js";
 import type {
     Agent,
@@ -60,12 +62,22 @@ let selected =
         sessionStorage.getItem("goblin.selectedWork") ??
         "",
     activeChat = "";
-let view: "work" | "chat" | "new" =
-        location.pathname.startsWith("/work") && selected ? "work" : "new",
+type WorkspaceView = "work" | "chat" | "new" | "integrations" | "knowledge";
+const pageFromPath = (): "integrations" | "knowledge" | undefined =>
+    /^\/integrations\/?$/.test(location.pathname)
+        ? "integrations"
+        : /^\/knowledge\/?$/.test(location.pathname)
+          ? "knowledge"
+          : undefined;
+let view: WorkspaceView =
+        pageFromPath() ??
+        (location.pathname.startsWith("/work") && selected ? "work" : "new"),
     filter = "all",
     search = "",
     conversationsOpen = false;
-let selectInitialWork = !query.has("new") && !query.has("conversation");
+let selectInitialWork =
+    !pageFromPath() && !query.has("new") && !query.has("conversation");
+const isDirectoryPage = () => view === "integrations" || view === "knowledge";
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
@@ -80,7 +92,12 @@ let initialSettings = query.get("settings");
 const drafts = new Map<string, string>();
 const setupDrafts = new Map<
     string,
-    { values: [string, string][]; open: boolean; approval: string }
+    {
+        values: [string, string][];
+        open: boolean;
+        advancedOpen: boolean;
+        approval: string;
+    }
 >();
 const setupErrors = new Map<string, Record<string, string>>();
 const modelSelections = new ModelSelections(sessionStorage);
@@ -112,7 +129,7 @@ const draftKey = () =>
         ? `work:${selected}`
         : view === "chat"
           ? `chat:${activeChat}`
-          : "new";
+          : view;
 
 let github: {
     configured: boolean;
@@ -137,6 +154,12 @@ let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const system = new SystemResources();
 const settings = new Settings(system);
+const integrations = new IntegrationsDirectory(
+    () => {
+        if (authenticated && view === "integrations") render();
+    },
+    (provider) => void settings.open(provider),
+);
 const timezoneSetup = new TimeZoneSetup();
 window.addEventListener("goblin-timezone-changed", () => render(true));
 window.addEventListener("goblin-workspace-locked", () => {
@@ -149,6 +172,7 @@ let gitHubRepositories: GitRepositoryInfo[] = [];
 window.addEventListener("goblin-connections-changed", () => {
     modelCatalogs.clear();
     void refreshConnections();
+    if (authenticated && view === "integrations") void integrations.refresh();
 });
 const current = () => work.find((x) => x.work.id === selected);
 function composerWork(): Work | undefined {
@@ -267,6 +291,7 @@ function forgetWorkspace() {
     loaded = false;
     system.reset();
     settings.reset();
+    integrations.reset();
 }
 async function refresh(preserveError = false) {
     if (loading || submission.sending) return;
@@ -294,6 +319,7 @@ async function refresh(preserveError = false) {
             return;
         }
         timezoneSetup.reset();
+        if (view === "integrations") void integrations.refresh();
         if (query.get("returnTo") === "logs") {
             if (timezoneError) return;
             location.replace("/logs/select/vmui/" + location.hash);
@@ -508,9 +534,19 @@ function rememberWork() {
         `/work?item=${encodeURIComponent(selected)}`,
     );
 }
-function navigate(next: typeof view, id = "") {
+function navigate(
+    next: WorkspaceView,
+    id = "",
+    historyMode: "auto" | "restore" = "auto",
+) {
     selectInitialWork = false;
     drafts.set(draftKey(), draft);
+    if (
+        historyMode === "auto" &&
+        next !== view &&
+        (isDirectoryPage() || next === "integrations" || next === "knowledge")
+    )
+        history.pushState(null, "", location.href);
     view = next;
     if (next === "work") {
         selected = id;
@@ -522,6 +558,11 @@ function navigate(next: typeof view, id = "") {
             "",
             "/?conversation=" + encodeURIComponent(id),
         );
+    } else if (next === "integrations" || next === "knowledge") {
+        history.replaceState(null, "", `/${next}`);
+        search = "";
+        if (authenticated && next === "integrations")
+            void integrations.refresh();
     } else history.replaceState(null, "", "/?new=work");
     draft = drafts.get(draftKey()) ?? "";
     changing = false;
@@ -564,7 +605,7 @@ function renderSidebar() {
     return `<aside id="workspace-sidebar" class="sidebar" aria-label="Workspace" ${sidebarCollapsed || activityOpen ? "inert" : ""} ${mobile.matches && !sidebarCollapsed ? 'role="dialog" aria-modal="true"' : ""}>
         <div class="sidebar-heading"><a class="brand" href="/" data-action="new-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button></div>
         <button class="new-chat" data-action="new-work">${icon("plus")}New work</button>
-        <nav class="primary-navigation" aria-label="Workspace navigation"><h2><button class="nav-button active" data-action="browse-work" aria-current="page">${icon("sidebar")}Work</button></h2><button class="nav-button" data-action="settings-agents">${icon("agents")}Agents</button><button class="nav-button" data-action="settings-integrations">${icon("link")}Integrations</button><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}Settings</button></nav>
+        <nav class="primary-navigation" aria-label="Workspace navigation"><h2><button class="nav-button ${isDirectoryPage() ? "" : "active"}" data-action="browse-work" aria-current="${isDirectoryPage() ? "false" : "page"}">${icon("sidebar")}Work</button></h2><button class="nav-button" data-action="settings-agents">${icon("agents")}Agents</button><a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><a id="nav-integrations" class="nav-button ${view === "integrations" ? "active" : ""}" href="/integrations" data-action="integrations" aria-current="${view === "integrations" ? "page" : "false"}">${icon("integrations")}Integrations</a><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}Settings</button></nav>
         <nav class="work-views" aria-label="Work views">${[
             ["all", "All work", "work", work.length],
             [
@@ -605,10 +646,10 @@ function renderSidebar() {
         <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button></aside>`;
 }
 function renderHeader() {
-    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div><label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label><div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
+    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "integrations" ? "Integrations" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
 }
 function renderSearchResults() {
-    if (!search || !sidebarCollapsed) return "";
+    if (isDirectoryPage() || !search || !sidebarCollapsed) return "";
     const items = work.filter((x) =>
         matchesWork(
             x.work,
@@ -711,6 +752,10 @@ function render(preserveHome = false, forceSelect = false) {
                 root.querySelector<HTMLDetailsElement>(
                     "#github-repository-options",
                 )?.open ?? false,
+            advancedOpen:
+                root.querySelector<HTMLDetailsElement>(
+                    "#github-repository-advanced",
+                )?.open ?? false,
         });
     const preserved = sameContext
         ? Array.from(
@@ -751,16 +796,20 @@ function render(preserveHome = false, forceSelect = false) {
     ).map((x) => [x.dataset.scroll, x.scrollTop] as const);
     renderedContext = context;
     document.title =
-        view === "work" && authenticated && current()
-            ? current()!.work.objective.slice(0, 70) + " · Goblin"
-            : "Goblin";
+        view === "integrations"
+            ? "Integrations · Goblin"
+            : view === "knowledge"
+              ? "Knowledge · Goblin"
+              : view === "work" && authenticated && current()
+                ? current()!.work.objective.slice(0, 70) + " · Goblin"
+                : "Goblin";
     if (!authenticated) {
         root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
         const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
             <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
-            ${view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
+            ${view === "integrations" ? integrations.render() : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&
             sameContext &&
@@ -791,6 +840,11 @@ function render(preserveHome = false, forceSelect = false) {
     );
     if (gitHubRepositoryOptions && setup?.open)
         gitHubRepositoryOptions.open = true;
+    const advancedRepositoryOptions = root.querySelector<HTMLDetailsElement>(
+        "#github-repository-advanced",
+    );
+    if (advancedRepositoryOptions && setup?.advancedOpen)
+        advancedRepositoryOptions.open = true;
     showSetupErrors();
     if (focus?.id && sameContext) {
         const replacement = document.getElementById(focus.id) as
@@ -814,6 +868,7 @@ function render(preserveHome = false, forceSelect = false) {
                     b.dataset.action === buttonData.action &&
                     b.dataset.id === buttonData.id &&
                     b.dataset.value === buttonData.value &&
+                    b.dataset.provider === buttonData.provider &&
                     !b.closest("[inert]") &&
                     b.getClientRects().length,
             )
@@ -895,7 +950,7 @@ function gitHubRepositorySetup(w: Work, required = false) {
                     <li>${grant.allowPush ? "Push changes to the work branch." : "Keep changes in this Work without pushing."}</li>
                     <li>${grant.allowPullRequest ? "Open a draft pull request." : "No pull request."}</li>
                 </ul></div>
-                ${approval.enableRepository ? '<p class="github-repository-authorization-note">This also enables the repository in Goblin for future requests. Each Work still requires authorization.</p>' : ""}
+                ${approval.enableRepository ? '<p class="github-repository-authorization-note">This also enables the repository in Goblin for future requests. Requests naming an enabled repository can start directly.</p>' : ""}
                 <div class="github-repository-actions">${button("authorize-github-repository", approval.enableRepository ? "Enable repository & authorize this Work" : "Authorize this Work", true)}${button("deny-github-repository", "Decline")}</div>
             </section>`
             : approval?.status === GitRepositoryAuthorizationStatus.Invalidated
@@ -905,7 +960,7 @@ function gitHubRepositorySetup(w: Work, required = false) {
                 : "";
     return `${preview}<details id="github-repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
         <summary>${icon("chevron")}${pendingApproval ? "Change repository or actions" : "Repository access"}</summary>
-        <p>Review the repository and Git actions before this Work uses your GitHub connection.</p>
+        <p>Choose an enabled repository to continue. Goblin uses its default branch and your connected GitHub commit identity. Changes stay local unless your request asks to publish them.</p>
         ${suggestions.length > 1 ? `<p class="field-hint">Several repositories match: ${e(suggestions.join(", "))}. Choose the full name.</p>` : ""}
         <form class="work-setup github-repository-form" data-form="github-repository" novalidate>
             <div><label for="github-repository">Repository</label>
@@ -914,6 +969,7 @@ function gitHubRepositorySetup(w: Work, required = false) {
                 <p class="field-error" id="github-repository-error" hidden></p>
                 <button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button>
             </div>
+            <details id="github-repository-advanced"><summary>Branch, delivery, and commit identity</summary>
             <div><label for="github-repository-branch">Base branch</label>
                 <input class="field-control" id="github-repository-branch" name="base-branch" value="${e(grant?.baseBranch ?? "")}" placeholder="From your request or repository default">
             </div>
@@ -927,10 +983,11 @@ function gitHubRepositorySetup(w: Work, required = false) {
                 </select>
             </div>
             <div class="identity-fields">
-                <div><label for="git-name">Agent Git name</label><input class="field-control" id="git-name" name="git-name" value="${e(proposed?.gitAuthorName ?? "Goblin")}" required aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div>
-                <div><label for="git-email">Agent Git email</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "goblin@localhost")}" required aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
+                <div><label for="git-name">Git commit name (optional)</label><input class="field-control" id="git-name" name="git-name" value="${e(proposed?.gitAuthorName ?? "")}" placeholder="Connected GitHub account" aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div>
+                <div><label for="git-email">Git commit email (optional)</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "")}" placeholder="GitHub no-reply email" aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
             </div>
-            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="github-repository-actions"><button id="start-github-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Review repository access</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
+            </details>
+            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="github-repository-actions"><button id="start-github-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Use repository</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
         </form>
     </details>`;
 }
@@ -1081,9 +1138,51 @@ document.addEventListener("click", async (event) => {
     }
     const target = event.target.closest<HTMLElement>("[data-action]");
     if (!target) return;
-    if (target instanceof HTMLAnchorElement) event.preventDefault();
+    if (target instanceof HTMLAnchorElement) {
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)
+            return;
+        event.preventDefault();
+    }
     const action = target.dataset.action,
         value = target.dataset.value;
+    if (action === "integrations" || action === "knowledge") {
+        navigate(action);
+        render();
+        document.getElementById(action + "-title")?.focus();
+        return;
+    }
+    if (action === "add-integration") {
+        integrations.openPicker();
+        return;
+    }
+    if (action === "manage-integration") {
+        const provider = target.dataset.provider;
+        if (provider === "github" || provider === "slack")
+            await settings.open(provider);
+        return;
+    }
+    if (action === "refresh-integrations") {
+        await integrations.refresh();
+        return;
+    }
+    if (action === "integration-tab") {
+        integrations.tab = value === "connected" ? "connected" : "all";
+        render();
+        return;
+    }
+    if (action === "reset-integrations") {
+        integrations.search = "";
+        integrations.tab = "all";
+        render();
+        const input = root.querySelector<HTMLInputElement>(
+            "#integration-search",
+        );
+        if (input) {
+            input.value = "";
+            input.focus();
+        }
+        return;
+    }
     if (action === "toggle-model-picker") {
         modelPickerOpen = !modelPickerOpen;
         modelListOpen = false;
@@ -1159,13 +1258,17 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "browse-work") {
+        const fromDirectory = isDirectoryPage();
+        if (fromDirectory) navigate(current() ? "work" : "new", selected);
         filter = "all";
         search = "";
-        sidebarCollapsed = false;
+        sidebarCollapsed = fromDirectory && mobile.matches;
         activityOpen = false;
         render();
         root.querySelector<HTMLElement>(
-            '.work-card[aria-current="page"]',
+            fromDirectory
+                ? "#work-title-heading, #reply"
+                : '.work-card[aria-current="page"]',
         )?.focus();
         return;
     }
@@ -1295,7 +1398,10 @@ document.addEventListener("click", async (event) => {
     if (action === "select-chat") navigate("chat", target.dataset.id!);
     if (action === "select-work") navigate("work", target.dataset.id!);
 
-    if (action === "filter") filter = value!;
+    if (action === "filter") {
+        if (isDirectoryPage()) navigate(current() ? "work" : "new", selected);
+        filter = value!;
+    }
     if (action === "changes") changing = true;
     if (action === "execute" && current())
         await command(WorkAction.Execute, modelPayload(current()!.work));
@@ -1378,11 +1484,9 @@ document.addEventListener("submit", async (event) => {
         if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(gitHubRepository))
             errors["github-repository"] =
                 "Enter the full owner/repository name or GitHub URL.";
-        if (!gitAuthorName)
-            errors["git-name"] = "Enter a name for the agent’s commits.";
         const email =
             event.target.querySelector<HTMLInputElement>("#git-email")!;
-        if (!gitAuthorEmail || email.validity.typeMismatch)
+        if (gitAuthorEmail && email.validity.typeMismatch)
             errors["git-email"] =
                 "Enter a valid email for the agent’s commits.";
         setupErrors.set(renderedContext, errors);
@@ -1419,8 +1523,8 @@ document.addEventListener("submit", async (event) => {
                       }),
                 repository: {
                     repository: gitHubRepository,
-                    gitAuthorName,
-                    gitAuthorEmail,
+                    ...(gitAuthorName ? { gitAuthorName } : {}),
+                    ...(gitAuthorEmail ? { gitAuthorEmail } : {}),
                 },
                 ...(handoff ? {} : modelPayload(w)),
             },
@@ -1493,6 +1597,14 @@ document.addEventListener("submit", async (event) => {
     render();
 });
 document.addEventListener("input", (event) => {
+    if (
+        event.target instanceof HTMLInputElement &&
+        event.target.id === "integration-search"
+    ) {
+        integrations.search = event.target.value;
+        render();
+        return;
+    }
     if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "work-effort"
@@ -1598,7 +1710,28 @@ function trapFocus(event: KeyboardEvent, selector: string) {
     }
 }
 document.addEventListener("keydown", (event) => {
-    if (settings.isOpen) return;
+    if (settings.isOpen || integrations.isPickerOpen) return;
+    if (
+        view === "integrations" &&
+        event.target instanceof HTMLElement &&
+        event.target.closest('[role="tablist"]') &&
+        ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+    ) {
+        event.preventDefault();
+        integrations.tab =
+            event.key === "Home"
+                ? "all"
+                : event.key === "End"
+                  ? "connected"
+                  : integrations.tab === "all"
+                    ? "connected"
+                    : "all";
+        render();
+        document
+            .getElementById("integrations-tab-" + integrations.tab)
+            ?.focus();
+        return;
+    }
     const workspaceMenu =
         root.querySelector<HTMLDetailsElement>("#workspace-menu");
     if (event.key === "Escape" && workspaceMenu?.open) {
@@ -1615,7 +1748,15 @@ document.addEventListener("keydown", (event) => {
         !(mobile.matches && !sidebarCollapsed)
     ) {
         event.preventDefault();
-        document.getElementById("work-search")?.focus();
+        document
+            .getElementById(
+                view === "integrations"
+                    ? "integration-search"
+                    : view === "knowledge"
+                      ? "knowledge-search"
+                      : "work-search",
+            )
+            ?.focus();
         return;
     }
     if (
@@ -1718,6 +1859,21 @@ function updateResponsiveLayout() {
 }
 compact.addEventListener("change", updateResponsiveLayout);
 mobile.addEventListener("change", updateResponsiveLayout);
+window.addEventListener("popstate", () => {
+    const params = new URLSearchParams(location.search);
+    const section = pageFromPath();
+    const item = params.get("item");
+    const conversation = params.get("conversation");
+    navigate(
+        section ?? (item ? "work" : conversation ? "chat" : "new"),
+        item ?? conversation ?? "",
+        "restore",
+    );
+    render();
+    root.querySelector<HTMLElement>(
+        ".directory-heading h1, #work-title-heading, #reply",
+    )?.focus();
+});
 window.addEventListener("online", () => void refresh());
 document.addEventListener("visibilitychange", () => {
     if (!document.hidden) void refresh();
@@ -1725,7 +1881,7 @@ document.addEventListener("visibilitychange", () => {
 setInterval(() => {
     if (!document.hidden) void refresh();
 }, 3000);
-if (query.has("conversation")) {
+if (!pageFromPath() && query.has("conversation")) {
     view = "chat";
     activeChat = query.get("conversation") ?? "";
     conversationsOpen = true;

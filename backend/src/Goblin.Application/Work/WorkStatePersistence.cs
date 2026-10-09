@@ -30,6 +30,10 @@ internal static class WorkStatePersistence
         ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
         : Restore(row.State);
 
-    internal static WorkItem Restore(string state) =>
+    internal static WorkSnapshot Snapshot(Row row) => Restore(row).Snapshot();
+
+    internal static WorkSnapshot Snapshot(string state) => Restore(state).Snapshot();
+
+    private static WorkItem Restore(string state) =>
         WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(state, ContractJson.Options)!);
 }

@@ -32,6 +32,7 @@ public sealed class PublicError : Exception
             "invalid_api_key" or "invalid_prompt" => 400,
             _ => 502
         }),
+        ApplicationFailure { Code: "github_connection_required" } => new("repository_unavailable", "Connect GitHub first.", 409),
         ApplicationFailure failure => new(failure.Code, failure.Code switch
         {
             "external_link_expired" => "This Slack link request expired or has already been used. Start linking again.",

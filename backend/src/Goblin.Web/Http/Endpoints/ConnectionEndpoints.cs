@@ -1,16 +1,11 @@
 using System;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.Connections;
 using Goblin.Application.Work;
-using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
-using Goblin.Integrations.Codex;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Web;
@@ -18,22 +13,17 @@ namespace Goblin.Web;
 internal sealed class ConnectionEndpoints
 {
     private readonly ApplicationOptions _options;
-    private readonly Authentication _auth;
 
-    public ConnectionEndpoints(ApplicationOptions options, Authentication auth)
-    {
-        _options = options;
-        _auth = auth;
-    }
+    public ConnectionEndpoints(ApplicationOptions options) => _options = options;
 
     public void Map(WebApplication app)
     {
-        app.MapGet("/api/status", (Delegate)StatusAsync);
-        app.MapPost("/api/auth/chatgpt", (Delegate)LoginChatGPTAsync);
-        app.MapPost("/api/auth/api-key", (Delegate)LoginApiKeyAsync);
-        app.MapPost("/api/auth/cancel", (Delegate)CancelLoginAsync);
-        app.MapPost("/api/auth/logout", (Delegate)LogoutAsync);
-        app.MapPost("/api/prompt", (Delegate)PromptAsync);
+        app.MapGet("/api/status", StatusAsync);
+        app.MapPost("/api/auth/chatgpt", LoginChatGPTAsync);
+        app.MapPost("/api/auth/api-key", LoginApiKeyAsync);
+        app.MapPost("/api/auth/cancel", CancelLoginAsync);
+        app.MapPost("/api/auth/logout", LogoutAsync);
+        app.MapPost("/api/prompt", PromptAsync);
         if (_options.EnableWork)
         {
             app.MapGet("/api/connections", ListAsync);
@@ -43,36 +33,26 @@ internal sealed class ConnectionEndpoints
         }
     }
 
-    private Task<Api.AuthenticationState> StatusAsync(HttpContext context) => ConnectionAsync(context, false, _auth.StatusAsync);
+    private static async Task<Api.AuthenticationState> StatusAsync(ConnectionService service, CancellationToken token) =>
+        Api.AuthenticationState.From(await service.StatusAsync(token));
 
-    private Task<Api.AuthenticationState> LoginChatGPTAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LoginChatGPTAsync);
+    private static async Task<Api.AuthenticationState> LoginChatGPTAsync(ConnectionService service, CancellationToken token) =>
+        Api.AuthenticationState.From(await service.LoginChatGPTAsync(token));
 
-    private Task<Api.AuthenticationState> LoginApiKeyAsync(HttpContext context) =>
-        ConnectionAsync(context, true, () => _auth.LoginApiKeyAsync(ApiRequest.Body<ApiKeyRequest>(context).ApiKey));
+    private static async Task<Api.AuthenticationState> LoginApiKeyAsync(HttpContext context, ConnectionService service) =>
+        Api.AuthenticationState.From(await service.LoginApiKeyAsync(ApiRequest.Body<ApiKeyRequest>(context).ApiKey, context.RequestAborted));
 
-    private Task<Api.AuthenticationState> CancelLoginAsync(HttpContext context) => ConnectionAsync(context, true, _auth.CancelLoginAsync);
+    private static async Task<Api.AuthenticationState> CancelLoginAsync(ConnectionService service, CancellationToken token) =>
+        Api.AuthenticationState.From(await service.CancelLoginAsync(token));
 
-    private Task<Api.AuthenticationState> LogoutAsync(HttpContext context) => ConnectionAsync(context, true, _auth.LogoutAsync);
+    private static async Task<Api.AuthenticationState> LogoutAsync(ConnectionService service, CancellationToken token) =>
+        Api.AuthenticationState.From(await service.LogoutAsync(token));
 
-    private async Task<IResult> PromptAsync(HttpContext context)
-    {
-        ConnectionStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<ConnectionStore>() : null;
-        if (store is not null) await store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId, context.RequestAborted);
-        bool available = false;
-        try
-        {
-            PromptResult result = await _auth.SendPromptAsync(ApiRequest.Body<PromptRequest>(context).Prompt, context.RequestAborted);
-            available = true;
-            return Results.Json(Api.PromptResult.From(result));
-        }
-        finally { if (store is not null) await store.EndVerificationAsync(ConnectionStore.DefaultConnectionId, available); }
-    }
+    private static async Task<IResult> PromptAsync(HttpContext context, ConnectionService service) =>
+        Results.Json(Api.PromptResult.From(await service.PromptAsync(ApiRequest.Body<PromptRequest>(context).Prompt, context.RequestAborted)));
 
-    private async Task<IResult> ListAsync(HttpContext context, ConnectionStore store, CancellationToken token)
-    {
-        try { await StatusAsync(context); } catch (IntegrationFailure) { }
-        return WorkResponse.Json(Array.ConvertAll(await store.ListAsync(token), Api.ConnectionView.From));
-    }
+    private static async Task<IResult> ListAsync(ConnectionService service, CancellationToken token) =>
+        WorkResponse.Json(Array.ConvertAll(await service.ListAsync(token), Api.ConnectionView.From));
 
     private static async Task<IResult> ModelsAsync(long id, int? limit, string? selected, ModelCatalogStore catalogs, CancellationToken token) =>
         WorkResponse.Json(Api.ModelCatalogView.From(await catalogs.GetAsync(id, limit ?? 3, selected, token)));
@@ -84,53 +64,4 @@ internal sealed class ConnectionEndpoints
     }
 
     private static Api.RuntimeCapabilities[] Runtimes(IExecutionHost host) => Array.ConvertAll(host.Capabilities, Api.RuntimeCapabilities.From);
-
-    private async Task<Api.AuthenticationState> ConnectionAsync(HttpContext context, bool changing, Func<Task<AuthenticationState>> action)
-    {
-        ConnectionStore? store = _options.EnableWork ? context.RequestServices.GetRequiredService<ConnectionStore>() : null;
-        if (changing && store is not null) await store.BeginChangeAsync(ConnectionStore.DefaultConnectionId);
-        try
-        {
-            AuthenticationState state = await action();
-            if (store is not null)
-            {
-                bool available = state.Account is not null && state.RuntimeReady;
-                ConnectionAvailability availability = available ? ConnectionAvailability.Available : ConnectionAvailability.Disconnected;
-                string? signature = AccountSignature(state.Account);
-                bool changed = changing
-                    ? await store.CompleteChangeAsync(ConnectionStore.DefaultConnectionId, availability, signature)
-                    : await store.ObserveAccountAsync(ConnectionStore.DefaultConnectionId, availability, signature);
-                if (available)
-                {
-                    ModelCatalogStore catalogs = context.RequestServices.GetRequiredService<ModelCatalogStore>();
-                    if (changed) catalogs.ScheduleRefresh(ConnectionStore.DefaultConnectionId);
-                    else
-                        try { await catalogs.ObserveExecutableAsync(ConnectionStore.DefaultConnectionId, context.RequestAborted); }
-                        catch { /* Discovery cannot change the connection result. */ }
-                }
-            }
-            return Api.AuthenticationState.From(state);
-        }
-        catch
-        {
-            if (store is not null)
-            {
-                if (changing) await store.CompleteChangeAsync(ConnectionStore.DefaultConnectionId, ConnectionAvailability.Unavailable, null);
-                else await store.ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, ConnectionAvailability.Unavailable);
-            }
-            throw;
-        }
-    }
-
-    private static string? AccountSignature(AccountView? account)
-    {
-        if (account is null) return null;
-        string identity = account switch
-        {
-            ChatGPTAccountView chatGPT => "chatgpt:" + chatGPT.Email?.Trim().ToLowerInvariant(),
-            ApiKeyAccountView => "apiKey",
-            _ => account.GetType().Name
-        };
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
-    }
 }

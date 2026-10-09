@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Contracts;
@@ -7,7 +6,7 @@ using Goblin.Protocol;
 
 namespace Goblin.Integrations.Codex;
 
-public sealed class Authentication : IDisposable
+public sealed class Authentication : ICodexAuthentication, IDisposable
 {
     private readonly CodexClient _codex;
     private readonly Func<string, Task<VerificationState>> _verifyApiKey;
@@ -107,9 +106,7 @@ public sealed class Authentication : IDisposable
 
     public Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
     {
-        string prompt = value?.Trim() ?? "";
-        if (prompt.Length is < 1 or > 500 || prompt.Any(c => c is <= '\x08' or '\x0b' or '\x0c' or >= '\x0e' and <= '\x1f'))
-            throw new IntegrationFailure("invalid_prompt", "Enter a short prompt of 1–500 characters.");
+        string prompt = AuthenticationInputPolicy.Prompt(value);
         if (Interlocked.CompareExchange(ref _promptPending, 1, 0) != 0)
             throw new IntegrationFailure("prompt_in_progress", "A prompt is already running. Wait for it to finish.");
         return Run();
@@ -155,25 +152,20 @@ public sealed class Authentication : IDisposable
         await RequireDisconnectedAsync();
         lock (_gate) _notice = null;
         LoginAccountResponse result = await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ChatGPTDeviceCodeLoginAccountParams());
-        if (result is not ChatGPTDeviceCodeLoginAccountResponse device ||
-            string.IsNullOrEmpty(device.UserCode) || device.UserCode.Length > 64 ||
-            !Uri.TryCreate(device.VerificationUrl, UriKind.Absolute, out Uri? url) ||
-            url.Scheme != "https" || url.Host != "auth.openai.com" || !url.IsDefaultPort ||
-            url.AbsolutePath != "/codex/device" || url.UserInfo.Length != 0)
+        DeviceLogin? login = AuthenticationInputPolicy.DeviceLogin(result);
+        if (login is null)
         {
             if (result is ChatGPTDeviceCodeLoginAccountResponse invalid)
                 try { await _codex.RequestAsync<CancelLoginAccountParams, CancelLoginAccountResponse>("account/login/cancel", new() { LoginId = invalid.LoginId }); } catch { }
             throw new IntegrationFailure("unexpected_login_response", "Codex returned an unexpected sign-in response. Check the pinned Codex version.");
         }
-        lock (_gate) _login = new(device.LoginId, url.AbsoluteUri, device.UserCode);
+        lock (_gate) _login = login;
         return Snapshot();
     });
 
     public Task<AuthenticationState> LoginApiKeyAsync(string? value) => Serial(async () =>
     {
-        string apiKey = value?.Trim() ?? "";
-        if (apiKey.Length is < 20 or > 4096 || apiKey.Any(c => c is < '\x21' or > '\x7e'))
-            throw new IntegrationFailure("invalid_api_key", "Enter a complete OpenAI API key without spaces.");
+        string apiKey = AuthenticationInputPolicy.ApiKey(value);
         await RequireDisconnectedAsync();
         VerificationState verification = await _verifyApiKey(apiKey);
         await _codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start", new ApiKeyLoginAccountParams { ApiKey = apiKey });

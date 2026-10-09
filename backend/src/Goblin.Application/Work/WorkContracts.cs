@@ -53,7 +53,7 @@ public sealed class WorkCommand
 
     public long? DecisionId { get; init; }
 
-    public GitRepositoryChange? GitRepository { get; init; }
+    public GitRepositorySelection? GitRepository { get; init; }
 
     public string? Model { get; init; }
 
@@ -65,6 +65,10 @@ public sealed class WorkCommand
 
     public long? AuthorizationId { get; init; }
 }
+
+// A user's selection is not an executable grant. Missing commit identity fields
+// are resolved from the connected account before an attempt is created.
+public sealed record GitRepositorySelection(string GitRepository, string? GitAuthorName = null, string? GitAuthorEmail = null);
 
 public sealed class WorkView
 {

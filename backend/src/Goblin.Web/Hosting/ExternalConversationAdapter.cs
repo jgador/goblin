@@ -35,4 +35,22 @@ internal sealed class ExternalConversationAdapter : IExternalConversations
         using IServiceScope scope = _scopes.CreateScope();
         await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().QuestionSentAsync(installation, question, token);
     }
+
+    public async Task<ExternalWorkUpdate[]> PendingUpdatesAsync(ExternalInstallation installation, CancellationToken token)
+    {
+        using IServiceScope scope = _scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().PendingUpdatesAsync(installation, token);
+    }
+
+    public async Task UpdateSentAsync(ExternalInstallation installation, ExternalWorkUpdate update, CancellationToken token)
+    {
+        using IServiceScope scope = _scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().UpdateSentAsync(installation, update, token);
+    }
+
+    public async Task<bool> UpdateIsCurrentAsync(ExternalInstallation installation, ExternalWorkUpdate update, CancellationToken token)
+    {
+        using IServiceScope scope = _scopes.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ExternalConversationStore>().UpdateIsCurrentAsync(installation, update, token);
+    }
 }

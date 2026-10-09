@@ -24,20 +24,11 @@ public sealed class VictoriaLogsProxy : IDisposable
 
     public VictoriaLogsProxy(IHttpForwarder forwarder, string destination, WorkspacePreferences preferences)
     {
-        if (!Uri.TryCreate(destination, UriKind.Absolute, out Uri? uri) || uri.Scheme is not ("http" or "https") ||
-            uri.UserInfo.Length != 0 || uri.AbsolutePath != "/" || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-            throw new ArgumentException("GOBLIN_VICTORIALOGS_URL must be the internal VictoriaLogs HTTP origin (configured with -http.pathPrefix=/logs).");
         _forwarder = forwarder;
         _preferences = preferences;
-        _destination = uri.AbsoluteUri;
-        _client = new HttpMessageInvoker(new SocketsHttpHandler
-        {
-            UseProxy = false,
-            UseCookies = false,
-            AllowAutoRedirect = false,
-            AutomaticDecompression = DecompressionMethods.None,
-            ConnectTimeout = TimeSpan.FromSeconds(10)
-        });
+        _destination = FixedProxyBoundary.Destination(destination,
+            "GOBLIN_VICTORIALOGS_URL must be the internal VictoriaLogs HTTP origin (configured with -http.pathPrefix=/logs).");
+        _client = FixedProxyBoundary.CreateClient();
     }
 
     public async Task SendAsync(HttpContext context, Workspace workspace)
@@ -63,8 +54,7 @@ public sealed class VictoriaLogsProxy : IDisposable
 
     private static bool Allowed(string path, bool read, bool post)
     {
-        if (path.Contains('%') || path.Contains('\\') || path.Contains("//", StringComparison.Ordinal)) return false;
-        foreach (string segment in path.Split('/')) if (segment is "." or "..") return false;
+        if (!FixedProxyBoundary.SafePath(path)) return false;
         if (read && (path is "/logs" or "/logs/" or "/logs/select/vmui" or "/logs/select/buildinfo" ||
                      path.StartsWith("/logs/select/vmui/", StringComparison.Ordinal))) return true;
         return (read || post) && path is
@@ -102,17 +92,11 @@ public sealed class VictoriaLogsProxy : IDisposable
             CancellationToken cancellationToken)
         {
             bool copy = await base.TransformResponseAsync(context, proxyResponse, cancellationToken);
-            context.Response.Headers.Remove("Set-Cookie");
-            context.Response.Headers.Remove("Server");
-            context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers.XContentTypeOptions = "nosniff";
-            context.Response.Headers.XFrameOptions = "DENY";
-            context.Response.Headers["Referrer-Policy"] = "no-referrer";
             // The pinned VMUI uses external scripts and inline layout styles.
-            context.Response.Headers.ContentSecurityPolicy =
+            FixedProxyBoundary.ProtectResponse(context.Response,
                 "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
                 "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; " +
-                "object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+                "object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
             if (HttpMethods.IsGet(context.Request.Method) && IsDocument(context.Request.Path.Value!) &&
                 proxyResponse?.StatusCode == HttpStatusCode.OK && proxyResponse.Content.Headers.ContentType?.MediaType == "text/html")
             {

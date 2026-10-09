@@ -20,6 +20,18 @@ namespace Goblin.Tests;
 
 public sealed class TypedJsonBoundaryTests
 {
+    [Fact]
+    public void RepositorySelectionDoesNotRequireCommitIdentityOrAcceptRequesterAttribution()
+    {
+        Api.WorkCommand request = JsonSerializer.Deserialize<Api.WorkCommand>("""
+            {"commandId":1,"workId":2,"action":"PrepareRepository","repository":{"repository":"owner/repo","requestedBy":"forged-requester"}}
+            """, ContractJson.Options)!;
+        GitRepositorySelection selection = request.ToApplication().GitRepository!;
+        Assert.Equal("owner/repo", selection.GitRepository);
+        Assert.Null(selection.GitAuthorName);
+        Assert.Null(selection.GitAuthorEmail);
+        Assert.DoesNotContain("forged-requester", JsonSerializer.Serialize(selection, ContractJson.Options));
+    }
     private static readonly JsonSerializerOptions DifferentPolicy = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseUpper

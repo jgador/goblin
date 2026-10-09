@@ -203,6 +203,7 @@ CREATE TABLE public.external_conversations (
     thread_id text NOT NULL,
     conversation_id bigint NOT NULL REFERENCES public.conversations(id),
     notified_decision_id bigint,
+    notified_work_sequence bigint,
     UNIQUE (installation_id, workspace_id, channel_id, thread_id)
 );
 CREATE TABLE public.external_messages (

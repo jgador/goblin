@@ -170,11 +170,24 @@ public sealed record GitRepositoryChange
     public string GitAuthorEmail { get; }
     public GitRepositoryGrant? Grant { get; }
 
+    // An authenticated requester's opaque source reference, supplied by the
+    // application adapter. It is attribution, never repository authority.
+    public string? RequestedBy
+    {
+        get;
+        init
+        {
+            if (value is not null && (value.Length is 0 or > 256 || Array.Exists(value.ToCharArray(), char.IsControl)))
+                throw new WorkRuleException(WorkRule.InvalidValue);
+            field = value;
+        }
+    }
+
     public GitRepositoryChange(string gitRepository, string gitAuthorName, string gitAuthorEmail, GitRepositoryGrant? grant = null)
     {
         string[] parts = (gitRepository ?? "").Split('/');
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(gitAuthorName) || string.IsNullOrWhiteSpace(gitAuthorEmail) ||
-            gitAuthorName.Contains('\n') || gitAuthorEmail.Contains('\n')) throw new WorkRuleException(WorkRule.InvalidValue);
+            Array.Exists(gitAuthorName.ToCharArray(), char.IsControl) || Array.Exists(gitAuthorEmail.ToCharArray(), char.IsControl)) throw new WorkRuleException(WorkRule.InvalidValue);
         foreach (string part in parts)
         {
             if (part.Length == 0 || part is "." or "..") throw new WorkRuleException(WorkRule.InvalidValue);
@@ -206,14 +219,25 @@ public sealed record GitRepositoryGrant
     public bool AllowPush { get; init; }
     public bool AllowPullRequest { get; init; }
 
+    public bool RequiresApproval() => PolicyVersion != 1;
+
+    public bool PublishesChanges() => PolicyVersion == 1 || PolicyVersion == 2 && AllowPush;
+
+    public bool AllowsOperation(GitRepositoryOperationKind operation) =>
+        Enum.IsDefined(operation) && PolicyVersion is 1 or 2 &&
+        (PolicyVersion == 1 || operation switch
+        {
+            GitRepositoryOperationKind.Publish => AllowPush,
+            GitRepositoryOperationKind.PullRequest => AllowPush && AllowPullRequest,
+            _ => true
+        });
+
     public void Authorize(long workId, long attemptId, string gitRepository, string requestedGitRepository, string branch, GitRepositoryOperationKind operation)
     {
-        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) || PolicyVersion is not (1 or 2) ||
+        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) ||
             Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
             !string.Equals(gitRepository, requestedGitRepository, StringComparison.OrdinalIgnoreCase) ||
-            !Enum.IsDefined(operation) ||
-            PolicyVersion == 2 && (operation == GitRepositoryOperationKind.Publish && !AllowPush ||
-                operation == GitRepositoryOperationKind.PullRequest && (!AllowPush || !AllowPullRequest)))
+            !AllowsOperation(operation))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);
     }
 }

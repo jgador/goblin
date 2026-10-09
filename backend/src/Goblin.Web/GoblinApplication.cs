@@ -28,7 +28,7 @@ public static class GoblinApplication
 
         WebApplication app = builder.Build();
         // Resolve eagerly so event subscriptions exist before the first initialization.
-        Authentication auth = app.Services.GetRequiredService<Authentication>();
+        _ = app.Services.GetRequiredService<Authentication>();
         _ = app.Services.GetRequiredService<CodexClient>();
         if (options.EnableWork) _ = app.Services.GetRequiredService<Goblin.Integrations.Slack.SlackSetup>();
         StaticAssets assets = await StaticAssets.LoadAsync(options.AssetDirectory);
@@ -39,7 +39,7 @@ public static class GoblinApplication
         assets.Map(app);
         SessionEndpoints.Map(app);
         SettingsEndpoints.Map(app);
-        new ConnectionEndpoints(options, auth).Map(app);
+        new ConnectionEndpoints(options).Map(app);
         new GitHubEndpoints(options).Map(app);
         SlackEndpoints.Map(app, options.EnableWork);
         if (options.EnableWork)

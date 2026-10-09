@@ -1,31 +1,11 @@
-import { SlackConnectionStatus, SlackSetupStatus } from "../api/values.js";
+import { SlackSetupStatus } from "../api/values.js";
 import { requestJson, errorMessage } from "../api/client.js";
 import { escapeHtml as e } from "../work/presentation.js";
-
-type State = {
-    available: boolean;
-    connection: {
-        status: SlackConnectionStatus;
-        workspace?: string;
-        workspaceId?: string;
-        appId?: string;
-        botUserId?: string;
-        notice?: string;
-    };
-    setup: {
-        status: SlackSetupStatus;
-        command?: string;
-        expiresAt?: string;
-        appId?: string;
-        notice?: string;
-    };
-    identities: { id: string; userId: string }[];
-    link?: { id: string; userId?: string; expiresAt: string };
-};
+import type { SlackState } from "../api/integration-contracts.js";
 
 export function mountSlack(root: HTMLElement) {
     const controller = new AbortController();
-    let state: State | undefined,
+    let state: SlackState | undefined,
         busy = false,
         disposed = false,
         error = "",
@@ -98,7 +78,7 @@ export function mountSlack(root: HTMLElement) {
     }
     async function refresh(force = false) {
         try {
-            const next = await api<State>();
+            const next = await api<SlackState>();
             if (disposed) return;
             const changed = JSON.stringify(next) !== renderedState;
             state = next;
@@ -148,7 +128,7 @@ export function mountSlack(root: HTMLElement) {
         const command = target.dataset.slack!;
         if (command === "copy" || command === "copy-link") {
             const value =
-                command === "copy" ? state?.setup.command : `link ${code}`;
+                command === "copy" ? state?.setup?.command : `link ${code}`;
             if (!value) return;
             try {
                 await navigator.clipboard.writeText(value);

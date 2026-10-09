@@ -32,6 +32,7 @@ export class Settings {
     private slackDispose?: () => void;
     private opener: HTMLElement | null = null;
     private openerAction = "settings";
+    private openerId = "";
     private generation = 0;
     private codexDispose?: () => void;
     private githubDispose?: () => void;
@@ -66,7 +67,7 @@ export class Settings {
         document.body.append(this.dialog);
         const integrationsButton = document.createElement("button");
         integrationsButton.dataset.provider = "integrations";
-        integrationsButton.innerHTML = `${icon("activity")}Integrations`;
+        integrationsButton.innerHTML = `${icon("integrations")}Integrations`;
         this.dialog
             .querySelector('[data-provider="github"]')!
             .after(integrationsButton);
@@ -116,6 +117,14 @@ export class Settings {
         this.dialog.addEventListener("click", (event) => {
             if (
                 event.target instanceof Element &&
+                event.target.closest("[data-open-directory]")
+            ) {
+                this.opener = null;
+                this.openerId = "integrations-title";
+                this.dialog.close();
+            }
+            if (
+                event.target instanceof Element &&
                 event.target.closest("[data-open-system-cluster]")
             ) {
                 this.select("cluster");
@@ -135,7 +144,10 @@ export class Settings {
                     `[data-action="${this.openerAction}"]`,
                 ),
             ).find((element) => element.getClientRects().length > 0);
-            (this.opener?.isConnected ? this.opener : replacement)?.focus();
+            (this.opener?.isConnected
+                ? this.opener
+                : (document.getElementById(this.openerId) ?? replacement)
+            )?.focus();
             window.dispatchEvent(new Event("goblin-connections-changed"));
         });
         this.dialog
@@ -198,6 +210,7 @@ export class Settings {
                 ? document.activeElement
                 : null;
         this.openerAction = this.opener?.dataset.action ?? "settings";
+        this.openerId = this.opener?.id ?? "";
         this.select(provider);
         if (!this.dialog.open) this.dialog.showModal();
         await this.mount(provider);
@@ -215,13 +228,7 @@ export class Settings {
                 '[data-provider-panel="integrations"]',
             )!;
             panel.innerHTML =
-                '<h3>Integrations</h3><p class="settings-description">Bring conversations into Goblin from the tools you use.</p><div class="provider-card"><h4>Slack</h4><p class="settings-description">Direct messages and mentions through an app owned by your workspace.</p><button class="settings-primary" data-open-slack>Set up Slack</button></div>';
-            panel
-                .querySelector("[data-open-slack]")!
-                .addEventListener("click", () => {
-                    this.select("slack");
-                    void this.mount("slack");
-                });
+                '<h3>Integrations</h3><p class="settings-description">Connect and manage external tools in the integrations directory.</p><a class="settings-primary" href="/integrations" data-action="integrations" data-open-directory>Open integrations</a>';
             return;
         }
         if (provider === "slack") {

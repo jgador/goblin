@@ -31,6 +31,29 @@ Git status/diffs. Native sessions remain in ephemeral runtime storage. Missing
 retained storage requires attention; Goblin does not silently replace lost files
 with a checkout or an older checkpoint.
 
+Repository executions mount the same Work PVC at `/workspace`, `/runtime`, and
+`/tmp`. The latter two use the `.goblin/runtime` and `.goblin/tmp` subdirectories
+of that PVC, so tool homes, dependency caches, and scratch files share the
+repository's storage allocation instead of separate 256 MiB temporary limits.
+A non-root init container creates these directories without moving or replacing
+the existing checkout. They persist across suspension and explicit retries; no
+automatic cache or scratch-file reclamation is implemented. Private worker
+directories stay excluded from file previews and repository Git checkpoints.
+New folders beneath these paths automatically use the same disk. Additional
+writable top-level mounts belong in `SandboxManifestBuilder.PersistentDirectories`;
+that list supplies both initialization and PVC subpath mounts. They do not get
+separate PVCs or per-directory quotas. The existing checkout layout is unchanged.
+The PVC requests 2 GiB in total. Actual capacity enforcement belongs to the
+storage driver: local-path provisioning advertises the requested capacity but
+does not itself impose a filesystem quota on its backing directory.
+
+Codex's writable authentication and native sessions live separately at
+`/run/codex`, on a pod-lifetime `emptyDir` without a fixed size limit. They are
+discarded with the pod and never intentionally copied to the Work PVC. Each new
+pod receives current credentials through its read-only Secret mount. This keeps
+credential refresh working without retaining credentials in an inspectable Work
+volume. Read-only inspection pods retain their own temporary storage.
+
 ## Conversation and execution
 
 An agent question pauses a logical attempt. Answering saves the decision and

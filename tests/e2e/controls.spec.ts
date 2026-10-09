@@ -346,36 +346,35 @@ test("repository setup validates locally and keeps the branch and Git identity t
     page,
 }) => {
     const commands = await setup(page);
-    await page.locator("#github-repository-options summary").click();
+    await page.locator("#github-repository-options > summary").click();
     const start = page.getByRole("button", {
-        name: "Review repository access",
+        name: "Use repository",
         exact: true,
     });
-    await page.getByLabel("Agent Git email").fill("");
     await start.click();
     await expect(
         page.getByText("Enter the full owner/repository name or GitHub URL.", {
             exact: true,
         }),
     ).toBeVisible();
-    await expect(
-        page.getByText("Enter a valid email for the agent’s commits."),
-    ).toBeVisible();
+    await expect(page.locator("#git-email-error")).not.toBeVisible();
     await expect(page.getByLabel("Repository", { exact: true })).toBeFocused();
     await page
         .getByLabel("Repository", { exact: true })
         .fill("owner/another-project");
+    await page.locator("#github-repository-advanced > summary").click();
     await page.getByLabel("Base branch").fill("develop");
     await page.getByLabel("Git actions").selectOption("local");
-    await page.getByLabel("Agent Git name").fill(" ");
-    await page.getByLabel("Agent Git email").fill("invalid");
+    await page.getByLabel("Git commit name (optional)").fill(" ");
+    await page.getByLabel("Git commit email (optional)").fill("invalid");
     await start.click();
-    await expect(page.getByLabel("Agent Git name")).toBeFocused();
-    await expect(
-        page.getByText("Enter a name for the agent’s commits."),
-    ).toBeVisible();
-    await page.getByLabel("Agent Git name").fill("Release reviewer");
-    await page.getByLabel("Agent Git email").fill("reviewer@example.com");
+    await expect(page.getByLabel("Git commit email (optional)")).toBeFocused();
+    await page
+        .getByLabel("Git commit name (optional)")
+        .fill("Release reviewer");
+    await page
+        .getByLabel("Git commit email (optional)")
+        .fill("reviewer@example.com");
     await page.getByRole("button", { name: "Manage repositories" }).click();
     await page.getByRole("button", { name: "Close settings" }).click();
     await page.getByRole("button", { name: "New work", exact: true }).click();
@@ -387,10 +386,10 @@ test("repository setup validates locally and keeps the branch and Git identity t
         "",
     );
     await expect(page.getByLabel("Base branch")).toHaveValue("develop");
-    await expect(page.getByLabel("Agent Git name")).toHaveValue(
+    await expect(page.getByLabel("Git commit name (optional)")).toHaveValue(
         "Release reviewer",
     );
-    await expect(page.getByLabel("Agent Git email")).toHaveValue(
+    await expect(page.getByLabel("Git commit email (optional)")).toHaveValue(
         "reviewer@example.com",
     );
     await expect(page.locator(".field-error:visible")).toHaveCount(0);
@@ -481,15 +480,17 @@ test("Settings keeps one content scroller and exposes repository loading without
     await expect(dialog).not.toBeVisible();
 });
 
-test("a waiting conversation can authorize repository access without creating another Work", async ({
+test("a waiting conversation can select an enabled repository with automatic defaults", async ({
     page,
 }) => {
     const commands = await setup(page, { waiting: true });
-    await page.locator("#github-repository-options summary").click();
+    await page.locator("#github-repository-options > summary").click();
     await page.getByLabel("Repository", { exact: true }).fill("owner/project");
-    await page.getByLabel("Agent Git email").fill("agent@example.com");
+    await expect(
+        page.getByLabel("Git commit email (optional)"),
+    ).not.toBeVisible();
     await page
-        .getByRole("button", { name: "Review repository access", exact: true })
+        .getByRole("button", { name: "Use repository", exact: true })
         .click();
     await expect
         .poll(() => commands)
@@ -500,8 +501,6 @@ test("a waiting conversation can authorize repository access without creating an
                 expectedVersion: "1",
                 repository: {
                     repository: "owner/project",
-                    gitAuthorName: "Goblin",
-                    gitAuthorEmail: "agent@example.com",
                 },
             }),
         );

@@ -42,6 +42,7 @@
         "spec.podTemplate.spec.containers.resources.limits",
         "spec.podTemplate.spec.containers.volumeMounts.name",
         "spec.podTemplate.spec.containers.volumeMounts.mountPath",
+        "spec.podTemplate.spec.containers.volumeMounts.subPath",
         "spec.podTemplate.spec.containers.volumeMounts.readOnly",
         "spec.podTemplate.spec.initContainers.name",
         "spec.podTemplate.spec.initContainers.image",

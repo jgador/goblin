@@ -87,10 +87,10 @@ public sealed class SlackConnection : BackgroundService
                 SetView(credentials, SlackConnectionStatus.Connected);
                 Task receive = ReceiveAsync(socket, credentials, cancellation.Token);
                 Task process = ProcessAsync(credentials, cancellation.Token);
-                Task questions = QuestionsAsync(credentials, cancellation.Token);
-                await Task.WhenAny(receive, process, questions);
+                Task notifications = NotificationsAsync(credentials, cancellation.Token);
+                await Task.WhenAny(receive, process, notifications);
                 await cancellation.CancelAsync();
-                try { await Task.WhenAll(receive, process, questions); } catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+                try { await Task.WhenAll(receive, process, notifications); } catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             }
             catch (Exception) when (!stoppingToken.IsCancellationRequested)
             {
@@ -130,7 +130,7 @@ public sealed class SlackConnection : BackgroundService
         {
             ExternalReply? reply = await _conversations.ProcessNextAsync(credentials.Installation, token);
             if (reply is null) { await Task.Delay(500, token); continue; }
-            // Results and repository authorizations still require local sign-in.
+            // Acknowledgements confirm acceptance; notifications carry saved outcomes.
             string text = reply.Kind switch
             {
                 ExternalReplyKind.WorkSaved => $"Saved in Goblin. <{_origin}/work?item={reply.WorkId}|Open Work> to follow progress and respond.",
@@ -139,18 +139,60 @@ public sealed class SlackConnection : BackgroundService
                 ExternalReplyKind.CommandRejected => "This message could not be applied. Open Goblin to review Work before sending another request.",
                 _ => throw new InvalidOperationException("Unknown conversation reply kind.")
             };
+            if (reply.Notice is { } notice)
+                text += "\n\n" + notice.Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
             try { await _api.PostAsync(credentials, reply.ChannelId, reply.ThreadId, text, token); }
             catch (SlackFailure) { /* A reply failure cannot roll back or repeat accepted Work. */ }
         }
     }
 
-    private async Task QuestionsAsync(SlackCredentials credentials, CancellationToken token)
+    private async Task NotificationsAsync(SlackCredentials credentials, CancellationToken token)
     {
         while (!token.IsCancellationRequested)
         {
             await DeliverQuestionAsync(credentials, token);
+            await DeliverUpdatesAsync(credentials, token);
             await Task.Delay(TimeSpan.FromSeconds(3), token);
         }
+    }
+
+    internal async Task DeliverUpdatesAsync(SlackCredentials credentials, CancellationToken token)
+    {
+        if (Installation?.Id != credentials.InstallationId) return;
+        ExternalWorkUpdate[] updates = await _conversations.PendingUpdatesAsync(credentials.Installation, token);
+        foreach (ExternalWorkUpdate update in updates)
+        {
+            if (Installation?.Id != credentials.InstallationId) return;
+            if (!await _conversations.UpdateIsCurrentAsync(credentials.Installation, update, token)) continue;
+            await DeliverUpdateAsync(credentials, update, token);
+        }
+    }
+
+    private async Task DeliverUpdateAsync(SlackCredentials credentials, ExternalWorkUpdate update, CancellationToken token)
+    {
+        string heading = update.Content.Kind switch
+        {
+            ExternalWorkUpdateKind.ResultReady => "Goblin finished execution. Your result is ready for review:",
+            ExternalWorkUpdateKind.Completed => "Work completed. The result has been approved:",
+            ExternalWorkUpdateKind.Failed => "Goblin encountered an error:",
+            ExternalWorkUpdateKind.Uncertain => "Goblin needs your attention:",
+            ExternalWorkUpdateKind.CleanupFailed => "Goblin encountered a cleanup error:",
+            ExternalWorkUpdateKind.Cancelled => "Goblin update:",
+            _ => throw new InvalidOperationException("Unknown Work update kind.")
+        };
+        string text = EscapeExcerpt(update.Content.Text);
+        string action = update.Content.Kind switch
+        {
+            ExternalWorkUpdateKind.ResultReady => $"<{_origin}/work?item={update.WorkId}|Review the result in Goblin> to approve it or request changes.",
+            ExternalWorkUpdateKind.Failed => $"<{_origin}/work?item={update.WorkId}|Open Work> to review the error and explicitly retry or cancel. Goblin will not retry automatically.",
+            _ => $"<{_origin}/work?item={update.WorkId}|Open Work in Goblin>."
+        };
+        if (Installation?.Id != credentials.InstallationId) return;
+        try { await _api.PostAsync(credentials, update.ChannelId, update.ThreadId, $"{heading}\n{text}\n\n{action}", token); }
+        catch (SlackFailure) { return; }
+        // As with questions, a crash after posting but before saving can duplicate
+        // the notification. Delivery never dispatches or retries agent execution.
+        await _conversations.UpdateSentAsync(credentials.Installation, update, token);
     }
 
     internal async Task DeliverQuestionAsync(SlackCredentials credentials, CancellationToken token)
@@ -159,9 +201,7 @@ public sealed class SlackConnection : BackgroundService
         ExternalQuestion? question = await _conversations.NextQuestionAsync(credentials.Installation, token);
         if (question is null) return;
         // Escape Slack's special characters so question text cannot inject mentions or links.
-        string text = question.Text.Length > 3000 ? question.Text[..3000] + "…" : question.Text;
-        text = text.Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal)
-            .Replace(">", "&gt;", StringComparison.Ordinal);
+        string text = EscapeExcerpt(question.Text);
         text = $"Goblin needs your answer:\n{text}\n\nReply in this thread to answer. In a channel, mention @goblin in your reply. You can also <{_origin}/work?item={question.WorkId}|answer in Goblin>.";
         if (Installation?.Id != credentials.InstallationId) return;
         try { await _api.PostAsync(credentials, question.ChannelId, question.ThreadId, text, token); }
@@ -169,5 +209,14 @@ public sealed class SlackConnection : BackgroundService
         // A crash between posting and saving this marker can duplicate a notification,
         // but cannot repeat Work execution or change its decision.
         await _conversations.QuestionSentAsync(credentials.Installation, question, token);
+    }
+
+    private static string EscapeExcerpt(string text)
+    {
+        int length = System.Math.Min(text.Length, 3000);
+        if (length < text.Length && char.IsHighSurrogate(text[length - 1])) length--;
+        string excerpt = length < text.Length ? text[..length] + "…" : text;
+        return excerpt.Replace("&", "&amp;", StringComparison.Ordinal).Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal);
     }
 }

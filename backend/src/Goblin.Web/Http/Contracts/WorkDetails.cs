@@ -222,7 +222,7 @@ public sealed class ExecutionTarget
 public sealed class GitRepositoryChange
 {
     [JsonConstructor]
-    public GitRepositoryChange(string gitRepository, string gitAuthorName, string gitAuthorEmail,
+    public GitRepositoryChange(string gitRepository, string? gitAuthorName = null, string? gitAuthorEmail = null,
         GitRepositoryGrant? grant = null)
     {
         GitRepository = gitRepository;
@@ -235,20 +235,22 @@ public sealed class GitRepositoryChange
     public string GitRepository { get; init; }
 
     [JsonPropertyName("gitAuthorName")]
-    public string GitAuthorName { get; init; }
+    public string? GitAuthorName { get; init; }
 
     [JsonPropertyName("gitAuthorEmail")]
-    public string GitAuthorEmail { get; init; }
+    public string? GitAuthorEmail { get; init; }
+
+    [JsonPropertyName("requestedBy")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequestedBy { get; init; }
 
     [JsonPropertyName("grant")]
     public GitRepositoryGrant? Grant { get; init; }
 
     public static GitRepositoryChange From(Goblin.Core.Work.GitRepositoryChange value) =>
         new(value.GitRepository, value.GitAuthorName, value.GitAuthorEmail,
-            value.Grant is null ? null : GitRepositoryGrant.From(value.Grant));
-
-    public Goblin.Core.Work.GitRepositoryChange ToCore() =>
-        new(GitRepository, GitAuthorName, GitAuthorEmail, Grant?.ToCore());
+            value.Grant is null ? null : GitRepositoryGrant.From(value.Grant))
+        { RequestedBy = value.RequestedBy };
 }
 
 public sealed class GitRepositoryGrant

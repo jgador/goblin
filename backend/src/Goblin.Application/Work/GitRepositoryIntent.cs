@@ -32,8 +32,10 @@ public static class GitRepositoryIntent
     {
         GitDeliveryIntent intent = previous ?? new();
         const RegexOptions flags = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
-        bool push = Regex.IsMatch(text, @"\b(push|publish)\b", flags);
-        bool pr = Regex.IsMatch(text, @"\b(open|create|submit|raise|make)\s+(?:a\s+|the\s+)?(?:draft\s+)?(?:pull\s+request|pr)\b", flags);
+        bool explanation = Regex.IsMatch(text, @"^\s*(?:explain|describe|show\s+me\s+how|how\s+(?:do|can|should|to)|(?:should|could|can|would|do|did)\s+(?:i|we)|what|why|when|where)\b", flags);
+        const string instruction = @"(?:^\s*|[.;,]\s*|\b(?:and|then|also|please|but)\s+|\b(?:can|could|would)\s+you\s+|\bi\s+want\s+you\s+to\s+)";
+        bool push = !explanation && Regex.IsMatch(text, instruction + @"(push|publish)(?:\s+(?:(?:the|these|your|my|our|all)\s+)?(?:changes?\b|commits?\b|branch\b|repository\b|code\b|it\b|them\b|to\b|[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+\b)|\s*[.!]?\s*$)", flags);
+        bool pr = !explanation && Regex.IsMatch(text, instruction + @"(open|create|submit|raise|make)\s+(?:a\s+|the\s+)?(?:draft\s+)?(?:pull\s+request|pr)\b", flags);
         bool noPush = Regex.IsMatch(text, @"\b(?:do\s+not|don't|don’t|never|without|no|not)\s+(?:\w+\s+){0,3}(?:push(?:ing)?|publish(?:ing)?)\b", flags);
         bool noPr = Regex.IsMatch(text, @"\b(?:do\s+not|don't|don’t|never|without|no|not)\s+(?:(?:push|publish)(?:\s+changes)?\s+or\s+)?(?:(?:open|create|submit|raise|make)\s+)?(?:a\s+|the\s+)?(?:draft\s+)?(?:pull\s+request|pr)\b", flags);
         if (noPush && pr && !noPr) throw new ApplicationFailure("repository_intent_conflict");

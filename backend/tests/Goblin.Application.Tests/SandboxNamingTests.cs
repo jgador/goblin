@@ -165,6 +165,22 @@ public sealed class SandboxNamingTests
         await Assert.ThrowsAsync<IOException>(() => host.CleanupAsync(work, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("k8s/agents/work-102")]
+    [InlineData("k8s/agents/work-101/12")]
+    [InlineData("k8s/../work-101")]
+    [InlineData("k8s/agents/other-101")]
+    [InlineData("unknown/12")]
+    public void InspectionUsesTheSamePersistedWorkspaceGrammar(string reference)
+    {
+        using var api = new KubernetesApi("http://127.0.0.1:1");
+        var host = new InspectionHost(api, new("agents", "image", "/private", "http://repository"));
+        var allocation = new InspectionAllocation(1, 101, 12, reference);
+
+        Assert.Equal("Unrecognized workspace reference.",
+            Assert.Throws<IOException>(() => host.Manifest(allocation, false)).Message);
+    }
+
     private static WorkSnapshot Work(string reference, long workId = 101, long attemptId = 12)
     {
         var work = new WorkItem(workId, "Edit repository", DateTimeOffset.UtcNow);
