@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Goblin.Core.Work;
 using K = Goblin.Execution.Kubernetes;
 
@@ -9,6 +10,15 @@ namespace Goblin.Execution;
 // coordinates lifecycle and recovery without constructing pod specifications.
 internal sealed class SandboxManifestBuilder
 {
+    // Additional writable top-level paths are logical directories on the same
+    // Work disk. This single list owns both initialization and mounts; paths are
+    // application constants, never user input or independent storage quotas.
+    private static readonly (string MountPath, string SubPath)[] PersistentDirectories =
+    [
+        ("/runtime", ".goblin/runtime"),
+        ("/tmp", ".goblin/tmp")
+    ];
+
     private readonly SandboxOptions _options;
 
     internal SandboxManifestBuilder(SandboxOptions options) => _options = options;
@@ -64,6 +74,28 @@ internal sealed class SandboxManifestBuilder
                             FsGroup = 1000,
                             SeccompProfile = new() { Type = "RuntimeDefault" }
                         },
+                        InitContainers =
+                        [
+                            new()
+                            {
+                                Name = "prepare-storage", Image = _options.Image,
+                                // Keep the existing PVC root and checkout layout. Subpaths must
+                                // exist before Kubernetes mounts them into the execution container.
+                                Command = ["sh", "-ec", "umask 077; mkdir -p " +
+                                    string.Join(" ", PersistentDirectories.Select(directory => "/workspace/" + directory.SubPath))],
+                                SecurityContext = new()
+                                {
+                                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
+                                    Capabilities = new() { Drop = ["ALL"] }
+                                },
+                                Resources = new()
+                                {
+                                    Requests = new() { ["cpu"] = "10m", ["memory"] = "16Mi" },
+                                    Limits = new() { ["cpu"] = "100m", ["memory"] = "64Mi" }
+                                },
+                                VolumeMounts = [new() { Name = "workspace", MountPath = "/workspace" }]
+                            }
+                        ],
                         Containers =
                         [
                             new()
@@ -83,8 +115,11 @@ internal sealed class SandboxManifestBuilder
                                 VolumeMounts =
                                 [
                                     new() { Name = "workspace", MountPath = "/workspace" },
-                                    new() { Name = "temporary", MountPath = "/tmp" },
-                                    new() { Name = "runtime", MountPath = "/runtime" },
+                                    .. PersistentDirectories.Select(directory => new K.SandboxSpecPodTemplateSpecContainersItemVolumeMountsItem
+                                    {
+                                        Name = "workspace", MountPath = directory.MountPath, SubPath = directory.SubPath
+                                    }),
+                                    new() { Name = "codex", MountPath = "/run/codex" },
                                     new() { Name = "credentials", MountPath = "/run/credentials", ReadOnly = true },
                                     new() { Name = "input", MountPath = "/run/input", ReadOnly = true }
                                 ]
@@ -93,10 +128,11 @@ internal sealed class SandboxManifestBuilder
                         Volumes =
                         [
                             new() { Name = "workspace", PersistentVolumeClaim = new() { ClaimName = name } },
-                            new() { Name = "temporary", EmptyDir = new() { SizeLimit = "256Mi" } },
+                            // Codex keeps writable, refreshable authentication alongside native
+                            // sessions. Keep this private directory off the retained Work disk.
+                            new() { Name = "codex", EmptyDir = new() },
                             new() { Name = "credentials", Secret = new() { SecretName = InputName(work), DefaultMode = 288 } },
-                            new() { Name = "input", ConfigMap = new() { Name = InputName(work) } },
-                            new() { Name = "runtime", EmptyDir = new() { SizeLimit = "256Mi" } }
+                            new() { Name = "input", ConfigMap = new() { Name = InputName(work) } }
                         ]
                     }
                 }

@@ -23,7 +23,7 @@ public static class SandboxWorker
         WorkerInput input = (await ExecutionFiles.ReadAsync<WorkerInput>("/run/input/input.json"))!;
         WorkSnapshot work = input.Work;
         int allocation = work.Attempts[^1].WorkspaceNumber;
-        string home = "/runtime/home", codexHome = "/runtime/codex";
+        string home = "/runtime/home", codexHome = "/run/codex";
         Directory.CreateDirectory(home); Directory.CreateDirectory(codexHome);
         File.Copy("/run/credentials/auth.json", Path.Combine(codexHome, "auth.json"), true);
         File.SetUnixFileMode(Path.Combine(codexHome, "auth.json"), UnixFileMode.UserRead | UnixFileMode.UserWrite);

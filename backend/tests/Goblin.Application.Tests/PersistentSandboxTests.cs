@@ -21,6 +21,39 @@ public sealed class PersistentSandboxTests
     private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
 
     [Fact]
+    public async Task RepositoryRuntimeAndScratchShareTheWorkVolumeWithoutPersistingCodexCredentials()
+    {
+        await using ControlPlane plane = await ControlPlane.StartAsync();
+        WorkItem work = Running(1, 10, plane.Host);
+        await plane.Host.StartAsync(work.Snapshot(), default);
+        JsonNode spec = plane.Sandbox["spec"]!["podTemplate"]!["spec"]!;
+        JsonNode execution = Assert.Single(spec["containers"]!.AsArray())!;
+        JsonNode[] mounts = [.. execution["volumeMounts"]!.AsArray().Select(x => x!)];
+        Assert.Null(Assert.Single(mounts, x => x["mountPath"]!.GetValue<string>() == "/workspace")["subPath"]);
+        foreach ((string path, string subPath) in new[] { ("/runtime", ".goblin/runtime"), ("/tmp", ".goblin/tmp") })
+        {
+            JsonNode mount = Assert.Single(mounts, x => x["mountPath"]!.GetValue<string>() == path);
+            Assert.Equal("workspace", mount["name"]!.GetValue<string>());
+            Assert.Equal(subPath, mount["subPath"]!.GetValue<string>());
+        }
+        JsonNode[] volumes = [.. spec["volumes"]!.AsArray().Select(x => x!)];
+        Assert.Equal("work-1", Assert.Single(volumes, x => x["persistentVolumeClaim"] is not null)
+            ["persistentVolumeClaim"]!["claimName"]!.GetValue<string>());
+        JsonNode privateVolume = Assert.Single(volumes, x => x["emptyDir"] is not null);
+        Assert.Equal("codex", privateVolume["name"]!.GetValue<string>());
+        Assert.Null(privateVolume["emptyDir"]!["sizeLimit"]);
+        Assert.Equal("codex", Assert.Single(mounts, x => x["mountPath"]!.GetValue<string>() == "/run/codex")
+            ["name"]!.GetValue<string>());
+        Assert.True(Assert.Single(mounts, x => x["mountPath"]!.GetValue<string>() == "/run/credentials")
+            ["readOnly"]!.GetValue<bool>());
+        JsonNode prepare = Assert.Single(spec["initContainers"]!.AsArray())!;
+        Assert.Equal("workspace", Assert.Single(prepare["volumeMounts"]!.AsArray())!["name"]!.GetValue<string>());
+        Assert.True(prepare["securityContext"]!["readOnlyRootFilesystem"]!.GetValue<bool>());
+        Assert.False(prepare["securityContext"]!["allowPrivilegeEscalation"]!.GetValue<bool>());
+        Assert.True(spec["securityContext"]!["runAsNonRoot"]!.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task RetryReusesStorageAndStaleStartSuspendAndCleanupCannotAffectIt()
     {
         await using ControlPlane plane = await ControlPlane.StartAsync();

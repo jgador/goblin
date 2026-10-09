@@ -21,4 +21,8 @@ public sealed class SandboxSpecPodTemplateSpecContainersItemVolumeMountsItem
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? ReadOnly { get; init; }
 
+    [JsonPropertyName("subPath")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SubPath { get; init; }
+
 }
