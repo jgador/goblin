@@ -50,5 +50,22 @@ public sealed class GitRepositoryProcessTests : IDisposable
         finally { Environment.SetEnvironmentVariable(secret, null); }
     }
 
+    [Fact]
+    public async Task DeadlineStopsTheEntireGitProcessTree()
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        string marker = Path.Combine(_root, "child-survived");
+        var environment = new Dictionary<string, string>
+        {
+            [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)!
+        };
+
+        await Assert.ThrowsAsync<TimeoutException>(() => GitRepositoryProcess.RunAsync(_root, environment,
+            TimeSpan.FromMilliseconds(100), CancellationToken.None,
+            "-c", $"alias.wait=!f() {{ (sleep 1; touch '{marker}') & wait; }}; f", "wait"));
+        await Task.Delay(1500);
+        Assert.False(File.Exists(marker));
+    }
+
     public void Dispose() => Directory.Delete(_root, true);
 }
