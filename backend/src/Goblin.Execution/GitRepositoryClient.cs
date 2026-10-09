@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -43,12 +42,8 @@ public static class GitRepositoryClient
         reservation.EnsureSuccessStatusCode();
         long id = await reservation.Content.ReadFromJsonAsync<long>();
         string bundle = Path.Combine("/workspace", id.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".bundle");
-        var start = new ProcessStartInfo("git") { UseShellExecute = false, WorkingDirectory = checkout, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (string argument in new[] { "-c", "core.hooksPath=/dev/null", "bundle", "create", bundle, "refs/heads/" + branch }) start.ArgumentList.Add(argument);
-        using Process git = Process.Start(start)!;
-        Task output = git.StandardOutput.ReadToEndAsync(), error = git.StandardError.ReadToEndAsync();
-        await git.WaitForExitAsync(); await output; await error;
-        if (git.ExitCode != 0) throw new IOException("Could not prepare repository changes.");
+        await GitRepositoryProcess.RunAsync(checkout, GitRepositoryProcess.CreateEnvironment(), CancellationToken.None,
+            "bundle", "create", bundle, "refs/heads/" + branch);
         try
         {
             await using FileStream stream = File.OpenRead(bundle);
@@ -106,11 +101,8 @@ public static class GitRepositoryClient
             if (arguments[0] == "fetch")
             {
                 await DownloadAsync(attempt.Id, "/workspace/fetched.bundle");
-                var start = new ProcessStartInfo("git") { WorkingDirectory = "/workspace/repository", UseShellExecute = false };
-                foreach (string value in new[] { "-c", "core.hooksPath=/dev/null", "fetch", "--no-tags", "--", "/workspace/fetched.bundle", "+refs/heads/*:refs/remotes/origin/*" }) start.ArgumentList.Add(value);
-                using Process process = Process.Start(start)!;
-                await process.WaitForExitAsync();
-                if (process.ExitCode != 0) throw new IOException();
+                await GitRepositoryProcess.RunAsync("/workspace/repository", GitRepositoryProcess.CreateEnvironment(), CancellationToken.None,
+                    "fetch", "--no-tags", "--", "/workspace/fetched.bundle", "+refs/heads/*:refs/remotes/origin/*");
             }
             Console.WriteLine(url); return 0;
         }
