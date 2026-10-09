@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f8f9f4" />
+    <meta name="description" content="One Goblin, every conversation. Explore an interactive vision of your AI coworker across your development channels." />
+    <title>Goblin · In the loop</title>
+    <link rel="icon" href="assets/goblin.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="demo.css" />
+    <script src="demo.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#player">Skip to the interactive demo</a>
+    <header class="site-header">
+      <a class="brand" href="./" aria-label="Goblin home"><img src="assets/goblin.svg" alt="" width="32" height="30" /><span>goblin</span></a>
+      <span class="header-note">A little coworker. A lot more connected.</span>
+      <button class="about-button" id="about-button" type="button">About this demo <span aria-hidden="true">↗</span></button>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="title">
+        <div><p class="eyebrow"><span class="tiny-star" aria-hidden="true">✳</span> IN THE LOOP</p><h1 id="title">One goblin.<br /><span>Every conversation.</span></h1></div>
+        <div class="intro-aside"><p>Your team has its places.<br />Goblin meets you there.</p><span class="demo-tag"><span></span> Interactive concept film</span></div>
+      </section>
+
+      <section class="player" id="player" aria-label="Interactive Goblin communications demo">
+        <div class="film-body">
+          <div class="network-panel">
+            <div class="stage-heading"><span>GOOD WORK STARTS WITH A CONVERSATION</span><span class="stage-count" id="stage-count">01 / 05</span></div>
+            <div class="network" id="network">
+              <svg class="connections" viewBox="0 0 900 570" aria-hidden="true">
+                <path class="connection" id="line-slack" d="M220 125 C220 240 360 150 450 272" />
+                <path class="connection" id="line-teams" d="M680 125 C680 240 540 150 450 272" />
+                <path class="connection" id="line-github" d="M735 365 C615 365 585 310 450 272" />
+                <path class="connection" id="line-discord" d="M165 365 C285 365 315 310 450 272" />
+                <path class="connection" id="line-email" d="M450 485 L450 272" />
+                <g class="packet" id="packet" visibility="hidden"><circle class="packet-halo" r="15" /><circle class="packet-dot" r="5" /></g>
+              </svg>
+              <button class="channel channel-slack" data-channel="slack" type="button" aria-label="Play the Slack conversation" aria-pressed="true"><span class="channel-icon"><img src="assets/slack.svg" alt="" width="34" height="34" /><span class="channel-indicator"></span></span><span class="channel-name">Slack</span><span class="channel-detail">A quick ask</span></button>
+              <button class="channel channel-teams" data-channel="teams" type="button" aria-label="Play the Microsoft Teams conversation" aria-pressed="false"><span class="channel-icon"><img src="assets/teams.svg" alt="" width="37" height="34" /><span class="channel-indicator"></span></span><span class="channel-name">Microsoft Teams</span><span class="channel-detail">Keep everyone close</span></button>
+              <button class="channel channel-github" data-channel="github" type="button" aria-label="Play the GitHub conversation" aria-pressed="false"><span class="channel-icon"><img src="assets/github.svg" alt="" width="37" height="37" /><span class="channel-indicator"></span></span><span class="channel-name">GitHub</span><span class="channel-detail">Where code happens</span></button>
+              <button class="channel channel-discord" data-channel="discord" type="button" aria-label="Play the Discord conversation" aria-pressed="false"><span class="channel-icon"><img src="assets/discord.svg" alt="" width="37" height="30" /><span class="channel-indicator"></span></span><span class="channel-name">Discord</span><span class="channel-detail">Build together</span></button>
+              <button class="channel channel-email" data-channel="email" type="button" aria-label="Play the Gmail conversation" aria-pressed="false"><span class="channel-icon"><img src="assets/email.svg" alt="" width="33" height="33" /><span class="channel-indicator"></span></span><span class="channel-name">Gmail</span><span class="channel-detail">The thoughtful follow-up</span></button>
+
+              <div class="goblin-hub" id="goblin-hub"><div class="hub-label"><span class="hub-name">goblin</span><span class="hub-status" id="hub-status">Here for your team</span></div><div class="hub-core"><img src="assets/goblin-dark.svg" alt="Goblin" width="77" height="72" /></div></div>
+              <div class="travel-label" id="travel-label" aria-hidden="true"></div>
+            </div>
+            <div class="network-footer"><span class="click-hint"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m5 3 13 9-7 1-3 7-3-17Z" /></svg> Pick a channel. Start a conversation.</span><span class="motion-note">A shared thread, wherever you work.</span></div>
+          </div>
+
+          <aside class="conversation-panel" aria-label="Example conversation">
+            <div class="conversation-top"><span class="eyebrow">THE CONVERSATION</span><span class="example-label">EXAMPLE</span></div>
+            <div class="conversation-heading"><span class="conversation-icon"><img id="conversation-icon" src="assets/slack.svg" alt="" width="23" height="23" /></span><div><h2 id="conversation-title">Slack</h2><p id="conversation-location"># development</p></div><span class="conversation-number" id="conversation-number">01</span></div>
+            <div class="thread" id="thread">
+              <div class="message incoming-message" id="incoming-message"><div class="message-meta"><span class="avatar human-avatar" id="human-avatar">A</span><strong id="sender-name">Alex</strong><span class="message-time">Just now</span></div><div class="message-bubble" id="request-text">Hey Goblin, can you take a look at the login bug?</div></div>
+              <div class="typing-row" id="typing-row" hidden><span class="avatar goblin-avatar"><img src="assets/goblin.svg" alt="" /></span><span>Goblin is thinking<span class="typing-dots" aria-hidden="true"><i></i><i></i><i></i></span></span></div>
+              <div class="message reply-message" id="reply-message" hidden><div class="message-meta"><span class="avatar goblin-avatar"><img src="assets/goblin.svg" alt="" /></span><strong>Goblin</strong><span class="bot-label">COWORKER</span></div><div class="message-bubble"><p id="reply-text"></p><div class="reply-receipt" id="reply-receipt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg><span id="receipt-text"></span></div></div></div>
+              <p class="thread-placeholder" id="thread-placeholder">A little nudge.<br />A conversation in motion.</p>
+            </div>
+            <div class="scenario-selector"><label for="scenario">TRY A DIFFERENT ASK</label><div class="select-wrap"><select id="scenario"><option value="0">Investigate a bug</option><option value="1">Plan a small feature</option><option value="2">Summarize the work</option></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg></div></div>
+          </aside>
+        </div>
+
+        <div class="playback">
+          <div class="timeline-wrap"><label class="sr-only" for="timeline">Video position</label><input id="timeline" class="timeline" type="range" min="0" max="60" step="0.1" value="0" aria-valuetext="0 seconds of 60 seconds" /></div>
+          <div class="transport"><div class="transport-main"><button class="play-button" id="play-button" type="button" aria-label="Pause animation"><svg id="pause-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5" width="3" height="14" rx="1" /><rect x="14" y="5" width="3" height="14" rx="1" /></svg><svg id="play-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" hidden><path d="m8 5 12 7-12 7Z" /></svg></button><button class="icon-button" id="replay-button" type="button" aria-label="Replay from the beginning" title="Replay from the beginning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M4 11a8 8 0 1 1 1 6M4 4v7h7" /></svg></button><span class="time-code"><span id="elapsed">00:00</span><span class="time-divider">/</span>01:00</span></div>
+            <nav class="chapters" aria-label="Conversation chapters"><button type="button" data-chapter="slack" aria-current="step"><span>01</span> Slack</button><button type="button" data-chapter="teams"><span>02</span> Teams</button><button type="button" data-chapter="github"><span>03</span> GitHub</button><button type="button" data-chapter="discord"><span>04</span> Discord</button><button type="button" data-chapter="email"><span>05</span> Gmail</button></nav>
+            <div class="transport-options"><button class="speed-button" id="speed-button" type="button" aria-label="Playback speed: 1 times. Click to change." title="Change playback speed">1×</button><button class="icon-button" id="fullscreen-button" type="button" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" /></svg></button></div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="page-footer"><p>Less switching. <span>More building.</span></p><span>Scripted conversations · A vision of connected work</span></footer>
+      <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+    </main>
+
+    <dialog id="about-dialog" aria-labelledby="about-title"><button class="dialog-close icon-button" id="close-about" type="button" aria-label="Close about dialog">×</button><img src="assets/goblin.svg" alt="" width="44" height="41" /><p class="eyebrow">IN THE LOOP</p><h2 id="about-title">A glimpse of connected work.</h2><p>This interactive concept shows Goblin at the center of everyday development conversations. Every exchange is scripted; nothing is sent to an external service.</p><p>The demo imagines channels including Teams, Discord, and email. Their appearance here does not mean those integrations are currently available.</p><p>Choose a channel or a different ask, scrub the timeline, or press Space to pause. Reduced-motion preferences are respected.</p><div class="dialog-footnote">Original Goblin artwork from the repository.</div></dialog>
+  </body>
+</html>
