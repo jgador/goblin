@@ -3,6 +3,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.GitRepositories;
 using Goblin.Application.Work;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
@@ -60,7 +61,7 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
             return View(previous);
         }
         Persistence.Entities.ExecutionAttempt owner = await db.ExecutionAttempts.SingleAsync(x => x.Id == attemptId, token);
-        if (owner.TurnNumber != turn || owner.Status is not ("Starting" or "Running")) throw new ApplicationFailure("workspace_changed");
+        if (owner.TurnNumber != turn || !GitRepositoryAttemptPolicy.AllowsOperations(owner.Status)) throw new ApplicationFailure("workspace_changed");
         var row = new Persistence.Entities.WorkspaceCheckpoint
         {
             WorkId = work.Id,

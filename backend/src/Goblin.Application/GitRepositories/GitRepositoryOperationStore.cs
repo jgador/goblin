@@ -58,7 +58,7 @@ public sealed class GitRepositoryOperationStore
             return View(previous);
         }
         Persistence.Entities.ExecutionAttempt attempt = await db.ExecutionAttempts.SingleAsync(x => x.Id == upload.AttemptId, token);
-        if (attempt.Status is not (nameof(AttemptStatus.Starting) or nameof(AttemptStatus.Running)) ||
+        if (!GitRepositoryAttemptPolicy.AllowsOperations(attempt.Status) ||
             await db.GitRepositoryOperations.AnyAsync(x => x.AttemptId == upload.AttemptId &&
                 (x.State == nameof(GitRepositoryOperationState.Queued) || x.State == nameof(GitRepositoryOperationState.Running) ||
                     x.State == nameof(GitRepositoryOperationState.Uncertain) || x.State == nameof(GitRepositoryOperationState.Failed)), token))

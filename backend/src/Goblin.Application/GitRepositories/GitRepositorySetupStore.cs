@@ -110,9 +110,9 @@ public sealed class GitRepositorySetupStore
 
     private static async Task<WorkSnapshot> CurrentAsync(GoblinDbContext db, long attemptId, CancellationToken token)
     {
-        var owner = await db.ExecutionAttempts.AsNoTracking().Where(x => x.Id == attemptId)
-            .Select(x => new { x.Work.State, x.Status, x.TurnNumber }).SingleOrDefaultAsync(token);
-        if (owner is null || owner.Status is not ("Starting" or "Running") || owner.State is null)
+        var owner = await GitRepositoryAttemptPolicy.AllowingOperations(db.ExecutionAttempts.AsNoTracking())
+            .Where(x => x.Id == attemptId).Select(x => new { x.Work.State, x.TurnNumber }).SingleOrDefaultAsync(token);
+        if (owner is null || owner.State is null)
             throw new ApplicationFailure("repository_setup_unavailable");
         WorkSnapshot work = WorkStatePersistence.Snapshot(owner.State);
         await GitRepositoryAccess.RequireSetupAsync(db, work, attemptId, owner.TurnNumber, token);

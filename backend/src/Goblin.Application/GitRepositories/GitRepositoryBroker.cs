@@ -110,7 +110,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         AttemptSnapshot attempt = work.Attempts[^1];
         if (!_capability.IsValid(capability, work.Id, attempt.Id, attempt.Target.GitRepository!.Grant!.Generation))
             throw new ApplicationFailure("repository_operation_unavailable");
-        if (write && attempt.Status is not (AttemptStatus.Starting or AttemptStatus.Running))
+        if (write && !GitRepositoryAttemptPolicy.AllowsOperations(attempt.Status))
             throw new ApplicationFailure("repository_operation_unavailable");
     }
 
@@ -135,7 +135,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
     public async Task<long> ReserveOperationIdAsync(long attemptId, CancellationToken token)
     {
         WorkSnapshot work = await WorkAsync(attemptId, token);
-        if (work.Attempts[^1].Status is not (AttemptStatus.Starting or AttemptStatus.Running))
+        if (!GitRepositoryAttemptPolicy.AllowsOperations(work.Attempts[^1].Status))
             throw new ApplicationFailure("repository_operation_unavailable");
         return await _operations.ReserveIdAsync(token);
     }
@@ -178,7 +178,7 @@ public sealed class GitRepositoryBroker : IGitRepositoryBroker
         try
         {
             WorkSnapshot work = await WorkAsync(attemptId, cancellation.Token);
-            if (work.Attempts[^1].Status is not (AttemptStatus.Starting or AttemptStatus.Running)) throw new ApplicationFailure("repository_operation_unavailable");
+            if (!GitRepositoryAttemptPolicy.AllowsOperations(work.Attempts[^1].Status)) throw new ApplicationFailure("repository_operation_unavailable");
             GitRepositoryChange gitRepository = work.Attempts[^1].Target.GitRepository!;
             GitRepositoryOperationSnapshot operation = await _operations.RequireRunningAsync(id, cancellation.Token);
             gitRepository.Grant!.Authorize(work.Id, attemptId, gitRepository.GitRepository, gitRepository.GitRepository, gitRepository.Grant.Branch, operation.Kind);
