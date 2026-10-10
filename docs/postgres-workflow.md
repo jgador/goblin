@@ -116,6 +116,13 @@ authentication without its initial password prompt. No database password is stor
 For an already imported server that prompts, leave the password blank, select
 **Save Password**, and click **OK** to remember the password-free connection.
 
+If the dialog also shows `exception: access violation writing 0x0000000000000000`,
+edit the saved server: **Properties → Parameters → GSS encmode → disable**, then
+save and reconnect. Add that parameter with **+** if absent. This works around a
+[pgAdmin 9.18 Windows bug](https://github.com/pgadmin-org/pgadmin4/issues/10445).
+Exports include this setting; TLS remains **verify-full**. Re-exporting refreshes
+files but does not change the properties of an already imported server.
+
 If you already saved a working connection, keep using it. After restarting WSL or
 renewing certificates, run the same `export` command and reconnect that saved
 server. Certificate paths stay the same. Repeated imports add duplicate servers;
@@ -140,7 +147,7 @@ On your **Windows host machine**, open PowerShell and read the exported settings
 ```powershell
 Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl\app\connection.json" |
     ConvertFrom-Json |
-    Format-List host, port, database, username, sslmode, sslrootcert, sslcert, sslkey
+    Format-List host, port, database, username, sslmode, gssencmode, sslrootcert, sslcert, sslkey
 ```
 
 Create a PostgreSQL connection in your Windows client, such as pgAdmin or DBeaver.
@@ -155,6 +162,7 @@ not load `connection.json` automatically. Enter these settings, then save and co
 | Username | `goblin_app` |
 | Password | Leave blank; authentication uses the client certificate |
 | SSL mode | `verify-full` |
+| GSS encmode (libpq/pgAdmin) | `disable`; the connection uses certificate TLS |
 | CA / root certificate | Absolute Windows path from `sslrootcert` in `connection.json` |
 | Client certificate | Absolute Windows path from `sslcert` in `connection.json` |
 | Client private key / Client certificate key | Absolute Windows path from `sslkey` in `connection.json` |

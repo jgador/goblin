@@ -85,7 +85,8 @@ try {
         $encoding = New-Object Text.UTF8Encoding($false)
         $settings = @{
             host = 'localhost'; port = $inputData.port; database = 'goblin'; username = ('goblin_' + $inputData.role)
-            sslmode = 'verify-full'; sslrootcert = $caPath
+            # Certificate TLS is the transport; avoid Windows pgAdmin's GSS negotiation crash.
+            sslmode = 'verify-full'; gssencmode = 'disable'; sslrootcert = $caPath
             sslcert = (Join-Path $role 'tls.crt'); sslkey = (Join-Path $role 'tls.key'); identity = $inputData.identity
         }
         $pgadmin = @{
@@ -95,7 +96,7 @@ try {
                     Host = $settings.host; Port = $settings.port
                     MaintenanceDB = $settings.database; Username = $settings.username
                     ConnectionParameters = @{
-                        sslmode = $settings.sslmode; sslrootcert = $settings.sslrootcert
+                        sslmode = $settings.sslmode; gssencmode = $settings.gssencmode; sslrootcert = $settings.sslrootcert
                         sslcert = $settings.sslcert; sslkey = $settings.sslkey
                         passfile = (Join-Path $role 'pgpass.conf')
                     }

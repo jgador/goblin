@@ -503,6 +503,7 @@ test(
                 Username: "goblin_app",
                 ConnectionParameters: {
                     sslmode: "verify-full",
+                    gssencmode: "disable",
                     sslrootcert: win32.join(
                         win32.dirname(roleDirectory),
                         "ca.crt",
@@ -542,6 +543,7 @@ test(
             assert.deepEqual(readPgAdmin(), pgadmin);
             const admin = readPgAdmin("admin").Servers["1"];
             assert.equal(admin.Username, "goblin_admin");
+            assert.equal(admin.ConnectionParameters.gssencmode, "disable");
             assert.equal(admin.Name, `Goblin - ${name} (admin)`);
             assert.equal(
                 admin.ConnectionParameters.passfile,
