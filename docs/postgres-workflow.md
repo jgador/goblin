@@ -103,11 +103,14 @@ connections, `goblinctl db connect wsl` reuses its source and forwarding port.
 On your **Windows host machine**, open PowerShell and read the exported settings:
 
 ```powershell
-Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl\app\connection.json"
+Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl\app\connection.json" |
+    ConvertFrom-Json |
+    Format-List host, port, database, username, sslmode, sslrootcert, sslcert, sslkey
 ```
 
 Create a PostgreSQL connection in your Windows client, such as pgAdmin or DBeaver.
-Enter these connection and SSL settings, then save and connect:
+Copy the full paths shown above into the client's SSL settings; the client does
+not load `connection.json` automatically. Enter these settings, then save and connect:
 
 | Client field | Value |
 | --- | --- |
@@ -119,7 +122,15 @@ Enter these connection and SSL settings, then save and connect:
 | SSL mode | `verify-full` |
 | CA / root certificate | Absolute Windows path from `sslrootcert` in `connection.json` |
 | Client certificate | Absolute Windows path from `sslcert` in `connection.json` |
-| Client private key | Absolute Windows path from `sslkey` in `connection.json` |
+| Client private key / Client certificate key | Absolute Windows path from `sslkey` in `connection.json` |
+
+In pgAdmin, edit the server's properties and find these certificate fields under
+**SSL** or **Parameters**, depending on the version. If an error mentions a missing
+`AppData\Roaming\postgresql\root.crt`, set **Root certificate** to the exported
+`sslrootcert` path, **Client certificate** to `sslcert`, and **Client certificate key**
+to `sslkey`. Keep SSL mode **verify-full**. Goblin's CA is at
+`%LOCALAPPDATA%\Goblin\postgres\wsl\ca.crt`; use the expanded absolute path printed
+by PowerShell in the client.
 
 Exports live outside the checkout at
 `%LOCALAPPDATA%\Goblin\postgres\<profile>\`. The export resolves the current
