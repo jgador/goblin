@@ -24,6 +24,9 @@ sudo -v
 goblinctl db connect wsl --local --forward-port 55432
 ```
 
+To use a database client on your Windows host machine, continue with
+[Windows database clients](#windows-database-clients) below.
+
 The installer creates host access automatically. To repair it, run this on the
 **WSL instance or Azure VM containing the database**:
 
@@ -83,18 +86,55 @@ their opt-in behavior. `db run` also wraps other developer commands; add
 
 ## Windows database clients
 
-Export only the role your Windows client needs:
+After [first use](#first-use), run these commands **inside WSL** to prepare access
+and export certificates for your Windows host machine:
 
 ```bash
+sudo -v
+goblinctl db connect wsl --local --forward-port 55432
 goblinctl db export wsl --client windows --role app
+```
+
+PostgreSQL and its WSL host endpoint stay on **5432**. The additional **55432**
+listener runs inside WSL; your Windows host machine accesses it through WSL's
+localhost forwarding. `wsl` is the saved database profile name. For later
+connections, `goblinctl db connect wsl` reuses its source and forwarding port.
+
+On your **Windows host machine**, open PowerShell and read the exported settings:
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl\app\connection.json"
+```
+
+Create a PostgreSQL connection in your Windows client, such as pgAdmin or DBeaver.
+Enter these connection and SSL settings, then save and connect:
+
+| Client field | Value |
+| --- | --- |
+| Host | `localhost` |
+| Port | `55432` (or the port in `connection.json`) |
+| Database / maintenance database | `goblin` |
+| Username | `goblin_app` |
+| Password | Leave blank; authentication uses the client certificate |
+| SSL mode | `verify-full` |
+| CA / root certificate | Absolute Windows path from `sslrootcert` in `connection.json` |
+| Client certificate | Absolute Windows path from `sslcert` in `connection.json` |
+| Client private key | Absolute Windows path from `sslkey` in `connection.json` |
+
+Exports live outside the checkout at
+`%LOCALAPPDATA%\Goblin\postgres\<profile>\`. The export resolves the current
+Windows account and sets private ACLs. Export only the role your client needs;
+another database's exported identity cannot be overwritten.
+
+For an existing Azure profile, run **inside WSL**:
+
+```bash
+goblinctl db connect azure-dev
 goblinctl db export azure-dev --client windows --role app
 ```
 
-Exports go to `%LOCALAPPDATA%\Goblin\postgres\<profile>\`. Each role's
-`connection.json` supplies Windows paths, database `goblin`, user, forwarding
-port, and TLS settings. Configure the client with **verify-full**, the CA, client
-certificate and private key. The export resolves the current Windows account and
-sets private ACLs. It refuses to overwrite another database's exported identity.
+On Windows, use `azure-dev\app\connection.json` under the same export directory
+and its saved port (for example **55433**). The SSH tunnel runs inside WSL.
 
 Export again after certificate renewal or changing a forwarding port. Windows
 exports are explicit snapshots; unavailable Windows interop does not block WSL
