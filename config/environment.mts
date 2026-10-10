@@ -87,6 +87,47 @@ export const environmentVariables = {
         required: "Required for durable Work",
         sensitive: true,
     },
+    ConnectionStrings__GoblinAdmin: {
+        name: "ConnectionStrings__GoblinAdmin",
+        purpose:
+            "Schema administrator connection supplied by PostgreSQL profiles.",
+        format: "Npgsql connection string",
+        fallback: "Environment overrides standard .NET configuration",
+        required: "Schema migrations and explicit administrator commands",
+        sensitive: true,
+    },
+    HOME: {
+        name: "HOME",
+        purpose: "User home directory for the PostgreSQL profile store.",
+        format: "Absolute path",
+        fallback: "Required when XDG_CONFIG_HOME is unset",
+        required: "Developer profile commands",
+        sensitive: false,
+    },
+    XDG_CONFIG_HOME: {
+        name: "XDG_CONFIG_HOME",
+        purpose: "User configuration base for PostgreSQL profiles.",
+        format: "Absolute path",
+        fallback: "HOME/.config",
+        required: "Optional",
+        sensitive: false,
+    },
+    SUDO_UID: {
+        name: "SUDO_UID",
+        purpose: "Original sudo caller user ID.",
+        format: "Unsigned integer",
+        fallback: "No caller ownership override",
+        required: "Provided by sudo; cleared in isolated profile tests",
+        sensitive: false,
+    },
+    SUDO_GID: {
+        name: "SUDO_GID",
+        purpose: "Original sudo caller group ID.",
+        format: "Unsigned integer",
+        fallback: "No caller ownership override",
+        required: "Provided by sudo; cleared in isolated profile tests",
+        sensitive: false,
+    },
     DOCKER_CERT_PATH: {
         name: "DOCKER_CERT_PATH",
         purpose:
@@ -283,6 +324,15 @@ export const environmentVariables = {
             "Web requires an explicit file; dev/install tooling uses .goblin-secrets/owner-password and validates explicit overrides without fallback",
         required: "Required by the web host; optional override for tooling",
         sensitive: true,
+    },
+    GOBLIN_TEST_WINDOWS_EXPORT: {
+        name: "GOBLIN_TEST_WINDOWS_EXPORT",
+        purpose:
+            "Run isolated Windows filesystem and ACL checks through WSL interop.",
+        format: "true enables",
+        fallback: "Windows export test skips",
+        required: "Explicit local verification only",
+        sensitive: false,
     },
     GOBLIN_POSTGRES_CERT_FAILED: {
         name: "GOBLIN_POSTGRES_CERT_FAILED",

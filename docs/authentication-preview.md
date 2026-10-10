@@ -16,21 +16,21 @@ configures the Codex connection.
 
 ## Run locally
 
-Durable Work is enabled by default and requires the migrated PostgreSQL connection
-in the [database guide](database.md). For an authentication-only development check,
-set `GOBLIN_WORK_ENABLED=false` before starting Goblin.
+Durable Work is enabled by default and requires a migrated profile from the
+[PostgreSQL workflow](postgres-workflow.md). The authentication preview below
+starts with database access disabled.
 
 Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run from this checkout:
 
 ```bash
 make install
-make dev
+make dev ARGS=--without-database
 ```
 
 `make dev` builds the C# backend and TypeScript browser assets, provisions the
 local password if needed, then starts the ASP.NET Core Minimal API host. After
 editing sources, restart it to rebuild. To build separately, run `make build`,
-then launch with `cargo xtask dev`.
+then launch with `cargo xtask dev --without-database`.
 Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
 `obj/` output are ignored by Git.
 
@@ -65,7 +65,7 @@ To prepare the password before starting the application:
 
 ```bash
 make setup-password
-make dev
+make dev ARGS=--without-database
 ```
 
 Use `make setup-password ARGS=--replace` to choose a new password, then restart

@@ -6,6 +6,7 @@ SHELL := /bin/bash
 .NOTPARALLEL:
 export PATH := $(CURDIR)/node_modules/.bin:$(PATH)
 CARGO_ARGS ?= --workspace
+DB_PROFILE ?= wsl
 ARGS ?=
 RUST_MIN_STACK ?= 8388608
 
@@ -19,7 +20,7 @@ RUST_MIN_STACK ?= 8388608
 	deploy-generate dependencies-check dependencies-resolve secrets-setup secrets-scan \
 	secrets-staged secrets-history goblinctl local local-start local-status local-stop \
 	local-reset local-logs local-retry local-database local-password setup-password \
-	release-build release-check-installer release-local codex
+	release-build release-check-installer release-local codex db-migrate db-scaffold test-postgres
 
 # List targets and their purpose; pass tool flags with ARGS or CARGO_ARGS.
 help:
@@ -78,7 +79,7 @@ check: format-rust-check lint-rust test typecheck
 
 # Build the application, provision local credentials, and launch the .NET host.
 dev: build
-	cargo xtask dev $(ARGS)
+	cargo xtask dev --profile "$(DB_PROFILE)" $(ARGS)
 
 # Start the development host with the same build and credential setup as dev.
 start: dev
@@ -259,7 +260,7 @@ local-logs:
 local-retry:
 	cargo run --locked -q -p goblinctl -- local retry $(ARGS)
 
-# Provision the local PostgreSQL development database.
+# Configure the local installation’s PostgreSQL host endpoint on port 5432.
 local-database:
 	cargo run --locked -q -p goblinctl -- local database $(ARGS)
 
@@ -286,3 +287,15 @@ release-local: release-build
 # Invoke the locked Codex npm runtime directly without downloading another version.
 codex:
 	node node_modules/@openai/codex/bin/codex.js $(ARGS)
+
+# Apply SQL migrations using the selected PostgreSQL profile.
+db-migrate:
+	cargo xtask database-migrate --profile "$(DB_PROFILE)"
+
+# Regenerate EF mappings using the selected PostgreSQL profile.
+db-scaffold:
+	cargo xtask database-scaffold --profile "$(DB_PROFILE)"
+
+# Run opt-in database integration tests on a development installation.
+test-postgres:
+	cargo xtask test-postgres --profile "$(DB_PROFILE)"

@@ -125,7 +125,10 @@ npm run typecheck
 | `make local-status` | Report installation status without changing it |
 | `make local-reset ARGS=--yes` | Explicitly reset only the owned local installation |
 | `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
-| `make dev` | Build, provision the local password on first run, and start the application |
+| `make dev DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
+| `make db-migrate DB_PROFILE=wsl` | Apply SQL migrations with the profile’s admin role |
+| `make db-scaffold DB_PROFILE=wsl` | Regenerate EF mappings with the profile’s app role |
+| `make test-postgres DB_PROFILE=wsl` | Explicitly run the .NET database integration tests |
 | `make setup-password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
 | `make build-assets` | Build only the frontend |
 | `npm --prefix frontend run build` | Run the frontend package build directly |
@@ -203,8 +206,9 @@ browser into `frontend/public/assets/`. Codex schemas belong under
 contracts belong to `Goblin.Application/Work`. Browser types describe these public
 Goblin APIs, including `frontend/src/api/contracts.ts` for connection setup. They describe different APIs.
 
-For PostgreSQL setup, SQL changes, and regenerating the EF Core classes after
-adding tables, see the [database guide](database.md).
+For daily PostgreSQL connections and Windows exports, use the
+[PostgreSQL workflow](postgres-workflow.md). Schema rules and EF mapping conventions
+remain in the [database guide](database.md).
 
 The [Work lifecycle](work-lifecycle.md) is used by the live application. Core and
 public contracts are independent of runtime protocols and HTTP. Orchestration

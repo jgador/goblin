@@ -372,7 +372,7 @@ fn authenticate(github_repository: &str, artifact: &Path) -> Result<()> {
                 "--repo",
                 github_repository,
                 "--cert-identity-regex",
-                &format!("^https://github\\.com/{}/\\.github/workflows/(goblinctl-release|goblin-release)\\.yml@refs/heads/master$", regex::escape(github_repository)),
+                &format!("^https://github\\.com/{}/\\.github/workflows/goblin-release\\.yml@refs/heads/master$", regex::escape(github_repository)),
                 "--deny-self-hosted-runners",
             ]),
     )
@@ -430,12 +430,6 @@ fn check_inner(
     let pin = crate::dependencies::installer(root)?;
     let version = pin.version.as_str();
     download(github_repository, version, directory)?;
-    let raw = files::json(&directory.join("release.json"))?;
-    if raw.get("schemaVersion").is_none() {
-        return Ok(Report { schema_version: 1, outcome: Outcome::ReleaseRequired,
-            message: "The pinned legacy release has no authenticated installer fingerprint. Publish a release with dependency metadata.".into(),
-            changed_inputs: snapshot.files.keys().cloned().collect() });
-    }
     let published = verify_artifacts(github_repository, directory)?;
     ensure!(published.version == version, "Release tag/version mismatch");
     let mut report = compare(&snapshot, &published.installer, &required);

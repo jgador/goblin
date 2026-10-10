@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using Goblin.Core.Work;
 using Xunit;
 
@@ -45,6 +46,21 @@ public sealed class GitRepositoryAuthorizationTests
         Assert.True(work.TryClaimExecution(10, 100, "sandbox", Now));
         Assert.False(work.TryClaimExecution(10, 101, "sandbox", Now));
         Assert.Equal(GitRepositoryAuthorizationStatus.Authorized, work.GitRepositoryAuthorization.Status);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void RestoredUnsupportedPolicyCannotClaimEvenWithMatchingApproval(int policyVersion)
+    {
+        WorkItem work = Ready();
+        work.QueueExecution(10, Target(10), Now);
+        work.AuthorizeGitRepository(10, Target(10), Now);
+        string state = JsonSerializer.Serialize(work.Snapshot())
+            .Replace("\"PolicyVersion\":2", $"\"PolicyVersion\":{policyVersion}", StringComparison.Ordinal);
+        work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(state)!);
+        Assert.False(work.TryClaimExecution(10, 100, "sandbox", Now));
+        Assert.Equal(AttemptStatus.Queued, work.CurrentAttempt!.Status);
     }
 
     [Theory]

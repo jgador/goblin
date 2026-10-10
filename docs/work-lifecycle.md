@@ -31,8 +31,8 @@ Attempts reserve their ID before state and dispatch intent commit. Claim owners,
 decisions, and core context messages use `work_event_ids`, independent of table
 identities. A context entry is not identified by its source command/message ID:
 those IDs come from separate sequences and may coincide. Core snapshots use
-schema version 2 for the bigint model. Earlier GUID snapshots and host journals
-are incompatible with this unreleased schema change.
+schema version 2 for the bigint model. Every persisted Work item requires its
+aggregate snapshot; summary columns cannot substitute for durable state.
 
 ## Attention belongs to Work
 

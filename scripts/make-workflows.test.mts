@@ -157,3 +157,24 @@ test("install keeps packages separate and local reset requires explicit consent 
         "cargo test --locked --doc -p goblinctl",
     );
 });
+
+test("database workflows forward the chosen profile without changing Cargo selectors", async () => {
+    for (const [target, task] of [
+        ["dev", "dev"],
+        ["db-migrate", "database-migrate"],
+        ["db-scaffold", "database-scaffold"],
+        ["test-postgres", "test-postgres"],
+    ]) {
+        const { result, commands } = await workflow([
+            target!,
+            "DB_PROFILE=azure-dev",
+        ]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(
+            commands.at(-1),
+            `cargo xtask ${task} --profile azure-dev`,
+        );
+        if (target === "dev")
+            assert.ok(commands.includes("cargo build --locked --workspace"));
+    }
+});

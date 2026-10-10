@@ -25,8 +25,7 @@ public sealed record ProcessIdentity(int Pid, long StartedAt, string Machine)
     public bool CanObserve()
     {
         if (Machine != Environment.MachineName) return false;
-        // Old Linux journals contain only a wall-clock conversion. It cannot
-        // prove identity, including after a controller restart or PID reuse.
+        // Linux identity needs kernel evidence across controller restarts and PID reuse.
         if (OperatingSystem.IsLinux())
             return StartTicks is not null && BootId == ReadBootId() && PidNamespace == ReadPidNamespace();
         return BootId is null && PidNamespace is null && StartTicks is null;

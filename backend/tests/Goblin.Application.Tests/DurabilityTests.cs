@@ -1036,17 +1036,24 @@ public sealed partial class DurabilityTests
         await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, unapproved, attempt.Id, default));
         await GitRepositoryAccess.RequireSetupAsync(db, unapproved, attempt.Id, attempt.TurnNumber, default);
         GitRepositoryChange repository = attempt.Target.GitRepository!;
-        var legacy = new WorkSnapshot
+        var unsupportedTarget = new ExecutionTarget(attempt.Target.Runtime, attempt.Target.ConnectionId, attempt.Target.RequestedModel,
+            new(repository.GitRepository, repository.GitAuthorName, repository.GitAuthorEmail,
+                repository.Grant! with { PolicyVersion = 1 }), attempt.Target.RequestedEffort);
+        var unsupportedPolicy = new WorkSnapshot
         {
+            GitRepositoryAuthorization = new(attempt.Id, unsupportedTarget, DateTimeOffset.UtcNow)
+            {
+                Status = GitRepositoryAuthorizationStatus.Authorized
+            },
             Attempts = [new AttemptSnapshot
             {
                 Id = attempt.Id,
-                Target = new(attempt.Target.Runtime, attempt.Target.ConnectionId, attempt.Target.RequestedModel,
-                    new(repository.GitRepository, repository.GitAuthorName, repository.GitAuthorEmail,
-                        repository.Grant! with { PolicyVersion = 1 }), attempt.Target.RequestedEffort)
+                TurnNumber = attempt.TurnNumber,
+                Target = unsupportedTarget
             }]
         };
-        await GitRepositoryAccess.RequireOperationAsync(db, legacy, attempt.Id, default);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, unsupportedPolicy, attempt.Id, default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireSetupAsync(db, unsupportedPolicy, attempt.Id, attempt.TurnNumber, default));
     }
 
     [DatabaseFact]

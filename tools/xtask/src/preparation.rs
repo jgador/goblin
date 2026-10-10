@@ -149,7 +149,7 @@ fn select_installer(
     workspace: &str,
     inventory: &Inventory,
     requested: Option<&str>,
-    mut inspect: impl FnMut(&str) -> Result<Option<release::Release>>,
+    mut inspect: impl FnMut(&str) -> Result<release::Release>,
 ) -> Result<Selection> {
     ensure!(
         required.is_subset(&snapshot.capabilities),
@@ -161,7 +161,7 @@ fn select_installer(
     if let Some(version) = requested {
         release::validate_version(version)?;
         if inventory.published_installers.contains(version) {
-            let published = inspect(version)?.context("Requested installer has no supported dependency manifest; choose an unused version")?;
+            let published = inspect(version)?;
             ensure!(
                 release::compare(snapshot, &published.installer, required).outcome
                     == release::Outcome::Ready,
@@ -193,13 +193,13 @@ fn select_installer(
         .chain(std::iter::once(workspace))
         .chain(candidates.iter().map(|(_, v)| v.as_str()))
     {
-        if inventory.published_installers.contains(version)
-            && seen.insert(version)
-            && let Some(published) = inspect(version)?
-            && release::compare(snapshot, &published.installer, required).outcome
+        if inventory.published_installers.contains(version) && seen.insert(version) {
+            let published = inspect(version)?;
+            if release::compare(snapshot, &published.installer, required).outcome
                 == release::Outcome::Ready
-        {
-            return Ok(Selection::Reuse(published));
+            {
+                return Ok(Selection::Reuse(published));
+            }
         }
     }
     Ok(Selection::Build(installer_version(inventory, workspace)?))
@@ -317,7 +317,7 @@ fn export_source(root: &Path, revision: &str, destination: &Path) -> Result<()> 
     Ok(())
 }
 
-fn published_manifest(version: &str, directory: &Path) -> Result<Option<release::Release>> {
+fn published_manifest(version: &str, directory: &Path) -> Result<release::Release> {
     fs::create_dir_all(directory)?;
     release::download_files(
         release::GITHUB_REPOSITORY,
@@ -328,14 +328,11 @@ fn published_manifest(version: &str, directory: &Path) -> Result<Option<release:
     // Metadata can rule out incompatible releases without trusting their claims.
     // Only the selected installer is authenticated, before any executable is used.
     let metadata = files::json(&directory.join("release.json"))?;
-    if metadata.get("schemaVersion").is_none() {
-        return Ok(None);
-    }
     let record: release::Release = serde_json::from_value(metadata)
         .with_context(|| format!("Invalid goblinctl {version} dependency manifest"))?;
     release::validate(&record)?;
     ensure!(record.version == version, "Installer tag/version mismatch");
-    Ok(Some(record))
+    Ok(record)
 }
 
 fn validate_installer_tag(record: &release::Release, tag: &Value) -> Result<()> {

@@ -76,8 +76,8 @@ dotslash --version
 | `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
 | `cargo xtask release prepare --source-branch release/0.1` | In Actions, prepare an unpublished Goblin/goblinctl candidate from checked release-branch source |
 | `cargo xtask release check-candidate --directory PATH --source-root SOURCE` | Check the candidate executable, source inputs and reproduced Azure assets |
-| `cargo xtask release verify --directory PATH` | Verify a sealed coordinated candidate or historical published Goblin record |
-| `cargo xtask release authenticate-installer --directory PATH` | Verify installer bytes and historical/coordinated provenance |
+| `cargo xtask release verify --directory PATH` | Verify a sealed coordinated release candidate |
+| `cargo xtask release authenticate-installer --directory PATH` | Verify installer bytes and coordinated release provenance |
 
 Coordinated preparation supplies `GOBLINCTL_BUILD_VERSION` only to the isolated
 native build. All installer version reporting uses that compiled value, defaulting
@@ -103,7 +103,7 @@ references when clear, and prefer exhaustive matches. Avoid opaque boolean and
 
 The nextest configuration matches Codex's default/local profile: an 8 MiB Rust
 thread stack, a 30-second slow-test period with termination after two periods,
-one retry, and JUnit output under `target/nextest/`. These retries apply only to
+one retry, and JUnit output under `.artifacts/nextest/`. These retries apply only to
 tests. Failed Goblin Work still requires an explicit retry through its core rules.
 The pinned nextest version inherits custom profiles from `default` automatically;
 Goblin omits Codex's explicit `inherits` key because 0.9.103 warns that it is unknown.

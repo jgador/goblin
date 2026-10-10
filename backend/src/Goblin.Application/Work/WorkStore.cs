@@ -38,9 +38,6 @@ public sealed partial class WorkStore
     }
 
     public static readonly long DefaultAgentId = 1;
-    // Retained for source compatibility. New consumers should take serialization
-    // policy from the contracts boundary rather than from this persistence service.
-    public static readonly JsonSerializerOptions Json = ContractJson.Options;
 
     public async Task<WorkView[]> ListAsync(CancellationToken token = default)
     {

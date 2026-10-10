@@ -7,12 +7,18 @@ use clap::Subcommand;
 use goblinctl::assets;
 use goblinctl::credentials;
 use goblinctl::database;
+use goblinctl::database_host;
 use goblinctl::deployment;
 use goblinctl::files;
 use goblinctl::install;
 use goblinctl::local::Local;
 use goblinctl::local::{self};
 use goblinctl::operations;
+use goblinctl::postgres::Access;
+use goblinctl::postgres::Role;
+use goblinctl::postgres::Source;
+use goblinctl::postgres::Store;
+use goblinctl::postgres::Usage;
 use goblinctl::progress;
 use goblinctl::setup;
 use serde_json::Value;
@@ -27,7 +33,7 @@ use std::process::Command;
     long_about = "Install and administer Goblin. The web UI controls Work; this CLI manages the installation and its infrastructure."
 )]
 struct Cli {
-    /// Source checkout or destination for local credentials and database settings.
+    /// Source checkout for local installation and owner credentials.
     #[arg(long = "repo", global = true)]
     config_root: Option<PathBuf>,
     #[command(subcommand)]
@@ -112,7 +118,6 @@ enum LocalCommand {
         http_port: Option<u16>,
     },
     Stop,
-    #[command(alias = "destroy")]
     Reset {
         #[arg(long, required = true)]
         yes: bool,
@@ -127,10 +132,7 @@ enum LocalCommand {
         follow: bool,
     },
     Password,
-    Database {
-        #[arg(long, value_parser = clap::value_parser!(u16).range(1024..))]
-        port: Option<u16>,
-    },
+    Database,
 }
 #[derive(Subcommand)]
 enum PasswordCommand {
@@ -143,20 +145,53 @@ enum PasswordCommand {
 }
 #[derive(Subcommand)]
 enum DbCommand {
-    Setup {
-        #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
-        port: Option<u16>,
+    /// Provision PostgreSQL in the selected Kubernetes cluster (no client exports).
+    Setup,
+    /// Configure this installation's loopback endpoint on port 5432 (requires root).
+    Host {
+        #[arg(long, hide = true, default_value = "/")]
+        system_root: PathBuf,
     },
-    Migrate {
-        image: String,
-    },
-    Credentials {
-        #[arg(long, default_value_t = 5432, value_parser = clap::value_parser!(u16).range(1..))]
-        port: u16,
-    },
-    Forward {
+    /// Run the deployment migration Job in the selected cluster.
+    Migrate { image: String },
+    /// Refresh certificates, establish access and verify a profile's TLS login.
+    Connect {
+        profile: String,
+        #[arg(long, conflicts_with = "ssh")]
+        local: bool,
+        #[arg(long)]
+        ssh: Option<String>,
         #[arg(long, value_parser = clap::value_parser!(u16).range(1024..))]
-        port: Option<u16>,
+        forward_port: Option<u16>,
+        #[arg(long, value_enum, default_value = "app")]
+        role: Access,
+    },
+    /// Refresh an existing profile without changing its identity or forwarding port.
+    Refresh {
+        profile: String,
+        #[arg(long, value_enum, default_value = "app")]
+        role: Access,
+    },
+    /// Export certificates and Windows connection settings through WSL interop.
+    Export {
+        profile: String,
+        #[arg(long, value_parser = ["windows"], required = true)]
+        client: String,
+        #[arg(long, value_enum, default_value = "app")]
+        role: Role,
+    },
+    /// Stop this profile's WSL listener or SSH tunnel; retain its settings.
+    Disconnect { profile: String },
+    /// Run a development command with the selected profile's connections.
+    Run {
+        profile: String,
+        #[arg(long, value_enum, default_value = "app")]
+        role: Access,
+        /// Explicitly expose opt-in PostgreSQL test connections to the child.
+        #[arg(long, value_enum, default_value = "development")]
+        usage: Usage,
+        #[arg(last = true, required = true)]
+        command: Vec<std::ffi::OsString>,
     },
 }
 #[derive(Subcommand)]
@@ -230,20 +265,11 @@ enum InternalCommand {
         origin: String,
     },
     AdminSecret,
-    DbExport {
-        #[arg(long, default_value_t = 5432, value_parser = clap::value_parser!(u16).range(1..))]
-        port: u16,
-    },
-    DbPatch,
     MigrationJob {
         image: String,
     },
     MigrationState {
         image: String,
-    },
-    LocalPort {
-        #[arg(long, default_value = "/var/lib/goblin/local-test/config.json")]
-        owner: PathBuf,
     },
     Forward,
     Snapshot {
@@ -269,6 +295,10 @@ fn main() {
     }
 }
 fn execute(cli: Cli) -> Result<()> {
+    // Client access must work outside a checkout and without reading root-owned installer state.
+    if let Commands::Db { command } = cli.command {
+        return database_action(command);
+    }
     let config_root = match cli.config_root {
         Some(path) => {
             if path.exists() {
@@ -339,33 +369,7 @@ fn execute(cli: Cli) -> Result<()> {
             );
             Ok(())
         }
-        Commands::Db { command } => match command {
-            DbCommand::Setup { port } => database::setup(&config_root, port),
-            DbCommand::Migrate { image } => database::migrate(&image),
-            DbCommand::Credentials { port } => {
-                let mut cmd = if files::executable("kubectl") {
-                    Command::new("kubectl")
-                } else {
-                    let mut c = Command::new("k3s");
-                    c.arg("kubectl");
-                    c
-                };
-                let text = files::output(cmd.args([
-                    "get",
-                    "secret",
-                    "goblin-postgres-app-tls",
-                    "goblin-postgres-admin-tls",
-                    "-n",
-                    "goblin",
-                    "-o",
-                    "json",
-                ]))?;
-                database::export(&config_root, &serde_json::from_str(&text)?, port)
-            }
-            DbCommand::Forward { port } => {
-                local_action(&config_root, LocalCommand::Database { port })
-            }
-        },
+        Commands::Db { .. } => unreachable!(),
         Commands::Internal { command } => match command {
             InternalCommand::PrepareInstall {
                 request,
@@ -425,32 +429,9 @@ fn execute(cli: Cli) -> Result<()> {
                 origin,
             } => install::render_overlay(&path, &hostname, &image, &origin),
             InternalCommand::AdminSecret => print_json(&database::admin_secret()?),
-            InternalCommand::DbExport { port } => {
-                database::export(&config_root, &stdin_json()?, port)
-            }
-            InternalCommand::DbPatch => {
-                let settings =
-                    files::json(&config_root.join("backend/src/Goblin.Web/appsettings.json"))?;
-                if let Some(patch) = database::patch(
-                    &stdin_json()?,
-                    settings["ConnectionStrings"]["Goblin"]
-                        .as_str()
-                        .context("Missing database connection")?,
-                )? {
-                    print_json(&patch)?;
-                }
-                Ok(())
-            }
             InternalCommand::MigrationJob { image } => print_json(&database::migration_job(&image)),
             InternalCommand::MigrationState { image } => {
                 println!("{}", database::migration_state(&stdin_json()?, &image)?);
-                Ok(())
-            }
-            InternalCommand::LocalPort { owner } => {
-                let config = files::json(&owner)?;
-                if config["mode"] == "direct" && config["repo"].as_str() == config_root.to_str() {
-                    println!("{}", config["postgres_port"].as_u64().unwrap_or(55432));
-                }
                 Ok(())
             }
             InternalCommand::Forward => local::forward(),
@@ -513,10 +494,63 @@ fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
                 local.reset()
             }
             LocalCommand::Retry => local.retry(),
-            LocalCommand::Database { port } => {
-                local.configure_database(&mut local.owned_config()?, port)
-            }
+            LocalCommand::Database => local.configure_database(&local.owned_config()?),
             _ => unreachable!(),
         }),
+    }
+}
+
+fn database_action(command: DbCommand) -> Result<()> {
+    match command {
+        DbCommand::Setup => database::setup(),
+        DbCommand::Host { system_root } => {
+            files::require_root()?;
+            if system_root == Path::new("/") {
+                database_host::configure(&system_root)
+            } else {
+                database_host::configure_with_probe(&system_root, || Ok(()))
+            }
+        }
+        DbCommand::Migrate { image } => database::migrate(&image),
+        DbCommand::Connect {
+            profile,
+            local,
+            ssh,
+            forward_port,
+            role,
+        } => {
+            let source = if local {
+                Some(Source::Local)
+            } else {
+                ssh.map(|destination| Source::Ssh { destination })
+            };
+            Store::user()?.connect(&profile, source, forward_port, role)?;
+            Ok(())
+        }
+        DbCommand::Refresh { profile, role } => {
+            Store::user()?.connect(&profile, None, None, role)?;
+            Ok(())
+        }
+        DbCommand::Export {
+            profile,
+            client: _,
+            role,
+        } => Store::user()?.export_windows(&profile, role),
+        DbCommand::Disconnect { profile } => Store::user()?.disconnect(&profile),
+        DbCommand::Run {
+            profile,
+            role,
+            usage,
+            command,
+        } => {
+            let client = Store::user()?.connect(&profile, None, None, role)?;
+            let mut child = Command::new(&command[0]);
+            child.args(&command[1..]);
+            match usage {
+                Usage::Development => client.configure(&mut child, role),
+                Usage::Tests => client.configure_tests(&mut child, role),
+            }
+            files::run(&mut child)
+        }
     }
 }

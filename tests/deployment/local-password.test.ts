@@ -142,16 +142,20 @@ test("development startup validates the configured verifier and removes plaintex
     );
     const { resolve } = await import("node:path");
     const run = () =>
-        execFileSync(resolve("target/debug/xtask"), ["dev"], {
-            encoding: "utf8",
-            stdio: "pipe",
-            env: {
-                ...process.env,
-                [Env.PATH.name]: bin,
-                [Env.GOBLIN_PASSWORD_HASH_FILE.name]: path,
-                [Env.GOBLIN_LOCAL_PASSWORD.name]: "never-forward-test",
+        execFileSync(
+            resolve("target/debug/xtask"),
+            ["dev", "--without-database"],
+            {
+                encoding: "utf8",
+                stdio: "pipe",
+                env: {
+                    ...process.env,
+                    [Env.PATH.name]: bin,
+                    [Env.GOBLIN_PASSWORD_HASH_FILE.name]: path,
+                    [Env.GOBLIN_LOCAL_PASSWORD.name]: "never-forward-test",
+                },
             },
-        });
+        );
     const output = JSON.parse(run());
     assert.equal(output.verifier, path);
     assert.equal(output.plaintext, undefined);

@@ -443,50 +443,38 @@ function publishedRelease(version: string, directory: string) {
     assert.ok(released && !released.draft, "Choose a published Goblin release");
     download(tag, directory, releaseFiles);
     const record = json(join(directory, "release.json"));
-    if (record.schemaVersion === 2) {
-        authenticateCandidate(directory, record);
-        const installerDirectory = join(directory, "installer");
-        const installerTag = "goblinctl-v" + record.installer.version;
-        assert.match(
-            record.installer.version,
-            /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/,
-        );
-        const installerRelease = api("releases/tags/" + installerTag);
-        assert.ok(
-            installerRelease &&
-                !installerRelease.draft &&
-                !installerRelease.prerelease,
-            "Installer publication is incomplete",
-        );
-        assertTag(installerTag, record.installer.sourceRevision);
-        download(installerTag, installerDirectory, [
-            "goblinctl-x86_64-unknown-linux-musl.tar.gz",
-            "release.json",
-            "SHA256SUMS",
-        ]);
-        run("cargo", [
-            "xtask",
-            "release",
-            "authenticate-installer",
-            "--directory",
-            installerDirectory,
-        ]);
-    } else {
-        run("gh", [
-            "attestation",
-            "verify",
-            join(directory, "release.json"),
-            "--repo",
-            githubRepository,
-            "--signer-workflow",
-            `${githubRepository}/.github/workflows/goblin-release.yml`,
-            "--deny-self-hosted-runners",
-        ]);
-    }
+    assert.equal(record.schemaVersion, 2, "Unsupported Goblin release schema");
+    authenticateCandidate(directory, record);
+    const installerDirectory = join(directory, "installer");
+    const installerTag = "goblinctl-v" + record.installer.version;
+    assert.match(
+        record.installer.version,
+        /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/,
+    );
+    const installerRelease = api("releases/tags/" + installerTag);
+    assert.ok(
+        installerRelease &&
+            !installerRelease.draft &&
+            !installerRelease.prerelease,
+        "Installer publication is incomplete",
+    );
+    assertTag(installerTag, record.installer.sourceRevision);
+    download(installerTag, installerDirectory, [
+        "goblinctl-x86_64-unknown-linux-musl.tar.gz",
+        "release.json",
+        "SHA256SUMS",
+    ]);
+    run("cargo", [
+        "xtask",
+        "release",
+        "authenticate-installer",
+        "--directory",
+        installerDirectory,
+    ]);
     verify(directory);
     assert.equal(record.version, version);
     assert.equal(released.prerelease, record.channel === "preview");
-    assertTag(tag, record.source?.revision ?? record.sourceRevision);
+    assertTag(tag, record.source.revision);
     return record;
 }
 export function updateCatalog(catalog: any, entry: any, recommend: boolean) {
@@ -563,7 +551,7 @@ function site(version: string, recommendation: string) {
         const entry = {
             version,
             channel: record.channel,
-            sourceRevision: record.source?.revision ?? record.sourceRevision,
+            sourceRevision: record.source.revision,
             manifestSha256: sha(join(downloadDir, "release.json")),
         };
         writeFileSync(

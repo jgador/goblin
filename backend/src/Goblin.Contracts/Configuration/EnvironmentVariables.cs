@@ -32,7 +32,7 @@ public static class EnvironmentVariables
     public const string ConnectionStringsGoblin = "ConnectionStrings__Goblin";
 
     /// <summary>Schema administrator PostgreSQL connection; .NET maps __ to ConnectionStrings:GoblinAdmin.</summary>
-    /// <remarks>Format: Npgsql connection string. Default/fallback: Existing database tooling appsettings/configuration providers; environment overrides JSON.
+    /// <remarks>Format: Npgsql connection string. Default/fallback: Standard runtime configuration; developer profiles supply the environment directly.
     /// Required: Required for schema migration. Sensitive: yes.</remarks>
     public const string ConnectionStringsGoblinAdmin = "ConnectionStrings__GoblinAdmin";
 

@@ -2,6 +2,7 @@ use goblinctl::contract_values::SetupAction;
 use goblinctl::contract_values::SetupStep;
 use goblinctl::credentials;
 use goblinctl::database;
+use goblinctl::database_host;
 use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
@@ -200,6 +201,22 @@ fn failed_setup_and_restarts_keep_attempt_history_without_claiming_readiness() {
 }
 
 #[test]
+fn unsupported_setup_shapes_are_rejected_without_conversion() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("status.json");
+    setup::update(&path, SetupAction::Init, "").unwrap();
+    let current = files::json(&path).unwrap();
+    for field in ["steps", "logGeneration", "revision", "logs"] {
+        let mut invalid = current.clone();
+        invalid.as_object_mut().unwrap().remove(field);
+        files::write_json(&path, &invalid, 0o644).unwrap();
+        let before = fs::read(&path).unwrap();
+        assert!(setup::update(&path, SetupAction::Begin, "").is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
+}
+
+#[test]
 fn local_ownership_is_required_before_reset() {
     let dir = tempfile::tempdir().unwrap();
     let git_repository = dir.path().join("git-repository");
@@ -235,7 +252,7 @@ fn local_ownership_is_required_before_reset() {
 }
 
 #[test]
-fn retained_and_legacy_credentials_migrate_without_new_passwords() {
+fn retained_password_verifier_is_reused() {
     let dir = tempfile::tempdir().unwrap();
     let git_repository = dir.path().join("git-repository");
     fs::create_dir(&git_repository).unwrap();
@@ -244,22 +261,10 @@ fn retained_and_legacy_credentials_migrate_without_new_passwords() {
         system: dir.path().join("system"),
     };
     let retained = local.path("var/lib/goblin/install/private/owner-password");
-    let legacy = local.git_repository.join(".goblin-local/login-password");
     let verifier = credentials::hash("retained-test").unwrap();
     credentials::save(&retained, &verifier).unwrap();
-    files::atomic_write(&legacy, b"retained-test\n", 0o600, false).unwrap();
     let path = local.prepare_password().unwrap();
     assert_eq!(credentials::read(&path).unwrap().trim(), verifier);
-    assert!(!legacy.exists());
-    fs::remove_file(path).unwrap();
-    fs::remove_file(retained).unwrap();
-    files::atomic_write(&legacy, b"legacy-test\n", 0o600, false).unwrap();
-    assert!(
-        credentials::read(&local.prepare_password().unwrap())
-            .unwrap()
-            .starts_with("pbkdf2-sha256$600000$")
-    );
-    assert!(!legacy.exists());
 }
 
 #[test]
@@ -301,6 +306,10 @@ name=${0##*/}
 printf '%s %s\n' "$name" "$*" >> "$GOBLIN_NATIVE_TEST_ROOT/calls"
 case "$name" in
 systemctl)
+  if [[ "$1" == enable && -f "$GOBLIN_NATIVE_TEST_ROOT/fail-enable-once" ]]; then
+    rm "$GOBLIN_NATIVE_TEST_ROOT/fail-enable-once"
+    exit 1
+  fi
   if [[ "$1" == is-active ]]; then
     [[ "$3" == k3s.service || -f "$GOBLIN_NATIVE_TEST_ROOT/database-active" ]]
   fi
@@ -348,16 +357,19 @@ esac
         system: root.join("system"),
     };
     let owner = local.path("var/lib/goblin/local-test/config.json");
-    let mut config = json!({"mode":"direct","repo":git_repository,"http_port":8788});
+    let config = json!({"mode":"direct","repo":git_repository,"http_port":8788});
     files::write_json(&owner, &config, 0o600).unwrap();
+    let port = 5432;
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
+    let occupied = listener.local_addr().unwrap();
     assert!(
-        local
-            .configure_database(&mut config, Some(port))
-            .unwrap_err()
-            .to_string()
-            .contains("occupied")
+        database_host::configure_with_probe(&local.system, || {
+            TcpListener::bind(occupied).map_err(|_| anyhow::anyhow!("occupied"))?;
+            Ok(())
+        })
+        .unwrap_err()
+        .to_string()
+        .contains("occupied")
     );
     assert_eq!(files::json(&owner).unwrap(), config);
     assert!(
@@ -366,7 +378,7 @@ esac
             .contains("k3s kubectl")
     );
     drop(listener);
-    local.configure_database(&mut config, Some(port)).unwrap();
+    database_host::configure_with_probe(&local.system, || Ok(())).unwrap();
     let socket = local.path("etc/systemd/system/goblin-local-postgres.socket");
     let service = local.path("etc/systemd/system/goblin-local-postgres.service");
     let socket_text = fs::read_to_string(&socket).unwrap();
@@ -381,19 +393,34 @@ esac
             .contains("systemd-socket-proxyd 10.43.23.45:5432")
     );
     assert_eq!(
-        fs::metadata(socket).unwrap().permissions().mode() & 0o777,
+        fs::metadata(&socket).unwrap().permissions().mode() & 0o777,
         0o644
     );
-    assert_eq!(files::json(&owner).unwrap()["postgres_port"], port);
+    assert_eq!(
+        files::json(&local.path("var/lib/goblin/postgres/host.json")).unwrap()["port"],
+        port
+    );
     fs::write(root.join("calls"), "").unwrap();
     fs::write(root.join("database-active"), "").unwrap();
-    let _live = TcpListener::bind(("127.0.0.1", port)).unwrap();
-    local.configure_database(&mut config, None).unwrap();
+    let _live = TcpListener::bind(occupied).unwrap();
+    local.configure_database(&config).unwrap();
     assert!(
         !fs::read_to_string(root.join("calls"))
             .unwrap()
             .contains("systemctl stop")
     );
+    // A changed cluster address restores the previous working service on failure.
+    let host_state = local.path("var/lib/goblin/postgres/host.json");
+    let service_text = fs::read_to_string(&service)
+        .unwrap()
+        .replace("10.43.23.45", "10.43.23.46");
+    fs::write(&service, &service_text).unwrap();
+    fs::write(root.join("fail-enable-once"), "").unwrap();
+    assert!(database_host::configure_with_probe(&local.system, || Ok(())).is_err());
+    assert_eq!(fs::read_to_string(&service).unwrap(), service_text);
+    assert_eq!(files::json(&host_state).unwrap()["port"], 5432);
+    database_host::configure_with_probe(&local.system, || Ok(())).unwrap();
+    assert!(!local.path("var/lib/goblin/postgres/pending.json").exists());
     // Resume a completed installation, synchronize a changed verifier exactly once.
     for (name, bytes) in [
         ("proc/1/comm", b"systemd\n".as_slice()),
@@ -442,10 +469,8 @@ fn native_activation_is_repeatable_and_preserves_installation_state() {
     let password = dir
         .path()
         .join("var/lib/goblin/install/private/owner-password");
-    let legacy = dir.path().join("opt/goblin/setup/goblin-setup.pyz");
     files::atomic_write(&status, b"retained state", 0o644, false).unwrap();
     files::atomic_write(&password, b"retained verifier", 0o600, false).unwrap();
-    files::atomic_write(&legacy, b"obsolete executable", 0o755, false).unwrap();
     for _ in 0..2 {
         install::activate_tooling(dir.path(), Path::new(env!("CARGO_BIN_EXE_goblinctl"))).unwrap();
         let output = Command::new(dir.path().join("usr/local/bin/goblinctl"))
@@ -457,7 +482,6 @@ fn native_activation_is_repeatable_and_preserves_installation_state() {
         assert!(String::from_utf8_lossy(&output.stdout).starts_with("goblinctl "));
         assert_eq!(fs::read(&status).unwrap(), b"retained state");
         assert_eq!(fs::read(&password).unwrap(), b"retained verifier");
-        assert!(!legacy.exists());
     }
 }
 

@@ -49,8 +49,6 @@ pub fn activate_tooling(system_root: &Path, binary: &Path) -> Result<()> {
             false,
         )?;
     }
-    // Only obsolete executables are removed; retained source, state and credentials stay.
-    files::remove_file(&root("opt/goblin/setup/goblin-setup.pyz"))?;
     Ok(())
 }
 use anyhow::Context;

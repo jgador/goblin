@@ -18,7 +18,7 @@ public partial class WorkItem
     public string Objective { get; set; } = null!;
 
     [Column("state", TypeName = "jsonb")]
-    public string? State { get; set; }
+    public string State { get; set; } = null!;
 
     [Column("version")]
     public long Version { get; set; }

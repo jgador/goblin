@@ -92,8 +92,9 @@ retain their scoped exception for history scans. Other fields and credential rul
 
 The PostgreSQL connection in `backend/src/Goblin.Web/appsettings.json` contains
 certificate paths, with private keys supplied at runtime. Database passwords no
-longer have a scanner exception. Exported client keys in `.goblin-postgres/` are
-ignored by Git and Docker; keep them private. Older commits may still contain the
+longer have a scanner exception. Client certificates live in
+[user profile stores](postgres-workflow.md#storage) outside the
+checkout; keep all private keys out of Git and Docker. Older commits may still contain the
 previously tracked password, so history scans can report those versions.
 
 Review the reported location locally. Replace real credentials with runtime

@@ -52,7 +52,7 @@ required for this optional suggestion.
 Country/city labels are bundled locally from the public-domain IANA tzdb, with
 country names supplied by `Intl.DisplayNames`. They need no location service.
 `zone.tab` preserves a country's own city even when its clock rules agree with
-another country's. Legacy IANA aliases inherit their target's place. Update the
+another country's. IANA aliases inherit their target's place. Update the
 checked-in data using `node scripts/update-timezone-places.mts /usr/share/zoneinfo`
 with the desired installed tzdb version; builds never depend on the host's tzdb
 files. A timezone introduced after the bundled data uses its readable IANA ID

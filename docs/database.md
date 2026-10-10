@@ -18,6 +18,9 @@ schema history. EF scaffolding selects application tables explicitly.
 Wolverine-owned key types are dictated by the pinned messaging library and are
 the exception to Goblin's bigint convention.
 
+For daily WSL/Azure connections, Windows exports and development commands, use
+[the PostgreSQL workflow](postgres-workflow.md).
+
 ## Set up certificate authentication in k3s
 
 After the Goblin bundle has installed k3s and cert-manager, run from this checkout:
@@ -28,10 +31,8 @@ bash deploy/postgres/setup.sh
 
 Use `sudo bash` if the kubeconfig requires root. The script uses the selected
 `kubectl` context, falling back to `k3s kubectl`. It issues certificates,
-configures PostgreSQL, verifies a real TLS client login, and connects an existing
-Goblin Sandbox. If the Sandbox
-configuration changes, setup recreates its pod to load the certificate mount and
-connection string; its image, public origin, login, and storage are preserved.
+configures PostgreSQL, and verifies a real TLS client login. The application
+deployment mounts its client certificate and uses packaged connection settings.
 Rerunning setup preserves the database volume, CA, and existing certificate identities.
 
 The application installer now invokes this setup and the migration job before
@@ -67,13 +68,11 @@ Default privileges cover future tables and sequences created by `goblin_admin`.
 The internal Service and network policy permit Goblin and same-namespace pods
 labeled `goblin-database-access: "true"`; no public database listener is created.
 
-### Existing password-based installations
+### Development installation lifecycle
 
-Setup retains the existing PVC and initialization Secret, installs certificate
-authentication, then restarts PostgreSQL with the new configuration. Existing
-data and role privileges are preserved. Network password authentication is
-disabled even if old password hashes and Secrets still exist. Update any other
-database clients to certificates before this restart.
+Goblin is preproduction. Recreate development installations when the database
+schema or installation format changes. Support only the current certificate-based
+configuration; new formats do not require an in-place conversion path.
 
 Setup refuses to replace a missing CA when issued TLS Secrets exist, or a missing
 initialization Secret when the PVC exists. Restore those Secrets from backup.
@@ -106,65 +105,16 @@ image. Npgsql supports these settings directly; no custom certificate validation
 or authentication callback is used by the application. The application certificate mount is required by the deployed durable Work
 configuration; repository agent sandboxes never receive this mount.
 
-For an existing image, setup sets the same certificate connection through
-`ConnectionStrings__Goblin` in the Sandbox so it takes effect without rebuilding.
-New images carry the certificate configuration in `appsettings.json`. If you
-change that file later, rerun setup to refresh the deployed override.
+Images carry the certificate configuration in `appsettings.json`. Rebuild and
+redeploy the application when that packaged configuration changes.
 
 ## Database tooling outside Kubernetes
 
-Setup exports only the two client certificates and their public CA to
-`.goblin-postgres/app/` and `.goblin-postgres/admin/`. Directories are mode 0700
-and files mode 0600, excluded from Git and Docker. These private keys are login
-credentials. The CA signing key is not exported.
-
-It writes `backend/tools/Goblin.Database/appsettings.json` with the local
-certificate paths and `Host=localhost`. The server certificate includes
-`localhost` and loopback IPs for verified local connections.
-
-For the [local WSL runner](../deploy/local/README.md), setup automatically provides
-`localhost:55432` through a persistent loopback TCP proxy. It does not require a
-terminal or `kubectl port-forward`, and it resumes with the local installation.
-For an existing database, enable or repair it with:
-
-```bash
-make local-database
-```
-
-In VS Code's WSL window, use:
-
-```text
-postgresql://goblin_app@localhost:55432/goblin?sslmode=verify-full&sslrootcert=/root/repos/goblin/.goblin-postgres/app/ca.crt&sslcert=/root/repos/goblin/.goblin-postgres/app/tls.crt&sslkey=/root/repos/goblin/.goblin-postgres/app/tls.key
-```
-
-Adjust the certificate paths if your checkout is elsewhere. Use `goblin_admin`
-and the `admin` certificate directory for schema administration.
-
-For other clusters, establish a tunnel from your machine. A temporary connection
-can use this command in a separate terminal:
-
-```bash
-kubectl -n goblin port-forward service/goblin-postgres 5432:5432
-```
-
-For another local port, use matching setup/tunnel ports:
-
-```bash
-bash deploy/postgres/setup.sh --port 55432
-kubectl -n goblin port-forward service/goblin-postgres 55432:5432
-```
-
-To refresh local certificates/configuration without restarting any workloads:
-
-```bash
-goblinctl db credentials --port 55432
-```
-
-Local builds copy settings beside the executable. For a web process outside
-Kubernetes, use the tooling's `Goblin` connection (local host/port and absolute
-client certificate paths); `goblin-postgres` resolves inside Kubernetes.
-Remove stale connection environment overrides before running tooling, since
-.NET environment configuration takes precedence over JSON.
+Named user profiles hold client certificates outside the checkout. Development,
+migrations, scaffolding and opt-in tests receive the selected connection through
+child-process environment variables. The installer exports no client credentials.
+WSL and Azure host endpoints use port 5432; additional forwarding runs inside WSL.
+See [the workflow guide](postgres-workflow.md) for commands and Windows paths.
 
 ## Certificate renewal
 
@@ -174,7 +124,8 @@ PostgreSQL watches the projected Secret and reloads TLS configuration; new Npgsq
 connections load the current client files. Existing pooled connections remain
 usable. No connection-string change or application rebuild is required.
 
-Exported host-side files are snapshots: refresh them with the command above
+Linux profiles refresh on connect and before development commands. Windows exports
+are snapshots: rerun `goblinctl db export PROFILE --client windows --role app`
 after renewal. Monitor Certificate readiness and expiry. The CA has a ten-year
 lifetime and retains its key during routine renewal. A CA issuer does not manage
 a complete trust rollover or certificate revocation workflow; plan CA replacement
@@ -185,8 +136,8 @@ to issue certificates and read Secrets in the `goblin` namespace.
 
 | Location | Purpose |
 | --- | --- |
-| `deploy/postgres/` | PostgreSQL 18.6, certificate resources, TLS/auth configuration, setup/export scripts |
-| `backend/database/migrations/` | Unreleased initial baseline; ordered, immutable migrations after deployment |
+| `deploy/postgres/` | PostgreSQL 18.6, certificate resources, TLS/auth configuration, setup and verification scripts |
+| `backend/database/migrations/` | Unreleased initial baseline; ordered, immutable migrations after production deployment |
 | `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
 | `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime `IDbContextFactory<GoblinDbContext>` registration |
 | `backend/tools/Goblin.Database/` | SQL migration runner using Npgsql and administrator configuration |
@@ -204,7 +155,7 @@ permissions and default privileges; the runner creates the protected migration
 journal in `public` before applying the baseline.
 
 ```bash
-dotnet run --project backend/tools/Goblin.Database -- apply backend/database/migrations
+make db-migrate DB_PROFILE=wsl
 ```
 
 The runner applies `.sql` files in ordinal filename order, once each. Every file
@@ -213,13 +164,12 @@ be retried. A PostgreSQL advisory lock serializes concurrent runners.
 
 The journal lives in `public.schema_migrations`. Only the schema administrator
 can access it, and it is excluded from reverse engineering. Recorded SHA-256 checksums
-reject changes to previously applied scripts. Before the first real deployment,
+reject changes to previously applied scripts. Before the first production deployment,
 consolidate schema changes into `0001_initial.sql`; local development provisioning
-does not freeze the baseline. An existing development database must be recreated
-if disposable, or its schema must be verified against the consolidated baseline
-before reconciling its migration journal. The runner's checksum checks still apply.
+does not freeze the baseline. Recreate the development database when that baseline
+changes. The runner's checksum checks still apply.
 
-After deployment, keep applied filenames and contents unchanged and add a new,
+After production deployment, keep applied filenames and contents unchanged and add a new,
 higher-numbered file for every change. SQL files use LF line endings so checksums
 remain consistent across operating systems.
 
@@ -233,48 +183,21 @@ The runner never applies schema changes during web application startup.
 The recommended command is:
 
 ```bash
-bash backend/scripts/scaffold-database.sh
+make db-scaffold DB_PROFILE=wsl
 ```
 
 It restores the local tool, regenerates the selected application tables, normalizes
 generated C# files to UTF-8 without a BOM and LF line endings, and applies the
-repository's whitespace and style rules, including regular constructors. It reads
-`ConnectionStrings:Goblin` from `backend/tools/Goblin.Database/appsettings.json`;
-ordinary application access is enough to inspect the mapped schema. It starts
-neither the web server nor Codex.
-
-The scaffolding host links that existing settings file into its build output;
-configuration providers and environment overrides remain unchanged. Docker
-publishes only the migration runner, which has no EF or application-model dependency.
+repository's whitespace and style rules, including regular constructors. The selected
+profile supplies the app connection through the environment; ordinary application
+access is enough to inspect the mapped schema. Docker publishes only the migration
+runner, which has no EF or application-model dependency.
 Scaffolding services and their tests live in separate projects so the scaffolding
 host's dependency graph does not enter application and persistence test builds.
 
-The equivalent `dotnet ef` invocation is:
-
-```bash
-dotnet tool restore
-dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFrameworkCore.PostgreSQL \
-  --project backend/src/Goblin.Persistence \
-  --startup-project backend/tools/Goblin.Database.Scaffolding \
-  --context GoblinDbContext \
-  --context-dir Generated \
-  --output-dir Generated/Entities \
-  --context-namespace Goblin.Persistence \
-  --namespace Goblin.Persistence.Entities \
-  --table public.agents \
-  --table public.connections \
-  --table public.conversation_messages \
-  --table public.conversations \
-  --table public.execution_attempts \
-  --table public.work_commands \
-  --table public.work_items \
-  --data-annotations \
-  --no-onconfiguring \
-  --force
-```
-
-`Name=ConnectionStrings:Goblin` resolves the JSON configuration in the tooling
-host, keeping connection configuration out of command-line arguments.
+The script owns the complete table selection and EF flags. Its
+`Name=ConnectionStrings:Goblin` argument resolves the profile connection from the
+tooling host's environment, keeping it out of the command-line arguments.
 `--data-annotations` requests mapping attributes. Leave `--use-database-names`
 unset so that `work_items` becomes `WorkItem` and `objective` becomes `Objective`.
 `--no-onconfiguring` keeps the connection string out of generated source.
@@ -304,7 +227,8 @@ context and entities are generated. Put custom behavior in partial classes
 
 ## Add another table later
 
-1. Add the next SQL file, for example
+1. Before the first production deployment, add the table to `0001_initial.sql`.
+   After production deployment, put it in the next migration, for example
    `backend/database/migrations/0002_work_notes.sql`:
 
    ```sql
@@ -319,16 +243,16 @@ context and entities are generated. Put custom behavior in partial classes
    apply the SQL and reverse engineer again:
 
    ```bash
-   dotnet run --project backend/tools/Goblin.Database -- apply backend/database/migrations
-   bash backend/scripts/scaffold-database.sh
+   make db-migrate DB_PROFILE=wsl
+   make db-scaffold DB_PROFILE=wsl
    dotnet build backend/Goblin.slnx
    ```
 
 3. Review the new `WorkNote` entity, the context, and relationship changes to
    `WorkItem`. Commit the SQL, scaffolding table list, and generated C# together.
 
-With one deployed database, applying SQL through the port-forward changes that
-database immediately; scaffolding only reads its schema. Review SQL before
+Applying SQL changes the selected profile's database immediately; scaffolding
+only reads its schema. Review SQL before
 applying it and keep a backup before destructive changes. EF migrations and
 `EnsureCreated` are not part of this workflow.
 
@@ -361,15 +285,14 @@ above. Database-first EF mappings include a separate partial configuration for
 the filtered active-attempt relationship; do not edit generated classes manually.
 
 `/readyz` checks the enabled database dependency independently of Codex. For a
-connection-only development session without PostgreSQL, explicitly set
-`GOBLIN_WORK_ENABLED=false`. This disables Work APIs. Repository execution uses
+connection-only development session without PostgreSQL, use
+`make dev ARGS=--without-database` (or set `GOBLIN_WORK_ENABLED=false`). This disables Work APIs. Repository execution uses
 [separate sandboxes](execution-hosting.md) without database credentials.
 
-Run the real PostgreSQL integration tests explicitly using the tooling's JSON
-configuration (keep the port-forward running):
+Run the real PostgreSQL integration tests explicitly using a development profile:
 
 ```bash
-cargo xtask test-postgres
+make test-postgres DB_PROFILE=wsl
 ```
 
 The tests create and drop uniquely named databases. They cover EF insert/read/
@@ -380,10 +303,8 @@ and the connection reservation held by an attempt awaiting cleanup.
 With a certificate connection, they also verify the authenticated identity and
 reject missing client certificates, administrator impersonation, unencrypted
 connections, an untrusted server CA, and an incorrect server hostname.
-Some client resets can cause this k3s version's `kubectl port-forward` to exit.
-The local runner's persistent endpoint avoids that path; use it for VS Code and
-these tests, or use a stable tunnel to another cluster.
-Without these explicit test variables, database integration tests are skipped
+Profile forwarding uses the stable host endpoint and SSH for Azure.
+Without explicit test configuration, database integration tests are skipped
 and the normal solution tests need no PostgreSQL server.
 
 See [EF Core reverse engineering](https://learn.microsoft.com/en-us/ef/core/managing-schemas/scaffolding/)

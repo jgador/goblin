@@ -50,7 +50,7 @@ async function bootstrap(
         kubeconfig?: string;
         bootstrapOnly?: boolean;
         nativeDownload?: "failed" | "corrupt" | "wrong-version";
-        nativeArchive?: "licensed" | "legacy" | "unexpected-entry";
+        nativeArchive?: "licensed" | "missing-licenses" | "unexpected-entry";
         resume?: boolean;
         recovery?: boolean;
         pullDelay?: number;
@@ -201,6 +201,7 @@ if (name === 'curl') {
   fs.appendFileSync(path.join(root, 'systemctl-requests.jsonl'), JSON.stringify(args) + '\\n');
   if (args[0] === 'cat' && !fs.existsSync(path.join(root, 'etc/systemd/system', args[1]))) process.exit(1);
 } else if (name === 'k3s' || name === 'kubectl') {
+  if (args[1] === '--kubeconfig') args.splice(1, 2);
   fs.appendFileSync(path.join(root, 'k3s-requests.jsonl'), JSON.stringify(args) + '\\n');
   if (args[0] === 'crictl' && args[1] === 'inspecti') process.exit(1);
   if (args[0] === 'crictl' && args[1] === 'pull') {
@@ -230,7 +231,7 @@ if (name === 'curl') {
   }
   if (args[1] === 'get' && args[2] === 'service') {
     // Model K3s reconciling its watched HelmChartConfig, including chart v40's
-    // service.spec.type setting. An ignored legacy value retains LoadBalancer.
+    // service.spec.type setting. An ignored value retains LoadBalancer.
     const yaml = fs.readFileSync(path.join(root, 'var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml'), 'utf8');
     fs.writeFileSync(path.join(root, 'ingress-mode'), yaml.includes('service:\\n      spec:\\n        type: ClusterIP') ? 'ClusterIP' : 'LoadBalancer');
     process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : fs.readFileSync(path.join(root, 'ingress-mode'), 'utf8'));
@@ -294,7 +295,13 @@ if (name === 'curl') {
     if ((fs.statSync(file).mode & 0o777) !== 0o600) throw new Error('Verifier file must be private');
     process.stdout.write(JSON.stringify({ apiVersion: 'v1', kind: 'Secret', metadata: { name: args[4], namespace: args[args.indexOf('-n') + 1] }, data: { 'owner-password': fs.readFileSync(file).toString('base64') } }));
   } else if (args[1] === 'apply' && args.at(-1) === '-') {
-    const resource = JSON.parse(fs.readFileSync(0, 'utf8'));
+    const input = fs.readFileSync(0, 'utf8');
+    if (input.includes('kind: Service')) {
+      if (!input.includes('name: goblin-postgres-local') || !input.includes('port: 5432')) throw new Error('Unexpected host PostgreSQL service');
+      fs.writeFileSync(path.join(root, 'postgres-host-service.yaml'), input);
+      process.exit(0);
+    }
+    const resource = JSON.parse(input);
     if (resource.kind === 'Secret') fs.writeFileSync(path.join(root, 'secret.json'), JSON.stringify(resource), { mode: 0o600 });
   }
 }
@@ -339,6 +346,7 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 const root = process.env["${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}"];
 if (args[0] === 'internal' && args[1] === 'activate') args.push('--system-root', root);
+if (args[0] === 'db' && args[1] === 'host') args.push('--system-root', root);
 if (args[0] === 'internal' && ['state', 'build-progress'].includes(args[1]) && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
 if (args[0] === 'internal' && args[1] === 'docker-config') args.push(path.join(root, 'etc/docker/daemon.json'));
 if (args[0] === 'internal' && args[1] === 'state' && args[2] === 'fail-step' && args[3] === 'cert-manager' && process.env["${Env.GOBLIN_BOOTSTRAP_APP_STATE.name}"] === 'cert-failed') {
@@ -375,7 +383,7 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
     await mkdir(join(root, "native"), { recursive: true });
     await cp(goblinctl, join(root, "native/goblinctl"));
     const nativeEntries = ["goblinctl"];
-    if (application.nativeArchive !== "legacy") {
+    if (application.nativeArchive !== "missing-licenses") {
         for (const name of ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]) {
             await cp(name, join(root, "native", name));
             nativeEntries.push(name);
@@ -1550,9 +1558,11 @@ test("cert-manager readiness gates database setup and migrations before applicat
         if (state !== "cert-failed")
             assert.ok(calls.some((args) => args.includes("--dry-run=server")));
         assert.equal(
-            JSON.stringify(
-                calls.filter((args) => args[0] === "kubectl"),
-            ).includes("postgres"),
+            calls.some(
+                (args) =>
+                    args[0] === "kubectl" &&
+                    args.includes("statefulset/goblin-postgres"),
+            ),
             state === "ready",
         );
         if (state === "ready") {
@@ -1843,62 +1853,65 @@ test("invalid forwarded origins fail before installing cluster components", asyn
     }
 });
 
-test("native archives install license documents and accept the legacy layout", async (t) => {
+test("native archives install license documents", async (t) => {
     const artifacts = resolve(".artifacts/deployment");
     await mkdir(artifacts, { recursive: true });
-    for (const nativeArchive of ["licensed", "legacy"] as const) {
-        const root = await mkdtemp(join(artifacts, "goblin-licensed-"));
-        t.after(() => rm(root, { recursive: true, force: true }));
-        await bootstrap(root, fakePassword, "ready", {
-            nativeArchive,
-            bootstrapOnly: true,
-        });
-        for (const path of [
-            "share",
-            "share/licenses",
-            "share/licenses/goblinctl",
-        ]) {
-            assert.equal(
-                (await stat(join(root, "opt/goblin", path))).mode & 0o777,
-                0o755,
-            );
-        }
-        for (const name of ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]) {
-            assert.deepEqual(
-                await readFile(
+    const root = await mkdtemp(join(artifacts, "goblin-licensed-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await bootstrap(root, fakePassword, "ready", {
+        nativeArchive: "licensed",
+        bootstrapOnly: true,
+    });
+    for (const path of [
+        "share",
+        "share/licenses",
+        "share/licenses/goblinctl",
+    ]) {
+        assert.equal(
+            (await stat(join(root, "opt/goblin", path))).mode & 0o777,
+            0o755,
+        );
+    }
+    for (const name of ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md"]) {
+        assert.deepEqual(
+            await readFile(
+                join(root, "opt/goblin/share/licenses/goblinctl", name),
+            ),
+            await readFile(name),
+        );
+        assert.equal(
+            (
+                await stat(
                     join(root, "opt/goblin/share/licenses/goblinctl", name),
-                ),
-                await readFile(name),
-            );
-            assert.equal(
-                (
-                    await stat(
-                        join(root, "opt/goblin/share/licenses/goblinctl", name),
-                    )
-                ).mode & 0o777,
-                0o644,
-            );
-        }
+                )
+            ).mode & 0o777,
+            0o644,
+        );
     }
 });
 
-test("native archives with unexpected entries fail before activating the installer", async (t) => {
+test("native archives with missing or unexpected entries fail before activating the installer", async (t) => {
     const artifacts = resolve(".artifacts/deployment");
     await mkdir(artifacts, { recursive: true });
-    const root = await mkdtemp(join(artifacts, "goblin-archive-rejected-"));
-    t.after(() => rm(root, { recursive: true, force: true }));
-    await assert.rejects(
-        bootstrap(root, fakePassword, "ready", {
-            nativeArchive: "unexpected-entry",
-            bootstrapOnly: true,
-        }),
-    );
-    await assert.rejects(access(join(root, "opt/goblin/bin/goblinctl")));
-    await assert.rejects(access(join(root, "systemctl-requests.jsonl")));
-    assert.match(
-        await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8"),
-        /Unsupported native archive contents/,
-    );
+    for (const nativeArchive of [
+        "missing-licenses",
+        "unexpected-entry",
+    ] as const) {
+        const root = await mkdtemp(join(artifacts, "goblin-archive-rejected-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        await assert.rejects(
+            bootstrap(root, fakePassword, "ready", {
+                nativeArchive,
+                bootstrapOnly: true,
+            }),
+        );
+        await assert.rejects(access(join(root, "opt/goblin/bin/goblinctl")));
+        await assert.rejects(access(join(root, "systemctl-requests.jsonl")));
+        assert.match(
+            await readFile(join(root, "var/log/goblin-bootstrap.log"), "utf8"),
+            /Unsupported native archive contents/,
+        );
+    }
 });
 
 test("native download failure, corruption, or wrong version leaves the previous installer untouched", async (t) => {

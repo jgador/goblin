@@ -1,3 +1,6 @@
+[store]
+dir = ".artifacts/nextest"
+
 [profile.default]
 # Match Codex's test-runner defaults. This retries tests, never failed Work.
 slow-timeout = { period = "30s", terminate-after = 2 }

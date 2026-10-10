@@ -130,10 +130,10 @@ Shipping inputs include Rust source/build configuration, setup and PostgreSQL
 bundles, branding, and licensing files. Additions and deletions count. Changed
 inputs require a matching publication or a new build. Missing capabilities in the
 source, failed authentication, failed source checks, and conflicting requested
-versions stop preparation with a failing job and a next action. Legacy manifests
-without input fingerprints are never reused.
+versions stop preparation with a failing job and a next action. Installer manifests
+must contain the current schema and input fingerprints.
 
-An incompatible historical installer's signatures or tag cannot block a new
+A nonmatching installer's signatures or tag cannot block a new
 build. Its metadata is used only to rule it out; preparation does not execute or
 include its archive in the candidate. Failed verification of a selected installer
 stops preparation. Investigate its provenance or start a new preparation with an
@@ -169,8 +169,7 @@ release publication separately from site delivery. **Make this release the
 installation default** is unchecked by default; only an explicit selection updates
 the recommendation.
 
-Standalone **Publish goblinctl** and the automatic pin-PR handoff have been retired.
-The optional development dependency update remains available:
+To update the development installer dependency:
 
 ```bash
 cargo xtask release pin-installer --version X.Y.Z
@@ -178,9 +177,8 @@ cargo xtask release pin-installer --version X.Y.Z
 
 Creating a release branch or merging a backport does not publish anything. A manual
 preparation run now proceeds to verification and then waits for publication approval.
-An unapproved candidate stays unpublished. Installer signing accepts both the
-historical standalone workflow and the coordinated workflow on master; historical
-Goblin records also remain verifiable.
+An unapproved candidate stays unpublished. Installer signing requires the
+coordinated workflow on master. Only the current release record schema is supported.
 
 ## Installation defaults and recommendation
 

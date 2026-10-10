@@ -112,9 +112,7 @@ public sealed class GitRepositorySetupStore
     {
         GitRepositoryWorkOwner? owner = await GitRepositoryWorkQuery.ForAttempt(
             GitRepositoryAttemptPolicy.AllowingOperations(db.ExecutionAttempts.AsNoTracking()), attemptId)
-            .SingleOrDefaultAsync(token);
-        if (owner is null || owner.State is null)
-            throw new ApplicationFailure("repository_setup_unavailable");
+            .SingleOrDefaultAsync(token) ?? throw new ApplicationFailure("repository_setup_unavailable");
         WorkSnapshot work = owner.Snapshot();
         await GitRepositoryAccess.RequireSetupAsync(db, work, attemptId, owner.TurnNumber, token);
         return work;

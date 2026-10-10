@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Persistence;
@@ -53,7 +54,7 @@ public sealed partial class WorkStore
         Persistence.Entities.WorkCommand? receipt = await db.WorkCommands.AsNoTracking().SingleOrDefaultAsync(x => x.Id == command.CommandId, token);
         if (receipt is null) return null;
         if (receipt.Fingerprint != WorkCommandPolicy.Fingerprint(command)) throw new ApplicationFailure("command_id_reused");
-        return JsonSerializer.Deserialize<WorkView>(receipt.Response, Json)!;
+        return JsonSerializer.Deserialize<WorkView>(receipt.Response, ContractJson.Options)!;
     }
 
     // Discovery may call GitHub. Do it before acquiring the product transaction;

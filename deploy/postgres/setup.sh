@@ -9,12 +9,8 @@ progress() {
     "$goblinctl" internal state detail "$1" --step database --path "${GOBLIN_INSTALL_STATE:-/var/lib/goblin/install/status.json}"
   fi
 }
-config_root=${GOBLIN_CONFIG_ROOT:-$PWD}
-port=5432
-if [[ $# == 2 && "$1" == --port && "$2" =~ ^[0-9]+$ && "$2" -ge 1 && "$2" -le 65535 ]]; then
-  port=$2
-elif [[ $# != 0 ]]; then
-  printf 'Usage: bash deploy/postgres/setup.sh [--port LOCAL_DATABASE_PORT]\n' >&2
+if [[ $# != 0 ]]; then
+  printf 'Usage: bash deploy/postgres/setup.sh\n' >&2
   exit 1
 fi
 
@@ -22,22 +18,6 @@ if command -v kubectl >/dev/null 2>&1; then
   goblin_kubectl=(kubectl)
 else
   goblin_kubectl=(k3s kubectl)
-fi
-# Only enable host access automatically when this checkout owns the local runner
-# and the selected kubectl context refers to that same cluster.
-local_port=''
-if [[ -f /var/lib/goblin/local-test/config.json ]]; then
-  local_port=$("$goblinctl" --repo "$config_root" internal local-port
-  )
-  if [[ -n "$local_port" ]]; then
-    if selected_uid=$("${goblin_kubectl[@]}" get namespace kube-system -o 'jsonpath={.metadata.uid}' --request-timeout=10s) && \
-       local_uid=$(k3s kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml get namespace kube-system -o 'jsonpath={.metadata.uid}' --request-timeout=10s) && \
-       [[ -n "$selected_uid" && "$selected_uid" == "$local_uid" ]]; then
-      if [[ $# == 0 ]]; then port=$local_port; fi
-    else
-      local_port=''
-    fi
-  fi
 fi
 # Fail before changing a database if certificate issuance is unavailable.
 progress 'Checking certificate manager before PostgreSQL setup'
@@ -81,26 +61,4 @@ if ! "${goblin_kubectl[@]}" wait --for=condition=Complete "$verification_job" -n
 fi
 "${goblin_kubectl[@]}" logs "$verification_job" -n goblin
 "${goblin_kubectl[@]}" delete "$verification_job" -n goblin --ignore-not-found=true --wait=true
-progress 'Saving private database client configuration'
-"${goblin_kubectl[@]}" get secret goblin-postgres-app-tls goblin-postgres-admin-tls -n goblin -o json | \
-  "$goblinctl" --repo "$config_root" internal db-export --port "$port"
-
-# Patch just the database configuration of an existing Goblin deployment, without
-# replacing its image, owner password, origin, storage, or other custom settings.
-sandbox=$("${goblin_kubectl[@]}" get sandbox app -n goblin --ignore-not-found -o name)
-if [[ -n "$sandbox" && "${GOBLIN_POSTGRES_CONFIGURE_APP:-true}" == true ]]; then
-  patch=$(mktemp)
-  trap 'rm -f "$patch"' EXIT
-  "${goblin_kubectl[@]}" get sandbox app -n goblin -o json | "$goblinctl" --repo "$config_root" internal db-patch > "$patch"
-  if [[ -s "$patch" ]]; then
-    "${goblin_kubectl[@]}" patch sandbox app -n goblin --type=merge --patch-file "$patch"
-    "${goblin_kubectl[@]}" delete pod -n goblin -l app=goblin-auth --ignore-not-found=true --wait=true
-    "${goblin_kubectl[@]}" wait --for=condition=Ready sandbox/app -n goblin --timeout=300s
-  fi
-fi
-if [[ -n "$local_port" ]]; then
-  "$goblinctl" --repo "$config_root" db forward --port "$port"
-else
-  printf 'Tooling expects a localhost:%s tunnel to PostgreSQL.\n' "$port"
-fi
-printf 'PostgreSQL certificate authentication is configured. Apply SQL migrations using docs/database.md.\n'
+printf 'PostgreSQL certificate authentication is configured. See docs/postgres-workflow.md for client access.\n'

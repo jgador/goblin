@@ -2,6 +2,10 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
+if [[ "${1:-}" != --configured ]]; then
+  exec cargo xtask database-scaffold --profile "${1:-wsl}"
+fi
+
 dotnet tool restore
 # Select product tables explicitly: public also holds Wolverine's tables and
 # the administrator-only migration journal, which are not part of this model.

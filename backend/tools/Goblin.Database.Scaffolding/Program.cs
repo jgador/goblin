@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 // EF tools resolve Name=ConnectionStrings:Goblin from this developer-only host.
-// The linked settings preserve the migration tool's existing configuration path.
+// The selected PostgreSQL profile supplies its connection through the environment.
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
 {
     Args = args,

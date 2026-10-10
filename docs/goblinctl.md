@@ -23,7 +23,8 @@ sudo goblinctl doctor --json
 sudo goblinctl logs --follow
 sudo goblinctl password set --replace
 sudo goblinctl db setup
-goblinctl --repo "$PWD" db credentials --port 55432
+sudo goblinctl db host
+goblinctl db connect wsl --local --forward-port 55432
 sudo goblinctl db migrate IMAGE
 ```
 
@@ -50,7 +51,7 @@ sudo goblinctl local stop                     # retains application data and PVC
 sudo goblinctl local reset --yes              # deletes only this owned local cluster
 goblinctl --repo "$PWD" password set --replace
 sudo goblinctl local start                    # loads the changed local verifier
-sudo goblinctl db forward --port 55432
+sudo goblinctl local database
 ```
 
 The local source snapshot includes Git-visible working-tree changes and untracked
@@ -64,6 +65,11 @@ service as separate processes. Public setup exposes static assets, status,
 health, and the read-only `/setup/events` progress stream. Its local health socket appears only after the public listener binds.
 The server bounds request sizes, connection count and timeouts. The existing
 handoff marker, installer lock, rollback, and retained-source retry rules remain.
+
+PostgreSQL client profiles are independent of `--repo` and installer state. See
+[the PostgreSQL workflow](postgres-workflow.md) for WSL/Azure connections, Windows
+exports, refresh, cleanup and per-command profile selection. Client commands need
+`psql` and OpenSSL; Azure access also needs SSH.
 
 ## Parallel installation and live progress
 
@@ -131,15 +137,15 @@ make test-browser ARGS=tests/e2e/setup.spec.ts
 Install the pinned helpers and configure your editor using the
 [Rust development guide](rust-development.md).
 
-`make dev` prepares credentials and launches .NET through `cargo xtask dev`.
+`make dev DB_PROFILE=wsl` prepares the selected database profile and owner credentials,
+then launches .NET through `cargo xtask dev --profile wsl`.
 Protocol/Kubernetes generators, EF scaffolding, and the .NET SQL migration engine
 remain authoritative. Production shell helpers find the installed CLI via
 `GOBLINCTL` or PATH; developer scripts can use `GOBLINCTL="$PWD/target/debug/goblinctl"`.
-`--repo` selects the credential/settings destination. On a standalone installed
-host, database exports default to `/var/lib/goblin/config`. The flag retains its
-existing spelling; Rust names this general destination `config_root` and names
-the local source checkout `git_repository`. The local ownership file likewise
-retains its existing `repo` JSON key.
+`--repo` selects the checkout used by local installation and owner-password
+commands. PostgreSQL client commands use the per-user profile store independently
+of this flag; see the [PostgreSQL workflow](postgres-workflow.md). The local
+ownership file retains its existing `repo` JSON key.
 
 ## Releases
 

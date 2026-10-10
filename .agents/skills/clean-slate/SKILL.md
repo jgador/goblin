@@ -162,23 +162,20 @@ removes these verified artifacts after their writers have stopped:
 | --- | --- |
 | `.goblin-auth/` | Private Codex login/tokens, session databases, history, home, workspace, and other application state. |
 | `.goblin-browser-test/` | Fake-login state, browser-test password, and private test workspace. |
-| `.goblin-local/` | Remaining snapshots, bundles, logs, screenshots, legacy passwords, and old test-VM archives/disks such as `previous-vm/`. Verify no VM/process still uses a disk first. |
-| `.goblin-postgres/` | Exported application/admin certificates and private keys. |
+| `.goblin-local/` | Installation source snapshots, bundles, and logs. |
 | `.goblin-secrets/` | Ignored test credentials, including `owner-password`; preserve `.gitkeep` and any other tracked files. |
 | `test-results/`, `playwright-report/` | Generated reports, traces, screenshots, and browser artifacts, excluding any tracked files. |
 
 Also address these conditional leftovers; report anything that cannot safely be
 removed rather than claiming the environment is completely clean:
 
-- **Database settings:** `backend/tools/Goblin.Database/appsettings.json` is an
-  ignored generated file. Remove it if it contains only this installation's
-  generated settings; otherwise remove only the proven generated `Goblin` and
-  `GoblinAdmin` connection entries, preserving unrelated settings. Check generated
-  copies beside built executables for stale local credentials/configuration. Do
-  not delete or reset the tracked `backend/src/Goblin.Web/appsettings.json`; its
-  password-free cluster configuration is source, not test data. Preserve any user
-  edits. Report stale connection/data/password environment overrides without
-  rewriting the user's shell profiles.
+- **PostgreSQL client profiles:** Disconnect profiles for this installation before
+  removing their named directories under `~/.config/goblin/postgres/` (or
+  `XDG_CONFIG_HOME`) and the matching Windows exports under
+  `%LOCALAPPDATA%\Goblin\postgres\`. Verify each profile belongs to this
+  installation; preserve profiles for other databases. See the
+  [PostgreSQL workflow](../../../docs/postgres-workflow.md). Preserve the tracked
+  Kubernetes configuration in `backend/src/Goblin.Web/appsettings.json`.
 - **Storage outside k3s:** Remove exact local backing directories or volumes
   proven exclusive to this installation if the uninstaller did not remove them.
   Never infer that a retained PV, remote volume, or shared host path is disposable.

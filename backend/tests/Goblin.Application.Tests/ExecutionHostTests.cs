@@ -122,7 +122,7 @@ public sealed class ExecutionHostTests
     }
 
     [Theory]
-    [InlineData("legacy")]
+    [InlineData("missing-kernel-identity")]
     [InlineData("boot")]
     [InlineData("namespace")]
     [InlineData("reused-pid")]
@@ -139,7 +139,7 @@ public sealed class ExecutionHostTests
             ProcessIdentity identity = ProcessIdentity.Capture(process);
             identity = scenario switch
             {
-                "legacy" => new(identity.Pid, identity.StartedAt, identity.Machine),
+                "missing-kernel-identity" => new(identity.Pid, identity.StartedAt, identity.Machine),
                 "boot" => identity with { BootId = "another-boot" },
                 "namespace" => identity with { PidNamespace = "another-namespace" },
                 "reused-pid" => identity with { StartTicks = identity.StartTicks + 1 },

@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Database;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
@@ -34,13 +36,14 @@ public sealed class PostgresTests
         const string objective = "Persist café 🧌 and 'quoted' text";
         await using (GoblinDbContext write = await database.ContextFactory.CreateDbContextAsync())
         {
-            write.WorkItems.Add(new WorkItem { Id = id, Objective = objective });
+            write.WorkItems.Add(new WorkItem { Id = id, Objective = objective, State = WorkState(id, objective) });
             await write.SaveChangesAsync();
         }
         await using (GoblinDbContext read = await database.ContextFactory.CreateDbContextAsync())
         {
             WorkItem item = await read.WorkItems.SingleAsync(x => x.Id == id);
             Assert.Equal(objective, item.Objective);
+            Assert.Equal(id, JsonSerializer.Deserialize<Core.Work.WorkSnapshot>(item.State, ContractJson.Options)!.Id);
             item.Objective = "Updated objective";
             await read.SaveChangesAsync();
         }
@@ -51,6 +54,18 @@ public sealed class PostgresTests
         }
         await using GoblinDbContext empty = await database.ContextFactory.CreateDbContextAsync();
         Assert.False(await empty.WorkItems.AnyAsync());
+    }
+
+    [PostgresFact]
+    public async Task WorkItemsRequirePersistedAggregateState()
+    {
+        await using TestDatabase database = await TestDatabase.CreateAsync();
+        await using var connection = new NpgsqlConnection(database.AppConnection);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("INSERT INTO public.work_items (objective) VALUES ('Missing state');", connection);
+        PostgresException error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.NotNullViolation, error.SqlState);
+        Assert.Equal("state", error.ColumnName);
     }
 
     [PostgresFact]
@@ -129,8 +144,8 @@ public sealed class PostgresTests
         await using var app = new NpgsqlConnection(database.AppConnection);
         await app.OpenAsync();
         await using (var seed = new NpgsqlCommand("""
-            INSERT INTO public.work_items (id, objective)
-                VALUES (2147483648, 'Finish cleanup');
+            INSERT INTO public.work_items (id, objective, state)
+                VALUES (2147483648, 'Finish cleanup', @state);
             INSERT INTO public.execution_attempts
                 (id, work_id, agent_id, connection_id, runtime, status, queued_at, updated_at, cleanup_pending)
                 VALUES (2147483648,
@@ -140,7 +155,10 @@ public sealed class PostgresTests
             INSERT INTO public.wolverine_incoming_envelopes (id, status, owner_id, body, message_type)
                 VALUES ('30000000-0000-0000-0000-000000000001', 'Incoming', 0, decode('010203', 'hex'), 'DispatchWork');
             """, app))
+        {
+            seed.Parameters.AddWithValue("state", NpgsqlTypes.NpgsqlDbType.Jsonb, WorkState(2147483648, "Finish cleanup"));
             await seed.ExecuteNonQueryAsync();
+        }
 
         await using GoblinDbContext db = await database.ContextFactory.CreateDbContextAsync();
         Assert.True((await db.ExecutionAttempts.SingleAsync()).CleanupPending);
@@ -168,6 +186,9 @@ public sealed class PostgresTests
             Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, conflict.SqlState);
         }
     }
+
+    private static string WorkState(long id, string objective) =>
+        JsonSerializer.Serialize(new Core.Work.WorkItem(id, objective, DateTimeOffset.UtcNow).Snapshot(), ContractJson.Options);
 
     private sealed class TestDatabase : IAsyncDisposable
     {

@@ -62,7 +62,7 @@ fn unchanged_installer_is_reused_with_its_original_source_revision() {
         "0.1.4",
         &inventory,
         None,
-        |_| Ok(Some(published.clone())),
+        |_| Ok(published.clone()),
     )
     .unwrap();
     assert!(matches!(selected, Selection::Reuse(actual) if actual == published));
@@ -140,7 +140,7 @@ fn bundle_changes_additions_and_deletions_build_without_a_version_bump() {
             "0.1.4",
             &inventory,
             None,
-            |_| Ok(Some(published.clone())),
+            |_| Ok(published.clone()),
         )
         .unwrap();
         assert!(matches!(selected, Selection::Build(version) if version == "0.1.5"));
@@ -167,11 +167,11 @@ fn later_matching_publication_is_reused_without_a_pin_update() {
         &inventory,
         None,
         |version| {
-            Ok(Some(if version == pin.version {
+            Ok(if version == pin.version {
                 pin.clone()
             } else {
                 matching.clone()
-            }))
+            })
         },
     )
     .unwrap();
@@ -224,7 +224,7 @@ fn explicit_versions_cannot_replace_reserved_or_incompatible_installers() {
                 "0.1.4",
                 &inventory,
                 Some(version),
-                |_| Ok(Some(published.clone()))
+                |_| Ok(published.clone())
             )
             .is_err(),
             "{version}"
@@ -242,34 +242,6 @@ fn explicit_versions_cannot_replace_reserved_or_incompatible_installers() {
     .unwrap();
     assert!(matches!(selected, Selection::Build(version) if version == "0.1.6"));
     assert_eq!(installer_version(&inventory, "0.1.4").unwrap(), "0.1.6");
-}
-
-#[test]
-fn legacy_metadata_never_establishes_reuse() {
-    let (snapshot, published, inventory) = fixture();
-    let selected = select_installer(
-        &snapshot,
-        &snapshot.capabilities,
-        &published,
-        "0.1.4",
-        &inventory,
-        None,
-        |_| Ok(None),
-    )
-    .unwrap();
-    assert!(matches!(selected, Selection::Build(version) if version == "0.1.5"));
-    assert!(
-        select_installer(
-            &snapshot,
-            &snapshot.capabilities,
-            &published,
-            "0.1.4",
-            &inventory,
-            Some("0.1.4"),
-            |_| Ok(None)
-        )
-        .is_err()
-    );
 }
 
 #[test]

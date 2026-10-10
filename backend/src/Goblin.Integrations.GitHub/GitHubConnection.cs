@@ -28,7 +28,6 @@ public sealed class GitHubConnection : IGitHubConnection, IDisposable
 
     public string Profile => Path.Combine(_directory, "active");
     internal GitHubCommandRunner Commands { get; }
-    private string LegacyFile => Path.Combine(Path.GetDirectoryName(_directory)!, "github.json");
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -48,8 +47,6 @@ public sealed class GitHubConnection : IGitHubConnection, IDisposable
             }
             catch { _state = new(true, null, null, null, "The saved GitHub connection could not be read. Sign in again to restore access.", GitHubConnectionStatus.Unavailable); }
         }
-        else if (File.Exists(Path.Combine(Path.GetDirectoryName(_directory)!, "github.json")))
-            _state = _state with { Notice = "Sign in once with GitHub CLI to replace the previous GitHub connection." };
     }
 
     public Task<GitHubState> StatusAsync() { lock (_gate) return Task.FromResult(_state); }
@@ -97,7 +94,6 @@ public sealed class GitHubConnection : IGitHubConnection, IDisposable
                 if (epoch != _epoch) return;
                 if (Directory.Exists(Profile)) Directory.Delete(Profile, true);
                 Directory.Move(staging, Profile);
-                File.Delete(LegacyFile);
                 _state = new(true, account.Login, null, null, null, GitHubConnectionStatus.Connected, account);
             }
         }
@@ -120,7 +116,6 @@ public sealed class GitHubConnection : IGitHubConnection, IDisposable
             lock (_gate)
             {
                 if (Directory.Exists(Profile)) Directory.Delete(Profile, true);
-                File.Delete(LegacyFile);
                 _state = new(true, null, null, null, "Goblin’s saved access was removed. GitHub authorizations can also be revoked in your GitHub account settings.");
                 return _state;
             }

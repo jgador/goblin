@@ -49,11 +49,15 @@ Use current code and tests to check implementation claims in dated plans and aud
 - Follow the four behavioral boundaries and their compatibility/recovery
   contracts. Preserve the existing transport and protocol tests. Repository
   execution requires the isolation boundary in the plan.
-- Until the first real deployment, consolidate schema changes into
+- Goblin is preproduction. Support only the current application, configuration,
+  and installation formats; remove superseded paths instead of adding backward
+  compatibility, migration shims, or in-place upgrade tooling. Development Goblin,
+  PostgreSQL, and k3s installations can be recreated when formats change.
+- Until the first production deployment, consolidate schema changes into
   `backend/database/migrations/0001_initial.sql`; breaking changes are allowed.
   Local development provisioning does not freeze this unreleased baseline.
-  After deployment, keep SQL migrations immutable. Regenerate EF mappings from
-  the database and put custom behavior outside generated files.
+  After production deployment, keep SQL migrations immutable. Regenerate EF
+  mappings from the database and put custom behavior outside generated files.
 - Preserve the frontend technology, visual design, branding, accessibility, and
   HTTP security. Preserve public property contracts, JSON behavior, and relied-upon
   record semantics unless the task calls for changes; identify external impact.

@@ -85,7 +85,7 @@ To try authentication first:
 make setup-rust
 source "$HOME/.cargo/env"
 make install
-make dev
+make dev ARGS=--without-database
 ```
 
 The [Rust development guide](docs/rust-development.md) documents the Codex-aligned
@@ -111,7 +111,9 @@ release; installed hosts do not require Python or a Rust compiler.
 The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official
 Rust `codex app-server`; the browser UI remains TypeScript. Protocol models are
 generated from the checked-in schemas using `System.Text.Json`.
-`make dev` builds the browser assets and .NET solution, then starts the C# host.
+`make dev` builds the browser assets and .NET solution, refreshes the `wsl`
+PostgreSQL profile, then starts the C# host. Create the profile using the
+[PostgreSQL workflow](docs/postgres-workflow.md) first.
 Use `make typecheck` for TypeScript checks and a .NET build, or `make test`
 for schema drift checks (.NET), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for the current
@@ -130,8 +132,8 @@ require attention and explicit recovery.
 
 Durable Work requires a configured, migrated PostgreSQL database. The installer
 sets this up before starting Goblin. For direct local development, follow the
-[database guide](docs/database.md) first, then run `make dev`. Set
-`GOBLIN_WORK_ENABLED=false` to manage connections without PostgreSQL.
+[PostgreSQL workflow](docs/postgres-workflow.md), then run `make dev DB_PROFILE=wsl`.
+Use `make dev ARGS=--without-database` to manage connections without PostgreSQL.
 [Execution hosting](docs/execution-hosting.md) covers repository sandboxes,
 GitHub sign-in, credentials, recovery, and current validation limits.
 

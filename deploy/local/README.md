@@ -23,11 +23,8 @@ leaves installation running in the background. Keep WSL running; closing the
 browser or terminal does not stop the installer. Starting an existing installation
 preserves its data and password.
 
-Starting an existing installation does not upgrade Agent Sandbox. Follow the
-[v1.0.4 in-place upgrade instructions](../azure/reference.md#agent-sandbox-v104-upgrade)
-to update its controller without resetting the cluster or deleting Goblin data.
-For this unreleased naming change, recreate local test installations as described
-in [Kubernetes names](../../docs/kubernetes-names.md#local-test-installations).
+Goblin is preproduction. Recreate this development installation when database,
+application, or cluster formats change; use the [reset commands](#stop-resume-or-start-clean) below.
 
 There is no nested VM, VM image download, Windows hosts-file edit, or manual
 port forwarding. Windows uses WSL's default localhost forwarding. The runner
@@ -94,11 +91,10 @@ Kubernetes diagnostics are available through `sudo k3s kubectl` and
 `/etc/rancher/k3s/k3s.yaml` for all Kubernetes operations, including database
 helpers invoked through a separately installed `kubectl`.
 The installer provisions PostgreSQL and applies schema migrations before
-starting Goblin. To repair or export local tooling credentials after installation,
-run `bash deploy/postgres/setup.sh` to enable
-[PostgreSQL certificate authentication](../../docs/database.md). For this runner,
-setup also enables persistent local database access at `localhost:55432` and
-configures tooling for that port. Use `--port` to choose a different local port.
+starting Goblin. PostgreSQL and the WSL host endpoint use port 5432. Client
+certificates live in user profiles outside the checkout. Windows access uses an
+additional listener inside WSL, for example port 55432; see
+[the PostgreSQL workflow](../../docs/postgres-workflow.md).
 
 To enable or repair local access for an already configured database:
 
@@ -158,10 +154,9 @@ Azure obtains its password from the deployment form instead of the local prompt.
 
 You can prepare the verifier separately with `make setup-password`.
 For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD` through the process
-environment. It does not override an existing verifier. Starting an older local
-installation imports its retained verifier and removes the old
-`.goblin-local/login-password` plaintext file without changing its password.
-`make local-password` now reports the verifier's location; the
+environment. It does not override an existing verifier. The installer can reuse
+its retained password verifier if the checkout's copy is missing.
+`make local-password` reports the verifier's location; the
 original password cannot be displayed.
 
 To change the shared local password, run:
