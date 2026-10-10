@@ -509,6 +509,7 @@ test(
                     ),
                     sslcert: win32.join(roleDirectory, "tls.crt"),
                     sslkey: win32.join(roleDirectory, "tls.key"),
+                    passfile: win32.join(roleDirectory, "pgpass.conf"),
                 },
             });
             const importFiles = JSON.parse(
@@ -520,6 +521,15 @@ test(
             assert.equal(importFiles.allExist, true);
             assert.equal(importFiles.rules, 1);
             assert.equal(importFiles.protected, true);
+            const passfile = JSON.parse(
+                ps(
+                    prefix +
+                        "$s=(Get-Content -Raw -LiteralPath (Join-Path $p 'app/pgadmin.json') | ConvertFrom-Json).Servers.'1'; $path=$s.ConnectionParameters.passfile; $acl=Get-Acl -LiteralPath $path; @{length=(Get-Item -LiteralPath $path).Length; rules=@($acl.Access).Count; protected=$acl.AreAccessRulesProtected} | ConvertTo-Json",
+                ),
+            );
+            assert.equal(passfile.length, 0);
+            assert.equal(passfile.rules, 1);
+            assert.equal(passfile.protected, true);
             run({
                 ...payload,
                 role: "admin",
@@ -533,6 +543,14 @@ test(
             const admin = readPgAdmin("admin").Servers["1"];
             assert.equal(admin.Username, "goblin_admin");
             assert.equal(admin.Name, `Goblin - ${name} (admin)`);
+            assert.equal(
+                admin.ConnectionParameters.passfile,
+                win32.join(
+                    win32.dirname(roleDirectory),
+                    "admin",
+                    "pgpass.conf",
+                ),
+            );
             assert.equal(
                 admin.ConnectionParameters.sslkey,
                 win32.join(win32.dirname(roleDirectory), "admin", "tls.key"),

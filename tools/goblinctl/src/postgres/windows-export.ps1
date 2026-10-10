@@ -40,7 +40,7 @@ try {
         if (Test-Path -LiteralPath $path) {
             foreach ($file in Get-ChildItem -Force -LiteralPath $path) {
                 Assert-Path $file.FullName
-                if ($file.PSIsContainer -or $file.Name -notin @('tls.crt', 'tls.key', 'connection.json', 'pgadmin.json')) { throw 'Unexpected files in export generation' }
+                if ($file.PSIsContainer -or $file.Name -notin @('tls.crt', 'tls.key', 'connection.json', 'pgadmin.json', 'pgpass.conf')) { throw 'Unexpected files in export generation' }
             }
             Remove-Item -LiteralPath $path -Recurse -Force
         }
@@ -97,6 +97,7 @@ try {
                     ConnectionParameters = @{
                         sslmode = $settings.sslmode; sslrootcert = $settings.sslrootcert
                         sslcert = $settings.sslcert; sslkey = $settings.sslkey
+                        passfile = (Join-Path $role 'pgpass.conf')
                     }
                 }
             }
@@ -106,6 +107,9 @@ try {
         Write-PrivateFile (Join-Path $staging 'tls.key') $inputData.key
         Write-PrivateFile (Join-Path $staging 'connection.json') ($settings | ConvertTo-Json -Depth 5)
         Write-PrivateFile (Join-Path $staging 'pgadmin.json') ($pgadmin | ConvertTo-Json -Depth 5)
+        # pgAdmin prompts before trying TLS unless a credential source is configured.
+        # An empty passfile lets it attempt certificate authentication without a password.
+        Write-PrivateFile (Join-Path $staging 'pgpass.conf') ''
         if (-not (Test-Path -LiteralPath $caPath)) { Write-PrivateFile $caPath $inputData.ca }
         Write-PrivateFile $identityPath ($inputData.identity | ConvertTo-Json)
         if (Test-Path -LiteralPath $role) { [IO.Directory]::Move($role, $previous) }

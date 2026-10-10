@@ -111,6 +111,11 @@ and is accessible from your Windows host machine through localhost forwarding.
 3. Open **Goblin → Goblin - wsl (app)**. The port, username, `verify-full`, and all
    certificate paths are already filled in; no password is needed.
 
+The import includes an empty `pgpass.conf` so pgAdmin attempts certificate
+authentication without its initial password prompt. No database password is stored.
+For an already imported server that prompts, leave the password blank, select
+**Save Password**, and click **OK** to remember the password-free connection.
+
 If you already saved a working connection, keep using it. After restarting WSL or
 renewing certificates, run the same `export` command and reconnect that saved
 server. Certificate paths stay the same. Repeated imports add duplicate servers;
