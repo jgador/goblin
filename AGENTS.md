@@ -1,12 +1,37 @@
-# Architecture and verification
+# Working agreement
 
-Follow [the architecture rewrite plan](docs/architecture-refactoring-plan.md).
-The implemented boundary and its current limitations are documented in
-[the Work lifecycle core](docs/work-lifecycle.md).
+Deliver the requested outcome through implementation, affected callers, documentation,
+and relevant verification. Fix regressions caused by the change before stopping.
+Make routine reversible choices within scope; ask when missing information materially
+changes the outcome, authorization, or destructive scope. Continue independent work.
 
-- Work lifecycle rules belong in `backend/src/Goblin.Core/Work/`.
-- Keep the core independent of HTTP, persistence, messaging, and runtime SDKs or
-  generated protocols. Adapters translate to Goblin-owned product types.
+Follow user instructions over skill guidelines and respect each skill's triggers.
+Discussing or editing a skill does not invoke it. If guidance blocks progress,
+identify its file/section, explain the conflict and what is needed, without exposing
+confidential content.
+
+# Read guidance for the task
+
+Follow the relevant sections as needed; these links are not a required reading list.
+Use current code and tests to check implementation claims in dated plans and audits.
+
+| When changing | Guidance |
+| --- | --- |
+| Work behavior or service boundaries | [Architecture plan](docs/architecture-refactoring-plan.md) and [implemented Work lifecycle](docs/work-lifecycle.md) |
+| Execution, recovery, or workspace storage | [Execution hosting](docs/execution-hosting.md) and [workspace lifecycle](docs/workspace-lifecycle.md) |
+| SQL or EF mappings | [Database guide](docs/database.md) |
+| Environment variables | [Named definitions and boundary parsing](docs/environment-variables.md) for reads, sets, removals, and forwarding |
+| Closed behavior or shared values | [Typed ownership, boundary parsing, and browser generation](docs/contract-values.md) |
+| C# types or constructors | [Construction conventions](docs/formatting.md#c-construction-and-contracts) and, when changing record semantics, [record audit](docs/csharp-record-audit.md) |
+| Rust under `tools/` | [Pinned toolchain, conventions, and checks](docs/rust-development.md) |
+| Verification or build/test tooling | [Commands and test selection](docs/repository-layout.md#choosing-verification) |
+| Agent instructions, skills, or task prompts | [Agent workflow guide](docs/agent-workflow.md) |
+
+# Project constraints
+
+- Work lifecycle rules belong in `backend/src/Goblin.Core/Work/`, independent of
+  HTTP, persistence, messaging, process configuration, and runtime SDKs or generated
+  protocols. Adapters translate to Goblin-owned product types.
 - Every failure requires core-owned attention, including temporary failures.
   Do not add automatic retries of failed Work. Reconcile uncertain execution
   before an explicit retry can dispatch a replacement attempt.
@@ -28,52 +53,24 @@ The implemented boundary and its current limitations are documented in
   `backend/database/migrations/0001_initial.sql`; breaking changes are allowed.
   Local development provisioning does not freeze this unreleased baseline.
   After deployment, keep SQL migrations immutable. Regenerate EF mappings from
-  the database and put custom behavior outside generated files. Preserve the
-  frontend technology, visual design, branding, accessibility, and HTTP security.
-- Use regular constructors for class declarations and readonly fields for
-  retained dependencies. Constructor signatures and positional record declarations
-  may change as part of refactoring; do not preserve them solely because they
-  already exist. Prefer cohesive types and clear construction APIs over long
-  positional or optional parameter lists. Preserve public property contracts,
-  JSON behavior, and relied-upon record semantics by default; change them when
-  the task calls for it. Update affected callers and relevant tests together,
-  and identify any external compatibility impact.
+  the database and put custom behavior outside generated files.
+- Preserve the frontend technology, visual design, branding, accessibility, and
+  HTTP security. Preserve public property contracts, JSON behavior, and relied-upon
+  record semantics unless the task calls for changes; identify external impact.
+- Keep operational tooling Python-free and developer tools out of production.
+- Azure installation is manual. Keep automation free of Azure login, live deployment
+  tests, resource provisioning, and cloud cleanup. Preserve templates, installer
+  assets, and offline checks for manual use.
 
-Use `dotnet test backend/tests/Goblin.Core.Tests` for core changes. `make test`
-builds and runs protocol checks, .NET tests, HTTP tests, and deployment tests.
-Real PostgreSQL tests are opt-in; report skips rather than claiming persistence
-coverage. Run the relevant browser and real-runtime checks when integrating
-those boundaries.
+# Verification and artifacts
 
-Coding agents must store all temporary files created inside this repository in
-`.artifacts/`, organized into clearly named subdirectories for the task or tool
-(for example, `.artifacts/playwright/` or `.artifacts/contract-investigation/`).
-This includes one-off scripts, scratch code, temporary test fixtures, test results,
-reports, screenshots, traces, logs, and other files used temporarily for testing
-or investigation. Configure tools such as Playwright to write their temporary
-files and test output into these subdirectories. Do not scatter temporary files
-or output directories elsewhere in the repository.
+Run relevant checks without repeated approval for local edit/test steps. Core changes
+require `dotnet test backend/tests/Goblin.Core.Tests`; owning C#/Rust contract changes
+require `make contracts-check`. Use the test-selection guide for other boundaries.
+Repeat or broaden passing checks only for new changes, failures, unresolved risks,
+or required coverage. Report failures and skips; PostgreSQL tests remain opt-in.
+Claim persistence or authenticated runtime coverage only from actual integration checks.
 
-Azure installation is manual. Keep repository automation free of Azure login,
-live deployment tests, resource provisioning, and cloud cleanup. Preserve the
-templates, installer assets, and offline deployment checks for manual use.
-
-For environment variables, follow [the definition catalogs and contributor
-guide](docs/environment-variables.md). Reference named definitions for reads,
-sets, removals, and forwarding; keep parsing at adapter/configuration boundaries
-and keep the Work core independent of process configuration.
-
-For Rust tooling under `tools/`, follow [the Rust development guide](docs/rust-development.md).
-Use the pinned toolchain and helper versions, `make format-rust`,
-`make lint-rust CARGO_ARGS="-p <crate>"`, and
-`make test-rust CARGO_ARGS="-p <crate>"`; `make test-rust-doc` covers documentation tests.
-Keep the shared Clippy rules enabled, use inline format arguments and method
-references when clear, and prefer exhaustive matches. Avoid opaque boolean and
-`Option` arguments in new APIs. Keep operational tooling Python-free and keep
-developer tools out of production installations. Snapshot changes must be
-reviewed before accepting them with `cargo insta`.
-
-For closed behavior and shared contract values, follow [the ownership and
-generation guide](docs/contract-values.md). Use typed internal APIs and generated
-browser values; parse only at adapters and persistence boundaries. Run
-`make contracts-check` after changing an owning C# or Rust definition.
+Keep all temporary files created inside this repository under `.artifacts/` in
+task/tool subdirectories, including scratch scripts, fixtures, test results,
+reports, screenshots, traces, and logs. Configure test tools to use those paths.

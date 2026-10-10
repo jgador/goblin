@@ -5,6 +5,11 @@ Work, integration boundaries, conditional execution hosting, and the persisted U
 Validation and remaining integration limits are recorded in the implementation
 checkpoint below. Future runtime switching and collaboration remain deferred.
 
+Use this plan when changing the four behavioral boundaries. Its architectural
+constraints still apply; the original rewrite scope and dated checkpoints describe
+past work, not a standing assignment to repeat it. For current behavior and known
+limits, start with the relevant section of [the Work lifecycle](work-lifecycle.md).
+
 Initial code review on 2026-09-19 against
 [`master` at `caecffc`](https://github.com/jgador/goblin/commit/caecffcb5276a35a7a0520ed412c253d1af77635).
 

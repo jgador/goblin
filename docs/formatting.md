@@ -50,6 +50,18 @@ and EF mappings.
 The style pass excludes `IDE0130` and `IDE1006`, as recorded in the
 [generated C# formatting audit](generated-csharp-formatting.md).
 
+## C# construction and contracts
+
+Use regular constructors for class declarations and readonly fields for retained
+dependencies. Constructor signatures and positional record declarations may change
+as part of refactoring; do not preserve them solely because they already exist.
+Prefer cohesive types and clear construction APIs over long positional or optional
+parameter lists. Preserve public property contracts, JSON behavior, and relied-upon
+record semantics by default; change them when the task calls for it. Update affected
+callers and relevant tests together, and identify any external compatibility impact.
+The [record audit](csharp-record-audit.md) explains existing construction choices
+and the value/copy semantics that remain in use.
+
 Separate C# type declarations, methods, constructors, and attributed members with
 at least one blank line. Keep attributes on their own lines directly above the
 declaration they annotate. Put enum braces and each enum value on separate lines;
@@ -58,6 +70,8 @@ properties may remain grouped. Formatting alone should not change record shape;
 refactoring may replace positional declarations with explicit construction APIs
 while preserving the required behavior and contracts. These spacing rules also
 apply to generated C#; update the generators when their output needs changes.
+
+## Deployment assets
 
 Formatting does not rebuild deployment artifacts. After editing a bootstrap or
 Bicep source, run `make deploy-generate` to generate review assets in `.artifacts/azure`.

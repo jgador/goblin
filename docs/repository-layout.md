@@ -132,9 +132,9 @@ npm run typecheck
 | `make build-backend` | Build the .NET solution using any existing frontend output |
 | `make typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
 | `make typecheck-scripts` | Check directly executed TypeScript scripts without building |
-| `make test` | Build, check protocol generation, and run .NET, HTTP, and deployment tests |
+| `make test` | Build, check generated contracts/protocols, and run Rust, .NET, frontend, HTTP, release, and offline deployment tests |
 | `make test-browser` | Build and run Playwright journeys |
-| `make test-codex` | Build and check the pinned Codex binary with isolated test credentials |
+| `make test-codex` | Build and check the pinned Codex binary's local storage/transport with synthetic credentials; no authenticated model task |
 | `make protocol-generate` | Regenerate C# models from the checked-in schemas |
 | `make protocol-check` | Verify that generated models match the schemas |
 | `make kubernetes-generate` | Regenerate selected Kubernetes and Agent Sandbox models |
@@ -145,6 +145,42 @@ After building frontend assets, publish with:
 ```sh
 dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 ```
+
+### Choosing verification
+
+Choose checks for the behavior and boundaries changed. Local edits, fixture tests,
+and fixing regressions from the requested change can proceed without approval at
+each step. Reuse passing results for unchanged content; broaden or repeat checks
+when new changes, failures, unresolved risks, or required coverage justify it.
+Use meaningful regression tests for behavior changes rather than assertions that
+only repeat the implementation.
+
+| Change | Relevant verification |
+| --- | --- |
+| Prose or agent instructions only | Review the diff, relative links/anchors, and commands against their owners; run `git diff --check`. Runtime tests are unnecessary unless executable behavior also changes. |
+| Work core | `dotnet test backend/tests/Goblin.Core.Tests`; add boundary checks below when callers or integrations change. |
+| Other C# behavior | The affected project under `backend/tests/`; use `make test` when changes span application, transport, HTTP, or deployment contracts. Preserve existing protocol and transport coverage. |
+| Shared C#/Rust contract values | Generate and validate using [the contract guide](contract-values.md#cross-language-changes), including `make contracts-check`. |
+| Rust tooling | `make format-rust`, `make lint-rust CARGO_ARGS="-p <crate>"`, and `make test-rust CARGO_ARGS="-p <crate>"`. The last command includes documentation tests; review snapshots before accepting them. |
+| Browser code or UI behavior | `npm --prefix frontend run typecheck`, affected frontend tests, and relevant `make test-browser ARGS="tests/e2e/<journey>.spec.ts"` journeys when integrating the browser boundary. Inspect the changed interaction and visual result. |
+| Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus real PostgreSQL checks with the explicit setup in [the database guide](database.md#application-configuration-and-verification). |
+| Codex transport or execution hosting | Existing transport/protocol tests and `make test-codex` where relevant; authenticated execution/isolation needs the real-runtime checks described in [execution hosting](execution-hosting.md#verification-limits). |
+| Installer or deployment contracts | Offline generation and deployment checks in `make test`; consult [formatting deployment assets](formatting.md#deployment-assets) for generated inputs. Azure installation stays manual. |
+
+`make test` is the broad offline suite with real PostgreSQL checks gated by explicit
+test configuration. `make check` adds Rust formatting/lints and type checks. These
+are useful integration/CI gates, not prerequisites for every local edit. Required
+CI checks still apply; scoped local results do not imply that CI ran.
+
+The ordinary HTTP/browser harness uses runtime fixtures. `make test-codex` uses the
+real pinned executable with an isolated home and synthetic credentials, without
+submitting a model task. Neither establishes authenticated execution coverage.
+PostgreSQL and database-backed browser journeys can skip without their test setup;
+report those skips. Use the documented test configuration for live checks and keep
+credentials private. A missing live setup leaves that coverage unverified; complete
+the available checks and report the gap rather than claiming persistence or runtime
+verification. Do not add Azure login, provisioning, live deployment, or cleanup to
+these checks.
 
 ## Build output and browser routes
 

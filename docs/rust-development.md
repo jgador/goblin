@@ -97,6 +97,10 @@ Production paths propagate contextual errors instead of calling `unwrap` or
 `expect`. Codex's UI-color and SQLite-specific disallowed methods do not apply to
 Goblin's Rust crates.
 
+Keep the shared Clippy rules enabled. Use inline format arguments and method
+references when clear, and prefer exhaustive matches. Avoid opaque boolean and
+`Option` arguments in new APIs; express the caller's intent with cohesive types.
+
 The nextest configuration matches Codex's default/local profile: an 8 MiB Rust
 thread stack, a 30-second slow-test period with termination after two periods,
 one retry, and JUnit output under `target/nextest/`. These retries apply only to

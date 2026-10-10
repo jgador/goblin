@@ -94,6 +94,10 @@ Use `make help` for the full target list, or `make build`, `make test`,
 `make check`, and `make format` for common workflows. Frontend-only commands
 remain npm commands inside `frontend/`; see [repository tasks](docs/repository-layout.md#build-and-test).
 
+For coding-agent contributions, [AGENTS.md](AGENTS.md) defines repository rules.
+The [agent workflow guide](docs/agent-workflow.md) covers task prompts, completion,
+and maintaining instructions, with guidance informed by GPT-6 Astra.
+
 On first start, choose and confirm your password in the terminal. Open
 http://localhost:8787, enter that password, and click **Open workspace**.
 Both local launch paths use the shared Rust password implementation and the same application login.
