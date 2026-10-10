@@ -40,7 +40,7 @@ try {
         if (Test-Path -LiteralPath $path) {
             foreach ($file in Get-ChildItem -Force -LiteralPath $path) {
                 Assert-Path $file.FullName
-                if ($file.PSIsContainer -or $file.Name -notin @('tls.crt', 'tls.key', 'connection.json')) { throw 'Unexpected files in export generation' }
+                if ($file.PSIsContainer -or $file.Name -notin @('tls.crt', 'tls.key', 'connection.json', 'pgadmin.json')) { throw 'Unexpected files in export generation' }
             }
             Remove-Item -LiteralPath $path -Recurse -Force
         }
@@ -87,11 +87,25 @@ try {
             host = 'localhost'; port = $inputData.port; database = 'goblin'; username = ('goblin_' + $inputData.role)
             sslmode = 'verify-full'; sslrootcert = $caPath
             sslcert = (Join-Path $role 'tls.crt'); sslkey = (Join-Path $role 'tls.key'); identity = $inputData.identity
-        } | ConvertTo-Json -Depth 5
+        }
+        $pgadmin = @{
+            Servers = @{
+                '1' = @{
+                    Name = ('Goblin - ' + $inputData.profile + ' (' + $inputData.role + ')'); Group = 'Goblin'
+                    Host = $settings.host; Port = $settings.port
+                    MaintenanceDB = $settings.database; Username = $settings.username
+                    ConnectionParameters = @{
+                        sslmode = $settings.sslmode; sslrootcert = $settings.sslrootcert
+                        sslcert = $settings.sslcert; sslkey = $settings.sslkey
+                    }
+                }
+            }
+        }
         # All new files inherit the private staging ACL before any key bytes are written.
         Write-PrivateFile (Join-Path $staging 'tls.crt') $inputData.certificate
         Write-PrivateFile (Join-Path $staging 'tls.key') $inputData.key
-        Write-PrivateFile (Join-Path $staging 'connection.json') $settings
+        Write-PrivateFile (Join-Path $staging 'connection.json') ($settings | ConvertTo-Json -Depth 5)
+        Write-PrivateFile (Join-Path $staging 'pgadmin.json') ($pgadmin | ConvertTo-Json -Depth 5)
         if (-not (Test-Path -LiteralPath $caPath)) { Write-PrivateFile $caPath $inputData.ca }
         Write-PrivateFile $identityPath ($inputData.identity | ConvertTo-Json)
         if (Test-Path -LiteralPath $role) { [IO.Directory]::Move($role, $previous) }

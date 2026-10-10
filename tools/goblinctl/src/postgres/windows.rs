@@ -40,9 +40,15 @@ pub fn export(name: &str, client: &Client, role: Role) -> Result<()> {
         output.status.success(),
         "Windows export failed; check access to your Windows LocalAppData directory and its private file permissions"
     );
+    let settings = String::from_utf8(output.stdout)?;
+    let settings = settings.trim();
+    let directory = settings
+        .strip_suffix("connection.json")
+        .context("Windows export did not return its connection settings path")?;
+    println!("Windows connection settings: {settings}");
+    println!("pgAdmin import: {directory}pgadmin.json");
     println!(
-        "Windows certificates: {}",
-        String::from_utf8(output.stdout)?.trim()
+        "First use: pgAdmin > Tools > Import/Export Servers > Import; keep existing servers.\nAfter certificate refresh, reconnect the saved server. Import again only for a new profile or role; update its port if you change forwarding."
     );
     println!(
         "Windows host client: localhost:{port}, database goblin, user goblin_{}, sslmode verify-full",

@@ -86,19 +86,49 @@ their opt-in behavior. `db run` also wraps other developer commands; add
 
 ## Windows database clients
 
-After [first use](#first-use), run these commands **inside WSL** to prepare access
-and export certificates for your Windows host machine:
+After [first use](#first-use), run this **inside WSL**:
 
 ```bash
-sudo -v
-goblinctl db connect wsl --local --forward-port 55432
 goblinctl db export wsl --client windows --role app
 ```
 
-PostgreSQL and its WSL host endpoint stay on **5432**. The additional **55432**
-listener runs inside WSL; your Windows host machine accesses it through WSL's
-localhost forwarding. `wsl` is the saved database profile name. For later
-connections, `goblinctl db connect wsl` reuses its source and forwarding port.
+`export` refreshes certificates, starts forwarding, verifies a TLS login, and
+writes Windows files. There is no separate `connect` step for an existing profile.
+PostgreSQL stays on **5432**; the additional **55432** listener runs inside WSL
+and is accessible from your Windows host machine through localhost forwarding.
+
+**pgAdmin: import once per profile and role.** On your Windows host machine:
+
+1. Open **Tools → Import/Export Servers**, select **Import**, and choose the full
+   Windows path printed after **pgAdmin import** by the command above:
+
+   ```text
+   %LOCALAPPDATA%\Goblin\postgres\wsl\app\pgadmin.json
+   ```
+
+2. Leave **Remove all the existing servers?** set to **No**. Select the generated
+   server and finish the import.
+3. Open **Goblin → Goblin - wsl (app)**. The port, username, `verify-full`, and all
+   certificate paths are already filled in; no password is needed.
+
+If you already saved a working connection, keep using it. After restarting WSL or
+renewing certificates, run the same `export` command and reconnect that saved
+server. Certificate paths stay the same. Repeated imports add duplicate servers;
+if you change the forwarding port, update the saved server's port.
+
+For an existing Azure profile, use this inside WSL, then import the printed
+`azure-dev\app\pgadmin.json` path once in pgAdmin:
+
+```bash
+goblinctl db export azure-dev --client windows --role app
+```
+
+The SSH tunnel runs inside WSL on the profile's saved port, for example **55433**.
+Keep WSL running while using either connection. Windows exports are explicit
+snapshots; export again after certificate renewal or a port change.
+
+<details>
+<summary>Manual settings for other clients or troubleshooting</summary>
 
 On your **Windows host machine**, open PowerShell and read the exported settings:
 
@@ -137,19 +167,7 @@ Exports live outside the checkout at
 Windows account and sets private ACLs. Export only the role your client needs;
 another database's exported identity cannot be overwritten.
 
-For an existing Azure profile, run **inside WSL**:
-
-```bash
-goblinctl db connect azure-dev
-goblinctl db export azure-dev --client windows --role app
-```
-
-On Windows, use `azure-dev\app\connection.json` under the same export directory
-and its saved port (for example **55433**). The SSH tunnel runs inside WSL.
-
-Export again after certificate renewal or changing a forwarding port. Windows
-exports are explicit snapshots; unavailable Windows interop does not block WSL
-development. Keep WSL running while using its forwarded connections.
+</details>
 
 ## Refresh, reconnect and disconnect
 
