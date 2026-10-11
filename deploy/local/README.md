@@ -106,8 +106,8 @@ The endpoint runs as `goblin-local-postgres.socket`/`.service` under systemd and
 binds only to loopback. It forwards raw TCP to an internal Kubernetes Service;
 individual client resets do not stop other connections, and Kubernetes follows
 replacement database pods. No terminal or `kubectl port-forward` is required.
-Certificate authentication and server verification still apply. Inspect it with
-`sudo journalctl -u goblin-local-postgres.service`.
+Certificate authentication and server verification still apply. Inspect it from
+a root shell with `journalctl -u goblin-local-postgres.service`.
 
 ## Stop, resume, or start clean
 

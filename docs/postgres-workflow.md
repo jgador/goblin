@@ -1,8 +1,9 @@
 # PostgreSQL development workflow
 
-Run client commands **inside WSL, as your development user**. PostgreSQL and the
-Linux host endpoint use **5432** in both WSL and Azure. Extra listeners run in
-WSL; your Windows host machine reaches them through WSL localhost forwarding.
+Run client commands **inside WSL, as root**. The commands below assume a root
+shell. PostgreSQL and the Linux host endpoint use **5432** in both WSL and Azure.
+Extra listeners run in WSL; your Windows host machine reaches them through WSL
+localhost forwarding.
 
 | Database | Linux host endpoint | Optional WSL listener | Windows client |
 | --- | --- | --- | --- |
@@ -19,8 +20,7 @@ After completing the Goblin installer, use the CLI from this checkout:
 ```bash
 cargo build --locked -p goblinctl
 export PATH="$PWD/target/debug:$PATH"
-sudo apt install -y postgresql-client openssl openssh-client
-sudo -v
+apt install -y postgresql-client openssl openssh-client
 goblinctl db connect wsl --local --forward-port 55432
 ```
 
@@ -28,16 +28,16 @@ To use a database client on your Windows host machine, continue with
 [Windows database clients](#windows-database-clients) below.
 
 The installer creates host access automatically. To repair it, run this on the
-**WSL instance or Azure VM containing the database**:
+**WSL instance or Azure VM containing the database**, from a root shell:
 
 ```bash
-sudo "$(command -v goblinctl)" db host
+goblinctl db host
 ```
 
 This needs port 5432 to be free or already owned by Goblin. If another PostgreSQL
 service occupies it, decide which service to retain before stopping anything.
 Database setup, when needed after k3s/cert-manager installation, remains
-`sudo goblinctl db setup`; it creates no host client exports.
+`goblinctl db setup`; it creates no host client exports.
 
 For Azure, replace the SSH destination with your VM or SSH host alias. Configure
 SSH authentication and trust the host key first. The SSH user needs noninteractive
@@ -194,7 +194,7 @@ goblinctl db disconnect azure-dev
 Refresh preserves the selected port. Disconnect stops only that profile's extra
 listener/tunnel and retains certificates/settings. Reconnect after restarting
 WSL or losing an SSH connection. Local PostgreSQL host access remains managed by
-the installation. For an expired sudo session, run `sudo -v` again.
+the installation.
 
 ## Storage
 

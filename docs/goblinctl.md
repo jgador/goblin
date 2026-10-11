@@ -14,6 +14,8 @@ Git, k3s, and the application's existing build/runtime dependencies remain.
 
 ## Commands
 
+The PostgreSQL commands on this page assume a root shell.
+
 ```bash
 goblinctl install --hostname goblin.example --source-ref COMMIT
 sudo goblinctl install status --json
@@ -22,10 +24,10 @@ sudo goblinctl status --json
 sudo goblinctl doctor --json
 sudo goblinctl logs --follow
 sudo goblinctl password set --replace
-sudo goblinctl db setup
-sudo goblinctl db host
+goblinctl db setup
+goblinctl db host
 goblinctl db connect wsl --local --forward-port 55432
-sudo goblinctl db migrate IMAGE
+goblinctl db migrate IMAGE
 ```
 
 `status` checks live services and application readiness; `install status` reports
@@ -51,7 +53,7 @@ sudo goblinctl local stop                     # retains application data and PVC
 sudo goblinctl local reset --yes              # deletes only this owned local cluster
 goblinctl --repo "$PWD" password set --replace
 sudo goblinctl local start                    # loads the changed local verifier
-sudo goblinctl local database
+goblinctl local database
 ```
 
 The local source snapshot includes Git-visible working-tree changes and untracked

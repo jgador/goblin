@@ -23,16 +23,17 @@ For daily WSL/Azure connections, Windows exports and development commands, use
 
 ## Set up certificate authentication in k3s
 
-After the Goblin bundle has installed k3s and cert-manager, run from this checkout:
+After the Goblin bundle has installed k3s and cert-manager, run from this checkout
+in a root shell:
 
 ```bash
 bash deploy/postgres/setup.sh
 ```
 
-Use `sudo bash` if the kubeconfig requires root. The script uses the selected
-`kubectl` context, falling back to `k3s kubectl`. It issues certificates,
-configures PostgreSQL, and verifies a real TLS client login. The application
-deployment mounts its client certificate and uses packaged connection settings.
+The script uses the selected `kubectl` context, falling back to `k3s kubectl`.
+It issues certificates, configures PostgreSQL, and verifies a real TLS client
+login. The application deployment mounts its client certificate and uses packaged
+connection settings.
 Rerunning setup preserves the database volume, CA, and existing certificate identities.
 
 The application installer now invokes this setup and the migration job before
