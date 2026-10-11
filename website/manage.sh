@@ -62,9 +62,9 @@ case "$action" in
         sed "s|image: docker.io/library/goblin-website:local|image: $image|" "$website_dir/k8s/deployment.yaml" >"$artifacts/deployment.yaml"
         "${kubectl[@]}" apply -f "$website_dir/k8s/namespace.yaml"
         "${kubectl[@]}" apply -f "$website_dir/k8s/service.yaml" -f "$artifacts/deployment.yaml"
-        "${kubectl[@]}" -n goblin-website rollout status deployment/website --timeout=120s
+        "${kubectl[@]}" -n goblin rollout status deployment/website --timeout=120s
         "${kubectl[@]}" apply -f "$website_dir/k8s/hpa.yaml"
-        "${kubectl[@]}" -n goblin-website wait --for=condition=ScalingActive horizontalpodautoscaler/website --timeout=120s
+        "${kubectl[@]}" -n goblin wait --for=condition=ScalingActive horizontalpodautoscaler/website --timeout=120s
         printf '\nWebsite deployed to local k3s. Run make website-preview to open http://localhost:5174.\n'
         ;;
     load-test)
@@ -79,7 +79,7 @@ case "$action" in
     preview)
         local_k3s
         printf 'Open http://localhost:5174. Keep this terminal open; Ctrl+C stops forwarding.\n'
-        exec "${kubectl[@]}" -n goblin-website port-forward --address 127.0.0.1 service/website 5174:80
+        exec "${kubectl[@]}" -n goblin port-forward --address 127.0.0.1 service/website 5174:80
         ;;
     *)
         printf 'Usage: bash website/manage.sh {dev|stop|status|logs|deploy|preview|load-test}\n' >&2

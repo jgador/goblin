@@ -160,6 +160,13 @@ the initial Codex implementation.
 
 ## Baseline reviewed before implementation
 
+Deployment identity uses two components: `platform` for the main application and
+`website` for the public preview/marketing site, both in namespace `goblin`.
+The platform still composes the existing `backend/` and `frontend/` source trees;
+`website/` retains its independent build and deployment workflow. Selectors grant
+platform access to supporting services without granting the website that access.
+See [Kubernetes names](kubernetes-names.md) for resources, images, and storage.
+
 The reviewed application managed workspace access, Codex authentication, and a
 restricted verification prompt. Authentication and execution coordination lived
 in the web project; public account DTOs referenced generated Codex types. The

@@ -506,7 +506,7 @@ mod tests {
     fn snapshot() -> Inputs {
         let files = BTreeMap::from([
             ("Cargo.lock".into(), "a".repeat(64)),
-            ("deploy/azure/install-app.sh".into(), "b".repeat(64)),
+            ("deploy/azure/install-platform.sh".into(), "b".repeat(64)),
         ]);
         Inputs {
             schema_version: 1,
@@ -621,7 +621,7 @@ mod tests {
         }
         assert_eq!(inputs(directory.path()).unwrap(), original);
         fs::write(
-            directory.path().join("deploy/azure/install-app.sh"),
+            directory.path().join("deploy/azure/install-platform.sh"),
             "new installer behavior",
         )
         .unwrap();

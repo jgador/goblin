@@ -42,7 +42,7 @@ Read the current implementations before relying on this inventory:
   preflight, systemd units, and ports.
 - `tools/goblinctl/src/credentials.rs` and
   `backend/src/Goblin.Web/Program.cs`: direct development startup and data overrides.
-- `deploy/azure/install-app.sh`: Docker image naming and build ownership.
+- `deploy/azure/install-platform.sh`: Docker image naming and build ownership.
 - If database artifacts exist, `tools/goblinctl/src/database.rs` and
   `docs/database.md`: exported credentials and generated configuration.
 
@@ -69,7 +69,7 @@ full process environments, or secret-bearing connection strings.
 
    Inspect unexpected workloads before uninstalling a whole cluster. Do not use
    the ambient kubectl context or start a stopped cluster just for inventory.
-   Expected Goblin storage includes `goblin-auth-data` and, when separately set
+   Expected Goblin storage includes `platform-data` and, when separately set
    up, `goblin-postgres-data`. The default local-path data lives under
    `/var/lib/rancher/k3s/storage`; external/retained volumes need separate review.
 4. Identify listeners and their owning PIDs/services, including ports 80, 443,
@@ -160,7 +160,7 @@ removes these verified artifacts after their writers have stopped:
 
 | Target relative to this checkout | Cleanup scope |
 | --- | --- |
-| `.goblin-auth/` | Private Codex login/tokens, session databases, history, home, workspace, and other application state. |
+| `.goblin-platform/` | Private Codex login/tokens, session databases, history, home, workspace, and other application state. |
 | `.goblin-browser-test/` | Fake-login state, browser-test password, and private test workspace. |
 | `.goblin-local/` | Installation source snapshots, bundles, and logs. |
 | `.goblin-secrets/` | Ignored test credentials, including `owner-password`; preserve `.gitkeep` and any other tracked files. |
@@ -181,7 +181,7 @@ removed rather than claiming the environment is completely clean:
   Never infer that a retained PV, remote volume, or shared host path is disposable.
 - **Docker artifacts:** Remove verified Goblin-only test containers and their
   exclusive volumes/networks. Remove verified installation image tags, normally
-  `localhost/goblin-auth:<source-sha256>`, after checking other consumers. Preserve
+  `localhost/goblin-platform:<source-sha256>`, after checking other consumers. Preserve
   unrelated tags, shared base images, Docker's daemon/configuration, and shared
   BuildKit/download caches. Do not use `docker system prune`, global volume prune,
   or force image removal. Report retained shared caches; this is a state reset,
@@ -194,7 +194,7 @@ removed rather than claiming the environment is completely clean:
   not just the prefix. Preserve the shared server, other databases, and roles with
   other consumers. Do not connect to or mutate an external database for this task.
 - **Other files:** Remove exact verified custom data/password paths, local auth
-  backups (such as individually identified `goblin-auth*.tar` files), and abandoned
+  backups (such as individually identified `goblin-platform*.tar` files), and abandoned
   test/temp directories tied to this checkout. Enumerate candidates without
   deleting by wildcard. Preserve unrelated `/tmp` entries, active agent work,
   personal credentials, kubeconfig contexts for other clusters, and source work.

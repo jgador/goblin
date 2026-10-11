@@ -137,7 +137,7 @@ try {
             assert.equal(check.pods.status, 200);
             const appPod = check.pods.body.items.find(
                 (pod: { metadata: { labels?: { app?: string } } }) =>
-                    pod.metadata.labels?.app === "goblin-auth",
+                    pod.metadata.labels?.app === "platform",
             );
             assert.ok(appPod);
             assert.equal(check.secrets.status, 403);

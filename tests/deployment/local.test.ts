@@ -116,7 +116,7 @@ test("native setup assets work outside a checkout and do not overwrite template 
     });
     for (const name of [
         "installer.sh",
-        "install-app.sh",
+        "install-platform.sh",
         "goblin-setup.service",
         "goblin-installer.service",
         "sandbox-kustomization.yaml",

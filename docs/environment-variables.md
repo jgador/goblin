@@ -100,11 +100,13 @@ operator inputs are documented in the Rust catalog too:
 Installer inputs are consumed by embedded scripts,
 so changing their names or semantics requires checking the shipping installer.
 
-The application template `deploy/auth/sandbox.yaml`, Azure overlays, Docker image
-defaults, and PostgreSQL migration environment retain their existing names and
-values. A catalog's fallback describes a consumer default; a deployment may supply
+The platform template `deploy/platform/sandbox.yaml`, Azure overlays, Docker image
+defaults, and PostgreSQL migration environment supply explicit deployment values.
+A catalog's fallback describes a consumer default; a deployment may supply
 an explicit value, such as `GOBLIN_HOST=0.0.0.0` instead of the web host's loopback
-default. No installer release or dependency pin is changed by this refactor.
+default. See [Kubernetes names](kubernetes-names.md) for component identity and
+storage defaults. Published installer provenance stays in the dependency lock;
+current embedded asset changes require a newly built installer before release.
 
 ## Adding a variable
 

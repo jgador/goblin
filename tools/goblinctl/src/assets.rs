@@ -43,8 +43,8 @@ pub const SETUP: &[(&str, &[u8])] = &[
         include_bytes!("../../../deploy/azure/setup/installer.sh"),
     ),
     (
-        "install-app.sh",
-        include_bytes!("../../../deploy/azure/install-app.sh"),
+        "install-platform.sh",
+        include_bytes!("../../../deploy/azure/install-platform.sh"),
     ),
     (
         "sandbox-kustomization.yaml",

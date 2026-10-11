@@ -32,16 +32,17 @@ const dwellSeconds = 20;
 const sampleMilliseconds = 250;
 const output = resolve(repo, ".artifacts/website/load-test", new Date().toISOString().replaceAll(":", "-"));
 await mkdir(output, { recursive: true });
-const kubectl = ["kubectl", "--kubeconfig", "/etc/rancher/k3s/k3s.yaml", "-n", "goblin-website"];
+const kubectl = ["kubectl", "--kubeconfig", "/etc/rancher/k3s/k3s.yaml", "-n", "goblin"];
 async function command(args) {
   return (await run("k3s", args, { timeout: 15_000, maxBuffer: 4 * 1024 * 1024 })).stdout;
 }
 async function websitePod() {
-  const list = JSON.parse(await command([...kubectl, "get", "pods", "-l", "app.kubernetes.io/name=goblin-website", "-o", "json"]));
+  const list = JSON.parse(await command([...kubectl, "get", "pods", "-l", "app.kubernetes.io/name=website", "-o", "json"]));
   assert.equal(list.items.length, 1, "Measurement requires exactly one website pod and no rollout in progress");
   const pod = list.items[0];
   assert.ok(!pod.metadata.deletionTimestamp, "Website pod is terminating");
   assert.equal(pod.spec.containers.length, 1, "Measurement requires the website container without sidecars");
+  assert.equal(pod.spec.containers[0].name, "website", "Measurement requires the website container");
   const container = pod.status.containerStatuses.find(item => item.name === "website");
   assert.ok(container?.ready && container.state.running, "Website container must be ready and running");
   return { pod, container };
@@ -65,6 +66,7 @@ const cgroupPath = membership.split("\n").find(line => line.startsWith("0::"))?.
 assert.ok(cgroupPath?.includes(id), "Expected the website container's cgroup v2 path");
 const cgroup = resolve("/sys/fs/cgroup", `.${cgroupPath}`);
 const service = JSON.parse(await command([...kubectl, "get", "service", "website", "-o", "json"]));
+assert.equal(service.spec.selector["app.kubernetes.io/name"], "website", "Traffic must target only website pods");
 const origin = new URL(`http://${service.spec.clusterIP}:${service.spec.ports[0].port}`).origin;
 const startedAt = new Date().toISOString();
 const start = performance.now();

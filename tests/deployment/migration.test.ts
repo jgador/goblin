@@ -13,7 +13,7 @@ test("migration retry observes an interrupted job and replaces only a terminal o
     const bin = join(root, "bin");
     await mkdir(bin);
     await writeFile(join(bin, "package.json"), '{"type":"commonjs"}\n');
-    const image = "localhost/goblin-auth:test";
+    const image = "localhost/goblin-platform:test";
     const job = JSON.parse(
         execFileSync(goblinctl, ["internal", "migration-job", image], {
             encoding: "utf8",
@@ -67,7 +67,7 @@ if (args[0] === 'delete') fs.unlinkSync(file('job'));
             retried.findIndex((args) => args[0] === "create"),
     );
     job.spec.template.spec.containers[0].image =
-        "localhost/goblin-auth:different";
+        "localhost/goblin-platform:different";
     await writeFile(join(root, "job"), JSON.stringify(job));
     await writeFile(join(root, "calls"), "");
     assert.throws(() => run(), /ownership or image differs/);

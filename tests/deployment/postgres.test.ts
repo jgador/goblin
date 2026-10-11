@@ -100,8 +100,8 @@ test("database setup does not patch or restart the application", async (t) => {
         !requests.some(
             (args) =>
                 args.includes("sandbox") ||
-                args.includes("sandbox/app") ||
-                args.includes("app=goblin-auth"),
+                args.includes("sandbox/platform") ||
+                args.includes("app=platform"),
         ),
     );
 });

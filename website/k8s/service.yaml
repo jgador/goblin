@@ -2,10 +2,10 @@ apiVersion: v1
 kind: Service
 metadata:
   name: website
-  namespace: goblin-website
+  namespace: goblin
 spec:
   selector:
-    app.kubernetes.io/name: goblin-website
+    app.kubernetes.io/name: website
   ports:
     - name: http
       port: 80

@@ -1,6 +1,6 @@
 .git
 .goblin-secrets
-.goblin-auth
+.goblin-platform
 .goblin-browser-test
 .goblin-local
 .artifacts

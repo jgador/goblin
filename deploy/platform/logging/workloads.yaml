@@ -114,7 +114,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: goblin-auth
+              app: platform
         - podSelector:
             matchLabels:
               app: goblin-fluent-bit

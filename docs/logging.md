@@ -19,7 +19,7 @@ and Work/Attempt instrumentation are deferred. Existing `Console.WriteLine` and
 
 The main Goblin container writes to stdout/stderr. k3s/containerd wraps each line
 in CRI format in `/var/log/pods`; `/var/log/containers` provides symlinks. One
-Fluent Bit DaemonSet pod per node tails `*_goblin_auth-*.log`, reconstructs CRI
+Fluent Bit DaemonSet pod per node tails `*_goblin_platform-*.log`, reconstructs CRI
 partial lines, parses JSON messages, and adds pod/container/namespace/node metadata.
 Plain messages use the container timestamp and retain their text.
 
@@ -98,11 +98,11 @@ by VictoriaLogs itself, so the stack adds **two pods** on one node.
 
 ## Authentication and deployment
 
-The manifests are in `deploy/auth/logging/`, included by the existing local and
+The manifests are in `deploy/platform/logging/`, included by the existing local and
 Azure Kustomize installations. ConfigMap content hashes roll Fluent Bit when its
 configuration changes. The installer copies the manifests and waits for both
 logging workloads. Rebuild the native installer for changes to its embedded
-`install-app.sh`; follow [the release order](goblinctl.md#release-order) before
+`install-platform.sh`; follow [the release order](goblinctl.md#release-order) before
 publishing a production installer.
 
 `GOBLIN_VICTORIALOGS_URL` is a trusted private HTTP origin. Kubernetes sets it to

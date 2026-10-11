@@ -217,7 +217,7 @@ make website-preview
 
 The deployment command builds a separate Nginx image containing only the static
 website and license notices. It streams the image from Docker into k3s's
-containerd, applies the manifests in `k8s/` to the `goblin-website` namespace,
+containerd, applies the manifests in `k8s/` to the shared `goblin` namespace,
 and waits for the rollout. Every invocation supplies a new image tag, including
 uncommitted source edits. `imagePullPolicy: Never` uses that imported image.
 The local manifests belong to the website and are separate from Goblin's
@@ -368,11 +368,19 @@ New Deployments default to one replica. The Deployment manifest leaves
 `spec.replicas` unset so later deployments do not overwrite the HPA's count.
 `make website-deploy` checks that metrics-server is available, applies the
 autoscaler after the rollout, and waits for its metrics to become active.
+The website shares namespace `goblin` with the platform, but uses
+`app.kubernetes.io/name=website` for pod selection. Platform access policies use
+`app=platform`; website pods have no platform credentials or service-account token.
+Deployment applies only website manifests and does not restart the platform.
+`make website-stop` stops the Docker development container. To remove the Kubernetes
+preview, delete only `deployment/website`, `service/website`, and `hpa/website`
+in namespace `goblin`. Never delete the shared namespace as website cleanup.
+See [Kubernetes names](../docs/kubernetes-names.md) for the authoritative naming map.
 Use the following commands to inspect website-only usage and scaling:
 
 ```bash
-sudo k3s kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n goblin-website top pod --containers
-sudo k3s kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n goblin-website get hpa
+sudo k3s kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n goblin top pod -l app.kubernetes.io/name=website --containers
+sudo k3s kubectl --kubeconfig /etc/rancher/k3s/k3s.yaml -n goblin get hpa website
 ```
 
 All replicas run on the existing single WSL node; the HPA adds pods, not nodes.

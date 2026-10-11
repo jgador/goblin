@@ -137,9 +137,9 @@ repository currently has no Insta snapshots or DotSlash manifests. See
 | K3s logging test image | `rancher/k3s:v1.37.0-k3s1` | [Logging smoke check](../scripts/check-logging.sh) |
 | Agent Sandbox | `v1.0.4` | [Installer](../deploy/azure/setup/installer.sh) |
 | cert-manager | `v1.21.2` | [Installer](../deploy/azure/setup/installer.sh) |
-| Headlamp | `v0.45.0`, with image digest | [Headlamp deployment](../deploy/auth/headlamp.yaml) |
-| VictoriaLogs | `v1.53.0`, with image digest | [Logging deployment](../deploy/auth/logging/workloads.yaml) |
-| Fluent Bit | `5.1.3`, with image digest | [Logging deployment](../deploy/auth/logging/workloads.yaml) |
+| Headlamp | `v0.45.0`, with image digest | [Headlamp deployment](../deploy/platform/headlamp.yaml) |
+| VictoriaLogs | `v1.53.0`, with image digest | [Logging deployment](../deploy/platform/logging/workloads.yaml) |
+| Fluent Bit | `5.1.3`, with image digest | [Logging deployment](../deploy/platform/logging/workloads.yaml) |
 | Kubernetes schema | `v1.37.0`, with content checksums | [Schema selection](../backend/schemas/kubernetes/selection.json) |
 | Agent Sandbox schema | `v1.0.4`, with content checksum | [Schema selection](../backend/schemas/kubernetes/selection.json) |
 | Codex protocol schemas | Coupled to the selected Codex runtime | [Protocol generator](../backend/scripts/GenerateProtocol.cs), [schema files](../backend/schemas/codex) |
@@ -172,7 +172,7 @@ Git, Docker Engine, Docker Buildx/BuildKit, Bash, curl, tar/gzip, CA certificate
 systemd, coreutils, util-linux, sed, grep, and ripgrep are used by build,
 installation, administration, or verification flows. Their exact versions are
 not pinned individually in the repository. Docker packages come from the host
-distribution in [install-app.sh](../deploy/azure/install-app.sh); Git and CA
+distribution in [install-platform.sh](../deploy/azure/install-platform.sh); Git and CA
 certificates come from the runtime image's package repositories in the
 [Dockerfile](../Dockerfile). Development Rust setup also documents the
 distribution's `build-essential` package.

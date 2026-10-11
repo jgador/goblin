@@ -67,6 +67,8 @@ public sealed class CodexClientTests
         await fixture.ReadAsync();
         string[] calls = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
         Assert.Equal(["initialize", "initialized", "account/read"], calls.Select(line => JsonSerializer.Deserialize<JSONRPCNotification>(line, ProtocolJson.Options)!.Method));
+        using JsonDocument handshake = JsonDocument.Parse(calls[0]);
+        Assert.Equal("goblin-platform", handshake.RootElement.GetProperty("params").GetProperty("clientInfo").GetProperty("name").GetString());
         Dictionary<string, string> environment = JsonSerializer.Deserialize<Dictionary<string, string>>(await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "environment.json")))!;
         Assert.False(environment.ContainsKey(Env.OpenaiApiKey));
         Assert.False(environment.ContainsKey(Env.GoblinSecret));

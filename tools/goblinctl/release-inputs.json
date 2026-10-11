@@ -14,7 +14,7 @@
     "scripts/build-goblinctl-release.sh",
     "assets/branding/svg/icon-light.svg",
     "deploy/azure/bootstrap.sh",
-    "deploy/azure/install-app.sh",
+    "deploy/azure/install-platform.sh",
     "deploy/local/postgres-service.yaml"
   ],
   "directories": [

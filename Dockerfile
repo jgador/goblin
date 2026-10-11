@@ -71,7 +71,7 @@ USER 1000:1000
 ENV PATH="/opt/codex/bin:/opt/codex/codex-path:${PATH}" \
     GOBLIN_HOST=0.0.0.0 \
     GOBLIN_PORT=8787 \
-    GOBLIN_DATA_DIR=/data/auth \
+    GOBLIN_DATA_DIR=/data/platform \
     GOBLIN_PUBLIC_ORIGIN=http://localhost:8787
 EXPOSE 8787
 CMD ["dotnet", "Goblin.Web.dll"]

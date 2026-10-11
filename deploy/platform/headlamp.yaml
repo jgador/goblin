@@ -173,7 +173,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: goblin-auth
+              app: platform
       ports:
         - protocol: TCP
           port: 4466

@@ -17,7 +17,7 @@ the `/headlamp` prefix.
 
 Headlamp is a separate Deployment, `goblin-headlamp`, in the `goblin` namespace.
 The image is pinned to version 0.45.0 and its multi-architecture digest in
-[`deploy/auth/headlamp.yaml`](../deploy/auth/headlamp.yaml). It runs without root
+[`deploy/platform/headlamp.yaml`](../deploy/platform/headlamp.yaml). It runs without root
 or a writable root filesystem and has its own temporary volume and service account.
 
 The existing Traefik route sends `/headlamp` to Goblin. The C# backend checks the

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -98,12 +98,12 @@ spec:
     assert.doesNotMatch(rendered, /agent-sandbox-system/);
 });
 
-test("application overlays keep agents isolated while shortening the Sandbox name", (t) => {
+test("platform overlays preserve service routing and execution isolation", (t) => {
     if (!kubectl)
         return t.skip(
             "k3s or kubectl is required for offline Kustomize validation",
         );
-    for (const directory of ["deploy/auth", "deploy/azure/app"]) {
+    for (const directory of ["deploy/platform", "deploy/azure/platform"]) {
         const rendered = execFileSync(
             kubectl[0]!,
             [...kubectl.slice(1), "kustomize", directory],
@@ -113,13 +113,37 @@ test("application overlays keep agents isolated while shortening the Sandbox nam
         const sandbox = documents.find((doc) =>
             doc.includes("kind: Sandbox\n"),
         )!;
-        assert.match(sandbox, /metadata:\n  name: app\n  namespace: goblin/);
+        assert.match(
+            sandbox,
+            /metadata:\n  name: platform\n  namespace: goblin/,
+        );
         assert.match(
             sandbox,
             /name: GOBLIN_EXECUTION_NAMESPACE\n\s+value: agents/,
         );
-        assert.match(sandbox, /claimName: goblin-auth-data/);
-        assert.match(sandbox, /app: goblin-auth/);
+        assert.match(sandbox, /claimName: platform-data/);
+        assert.match(sandbox, /app: platform/);
+        assert.match(sandbox, /app\.kubernetes\.io\/name: platform/);
+        assert.match(sandbox, /\n\s+name: platform\n\s+ports:/);
+        const image = sandbox.match(/\n\s+(?:- )?image: ([^\n]+)/)![1]!;
+        assert.ok(
+            sandbox.includes(`value: ${image}`),
+            "execution uses the platform image",
+        );
+        for (const name of ["platform", "goblin-repository"]) {
+            const service = documents.find(
+                (doc) =>
+                    doc.includes("kind: Service\n") &&
+                    doc.includes(`name: ${name}\n`),
+            )!;
+            assert.match(service, /selector:\n\s+app: platform/);
+        }
+        if (directory.includes("azure")) {
+            const ingress = documents.find((doc) =>
+                doc.includes("kind: Ingress\n"),
+            )!;
+            assert.match(ingress, /service:\n\s+name: platform/);
+        }
         const role = documents.find(
             (doc) =>
                 doc.includes("kind: RoleBinding") &&
@@ -139,12 +163,58 @@ test("application overlays keep agents isolated while shortening the Sandbox nam
         const brokerPolicy = documents.find(
             (doc) =>
                 doc.includes("kind: NetworkPolicy") &&
-                doc.includes("name: goblin-auth\n"),
+                doc.includes("name: platform\n"),
         )!;
         assert.match(
             brokerPolicy,
             /namespaceSelector:\n\s+matchLabels:\n\s+kubernetes\.io\/metadata\.name: agents/,
         );
         assert.doesNotMatch(brokerPolicy, /matchExpressions/);
+        for (const name of ["goblin-headlamp", "goblin-victorialogs"]) {
+            const policy = documents.find(
+                (doc) =>
+                    doc.includes("kind: NetworkPolicy\n") &&
+                    doc.includes(`name: ${name}\n`),
+            )!;
+            assert.match(policy, /app: platform/);
+            assert.doesNotMatch(
+                policy,
+                /app: website|app\.kubernetes\.io\/name: website/,
+            );
+        }
+        assert.match(policy, /app: platform/);
     }
+});
+
+test("website shares the namespace without platform access or replica ownership", async () => {
+    const deployment = await readFile("website/k8s/deployment.yaml", "utf8");
+    const service = await readFile("website/k8s/service.yaml", "utf8");
+    const hpa = await readFile("website/k8s/hpa.yaml", "utf8");
+    for (const manifest of [deployment, service, hpa]) {
+        assert.match(manifest, /name: website\n  namespace: goblin/);
+        assert.doesNotMatch(
+            manifest,
+            /app: platform|app\.kubernetes\.io\/name: platform/,
+        );
+    }
+    assert.match(deployment, /app\.kubernetes\.io\/name: website/);
+    assert.match(service, /app\.kubernetes\.io\/name: website/);
+    assert.match(deployment, /automountServiceAccountToken: false/);
+    assert.doesNotMatch(
+        deployment,
+        /secret:|secretKeyRef:|serviceAccountName:|\n\s+replicas:/,
+    );
+    assert.match(deployment, /requests:\n\s+cpu: 25m\n\s+memory: 16Mi/);
+    assert.match(deployment, /limits:\n\s+cpu: 100m\n\s+memory: 32Mi/);
+    assert.match(hpa, /minReplicas: 1\n  maxReplicas: 3/);
+    assert.match(hpa, /averageUtilization: 60/);
+    const postgres = await readFile("deploy/postgres/postgres.yaml", "utf8");
+    const policy = postgres
+        .split(/^---$/m)
+        .find((doc) => doc.includes("kind: NetworkPolicy"))!;
+    assert.match(policy, /app: platform/);
+    assert.doesNotMatch(
+        policy,
+        /app: website|app\.kubernetes\.io\/name: website/,
+    );
 });

@@ -2,16 +2,16 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: website
-  namespace: goblin-website
+  namespace: goblin
 spec:
   # New Deployments default to one replica; hpa.yaml owns subsequent scaling.
   selector:
     matchLabels:
-      app.kubernetes.io/name: goblin-website
+      app.kubernetes.io/name: website
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: goblin-website
+        app.kubernetes.io/name: website
     spec:
       automountServiceAccountToken: false
       securityContext:

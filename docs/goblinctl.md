@@ -5,6 +5,14 @@ rules and SQL migrations remain in .NET. The CLI installs and inspects the host,
 serves the temporary setup UI, manages local services and credentials, and runs
 PostgreSQL provisioning. It does not retry failed Work or modify Work history.
 
+The main application is component `platform`; the independently deployed public
+site is component `website`. Both use namespace `goblin`. Installer manifests are
+in `deploy/platform/` and `deploy/azure/platform/`; embedded setup sources
+`install-platform.sh`. Pod operations select `app=platform` and leave website
+pods alone. See [Kubernetes names](kubernetes-names.md) for the full naming and
+persistent-storage transition rules. A newly packaged installer is required to
+ship these embedded input changes; the pinned publication remains historical.
+
 Production uses `goblinctl-x86_64-unknown-linux-musl.tar.gz`, following Codex's
 native Linux distribution model. This is a statically linked Linux executable;
 Ubuntu 24.04 on x86-64, including WSL with systemd, is the supported installation

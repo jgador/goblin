@@ -14,7 +14,7 @@ public sealed class ApplicationOptionsConfigurationTests
     {
         ApplicationOptions options = ApplicationOptionsConfiguration.Read(_ => null);
 
-        Assert.Equal(".goblin-auth", options.DataDirectory);
+        Assert.Equal(".goblin-platform", options.DataDirectory);
         Assert.Null(options.PasswordHashFile);
         Assert.Equal("http://localhost:8787", options.PublicOrigin);
         Assert.False(options.AllowInsecureHttp);

@@ -1,6 +1,7 @@
 name: goblin-website
 services:
   website:
+    image: goblin-website:development
     build:
       context: ..
       dockerfile: website/Dockerfile

@@ -54,7 +54,7 @@ function fixture(t: TestContext) {
     // Isolate tests from any global hooks on the developer's machine.
     git("config", "core.hooksPath", join(directory, "no-hooks"));
     copyFileSync(config, join(directory, ".gitleaks.toml"));
-    write(".gitignore", ".env\n.goblin-auth/\n");
+    write(".gitignore", ".env\n.goblin-platform/\n");
     write("notes.txt", "Safe content.\n");
     git("add", ".");
     git("commit", "--quiet", "-m", "Initial test fixture");
@@ -279,7 +279,7 @@ test("clean scans do not read ignored runtime credentials", (t) => {
     const gitRepository = fixture(t);
     gitRepository.write(".env", syntheticKey());
     gitRepository.write(
-        ".goblin-auth/auth.json",
+        ".goblin-platform/auth.json",
         JSON.stringify({ token: syntheticKey() }),
     );
     gitRepository.write(".visible.txt", "Safe untracked file.\n");
@@ -350,8 +350,11 @@ test("force-added ignored files remain in scope", (t) => {
 
 test("private auth filenames block even unfamiliar credential formats", (t) => {
     const gitRepository = fixture(t);
-    gitRepository.write(".goblin-auth/owner-password", "synthetic-short-value");
-    gitRepository.git("add", "--force", ".goblin-auth/owner-password");
+    gitRepository.write(
+        ".goblin-platform/owner-password",
+        "synthetic-short-value",
+    );
+    gitRepository.git("add", "--force", ".goblin-platform/owner-password");
     detected(
         gitRepository.scan("staged"),
         "synthetic-short-value",

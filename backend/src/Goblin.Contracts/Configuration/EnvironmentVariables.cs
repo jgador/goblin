@@ -92,12 +92,12 @@ public static class EnvironmentVariables
     public const string GoblinCodexCommand = "GOBLIN_CODEX_COMMAND";
 
     /// <summary>Private application data directory.</summary>
-    /// <remarks>Format: Filesystem path. Default/fallback: .goblin-auth relative to the working directory.
+    /// <remarks>Format: Filesystem path. Default/fallback: .goblin-platform relative to the working directory.
     /// Required: Optional. Sensitive: no.</remarks>
     public const string GoblinDataDir = "GOBLIN_DATA_DIR";
 
     /// <summary>Container image used by isolated repository workers.</summary>
-    /// <remarks>Format: Container image reference. Default/fallback: goblin-auth:0.1.0; deployment supplies the selected image.
+    /// <remarks>Format: Container image reference. Default/fallback: goblin-platform:0.1.0; deployment supplies the selected image.
     /// Required: Optional when isolated execution is enabled. Sensitive: no.</remarks>
     public const string GoblinExecutionImage = "GOBLIN_EXECUTION_IMAGE";
 

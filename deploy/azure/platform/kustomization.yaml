@@ -1,14 +1,14 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - ../../auth
+  - ../../platform
   - ingress.yaml
 patches:
   - target:
       group: agents.x-k8s.io
       version: v1beta1
       kind: Sandbox
-      name: app
+      name: platform
     patch: |-
       - op: replace
         path: /spec/podTemplate/spec/containers/0/image
@@ -28,7 +28,7 @@ patches:
       group: networking.k8s.io
       version: v1
       kind: NetworkPolicy
-      name: goblin-auth
+      name: platform
     patch: |-
       - op: add
         path: /spec/ingress/-
@@ -49,13 +49,13 @@ replacements:
       group: agents.x-k8s.io
       version: v1beta1
       kind: Sandbox
-      name: app
-      fieldPath: spec.podTemplate.spec.containers.[name=auth].image
+      name: platform
+      fieldPath: spec.podTemplate.spec.containers.[name=platform].image
     targets:
       - select:
           group: agents.x-k8s.io
           version: v1beta1
           kind: Sandbox
-          name: app
+          name: platform
         fieldPaths:
-          - spec.podTemplate.spec.containers.[name=auth].env.[name=GOBLIN_EXECUTION_IMAGE].value
+          - spec.podTemplate.spec.containers.[name=platform].env.[name=GOBLIN_EXECUTION_IMAGE].value
