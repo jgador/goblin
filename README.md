@@ -113,7 +113,7 @@ Rust `codex app-server`; the browser UI remains TypeScript. Protocol models are
 generated from the checked-in schemas using `System.Text.Json`.
 `make dev` builds the browser assets and .NET solution, refreshes the `wsl`
 PostgreSQL profile, then starts the C# host. Create the profile using the
-[PostgreSQL workflow](docs/postgres-workflow.md) first.
+[PostgreSQL workflow](docs/database.md#wsl-and-windows-pgadmin) first.
 Use `make typecheck` for TypeScript checks and a .NET build, or `make test`
 for schema drift checks (.NET), .NET tests, and HTTP integration tests.
 See the [App Server migration notes](docs/app-server-migration.md) for the current
@@ -132,7 +132,8 @@ require attention and explicit recovery.
 
 Durable Work requires a configured, migrated PostgreSQL database. The installer
 sets this up before starting Goblin. For direct local development, follow the
-[PostgreSQL workflow](docs/postgres-workflow.md), then run `make dev DB_PROFILE=wsl`.
+[PostgreSQL workflow](docs/database.md#wsl-and-windows-pgadmin), then run
+`make dev DB_PROFILE=wsl`.
 Use `make dev ARGS=--without-database` to manage connections without PostgreSQL.
 [Execution hosting](docs/execution-hosting.md) covers repository sandboxes,
 GitHub sign-in, credentials, recovery, and current validation limits.

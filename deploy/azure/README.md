@@ -47,11 +47,11 @@ After cert-manager is ready, the application installer provisions PostgreSQL wit
 certificate authentication and a loopback host endpoint on port 5432, runs the
 versioned schema migrations, and deploys
 Goblin plus the isolated execution namespace. A database or migration failure
-prevents application handoff. [Database setup](../../docs/database.md) and
+prevents application handoff. [Database setup](../../docs/database.md#installation-and-certificates) and
 [execution hosting](../../docs/execution-hosting.md) cover repair, credentials,
 repository execution, and GitHub CLI sign-in through Settings. For development
 access through an SSH tunnel running inside WSL and explicit Windows certificate
-exports, follow [the PostgreSQL workflow](../../docs/postgres-workflow.md).
+exports, follow [the PostgreSQL workflow](../../docs/database.md#azure-development).
 Installers retain no client exports under `/var/lib/goblin/config`.
 
 Headlamp is installed alongside Goblin at **`<goblinUrl>/headlamp/`**. Open

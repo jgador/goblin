@@ -46,7 +46,7 @@ pub fn export(name: &str, client: &Client, role: Role) -> Result<()> {
         .strip_suffix("connection.json")
         .context("Windows export did not return its connection settings path")?;
     println!("Windows connection settings: {settings}");
-    println!("pgAdmin import: {directory}pgadmin.json");
+    println!("pgAdmin import: {directory}pgAdmin.json");
     println!(
         "First use: pgAdmin > Tools > Import/Export Servers > Import; keep existing servers.\nAfter certificate refresh, reconnect the saved server. Import again only for a new profile or role; update its port if you change forwarding."
     );

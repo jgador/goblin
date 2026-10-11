@@ -174,8 +174,8 @@ removed rather than claiming the environment is completely clean:
   `XDG_CONFIG_HOME`) and the matching Windows exports under
   `%LOCALAPPDATA%\Goblin\postgres\`. Verify each profile belongs to this
   installation; preserve profiles for other databases. See the
-  [PostgreSQL workflow](../../../docs/postgres-workflow.md). Preserve the tracked
-  Kubernetes configuration in `backend/src/Goblin.Web/appsettings.json`.
+  [profile storage](../../../docs/database.md#profile-management-and-storage).
+  Preserve the tracked Kubernetes configuration in `backend/src/Goblin.Web/appsettings.json`.
 - **Storage outside k3s:** Remove exact local backing directories or volumes
   proven exclusive to this installation if the uninstaller did not remove them.
   Never infer that a retained PV, remote volume, or shared host path is disposable.

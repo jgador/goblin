@@ -17,8 +17,8 @@ configures the Codex connection.
 ## Run locally
 
 Durable Work is enabled by default and requires a migrated profile from the
-[PostgreSQL workflow](postgres-workflow.md). The authentication preview below
-starts with database access disabled.
+[PostgreSQL workflow](database.md#wsl-and-windows-pgadmin). The authentication
+preview below starts with database access disabled.
 
 Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run from this checkout:
 

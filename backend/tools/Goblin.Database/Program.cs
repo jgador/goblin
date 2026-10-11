@@ -23,7 +23,7 @@ if (args.Length != 2 || args[0] != "apply")
 string? adminConnection = builder.Configuration.GetConnectionString("GoblinAdmin");
 if (string.IsNullOrWhiteSpace(adminConnection))
 {
-    Console.Error.WriteLine("Select a PostgreSQL profile: make db-migrate DB_PROFILE=wsl (see docs/postgres-workflow.md).");
+    Console.Error.WriteLine("Select a PostgreSQL profile: make db-migrate DB_PROFILE=wsl (see docs/database.md#daily-development).");
     return 1;
 }
 

@@ -475,7 +475,7 @@ test(
                 JSON.parse(
                     ps(
                         prefix +
-                            `Get-Content -Raw -LiteralPath (Join-Path $p '${role}\\pgadmin.json')`,
+                            `Get-Content -Raw -LiteralPath (Join-Path $p '${role}\\pgAdmin.json')`,
                     ),
                 );
             const destination = run().trim();
@@ -490,10 +490,10 @@ test(
             assert.equal(result.rules, 1);
             assert.equal(result.protected, true);
             assert.equal(result.ownerMatches, true);
-            const pgadmin = readPgAdmin();
-            const server = pgadmin.Servers["1"];
+            const pgAdmin = readPgAdmin();
+            const server = pgAdmin.Servers["1"];
             const roleDirectory = win32.dirname(destination);
-            assert.deepEqual(Object.keys(pgadmin.Servers), ["1"]);
+            assert.deepEqual(Object.keys(pgAdmin.Servers), ["1"]);
             assert.deepEqual(server, {
                 Name: `Goblin - ${name} (app)`,
                 Group: "Goblin",
@@ -516,7 +516,7 @@ test(
             const importFiles = JSON.parse(
                 ps(
                     prefix +
-                        `$s=(Get-Content -Raw -LiteralPath (Join-Path $p 'app\\pgadmin.json') | ConvertFrom-Json).Servers.'1'; $a=Get-Acl -LiteralPath (Join-Path $p 'app\\pgadmin.json'); @{allExist=((Test-Path -LiteralPath $s.ConnectionParameters.sslrootcert) -and (Test-Path -LiteralPath $s.ConnectionParameters.sslcert) -and (Test-Path -LiteralPath $s.ConnectionParameters.sslkey)); rules=@($a.Access).Count; protected=$a.AreAccessRulesProtected} | ConvertTo-Json`,
+                        `$s=(Get-Content -Raw -LiteralPath (Join-Path $p 'app\\pgAdmin.json') | ConvertFrom-Json).Servers.'1'; $a=Get-Acl -LiteralPath (Join-Path $p 'app\\pgAdmin.json'); @{allExist=((Test-Path -LiteralPath $s.ConnectionParameters.sslrootcert) -and (Test-Path -LiteralPath $s.ConnectionParameters.sslcert) -and (Test-Path -LiteralPath $s.ConnectionParameters.sslkey)); rules=@($a.Access).Count; protected=$a.AreAccessRulesProtected} | ConvertTo-Json`,
                 ),
             );
             assert.equal(importFiles.allExist, true);
@@ -525,7 +525,7 @@ test(
             const passfile = JSON.parse(
                 ps(
                     prefix +
-                        "$s=(Get-Content -Raw -LiteralPath (Join-Path $p 'app/pgadmin.json') | ConvertFrom-Json).Servers.'1'; $path=$s.ConnectionParameters.passfile; $acl=Get-Acl -LiteralPath $path; @{length=(Get-Item -LiteralPath $path).Length; rules=@($acl.Access).Count; protected=$acl.AreAccessRulesProtected} | ConvertTo-Json",
+                        "$s=(Get-Content -Raw -LiteralPath (Join-Path $p 'app/pgAdmin.json') | ConvertFrom-Json).Servers.'1'; $path=$s.ConnectionParameters.passfile; $acl=Get-Acl -LiteralPath $path; @{length=(Get-Item -LiteralPath $path).Length; rules=@($acl.Access).Count; protected=$acl.AreAccessRulesProtected} | ConvertTo-Json",
                 ),
             );
             assert.equal(passfile.length, 0);
@@ -540,7 +540,7 @@ test(
                 ),
                 key: await readFile(join(certificates, "admin.key"), "utf8"),
             });
-            assert.deepEqual(readPgAdmin(), pgadmin);
+            assert.deepEqual(readPgAdmin(), pgAdmin);
             const admin = readPgAdmin("admin").Servers["1"];
             assert.equal(admin.Username, "goblin_admin");
             assert.equal(admin.ConnectionParameters.gssencmode, "disable");
@@ -570,7 +570,7 @@ test(
             );
             assert.equal(unchanged.port, 55432);
             assert.equal(unchanged.identityExists, false);
-            assert.deepEqual(readPgAdmin(), pgadmin);
+            assert.deepEqual(readPgAdmin(), pgAdmin);
             ps(
                 prefix +
                     `[IO.File]::Move((Join-Path $p '.saved-identity'),(Join-Path $p 'identity.json'))`,

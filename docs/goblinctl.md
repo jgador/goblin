@@ -69,9 +69,9 @@ The server bounds request sizes, connection count and timeouts. The existing
 handoff marker, installer lock, rollback, and retained-source retry rules remain.
 
 PostgreSQL client profiles are independent of `--repo` and installer state. See
-[the PostgreSQL workflow](postgres-workflow.md) for WSL/Azure connections, Windows
-exports, refresh, cleanup and per-command profile selection. Client commands need
-`psql` and OpenSSL; Azure access also needs SSH.
+[the database guide](database.md) for WSL/Azure connections, Windows exports,
+refresh, cleanup and per-command profile selection. Client commands need `psql`
+and OpenSSL; Azure access also needs SSH.
 
 ## Parallel installation and live progress
 
@@ -146,8 +146,8 @@ remain authoritative. Production shell helpers find the installed CLI via
 `GOBLINCTL` or PATH; developer scripts can use `GOBLINCTL="$PWD/target/debug/goblinctl"`.
 `--repo` selects the checkout used by local installation and owner-password
 commands. PostgreSQL client commands use the per-user profile store independently
-of this flag; see the [PostgreSQL workflow](postgres-workflow.md). The local
-ownership file retains its existing `repo` JSON key.
+of this flag; see [profile storage](database.md#profile-management-and-storage).
+The local ownership file retains its existing `repo` JSON key.
 
 ## Releases
 

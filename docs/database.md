@@ -1,312 +1,296 @@
-# PostgreSQL and database-first EF Core
+# PostgreSQL
 
-SQL files define Goblin's database. EF Core reverse engineers that database into
-checked-in C# classes. PostgreSQL uses unquoted `snake_case` names; C# uses
-`PascalCase`, with attributes preserving the mapping. Work, conversations, connections, attempts, and command receipts are durable.
-All Goblin-owned tables use `id bigint`, including the migration journal,
-repository operations, workspace checkpoints, inspection sessions, and setup
-memories. Their foreign keys use `bigint` too. PostgreSQL identity sequences
-allocate local IDs; GitHub repository IDs retain their upstream bigint values.
-Public HTTP represents bigint IDs as decimal strings to preserve JavaScript
-precision. Inspection requests reserve their ID before posting, and isolated
-workers reserve repository-operation IDs through the broker before submission.
-Replaying a request retains its original ID.
+Goblin uses PostgreSQL with certificate authentication and database-first EF Core.
+SQL owns the schema; EF generates the C# mappings.
 
-All tables use PostgreSQL's default `public` schema. Wolverine's inbox/outbox
-tables keep their `wolverine_` prefix, and `public.schema_migrations` records
-schema history. EF scaffolding selects application tables explicitly.
-Wolverine-owned key types are dictated by the pinned messaging library and are
-the exception to Goblin's bigint convention.
+## WSL and Windows pgAdmin
 
-For daily WSL/Azure connections, Windows exports and development commands, use
-[the PostgreSQL workflow](postgres-workflow.md).
-
-## Set up certificate authentication in k3s
-
-After the Goblin bundle has installed k3s and cert-manager, run from this checkout
-in a root shell:
+After completing the [local installer](../deploy/local/README.md), run these
+commands **inside WSL, as root**, from the repository root:
 
 ```bash
-bash deploy/postgres/setup.sh
+cargo build --locked -p goblinctl
+export PATH="$PWD/target/debug:$PATH"
+apt install -y postgresql-client openssl openssh-client
+goblinctl db connect wsl --local --forward-port 55432
+goblinctl db export wsl --client windows --role app
 ```
 
-The script uses the selected `kubectl` context, falling back to `k3s kubectl`.
-It issues certificates, configures PostgreSQL, and verifies a real TLS client
-login. The application deployment mounts its client certificate and uses packaged
-connection settings.
-Rerunning setup preserves the database volume, CA, and existing certificate identities.
+On Windows, import the generated connection into **pgAdmin**:
 
-The application installer now invokes this setup and the migration job before
-deploying Goblin. Running setup directly remains useful for development and
-repair. The same setup works in the local WSL k3s cluster and Azure.
-It does not configure a PostgreSQL instance installed directly on the host.
+1. Open **Tools → Import/Export Servers → Import** and select the full path
+   printed after **pgAdmin import**, ending in `wsl\app\pgAdmin.json`.
+2. Keep **Remove all the existing servers?** set to **No** and finish the import.
+3. Open **Goblin → Goblin - wsl (app)**. No database password is needed.
 
-Setup creates the following namespaced resources:
+PostgreSQL's WSL host endpoint is `localhost:5432`; Windows uses
+`localhost:55432` through WSL localhost forwarding. Keep WSL running. Choose a
+port free in both WSL and Windows; the profile saves it and never silently changes it.
+The commands verify the database identity and TLS login before publishing files.
 
-| Resource | Purpose |
+### Reconnect or refresh
+
+After restarting WSL or renewing certificates, run this in WSL and reconnect the
+saved pgAdmin server:
+
+```bash
+goblinctl db export wsl --client windows --role app
+```
+
+`export` refreshes certificates and starts forwarding, so an existing profile
+needs no separate `connect`. Import only once per profile and role; repeated
+imports add duplicates. Certificate paths stay the same. If you change the
+forwarding port, export again and update the saved server's port.
+
+### Troubleshooting and other clients
+
+- **Password prompt:** leave it blank, select **Save Password**, and connect.
+  New exports include an empty `pgpass.conf` to avoid the initial prompt.
+- **Windows access violation:** set **Properties → Parameters → GSS encmode →
+  disable** (add it with **+** if absent). This works around a
+  [pgAdmin Windows bug](https://github.com/pgadmin-org/pgadmin4/issues/10445).
+  New exports include this setting; an existing saved server needs the edit.
+- **Missing root certificate:** use the exported absolute certificate paths and
+  keep SSL mode **verify-full**.
+
+For manual configuration, inspect the export in Windows PowerShell:
+
+```powershell
+Get-Content "$env:LOCALAPPDATA\Goblin\postgres\wsl\app\connection.json" |
+    ConvertFrom-Json |
+    Format-List host, port, database, username, sslmode, gssencmode, sslrootcert, sslcert, sslkey
+```
+
+Copy those values into the client's connection and SSL fields; clients do not
+load `connection.json` automatically. `sslrootcert` is the CA, `sslcert` the
+client certificate, and `sslkey` its private key. Leave the password blank.
+
+## Daily development
+
+These commands refresh the profile and prepare access automatically:
+
+| Command | Purpose / role |
 | --- | --- |
-| `goblin-postgres-ca` Certificate/Secret | Private CA for this database; its key stays in Kubernetes |
-| `goblin-postgres-server` Certificate | Server identity, stored in `goblin-postgres-tls` |
-| `goblin-postgres-app` Certificate | Client identity `goblin_app`, stored in `goblin-postgres-app-tls` |
-| `goblin-postgres-admin` Certificate | Client identity `goblin_admin`, stored in `goblin-postgres-admin-tls` |
-| `goblin-postgres-admin` Opaque Secret | Initialization-only password required by the official image; never used in client connection strings |
-| `goblin-postgres-data` PVC | Independently declared 5 GiB database storage |
+| `make dev` | Start Goblin with `goblin_app` |
+| `make db-migrate` | [Apply SQL](#apply-the-sql-schema) with `goblin_admin` |
+| `make db-scaffold` | [Regenerate EF mappings](#reverse-engineer-the-database) with `goblin_app` |
+| `make test-postgres` | [Run database integration tests](#application-configuration-and-verification) with both roles |
 
-The official image requires an initialization password before running its init
-scripts. Setup generates this privately once; initialization clears the database
-role's password and creates the application role without one. Neither the app nor
-the operator needs to know or supply this bootstrap value.
+`DB_PROFILE` defaults to `wsl`. Append `DB_PROFILE=azure-dev` to use another
+development database; there is no global active profile. For connection-only
+development, `make dev ARGS=--without-database` disables Work APIs.
 
-The PostgreSQL configuration requires TLS and a trusted client certificate for
-every network connection. The certificate's common name must match the requested
-database role. Password-only and unencrypted connections are rejected. Local Unix
-socket administration is restricted to the `postgres` OS user inside the database
-container through peer authentication.
+Wrap other developer commands with `goblinctl db run wsl -- COMMAND`;
+add `--role admin` or `--role both` before `--` only when needed.
 
-`goblin_admin` owns the database/schema and applies schema changes.
-`goblin_app` can read/write application tables, but cannot create or drop them.
-Default privileges cover future tables and sequences created by `goblin_admin`.
-The internal Service and network policy permit Goblin and same-namespace pods
-labeled `goblin-database-access: "true"`; no public database listener is created.
+## Azure development
 
-### Development installation lifecycle
+[Install Azure manually](../deploy/azure/README.md), then configure SSH authentication
+and trust the VM's host key. The SSH user needs noninteractive sudo access to k3s.
+Using the CLI and packages from [the WSL setup](#wsl-and-windows-pgadmin), run in WSL
+with your SSH destination:
 
-Goblin is preproduction. Recreate development installations when the database
-schema or installation format changes. Support only the current certificate-based
-configuration; new formats do not require an in-place conversion path.
-
-Setup refuses to replace a missing CA when issued TLS Secrets exist, or a missing
-initialization Secret when the PVC exists. Restore those Secrets from backup.
-Keep the CA and database recovery material backed up; deleting the namespace/PVC
-or losing the VM can delete the database.
-
-## Password-free connection strings
-
-The checked-in `backend/src/Goblin.Web/appsettings.json` contains this Npgsql
-connection string (shown on separate lines for readability):
-
-```text
-Host=goblin-postgres;Port=5432;Database=goblin;Username=goblin_app;
-SSL Mode=VerifyFull;
-GSS Encryption Mode=Disable;
-Root Certificate=/etc/goblin-postgres/ca.crt;
-SSL Certificate=/etc/goblin-postgres/tls.crt;
-SSL Key=/etc/goblin-postgres/tls.key
+```bash
+goblinctl db connect azure-dev --ssh developer@your-azure-vm --forward-port 55433
+goblinctl db export azure-dev --client windows --role app
 ```
 
-`VerifyFull` checks both the server's CA and its hostname. GSS encryption is
-disabled so this connection uses TLS without requiring Kerberos libraries.
-Kubernetes mounts only
-the application certificate/key into Goblin at those stable paths, using a
-read-only Secret volume accessible to the application's group. The administrator
-and CA private keys are never mounted into the application.
+Import the printed `azure-dev\app\pgAdmin.json` using the
+[same pgAdmin steps](#wsl-and-windows-pgadmin). The SSH tunnel runs in WSL on
+`localhost:55433` and reaches the VM's `localhost:5432`. Keep WSL running.
+For later exports, use `azure-dev` in the [refresh command](#reconnect-or-refresh).
 
-The connection string has no password, and no private key is copied into the
-image. Npgsql supports these settings directly; no custom certificate validation
-or authentication callback is used by the application. The application certificate mount is required by the deployed durable Work
-configuration; repository agent sandboxes never receive this mount.
+## Profile management and storage
 
-Images carry the certificate configuration in `appsettings.json`. Rebuild and
-redeploy the application when that packaged configuration changes.
+| Command | Effect |
+| --- | --- |
+| `goblinctl db connect wsl` | Refresh certificates, restore forwarding, and verify TLS |
+| `goblinctl db refresh wsl --role admin` | Refresh access for the selected role |
+| `goblinctl db disconnect wsl` | Stop this profile's extra listener/tunnel; retain settings and certificates |
 
-## Database tooling outside Kubernetes
-
-Named user profiles hold client certificates outside the checkout. Development,
-migrations, scaffolding and opt-in tests receive the selected connection through
-child-process environment variables. The installer exports no client credentials.
-WSL and Azure host endpoints use port 5432; additional forwarding runs inside WSL.
-See [the workflow guide](postgres-workflow.md) for commands and Windows paths.
-
-## Certificate renewal
-
-Leaf certificates last 90 days and cert-manager renews them 30 days before expiry,
-rotating their keys. Full Secret directory mounts receive the renewed files.
-PostgreSQL watches the projected Secret and reloads TLS configuration; new Npgsql
-connections load the current client files. Existing pooled connections remain
-usable. No connection-string change or application rebuild is required.
-
-Linux profiles refresh on connect and before development commands. Windows exports
-are snapshots: rerun `goblinctl db export PROFILE --client windows --role app`
-after renewal. Monitor Certificate readiness and expiry. The CA has a ten-year
-lifetime and retains its key during routine renewal. A CA issuer does not manage
-a complete trust rollover or certificate revocation workflow; plan CA replacement
-and distribution of overlapping trust before expiry, and protect permissions
-to issue certificates and read Secrets in the `goblin` namespace.
-
-## Files and tools
+Connect and refresh preserve the saved port; change it explicitly with
+`connect --forward-port PORT`. Disconnect leaves installation-managed host access
+on 5432 running. Linux refreshes do not update Windows exports.
 
 | Location | Purpose |
 | --- | --- |
-| `deploy/postgres/` | PostgreSQL 18.6, certificate resources, TLS/auth configuration, setup and verification scripts |
-| `backend/database/migrations/` | Unreleased initial baseline; ordered, immutable migrations after production deployment |
-| `backend/src/Goblin.Persistence/Generated/` | Reverse-engineered context and entities; regenerated, not hand-edited |
-| `backend/src/Goblin.Persistence/PersistenceServices.cs` | Runtime `IDbContextFactory<GoblinDbContext>` registration |
-| `backend/tools/Goblin.Database/` | SQL migration runner using Npgsql and administrator configuration |
-| `backend/tools/Goblin.Database.Scaffolding/` | Developer-only host and naming services for dotnet ef |
-| `backend/scripts/scaffold-database.sh` | Repeatable reverse-engineering command |
+| Kubernetes Secrets | Authoritative certificates; the CA signing key stays here |
+| `~/.config/goblin/postgres/<profile>/` | Linux profile and client certificates; honors `XDG_CONFIG_HOME` |
+| `%LOCALAPPDATA%\Goblin\postgres\<profile>\` | Explicit Windows exports, separated by role |
+| `/var/lib/goblin/postgres/` | Host forwarding state, without client keys |
+| Repository `.artifacts/` | Disposable build/test output |
 
-Use .NET 10, Bash, goblinctl, and a configured kubectl. EF Core and dotnet-ef are
-pinned to 10.0.12; the Npgsql EF provider is pinned to 10.0.3.
+Linux directories are 0700 and files 0600. Windows exports resolve the current
+Windows account and set private ACLs. Export only the role needed. Profiles pass
+connections through child-process environment variables without editing checkout
+`appsettings.json` files.
 
-## Apply the SQL schema
+Profiles refuse changes to the source, cluster, database volume, or CA. Restore
+the original installation or deliberately use a new profile name. After
+[recreating a development installation](../deploy/local/README.md#stop-resume-or-start-clean),
+disconnect and remove its named Linux profile and Windows export before reusing
+that name.
 
-The baseline `0001_initial.sql` creates application and Wolverine tables directly
-in `public` on an empty database. Database initialization configures application
-permissions and default privileges; the runner creates the protected migration
-journal in `public` before applying the baseline.
+## Installation and certificates
 
-```bash
-make db-migrate DB_PROFILE=wsl
-```
+The installer provisions PostgreSQL, applies migrations, and creates host access;
+it exports no client credentials. After k3s and cert-manager are ready, these
+commands are available for repair from a root shell on the database's WSL instance
+or Azure VM:
 
-The runner applies `.sql` files in ordinal filename order, once each. Every file
-and its journal entry commit in one transaction. Failed files roll back and can
-be retried. A PostgreSQL advisory lock serializes concurrent runners.
+| Command | Purpose |
+| --- | --- |
+| `goblinctl db setup` | Configure certificates and PostgreSQL in the selected Kubernetes context, then verify TLS |
+| `goblinctl db host` | Configure the installation's loopback endpoint on 5432 |
 
-The journal lives in `public.schema_migrations`. Only the schema administrator
-can access it, and it is excluded from reverse engineering. Recorded SHA-256 checksums
-reject changes to previously applied scripts. Before the first production deployment,
-consolidate schema changes into `0001_initial.sql`; local development provisioning
-does not freeze the baseline. Recreate the development database when that baseline
-changes. The runner's checksum checks still apply.
+Setup uses `kubectl`, falling back to `k3s kubectl`, and preserves the database
+volume, CA, and certificate identities. It does not configure host-installed
+PostgreSQL. Host access needs port 5432 free or already owned by Goblin; resolve
+any other service's ownership before stopping it.
 
-After production deployment, keep applied filenames and contents unchanged and add a new,
-higher-numbered file for every change. SQL files use LF line endings so checksums
-remain consistent across operating systems.
+Resources are defined in [deploy/postgres](../deploy/postgres/):
 
-Scripts contain ordinary PostgreSQL SQL, without `psql` commands or explicit
-`BEGIN`/`COMMIT`. Operations that cannot run in a transaction, such as
-`CREATE INDEX CONCURRENTLY`, need a separately planned administrative procedure.
-The runner never applies schema changes during web application startup.
+| Resource | Purpose |
+| --- | --- |
+| `goblin-postgres-ca` Certificate/Secret | Database CA; signing key stays in Kubernetes |
+| `goblin-postgres-server` Certificate | Server identity in `goblin-postgres-tls` |
+| `goblin-postgres-app` Certificate | `goblin_app` identity in `goblin-postgres-app-tls` |
+| `goblin-postgres-admin` Certificate | `goblin_admin` identity in `goblin-postgres-admin-tls` |
+| `goblin-postgres-admin` Opaque Secret | Initialization-only password required by the official image |
+| `goblin-postgres-data` PVC | Independent 5 GiB database storage |
 
-## Reverse engineer the database
+Every network connection requires TLS and a trusted client certificate whose
+common name matches the role. Initialization clears the bootstrap password;
+clients use no password. Container-local Unix socket administration uses peer
+authentication restricted to the `postgres` OS user.
 
-The recommended command is:
+`goblin_admin` owns the schema; `goblin_app` can read/write application tables but
+cannot create/drop them. Default privileges cover future tables and sequences
+created by the administrator. Network policy allows Goblin and same-namespace
+pods labeled `goblin-database-access: "true"`; no public database listener is created.
 
-```bash
-make db-scaffold DB_PROFILE=wsl
-```
+Back up the CA, initialization Secret, and database recovery material. Setup
+refuses to replace a missing CA while issued TLS Secrets exist, or a missing
+initialization Secret while the PVC exists; restore the missing Secrets.
+Deleting the namespace/PVC or losing the VM can delete the database.
 
-It restores the local tool, regenerates the selected application tables, normalizes
-generated C# files to UTF-8 without a BOM and LF line endings, and applies the
-repository's whitespace and style rules, including regular constructors. The selected
-profile supplies the app connection through the environment; ordinary application
-access is enough to inspect the mapped schema. Docker publishes only the migration
-runner, which has no EF or application-model dependency.
-Scaffolding services and their tests live in separate projects so the scaffolding
-host's dependency graph does not enter application and persistence test builds.
+### Certificate renewal
 
-The script owns the complete table selection and EF flags. Its
-`Name=ConnectionStrings:Goblin` argument resolves the profile connection from the
-tooling host's environment, keeping it out of the command-line arguments.
-`--data-annotations` requests mapping attributes. Leave `--use-database-names`
-unset so that `work_items` becomes `WorkItem` and `objective` becomes `Objective`.
-`--no-onconfiguring` keeps the connection string out of generated source.
-The table list excludes Wolverine and the migration journal. Do not combine it
-with `--schema public`: EF includes every table in any selected schema.
+cert-manager renews 90-day leaf certificates 30 days before expiry and rotates
+their keys. Full Secret directory mounts receive updates; PostgreSQL reloads TLS,
+and new Npgsql connections load current client files. Existing pooled connections
+remain usable. No application rebuild or connection-string change is needed.
+Linux profiles refresh on connect and development commands; Windows needs an
+explicit [export](#reconnect-or-refresh).
 
-For example, the generated entity contains:
+Monitor readiness and expiry. The CA lasts ten years and retains its key during
+routine renewal. Its issuer does not provide complete trust rollover or revocation;
+plan overlapping trust before replacing the CA and restrict Secret/issuance access.
 
-```csharp
-[Table("work_items")]
-public partial class WorkItem
-{
-    [Key]
-    [Column("id")]
-    public long Id { get; set; }
+## Schema and EF Core
 
-    [Column("objective")]
-    public string Objective { get; set; } = null!;
-}
-```
+Use unquoted PostgreSQL `snake_case` names in the default `public` schema and
+`PascalCase` C# names with mapping attributes. Goblin-owned tables use `id bigint`
+and bigint foreign keys. Identity sequences allocate local IDs; GitHub repository
+IDs retain their upstream values. HTTP exposes bigint IDs as decimal strings.
+Inspection and repository-operation requests reserve IDs before submission and
+retain them on replay.
 
-Npgsql treats `public` as the default schema, so generated attributes omit the
-schema name. EF retains Fluent API configuration for features attributes cannot fully express,
-including database key constraint names and value-generation behavior. Both the
-context and entities are generated. Put custom behavior in partial classes
-**outside** `Generated/`; do not add it to files overwritten by `--force`.
+Wolverine tables keep their `wolverine_` prefix and library-defined key types.
+The administrator-only migration journal is `public.schema_migrations`.
+Neither is included in EF scaffolding.
 
-## Add another table later
+### Apply the SQL schema
 
-1. Before the first production deployment, add the table to `0001_initial.sql`.
-   After production deployment, put it in the next migration, for example
-   `backend/database/migrations/0002_work_notes.sql`:
+Use `make db-migrate` from [daily development](#daily-development).
+[Goblin.Database](../backend/tools/Goblin.Database/) applies
+[SQL files](../backend/database/migrations/) in ordinal filename order, once each.
+Each file and its journal entry commit in one transaction; failures roll back.
+An advisory lock serializes runners, and recorded SHA-256 checksums reject edits
+to applied scripts.
 
-   ```sql
-   CREATE TABLE public.work_notes (
-       id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-       work_item_id bigint NOT NULL REFERENCES public.work_items (id),
-       body text NOT NULL
-   );
-   ```
+**Before production:** consolidate schema changes into `0001_initial.sql` and
+recreate development databases when it changes. Local provisioning does not freeze
+the baseline or bypass checksum checks. **After production:** keep applied filenames
+and contents immutable and add higher-numbered migrations.
 
-2. Add `--table public.work_notes` to `backend/scripts/scaffold-database.sh`, then
-   apply the SQL and reverse engineer again:
+Use LF endings and ordinary SQL without `psql` commands or explicit
+`BEGIN`/`COMMIT`. Nontransactional operations such as `CREATE INDEX CONCURRENTLY`
+need a separate administrative procedure. Review destructive SQL and back up
+before applying it. Web startup never runs migrations; EF migrations and
+`EnsureCreated` are not used.
 
-   ```bash
-   make db-migrate DB_PROFILE=wsl
-   make db-scaffold DB_PROFILE=wsl
-   dotnet build backend/Goblin.slnx
-   ```
+### Reverse engineer the database
 
-3. Review the new `WorkNote` entity, the context, and relationship changes to
-   `WorkItem`. Commit the SQL, scaffolding table list, and generated C# together.
+Use `make db-scaffold` from [daily development](#daily-development).
+[scaffold-database.sh](../backend/scripts/scaffold-database.sh) owns the table
+selection and EF flags, restores the pinned local tool, and regenerates
+[Generated/](../backend/src/Goblin.Persistence/Generated/) with repository
+formatting, regular constructors, UTF-8 without BOM, and LF endings.
 
-Applying SQL changes the selected profile's database immediately; scaffolding
-only reads its schema. Review SQL before
-applying it and keep a backup before destructive changes. EF migrations and
-`EnsureCreated` are not part of this workflow.
+The app role can inspect the schema. `Name=ConnectionStrings:Goblin` resolves its
+connection from the tooling host's environment; `--no-onconfiguring` keeps it out
+of generated code. `--data-annotations` requests attributes; remaining mappings
+use Fluent API. Leave `--use-database-names` unset (`work_items` becomes `WorkItem`),
+and do not combine the explicit table list with `--schema public`, which includes
+every table. `public` is implicit in generated attributes.
 
-Scaffolding overwrites matching files but does not remove old entity files after
-a table is dropped or renamed. Remove those obsolete generated files explicitly
-and build again. New tables need primary keys for normal tracked EF writes.
+Keep custom behavior in partial classes **outside** `Generated/`. EF/scaffolding
+tools remain developer-only, separate from application and persistence test builds;
+the published migration runner has no EF model dependency.
 
-To check reproducibility, scaffold twice against an unchanged database. The
-second pass should produce no additional diff in `Generated/`.
+To change the schema:
 
-## Workspace storage boundary
+1. Edit the unreleased baseline, or add a migration after production, following
+   [the migration rules](#apply-the-sql-schema). New tracked tables need primary keys.
+2. Update `--table` entries in the scaffolding script, apply SQL, and scaffold.
+3. Remove obsolete generated entities after table drops/renames, then run
+   `dotnet build backend/Goblin.slnx` and the [database tests](#application-configuration-and-verification).
+4. Review and commit SQL, table selection, and generated C# together. A second
+   scaffold against the unchanged database should produce no additional diff.
+
+### Workspace storage boundary
 
 PostgreSQL stores Work conversations, lifecycle history, Git commit metadata, and
-inspection records. `workspace_checkpoints` contains no filesystem payload or
-archive digest. Workspace files stay on the Work PVC, and inspection reads that
-volume. Never add workspace archive bytes to PostgreSQL. See
-[workspace lifecycle](workspace-lifecycle.md).
+inspection records. Workspace files stay on the Work PVC; `workspace_checkpoints`
+contains no filesystem payload or archive digest. Never store workspace archives
+in PostgreSQL. See [workspace lifecycle](workspace-lifecycle.md).
 
 ## Application configuration and verification
 
-`Goblin.Web` uses the application connection from its published configuration or
-`ConnectionStrings__Goblin`. Only application credentials belong there. Durable
-Work requires PostgreSQL and the committed migrations, including Wolverine's
-tables in `public`. Automatic schema creation is disabled.
+[appsettings.json](../backend/src/Goblin.Web/appsettings.json) supplies the deployed
+Npgsql connection: `goblin-postgres:5432`, database `goblin`, role `goblin_app`,
+`SSL Mode=VerifyFull`, and `GSS Encryption Mode=Disable`. CA/client certificate/key
+paths are `/etc/goblin-postgres/{ca.crt,tls.crt,tls.key}`. VerifyFull checks the CA
+and hostname; disabling GSS avoids Kerberos dependencies.
 
-The installer runs `bash deploy/postgres/migrate.sh IMAGE` before deploying a new
-application image. That job mounts only the schema administrator's client
-certificate and stops on failure. Direct development uses the migration command
-above. Database-first EF mappings include a separate partial configuration for
-the filtered active-attempt relationship; do not edit generated classes manually.
+Kubernetes mounts only the app certificate/key and public CA in a read-only Secret
+volume accessible to the app's group. No password or private key is baked into the
+image; administrator/CA private keys and database credentials stay out of
+[repository sandboxes](execution-hosting.md). Npgsql handles certificate validation
+directly. Rebuild/redeploy when packaged connection settings change.
 
-`/readyz` checks the enabled database dependency independently of Codex. For a
-connection-only development session without PostgreSQL, use
-`make dev ARGS=--without-database` (or set `GOBLIN_WORK_ENABLED=false`). This disables Work APIs. Repository execution uses
-[separate sandboxes](execution-hosting.md) without database credentials.
+Direct development receives the app connection through `ConnectionStrings__Goblin`.
+Durable Work requires committed migrations, including Wolverine tables; automatic
+schema creation is disabled. The installer runs
+`bash deploy/postgres/migrate.sh IMAGE` with only the admin certificate and stops
+on failure before deploying Goblin. `/readyz` checks the database independently
+of Codex. Custom EF configuration for the filtered active-attempt relationship
+lives outside generated classes.
 
-Run the real PostgreSQL integration tests explicitly using a development profile:
+Run `make test-postgres` against a development profile. Tests create/drop uniquely
+named databases and cover EF CRUD across contexts, role permissions, schema
+application/checksums/rollback, messaging storage, sequences, foreign keys, and
+attempt cleanup reservations. Certificate checks verify the authenticated role
+and reject missing client certificates, admin impersonation, unencrypted access,
+an untrusted CA, and a wrong server hostname. Without explicit test configuration,
+database tests skip and ordinary solution tests need no server.
+
+To run HTTP/browser journeys against a migrated, disposable development database:
 
 ```bash
-make test-postgres DB_PROFILE=wsl
+goblinctl db run wsl --usage tests -- make test-js
+goblinctl db run wsl --usage tests -- make test-browser ARGS=tests/e2e/work.spec.ts
 ```
 
-The tests create and drop uniquely named databases. They cover EF insert/read/
-update/delete across contexts, application permission boundaries, repeatable
-schema application, edited-script rejection, and rollback after failed DDL.
-The initial-schema checks cover messaging storage and sequences, foreign keys,
-and the connection reservation held by an attempt awaiting cleanup.
-With a certificate connection, they also verify the authenticated identity and
-reject missing client certificates, administrator impersonation, unencrypted
-connections, an untrusted server CA, and an incorrect server hostname.
-Profile forwarding uses the stable host endpoint and SSH for Azure.
-Without explicit test configuration, database integration tests are skipped
-and the normal solution tests need no PostgreSQL server.
-
-See [EF Core reverse engineering](https://learn.microsoft.com/en-us/ef/core/managing-schemas/scaffolding/)
-for the underlying CLI options.
+These journeys write Work records to the selected database.

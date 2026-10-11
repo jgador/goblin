@@ -61,4 +61,4 @@ if ! "${goblin_kubectl[@]}" wait --for=condition=Complete "$verification_job" -n
 fi
 "${goblin_kubectl[@]}" logs "$verification_job" -n goblin
 "${goblin_kubectl[@]}" delete "$verification_job" -n goblin --ignore-not-found=true --wait=true
-printf 'PostgreSQL certificate authentication is configured. See docs/postgres-workflow.md for client access.\n'
+printf 'PostgreSQL certificate authentication is configured. See docs/database.md#wsl-and-windows-pgadmin for client access.\n'

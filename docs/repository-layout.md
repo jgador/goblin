@@ -206,9 +206,8 @@ browser into `frontend/public/assets/`. Codex schemas belong under
 contracts belong to `Goblin.Application/Work`. Browser types describe these public
 Goblin APIs, including `frontend/src/api/contracts.ts` for connection setup. They describe different APIs.
 
-For daily PostgreSQL connections and Windows exports, use the
-[PostgreSQL workflow](postgres-workflow.md). Schema rules and EF mapping conventions
-remain in the [database guide](database.md).
+The [database guide](database.md) covers PostgreSQL connections, Windows pgAdmin,
+daily development, schema rules, and EF mappings.
 
 The [Work lifecycle](work-lifecycle.md) is used by the live application. Core and
 public contracts are independent of runtime protocols and HTTP. Orchestration

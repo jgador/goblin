@@ -94,7 +94,7 @@ The installer provisions PostgreSQL and applies schema migrations before
 starting Goblin. PostgreSQL and the WSL host endpoint use port 5432. Client
 certificates live in user profiles outside the checkout. Windows access uses an
 additional listener inside WSL, for example port 55432; see
-[the PostgreSQL workflow](../../docs/postgres-workflow.md).
+[the PostgreSQL workflow](../../docs/database.md#wsl-and-windows-pgadmin).
 
 To enable or repair local access for an already configured database:
 
