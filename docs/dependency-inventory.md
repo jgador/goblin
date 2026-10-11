@@ -53,15 +53,16 @@ upgrading Chromium to an arbitrary release.
 
 ## C# / NuGet packages
 
-There are twelve unique directly referenced NuGet packages across the projects,
+There are thirteen unique directly referenced NuGet packages across the projects,
 plus the separately installed `dotnet-ef` tool.
 
 | Package | Declared version | Source |
 | --- | --- | --- |
 | `Microsoft.EntityFrameworkCore` | `10.0.12` | [Persistence project](../backend/src/Goblin.Persistence/Goblin.Persistence.csproj) |
+| `Microsoft.EntityFrameworkCore.Relational` | `10.0.12` | [Application project](../backend/src/Goblin.Application/Goblin.Application.csproj); preserves the runtime version when excluding Wolverine's EF design-time dependency |
 | `Npgsql.EntityFrameworkCore.PostgreSQL` | `10.0.3` | [Persistence project](../backend/src/Goblin.Persistence/Goblin.Persistence.csproj) |
 | `Npgsql` | `10.0.3` | [Migration runner](../backend/tools/Goblin.Database/Goblin.Database.csproj); matches the previously resolved driver version |
-| `Microsoft.EntityFrameworkCore.Design` | `10.0.12` | [Scaffolding host](../backend/tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj), [database tooling tests](../backend/tests/Goblin.Database.Tests/Goblin.Database.Tests.csproj) |
+| `Microsoft.EntityFrameworkCore.Design` | `10.0.12` | [Scaffolding host](../backend/tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj), [database tooling tests](../backend/tests/Goblin.Database.Tests/Goblin.Database.Tests.csproj); [application project](../backend/src/Goblin.Application/Goblin.Application.csproj) excludes all assets and keeps the dependency private |
 | `Microsoft.Extensions.Hosting` | `10.0.12` | [Migration runner](../backend/tools/Goblin.Database/Goblin.Database.csproj), [scaffolding host](../backend/tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj) |
 | `WolverineFx.EntityFrameworkCore` | `6.39.1` | [Application project](../backend/src/Goblin.Application/Goblin.Application.csproj) |
 | `WolverineFx.Postgresql` | `6.39.1` | [Application project](../backend/src/Goblin.Application/Goblin.Application.csproj) |

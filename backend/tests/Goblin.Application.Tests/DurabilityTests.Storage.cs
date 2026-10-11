@@ -81,14 +81,14 @@ public sealed partial class DurabilityTests
         var storage = (MessageDatabase<NpgsqlConnection>)fixture.Host.Services.GetRequiredService<IWolverineRuntime>().Storage;
         await WaitForStorageAsync(async () =>
         {
-            await using DbCommand command = storage.DataSource.CreateCommand("SELECT count(*) FROM public.wolverine_dead_letter WHERE message_type LIKE '%StorageTransaction%'");
+            await using DbCommand command = storage.DataSource.CreateCommand("SELECT count(*) FROM public.wolverine_dead_letters WHERE message_type LIKE '%StorageTransaction%'");
             return (long)(await command.ExecuteScalarAsync())! == 1;
         });
         await using GoblinDbContext read = await factory.CreateDbContextAsync();
         Assert.False(await read.WorkItems.AnyAsync(row => row.Id == rejected));
         Assert.Equal(1, await read.WorkItems.CountAsync());
         // Only the committed handler may persist and deliver the cascading message.
-        Assert.Equal(1, await read.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM public.wolverine_incoming_envelope WHERE message_type LIKE '%StorageConsumed%'").SingleAsync());
+        Assert.Equal(1, await read.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM public.wolverine_incoming_envelopes WHERE message_type LIKE '%StorageConsumed%'").SingleAsync());
     }
 
     [DatabaseFact]
@@ -112,27 +112,28 @@ public sealed partial class DurabilityTests
     }
 
     [Fact]
-    public void BuildGraphUsesMaintainedIntegrationProjects()
+    public void BuildGraphUsesOfficialWolverinePackagesWithoutEfDesignDependencies()
     {
         string dependencies = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Goblin.Application.Tests.deps.json"));
         using JsonDocument document = JsonDocument.Parse(dependencies);
         JsonElement libraries = document.RootElement.GetProperty("libraries");
-        foreach (string project in new[] { "Wolverine.RDBMS", "Wolverine.Postgresql", "Wolverine.EntityFrameworkCore" })
+        foreach (string package in new[] { "WolverineFx.RDBMS", "WolverineFx.Postgresql", "WolverineFx.EntityFrameworkCore", "WolverineFx.RuntimeCompilation" })
         {
-            JsonProperty library = Assert.Single(libraries.EnumerateObject(), item => item.Name.StartsWith(project + "/", StringComparison.Ordinal));
-            Assert.Equal("project", library.Value.GetProperty("type").GetString());
+            JsonElement library = libraries.GetProperty(package + "/6.39.1");
+            Assert.Equal("package", library.GetProperty("type").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(library.GetProperty("sha512").GetString()));
         }
         Assert.DoesNotContain(libraries.EnumerateObject(), item => item.Name.StartsWith("Microsoft.EntityFrameworkCore.Design/", StringComparison.Ordinal));
-        Assert.DoesNotContain(libraries.EnumerateObject(), item => item.Name.StartsWith("WolverineFx.RDBMS/", StringComparison.Ordinal) || item.Name.StartsWith("WolverineFx.Postgresql/", StringComparison.Ordinal) || item.Name.StartsWith("WolverineFx.EntityFrameworkCore/", StringComparison.Ordinal));
+        Assert.DoesNotContain(libraries.EnumerateObject(), item => item.Value.GetProperty("type").GetString() == "project" && item.Name.StartsWith("Wolverine.", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void WolverineEfEnvelopeMappingsUseCanonicalSingularTables()
+    public void WolverineEfEnvelopeMappingsUseUpstreamTables()
     {
         var model = new ModelBuilder();
         model.MapWolverineEnvelopeStorage("public");
         string[] names = [.. model.Model.GetEntityTypes().Select(entity => entity.GetTableName()!).Order(StringComparer.Ordinal)];
-        Assert.Equal(new[] { "wolverine_incoming_envelope", "wolverine_outgoing_envelope" }, names);
+        Assert.Equal(new[] { "wolverine_incoming_envelopes", "wolverine_outgoing_envelopes" }, names);
     }
 
     [DatabaseFact]
@@ -227,7 +228,7 @@ public sealed partial class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task WolverineBatchAndTransactionalEnvelopeStorageUsesSingularTables()
+    public async Task WolverineBatchAndTransactionalEnvelopeStorageUsesUpstreamTables()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         var store = (MessageDatabase<NpgsqlConnection>)fixture.Host.Services.GetRequiredService<IWolverineRuntime>().Storage;

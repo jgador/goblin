@@ -1091,7 +1091,7 @@ public sealed partial class DurabilityTests
         if ((await broker.StatusAsync(attempt, operation, default)).State == GitRepositoryOperationState.Queued)
         {
             await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
-            string[] failures = await db.Database.SqlQueryRaw<string>("SELECT exception_message AS \"Value\" FROM public.wolverine_dead_letter").ToArrayAsync();
+            string[] failures = await db.Database.SqlQueryRaw<string>("SELECT exception_message AS \"Value\" FROM public.wolverine_dead_letters").ToArrayAsync();
             Assert.Fail(string.Join("\n", failures));
         }
         Assert.Equal(GitRepositoryOperationState.Uncertain, (await broker.StatusAsync(attempt, operation, default)).State);
@@ -1123,7 +1123,7 @@ public sealed partial class DurabilityTests
         await using GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync();
         Assert.False(await db.GitRepositoryOperations.AnyAsync(x => x.Id == rejected));
         Assert.Equal(0, await db.Database.SqlQueryRaw<int>("""
-            SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelope
+            SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelopes
             WHERE message_type LIKE '%ExecuteGitRepositoryOperation%'
             """).SingleAsync());
         Assert.Equal(0, fixture.Remote.Calls);
@@ -1352,7 +1352,7 @@ public sealed partial class DurabilityTests
             Assert.False(await db.WorkCommands.AnyAsync(x => x.Id == rejected));
             Assert.False(await db.ExecutionAttempts.AnyAsync(x => x.WorkId == id));
             Assert.Equal(0, await db.Database.SqlQueryRaw<int>("""
-                SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelope
+                SELECT count(*)::int AS "Value" FROM public.wolverine_incoming_envelopes
                 WHERE message_type LIKE '%DispatchWork%'
                 """).SingleAsync());
         }

@@ -189,30 +189,48 @@ plan overlapping trust before replacing the CA and restrict Secret/issuance acce
 
 ## Schema and EF Core
 
-Use singular, unquoted PostgreSQL `snake_case` names in the default `public` schema and
-`PascalCase` C# names with mapping attributes. Goblin-owned tables use `id bigint`
-and bigint foreign keys. Identity sequences allocate local IDs; GitHub repository
-IDs retain their upstream values. HTTP exposes bigint IDs as decimal strings.
+Goblin-owned tables use singular, unquoted PostgreSQL `snake_case` names in the
+default `public` schema and `PascalCase` C# names with mapping attributes. They use
+`id bigint` and bigint foreign keys. Identity sequences allocate local IDs;
+GitHub repository IDs retain their upstream values. HTTP exposes bigint IDs as decimal strings.
 Inspection and repository-operation requests reserve IDs before submission and
 retain them on replay.
 
-Wolverine tables keep their `wolverine_` prefix and library-defined key types.
+Wolverine-owned tables retain the official packages' native names, `wolverine_`
+prefix, and library-defined key types:
+
+- `wolverine_agent_restrictions`
+- `wolverine_control_queue`
+- `wolverine_dead_letters`
+- `wolverine_incoming_envelopes`
+- `wolverine_node_records`
+- `wolverine_nodes`
+- `wolverine_node_assignments`
+- `wolverine_outgoing_envelopes`
+
 The administrator-only migration journal is `public.schema_migration`; its
 identity sequence is also inaccessible to the application role.
-Neither is included in EF scaffolding. All 27 tables (18 product tables, eight
-Wolverine tables, and the journal) use singular names. Primary keys, foreign keys,
-identity sequences, and table-specific indexes derive from those names. The
-independent bigint Work history sequence is `work_event_id_seq`; it has no table
-or column owner. Wolverine uses `wolverine_node_record_id_seq` and
-`wolverine_node_node_number_seq`. C# entity types remain singular and collections
+Wolverine and the journal are excluded from Goblin EF scaffolding. The catalog has
+18 singular product tables, the singular journal, and eight native Wolverine
+tables. Primary keys, foreign keys, identity sequences, and table-specific indexes
+follow their owner's naming conventions. The independent bigint Work history
+sequence is `work_event_id_seq`; it has no table or column owner. Wolverine uses
+`wolverine_node_records_id_seq` and
+`wolverine_nodes_node_number_seq`. C# entity types remain singular and collections
 remain plural: `WorkItem` maps to `work_item`, while `WorkItems` is a DbSet.
 
-Wolverine's maintained [integration source](../backend/third_party/wolverine/README.md)
-rebuilds the RDBMS, PostgreSQL, and EF integrations from the pinned 6.39.1 revision.
-Keep their canonical SQL constants, schema objects, and this baseline DDL aligned.
-Ordinary project references and container publishing compile that source; startup
-retains `AutoCreate.None`. Optional tenancy, dynamic listeners, recurring messages,
-deduplication, partitioning, and database message queues are not enabled.
+Goblin references the official `WolverineFx.EntityFrameworkCore`,
+`WolverineFx.Postgresql`, and `WolverineFx.RuntimeCompilation` NuGet packages at
+6.39.1. The administrator-applied baseline DDL must match their native SQL
+definitions; startup retains `AutoCreate.None`. The application excludes the
+integration's transitive EF design-time assets from runtime consumers and pins
+EF relational runtime assets to Goblin's existing 10.0.12 version.
+EF transactions and the durable inbox preserve atomic state/dispatch persistence.
+Failed Work requires attention
+and explicit retry after reconciliation of uncertain execution, as described in
+the [Work lifecycle](work-lifecycle.md). Optional tenancy, dynamic listeners,
+recurring messages, deduplication, partitioning, and database message queues are
+not enabled.
 
 ### Apply the SQL schema
 
@@ -225,10 +243,14 @@ to applied scripts.
 
 **Before production:** consolidate schema changes into `0001_initial.sql` and
 deliberately recreate disposable development databases when it changes.
-An existing database with the former plural names cannot apply this changed
-baseline: checksum validation must reject it. Do not add rename migrations,
-compatibility views, or bypass the journal. Recreate only the verified owned
-development database; schema changes do not authorize deleting Work PVCs or
+The current development database using singular Wolverine names must be
+deliberately recreated before running the build that uses official Wolverine
+packages and their native names. Previously applied versions of this baseline
+cannot be reapplied: checksum validation must reject them. Verification uses
+isolated test databases and does not reset the running installation.
+Do not add rename migrations, compatibility views, or bypass the journal.
+Recreate only the verified owned development database; schema changes do not
+authorize deleting Work PVCs or
 unrelated installation data. Remove stale named client profiles only after
 reviewing the new database volume and CA identities, then reconnect.
 Local provisioning does not freeze the baseline or bypass checksum checks. **After production:** keep applied filenames
@@ -319,3 +341,21 @@ goblinctl db run wsl --usage tests -- make test-browser ARGS=tests/e2e/work.spec
 ```
 
 These journeys write Work records to the selected database.
+
+### Manual regression after development recreation
+
+After deliberately recreating the development database, applying the baseline,
+and deploying the changed build, check readiness and repeat these journeys with
+neutral test data. Preserve Work PVCs. Previous successful manual checks establish
+the starting behavior; they do not verify this build.
+
+- **Slack:** connect or relink the installation, link an external identity, submit
+  a message in a linked thread, and confirm Work and replies appear once. Reply
+  in that thread and confirm it reaches the existing conversation.
+- **GitHub:** connect the account, select an accessible test repository, complete
+  repository setup/approval, and confirm a Work repository operation completes
+  with its recorded result and provenance.
+- **ChatGPT:** connect the ChatGPT/Codex account, select a model, submit Work,
+  respond to an attention request, and confirm completion and history. Restart
+  Goblin during queued Work and confirm recovery; explicitly reconcile uncertain
+  execution before retrying failed Work.

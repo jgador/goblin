@@ -230,10 +230,10 @@ CREATE INDEX external_pending ON public.external_message(installation_id, id) WH
 -- independent of command/conversation message sequences and execution attempts.
 CREATE SEQUENCE public.work_event_id_seq AS bigint;
 
--- Wolverine 6.39.1 maintained integration storage. Keep definitions aligned
--- with backend/third_party/wolverine; automatic schema creation is disabled.
-CREATE TABLE public.wolverine_agent_restriction (
-    id uuid CONSTRAINT pkey_wolverine_agent_restriction_id PRIMARY KEY,
+-- Wolverine 6.39.1 message storage. Preserve its table, index, and constraint
+-- names while sharing the application's public schema.
+CREATE TABLE public.wolverine_agent_restrictions (
+    id uuid CONSTRAINT pkey_wolverine_agent_restrictions_id PRIMARY KEY,
     uri character varying NOT NULL,
     type character varying NOT NULL,
     node integer DEFAULT 0 NOT NULL
@@ -246,8 +246,8 @@ CREATE TABLE public.wolverine_control_queue (
     posted timestamp with time zone DEFAULT now() NOT NULL,
     expires timestamp with time zone
 );
-CREATE TABLE public.wolverine_dead_letter (
-    id uuid CONSTRAINT pkey_wolverine_dead_letter_id PRIMARY KEY,
+CREATE TABLE public.wolverine_dead_letters (
+    id uuid CONSTRAINT pkey_wolverine_dead_letters_id PRIMARY KEY,
     execution_time timestamp with time zone,
     body bytea NOT NULL,
     message_type character varying NOT NULL,
@@ -258,8 +258,8 @@ CREATE TABLE public.wolverine_dead_letter (
     sent_at timestamp with time zone,
     replayable boolean
 );
-CREATE TABLE public.wolverine_incoming_envelope (
-    id uuid CONSTRAINT pkey_wolverine_incoming_envelope_id PRIMARY KEY,
+CREATE TABLE public.wolverine_incoming_envelopes (
+    id uuid CONSTRAINT pkey_wolverine_incoming_envelopes_id PRIMARY KEY,
     status character varying NOT NULL,
     owner_id integer NOT NULL,
     execution_time timestamp with time zone,
@@ -270,21 +270,21 @@ CREATE TABLE public.wolverine_incoming_envelope (
     keep_until timestamp with time zone
 );
 
-CREATE SEQUENCE public.wolverine_node_record_id_seq AS integer;
-CREATE TABLE public.wolverine_node_record (
-    id integer DEFAULT nextval('public.wolverine_node_record_id_seq'::regclass)
-        CONSTRAINT pkey_wolverine_node_record_id PRIMARY KEY,
+CREATE SEQUENCE public.wolverine_node_records_id_seq AS integer;
+CREATE TABLE public.wolverine_node_records (
+    id integer DEFAULT nextval('public.wolverine_node_records_id_seq'::regclass)
+        CONSTRAINT pkey_wolverine_node_records_id PRIMARY KEY,
     node_number integer NOT NULL,
     event_name character varying NOT NULL,
     "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
     description character varying
 );
-ALTER SEQUENCE public.wolverine_node_record_id_seq OWNED BY public.wolverine_node_record.id;
+ALTER SEQUENCE public.wolverine_node_records_id_seq OWNED BY public.wolverine_node_records.id;
 
-CREATE SEQUENCE public.wolverine_node_node_number_seq AS integer;
-CREATE TABLE public.wolverine_node (
-    id uuid CONSTRAINT pkey_wolverine_node_id PRIMARY KEY,
-    node_number integer DEFAULT nextval('public.wolverine_node_node_number_seq'::regclass) NOT NULL,
+CREATE SEQUENCE public.wolverine_nodes_node_number_seq AS integer;
+CREATE TABLE public.wolverine_nodes (
+    id uuid CONSTRAINT pkey_wolverine_nodes_id PRIMARY KEY,
+    node_number integer DEFAULT nextval('public.wolverine_nodes_node_number_seq'::regclass) NOT NULL,
     description character varying NOT NULL,
     uri character varying NOT NULL,
     started timestamp with time zone DEFAULT now() NOT NULL,
@@ -292,15 +292,15 @@ CREATE TABLE public.wolverine_node (
     version character varying,
     capabilities text[]
 );
-ALTER SEQUENCE public.wolverine_node_node_number_seq OWNED BY public.wolverine_node.node_number;
+ALTER SEQUENCE public.wolverine_nodes_node_number_seq OWNED BY public.wolverine_nodes.node_number;
 
-CREATE TABLE public.wolverine_node_assignment (
-    id character varying CONSTRAINT pkey_wolverine_node_assignment_id PRIMARY KEY,
-    node_id uuid CONSTRAINT fkey_wolverine_node_assignment_node_id REFERENCES public.wolverine_node(id) ON DELETE CASCADE,
+CREATE TABLE public.wolverine_node_assignments (
+    id character varying CONSTRAINT pkey_wolverine_node_assignments_id PRIMARY KEY,
+    node_id uuid CONSTRAINT fkey_wolverine_node_assignments_node_id REFERENCES public.wolverine_nodes(id) ON DELETE CASCADE,
     started timestamp with time zone DEFAULT now() NOT NULL
 );
-CREATE TABLE public.wolverine_outgoing_envelope (
-    id uuid CONSTRAINT pkey_wolverine_outgoing_envelope_id PRIMARY KEY,
+CREATE TABLE public.wolverine_outgoing_envelopes (
+    id uuid CONSTRAINT pkey_wolverine_outgoing_envelopes_id PRIMARY KEY,
     owner_id integer NOT NULL,
     destination character varying NOT NULL,
     deliver_by timestamp with time zone,
@@ -309,9 +309,9 @@ CREATE TABLE public.wolverine_outgoing_envelope (
     message_type character varying NOT NULL
 );
 
-CREATE INDEX idx_wolverine_dead_letter_replayable ON public.wolverine_dead_letter (replayable) WHERE replayable = true;
-CREATE INDEX idx_wolverine_incoming_envelope_keep_until ON public.wolverine_incoming_envelope (keep_until) WHERE status = 'Handled';
-CREATE INDEX idx_wolverine_incoming_envelope_owner ON public.wolverine_incoming_envelope (owner_id) WHERE owner_id <> 0;
-CREATE INDEX idx_wolverine_incoming_envelope_recover ON public.wolverine_incoming_envelope (received_at) WHERE status = 'Incoming' AND owner_id = 0;
-CREATE INDEX idx_wolverine_outgoing_envelope_owner ON public.wolverine_outgoing_envelope (owner_id) WHERE owner_id <> 0;
-CREATE INDEX idx_wolverine_outgoing_envelope_recover ON public.wolverine_outgoing_envelope (destination) WHERE owner_id = 0;
+CREATE INDEX idx_wolverine_dead_letters_replayable ON public.wolverine_dead_letters (replayable) WHERE replayable = true;
+CREATE INDEX idx_wolverine_incoming_envelopes_keep_until ON public.wolverine_incoming_envelopes (keep_until) WHERE status = 'Handled';
+CREATE INDEX idx_wolverine_incoming_envelopes_owner ON public.wolverine_incoming_envelopes (owner_id) WHERE owner_id <> 0;
+CREATE INDEX idx_wolverine_incoming_envelopes_recover ON public.wolverine_incoming_envelopes (received_at) WHERE status = 'Incoming' AND owner_id = 0;
+CREATE INDEX idx_wolverine_outgoing_envelopes_owner ON public.wolverine_outgoing_envelopes (owner_id) WHERE owner_id <> 0;
+CREATE INDEX idx_wolverine_outgoing_envelopes_recover ON public.wolverine_outgoing_envelopes (destination) WHERE owner_id = 0;

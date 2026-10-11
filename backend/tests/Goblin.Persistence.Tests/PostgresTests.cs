@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Goblin.Contracts;
@@ -80,7 +81,7 @@ public sealed class PostgresTests
         {
             "CREATE TABLE public.forbidden (id integer);",
             "DROP TABLE public.work_item;",
-            "DROP TABLE public.wolverine_incoming_envelope;",
+            "DROP TABLE public.wolverine_incoming_envelopes;",
             "SELECT * FROM public.schema_migration;",
             "DELETE FROM public.schema_migration;",
             "SELECT nextval('public.schema_migration_id_seq');",
@@ -156,7 +157,7 @@ public sealed class PostgresTests
                     2147483648,
                     1,
                     1, 'codex', 'Succeeded', now(), now(), true);
-            INSERT INTO public.wolverine_incoming_envelope (id, status, owner_id, body, message_type)
+            INSERT INTO public.wolverine_incoming_envelopes (id, status, owner_id, body, message_type)
                 VALUES ('30000000-0000-0000-0000-000000000001', 'Incoming', 0, decode('010203', 'hex'), 'DispatchWork');
             """, app))
         {
@@ -166,9 +167,9 @@ public sealed class PostgresTests
 
         await using GoblinDbContext db = await database.ContextFactory.CreateDbContextAsync();
         Assert.True((await db.ExecutionAttempts.SingleAsync()).CleanupPending);
-        await using (var message = new NpgsqlCommand("SELECT body FROM public.wolverine_incoming_envelope WHERE id = '30000000-0000-0000-0000-000000000001';", app))
+        await using (var message = new NpgsqlCommand("SELECT body FROM public.wolverine_incoming_envelopes WHERE id = '30000000-0000-0000-0000-000000000001';", app))
             Assert.Equal(new byte[] { 1, 2, 3 }, (byte[])(await message.ExecuteScalarAsync())!);
-        await using (var sequence = new NpgsqlCommand("INSERT INTO public.wolverine_node_record (node_number, event_name) VALUES (1, 'Test event') RETURNING id;", app))
+        await using (var sequence = new NpgsqlCommand("INSERT INTO public.wolverine_node_records (node_number, event_name) VALUES (1, 'Test event') RETURNING id;", app))
         {
             Assert.Equal(1, await sequence.ExecuteScalarAsync());
             Assert.Equal(2, await sequence.ExecuteScalarAsync());
@@ -192,7 +193,7 @@ public sealed class PostgresTests
     }
 
     [PostgresFact]
-    public async Task FreshCatalogContainsExactlyTheSingularTablesAndOwnedObjects()
+    public async Task FreshCatalogContainsExactlySingularGoblinAndNativeWolverineObjects()
     {
         await using TestDatabase database = await TestDatabase.CreateAsync();
         await using var admin = new NpgsqlConnection(database.AdminConnection);
@@ -202,10 +203,10 @@ public sealed class PostgresTests
             "agent", "connection", "connection_model_catalog", "conversation", "conversation_message",
             "execution_attempt", "external_conversation", "external_identity", "external_link_request",
             "external_message", "github_connection", "github_repository", "repository_operation",
-            "repository_setup_memory", "schema_migration", "wolverine_agent_restriction",
-            "wolverine_control_queue", "wolverine_dead_letter", "wolverine_incoming_envelope",
-            "wolverine_node", "wolverine_node_assignment", "wolverine_node_record",
-            "wolverine_outgoing_envelope", "work_command", "work_item", "workspace_checkpoint", "workspace_session"
+            "repository_setup_memory", "schema_migration", "wolverine_agent_restrictions",
+            "wolverine_control_queue", "wolverine_dead_letters", "wolverine_incoming_envelopes",
+            "wolverine_node_assignments", "wolverine_node_records", "wolverine_nodes",
+            "wolverine_outgoing_envelopes", "work_command", "work_item", "workspace_checkpoint", "workspace_session"
         ];
         await using (var tables = new NpgsqlCommand("SELECT array_agg(tablename::text ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public'", admin))
             Assert.Equal(expected, (string[])(await tables.ExecuteScalarAsync())!);
@@ -222,7 +223,7 @@ public sealed class PostgresTests
             keys.Parameters.AddWithValue("table", table);
             await using NpgsqlDataReader row = await keys.ExecuteReaderAsync();
             Assert.True(await row.ReadAsync());
-            string type = table == "wolverine_node_record" ? "integer" : table == "wolverine_node_assignment" ? "character varying" : table.StartsWith("wolverine_", StringComparison.Ordinal) ? "uuid" : "bigint";
+            string type = table == "wolverine_node_records" ? "integer" : table == "wolverine_node_assignments" ? "character varying" : table.StartsWith("wolverine_", StringComparison.Ordinal) ? "uuid" : "bigint";
             Assert.Equal(type, row.GetString(0));
             Assert.Equal(table.StartsWith("wolverine_", StringComparison.Ordinal) ? "pkey_" + table + "_id" : table + "_pkey", row.GetString(1));
             Assert.False(await row.ReadAsync());
@@ -243,18 +244,26 @@ public sealed class PostgresTests
             Assert.Equal(0L, await identities.ExecuteScalarAsync());
         foreach ((string table, string column, string sequence) in new[]
         {
-            ("wolverine_node_record", "id", "wolverine_node_record_id_seq"),
-            ("wolverine_node", "node_number", "wolverine_node_node_number_seq")
+            ("wolverine_node_records", "id", "wolverine_node_records_id_seq"),
+            ("wolverine_nodes", "node_number", "wolverine_nodes_node_number_seq")
         })
         {
-            await using var owned = new NpgsqlCommand("SELECT pg_get_serial_sequence('public.' || @table, @column), pg_get_expr(adbin, adrelid) FROM pg_attrdef WHERE adrelid = ('public.' || @table)::regclass AND adnum = (SELECT attnum FROM pg_attribute WHERE attrelid = ('public.' || @table)::regclass AND attname = @column)", admin);
+            await using var owned = new NpgsqlCommand("SELECT pg_get_serial_sequence('public.' || @table, @column), pg_get_expr(adbin, adrelid), (SELECT seqtypid::regtype::text FROM pg_sequence WHERE seqrelid = pg_get_serial_sequence('public.' || @table, @column)::regclass) FROM pg_attrdef WHERE adrelid = ('public.' || @table)::regclass AND adnum = (SELECT attnum FROM pg_attribute WHERE attrelid = ('public.' || @table)::regclass AND attname = @column)", admin);
             owned.Parameters.AddWithValue("table", table);
             owned.Parameters.AddWithValue("column", column);
             await using NpgsqlDataReader row = await owned.ExecuteReaderAsync();
             Assert.True(await row.ReadAsync());
             Assert.Equal("public." + sequence, row.GetString(0));
             Assert.Contains(sequence, row.GetString(1), StringComparison.Ordinal);
+            Assert.Equal("integer", row.GetString(2));
         }
+        string[] expectedSequences = [.. expected
+            .Where(table => table != "github_repository" && !table.StartsWith("wolverine_", StringComparison.Ordinal))
+            .Select(table => table + "_id_seq")
+            .Concat(["work_event_id_seq", "wolverine_node_records_id_seq", "wolverine_nodes_node_number_seq"])
+            .Order(StringComparer.Ordinal)];
+        await using (var sequences = new NpgsqlCommand("SELECT array_agg(sequencename::text ORDER BY sequencename) FROM pg_sequences WHERE schemaname = 'public'", admin))
+            Assert.Equal(expectedSequences, (string[])(await sequences.ExecuteScalarAsync())!);
         await using (var independent = new NpgsqlCommand("""
             SELECT seqtypid::regtype::text, EXISTS (SELECT 1 FROM pg_depend WHERE objid = seqrelid AND deptype IN ('a', 'i'))
             FROM pg_sequence WHERE seqrelid = 'public.work_event_id_seq'::regclass
@@ -265,8 +274,27 @@ public sealed class PostgresTests
             Assert.Equal("bigint", row.GetString(0));
             Assert.False(row.GetBoolean(1));
         }
-        await using (var constraints = new NpgsqlCommand("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace JOIN pg_class t ON t.oid = c.conrelid WHERE n.nspname = 'public' AND c.contype = 'f' AND c.conname NOT LIKE t.relname || '_%' AND c.conname NOT LIKE 'fkey_wolverine_node_assignment_%'", admin))
+        await using (var constraints = new NpgsqlCommand("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace JOIN pg_class t ON t.oid = c.conrelid WHERE n.nspname = 'public' AND c.contype = 'f' AND c.conname NOT LIKE t.relname || '_%' AND c.conname NOT LIKE 'fkey_wolverine_node_assignments_%'", admin))
             Assert.Equal(0L, await constraints.ExecuteScalarAsync());
+        await using (var assignment = new NpgsqlCommand("""
+            SELECT conname, confrelid::regclass::text, confdeltype::text
+            FROM pg_constraint WHERE conrelid = 'public.wolverine_node_assignments'::regclass AND contype = 'f'
+            """, admin))
+        await using (NpgsqlDataReader row = await assignment.ExecuteReaderAsync())
+        {
+            Assert.True(await row.ReadAsync());
+            Assert.Equal("fkey_wolverine_node_assignments_node_id", row.GetString(0));
+            Assert.Equal("wolverine_nodes", row.GetString(1));
+            Assert.Equal("c", row.GetString(2));
+            Assert.False(await row.ReadAsync());
+        }
+        await using (var indexes = new NpgsqlCommand("SELECT array_agg(indexname::text ORDER BY indexname) FROM pg_indexes WHERE schemaname = 'public' AND indexname LIKE 'idx_wolverine_%'", admin))
+            Assert.Equal(new[]
+            {
+                "idx_wolverine_dead_letters_replayable", "idx_wolverine_incoming_envelopes_keep_until",
+                "idx_wolverine_incoming_envelopes_owner", "idx_wolverine_incoming_envelopes_recover",
+                "idx_wolverine_outgoing_envelopes_owner", "idx_wolverine_outgoing_envelopes_recover"
+            }, (string[])(await indexes.ExecuteScalarAsync())!);
         await using (var seeds = new NpgsqlCommand("SELECT nextval('public.connection_id_seq'), nextval('public.agent_id_seq'), nextval('public.github_connection_id_seq')", admin))
         await using (NpgsqlDataReader row = await seeds.ExecuteReaderAsync())
         {
