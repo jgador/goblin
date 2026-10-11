@@ -1,0 +1,32 @@
+# Installed by an administrator, outside the website's release permissions.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: website-deployer
+  namespace: goblin
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: website-deployer
+  namespace: goblin
+rules:
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [website]
+    verbs: [get, watch, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: website-deployer
+  namespace: goblin
+subjects:
+  - kind: ServiceAccount
+    name: website-deployer
+    namespace: goblin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: website-deployer

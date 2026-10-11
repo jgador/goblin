@@ -165,8 +165,10 @@ The existing `references/goblin-in-the-loop.gif` is an earlier exported design;
 it is not regenerated as part of this website update. Use `index.html` for the
 current interactive design.
 
-Published site: <https://goblin-in-the-loop.jesse-gador-2903.chatgpt.site/>.
-Local development and k3s previews do not update that hosted copy.
+Production domain: <https://goblinboard.com>. See the
+[protected production deployment](production/README.md) for AK3S ingress,
+GitHub approval, TLS, and the DNS cutover procedure.
+The earlier ChatGPT-hosted copy is independent of this deployment.
 
 ## Develop in Docker
 
