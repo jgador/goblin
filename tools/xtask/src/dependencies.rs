@@ -376,7 +376,7 @@ fn update_image_references(
     for captures in image_line.captures_iter(source) {
         let image = captures.name("image").context("Missing image reference")?;
         // Installation replaces this locally built image with its source-derived tag.
-        if path == "deploy/auth/sandbox.yaml" && image.as_str() == "goblin-auth:0.1.0" {
+        if path == "deploy/platform/sandbox.yaml" && image.as_str() == "goblin-platform:0.1.0" {
             continue;
         }
         let replacement = images.get(image_repository(image.as_str()));
@@ -441,7 +441,7 @@ fn outputs(root: &Path, previous: &Lock, lock: &Lock) -> Result<BTreeMap<String,
         }
     }
     let mut resources = Vec::new();
-    for directory in ["deploy/auth", "deploy/azure/app"] {
+    for directory in ["deploy/platform", "deploy/azure/platform"] {
         for path in walk(&root.join(directory))? {
             if path.extension().is_some_and(|v| v == "yaml" || v == "conf") {
                 let name = path
@@ -496,7 +496,11 @@ mod tests {
             .unwrap();
         let temp = tempfile::tempdir().unwrap();
         let mut paths = Vec::new();
-        for name in ["deploy/auth", "deploy/postgres", "deploy/azure/app"] {
+        for name in [
+            "deploy/platform",
+            "deploy/postgres",
+            "deploy/azure/platform",
+        ] {
             paths.extend(walk(&source.join(name)).unwrap());
         }
         for name in [CATALOG, LOCK, "Dockerfile", "scripts/check-logging.sh"] {
@@ -516,7 +520,7 @@ mod tests {
         let root = temp.path();
         let mut lock = read_lock(root).unwrap();
         let before = outputs(root, &lock, &lock).unwrap();
-        fs::write(root.join("deploy/auth/new.yaml"), "kind: ConfigMap\n").unwrap();
+        fs::write(root.join("deploy/platform/new.yaml"), "kind: ConfigMap\n").unwrap();
         lock.images.get_mut("headlamp").unwrap().reference =
             "ghcr.io/headlamp-k8s/headlamp:new-version".into();
         let after = outputs(root, &lock, &lock).unwrap();
@@ -525,8 +529,8 @@ mod tests {
             after["deploy/postgres/postgres.yaml"]
         );
         assert_ne!(
-            before["deploy/auth/headlamp.yaml"],
-            after["deploy/auth/headlamp.yaml"]
+            before["deploy/platform/headlamp.yaml"],
+            after["deploy/platform/headlamp.yaml"]
         );
         let request: goblinctl::deployment::InstallRequest =
             serde_json::from_slice(&after["deploy/install-request.json"]).unwrap();
@@ -534,7 +538,7 @@ mod tests {
             request
                 .resources
                 .iter()
-                .any(|r| r.path == "deploy/auth/new.yaml")
+                .any(|r| r.path == "deploy/platform/new.yaml")
         );
     }
 
@@ -722,9 +726,13 @@ mod tests {
         let temp = fixture();
         let root = temp.path();
         let lock = read_lock(root).unwrap();
-        fs::write(root.join("deploy/auth/new.yaml"), "image: untracked:1\n").unwrap();
+        fs::write(
+            root.join("deploy/platform/new.yaml"),
+            "image: untracked:1\n",
+        )
+        .unwrap();
         let error = outputs(root, &lock, &lock).unwrap_err().to_string();
-        assert!(error.contains("deploy/auth/new.yaml"));
+        assert!(error.contains("deploy/platform/new.yaml"));
         assert!(error.contains("dependencies.toml"));
     }
 

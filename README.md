@@ -21,6 +21,13 @@ tests live in [`tests/`](tests/), deployment files in [`deploy/`](deploy/), and
 original artwork in [`assets/`](assets/). See the
 [repository layout](docs/repository-layout.md) for ownership and build commands.
 
+The standalone communications website lives in [`website/`](website/), separate
+from the application UI. Run `make website-dev` inside WSL to start its Docker
+development server detached, then open **http://localhost:5173**. Saving website
+files reloads the browser. Use `make website-stop` to stop it; see the
+[website guide](website/README.md) for logs, local k3s previews, resource load tests,
+and autoscaling.
+
 The [environment variable guide](docs/environment-variables.md) points to the
 C#, Rust, and TypeScript definition catalogs and explains configuration boundaries,
 shared variables, and how to add new settings.

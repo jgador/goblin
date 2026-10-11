@@ -90,7 +90,7 @@ public sealed partial class CodexClient : IAsyncDisposable
         {
             await RequestAsync<InitializeParams, InitializeResponse>("initialize", new()
             {
-                ClientInfo = new ClientInfo { Name = "goblin_auth", Title = "Goblin", Version = "0.1.0" }
+                ClientInfo = new ClientInfo { Name = "goblin-platform", Title = "Goblin", Version = "0.1.0" }
             });
             await SendAsync(child, new JSONRPCNotification
             {

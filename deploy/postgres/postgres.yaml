@@ -147,7 +147,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app: goblin-auth
+              app: platform
         - podSelector:
             matchLabels:
               goblin-database-access: "true"

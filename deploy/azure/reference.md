@@ -60,7 +60,7 @@ password verifier. For a password change, redeploy with the new password.
 To restart the application separately:
 
 ```bash
-sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
+sudo k3s kubectl delete pod -n goblin -l app=platform
 ```
 
 The Sandbox controller recreates the pod with the same persistent data. The
@@ -253,15 +253,23 @@ binary and its embedded assets.
 
 The public IP resource's `dnsSettings.fqdn` is passed into bootstrap; the VM's
 Linux hostname is not used to construct the URL. The worker renders
-`deploy/azure/app`, which shares the PVC, password Secret mount, and application
-configuration with `deploy/auth/sandbox.yaml`. It configures:
+`deploy/azure/platform`, which shares the PVC, password Secret mount, and application
+configuration with `deploy/platform/sandbox.yaml`.
+
+The application component is `platform` (Sandbox, container, main Service and
+NetworkPolicy), in namespace `goblin`, with image `goblin-platform`. The website
+uses its independent workflow in that same namespace. New installations use
+PVC `platform-data`; existing storage requires an explicit, data-preserving
+transition before adopting that claim. See [Kubernetes names](../../docs/kubernetes-names.md).
+
+The overlay configures:
 
 - `GOBLIN_PUBLIC_ORIGIN=http://<assigned-hostname>` and the explicit
   `GOBLIN_ALLOW_INSECURE_HTTP=true` setting.
-- A Traefik Ingress for the same hostname, routing `/` to `goblin-auth:8787`.
+- A Traefik Ingress for the same hostname, routing `/` to `platform:8787`.
 - A network policy allowing only Traefik pods in `kube-system` to reach port 8787.
 
-The rendered files remain under `/var/lib/goblin/deploy/azure/app`. The deployment
+The rendered files remain under `/var/lib/goblin/deploy/azure/platform`. The deployment
 returns `goblinUrl`, and `/var/lib/goblin/public-url` stores the same address.
 The UI uses the password selected during provisioning. HTTP traffic is
 unencrypted until HTTPS is configured. To add HTTPS later, configure Traefik's
@@ -471,7 +479,7 @@ and `portal.bicep` aligned:
 
 ```bash
 cargo xtask azure
-bash -n deploy/azure/bootstrap.sh deploy/azure/install-app.sh deploy/azure/setup/installer.sh
+bash -n deploy/azure/bootstrap.sh deploy/azure/install-platform.sh deploy/azure/setup/installer.sh
 sh -n deploy/azure/missing-ssh-key.sh
 make test
 ```

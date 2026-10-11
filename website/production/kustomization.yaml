@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../k8s
+  - ingress.yaml
+images:
+  - name: docker.io/library/goblin-website
+    newName: ghcr.io/jgador/goblin-website
+    newTag: pending
+patches:
+  - target:
+      kind: Deployment
+      name: website
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: IfNotPresent
+      - op: add
+        path: /spec/strategy
+        value:
+          type: RollingUpdate
+          rollingUpdate:
+            maxUnavailable: 0
+            maxSurge: 1
+      - op: add
+        path: /spec/progressDeadlineSeconds
+        value: 180

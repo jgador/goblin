@@ -97,7 +97,7 @@ build/package exclusions when pending changes could copy credentials into an
 artifact. Do not open ignored credential stores just to verify their exclusion;
 use Git inventory, ignore rules, paths, and metadata.
 
-For Goblin, specifically check `.goblin-auth/`, `.goblin-browser-test/`, Codex
+For Goblin, specifically check `.goblin-platform/`, `.goblin-browser-test/`, Codex
 `auth.json`, Goblin `owner-password`, environment files, and `.dockerignore`.
 The saved ChatGPT login and password verifier are private runtime data. Do not print
 or copy them. Keep this a secrets review; do not connect GitHub repositories,

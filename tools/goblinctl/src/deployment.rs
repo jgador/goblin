@@ -54,8 +54,8 @@ impl InstallRequest {
                     ensure!(
                         path.components()
                             .all(|part| matches!(part, Component::Normal(_)))
-                            && (path.starts_with("deploy/auth")
-                                || path.starts_with("deploy/azure/app")),
+                            && (path.starts_with("deploy/platform")
+                                || path.starts_with("deploy/azure/platform")),
                         "Resource is outside application deployment: {}",
                         resource.path
                     );
@@ -79,9 +79,9 @@ impl InstallRequest {
                     );
                 }
                 for required in [
-                    "deploy/auth/kustomization.yaml",
-                    "deploy/auth/sandbox.yaml",
-                    "deploy/azure/app/kustomization.yaml",
+                    "deploy/platform/kustomization.yaml",
+                    "deploy/platform/sandbox.yaml",
+                    "deploy/azure/platform/kustomization.yaml",
                 ] {
                     ensure!(
                         seen.contains(&required.to_owned()),
@@ -152,7 +152,8 @@ pub fn prefetch_images(source: &Path) -> Result<Vec<String>> {
         for line in manifest.lines() {
             if let Some(image) = line.trim().strip_prefix("image:") {
                 let image = image.trim().trim_matches(['\'', '"']);
-                if image.starts_with("localhost/goblin-auth:") || image.starts_with("goblin-auth:")
+                if image.starts_with("localhost/goblin-platform:")
+                    || image.starts_with("goblin-platform:")
                 {
                     continue;
                 }
@@ -182,7 +183,7 @@ mod tests {
         let images = prefetch_images(&source).unwrap();
         assert_eq!(images.len(), 4);
         assert!(images.iter().any(|image| image.starts_with("postgres:")));
-        assert!(!images.iter().any(|image| image.contains("goblin-auth")));
+        assert!(!images.iter().any(|image| image.contains("goblin-platform")));
     }
 
     #[test]
@@ -201,7 +202,7 @@ mod tests {
         let source = tempfile::tempdir().unwrap();
         let destination = tempfile::tempdir().unwrap();
         let resource = Resource {
-            path: "deploy/auth/../../outside.yaml".into(),
+            path: "deploy/platform/../../outside.yaml".into(),
             sha256: "0".repeat(64),
         };
         let request = InstallRequest {
@@ -210,12 +211,12 @@ mod tests {
         };
         assert!(request.prepare(source.path(), destination.path()).is_err());
         assert_eq!(fs::read_dir(destination.path()).unwrap().count(), 0);
-        fs::create_dir_all(source.path().join("deploy/auth")).unwrap();
-        fs::write(source.path().join("deploy/auth/test.yaml"), "changed").unwrap();
+        fs::create_dir_all(source.path().join("deploy/platform")).unwrap();
+        fs::write(source.path().join("deploy/platform/test.yaml"), "changed").unwrap();
         let request = InstallRequest {
             format: Format::V1,
             resources: vec![Resource {
-                path: "deploy/auth/test.yaml".into(),
+                path: "deploy/platform/test.yaml".into(),
                 sha256: "0".repeat(64),
             }],
         };

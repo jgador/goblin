@@ -262,7 +262,7 @@ pub fn set_installed_password(replace: bool) -> Result<()> {
         "-n",
         "goblin",
         "-l",
-        "app=goblin-auth",
+        "app=platform",
         "--ignore-not-found=true",
         "--wait=true",
     ]))?;

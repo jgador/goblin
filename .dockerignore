@@ -1,6 +1,6 @@
 .git
 .goblin-secrets
-.goblin-auth
+.goblin-platform
 .goblin-browser-test
 .goblin-local
 .artifacts
@@ -14,6 +14,7 @@ dist
 tests
 backend/tests
 docs
+website
 deploy/*
 !deploy/install-gh.mjs
 !deploy/goblin-github

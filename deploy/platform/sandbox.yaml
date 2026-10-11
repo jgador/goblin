@@ -7,7 +7,7 @@ metadata:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: goblin-auth-data
+  name: platform-data
   namespace: goblin
 spec:
   accessModes: [ReadWriteOnce]
@@ -18,13 +18,14 @@ spec:
 apiVersion: agents.x-k8s.io/v1beta1
 kind: Sandbox
 metadata:
-  name: app
+  name: platform
   namespace: goblin
 spec:
   podTemplate:
     metadata:
       labels:
-        app: goblin-auth
+        app: platform
+        app.kubernetes.io/name: platform
     spec:
       serviceAccountName: goblin-execution-controller
       automountServiceAccountToken: true
@@ -36,8 +37,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: auth
-          image: goblin-auth:0.1.0
+        - name: platform
+          image: goblin-platform:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -50,7 +51,7 @@ spec:
             - name: GOBLIN_EXECUTION_NAMESPACE
               value: agents
             - name: GOBLIN_EXECUTION_IMAGE
-              value: goblin-auth:0.1.0
+              value: goblin-platform:0.1.0
             - name: GOBLIN_HEADLAMP_URL
               value: http://goblin-headlamp.goblin.svc:4466
             - name: GOBLIN_VICTORIALOGS_URL
@@ -101,7 +102,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: goblin-auth-data
+            claimName: platform-data
         - name: temporary
           emptyDir:
             sizeLimit: 64Mi
@@ -120,12 +121,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: goblin-auth
+  name: platform
   namespace: goblin
 spec:
   type: ClusterIP
   selector:
-    app: goblin-auth
+    app: platform
   ports:
     - name: http
       port: 8787
@@ -135,12 +136,12 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: goblin-auth
+  name: platform
   namespace: goblin
 spec:
   podSelector:
     matchLabels:
-      app: goblin-auth
+      app: platform
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -161,7 +162,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: goblin-auth
+    app: platform
   ports:
     - name: repository
       port: 8788

@@ -6,7 +6,7 @@
 # Local credentials and generated files
 .goblin-secrets/*
 !.goblin-secrets/.gitkeep
-.goblin-auth/
+.goblin-platform/
 .goblin-browser-test/
 .goblin-local/
 node_modules/
@@ -16,7 +16,7 @@ target/
 dist/
 playwright-report/
 test-results/
-goblin-auth*.tar
+goblin-platform*.tar
 
 # Secrets, including copies outside the default data directory
 appsettings.json

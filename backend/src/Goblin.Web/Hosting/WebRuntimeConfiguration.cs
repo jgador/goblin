@@ -21,7 +21,7 @@ internal sealed class WebRuntimeConfiguration
             "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
         KubernetesNamespace = configuration[Env.GoblinNamespace] ?? "goblin";
         MonitoringExecutionNamespace = ExecutionNamespace ?? "agents";
-        ExecutionImage = configuration[Env.GoblinExecutionImage] ?? "goblin-auth:0.1.0";
+        ExecutionImage = configuration[Env.GoblinExecutionImage] ?? "goblin-platform:0.1.0";
         GitRepositoryUrl = configuration[Env.GoblinGitRepositoryUrl] ??
             "http://goblin-repository.goblin.svc:8788";
         SandboxCpuLimit = configuration[Env.GoblinSandboxCpuLimit] ?? "2";

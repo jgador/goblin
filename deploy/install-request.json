@@ -2,40 +2,40 @@
   "format": "goblin.install.v1",
   "resources": [
     {
-      "path": "deploy/auth/execution.yaml",
-      "sha256": "188fe5de4d3b5f983c37e8944b04a08f0cd8e7e887fac4618442cd3a4567a31f"
+      "path": "deploy/platform/execution.yaml",
+      "sha256": "e6e7ae3e8a5c0692b7a0215a73780f974627d28f58b5d3fccda06ef72d9cfc68"
     },
     {
-      "path": "deploy/auth/headlamp.yaml",
-      "sha256": "055d940e5d8f2a0e40f0146ad0af5649f6913e9254ca107853afa698e7ecc1f4"
+      "path": "deploy/platform/headlamp.yaml",
+      "sha256": "8a281abdae4fddfdfbe578606b0ce8abb4337d1030b956e2e561028452064908"
     },
     {
-      "path": "deploy/auth/kustomization.yaml",
+      "path": "deploy/platform/kustomization.yaml",
       "sha256": "b8dfaee9cf3b527dc50d9228c1bc7100aa37e9d8f654a47730d16de4e37d1574"
     },
     {
-      "path": "deploy/auth/logging/fluent-bit.conf",
-      "sha256": "8e8937499dcbb6c238e6da53bfc9521ad0bee77e94fda8bbc28cfbd5e61ce81a"
+      "path": "deploy/platform/logging/fluent-bit.conf",
+      "sha256": "e1844356d35c6709599304163e00fdb7a06fc6d1f6cf61e53aac5745c409fc10"
     },
     {
-      "path": "deploy/auth/logging/kustomization.yaml",
+      "path": "deploy/platform/logging/kustomization.yaml",
       "sha256": "a12c9dbed025887906ce0116a9bf1be6d8639c127b8b54312c459379dff07d30"
     },
     {
-      "path": "deploy/auth/logging/workloads.yaml",
-      "sha256": "7a118f254390e57b73ef8a98f21a8288ca5930041bfd6f2a59151775d31a8d84"
+      "path": "deploy/platform/logging/workloads.yaml",
+      "sha256": "b30e394ca5a434d896905e099dcd893b28023e0cce8faa069643d6490016f58d"
     },
     {
-      "path": "deploy/auth/sandbox.yaml",
-      "sha256": "760f677bfa1a71447f2ea2270e53e54131ee570ecf5b809451b85fb3e578d0ca"
+      "path": "deploy/platform/sandbox.yaml",
+      "sha256": "d77b1fc8164bdb04d50a604391cfb6f7422cc2161f3ab64f7527582535e68d3d"
     },
     {
-      "path": "deploy/azure/app/ingress.yaml",
-      "sha256": "cd5ef41bac07a1624f95e0f282b8f09f665f7f013d35eb7738f238194473e1e3"
+      "path": "deploy/azure/platform/ingress.yaml",
+      "sha256": "30fae1b90ebd6a19c753aaf599a200cbca90dc8f8b0bd63fe45325eda19444ef"
     },
     {
-      "path": "deploy/azure/app/kustomization.yaml",
-      "sha256": "6ba3b5c96ef856d99db2677a547a1d0fca578b9ff6fe9e2536abba21d8eeb84d"
+      "path": "deploy/azure/platform/kustomization.yaml",
+      "sha256": "8bc166bacf7074c7b141d3de2dde07de6195c0c471eabe8b173bc444c5b7e154"
     }
   ]
 }

@@ -111,26 +111,26 @@ fn public_log_tail_is_bounded_and_retains_attempt_identity() {
 
 #[test]
 fn interrupted_migration_is_reconciled_before_replacement() {
-    let mut job = database::migration_job("localhost/goblin-auth:test");
+    let mut job = database::migration_job("localhost/goblin-platform:test");
     assert_eq!(
-        database::migration_state(&job, "localhost/goblin-auth:test").unwrap(),
+        database::migration_state(&job, "localhost/goblin-platform:test").unwrap(),
         "active"
     );
     job["status"] = json!({"conditions":[{"type":"Failed","status":"False"}]});
     assert_eq!(
-        database::migration_state(&job, "localhost/goblin-auth:test").unwrap(),
+        database::migration_state(&job, "localhost/goblin-platform:test").unwrap(),
         "active"
     );
     for (condition, expected) in [("Complete", "complete"), ("Failed", "failed")] {
         job["status"] = json!({"conditions":[{"type":condition,"status":"True"}]});
         assert_eq!(
-            database::migration_state(&job, "localhost/goblin-auth:test").unwrap(),
+            database::migration_state(&job, "localhost/goblin-platform:test").unwrap(),
             expected
         );
     }
-    assert!(database::migration_state(&job, "localhost/goblin-auth:other").is_err());
+    assert!(database::migration_state(&job, "localhost/goblin-platform:other").is_err());
     job["metadata"]["labels"] = json!({});
-    assert!(database::migration_state(&job, "localhost/goblin-auth:test").is_err());
+    assert!(database::migration_state(&job, "localhost/goblin-platform:test").is_err());
 }
 
 #[test]

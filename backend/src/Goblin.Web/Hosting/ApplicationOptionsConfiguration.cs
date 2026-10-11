@@ -19,7 +19,7 @@ internal static class ApplicationOptionsConfiguration
         string host = value(Env.GoblinHost) ?? "127.0.0.1";
         return new()
         {
-            DataDirectory = value(Env.GoblinDataDir) ?? ".goblin-auth",
+            DataDirectory = value(Env.GoblinDataDir) ?? ".goblin-platform",
             PasswordHashFile = value(Env.GoblinPasswordHashFile),
             PublicOrigin = origin,
             AllowInsecureHttp = string.Equals(value(Env.GoblinAllowInsecureHttp), "true", StringComparison.OrdinalIgnoreCase),

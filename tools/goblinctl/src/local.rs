@@ -283,7 +283,7 @@ impl Local {
                     "-n",
                     "goblin",
                     "-l",
-                    "app=goblin-auth",
+                    "app=platform",
                     "--ignore-not-found=true",
                     "--wait=true",
                 ]))?;

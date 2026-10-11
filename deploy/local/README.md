@@ -5,6 +5,13 @@ Run the same setup page and background installer used by Azure directly in Ubunt
 in this Linux environment. It uses your current checkout, including uncommitted
 source changes.
 
+The application runs as Sandbox/container/Service `platform` in namespace
+`goblin`, using image `goblin-platform`. The website has an independent local
+workflow in the same namespace; see [Kubernetes names](../../docs/kubernetes-names.md).
+Before applying renamed storage defaults to an existing installation, inventory
+and preserve its bound PVC and application data directory. A naming change does
+not authorize resetting this installation.
+
 ## Start
 
 With systemd enabled in WSL, run from the repository root:

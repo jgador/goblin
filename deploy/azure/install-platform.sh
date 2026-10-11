@@ -12,7 +12,7 @@ if [[ ! -f "$bootstrap_dir/goblin-source.tar.gz" ]]; then
   mv "$bootstrap_dir/goblin-source.tar.gz.part" "$bootstrap_dir/goblin-source.tar.gz"
 fi
 goblin_source_sha=$(sha256sum "$bootstrap_dir/goblin-source.tar.gz" | cut -d ' ' -f 1)
-goblin_image="localhost/goblin-auth:${goblin_source_sha}"
+goblin_image="localhost/goblin-platform:${goblin_source_sha}"
 # Public source files need their normal read/execute permissions when copied into
 # the non-root image. Keep bootstrap's private umask for everything outside this extraction.
 (
@@ -91,16 +91,16 @@ deploy_task() {
 stage 'Configuring the Goblin hostname'
 # Keep a rendered overlay on the VM for inspection and later HTTPS setup.
 "$GOBLINCTL" internal prepare-install --request "$goblin_source_dir/deploy/install-request.json" --source "$goblin_source_dir" --destination /var/lib/goblin/deploy
-"$GOBLINCTL" internal render-overlay /var/lib/goblin/deploy/azure/app "$goblin_hostname" "$goblin_image" "$goblin_origin"
-k3s kubectl apply -k /var/lib/goblin/deploy/azure/app
+"$GOBLINCTL" internal render-overlay /var/lib/goblin/deploy/azure/platform "$goblin_hostname" "$goblin_image" "$goblin_origin"
+k3s kubectl apply -k /var/lib/goblin/deploy/azure/platform
 # Sandbox recreates the pod from its template; replace it to load image/origin
 # changes and a new password verifier on reprovisioning. The PVC is retained.
-k3s kubectl delete pod -n goblin -l app=goblin-auth --ignore-not-found=true --wait=true
+k3s kubectl delete pod -n goblin -l app=platform --ignore-not-found=true --wait=true
 }
 
 verify_task() {
 stage 'Checking Goblin readiness'
-k3s kubectl wait --for=condition=Ready sandbox/app -n goblin --timeout=300s
+k3s kubectl wait --for=condition=Ready sandbox/platform -n goblin --timeout=300s
 k3s kubectl rollout status deployment/goblin-headlamp -n goblin --timeout=300s
 k3s kubectl rollout status deployment/goblin-victorialogs -n goblin --timeout=300s
 k3s kubectl rollout status daemonset/goblin-fluent-bit -n goblin --timeout=300s

@@ -1,0 +1,121 @@
+name: Website checks and release
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: website-checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install pinned Kubernetes client
+        run: bash website/install-kubectl.sh
+      - name: Check website source and production configuration
+        run: |
+          npm --prefix website run check
+          node --test website/release.test.mjs
+          bash -n website/check-container.sh website/install-kubectl.sh
+      - name: Build and inspect the production container
+        run: |
+          docker build --platform linux/amd64 --target production --file website/Dockerfile --tag goblin-website:verify .
+          bash website/check-container.sh goblin-website:verify
+
+  publish:
+    name: Publish verified website image
+    needs: verify
+    if: github.repository == 'jgador/goblin' && github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Require configured deployment protection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node website/release.mjs check-environment
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build, verify, and publish the same image
+        id: image
+        run: |
+          image="ghcr.io/jgador/goblin-website:sha-${GITHUB_SHA}-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker build --platform linux/amd64 --target production --file website/Dockerfile \
+            --label org.opencontainers.image.source=https://github.com/jgador/goblin \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag "$image" .
+          bash website/check-container.sh "$image"
+          docker push "$image"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
+          node website/release.mjs check-public "$digest"
+          printf 'image=%s\n' "$digest" >> "$GITHUB_OUTPUT"
+          printf '### Website candidate\n\nSource: %s\n\nImage: %s\n\nAwaiting website-production approval.\n' "$GITHUB_SHA" "$digest" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy goblinboard.com
+    needs: publish
+    runs-on: ubuntu-24.04
+    environment:
+      name: website-production
+      url: https://goblinboard.com
+    concurrency:
+      group: website-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Recheck protection and reject an outdated candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node website/release.mjs check-environment
+          current=$(gh api repos/jgador/goblin/branches/master --jq .commit.sha)
+          [[ "$current" == "$GITHUB_SHA" ]] || { echo 'master advanced while this candidate awaited approval; deploy the newer run.' >&2; exit 1; }
+      - name: Install pinned Kubernetes client
+        run: bash website/install-kubectl.sh
+      - name: Apply approved image and verify rollout
+        env:
+          WEBSITE_KUBECONFIG: ${{ secrets.WEBSITE_KUBECONFIG }}
+          WEBSITE_DEPLOYMENT_UID: ${{ vars.WEBSITE_DEPLOYMENT_UID }}
+          WEBSITE_IMAGE: ${{ needs.publish.outputs.image }}
+        run: |
+          umask 077
+          mkdir -p .artifacts/website-production
+          kubeconfig="$PWD/.artifacts/website-production/kubeconfig"
+          trap 'rm -f "$kubeconfig"' EXIT
+          [[ -n "$WEBSITE_KUBECONFIG" ]] || { echo 'WEBSITE_KUBECONFIG is missing.' >&2; exit 1; }
+          printf '%s\n' "$WEBSITE_KUBECONFIG" > "$kubeconfig"
+          unset WEBSITE_KUBECONFIG
+          node website/release.mjs deploy "$WEBSITE_IMAGE" "$kubeconfig" "$WEBSITE_DEPLOYMENT_UID"
+      - name: Verify the public website matches this release
+        run: node website/verify.mjs https://goblinboard.com

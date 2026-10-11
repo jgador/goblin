@@ -94,12 +94,14 @@ async function bootstrap(
         "backend/src/Goblin.Web/appsettings.json",
         join(source, "backend/src/Goblin.Web/appsettings.json"),
     );
-    await cp("deploy/auth", join(source, "deploy/auth"), { recursive: true });
+    await cp("deploy/platform", join(source, "deploy/platform"), {
+        recursive: true,
+    });
     await cp(
         "deploy/install-request.json",
         join(source, "deploy/install-request.json"),
     );
-    await cp("deploy/azure/app", join(source, "deploy/azure/app"), {
+    await cp("deploy/azure/platform", join(source, "deploy/azure/platform"), {
         recursive: true,
     });
     await cp("Dockerfile", join(source, "Dockerfile"));
@@ -280,7 +282,7 @@ if (name === 'curl') {
       process.stderr.write('error: timed out waiting for the condition on nodes/goblin\\n');
       process.exit(1);
     }
-  } else if (args[1] === 'wait' && args.includes('sandbox/app') && appState === 'not-ready') {
+  } else if (args[1] === 'wait' && args.includes('sandbox/platform') && appState === 'not-ready') {
     process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/goblin-headlamp') && appState === 'headlamp-failed') {
     process.exit(1);
@@ -712,7 +714,7 @@ test("installer verifies the pinned Agent Sandbox core release and waits for its
     const application = calls.findIndex(
         (args) =>
             args[1] === "apply" &&
-            args.includes(join(root, "var/lib/goblin/deploy/azure/app")),
+            args.includes(join(root, "var/lib/goblin/deploy/azure/platform")),
     );
     assert.ok(
         applied >= 0 &&
@@ -734,11 +736,14 @@ test("installer installs the application and uses Azure's hostname for both rout
             sourceRef: "refs/heads/master",
         });
         const config = await readFile(
-            join(root, "var/lib/goblin/deploy/azure/app/kustomization.yaml"),
+            join(
+                root,
+                "var/lib/goblin/deploy/azure/platform/kustomization.yaml",
+            ),
             "utf8",
         );
         const ingress = await readFile(
-            join(root, "var/lib/goblin/deploy/azure/app/ingress.yaml"),
+            join(root, "var/lib/goblin/deploy/azure/platform/ingress.yaml"),
             "utf8",
         );
         assert.ok(config.includes(`value: http://${hostname}`));
@@ -752,7 +757,7 @@ test("installer installs the application and uses Azure's hostname for both rout
             )
         ).trim();
         assert.match(digest, /^[0-9a-f]{64}$/);
-        assert.ok(config.includes(`localhost/goblin-auth:${digest}`));
+        assert.ok(config.includes(`localhost/goblin-platform:${digest}`));
         const dockerCalls: string[][] = (
             await readFile(join(root, "docker-requests.jsonl"), "utf8")
         )
@@ -764,14 +769,14 @@ test("installer installs the application and uses Azure's hostname for both rout
                 (args) =>
                     args[1] === "build" &&
                     args.includes("--load") &&
-                    args.includes(`localhost/goblin-auth:${digest}`),
+                    args.includes(`localhost/goblin-platform:${digest}`),
             ),
         );
         assert.ok(
             dockerCalls.some(
                 (args) =>
                     args[1] === "save" &&
-                    args.includes(`localhost/goblin-auth:${digest}`) &&
+                    args.includes(`localhost/goblin-platform:${digest}`) &&
                     !args.includes("--format"),
             ),
         );
@@ -796,13 +801,15 @@ test("installer installs the application and uses Azure's hostname for both rout
         const applied = calls.findIndex(
             (args) =>
                 args[1] === "apply" &&
-                args.includes(join(root, "var/lib/goblin/deploy/azure/app")),
+                args.includes(
+                    join(root, "var/lib/goblin/deploy/azure/platform"),
+                ),
         );
         const restarted = calls.findIndex(
             (args) => args[1] === "delete" && args[2] === "pod",
         );
         const ready = calls.findIndex(
-            (args) => args[1] === "wait" && args.includes("sandbox/app"),
+            (args) => args[1] === "wait" && args.includes("sandbox/platform"),
         );
         assert.ok(
             imported >= 0 &&
@@ -1000,7 +1007,7 @@ test("installer cannot report ready when Agent Sandbox, Docker, the application 
         "collector-failed",
         "ingress-failed",
     ] as const) {
-        const root = await mkdtemp(join(tmpdir(), "goblin-app-failed-"));
+        const root = await mkdtemp(join(tmpdir(), "goblin-platform-failed-"));
         t.after(() => rm(root, { recursive: true, force: true }));
         await assert.rejects(
             bootstrap(root, fakePassword, "ready", { state }),
@@ -1030,7 +1037,7 @@ test("bootstrap rejects invalid hostname/ref input before invoking the applicati
         { hostname: "$(touch PWNED).example.com" },
         { sourceRef: "master;touch PWNED" },
     ]) {
-        const root = await mkdtemp(join(tmpdir(), "goblin-app-input-"));
+        const root = await mkdtemp(join(tmpdir(), "goblin-platform-input-"));
         t.after(() => rm(root, { recursive: true, force: true }));
         await assert.rejects(bootstrap(root, fakePassword, "ready", config), {
             status: 1,
@@ -1575,7 +1582,7 @@ test("cert-manager readiness gates database setup and migrations before applicat
             const application = calls.findIndex(
                 (args) =>
                     args.includes("-k") &&
-                    args.some((value) => value.endsWith("/app")),
+                    args.some((value) => value.endsWith("/platform")),
             );
             assert.ok(migration >= 0, "the schema migration job ran");
             assert.ok(
@@ -1796,7 +1803,7 @@ test("a forwarded public origin is used by the application and readiness probes"
                 await readFile(
                     join(
                         root,
-                        "var/lib/goblin/deploy/azure/app/kustomization.yaml",
+                        "var/lib/goblin/deploy/azure/platform/kustomization.yaml",
                     ),
                     "utf8",
                 )
@@ -1826,7 +1833,10 @@ test("a forwarded public origin is used by the application and readiness probes"
         assert.ok(
             (
                 await readFile(
-                    join(root, "var/lib/goblin/deploy/azure/app/ingress.yaml"),
+                    join(
+                        root,
+                        "var/lib/goblin/deploy/azure/platform/ingress.yaml",
+                    ),
                     "utf8",
                 )
             ).includes(`host: ${hostname}`),

@@ -71,9 +71,9 @@ test("application and installer deployment names are present in the definition c
     const allNames = new Set(
         languages.flatMap((language) => [...language.values()]),
     );
-    const sandbox = await readFile("deploy/auth/sandbox.yaml", "utf8");
+    const sandbox = await readFile("deploy/platform/sandbox.yaml", "utf8");
     const overlay = await readFile(
-        "deploy/azure/app/kustomization.yaml",
+        "deploy/azure/platform/kustomization.yaml",
         "utf8",
     );
     for (const source of [sandbox, overlay]) {
@@ -89,7 +89,7 @@ test("application and installer deployment names are present in the definition c
         "Dockerfile",
         "deploy/azure/bootstrap.sh",
         "deploy/azure/setup/installer.sh",
-        "deploy/azure/install-app.sh",
+        "deploy/azure/install-platform.sh",
         "deploy/postgres/setup.sh",
     ]) {
         const source = await readFile(file, "utf8");

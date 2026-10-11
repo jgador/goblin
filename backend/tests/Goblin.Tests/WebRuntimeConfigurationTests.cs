@@ -22,7 +22,7 @@ public sealed class WebRuntimeConfigurationTests
         Assert.Equal("/var/run/secrets/kubernetes.io/serviceaccount/ca.crt", configuration.KubernetesCaFile);
         Assert.Equal("goblin", configuration.KubernetesNamespace);
         Assert.Equal("agents", configuration.MonitoringExecutionNamespace);
-        Assert.Equal("goblin-auth:0.1.0", configuration.ExecutionImage);
+        Assert.Equal("goblin-platform:0.1.0", configuration.ExecutionImage);
         Assert.Equal("http://goblin-repository.goblin.svc:8788", configuration.GitRepositoryUrl);
         Assert.Equal("2", configuration.SandboxCpuLimit);
         Assert.Equal("2Gi", configuration.SandboxMemoryLimit);

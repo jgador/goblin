@@ -170,9 +170,9 @@ the image and copy the verifier into a private Docker volume. The setup command
 sets file ownership for the application's UID 1000:
 
 ```bash
-docker build -t goblin-auth:0.1.0 .
+docker build -t goblin-platform:0.1.0 .
 docker run --rm -i --user 0:0 --entrypoint sh \
-  -v goblin-auth-password:/password goblin-auth:0.1.0 \
+  -v goblin-platform-password:/password goblin-platform:0.1.0 \
   -c 'umask 077; cat > /password/owner-password; chown 1000:1000 /password/owner-password' \
   < .goblin-secrets/owner-password
 ```
@@ -182,13 +182,13 @@ storage and the password volume mounted read-only. Durable Work additionally
 requires the database and execution configuration in [execution hosting](execution-hosting.md):
 
 ```bash
-docker run --rm --name goblin-auth \
+docker run --rm --name goblin-platform \
   -p 127.0.0.1:8787:8787 \
-  -v goblin-auth-data:/data \
-  -v goblin-auth-password:/etc/goblin:ro \
+  -v goblin-platform-data:/data \
+  -v goblin-platform-password:/etc/goblin:ro \
   -e GOBLIN_PASSWORD_HASH_FILE=/etc/goblin/owner-password \
   -e GOBLIN_WORK_ENABLED=false \
-  goblin-auth:0.1.0
+  goblin-platform:0.1.0
 ```
 
 The image builds browser assets and publishes .NET in separate stages. The final
@@ -209,10 +209,10 @@ and enter the **Goblin password** chosen during provisioning. See the
 The steps below are for a **manual installation using SSH forwarding**. Do not
 apply this local-access manifest over the automatic Azure installation: it
 restores the localhost origin and blocks Traefik. Azure's rendered configuration
-is saved at `/var/lib/goblin/deploy/azure/app` for subsequent changes.
+is saved at `/var/lib/goblin/deploy/azure/platform` for subsequent changes.
 
 The Azure bootstrap installs the core Agent Sandbox controller. The
-[preview manifest](../deploy/auth/sandbox.yaml) uses that controller
+[preview manifest](../deploy/platform/sandbox.yaml) uses that controller
 directly; extensions, warm pools, ingress, and GitHub access are not required.
 Azure setup asks you to choose and confirm a **Goblin password**. The manifest
 mounts the password verifier created during deployment. Use that password to
@@ -229,19 +229,19 @@ Build the image on a Docker-enabled machine for the VM's Linux architecture
 (the default Azure VM is amd64), then export it:
 
 ```bash
-docker build --platform linux/amd64 -t goblin-auth:0.1.0 .
-docker save -o goblin-auth.tar goblin-auth:0.1.0
+docker build --platform linux/amd64 -t goblin-platform:0.1.0 .
+docker save -o goblin-platform.tar goblin-platform:0.1.0
 ```
 
-Copy the image archive and `deploy/auth/sandbox.yaml` to the VM using
+Copy the image archive and `deploy/platform/sandbox.yaml` to the VM using
 your existing SSH access. On the VM, import and deploy them:
 
 ```bash
-sudo k3s ctr images import goblin-auth.tar
+sudo k3s ctr images import goblin-platform.tar
 sudo k3s kubectl apply -f sandbox.yaml
-sudo k3s kubectl wait --for=condition=Ready sandbox/app \
+sudo k3s kubectl wait --for=condition=Ready sandbox/platform \
   -n goblin --timeout=180s
-sudo k3s kubectl port-forward -n goblin svc/goblin-auth 8787:8787
+sudo k3s kubectl port-forward -n goblin svc/platform 8787:8787
 ```
 
 Leave the VM's port-forward running. On your own computer, forward the same
@@ -258,7 +258,7 @@ if SSH access was not enabled during deployment.
 After connecting an account, replace just the pod to test persistence:
 
 ```bash
-sudo k3s kubectl delete pod -n goblin -l app=goblin-auth
+sudo k3s kubectl delete pod -n goblin -l app=platform
 ```
 
 The Sandbox controller recreates it and reattaches the PVC. Restart the
@@ -279,7 +279,7 @@ connection reservations, sandbox isolation, and deployment configuration.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `GOBLIN_DATA_DIR` | `.goblin-auth` locally; `/data/auth` in the image | Persistent private application data |
+| `GOBLIN_DATA_DIR` | `.goblin-platform` locally; `/data/platform` in the image | Persistent private application data |
 | `GOBLIN_PASSWORD_HASH_FILE` | `.goblin-secrets/owner-password` supplied by the local launcher; `/etc/goblin/owner-password` in the Sandbox manifest | Required password verifier file in every environment |
 | `GOBLIN_HOST` | `127.0.0.1` locally; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |

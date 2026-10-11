@@ -176,8 +176,8 @@ k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --tim
 k3s kubectl rollout status deployment/sandbox -n sandbox --timeout=300s
 }
 
-# shellcheck source=deploy/azure/install-app.sh
-source "$setup_dir/install-app.sh"
+# shellcheck source=deploy/azure/install-platform.sh
+source "$setup_dir/install-platform.sh"
 
 wait_for_worker() {
   local pid result=0

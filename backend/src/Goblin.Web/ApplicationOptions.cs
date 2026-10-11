@@ -10,7 +10,7 @@ namespace Goblin.Web;
 
 public sealed class ApplicationOptions
 {
-    public string DataDirectory { get; init; } = ".goblin-auth";
+    public string DataDirectory { get; init; } = ".goblin-platform";
     public string? PasswordHashFile { get; init; }
     public string PublicOrigin { get; init; } = "http://localhost:8787";
     public bool AllowInsecureHttp { get; init; }

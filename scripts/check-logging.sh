@@ -15,7 +15,7 @@ cleanup() {
 trap cleanup EXIT
 kube() { kubectl --kubeconfig "$logging_test_dir/kubeconfig" "$@"; }
 # Pull exactly the images selected in the shipping manifests.
-mapfile -t logging_images < <(sed -n 's/^[[:space:]]*image: //p' deploy/auth/logging/workloads.yaml)
+mapfile -t logging_images < <(sed -n 's/^[[:space:]]*image: //p' deploy/platform/logging/workloads.yaml)
 for image in "${logging_images[@]}"; do docker pull "$image" >/dev/null; done
 printf 'Building the disposable .NET logging workload…\n'
 dotnet publish backend/tests/Goblin.LoggingSmoke -c Release -o "$logging_test_dir/publish" --nologo > "$logging_test_dir/publish.log"
@@ -47,7 +47,7 @@ kube wait --for=condition=Ready nodes --all --timeout=60s
 # Save the fixture by tag. Pinned upstream images are fetched by k3s directly.
 docker save "$logging_test_image" | docker exec -i "$logging_test_node" ctr -n k8s.io images import - >/dev/null
 kube create namespace goblin
-kube apply -k deploy/auth/logging
+kube apply -k deploy/platform/logging
 kube rollout status deployment/goblin-victorialogs -n goblin --timeout=180s
 kube rollout status daemonset/goblin-fluent-bit -n goblin --timeout=180s
 smoke() {
@@ -59,12 +59,12 @@ metadata:
   name: $name
   namespace: goblin
   labels:
-    app: goblin-auth
+    app: platform
 spec:
   restartPolicy: Never
   automountServiceAccountToken: false
   containers:
-    - name: auth
+    - name: platform
       image: $logging_test_image
       imagePullPolicy: Never
       args: [$name]
@@ -112,7 +112,7 @@ assert.equal(info['state.Marker'], process.argv[3]);
 assert.equal(info['state.AttemptId'], '9007199254740993');
 assert.equal(JSON.parse(info.scopes)[0].WorkId, '9007199254740993');
 assert.equal(info['kubernetes.namespace_name'], 'goblin');
-assert.equal(info['kubernetes.container_name'], 'auth');
+assert.equal(info['kubernetes.container_name'], 'platform');
 assert.ok(info['kubernetes.host']);
 assert.match(info._time, /Z$/);
 assert.ok(entries.some(row=>row.level==='Warning' && row._msg.includes('\nsecond line') && row.exception.includes('Synthetic smoke failure')));
