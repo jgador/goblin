@@ -68,6 +68,9 @@ test("production overlay retains scaling ownership and exposes only the website 
     assert.ok(manifest.includes("host: goblinboard.com"));
     assert.ok(manifest.includes("ingressClassName: nginx"));
     assert.ok(manifest.includes("letsencrypt-production"));
+    assert.ok(
+        manifest.includes('acme.cert-manager.io/http01-edit-in-place: "true"'),
+    );
     assert.ok(manifest.includes("minReplicas: 1"));
     assert.ok(manifest.includes("maxReplicas: 3"));
     assert.doesNotMatch(manifest, /^\s+replicas:/m);

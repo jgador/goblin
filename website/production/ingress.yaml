@@ -5,6 +5,7 @@ metadata:
   namespace: goblin
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-production
+    acme.cert-manager.io/http01-edit-in-place: "true"
     nginx.org/ssl-redirect: "true"
 spec:
   ingressClassName: nginx

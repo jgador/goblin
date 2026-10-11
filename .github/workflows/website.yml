@@ -5,6 +5,17 @@ on:
   merge_group:
   push:
     branches: [master]
+    paths:
+      - website/index.html
+      - website/website.css
+      - website/website.js
+      - website/assets/**
+      - website/Dockerfile
+      - website/Dockerfile.dockerignore
+      - website/nginx.conf
+      - LICENSE
+      - NOTICE
+      - THIRD_PARTY_NOTICES.md
   workflow_dispatch:
 
 permissions:
