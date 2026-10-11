@@ -6,6 +6,7 @@ import {
     mkdir,
     mkdtemp,
     readFile,
+    readdir,
     rm,
     stat,
     symlink,
@@ -78,7 +79,7 @@ test.after(async () => {
     await rm(certificates, { recursive: true, force: true });
 });
 
-async function fixture(t: test.TestContext) {
+async function fixture(t: test.TestContext, configDirectory = "c") {
     const freePort = async () => {
         const server = createServer();
         await new Promise<void>((resolve) =>
@@ -193,7 +194,7 @@ if (name === 'k3s') {
                 [Env.SUDO_UID.name]: "",
                 [Env.SUDO_GID.name]: "",
                 [Env.HOME.name]: root,
-                [Env.XDG_CONFIG_HOME.name]: join(root, "c"),
+                [Env.XDG_CONFIG_HOME.name]: join(root, configDirectory),
                 [Env.PATH.name]: `${bin}:${process.env[Env.PATH.name]}`,
                 [Env.GOBLIN_POSTGRES_SETUP_TEST.name]: root,
             },
@@ -211,7 +212,8 @@ if (name === 'k3s') {
             }),
         );
     };
-    const profile = (name = "wsl") => join(root, "c/goblin/postgres", name);
+    const profile = (name = "wsl") =>
+        join(root, configDirectory, "goblin/postgres", name);
     const calls = async (): Promise<string[][]> =>
         (await readFile(join(root, "calls.jsonl"), "utf8"))
             .trim()
@@ -332,7 +334,7 @@ test("a failed forwarded login cleans up first connections and restores a prior 
 });
 
 test("WSL and Azure profiles coexist, SSH tunnels are reused, and Windows exports stay explicit", async (t) => {
-    const f = await fixture(t);
+    const f = await fixture(t, "long-user-config-directory-".repeat(8));
     f.run("connect", "wsl", "--local", "--forward-port", String(f.ports[0]));
     f.run(
         "connect",
@@ -348,6 +350,14 @@ test("WSL and Azure profiles coexist, SSH tunnels are reused, and Windows export
             .length,
         1,
     );
+    const sockets = await readdir(join(f.profile("azure-dev"), "../.ssh"));
+    assert.equal(sockets.length, 1);
+    const socket = join(f.profile("azure-dev"), "../.ssh", sockets[0]);
+    assert.ok(Buffer.byteLength(socket) > 108);
+    const sshCalls = (await f.calls()).filter(
+        (c) => c[0] === "ssh" && c.includes("-S"),
+    );
+    assert.ok(sshCalls.every((c) => c[c.indexOf("-S") + 1] === sockets[0]));
     f.run("export", "wsl", "--client", "windows", "--role", "app");
     const payload = JSON.parse(
         await readFile(join(f.root, "windows-payload.json"), "utf8"),
@@ -395,6 +405,31 @@ test("selected roles reach child commands and database tests only opt in explici
         env[Env.ConnectionStrings__GoblinAdmin.name],
     );
 });
+
+test(
+    "host configuration requires root before invoking infrastructure commands",
+    { skip: process.getuid!() === 0 },
+    async (t) => {
+        const f = await fixture(t);
+        assert.throws(
+            () =>
+                execFileSync(goblinctl, ["db", "host"], {
+                    cwd: f.root,
+                    encoding: "utf8",
+                    env: { [Env.PATH.name]: join(f.root, "bin") },
+                    stdio: ["ignore", "pipe", "pipe"],
+                }),
+            (error: unknown) => {
+                assert.match(
+                    (error as { stderr: string }).stderr,
+                    /This operation requires root/,
+                );
+                return true;
+            },
+        );
+        await assert.rejects(stat(join(f.root, "calls.jsonl")));
+    },
+);
 
 test("profile paths reject traversal and symlinks without writing credentials", async (t) => {
     const f = await fixture(t);

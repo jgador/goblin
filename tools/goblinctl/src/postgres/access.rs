@@ -54,16 +54,21 @@ fn control(directory: &Path) -> Result<PathBuf> {
     files::directory(&root, 0o700)?;
     let path = root.join(&unit(directory)[..26]);
     files::reject_symlinks(&path)?;
-    ensure!(
-        path.as_os_str().as_encoded_bytes().len() < 100,
-        "The profile directory is too long for an SSH control socket; use a shorter XDG_CONFIG_HOME"
-    );
     Ok(path)
 }
-fn ssh_check(directory: &Path, destination: &str) -> Result<bool> {
-    Ok(Command::new("ssh")
+fn ssh(directory: &Path) -> Result<Command> {
+    let path = control(directory)?;
+    let mut command = Command::new("ssh");
+    // Unix sockets have a short path limit. Resolve the socket from its private
+    // directory so even a long XDG_CONFIG_HOME keeps the same owned endpoint.
+    command
+        .current_dir(path.parent().context("Missing SSH socket directory")?)
         .arg("-S")
-        .arg(control(directory)?)
+        .arg(path.file_name().context("Missing SSH socket name")?);
+    Ok(command)
+}
+fn ssh_check(directory: &Path, destination: &str) -> Result<bool> {
+    Ok(ssh(directory)?
         .args(["-o", "BatchMode=yes", "-O", "check", "--", destination])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -149,12 +154,14 @@ fn stop(directory: &Path, forward: &Forward) -> Result<()> {
         }
         Source::Ssh { destination } => {
             if ssh_check(directory, destination)? {
-                files::run(
-                    Command::new("ssh")
-                        .arg("-S")
-                        .arg(control(directory)?)
-                        .args(["-o", "BatchMode=yes", "-O", "exit", "--", destination]),
-                )?;
+                files::run(ssh(directory)?.args([
+                    "-o",
+                    "BatchMode=yes",
+                    "-O",
+                    "exit",
+                    "--",
+                    destination,
+                ]))?;
             }
             files::remove_file(&control(directory)?)?;
         }
@@ -184,32 +191,27 @@ fn start(directory: &Path, forward: &Forward) -> Result<()> {
         .context("Cannot start the WSL listener; check your systemd user session"),
         Source::Ssh { destination } => {
             files::remove_file(&control(directory)?)?;
-            files::run(
-                Command::new("ssh")
-                    .args(["-M", "-S"])
-                    .arg(control(directory)?)
-                    .args([
-                        "-fNT",
-                        "-o",
-                        "BatchMode=yes",
-                        "-o",
-                        "ConnectTimeout=10",
-                        "-o",
-                        "ExitOnForwardFailure=yes",
-                        "-o",
-                        "ControlPersist=no",
-                        "-o",
-                        "ServerAliveInterval=30",
-                        "-o",
-                        "ServerAliveCountMax=3",
-                        "-L",
-                        &format!("127.0.0.1:{}:127.0.0.1:5432", forward.port),
-                        "-L",
-                        &format!("[::1]:{}:127.0.0.1:5432", forward.port),
-                        "--",
-                        destination,
-                    ]),
-            )
+            files::run(ssh(directory)?.arg("-M").args([
+                "-fNT",
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=10",
+                "-o",
+                "ExitOnForwardFailure=yes",
+                "-o",
+                "ControlPersist=no",
+                "-o",
+                "ServerAliveInterval=30",
+                "-o",
+                "ServerAliveCountMax=3",
+                "-L",
+                &format!("127.0.0.1:{}:127.0.0.1:5432", forward.port),
+                "-L",
+                &format!("[::1]:{}:127.0.0.1:5432", forward.port),
+                "--",
+                destination,
+            ]))
         }
     }
 }

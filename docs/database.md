@@ -120,6 +120,10 @@ on 5432 running. Linux refreshes do not update Windows exports.
 | `/var/lib/goblin/postgres/` | Host forwarding state, without client keys |
 | Repository `.artifacts/` | Disposable build/test output |
 
+SSH control sockets remain in the profile store's private `.ssh` directory.
+The CLI starts and controls SSH from that directory using the socket filename,
+so long home or configuration paths do not exceed Unix socket path limits.
+
 Linux directories are 0700 and files 0600. Windows exports resolve the current
 Windows account and set private ACLs. Export only the role needed. Profiles pass
 connections through child-process environment variables without editing checkout

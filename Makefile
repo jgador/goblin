@@ -52,6 +52,7 @@ build-assets:
 
 # Clean compiled test tooling, check direct Node scripts, and compile test tools.
 build-tools:
+	cargo build --locked -p goblinctl --example host_fixture
 	node scripts/clean-output.mts
 	$(MAKE) typecheck-scripts
 	tsc -p tsconfig.json

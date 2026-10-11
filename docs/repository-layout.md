@@ -175,6 +175,14 @@ test configuration. `make check` adds Rust formatting/lints and type checks. The
 are useful integration/CI gates, not prerequisites for every local edit. Required
 CI checks still apply; scoped local results do not imply that CI ran.
 
+Offline installer tests run as an ordinary user. `make build-tools` builds the
+test-only `host_fixture` Rust example, which calls host configuration with a
+private filesystem, mocked infrastructure commands, and a supplied port probe.
+It is excluded from the shipped CLI archive and application image. The production
+`goblinctl db host` command still requires root and checks the real host port.
+PostgreSQL profile tests include a long configuration path to cover CI checkout
+layouts and SSH tunnel reuse, disconnect, and recovery.
+
 The ordinary HTTP/browser harness uses runtime fixtures. `make test-codex` uses the
 real pinned executable with an isolated home and synthetic credentials, without
 submitting a model task. Neither establishes authenticated execution coverage.

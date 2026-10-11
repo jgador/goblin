@@ -1,5 +1,5 @@
 import { environmentVariables as Env } from "../../config/environment.mjs";
-import { goblinctl } from "../support/goblinctl.js";
+import { databaseHostFixture, goblinctl } from "../support/goblinctl.js";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -346,7 +346,10 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 const root = process.env["${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}"];
 if (args[0] === 'internal' && args[1] === 'activate') args.push('--system-root', root);
-if (args[0] === 'db' && args[1] === 'host') args.push('--system-root', root);
+if (args[0] === 'db' && args[1] === 'host') {
+    const result = spawnSync(${JSON.stringify(databaseHostFixture)}, [root], {stdio: 'inherit'});
+    process.exit(result.status ?? 1);
+}
 if (args[0] === 'internal' && ['state', 'build-progress'].includes(args[1]) && !args.includes('--path')) args.push('--path', path.join(root, 'var/lib/goblin/install/status.json'));
 if (args[0] === 'internal' && args[1] === 'docker-config') args.push(path.join(root, 'etc/docker/daemon.json'));
 if (args[0] === 'internal' && args[1] === 'state' && args[2] === 'fail-step' && args[3] === 'cert-manager' && process.env["${Env.GOBLIN_BOOTSTRAP_APP_STATE.name}"] === 'cert-failed') {

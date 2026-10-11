@@ -404,7 +404,10 @@ fn publish_role(staged: &Path, target: &Path) -> Result<()> {
         let from = CString::new(staged.as_os_str().as_encoded_bytes())?;
         let to = CString::new(target.as_os_str().as_encoded_bytes())?;
         let status = unsafe {
-            libc::renameat2(
+            // musl does not export renameat2; Linux provides the same atomic
+            // exchange through its syscall interface on both supported builds.
+            libc::syscall(
+                libc::SYS_renameat2,
                 libc::AT_FDCWD,
                 from.as_ptr(),
                 libc::AT_FDCWD,

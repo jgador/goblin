@@ -148,10 +148,7 @@ enum DbCommand {
     /// Provision PostgreSQL in the selected Kubernetes cluster (no client exports).
     Setup,
     /// Configure this installation's loopback endpoint on port 5432 (requires root).
-    Host {
-        #[arg(long, hide = true, default_value = "/")]
-        system_root: PathBuf,
-    },
+    Host,
     /// Run the deployment migration Job in the selected cluster.
     Migrate { image: String },
     /// Refresh certificates, establish access and verify a profile's TLS login.
@@ -503,13 +500,9 @@ fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
 fn database_action(command: DbCommand) -> Result<()> {
     match command {
         DbCommand::Setup => database::setup(),
-        DbCommand::Host { system_root } => {
+        DbCommand::Host => {
             files::require_root()?;
-            if system_root == Path::new("/") {
-                database_host::configure(&system_root)
-            } else {
-                database_host::configure_with_probe(&system_root, || Ok(()))
-            }
+            database_host::configure(Path::new("/"))
         }
         DbCommand::Migrate { image } => database::migrate(&image),
         DbCommand::Connect {
