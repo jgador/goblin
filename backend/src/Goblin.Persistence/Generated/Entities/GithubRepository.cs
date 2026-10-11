@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("github_repositories")]
-[Index("Name", Name = "github_repositories_name_key", IsUnique = true)]
+[Table("github_repository")]
+[Index("Name", Name = "github_repository_name_key", IsUnique = true)]
 public partial class GithubRepository
 {
     [Key]

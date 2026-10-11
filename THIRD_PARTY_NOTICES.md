@@ -9,6 +9,7 @@ replace those terms or grant rights to hosted services.
 
 | Material | Source and license |
 | --- | --- |
+| `backend/third_party/wolverine/` | [Wolverine 6.39.1, revision 5a7aa99b5c4f2b29b56300cc5f69919d54a370e7](https://github.com/JasperFx/wolverine/tree/5a7aa99b5c4f2b29b56300cc5f69919d54a370e7), MIT. Goblin maintains the RDBMS, PostgreSQL, and EF integration source with singular storage identifiers. The full upstream license accompanies the source and published assemblies in `licenses/wolverine/LICENSE`, and the container in `/usr/share/doc/goblin/wolverine/LICENSE`. See its README for provenance and reproduction. |
 | Upstream schemas in `backend/schemas/codex/` and models generated from them in `backend/src/Goblin.Protocol/Generated/` | [OpenAI Codex 0.161.0](https://github.com/openai/codex/tree/rust-v0.161.0), Apache-2.0. The upstream notice is preserved in `NOTICE`. Goblin selects schema fields and generates C# models; see the protocol project's README. |
 | `backend/schemas/kubernetes/kubernetes-v1.37.0-swagger.json.gz` and models generated from it | [Kubernetes v1.37.0](https://github.com/kubernetes/kubernetes/tree/v1.37.0), Apache-2.0. Goblin compresses the upstream schema and generates selected C# models. |
 | `backend/schemas/kubernetes/sandbox-v1beta1.json` and models generated from it | [Kubernetes SIGs Agent Sandbox v1.0.4](https://github.com/kubernetes-sigs/agent-sandbox/tree/v1.0.4), Apache-2.0. Goblin extracts the schema from the release CRD and generates selected C# models. |

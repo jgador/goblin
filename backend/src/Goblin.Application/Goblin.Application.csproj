@@ -4,8 +4,8 @@
     <ProjectReference Include="../Goblin.Core/Goblin.Core.csproj" />
     <ProjectReference Include="../Goblin.Contracts/Goblin.Contracts.csproj" />
     <ProjectReference Include="../Goblin.Persistence/Goblin.Persistence.csproj" />
-    <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.39.1" />
-    <PackageReference Include="WolverineFx.Postgresql" Version="6.39.1" />
+    <ProjectReference Include="../../third_party/wolverine/Wolverine.EntityFrameworkCore/Wolverine.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../third_party/wolverine/Wolverine.Postgresql/Wolverine.Postgresql.csproj" />
     <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.39.1" />
   </ItemGroup>
 </Project>

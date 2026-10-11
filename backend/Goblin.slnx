@@ -26,4 +26,9 @@
     <Project Path="tests/Goblin.TestHost/Goblin.TestHost.csproj" />
     <Project Path="tests/Goblin.Tests/Goblin.Tests.csproj" />
   </Folder>
+  <Folder Name="/third_party/wolverine/">
+    <Project Path="third_party/wolverine/Wolverine.RDBMS/Wolverine.RDBMS.csproj" />
+    <Project Path="third_party/wolverine/Wolverine.Postgresql/Wolverine.Postgresql.csproj" />
+    <Project Path="third_party/wolverine/Wolverine.EntityFrameworkCore/Wolverine.EntityFrameworkCore.csproj" />
+  </Folder>
 </Solution>

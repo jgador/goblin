@@ -1,0 +1,89 @@
+using System.Data.Common;
+using Microsoft.Extensions.Logging;
+using Wolverine.Configuration;
+using Wolverine.Persistence.Durability;
+using Wolverine.RDBMS.Polling;
+using Wolverine.Runtime.Agents;
+using Wolverine.Transports;
+using DbCommandBuilder = Weasel.Core.DbCommandBuilder;
+
+namespace Wolverine.RDBMS.Durability;
+
+internal class CheckRecoverableIncomingMessagesOperation : IDatabaseOperation
+{
+    private readonly IMessageDatabase _database;
+    private readonly IEndpointCollection _endpoints;
+    private readonly List<IncomingCount> _incoming = new();
+    private readonly ILogger _logger;
+    private readonly DurabilitySettings _settings;
+
+    public CheckRecoverableIncomingMessagesOperation(IMessageDatabase database, IEndpointCollection endpoints,
+        DurabilitySettings settings, ILogger logger)
+    {
+        _database = database;
+        _endpoints = endpoints;
+        _settings = settings;
+        _logger = logger;
+    }
+
+    public string Description => "Recover persisted incoming messages";
+
+    public void ConfigureCommand(DbCommandBuilder builder)
+    {
+        builder.Append(
+            $"select {DatabaseConstants.ReceivedAt}, count(*) from {_database.TableNameFor(DatabaseConstants.IncomingTable)} where {DatabaseConstants.Status} = '{EnvelopeStatus.Incoming}' and {DatabaseConstants.OwnerId} = {TransportConstants.AnyNode} group by {DatabaseConstants.ReceivedAt};");
+    }
+
+    public async Task ReadResultsAsync(DbDataReader reader, IList<Exception> exceptions, CancellationToken token)
+    {
+        while (await reader.ReadAsync(token))
+        {
+            var address =
+                new Uri(await reader.GetFieldValueAsync<string>(0, token).ConfigureAwait(false));
+            // GH-4480: a provider picks its own CLR type for count(*) -- Oracle's unconstrained NUMBER
+            // arrives as decimal or Int64 -- and GetFieldValueAsync<int> is a cast that throws on both.
+            var count = await reader.GetInt32TolerantlyAsync(1, token).ConfigureAwait(false);
+
+            var incoming = new IncomingCount(address, count);
+
+            _incoming.Add(incoming);
+        }
+    }
+
+    public IEnumerable<IAgentCommand> PostProcessingCommands()
+    {
+        if (_settings.Cancellation.IsCancellationRequested) yield break;
+
+        foreach (var incoming in _incoming)
+        {
+            // GH-3590: exclusive and leader-pinned listeners are only active on ONE node, while this durability
+            // agent is assigned per database and may well be running somewhere else. Recovery for those endpoints
+            // is owned by the listening node itself (ListenerInboxRecovery). This check has to happen BEFORE any
+            // circuit lookup, because FindListenerCircuit() falls back to the durable local queue and would
+            // otherwise mis-route another node's messages into this node's local queue.
+            if (_endpoints.IsSingleNodeListener(incoming.Destination))
+            {
+                continue;
+            }
+
+            var listener = _endpoints.FindListenerCircuit(incoming.Destination);
+            if (listener == null) continue; // This *might* happen during shutdown
+
+            if (listener.Status == ListeningStatus.Accepting)
+            {
+                _logger.LogInformation(
+                    "Issuing a command to recover {Count} incoming messages from the inbox to destination {Destination}",
+                    incoming.Count, incoming.Destination);
+                yield return
+                    new RecoverIncomingMessagesCommand(_database, incoming, listener, _settings, _logger);
+            }
+            else
+            {
+                _logger.LogInformation("Found {Count} incoming messages from the inbox to destination {Destination}, but the listener is latched", incoming.Count, incoming.Destination);
+            }
+
+        }
+    }
+
+
+}

@@ -1,0 +1,522 @@
+using System.Data;
+using JasperFx.Events.Daemon;
+using System.Data.Common;
+using JasperFx.Core;
+using JasperFx.Core.Reflection;
+using JasperFx.Descriptors;
+using Microsoft.Extensions.Logging;
+using Weasel.Core;
+using Weasel.Core.Migrations;
+using Wolverine.Persistence;
+using Wolverine.Persistence.Durability;
+using Wolverine.Persistence.Durability.ScheduledMessageManagement;
+using Wolverine.Persistence.Sagas;
+using Wolverine.RDBMS.Polling;
+using Wolverine.RDBMS.Sagas;
+using Wolverine.RDBMS.Transport;
+using Wolverine.Runtime;
+using Wolverine.Runtime.Agents;
+using Wolverine.Transports;
+using Wolverine.RDBMS.Deduplication;
+using Wolverine.RDBMS.Recurring;
+using Wolverine.RDBMS.DynamicListeners;
+using DbCommandBuilder = Weasel.Core.DbCommandBuilder;
+
+namespace Wolverine.RDBMS;
+
+public abstract partial class MessageDatabase<T> : DatabaseBase<T>,
+    IMessageDatabase, IMessageInbox, IMessageOutbox, IMessageStoreAdmin, IDeadLetters, IScheduledMessages, ISagaSupport where T : DbConnection, new()
+{
+    /// <summary>
+    /// GH-4375. The most parameters this provider accepts in one command. Batched durability commands
+    /// are split so they never exceed it.
+    /// </summary>
+    /// <remarks>
+    /// The default is SQL Server's 2,100 -- the tightest limit of any provider Wolverine ships -- so a
+    /// provider that does not override it chunks more than it strictly needs to and is never wrong.
+    /// Getting this too LOW costs an extra round trip; getting it too high throws at the driver, so the
+    /// default leans the safe way.
+    ///
+    /// <para>
+    /// Measured against the containers in docker-compose, by walking a multi-row insert across the
+    /// boundary: SQL Server 2,100 (349 outgoing envelopes, 233 incoming), SQLite 32,766, MySQL at least
+    /// 65,536. PostgreSQL's wire protocol caps it at 65,535.
+    /// </para>
+    /// </remarks>
+    public virtual int MaximumParameterCount => 2100;
+
+    /// <summary>
+    /// GH-4375. True when this provider's batched builders use a FIXED number of parameters regardless
+    /// of batch size, so no amount of batching can approach <see cref="MaximumParameterCount" />.
+    /// PostgreSQL sets this, having moved to <c>unnest</c> in GH-4320.
+    /// </summary>
+    protected virtual bool BuildsFixedArityBatches => false;
+
+    /// <summary>
+    /// GH-4375. Split a batch so each slice stays under <see cref="MaximumParameterCount" />.
+    /// </summary>
+    /// <remarks>
+    /// Always yields at least one envelope per slice: a single envelope that cannot fit is a problem no
+    /// amount of chunking solves, and silently yielding nothing would drop messages.
+    /// </remarks>
+    protected IEnumerable<ArraySegment<Envelope>> chunkByParameterLimit(Envelope[] envelopes,
+        int parametersPerEnvelope, int sharedParameters = 0)
+    {
+        // The shared parameters have to come off the budget BEFORE the division. Leaving them out puts
+        // the chunk boundary exactly one envelope past what fits: the outgoing builder is 6N + 1 (owner
+        // is shared), so 2100/6 = 350 chunks to precisely the size that was already known to fail.
+        var budget = Math.Max(1, MaximumParameterCount - sharedParameters);
+        var perChunk = Math.Max(1, budget / Math.Max(1, parametersPerEnvelope));
+
+        if (envelopes.Length <= perChunk)
+        {
+            yield return new ArraySegment<Envelope>(envelopes);
+            yield break;
+        }
+
+        for (var offset = 0; offset < envelopes.Length; offset += perChunk)
+        {
+            yield return new ArraySegment<Envelope>(envelopes, offset,
+                Math.Min(perChunk, envelopes.Length - offset));
+        }
+    }
+
+    // ReSharper disable once InconsistentNaming
+    protected readonly CancellationToken _cancellation;
+    private readonly string _outgoingEnvelopeSql;
+    protected readonly DatabaseSettings _settings;
+    private readonly DbDataSource _dataSource;
+    private DatabaseBatcher? _batcher;
+    private string _schemaName;
+
+    protected MessageDatabase(DatabaseSettings databaseSettings, DbDataSource dataSource, DurabilitySettings settings,
+        ILogger logger, Migrator migrator, IDatabaseProvider provider) : base(new MigrationLogger(logger),
+        databaseSettings.AutoCreate, migrator,
+        "WolverineEnvelopeStorage", () => (T)dataSource.CreateConnection())
+    {
+        Provider = provider;
+        _settings = databaseSettings;
+        _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
+        Logger = logger;
+        _schemaName = databaseSettings.SchemaName ?? settings.MessageStorageSchemaName ?? provider.DefaultDatabaseSchemaName;
+
+        IncomingFullName = this.TableNameFor(DatabaseConstants.IncomingTable);
+        OutgoingFullName = this.TableNameFor(DatabaseConstants.OutgoingTable);
+
+        Durability = settings;
+        _cancellation = settings.Cancellation;
+
+        // GH-4216: deliberately NOT built here. Durability.EnableInboxPartitioning is not reliably set at
+        // construction time -- the batched path reads it per call and got the partitioned shape while this
+        // one, built in the constructor, silently kept the unpartitioned statement. Built lazily on first
+        // use instead, where the setting is settled.
+
+        _incrementIncomingEnvelopeAttempts =
+            $"update {this.TableNameFor(DatabaseConstants.IncomingTable)} set attempts = @attempts where id = @id and {DatabaseConstants.ReceivedAt} = @uri";
+
+        // ReSharper disable once VirtualMemberCallInConstructor
+        _outgoingEnvelopeSql = determineOutgoingEnvelopeSql(settings);
+
+        // ReSharper disable once VirtualMemberCallInConstructor
+        Nodes = buildNodeStorage(databaseSettings, dataSource)!;
+
+        DataSource = dataSource;
+
+        var descriptor = Describe();
+
+        Id = new DatabaseId(descriptor.ServerName, descriptor.DatabaseName);
+
+        var parts = new List<string>
+        {
+            descriptor.Engine.ToLowerInvariant(),
+            descriptor.ServerName.Split(',')[0],
+            descriptor.DatabaseName,
+            _schemaName
+        };
+
+        Role = databaseSettings.Role;
+
+        if (databaseSettings.Role == MessageStoreRole.Main)
+        {
+            SubjectUri = new Uri("wolverine://messages/main");
+        }
+
+        Uri = new Uri($"{PersistenceConstants.AgentScheme}://{parts.Where(x => x.IsNotEmpty()).Join("/")}");
+
+        // Dynamic-listener registry (GH-2685). Only the Main store hosts the registry —
+        // ancillary / tenant stores keep the no-op default and never see the
+        // wolverine_listener table provisioned. Gated on the opt-in flag so existing
+        // apps see no schema migration churn on upgrade.
+        if (settings.EnableDynamicListeners && Role == MessageStoreRole.Main)
+        {
+            // ReSharper disable once VirtualMemberCallInConstructor
+            Listeners = BuildListenerStore();
+        }
+
+        // GH-4180. Logical deduplication storage, unlike the listener registry above, is built for
+        // EVERY store role rather than only Main. A handler chain carrying an AncillaryStoreType
+        // claims its id in that store, so that the claim and the work it guards land in one
+        // transaction; a claim that went to the Main store instead could commit while the ancillary
+        // transaction rolled back.
+        if (settings.EnableMessageDeduplication)
+        {
+            // ReSharper disable once VirtualMemberCallInConstructor
+            Deduplication = BuildDeduplicationStore();
+        }
+
+        // Recurring-message tracking (see IRecurringMessageStore) — Main store only, like the
+        // listener registry: the single cluster-wide recurring agent publishes through the main
+        // store, so that is where the bookkeeping beside its inbox lives. Gated on the opt-in
+        // flag (flipped by registering the first schedule) so existing apps see no schema
+        // migration churn on upgrade.
+        if (settings.EnableRecurringMessages && Role == MessageStoreRole.Main)
+        {
+            // ReSharper disable once VirtualMemberCallInConstructor
+            RecurringMessages = BuildRecurringMessageStore();
+        }
+    }
+
+    /// <summary>
+    /// Factory hook for the per-database <see cref="IDeduplicationStore" /> when
+    /// <see cref="DurabilitySettings.EnableMessageDeduplication" /> is set. The default returns
+    /// <see cref="RdbmsDeduplicationStore" />, which is portable across every provider that uses
+    /// <c>@</c>-prefixed bind variables and <see cref="DbDataSource" />-driven command creation
+    /// (Postgres, SqlServer, MySQL, SQLite). Oracle supplies its own.
+    /// </summary>
+    protected virtual IDeduplicationStore BuildDeduplicationStore()
+    {
+        return new RdbmsDeduplicationStore(_dataSource,
+            QuotedTableNameFor(DatabaseConstants.DeduplicationTableName), IsUniqueConstraintViolation,
+            BatchedDeleteExpiredDeduplicationClaimsSql, Durability.DeduplicationCleanupBatchSize);
+    }
+
+    /// <inheritdoc />
+    public IDeduplicationStore Deduplication { get; private set; } = NullDeduplicationStore.Instance;
+
+    /// <summary>
+    /// Factory hook for the per-database <see cref="IRecurringMessageStore" /> when
+    /// <see cref="DurabilitySettings.EnableRecurringMessages" /> is set on a
+    /// <see cref="MessageStoreRole.Main" /> store. The default returns
+    /// <see cref="RdbmsRecurringMessageStore" />, portable across every provider that uses
+    /// <c>@</c>-prefixed bind variables and <see cref="DbDataSource" />-driven command creation
+    /// (Postgres, SqlServer, MySQL, SQLite).
+    /// </summary>
+    protected virtual IRecurringMessageStore BuildRecurringMessageStore()
+    {
+        return new RdbmsRecurringMessageStore(_dataSource,
+            QuotedTableNameFor(DatabaseConstants.RecurringMessagesTableName),
+            QuotedTableNameFor(DatabaseConstants.IncomingTable),
+            IsUniqueConstraintViolation);
+    }
+
+    /// <inheritdoc />
+    public IRecurringMessageStore RecurringMessages { get; private set; } = NullRecurringMessageStore.Instance;
+
+    /// <summary>
+    /// Factory hook for constructing the per-database <see cref="IListenerStore"/> when
+    /// <see cref="DurabilitySettings.EnableDynamicListeners"/> is set on a
+    /// <see cref="MessageStoreRole.Main"/> store. The default returns
+    /// <see cref="RdbmsListenerStore"/>, which is portable across providers that use
+    /// <c>@</c>-prefixed bind variables and <see cref="DbDataSource"/>-driven command
+    /// creation (Postgres, SqlServer, MySQL, SQLite). Oracle's
+    /// <c>OracleMessageStore</c> does not inherit from <see cref="MessageDatabase{T}"/>
+    /// and supplies its own listener-store implementation directly.
+    /// </summary>
+    protected virtual IListenerStore BuildListenerStore()
+    {
+        return new RdbmsListenerStore(_dataSource, QuotedTableNameFor(DatabaseConstants.ListenersTableName),
+            IsUniqueConstraintViolation);
+    }
+
+    public MessageStoreRole Role { get; private set; }
+
+    public override string ToString()
+    {
+        return $"{Uri} ({Name})";
+    }
+
+    public IAgent BuildAgent(IWolverineRuntime runtime)
+    {
+        return new DurabilityAgent(runtime, this)
+        {
+            // GH-3376: a tenant database's scheduled job polling belongs to this agent, which managed
+            // distribution assigns to exactly one node. Main / ancillary stores keep polling from the
+            // node-wide fan-out instead - see StartScheduledJobs() below.
+            AutoStartScheduledJobPolling = Role == MessageStoreRole.Tenant
+        };
+    }
+
+    public Uri Uri { get; protected set; } = new Uri("null://null");
+
+    public IAdvisoryLock AdvisoryLock { get; protected set; } = null!;
+
+    public ILogger Logger { get; }
+
+    public bool HasDisposed { get; protected set; }
+
+    public DbDataSource DataSource { get; }
+
+    public string OutgoingFullName { get; private set; }
+
+    public string IncomingFullName { get; private set; }
+
+    public DurabilitySettings Durability { get; }
+
+    public string Name { get; set; } = TransportConstants.Default;
+    public void PromoteToMain(IWolverineRuntime runtime)
+    {
+        Role = MessageStoreRole.Main;
+        Initialize(runtime);
+    }
+
+    public void DemoteToAncillary()
+    {
+        Role = MessageStoreRole.Ancillary;
+    }
+
+    public DatabaseSettings Settings => _settings;
+
+    public INodeAgentPersistence Nodes { get; }
+
+    /// <summary>
+    /// Set by <see cref="Initialize"/> after <see cref="DurabilitySettings.EnableDynamicListeners"/>
+    /// is read off the runtime — defaults to <see cref="NullListenerStore.Instance"/>
+    /// when the flag is off so the listener-registry table is never provisioned.
+    /// </summary>
+    public IListenerStore Listeners { get; protected set; } = NullListenerStore.Instance;
+
+    public IMessageInbox Inbox => this;
+
+    public IMessageOutbox Outbox => this;
+    public IDeadLetters DeadLetters => this;
+
+    public string SchemaName
+    {
+        get => _schemaName;
+        set
+        {
+            _schemaName = value;
+
+            IncomingFullName = QuotedTableNameFor(DatabaseConstants.IncomingTable);
+            OutgoingFullName = QuotedTableNameFor(DatabaseConstants.OutgoingTable);
+        }
+    }
+
+    /// <summary>
+    /// Returns the schema name properly quoted for use in SQL statements.
+    /// Override in derived classes for database-specific quoting (e.g., double quotes for PostgreSQL, square brackets for SQL Server).
+    /// </summary>
+    protected virtual string QuotedSchemaName => SchemaName;
+
+    /// <summary>
+    /// True when this engine has no user-defined schemas and <see cref="SchemaName"/> is a table name
+    /// prefix rather than a qualifier. Driven by <see cref="DatabaseSettings.SchemaNameIsTablePrefix"/>;
+    /// only SQLite sets it. See GH-3943.
+    /// </summary>
+    protected bool SchemaNameIsTablePrefix => _settings.SchemaNameIsTablePrefix;
+
+    /// <summary>
+    /// The <see cref="MessageDatabaseExtensions.TableNameFor"/> rendering, but with the schema name
+    /// quoted per this provider's rules. Prefixed names are single identifiers and are never quoted.
+    /// </summary>
+    protected string QuotedTableNameFor(string tableName)
+    {
+        if (SchemaNameIsTablePrefix) return TablePrefixing.Apply(SchemaName, tableName);
+
+        return string.IsNullOrEmpty(SchemaName) ? tableName : $"{QuotedSchemaName}.{tableName}";
+    }
+
+    public Task EnqueueAsync(IDatabaseOperation operation)
+    {
+        // Really probably only an issue w/ testing, but this lets us ignore
+        // log record saving
+        if (!Durability.DurabilityAgentEnabled) return Task.CompletedTask;
+
+        if (_batcher == null)
+        {
+            throw new InvalidOperationException($"Message database '{Identifier}' has not yet been initialized for node {Durability.AssignedNodeNumber}");
+        }
+
+        return _batcher.EnqueueAsync(operation);
+    }
+
+    public abstract Task PollForScheduledMessagesAsync(IWolverineRuntime runtime, ILogger runtimeLogger,
+        DurabilitySettings durabilitySettings,
+        CancellationToken cancellationToken);
+
+    public void Initialize(IWolverineRuntime runtime)
+    {
+        if (_batcher != null) return;
+
+        _batcher = new DatabaseBatcher(this, runtime, runtime.Options.Durability.Cancellation);
+
+        if (Role == MessageStoreRole.Main && runtime.Options.Transports.NodeControlEndpoint == null && runtime.Options.Durability.Mode == DurabilityMode.Balanced)
+        {
+            var transport = new DatabaseControlTransport(this, runtime.Options);
+            runtime.Options.Transports.Add(transport);
+
+            runtime.Options.Transports.NodeControlEndpoint = transport.ControlEndpoint;
+        }
+    }
+
+    public Uri SubjectUri { get; set; } = new Uri("wolverine://messages");
+
+    public IMessageStoreAdmin Admin => this;
+
+    public async Task DrainAsync()
+    {
+        if (_batcher != null)
+        {
+            try
+            {
+                await _batcher!.DrainAsync();
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (HasDisposed) return;
+
+        if (AdvisoryLock != null)
+        {
+            await AdvisoryLock.DisposeAsync();
+        }
+
+        if (_batcher != null)
+        {
+            await _batcher.DisposeAsync();
+        }
+
+        try
+        {
+            await DataSource.DisposeAsync();
+        }
+        catch
+        {
+            // Not letting this fail out of here
+        }
+
+        HasDisposed = true;
+    }
+
+    public abstract DbCommandBuilder ToCommandBuilder();
+
+    /// <summary>
+    /// Default implementation returns null, meaning "this provider cannot bound the
+    /// expired-handled-envelope delete". PostgreSQL and SQL Server override this to enable
+    /// batched cleanup. See <see cref="IMessageDatabase.BatchedDeleteExpiredHandledEnvelopesSql"/>.
+    /// </summary>
+    public virtual string? BatchedDeleteExpiredHandledEnvelopesSql(int batchSize) => null;
+
+    /// <summary>
+    /// GH-4180. Provider hook for a BOUNDED delete of expired logical deduplication claims. Null means
+    /// "this engine cannot bound it", and the reaper falls back to one unbounded statement. Mirrors
+    /// <see cref="BatchedDeleteExpiredHandledEnvelopesSql" />.
+    /// </summary>
+    public virtual string? BatchedDeleteExpiredDeduplicationClaimsSql(int batchSize) => null;
+
+    /// <summary>
+    /// GH-3971. Portable default. PostgreSQL and SQL Server override it with a recursive index
+    /// skip-scan, which is what keeps the steady-state cost proportional to the number of DISTINCT
+    /// owners (a handful) rather than to the number of rows (millions).
+    /// </summary>
+    public virtual string DistinctOwnerIdsSql(DbObjectName table)
+        => $"select distinct {DatabaseConstants.OwnerId} from {table} where {DatabaseConstants.OwnerId} <> 0";
+
+    /// <summary>
+    /// GH-3971: default is null, meaning "this provider cannot bound the release update". PostgreSQL
+    /// and SQL Server override. See <see cref="IMessageDatabase.BatchedReleaseOwnershipSql"/>.
+    /// </summary>
+    public virtual string? BatchedReleaseOwnershipSql(DbObjectName table, string deadOwnerList, int batchSize) => null;
+
+    public abstract Task<bool> ExistsAsync(Envelope envelope, CancellationToken cancellation);
+
+    public async Task ReleaseIncomingAsync(int ownerId, Uri receivedAt)
+    {
+        if (HasDisposed) return;
+
+        var impacted = await _dataSource
+            .CreateCommand(
+                $"update {QuotedTableNameFor(DatabaseConstants.IncomingTable)} set owner_id = 0 where owner_id = @owner and {DatabaseConstants.ReceivedAt} = @uri")
+            .With("owner", ownerId)
+            .With("uri", receivedAt.ToString())
+            .ExecuteNonQueryAsync(_cancellation);
+
+        if (impacted == 0) return;
+
+        Logger.LogInformation("Reassigned {Impacted} incoming messages from {Owner} and endpoint at {Uri} to any node in the durable inbox", impacted, ownerId, receivedAt);
+    }
+
+    protected abstract INodeAgentPersistence? buildNodeStorage(DatabaseSettings databaseSettings,
+        DbDataSource dataSource);
+
+    public DbCommand CreateCommand(string command)
+    {
+        return _dataSource.CreateCommand(command);
+    }
+
+    public DbCommand CallFunction(string functionName)
+    {
+        var cmd = CreateCommand(SchemaName + "." + functionName);
+        cmd.CommandType = CommandType.StoredProcedure;
+        return cmd;
+    }
+
+    public new abstract IEnumerable<ISchemaObject> AllObjects();
+
+    public IAgent StartScheduledJobs(IWolverineRuntime runtime)
+    {
+        var agent = new DurabilityAgent(runtime, this);
+
+        // GH-3376: this node-wide fan-out runs on every node for every known database, outside the
+        // agent distribution machinery. Starting a poller here meant every node polled every TENANT
+        // database every ScheduledJobPollingTime; the per-database advisory lock deduped the work but
+        // not the connection, so each losing node still opened a connection, began a transaction, and
+        // rolled back - parking `tenants x nodes` connections, and each added node multiplied the
+        // polling load instead of dividing it. Tenant polling now rides the distributed durability
+        // agent (BuildAgent above), which managed distribution assigns to exactly one node. That
+        // mirrors what the RavenDb and CosmosDb stores already do for the same reason (#2623).
+        //
+        // Main and ancillary stores deliberately keep polling here, on every node:
+        //  - There are a handful of them, and every node already holds connections to them anyway for
+        //    heartbeats, leader election, and the control queues, so scoping them saves nothing.
+        //  - Polling from here starts immediately at boot. Waiting for leader election and agent
+        //    assignment instead would delay scheduled messages by >10s on every startup.
+        //
+        // Hosts with durability agents turned off have no NodeAgentController and so never build a
+        // durability agent. For them this fan-out is the only scheduled message pump, whatever the role.
+        if (!runtime.Options.Durability.DurabilityAgentEnabled || Role != MessageStoreRole.Tenant)
+        {
+            agent.StartScheduledJobPolling();
+        }
+
+        return agent;
+    }
+
+    public async ValueTask<ISagaStorage<TId, TSaga>> EnrollAndFetchSagaStorage<TId, TSaga>(MessageContext context) where TSaga : Saga
+    {
+        var conn = CreateConnection();
+        await conn.OpenAsync(_cancellation);
+        try
+        {
+            var tx = await conn.BeginTransactionAsync(_cancellation);
+
+            var schema = SagaSchemaFor<TSaga, TId>();
+
+            var transaction = new DatabaseEnvelopeTransaction(this, tx);
+            await context.EnlistInOutboxAsync(transaction);
+            return new DatabaseSagaStorage<TId, TSaga>(conn, tx, schema);
+        }
+        catch (Exception)
+        {
+            await conn.CloseAsync();
+            throw;
+        }
+    }
+
+    public abstract IDatabaseSagaSchema<TId, TSaga> SagaSchemaFor<TSaga, TId>() where TSaga : Saga;
+}

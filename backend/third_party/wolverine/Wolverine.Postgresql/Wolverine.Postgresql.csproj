@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Description>Postgresql Saga, Message, and Outbox storage for Wolverine applications</Description>
+        <PackageId>Wolverine.Postgresql</PackageId>
+        <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+        <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+        <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+        <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+        <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+        <!--
+          AOT-compatible (#2746). Two reflective sites suppressed:
+          - PostgresqlMessageStore ctor: typeof(DatabaseSagaSchema<,>)
+            .CloseAndBuildAs over runtime saga / id types at startup
+          - DatabaseSagaSchema<T,TId>: reflection-based STJ over runtime
+            saga state type T (chunk D / chunk Z pattern)
+          AOT consumers preserve saga state types via TrimmerRootDescriptor
+          or supply a JsonSerializerContext.
+        -->
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Wolverine.RDBMS\Wolverine.RDBMS.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Weasel.Postgresql" Version="9.32.0" />
+    </ItemGroup>
+
+</Project>

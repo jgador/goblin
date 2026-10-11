@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("conversations")]
+[Table("conversation")]
 public partial class Conversation
 {
     [Key]

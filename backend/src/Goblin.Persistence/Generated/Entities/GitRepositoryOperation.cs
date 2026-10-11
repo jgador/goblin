@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("repository_operations")]
+[Table("repository_operation")]
 public partial class GitRepositoryOperation
 {
     [Key]

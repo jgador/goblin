@@ -189,7 +189,7 @@ plan overlapping trust before replacing the CA and restrict Secret/issuance acce
 
 ## Schema and EF Core
 
-Use unquoted PostgreSQL `snake_case` names in the default `public` schema and
+Use singular, unquoted PostgreSQL `snake_case` names in the default `public` schema and
 `PascalCase` C# names with mapping attributes. Goblin-owned tables use `id bigint`
 and bigint foreign keys. Identity sequences allocate local IDs; GitHub repository
 IDs retain their upstream values. HTTP exposes bigint IDs as decimal strings.
@@ -197,8 +197,22 @@ Inspection and repository-operation requests reserve IDs before submission and
 retain them on replay.
 
 Wolverine tables keep their `wolverine_` prefix and library-defined key types.
-The administrator-only migration journal is `public.schema_migrations`.
-Neither is included in EF scaffolding.
+The administrator-only migration journal is `public.schema_migration`; its
+identity sequence is also inaccessible to the application role.
+Neither is included in EF scaffolding. All 27 tables (18 product tables, eight
+Wolverine tables, and the journal) use singular names. Primary keys, foreign keys,
+identity sequences, and table-specific indexes derive from those names. The
+independent bigint Work history sequence is `work_event_id_seq`; it has no table
+or column owner. Wolverine uses `wolverine_node_record_id_seq` and
+`wolverine_node_node_number_seq`. C# entity types remain singular and collections
+remain plural: `WorkItem` maps to `work_item`, while `WorkItems` is a DbSet.
+
+Wolverine's maintained [integration source](../backend/third_party/wolverine/README.md)
+rebuilds the RDBMS, PostgreSQL, and EF integrations from the pinned 6.39.1 revision.
+Keep their canonical SQL constants, schema objects, and this baseline DDL aligned.
+Ordinary project references and container publishing compile that source; startup
+retains `AutoCreate.None`. Optional tenancy, dynamic listeners, recurring messages,
+deduplication, partitioning, and database message queues are not enabled.
 
 ### Apply the SQL schema
 
@@ -210,8 +224,14 @@ An advisory lock serializes runners, and recorded SHA-256 checksums reject edits
 to applied scripts.
 
 **Before production:** consolidate schema changes into `0001_initial.sql` and
-recreate development databases when it changes. Local provisioning does not freeze
-the baseline or bypass checksum checks. **After production:** keep applied filenames
+deliberately recreate disposable development databases when it changes.
+An existing database with the former plural names cannot apply this changed
+baseline: checksum validation must reject it. Do not add rename migrations,
+compatibility views, or bypass the journal. Recreate only the verified owned
+development database; schema changes do not authorize deleting Work PVCs or
+unrelated installation data. Remove stale named client profiles only after
+reviewing the new database volume and CA identities, then reconnect.
+Local provisioning does not freeze the baseline or bypass checksum checks. **After production:** keep applied filenames
 and contents immutable and add higher-numbered migrations.
 
 Use LF endings and ordinary SQL without `psql` commands or explicit
@@ -231,7 +251,7 @@ formatting, regular constructors, UTF-8 without BOM, and LF endings.
 The app role can inspect the schema. `Name=ConnectionStrings:Goblin` resolves its
 connection from the tooling host's environment; `--no-onconfiguring` keeps it out
 of generated code. `--data-annotations` requests attributes; remaining mappings
-use Fluent API. Leave `--use-database-names` unset (`work_items` becomes `WorkItem`),
+use Fluent API. Leave `--use-database-names` unset (`work_item` becomes `WorkItem`),
 and do not combine the explicit table list with `--schema public`, which includes
 every table. `public` is implicit in generated attributes.
 
@@ -243,16 +263,21 @@ To change the schema:
 
 1. Edit the unreleased baseline, or add a migration after production, following
    [the migration rules](#apply-the-sql-schema). New tracked tables need primary keys.
-2. Update `--table` entries in the scaffolding script, apply SQL, and scaffold.
+2. Update the 18 singular `--table` entries and custom candidate names in the
+   scaffolding tooling. Apply SQL to a fresh disposable database with
+   `make db-migrate DB_PROFILE=<profile>`, then run
+   `make db-scaffold DB_PROFILE=<profile>`. Wolverine and the journal remain excluded.
 3. Remove obsolete generated entities after table drops/renames, then run
    `dotnet build backend/Goblin.slnx` and the [database tests](#application-configuration-and-verification).
 4. Review and commit SQL, table selection, and generated C# together. A second
-   scaffold against the unchanged database should produce no additional diff.
+   scaffold against the unchanged database must produce no additional diff
+   relative to the first scaffold. Keep filtered unique relationship corrections
+   in `WorkModelConfiguration.cs` outside generated files.
 
 ### Workspace storage boundary
 
 PostgreSQL stores Work conversations, lifecycle history, Git commit metadata, and
-inspection records. Workspace files stay on the Work PVC; `workspace_checkpoints`
+inspection records. Workspace files stay on the Work PVC; `workspace_checkpoint`
 contains no filesystem payload or archive digest. Never store workspace archives
 in PostgreSQL. See [workspace lifecycle](workspace-lifecycle.md).
 

@@ -42,6 +42,7 @@ COPY global.json ./
 COPY backend/Directory.Build.props ./backend/Directory.Build.props
 COPY backend/src ./backend/src
 COPY backend/tools ./backend/tools
+COPY backend/third_party ./backend/third_party
 COPY --from=assets /app/frontend/dist ./frontend/dist
 COPY --from=assets /app/frontend/public/assets/branding/slack.png ./frontend/public/assets/branding/slack.png
 RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --nologo
@@ -54,6 +55,7 @@ WORKDIR /app
 # Remove package indexes in the same layer to avoid retaining download metadata.
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY LICENSE NOTICE THIRD_PARTY_NOTICES.md /usr/share/doc/goblin/
+COPY backend/third_party/wolverine/LICENSE /usr/share/doc/goblin/wolverine/LICENSE
 # appsettings.json contains certificate paths; private keys are mounted at runtime.
 COPY --from=build --chown=1000:1000 /publish ./
 # Provisioning runs the SQL migrations with this separately published tool.

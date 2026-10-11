@@ -73,7 +73,7 @@ The worker retires the runtime and verifies that other processes have stopped.
 It commits intended repository changes. When push is approved it publishes through
 Goblin's GitHub broker; otherwise it submits a Git object bundle for local verification.
 The controller verifies the Git commit without requiring publication.
-`workspace_checkpoints` records the Work, attempt, turn, allocation, repository,
+`workspace_checkpoint` records the Work, attempt, turn, allocation, repository,
 branch, commit SHA, and timestamp. This is Git provenance only: the table has no
 archive payload or archive digest. The internal checkpoint endpoint accepts a
 bounded JSON request with the turn number and commit SHA.

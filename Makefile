@@ -165,8 +165,8 @@ format-rust-check:
 
 # Format handwritten C# while excluding generated protocol and EF files.
 format-backend:
-	cd backend && dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated
-	cd backend && dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 IDE1006 --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated
+	cd backend && dotnet format whitespace Goblin.slnx --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated third_party
+	cd backend && dotnet format style Goblin.slnx --severity info --exclude-diagnostics IDE0130 IDE1006 --exclude src/Goblin.Protocol/Generated src/Goblin.Persistence/Generated third_party
 
 # Lint selected Rust crates and all targets with warnings denied.
 lint-rust:

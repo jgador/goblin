@@ -74,7 +74,7 @@ protect lost responses, duplicate submissions, and stale browser actions.
 
 Pending approval and its outcome live in the PostgreSQL Work snapshot. Command
 receipts preserve returned previews; attempts preserve their immutable grants.
-`github_repositories.enabled` remains the durable repository setting. The enablement
+`github_repository.enabled` remains the durable repository setting. The enablement
 write and dispatch intent share the Work transaction. GitHub discovery runs outside
 that transaction; connection identity is rechecked inside it.
 
@@ -130,8 +130,9 @@ unpublished commits and ignored outputs, stay on the Work PVC. A new attempt use
 that retained checkout, without requiring its previous commit to exist on GitHub.
 
 The unreleased baseline adds `checkpoint` to the repository-operation constraint.
-Existing development databases need the corresponding constraint update or a
-fresh disposable database. No filesystem archive columns or new EF properties are
+Existing development databases require deliberate recreation from the changed
+unreleased baseline; do not apply an in-place constraint update or bypass migration
+checksums. See the [database guide](database.md#apply-the-sql-schema). No filesystem archive columns or new EF properties are
 introduced. Core, real PostgreSQL, Git bundle, and browser tests cover these gates;
 live GitHub and authenticated model execution remain separate integration checks.
 

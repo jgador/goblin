@@ -17,24 +17,24 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --output-dir Generated/Entities \
   --context-namespace Goblin.Persistence \
   --namespace Goblin.Persistence.Entities \
-  --table public.agents \
-  --table public.connections \
-  --table public.connection_model_catalogs \
-  --table public.conversation_messages \
-  --table public.conversations \
-  --table public.execution_attempts \
-  --table public.external_identities \
-  --table public.external_link_requests \
-  --table public.external_conversations \
-  --table public.external_messages \
-  --table public.github_connections \
-  --table public.github_repositories \
-  --table public.repository_operations \
-  --table public.repository_setup_memories \
-  --table public.work_commands \
-  --table public.work_items \
-  --table public.workspace_checkpoints \
-  --table public.workspace_sessions \
+  --table public.agent \
+  --table public.connection \
+  --table public.connection_model_catalog \
+  --table public.conversation_message \
+  --table public.conversation \
+  --table public.execution_attempt \
+  --table public.external_identity \
+  --table public.external_link_request \
+  --table public.external_conversation \
+  --table public.external_message \
+  --table public.github_connection \
+  --table public.github_repository \
+  --table public.repository_operation \
+  --table public.repository_setup_memory \
+  --table public.work_command \
+  --table public.work_item \
+  --table public.workspace_checkpoint \
+  --table public.workspace_session \
   --data-annotations \
   --no-onconfiguring \
   --force

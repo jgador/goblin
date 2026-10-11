@@ -28,7 +28,7 @@ is retained for resubmission after an unconfirmed response. An allocation failur
 creates no pending command or Work; gaps in sequences are expected.
 
 Attempts reserve their ID before state and dispatch intent commit. Claim owners,
-decisions, and core context messages use `work_event_ids`, independent of table
+decisions, and core context messages use `work_event_id_seq`, independent of table
 identities. A context entry is not identified by its source command/message ID:
 those IDs come from separate sequences and may coincide. Core snapshots use
 schema version 2 for the bigint model. Every persisted Work item requires its

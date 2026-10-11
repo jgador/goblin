@@ -15,7 +15,7 @@ execution view shows both the requested model and the model Codex reported.
 
 The controller uses Codex App Server `model/list`, follows its pagination cursor,
 and discards hidden models. The complete visible catalog is stored as one JSONB
-value in `connection_model_catalogs`, scoped to the connection's authentication
+value in `connection_model_catalog`, scoped to the connection's authentication
 generation and the installed Codex executable stamp. Agent sandboxes have no
 catalog database access. A successful fetch atomically replaces the old value.
 

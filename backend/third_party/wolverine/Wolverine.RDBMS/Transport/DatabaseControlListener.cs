@@ -1,0 +1,116 @@
+using JasperFx.Blocks;
+using JasperFx.Core;
+using Microsoft.Extensions.Logging;
+using Weasel.Core;
+using Wolverine.RDBMS.Polling;
+using Wolverine.Runtime;
+using Wolverine.Transports;
+
+namespace Wolverine.RDBMS.Transport;
+
+internal class DatabaseControlListener : IListener
+{
+    private readonly CancellationTokenSource _cancellation;
+    private readonly IReceiver _receiver;
+    private readonly Task _receivingLoop;
+    private readonly RetryBlock<Envelope> _retryBlock;
+    private readonly DatabaseControlTransport _transport;
+
+    // GH-4321: the control queue is empty almost all of the time, but this listener polled it at
+    // a hard 1 Hz — a connection, a transaction, a DELETE and a SELECT per tick per node,
+    // ~86k transactions/day/node against the main store. The loop stays at 1s while there has
+    // been recent traffic and relaxes to 5s once the queue has been quiet, so a burst of agent
+    // commands is still consumed promptly while a quiet cluster stops hammering the database.
+    private static readonly TimeSpan ActivePollInterval = 1.Seconds();
+    private static readonly TimeSpan IdlePollInterval = 5.Seconds();
+    private const long IdleAfterMilliseconds = 10_000;
+    private long _lastActivityTicks = Environment.TickCount64;
+
+    internal void MarkActivity()
+    {
+        Interlocked.Exchange(ref _lastActivityTicks, Environment.TickCount64);
+    }
+
+    public DatabaseControlListener(DatabaseControlTransport transport, DatabaseControlEndpoint endpoint,
+        IReceiver receiver, ILogger<DatabaseControlListener> logger, CancellationToken cancellationToken)
+    {
+        _transport = transport;
+        _receiver = receiver;
+
+        _cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        _receivingLoop = Task.Run(async () =>
+        {
+            await Task.Delay(Random.Shared.Next(100, 1000).Milliseconds());
+
+            while (!_cancellation.IsCancellationRequested)
+            {
+                try
+                {
+                    var batch = new DatabaseOperationBatch(_transport.Database,
+                    [
+                        new DeleteExpiredMessages(_transport, DateTimeOffset.UtcNow),
+                        new PollDatabaseControlQueue(_transport, _receiver, this)
+                    ]);
+                    await receiver.ReceivedAsync(this, new Envelope(batch));
+                }
+                catch (Exception e)
+                {
+                    logger.LogError(e, "Error trying to poll for messages from the database control queue");
+                }
+
+                var idleFor = Environment.TickCount64 - Interlocked.Read(ref _lastActivityTicks);
+                await Task.Delay(idleFor < IdleAfterMilliseconds ? ActivePollInterval : IdlePollInterval);
+            }
+        }, _cancellation.Token);
+
+
+        Address = endpoint.Uri;
+
+        _retryBlock = new RetryBlock<Envelope>(deleteEnvelopeAsync, logger, cancellationToken);
+    }
+
+    public IHandlerPipeline? Pipeline => _receiver.Pipeline;
+
+    public async ValueTask CompleteAsync(Envelope envelope)
+    {
+        await _retryBlock.PostAsync(envelope);
+    }
+
+    public ValueTask DeferAsync(Envelope envelope)
+    {
+        return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cancellation.CancelAsync();
+        _receivingLoop.SafeDispose();
+    }
+
+    public Uri Address { get; }
+
+    public async ValueTask StopAsync()
+    {
+        await _cancellation.CancelAsync();
+        if (_receivingLoop != null)
+        {
+#pragma warning disable VSTHRD003 // Avoid awaiting foreign Tasks
+            await _receivingLoop;
+#pragma warning restore VSTHRD003 // Avoid awaiting foreign Tasks
+            _receivingLoop.Dispose();
+        }
+    }
+
+    private Task deleteEnvelopeAsync(Envelope envelope, CancellationToken cancellationToken)
+    {
+        if (_transport.Database.HasDisposed)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _transport.Database.DataSource.CreateCommand($"delete from {_transport.TableName} where id = @id")
+            .With("id", envelope.Id)
+            .ExecuteNonQueryAsync(cancellationToken);
+    }
+}

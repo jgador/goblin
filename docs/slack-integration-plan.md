@@ -179,7 +179,7 @@ does not decide whether or when to send these notifications. The existing
 connection polls committed Work every three seconds, independently of model
 commentary and without requiring a new Slack message.
 
-`external_conversations.notified_work_sequence` records successful outcome
+`external_conversation.notified_work_sequence` records successful outcome
 delivery using the durable Work history sequence. Pending outcomes survive
 restarts and disconnected Slack sessions. Before posting, Goblin rechecks the
 current outcome, installation, original thread, and originating user's enabled
@@ -209,10 +209,10 @@ a post but before its delivery marker commits can duplicate a notification;
 it cannot repeat Work execution. Question text is escaped for Slack and bounded
 to 3,000 characters, with a link to the full question in Goblin.
 
-The unreleased schema baseline adds `external_conversations.notified_decision_id`
-and `external_conversations.notified_work_sequence`.
-An existing development database needs schema reconciliation before running
-the updated application; restarting the old installed image does not enable
+The unreleased schema baseline adds `external_conversation.notified_decision_id`
+and `external_conversation.notified_work_sequence`.
+An existing disposable development database requires deliberate recreation
+from the changed unreleased baseline before running the updated application; restarting the old installed image does not enable
 notification delivery. Existing eligible outcomes without a delivery marker are
 sent after the updated app connects. The migration runner still rejects edited
 applied baselines.

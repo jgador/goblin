@@ -8,7 +8,7 @@ namespace Goblin.Database.Scaffolding;
 // is pinned with the existing scaffolding dependency in this tooling project.
 #pragma warning disable EF1001
 // EF discovers this in the scaffolding startup project. Keep CLR names
-// explicit when regenerating from the unchanged database table/column names.
+// explicit when regenerating from the singular database table names and preserved column names.
 public sealed class GitRepositoryDesignTimeServices : IDesignTimeServices
 {
     public void ConfigureDesignTimeServices(IServiceCollection services) =>
@@ -22,8 +22,8 @@ internal sealed class GitRepositoryCandidateNamingService : CandidateNamingServi
         {
             "repository" => "git_repository",
             "repository_id" => "git_repository_id",
-            "repository_operations" => "git_repository_operations",
-            "repository_setup_memories" => "git_repository_setup_memories",
+            "repository_operation" => "git_repository_operation",
+            "repository_setup_memory" => "git_repository_setup_memory",
             _ => originalIdentifier
         });
 }

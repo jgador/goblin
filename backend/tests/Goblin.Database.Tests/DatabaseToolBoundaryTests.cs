@@ -20,7 +20,7 @@ public sealed class DatabaseToolBoundaryTests
     // do not need design-time dependencies to exercise their runtime boundaries.
 #pragma warning disable EF1001
     [Fact]
-    public void ScaffoldingUsesGitNamesWithoutRenamingDatabaseObjects()
+    public void ScaffoldingUsesSingularGitCandidatesAndPreservesColumnNames()
     {
         var services = new ServiceCollection();
         new GitRepositoryDesignTimeServices().ConfigureDesignTimeServices(services);
@@ -28,12 +28,12 @@ public sealed class DatabaseToolBoundaryTests
         using ServiceProvider provider = services.BuildServiceProvider();
         ICandidateNamingService naming = provider.GetRequiredService<ICandidateNamingService>();
 
-        Assert.Equal("GitRepositorySetupMemories", naming.GenerateCandidateIdentifier("repository_setup_memories"));
-        Assert.Equal("GitRepositoryOperations", naming.GenerateCandidateIdentifier("repository_operations"));
+        Assert.Equal("GitRepositorySetupMemory", naming.GenerateCandidateIdentifier("repository_setup_memory"));
+        Assert.Equal("GitRepositoryOperation", naming.GenerateCandidateIdentifier("repository_operation"));
         Assert.Equal("GitRepositoryId", naming.GenerateCandidateIdentifier("repository_id"));
         Assert.Equal("GitRepository", naming.GenerateCandidateIdentifier("repository"));
-        Assert.Equal("GithubRepositories", naming.GenerateCandidateIdentifier("github_repositories"));
-        Assert.Equal("WorkItems", naming.GenerateCandidateIdentifier("work_items"));
+        Assert.Equal("GithubRepository", naming.GenerateCandidateIdentifier("github_repository"));
+        Assert.Equal("WorkItem", naming.GenerateCandidateIdentifier("work_item"));
     }
 #pragma warning restore EF1001
 }

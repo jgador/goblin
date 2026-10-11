@@ -31,7 +31,7 @@ public sealed class GitRepositorySetupStore
         // bound, so frequent runs do not crowd older branch variants out.
         var rows = await db.GitRepositorySetupMemories.FromSqlInterpolated($"""
             SELECT DISTINCT ON (topic, environment, fingerprint) *
-            FROM public.repository_setup_memories
+            FROM public.repository_setup_memory
             WHERE repository_id = {grant.GitRepositoryId} AND github_connection_id = {grant.ConnectionId} AND account_id = {grant.AccountId}
             ORDER BY topic, environment, fingerprint, verified_at DESC
             """).AsNoTracking().OrderByDescending(x => x.VerifiedAt).Take(64)
