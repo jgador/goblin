@@ -7,5 +7,10 @@
     <PackageReference Include="WolverineFx.EntityFrameworkCore" Version="6.39.1" />
     <PackageReference Include="WolverineFx.Postgresql" Version="6.39.1" />
     <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.39.1" />
+    <!-- Keep the runtime graph on Goblin's existing EF version when Design is private. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <!-- The official EF integration declares Design transitively; keep tooling out of runtime consumers. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" PrivateAssets="all" ExcludeAssets="all" />
+    <Content Include="../../licenses/wolverine/LICENSE" Link="licenses/wolverine/LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

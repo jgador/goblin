@@ -9,7 +9,6 @@
 .goblin-auth/
 .goblin-browser-test/
 .goblin-local/
-.goblin-postgres/
 node_modules/
 target/
 .venv/

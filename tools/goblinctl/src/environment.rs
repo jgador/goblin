@@ -10,7 +10,7 @@ pub const CONNECTIONSTRINGS_GOBLIN: &str = "ConnectionStrings__Goblin";
 
 /// Schema administrator PostgreSQL connection; .NET maps __ to ConnectionStrings:GoblinAdmin.
 /// Format: Npgsql connection string.
-/// Default/fallback: Existing database tooling appsettings/configuration providers; environment overrides JSON.
+/// Default/fallback: Standard runtime configuration; developer profiles supply the environment directly.
 /// Required: Required for schema migration. Sensitive: yes.
 pub const CONNECTIONSTRINGS_GOBLINADMIN: &str = "ConnectionStrings__GoblinAdmin";
 
@@ -43,12 +43,6 @@ pub const GITHUB_STEP_SUMMARY: &str = "GITHUB_STEP_SUMMARY";
 /// Default/fallback: Cargo package version when unset during compilation.
 /// Required: Supplied explicitly for coordinated builds. Sensitive: no.
 pub const GOBLINCTL_BUILD_VERSION: &str = "GOBLINCTL_BUILD_VERSION";
-
-/// Repository/configuration root used by PostgreSQL setup.
-/// Format: Directory path.
-/// Default/fallback: Current working directory in setup.sh; Rust tooling supplies repository root.
-/// Required: Optional. Sensitive: no.
-pub const GOBLIN_CONFIG_ROOT: &str = "GOBLIN_CONFIG_ROOT";
 
 /// Concurrent image download workers in the installation script.
 /// Format: Integer from 1 to 8.
@@ -85,12 +79,6 @@ pub const GOBLIN_NATIVE_TEST_ROOT: &str = "GOBLIN_NATIVE_TEST_ROOT";
 /// Default/fallback: Web requires an explicit file; dev/install tooling uses .goblin-secrets/owner-password and validates explicit overrides without fallback.
 /// Required: Required by the web host; optional override for tooling. Sensitive: yes.
 pub const GOBLIN_PASSWORD_HASH_FILE: &str = "GOBLIN_PASSWORD_HASH_FILE";
-
-/// Write application PostgreSQL configuration during database setup.
-/// Format: true enables configuration.
-/// Default/fallback: true; installer sets false before applying its own configuration.
-/// Required: Optional. Sensitive: no.
-pub const GOBLIN_POSTGRES_CONFIGURE_APP: &str = "GOBLIN_POSTGRES_CONFIGURE_APP";
 
 /// Browser-facing origin used for origin validation and deployment.
 /// Format: Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in.
@@ -145,3 +133,19 @@ pub const SUDO_GID: &str = "SUDO_GID";
 /// Default/fallback: Ownership override ignored unless running as root and both sudo IDs parse.
 /// Required: Optional; provided by sudo. Sensitive: no.
 pub const SUDO_UID: &str = "SUDO_UID";
+
+/// User home directory. Absolute path; required when XDG_CONFIG_HOME is absent. Not sensitive.
+pub const HOME: &str = "HOME";
+/// User configuration base. Absolute path; defaults to $HOME/.config. Optional, not sensitive.
+pub const XDG_CONFIG_HOME: &str = "XDG_CONFIG_HOME";
+/// libpq service selector; removed during profile verification. Optional string, potentially sensitive.
+pub const PGSERVICE: &str = "PGSERVICE";
+/// libpq service file; removed during profile verification. Optional path, potentially sensitive.
+pub const PGSERVICEFILE: &str = "PGSERVICEFILE";
+/// libpq session options; removed during profile verification. Optional string, potentially sensitive.
+pub const PGOPTIONS: &str = "PGOPTIONS";
+/// libpq password; removed during certificate-only verification. Optional secret, no fallback.
+pub const PGPASSWORD: &str = "PGPASSWORD";
+
+/// Enable durable Work. Boolean; defaults to true. Connection-only dev explicitly sets false. Not sensitive.
+pub const GOBLIN_WORK_ENABLED: &str = "GOBLIN_WORK_ENABLED";

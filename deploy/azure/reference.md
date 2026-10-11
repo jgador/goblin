@@ -181,46 +181,12 @@ Outbound internet access is required for downloads and image pulls. The Ubuntu
 24.04 LTS image uses Azure's latest revision. Agent Sandbox extensions are not
 installed. Existing K3s services are reused rather than automatically upgraded.
 
-### Agent Sandbox v1.0.4 upgrade
+### Development installation changes
 
-The [v1.0.4 release](https://github.com/kubernetes-sigs/agent-sandbox/releases/tag/v1.0.4)
-keeps the core Sandbox CRD unchanged from v1.0.3. It adds Kubernetes lifecycle
-events and stops reconciliation after invalid derived Service names. Goblin keeps
-the core-only controller; the optional SDKs, router, sandboxd, and extensions are
-not installed. Existing attempts still use explicit retry, deadlines, and retained
-Sandbox identities and PVCs.
-
-Fresh Azure/local installations use the new pin. Completed installations retain
-their installed controller; changing the checkout, rebuilding Goblin's image, or
-starting the local runner does not upgrade it. The commands below use the
-[short names](../../docs/kubernetes-names.md) and apply to installations already
-using them. Recreate test installations using earlier names; there is no naming
-migration or compatibility layer. From the repository checkout on the VM/WSL host,
-run the following in Bash as root after active repository attempts finish.
-This updates the controller in place without deleting Sandboxes or PVCs.
-
-```bash
-set -euo pipefail
-sandbox_upgrade_dir=$(mktemp -d /tmp/goblin-sandbox-upgrade.XXXXXX)
-curl --fail --silent --show-error --location \
-  https://github.com/kubernetes-sigs/agent-sandbox/releases/download/v1.0.4/sandbox.yaml \
-  --output "$sandbox_upgrade_dir/sandbox.yaml"
-printf 'c4f6344b6f04e450b61c433ce6275f2a45bc30f746b55ce47ade454ffa2a1aa7  %s\n' \
-  "$sandbox_upgrade_dir/sandbox.yaml" | sha256sum --check
-cp deploy/azure/setup/sandbox-kustomization.yaml "$sandbox_upgrade_dir/kustomization.yaml"
-k3s kubectl apply --server-side --dry-run=server --field-manager=goblin-bootstrap -k "$sandbox_upgrade_dir"
-k3s kubectl apply --server-side --field-manager=goblin-bootstrap -k "$sandbox_upgrade_dir"
-k3s kubectl wait --for=condition=Established crd/sandboxes.agents.x-k8s.io --timeout=120s
-k3s kubectl rollout status deployment/sandbox -n sandbox --timeout=300s
-k3s kubectl get deployment sandbox -n sandbox -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
-k3s kubectl get sandboxes,pods -n goblin
-k3s kubectl get sandboxes,pods -n agents
-```
-
-Stop and inspect any apply conflict instead of forcing ownership. Confirm the
-image ends in `:v1.0.4`, Goblin is ready, and a new repository attempt can execute
-and be cancelled/cleaned up while preserving its workspace and identity fence.
-A dry run validates API acceptance, not image pulls or controller/runtime behavior.
+Goblin is preproduction. Recreate development installations when application,
+database, or cluster formats change. New installations use the pinned k3s,
+cert-manager, and Agent Sandbox versions. Azure installation remains manual;
+use the [local reset commands](../local/README.md#stop-resume-or-start-clean) for the owned WSL cluster.
 
 ## Status UI and public URL handoff
 

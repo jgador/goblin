@@ -78,7 +78,8 @@ fi
 
 database_task() {
 stage 'Configuring durable Work storage'
-GOBLIN_POSTGRES_CONFIGURE_APP=false GOBLIN_INSTALL_PROGRESS=true GOBLIN_INSTALL_STATE="$install_dir/status.json" "$GOBLINCTL" --repo /var/lib/goblin/config db setup
+GOBLIN_INSTALL_PROGRESS=true GOBLIN_INSTALL_STATE="$install_dir/status.json" "$GOBLINCTL" db setup
+"$GOBLINCTL" db host
 }
 
 migrate_task() {

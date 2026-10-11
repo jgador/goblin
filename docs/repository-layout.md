@@ -125,7 +125,10 @@ npm run typecheck
 | `make local-status` | Report installation status without changing it |
 | `make local-reset ARGS=--yes` | Explicitly reset only the owned local installation |
 | `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
-| `make dev` | Build, provision the local password on first run, and start the application |
+| `make dev DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
+| `make db-migrate DB_PROFILE=wsl` | Apply SQL migrations with the profile’s admin role |
+| `make db-scaffold DB_PROFILE=wsl` | Regenerate EF mappings with the profile’s app role |
+| `make test-postgres DB_PROFILE=wsl` | Explicitly run the .NET database integration tests |
 | `make setup-password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
 | `make build-assets` | Build only the frontend |
 | `npm --prefix frontend run build` | Run the frontend package build directly |
@@ -172,6 +175,14 @@ test configuration. `make check` adds Rust formatting/lints and type checks. The
 are useful integration/CI gates, not prerequisites for every local edit. Required
 CI checks still apply; scoped local results do not imply that CI ran.
 
+Offline installer tests run as an ordinary user. `make build-tools` builds the
+test-only `host_fixture` Rust example, which calls host configuration with a
+private filesystem, mocked infrastructure commands, and a supplied port probe.
+It is excluded from the shipped CLI archive and application image. The production
+`goblinctl db host` command still requires root and checks the real host port.
+PostgreSQL profile tests include a long configuration path to cover CI checkout
+layouts and SSH tunnel reuse, disconnect, and recovery.
+
 The ordinary HTTP/browser harness uses runtime fixtures. `make test-codex` uses the
 real pinned executable with an isolated home and synthetic credentials, without
 submitting a model task. Neither establishes authenticated execution coverage.
@@ -203,8 +214,8 @@ browser into `frontend/public/assets/`. Codex schemas belong under
 contracts belong to `Goblin.Application/Work`. Browser types describe these public
 Goblin APIs, including `frontend/src/api/contracts.ts` for connection setup. They describe different APIs.
 
-For PostgreSQL setup, SQL changes, and regenerating the EF Core classes after
-adding tables, see the [database guide](database.md).
+The [database guide](database.md) covers PostgreSQL connections, Windows pgAdmin,
+daily development, schema rules, and EF mappings.
 
 The [Work lifecycle](work-lifecycle.md) is used by the live application. Core and
 public contracts are independent of runtime protocols and HTTP. Orchestration

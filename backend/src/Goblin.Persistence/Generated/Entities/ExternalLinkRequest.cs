@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("external_link_requests")]
+[Table("external_link_request")]
 public partial class ExternalLinkRequest
 {
     [Key]

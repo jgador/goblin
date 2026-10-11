@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("connection_model_catalogs")]
-[Index("ConnectionId", Name = "connection_model_catalogs_connection_id_key", IsUnique = true)]
+[Table("connection_model_catalog")]
+[Index("ConnectionId", Name = "connection_model_catalog_connection_id_key", IsUnique = true)]
 public partial class ConnectionModelCatalog
 {
     [Key]

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("github_connections")]
+[Table("github_connection")]
 public partial class GithubConnection
 {
     [Key]
@@ -28,9 +28,9 @@ public partial class GithubConnection
     [InverseProperty("GithubConnection")]
     public virtual ICollection<ExecutionAttempt> ExecutionAttempts { get; set; } = [];
 
-    [InverseProperty("Connection")]
-    public virtual ICollection<GithubRepository> GithubRepositories { get; set; } = [];
-
     [InverseProperty("GithubConnection")]
     public virtual ICollection<GitRepositorySetupMemory> GitRepositorySetupMemories { get; set; } = [];
+
+    [InverseProperty("Connection")]
+    public virtual ICollection<GithubRepository> GithubRepositories { get; set; } = [];
 }

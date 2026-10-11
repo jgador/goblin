@@ -4,8 +4,6 @@
     <IsPublishable>false</IsPublishable>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="../Goblin.Database/appsettings.json" Condition="Exists('../Goblin.Database/appsettings.json')"
-          Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <ProjectReference Include="../../src/Goblin.Persistence/Goblin.Persistence.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">

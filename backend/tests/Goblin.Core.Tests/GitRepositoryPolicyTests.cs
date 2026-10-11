@@ -61,13 +61,8 @@ public sealed class GitRepositoryPolicyTests
     [Fact]
     public void GrantOwnsVersionedApprovalPublicationAndOperationPolicy()
     {
-        GitRepositoryGrant legacy = Grant with { PolicyVersion = 1, AllowPush = false, AllowPullRequest = false };
-        Assert.False(legacy.RequiresApproval());
-        Assert.True(legacy.PublishesChanges());
-        Assert.All(Enum.GetValues<GitRepositoryOperationKind>(), operation => Assert.True(legacy.AllowsOperation(operation)));
-
         GitRepositoryGrant local = Grant with { AllowPush = false, AllowPullRequest = false };
-        Assert.True(local.RequiresApproval());
+        Assert.True(local.HasSupportedPolicy());
         Assert.False(local.PublishesChanges());
         Assert.True(local.AllowsOperation(GitRepositoryOperationKind.Fetch));
         Assert.True(local.AllowsOperation(GitRepositoryOperationKind.Checkpoint));
@@ -80,10 +75,13 @@ public sealed class GitRepositoryPolicyTests
         Assert.False(push.AllowsOperation(GitRepositoryOperationKind.PullRequest));
         Assert.True((push with { AllowPullRequest = true }).AllowsOperation(GitRepositoryOperationKind.PullRequest));
 
-        GitRepositoryGrant unknown = Grant with { PolicyVersion = 3 };
-        Assert.True(unknown.RequiresApproval());
-        Assert.False(unknown.PublishesChanges());
-        Assert.All(Enum.GetValues<GitRepositoryOperationKind>(), operation => Assert.False(unknown.AllowsOperation(operation)));
+        foreach (int version in new[] { 1, 3 })
+        {
+            GitRepositoryGrant unsupported = Grant with { PolicyVersion = version };
+            Assert.False(unsupported.HasSupportedPolicy());
+            Assert.False(unsupported.PublishesChanges());
+            Assert.All(Enum.GetValues<GitRepositoryOperationKind>(), operation => Assert.False(unsupported.AllowsOperation(operation)));
+        }
         Assert.False(Grant.AllowsOperation((GitRepositoryOperationKind)99));
     }
 

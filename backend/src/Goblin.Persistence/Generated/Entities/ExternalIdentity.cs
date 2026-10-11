@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("external_identities")]
-[Index("InstallationId", "WorkspaceId", "UserId", Name = "external_identities_installation_id_workspace_id_user_id_key", IsUnique = true)]
+[Table("external_identity")]
+[Index("InstallationId", "WorkspaceId", "UserId", Name = "external_identity_installation_id_workspace_id_user_id_key", IsUnique = true)]
 public partial class ExternalIdentity
 {
     [Key]

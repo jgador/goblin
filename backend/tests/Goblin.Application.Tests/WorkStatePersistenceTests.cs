@@ -24,6 +24,13 @@ public sealed class WorkStatePersistenceTests
     }
 
     [Fact]
+    public void SnapshotRestorationRejectsMissingAggregateState()
+    {
+        var row = new Persistence.Entities.WorkItem { Id = 11, Objective = "Missing state", State = null! };
+        Assert.Throws<ArgumentNullException>(() => WorkStatePersistence.Snapshot(row));
+    }
+
+    [Fact]
     public void SnapshotRestorationRejectsInvalidAggregateState()
     {
         DateTimeOffset now = new(2026, 10, 9, 0, 0, 0, TimeSpan.Zero);

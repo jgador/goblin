@@ -12,6 +12,7 @@ test("migration retry observes an interrupted job and replaces only a terminal o
     t.after(() => rm(root, { recursive: true, force: true }));
     const bin = join(root, "bin");
     await mkdir(bin);
+    await writeFile(join(bin, "package.json"), '{"type":"commonjs"}\n');
     const image = "localhost/goblin-auth:test";
     const job = JSON.parse(
         execFileSync(goblinctl, ["internal", "migration-job", image], {

@@ -15,14 +15,14 @@ internal static class IdentitySequence
     {
         string sequence = kind switch
         {
-            IdentityKind.Work => "public.work_items_id_seq",
-            IdentityKind.Command => "public.work_commands_id_seq",
-            IdentityKind.Conversation => "public.conversations_id_seq",
-            IdentityKind.Message => "public.conversation_messages_id_seq",
-            IdentityKind.Attempt => "public.execution_attempts_id_seq",
-            IdentityKind.Event => "public.work_event_ids",
-            IdentityKind.Inspection => "public.workspace_sessions_id_seq",
-            IdentityKind.GitRepositoryOperation => "public.repository_operations_id_seq",
+            IdentityKind.Work => "public.work_item_id_seq",
+            IdentityKind.Command => "public.work_command_id_seq",
+            IdentityKind.Conversation => "public.conversation_id_seq",
+            IdentityKind.Message => "public.conversation_message_id_seq",
+            IdentityKind.Attempt => "public.execution_attempt_id_seq",
+            IdentityKind.Event => "public.work_event_id_seq",
+            IdentityKind.Inspection => "public.workspace_session_id_seq",
+            IdentityKind.GitRepositoryOperation => "public.repository_operation_id_seq",
             _ => throw new ArgumentOutOfRangeException(nameof(kind))
         };
         return db.Database.SqlQuery<long>($"SELECT nextval({sequence}::regclass) AS \"Value\"").SingleAsync(token);

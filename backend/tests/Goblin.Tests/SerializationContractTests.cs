@@ -12,14 +12,13 @@ using Api = Goblin.Web.Http.Contracts;
 
 namespace Goblin.Tests;
 
-public sealed class ConstructorCompatibilityTests
+public sealed class SerializationContractTests
 {
-    // Captured at 9de7d83 before changing constructors, with distinct values for
-    // each property. Exact bytes protect command fingerprints as well as JSON shape.
+    // Distinct property values exercise JSON shape, defaults, and command fingerprints.
     public static IEnumerable<object[]> Cases()
     {
-        using Stream stream = typeof(ConstructorCompatibilityTests).Assembly
-            .GetManifestResourceStream("Goblin.Tests.Contracts.constructor-compatibility.json")!;
+        using Stream stream = typeof(SerializationContractTests).Assembly
+            .GetManifestResourceStream("Goblin.Tests.Contracts.serialization-contracts.json")!;
         using JsonDocument document = JsonDocument.Parse(stream);
         foreach (JsonElement entry in document.RootElement.EnumerateArray())
             yield return new object[]
@@ -32,10 +31,9 @@ public sealed class ConstructorCompatibilityTests
 
     [Theory]
     [MemberData(nameof(Cases))]
-    public void ConstructionChangesPreserveSerializedBytes(string name, bool web, string scenario, string input, string expected)
+    public void ContractsHaveExpectedSerializedBytes(string name, bool web, string scenario, string input, string expected)
     {
-        string currentName = name.Replace("Repository", "GitRepository", StringComparison.Ordinal);
-        Type type = Type.GetType(currentName + ", " + string.Join('.', name.Split('.').Take(2)), throwOnError: true)!;
+        Type type = Type.GetType(name + ", " + string.Join('.', name.Split('.').Take(2)), throwOnError: true)!;
         JsonSerializerOptions options = web ? new JsonSerializerOptions(ContractJson.Options) : GitRepositoryJson.CreateOptions();
         object value = JsonSerializer.Deserialize(input, type, options)!;
         string actual = JsonSerializer.Serialize(value, type, options);
@@ -43,8 +41,7 @@ public sealed class ConstructorCompatibilityTests
             $"{name} ({scenario}, Web={web}) changed serialized bytes.\nExpected: {expected}\nActual: {actual}");
         if (web && value is Api.WorkCommand command)
         {
-            // Repository selections intentionally no longer carry a submitted
-            // executable grant. Every other request field keeps its mapping.
+            // Repository selections cannot submit executable grants or requester identity.
             JsonNode mapped = JsonNode.Parse(expected)!;
             if (mapped["repository"] is JsonObject repository)
             {

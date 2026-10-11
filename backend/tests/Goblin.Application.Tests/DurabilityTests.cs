@@ -258,7 +258,7 @@ public sealed partial class DurabilityTests
         settings = restarted.ServiceProvider.GetRequiredService<GitHubStore>();
         work = await fixture.Get(id);
         long rejected = NextId();
-        await fixture.RejectId("work_commands", rejected);
+        await fixture.RejectId("work_command", rejected);
         await Assert.ThrowsAsync<DbUpdateException>(() => fixture.Apply(new(rejected, id, WorkAction.AuthorizeGitRepository)
         {
             ExpectedVersion = work.Version,
@@ -794,7 +794,7 @@ public sealed partial class DurabilityTests
         AssertCheckpoint(saved, Assert.Single(await store.ListAsync(id, default)));
         Assert.Equal(saved.Id, (await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default)).Id);
         await using (GoblinDbContext db = await factory.CreateDbContextAsync())
-            Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='workspace_checkpoints' AND data_type='bytea'").SingleAsync());
+            Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE table_schema='public' AND table_name='workspace_checkpoint' AND data_type='bytea'").SingleAsync());
         Assert.True(await store.VerifiedAsync(saved.Id, attempt, 1, default));
         Assert.False(await store.VerifiedAsync(saved.Id, attempt, 2, default));
         await fixture.RestartAsync();
@@ -1036,17 +1036,24 @@ public sealed partial class DurabilityTests
         await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, unapproved, attempt.Id, default));
         await GitRepositoryAccess.RequireSetupAsync(db, unapproved, attempt.Id, attempt.TurnNumber, default);
         GitRepositoryChange repository = attempt.Target.GitRepository!;
-        var legacy = new WorkSnapshot
+        var unsupportedTarget = new ExecutionTarget(attempt.Target.Runtime, attempt.Target.ConnectionId, attempt.Target.RequestedModel,
+            new(repository.GitRepository, repository.GitAuthorName, repository.GitAuthorEmail,
+                repository.Grant! with { PolicyVersion = 1 }), attempt.Target.RequestedEffort);
+        var unsupportedPolicy = new WorkSnapshot
         {
+            GitRepositoryAuthorization = new(attempt.Id, unsupportedTarget, DateTimeOffset.UtcNow)
+            {
+                Status = GitRepositoryAuthorizationStatus.Authorized
+            },
             Attempts = [new AttemptSnapshot
             {
                 Id = attempt.Id,
-                Target = new(attempt.Target.Runtime, attempt.Target.ConnectionId, attempt.Target.RequestedModel,
-                    new(repository.GitRepository, repository.GitAuthorName, repository.GitAuthorEmail,
-                        repository.Grant! with { PolicyVersion = 1 }), attempt.Target.RequestedEffort)
+                TurnNumber = attempt.TurnNumber,
+                Target = unsupportedTarget
             }]
         };
-        await GitRepositoryAccess.RequireOperationAsync(db, legacy, attempt.Id, default);
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireOperationAsync(db, unsupportedPolicy, attempt.Id, default));
+        await Assert.ThrowsAsync<ApplicationFailure>(() => GitRepositoryAccess.RequireSetupAsync(db, unsupportedPolicy, attempt.Id, attempt.TurnNumber, default));
     }
 
     [DatabaseFact]
@@ -1109,7 +1116,7 @@ public sealed partial class DurabilityTests
         await broker.PrepareAsync(work.Work, default);
         long attempt = work.Work.Attempts[^1].Id;
         long rejected = await broker.ReserveOperationIdAsync(attempt, default);
-        await fixture.RejectId("repository_operations", rejected);
+        await fixture.RejectId("repository_operation", rejected);
         await Assert.ThrowsAsync<DbUpdateException>(() =>
             broker.EnqueueAsync(attempt, rejected, GitRepositoryOperationKind.Checkpoint, new MemoryStream([1, 2, 3]), default));
         using IServiceScope scope = fixture.Host.Services.CreateScope();
@@ -1203,7 +1210,7 @@ public sealed partial class DurabilityTests
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         IdentityStore ids = scope.ServiceProvider.GetRequiredService<IdentityStore>();
         await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
-            await db.Database.ExecuteSqlRawAsync("SELECT setval('public.work_items_id_seq', 9007199254740993, false)");
+            await db.Database.ExecuteSqlRawAsync("SELECT setval('public.work_item_id_seq', 9007199254740993, false)");
         ReservedIdentities[] reservations = await Task.WhenAll(Enumerable.Range(0, 16)
             .Select(_ => ids.ReserveAsync(new([IdentityKind.Work]))));
         long[] values = [.. reservations.Select(x => x.Ids.Single())];
@@ -1338,7 +1345,7 @@ public sealed partial class DurabilityTests
 
         // Fail the database write after dispatch has been published into the
         // transaction, rather than rejecting the command before publishing.
-        await fixture.RejectId("work_commands", rejected);
+        await fixture.RejectId("work_command", rejected);
         await Assert.ThrowsAsync<DbUpdateException>(() => store.ApplyAsync(WorkCommands.Execute(rejected, id, assigned.Version)));
         await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
         {
@@ -1366,7 +1373,7 @@ public sealed partial class DurabilityTests
         using IServiceScope scope = fixture.Host.Services.CreateScope();
         ConversationStore store = scope.ServiceProvider.GetRequiredService<ConversationStore>();
         long conversationId = NextId(), messageId = NextId(), rejectedWork = NextId();
-        await fixture.RejectId("work_items", rejectedWork);
+        await fixture.RejectId("work_item", rejectedWork);
         await Assert.ThrowsAsync<DbUpdateException>(() => store.ApplyAsync(new(conversationId, messageId, "Track this conversation", rejectedWork)));
         await using (GoblinDbContext db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>().CreateDbContextAsync())
         {
@@ -1792,7 +1799,7 @@ public sealed partial class DurabilityTests
             string? repo = Environment.CurrentDirectory;
             while (repo is not null && !Directory.Exists(Path.Combine(repo, ".git"))) repo = Path.GetDirectoryName(repo);
             if (repo is null) throw new InvalidOperationException("Repository directory not found");
-            var fixture = new Fixture(app.ConnectionString, name, Path.Combine(repo, ".artifacts", "durability-tests", name), catalog);
+            var fixture = new Fixture(app.ConnectionString, name, Path.Combine(repo, ".artifacts", "postgres-singular", "durability-tests", name), catalog);
             await fixture.StartAsync();
             using IServiceScope scope = fixture.Host.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<ConnectionStore>().ObserveAvailabilityAsync(ConnectionStore.DefaultConnectionId, Goblin.Contracts.ConnectionAvailability.Available);
@@ -1818,7 +1825,15 @@ public sealed partial class DurabilityTests
             builder.Services.AddSingleton(new GitRepositoryBrokerOptions(Path.Combine(_directory, "repositories")));
             builder.Services.AddSingleton<GitRepositoryBroker>();
             builder.Services.AddSingleton<IDispatchFailureJournal>(new FileDispatchFailureJournal(_directory));
-            builder.UseWolverine(o => ApplicationServices.ConfigureMessaging(o, _app, inspectionEnabled: true));
+            builder.UseWolverine(o =>
+            {
+                ApplicationServices.ConfigureMessaging(o, _app, inspectionEnabled: true);
+                o.Discovery.IncludeType(typeof(StorageTransactionHandler));
+                o.Discovery.IncludeType(typeof(StorageConsumedHandler));
+                o.LocalQueue("storage-test").UseDurableInbox();
+                o.PublishMessage<StorageTransaction>().ToLocalQueue("storage-test");
+                o.PublishMessage<StorageConsumed>().ToLocalQueue("storage-test");
+            });
             Host = builder.Build();
             await Host.StartAsync();
         }

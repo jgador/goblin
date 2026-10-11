@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("work_items")]
-[Index("UpdatedAt", "Id", Name = "work_items_updated", IsDescending = new[] { true, false })]
+[Table("work_item")]
+[Index("UpdatedAt", "Id", Name = "work_item_updated", IsDescending = new[] { true, false })]
 public partial class WorkItem
 {
     [Key]
@@ -18,7 +18,7 @@ public partial class WorkItem
     public string Objective { get; set; } = null!;
 
     [Column("state", TypeName = "jsonb")]
-    public string? State { get; set; }
+    public string State { get; set; } = null!;
 
     [Column("version")]
     public long Version { get; set; }

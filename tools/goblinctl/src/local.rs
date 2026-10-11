@@ -1,6 +1,6 @@
 //! Ownership-scoped administration of the dedicated Ubuntu/WSL installation.
-use crate::assets;
 use crate::credentials;
+use crate::database_host;
 use crate::environment;
 use crate::files;
 use crate::install;
@@ -169,22 +169,13 @@ impl Local {
     }
     pub fn prepare_password(&self) -> Result<PathBuf> {
         let path = self.password();
-        let legacy = self.state().join("login-password");
         if !path.exists() && !path.is_symlink() {
             let retained = self.path("var/lib/goblin/install/private/owner-password");
             if retained.exists() {
                 credentials::save(&path, &credentials::read(&retained)?)?;
-            } else if legacy.exists() {
-                files::reject_symlinks(&legacy)?;
-                let text = fs::read_to_string(&legacy)?;
-                credentials::save(
-                    &path,
-                    &credentials::hash(text.strip_suffix('\n').unwrap_or(&text))?,
-                )?;
             }
         }
         credentials::ensure(&path, false)?;
-        files::remove_file(&legacy)?;
         Ok(path)
     }
     pub fn configure_forwarder(&self, config: &Value) -> Result<()> {
@@ -202,87 +193,12 @@ impl Local {
         systemctl(&["daemon-reload"])?;
         systemctl(&["enable", "--now", "goblin-local.socket"])
     }
-    pub fn configure_database(
-        &self,
-        config: &mut Value,
-        requested_port: Option<u16>,
-    ) -> Result<()> {
-        let port =
-            requested_port.unwrap_or(config["postgres_port"].as_u64().unwrap_or(55432) as u16);
+    pub fn configure_database(&self, config: &Value) -> Result<()> {
         ensure!(
-            port >= 1024 && config["http_port"] != port,
-            "Choose a database port between 1024 and 65535, different from the browser port."
+            config["http_port"] != 5432,
+            "The browser occupies PostgreSQL port 5432"
         );
-        ensure!(
-            active("k3s.service"),
-            "Start the local cluster first: goblinctl local start."
-        );
-        ensure!(
-            config.get("postgres_port").is_some()
-                || ![DATABASE_SOCKET, DATABASE_SERVICE]
-                    .iter()
-                    .any(|u| self.unit(u).exists()),
-            "Database forwarding units already exist outside this runner; refusing to replace them."
-        );
-        if config["postgres_port"] != port || !active(DATABASE_SOCKET) {
-            for address in ["127.0.0.1", "::1"] {
-                TcpListener::bind((address, port)).with_context(|| format!("Local port {port} is occupied. Stop its existing port-forward or choose another port."))?;
-            }
-        }
-        files::run(
-            kubectl()
-                .args(["get", "statefulset", "goblin-postgres", "-n", "goblin"])
-                .stdout(Stdio::null()),
-        )?;
-        files::input(
-            kubectl().args(["apply", "-f", "-"]),
-            assets::POSTGRES_SERVICE,
-        )?;
-        let address: Ipv4Addr = files::output(kubectl().args([
-            "get",
-            "service",
-            "goblin-postgres-local",
-            "-n",
-            "goblin",
-            "-o",
-            "jsonpath={.spec.clusterIP}",
-        ]))?
-        .trim()
-        .parse()
-        .context("The local PostgreSQL service has no usable IPv4 cluster address.")?;
-        let units = [
-            (
-                DATABASE_SOCKET,
-                socket_unit("Goblin local PostgreSQL port", port),
-            ),
-            (
-                DATABASE_SERVICE,
-                format!(
-                    "[Unit]\nDescription=Forward local PostgreSQL clients to the Kubernetes service\nRequires={DATABASE_SOCKET} k3s.service\nAfter=network.target k3s.service\n[Service]\nExecStart=/usr/lib/systemd/systemd-socket-proxyd {address}:5432\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
-                ),
-            ),
-        ];
-        if units
-            .iter()
-            .any(|(name, text)| fs::read_to_string(self.unit(name)).ok().as_ref() != Some(text))
-        {
-            for (name, _) in &units {
-                if self.unit(name).exists() {
-                    systemctl(&["stop", name])?;
-                }
-            }
-            for (name, text) in &units {
-                files::atomic_write(&self.unit(name), text.as_bytes(), 0o644, false)?;
-            }
-        }
-        config["postgres_port"] = json!(port);
-        files::write_json(&self.owner(), config, 0o600)?;
-        systemctl(&["daemon-reload"])?;
-        systemctl(&["enable", "--now", DATABASE_SOCKET])?;
-        println!(
-            "PostgreSQL is available at localhost:{port}; local access runs in the background. No kubectl port-forward is needed."
-        );
-        Ok(())
+        database_host::configure(&self.system)
     }
     fn prepare(&self, config: &Value) -> Result<String> {
         println!("Preparing the installation page and current source checkout…");
@@ -326,7 +242,6 @@ impl Local {
             Some(self.prepare(&config)?)
         };
         if complete {
-            self.migrate_legacy_tooling()?;
             self.configure_forwarder(&config)?;
             let state = self.status()?;
             if self.unit("k3s.service").exists() {
@@ -374,7 +289,7 @@ impl Local {
                 ]))?;
                 files::atomic_write(&retained, verifier.as_bytes(), 0o600, false)?;
             }
-            if config.get("postgres_port").is_some() {
+            if self.unit(DATABASE_SOCKET).exists() {
                 systemctl(&["enable", "--now", DATABASE_SOCKET])?;
             }
             if let Some(state) = state
@@ -446,27 +361,6 @@ impl Local {
             );
         }
         Ok(())
-    }
-    fn migrate_legacy_tooling(&self) -> Result<()> {
-        if !self.path("opt/goblin/setup/goblin-setup.pyz").exists() {
-            return Ok(());
-        }
-        // A local installation may predate the native CLI. Preserve its progress,
-        // source archive and credentials while replacing only the operational tools.
-        if self.unit("goblin-installer.service").exists() {
-            systemctl(&["stop", "goblin-installer.service"])?;
-        }
-        let lock = fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(self.path("var/lib/goblin/install/installer.lock"))?;
-        lock.lock_exclusive()?;
-        if self.unit("goblin-setup.service").exists() {
-            systemctl(&["stop", "goblin-setup.service"])?;
-        }
-        install::activate_tooling(&self.system, &std::env::current_exe()?)?;
-        files::remove_file(&self.path("opt/goblin/local/forward.py"))?;
-        systemctl(&["daemon-reload"])
     }
     pub fn retry(&self) -> Result<()> {
         let config = self.owned_config()?;
@@ -569,15 +463,10 @@ impl Local {
         if override_dir.exists() && fs::read_dir(&override_dir)?.next().is_none() {
             fs::remove_dir(override_dir)?;
         }
-        for p in ["var/lib/goblin", "opt/goblin/setup", "opt/goblin/local"] {
+        for p in ["var/lib/goblin", "opt/goblin/setup"] {
             remove_tree(&self.path(p))?;
         }
-        for name in [
-            "source.tar.gz",
-            "bootstrap.sh",
-            "bootstrap.log",
-            "login-password",
-        ] {
+        for name in ["source.tar.gz", "bootstrap.sh", "bootstrap.log"] {
             files::remove_file(&self.state().join(name))?;
         }
         for name in [

@@ -2,12 +2,14 @@ pub mod assets;
 pub mod contract_values;
 pub mod credentials;
 pub mod database;
+pub mod database_host;
 pub mod deployment;
 pub mod environment;
 pub mod files;
 pub mod install;
 pub mod local;
 pub mod operations;
+pub mod postgres;
 pub mod progress;
 pub mod setup;
 

@@ -78,7 +78,7 @@ public sealed class CertificateTests
     [PostgresCertificateFact]
     public async Task UntrustedServerCertificateIsRejected()
     {
-        string directory = Path.Combine(Path.GetTempPath(), "goblin-untrusted-ca-" + Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(PostgresTests.ArtifactDirectory, "untrusted-ca-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {

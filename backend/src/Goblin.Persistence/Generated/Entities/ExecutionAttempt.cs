@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("execution_attempts")]
-[Index("Status", "UpdatedAt", Name = "attempts_recovery")]
+[Table("execution_attempt")]
+[Index("Status", "UpdatedAt", Name = "execution_attempt_recovery")]
 public partial class ExecutionAttempt
 {
     [Key]
@@ -64,15 +64,15 @@ public partial class ExecutionAttempt
     [InverseProperty("ExecutionAttempt")]
     public virtual Connection Connection { get; set; } = null!;
 
-    [ForeignKey("GithubConnectionId")]
-    [InverseProperty("ExecutionAttempts")]
-    public virtual GithubConnection? GithubConnection { get; set; }
-
     [InverseProperty("Attempt")]
     public virtual GitRepositoryOperation? GitRepositoryOperation { get; set; }
 
     [InverseProperty("Attempt")]
     public virtual ICollection<GitRepositorySetupMemory> GitRepositorySetupMemories { get; set; } = [];
+
+    [ForeignKey("GithubConnectionId")]
+    [InverseProperty("ExecutionAttempts")]
+    public virtual GithubConnection? GithubConnection { get; set; }
 
     [ForeignKey("WorkId")]
     [InverseProperty("ExecutionAttempts")]

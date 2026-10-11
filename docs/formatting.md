@@ -46,7 +46,8 @@ the same rules without writing files.
 
 When C# files change, the hook runs `dotnet format whitespace` and `dotnet format
 style --severity info` on `backend/Goblin.slnx`, excluding generated protocol types
-and EF mappings.
+and EF mappings. Wolverine integrations are ordinary NuGet dependencies and
+have no source in the formatting scope.
 The style pass excludes `IDE0130` and `IDE1006`, as recorded in the
 [generated C# formatting audit](generated-csharp-formatting.md).
 

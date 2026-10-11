@@ -6,6 +6,8 @@ use clap::Subcommand;
 use goblinctl::credentials;
 use goblinctl::environment;
 use goblinctl::files;
+use goblinctl::postgres::Access;
+use goblinctl::postgres::Store;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -32,7 +34,12 @@ enum Task {
         command: dependencies::Task,
     },
     /// Launch the development app after preparing credentials.
-    Dev,
+    Dev {
+        #[arg(long, default_value = "wsl")]
+        profile: String,
+        #[arg(long)]
+        without_database: bool,
+    },
     /// Package an already-built native binary deterministically.
     Package {
         #[arg(long)]
@@ -54,8 +61,21 @@ enum Task {
     },
     /// Normalize EF's generated C# line endings and UTF-8 BOM.
     NormalizeEf,
-    /// Run opt-in persistence tests using the private local tooling settings.
-    TestPostgres,
+    /// Run opt-in database tests against the selected development installation.
+    TestPostgres {
+        #[arg(long, default_value = "wsl")]
+        profile: String,
+    },
+    /// Apply local SQL migrations through a selected profile.
+    DatabaseMigrate {
+        #[arg(long, default_value = "wsl")]
+        profile: String,
+    },
+    /// Regenerate EF mappings through a selected profile.
+    DatabaseScaffold {
+        #[arg(long, default_value = "wsl")]
+        profile: String,
+    },
 }
 fn main() {
     if let Err(e) = execute() {
@@ -72,7 +92,20 @@ fn execute() -> Result<()> {
     std::env::set_current_dir(root)?;
     match Cli::parse().command {
         Task::Dependencies { command } => dependencies::execute(root, command),
-        Task::Dev => credentials::dev(root),
+        Task::Dev {
+            profile,
+            without_database,
+        } => {
+            let client = if without_database
+                || std::env::var(environment::GOBLIN_WORK_ENABLED)
+                    .is_ok_and(|v| v.eq_ignore_ascii_case("false"))
+            {
+                None
+            } else {
+                Some(Store::user()?.connect(&profile, None, None, Access::App)?)
+            };
+            credentials::dev(root, client.as_ref())
+        }
         Task::Package {
             binary,
             target,
@@ -84,25 +117,35 @@ fn execute() -> Result<()> {
             azure::generate(root, &output, "0.0.0-preview.1", source.trim())
         }
         Task::NormalizeEf => normalize(Path::new("backend/src/Goblin.Persistence/Generated")),
-        Task::TestPostgres => {
-            let settings =
-                files::json(Path::new("backend/tools/Goblin.Database/appsettings.json"))?;
-            files::run(
-                Command::new("dotnet")
-                    .args(["test", "backend/tests/Goblin.Persistence.Tests"])
-                    .env(
-                        environment::GOBLIN_TEST_POSTGRES_ADMIN,
-                        settings["ConnectionStrings"]["GoblinAdmin"]
-                            .as_str()
-                            .context("Missing administrator connection")?,
-                    )
-                    .env(
-                        environment::GOBLIN_TEST_POSTGRES_APP,
-                        settings["ConnectionStrings"]["Goblin"]
-                            .as_str()
-                            .context("Missing application connection")?,
-                    ),
-            )
+        Task::TestPostgres { profile } => {
+            let client = Store::user()?.connect(&profile, None, None, Access::Both)?;
+            let mut command = Command::new("dotnet");
+            command.args(["test", "backend/Goblin.slnx"]);
+            client.configure_tests(&mut command, Access::Both);
+            files::run(&mut command)
+        }
+        Task::DatabaseMigrate { profile } => {
+            let client = Store::user()?.connect(&profile, None, None, Access::Admin)?;
+            let mut command = Command::new("dotnet");
+            command.args([
+                "run",
+                "--project",
+                "backend/tools/Goblin.Database",
+                "--",
+                "apply",
+                "backend/database/migrations",
+            ]);
+            client.configure(&mut command, Access::Admin);
+            files::run(&mut command)
+        }
+        Task::DatabaseScaffold { profile } => {
+            let client = Store::user()?.connect(&profile, None, None, Access::App)?;
+            let mut command = Command::new("bash");
+            command
+                .arg("backend/scripts/scaffold-database.sh")
+                .arg("--configured");
+            client.configure(&mut command, Access::App);
+            files::run(&mut command)
         }
     }
 }

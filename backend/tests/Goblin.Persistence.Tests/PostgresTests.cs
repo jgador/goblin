@@ -1,6 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Database;
 using Goblin.Persistence;
 using Goblin.Persistence.Entities;
@@ -26,6 +29,8 @@ public sealed class PostgresFactAttribute : FactAttribute
 
 public sealed class PostgresTests
 {
+    internal static string ArtifactDirectory => TestDatabase.Artifacts;
+
     [PostgresFact]
     public async Task WorkItemRoundTripUsesTheApplicationRoleAndSeparateContexts()
     {
@@ -34,13 +39,14 @@ public sealed class PostgresTests
         const string objective = "Persist café 🧌 and 'quoted' text";
         await using (GoblinDbContext write = await database.ContextFactory.CreateDbContextAsync())
         {
-            write.WorkItems.Add(new WorkItem { Id = id, Objective = objective });
+            write.WorkItems.Add(new WorkItem { Id = id, Objective = objective, State = WorkState(id, objective) });
             await write.SaveChangesAsync();
         }
         await using (GoblinDbContext read = await database.ContextFactory.CreateDbContextAsync())
         {
             WorkItem item = await read.WorkItems.SingleAsync(x => x.Id == id);
             Assert.Equal(objective, item.Objective);
+            Assert.Equal(id, JsonSerializer.Deserialize<Core.Work.WorkSnapshot>(item.State, ContractJson.Options)!.Id);
             item.Objective = "Updated objective";
             await read.SaveChangesAsync();
         }
@@ -54,6 +60,18 @@ public sealed class PostgresTests
     }
 
     [PostgresFact]
+    public async Task WorkItemsRequirePersistedAggregateState()
+    {
+        await using TestDatabase database = await TestDatabase.CreateAsync();
+        await using var connection = new NpgsqlConnection(database.AppConnection);
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("INSERT INTO public.work_item (objective) VALUES ('Missing state');", connection);
+        PostgresException error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+        Assert.Equal(PostgresErrorCodes.NotNullViolation, error.SqlState);
+        Assert.Equal("state", error.ColumnName);
+    }
+
+    [PostgresFact]
     public async Task ApplicationRoleCannotChangeTheSchemaOrMigrationJournal()
     {
         await using TestDatabase database = await TestDatabase.CreateAsync();
@@ -62,10 +80,12 @@ public sealed class PostgresTests
         foreach (string sql in new[]
         {
             "CREATE TABLE public.forbidden (id integer);",
-            "DROP TABLE public.work_items;",
+            "DROP TABLE public.work_item;",
             "DROP TABLE public.wolverine_incoming_envelopes;",
-            "SELECT * FROM public.schema_migrations;",
-            "DELETE FROM public.schema_migrations;"
+            "SELECT * FROM public.schema_migration;",
+            "DELETE FROM public.schema_migration;",
+            "SELECT nextval('public.schema_migration_id_seq');",
+            "SELECT last_value FROM public.schema_migration_id_seq;"
         })
         {
             await using var command = new NpgsqlCommand(sql, connection);
@@ -78,7 +98,7 @@ public sealed class PostgresTests
     public async Task MigrationsAreRepeatableDetectEditsAndRollBackFailedDdl()
     {
         await using TestDatabase database = await TestDatabase.CreateAsync();
-        string directory = Path.Combine(Path.GetTempPath(), "goblin-migrations-" + Guid.NewGuid().ToString("N"));
+        string directory = Path.Combine(TestDatabase.Artifacts, "migrations-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         try
         {
@@ -129,9 +149,9 @@ public sealed class PostgresTests
         await using var app = new NpgsqlConnection(database.AppConnection);
         await app.OpenAsync();
         await using (var seed = new NpgsqlCommand("""
-            INSERT INTO public.work_items (id, objective)
-                VALUES (2147483648, 'Finish cleanup');
-            INSERT INTO public.execution_attempts
+            INSERT INTO public.work_item (id, objective, state)
+                VALUES (2147483648, 'Finish cleanup', @state);
+            INSERT INTO public.execution_attempt
                 (id, work_id, agent_id, connection_id, runtime, status, queued_at, updated_at, cleanup_pending)
                 VALUES (2147483648,
                     2147483648,
@@ -140,7 +160,10 @@ public sealed class PostgresTests
             INSERT INTO public.wolverine_incoming_envelopes (id, status, owner_id, body, message_type)
                 VALUES ('30000000-0000-0000-0000-000000000001', 'Incoming', 0, decode('010203', 'hex'), 'DispatchWork');
             """, app))
+        {
+            seed.Parameters.AddWithValue("state", NpgsqlTypes.NpgsqlDbType.Jsonb, WorkState(2147483648, "Finish cleanup"));
             await seed.ExecuteNonQueryAsync();
+        }
 
         await using GoblinDbContext db = await database.ContextFactory.CreateDbContextAsync();
         Assert.True((await db.ExecutionAttempts.SingleAsync()).CleanupPending);
@@ -152,22 +175,138 @@ public sealed class PostgresTests
             Assert.Equal(2, await sequence.ExecuteScalarAsync());
         }
         await using (var duplicate = new NpgsqlCommand("""
-            INSERT INTO public.execution_attempts
+            INSERT INTO public.execution_attempt
                 (id, work_id, agent_id, connection_id, runtime, status, queued_at, updated_at)
             SELECT 2147483649, work_id, agent_id,
-                connection_id, runtime, 'Starting', queued_at, updated_at FROM public.execution_attempts;
+                connection_id, runtime, 'Starting', queued_at, updated_at FROM public.execution_attempt;
             """, app))
         {
             PostgresException conflict = await Assert.ThrowsAsync<PostgresException>(() => duplicate.ExecuteNonQueryAsync());
             Assert.Equal(PostgresErrorCodes.UniqueViolation, conflict.SqlState);
             Assert.Equal("one_execution_per_connection", conflict.ConstraintName);
         }
-        await using (var orphan = new NpgsqlCommand("UPDATE public.execution_attempts SET work_id = 2147483649;", app))
+        await using (var orphan = new NpgsqlCommand("UPDATE public.execution_attempt SET work_id = 2147483649;", app))
         {
             PostgresException conflict = await Assert.ThrowsAsync<PostgresException>(() => orphan.ExecuteNonQueryAsync());
             Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, conflict.SqlState);
         }
     }
+
+    [PostgresFact]
+    public async Task FreshCatalogContainsExactlySingularGoblinAndNativeWolverineObjects()
+    {
+        await using TestDatabase database = await TestDatabase.CreateAsync();
+        await using var admin = new NpgsqlConnection(database.AdminConnection);
+        await admin.OpenAsync();
+        string[] expected =
+        [
+            "agent", "connection", "connection_model_catalog", "conversation", "conversation_message",
+            "execution_attempt", "external_conversation", "external_identity", "external_link_request",
+            "external_message", "github_connection", "github_repository", "repository_operation",
+            "repository_setup_memory", "schema_migration", "wolverine_agent_restrictions",
+            "wolverine_control_queue", "wolverine_dead_letters", "wolverine_incoming_envelopes",
+            "wolverine_node_assignments", "wolverine_node_records", "wolverine_nodes",
+            "wolverine_outgoing_envelopes", "work_command", "work_item", "workspace_checkpoint", "workspace_session"
+        ];
+        await using (var tables = new NpgsqlCommand("SELECT array_agg(tablename::text ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public'", admin))
+            Assert.Equal(expected, (string[])(await tables.ExecuteScalarAsync())!);
+        // An exact catalog excludes every old table name and any added compatibility table.
+        await using (var views = new NpgsqlCommand("SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('v', 'm')", admin))
+            Assert.Equal(0L, await views.ExecuteScalarAsync());
+        foreach (string table in expected)
+        {
+            await using var keys = new NpgsqlCommand("""
+                SELECT a.atttypid::regtype::text, con.conname
+                FROM pg_constraint con JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = ANY(con.conkey)
+                WHERE con.conrelid = ('public.' || @table)::regclass AND con.contype = 'p'
+                """, admin);
+            keys.Parameters.AddWithValue("table", table);
+            await using NpgsqlDataReader row = await keys.ExecuteReaderAsync();
+            Assert.True(await row.ReadAsync());
+            string type = table == "wolverine_node_records" ? "integer" : table == "wolverine_node_assignments" ? "character varying" : table.StartsWith("wolverine_", StringComparison.Ordinal) ? "uuid" : "bigint";
+            Assert.Equal(type, row.GetString(0));
+            Assert.Equal(table.StartsWith("wolverine_", StringComparison.Ordinal) ? "pkey_" + table + "_id" : table + "_pkey", row.GetString(1));
+            Assert.False(await row.ReadAsync());
+        }
+        foreach (string table in expected)
+        {
+            if (table == "github_repository" || table.StartsWith("wolverine_", StringComparison.Ordinal)) continue;
+            await using var sequence = new NpgsqlCommand("SELECT pg_get_serial_sequence('public.' || @table, 'id')", admin);
+            sequence.Parameters.AddWithValue("table", table);
+            Assert.Equal("public." + table + "_id_seq", await sequence.ExecuteScalarAsync());
+        }
+        await using (var identities = new NpgsqlCommand("""
+            SELECT count(*) FROM pg_attribute a JOIN pg_class t ON t.oid = a.attrelid
+            JOIN pg_namespace n ON n.oid = t.relnamespace
+            WHERE n.nspname = 'public' AND t.relkind = 'r' AND t.relname NOT LIKE 'wolverine_%'
+              AND a.attname = 'id' AND a.attidentity <> CASE WHEN t.relname = 'github_repository' THEN '' ELSE 'd' END
+            """, admin))
+            Assert.Equal(0L, await identities.ExecuteScalarAsync());
+        foreach ((string table, string column, string sequence) in new[]
+        {
+            ("wolverine_node_records", "id", "wolverine_node_records_id_seq"),
+            ("wolverine_nodes", "node_number", "wolverine_nodes_node_number_seq")
+        })
+        {
+            await using var owned = new NpgsqlCommand("SELECT pg_get_serial_sequence('public.' || @table, @column), pg_get_expr(adbin, adrelid), (SELECT seqtypid::regtype::text FROM pg_sequence WHERE seqrelid = pg_get_serial_sequence('public.' || @table, @column)::regclass) FROM pg_attrdef WHERE adrelid = ('public.' || @table)::regclass AND adnum = (SELECT attnum FROM pg_attribute WHERE attrelid = ('public.' || @table)::regclass AND attname = @column)", admin);
+            owned.Parameters.AddWithValue("table", table);
+            owned.Parameters.AddWithValue("column", column);
+            await using NpgsqlDataReader row = await owned.ExecuteReaderAsync();
+            Assert.True(await row.ReadAsync());
+            Assert.Equal("public." + sequence, row.GetString(0));
+            Assert.Contains(sequence, row.GetString(1), StringComparison.Ordinal);
+            Assert.Equal("integer", row.GetString(2));
+        }
+        string[] expectedSequences = [.. expected
+            .Where(table => table != "github_repository" && !table.StartsWith("wolverine_", StringComparison.Ordinal))
+            .Select(table => table + "_id_seq")
+            .Concat(["work_event_id_seq", "wolverine_node_records_id_seq", "wolverine_nodes_node_number_seq"])
+            .Order(StringComparer.Ordinal)];
+        await using (var sequences = new NpgsqlCommand("SELECT array_agg(sequencename::text ORDER BY sequencename) FROM pg_sequences WHERE schemaname = 'public'", admin))
+            Assert.Equal(expectedSequences, (string[])(await sequences.ExecuteScalarAsync())!);
+        await using (var independent = new NpgsqlCommand("""
+            SELECT seqtypid::regtype::text, EXISTS (SELECT 1 FROM pg_depend WHERE objid = seqrelid AND deptype IN ('a', 'i'))
+            FROM pg_sequence WHERE seqrelid = 'public.work_event_id_seq'::regclass
+            """, admin))
+        await using (NpgsqlDataReader row = await independent.ExecuteReaderAsync())
+        {
+            Assert.True(await row.ReadAsync());
+            Assert.Equal("bigint", row.GetString(0));
+            Assert.False(row.GetBoolean(1));
+        }
+        await using (var constraints = new NpgsqlCommand("SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid = c.connamespace JOIN pg_class t ON t.oid = c.conrelid WHERE n.nspname = 'public' AND c.contype = 'f' AND c.conname NOT LIKE t.relname || '_%' AND c.conname NOT LIKE 'fkey_wolverine_node_assignments_%'", admin))
+            Assert.Equal(0L, await constraints.ExecuteScalarAsync());
+        await using (var assignment = new NpgsqlCommand("""
+            SELECT conname, confrelid::regclass::text, confdeltype::text
+            FROM pg_constraint WHERE conrelid = 'public.wolverine_node_assignments'::regclass AND contype = 'f'
+            """, admin))
+        await using (NpgsqlDataReader row = await assignment.ExecuteReaderAsync())
+        {
+            Assert.True(await row.ReadAsync());
+            Assert.Equal("fkey_wolverine_node_assignments_node_id", row.GetString(0));
+            Assert.Equal("wolverine_nodes", row.GetString(1));
+            Assert.Equal("c", row.GetString(2));
+            Assert.False(await row.ReadAsync());
+        }
+        await using (var indexes = new NpgsqlCommand("SELECT array_agg(indexname::text ORDER BY indexname) FROM pg_indexes WHERE schemaname = 'public' AND indexname LIKE 'idx_wolverine_%'", admin))
+            Assert.Equal(new[]
+            {
+                "idx_wolverine_dead_letters_replayable", "idx_wolverine_incoming_envelopes_keep_until",
+                "idx_wolverine_incoming_envelopes_owner", "idx_wolverine_incoming_envelopes_recover",
+                "idx_wolverine_outgoing_envelopes_owner", "idx_wolverine_outgoing_envelopes_recover"
+            }, (string[])(await indexes.ExecuteScalarAsync())!);
+        await using (var seeds = new NpgsqlCommand("SELECT nextval('public.connection_id_seq'), nextval('public.agent_id_seq'), nextval('public.github_connection_id_seq')", admin))
+        await using (NpgsqlDataReader row = await seeds.ExecuteReaderAsync())
+        {
+            Assert.True(await row.ReadAsync());
+            Assert.Equal(2L, row.GetInt64(0));
+            Assert.Equal(2L, row.GetInt64(1));
+            Assert.Equal(2L, row.GetInt64(2));
+        }
+    }
+
+    private static string WorkState(long id, string objective) =>
+        JsonSerializer.Serialize(new Core.Work.WorkItem(id, objective, DateTimeOffset.UtcNow).Snapshot(), ContractJson.Options);
 
     private sealed class TestDatabase : IAsyncDisposable
     {
@@ -180,6 +319,16 @@ public sealed class PostgresTests
             AdminConnection = adminConnection;
             AppConnection = appConnection;
             _services = new ServiceCollection().AddGoblinPersistence(appConnection).BuildServiceProvider(validateScopes: true);
+        }
+
+        public static string Artifacts
+        {
+            get
+            {
+                string? root = Environment.CurrentDirectory;
+                while (root is not null && !File.Exists(Path.Combine(root, "AGENTS.md"))) root = Path.GetDirectoryName(root);
+                return Path.Combine(root ?? throw new InvalidOperationException("Repository root not found."), ".artifacts", "postgres-singular", "persistence-tests");
+            }
         }
 
         public static string Migrations => Path.Combine(AppContext.BaseDirectory, "migrations");

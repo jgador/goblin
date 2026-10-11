@@ -88,8 +88,7 @@ references with empty strings/collections would change that behavior. Non-null
 defaults such as grant policy version and attempt turn/workspace values remain
 explicit. This convention does not authorize partially populated live domain state.
 
-The constructor compatibility fixture was captured before these signature changes
-at `9de7d83`. Its 114 cases cover all 19 types under default and Web JSON policies,
+The serialization contract fixture covers 19 types under default and Web JSON policies,
 including populated, omitted, and explicit-null values. Exact serialized-string
 checks protect property order and command fingerprints. Mapping fixtures use
 distinct values, and Core tests cover restored grant equality and captured turn

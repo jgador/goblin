@@ -2,15 +2,16 @@
 use crate::azure;
 use crate::goblin_release::Channel;
 use crate::goblin_release::Check;
-use crate::goblin_release::Record;
 use crate::goblin_release::Version;
 use crate::release;
+use anyhow::Context;
 use anyhow::Result;
 use anyhow::ensure;
 use goblinctl::files;
 use goblinctl::install;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -52,32 +53,6 @@ pub(crate) struct Candidate {
     pub deployment_checks: Check,
 }
 
-impl Candidate {
-    // Share the established Azure contract and historical record verifier.
-    pub(crate) fn record(&self) -> Record {
-        Record {
-            schema_version: 1,
-            version: self.version.clone(),
-            channel: self.channel,
-            source_revision: self.source.revision.clone(),
-            installer: self.installer.clone(),
-            run_id: self.run_id.clone(),
-            run_attempt: self.run_attempt.clone(),
-            assets: self
-                .assets
-                .iter()
-                .filter(|(name, _)| azure::ASSETS.contains(&name.as_str()))
-                .map(|(name, hash)| (name.clone(), hash.clone()))
-                .collect(),
-            deployment_checks: self.deployment_checks,
-        }
-    }
-}
-
-pub(crate) fn coordinated(directory: &Path) -> Result<bool> {
-    Ok(files::json(&directory.join("release.json"))?["schemaVersion"] == 2)
-}
-
 fn checksums(directory: &Path, candidate: &Candidate) -> Result<String> {
     let mut sums = candidate.assets.clone();
     sums.insert(
@@ -111,12 +86,27 @@ pub(crate) fn validate(directory: &Path) -> Result<Candidate> {
         candidate.schema_version == 2,
         "Expected coordinated candidate schema 2"
     );
+    let version = Version::parse(&candidate.version)?;
+    ensure!(
+        version.preview.is_some() == (candidate.channel == Channel::Preview),
+        "Release channel mismatch"
+    );
+    for id in [&candidate.run_id, &candidate.run_attempt] {
+        ensure!(
+            !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()),
+            "Invalid workflow identity"
+        );
+    }
     let line = crate::preparation::line(&candidate.source.branch)?;
     ensure!(
         Version::parse(&candidate.version)?.base[..2] == line,
         "Candidate version belongs to another release line"
     );
-    for revision in [&candidate.source.branch_tip, &candidate.workflow_revision] {
+    for revision in [
+        &candidate.source.revision,
+        &candidate.source.branch_tip,
+        &candidate.workflow_revision,
+    ] {
         ensure!(
             revision.len() == 40
                 && revision
@@ -152,7 +142,30 @@ pub(crate) fn validate(directory: &Path) -> Result<Candidate> {
             "Candidate asset changed: {name}"
         );
     }
-    crate::goblin_release::validate_assets(directory, &candidate.record())?;
+    for name in &azure::ASSETS[..2] {
+        let template = files::json(&directory.join(name))?;
+        ensure!(
+            template["parameters"]["goblinSourceRef"]["defaultValue"] == candidate.source.revision
+                && template["parameters"]["goblinSourceRef"]["allowedValues"]
+                    == json!([candidate.source.revision])
+                && template["metadata"]["goblin"]
+                    == json!({"version":candidate.version,"sourceRevision":candidate.source.revision,"installerVersion":candidate.installer.version,"installerSha256":candidate.installer.sha256}),
+            "Template does not identify the release"
+        );
+    }
+    let ui = files::json(&directory.join(azure::ASSETS[2]))?;
+    let field = ui["parameters"]["basics"]
+        .as_array()
+        .context("Missing Azure form")?
+        .iter()
+        .find(|item| item["name"] == "goblinSourceRef")
+        .context("Missing Goblin version")?;
+    ensure!(
+        field["defaultValue"] == candidate.version
+            && field["constraints"]["allowedValues"]
+                == json!([{"label":candidate.version,"value":candidate.source.revision}]),
+        "Azure form selects another release"
+    );
     ensure!(
         release::verify_archive(&directory.join("installer"))? == candidate.installer,
         "Candidate selects a different installer manifest"
@@ -224,7 +237,12 @@ pub(crate) fn check_source(directory: &Path, source: &Path) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn seal(directory: &Path, run: &str, attempt: &str, workflow: &str) -> Result<Record> {
+pub(crate) fn seal(
+    directory: &Path,
+    run: &str,
+    attempt: &str,
+    workflow: &str,
+) -> Result<Candidate> {
     let mut candidate = validate(directory)?;
     ensure!(
         candidate.run_id == run
@@ -249,11 +267,11 @@ pub(crate) fn seal(directory: &Path, run: &str, attempt: &str, workflow: &str) -
     verify(directory)
 }
 
-pub(crate) fn verify(directory: &Path) -> Result<Record> {
+pub(crate) fn verify(directory: &Path) -> Result<Candidate> {
     let candidate = validate(directory)?;
     ensure!(
         candidate.deployment_checks == Check::Passed,
         "Candidate has not passed all required checks"
     );
-    Ok(candidate.record())
+    Ok(candidate)
 }

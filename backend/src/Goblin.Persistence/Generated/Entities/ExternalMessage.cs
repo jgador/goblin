@@ -6,9 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("external_messages")]
-[Index("InstallationId", "EventId", Name = "external_messages_installation_id_event_id_key", IsUnique = true)]
-[Index("InstallationId", "WorkspaceId", "ChannelId", "MessageId", Name = "external_messages_installation_id_workspace_id_channel_id_m_key", IsUnique = true)]
+[Table("external_message")]
+[Index("InstallationId", "EventId", Name = "external_message_installation_id_event_id_key", IsUnique = true)]
+[Index("InstallationId", "WorkspaceId", "ChannelId", "MessageId", Name = "external_message_installation_id_workspace_id_channel_id_me_key", IsUnique = true)]
 public partial class ExternalMessage
 {
     [Key]

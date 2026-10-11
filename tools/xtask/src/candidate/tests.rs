@@ -103,6 +103,36 @@ fn pending_candidates_need_checks_and_the_original_run_identity_to_be_sealed() {
 }
 
 #[test]
+fn release_schema_and_identity_are_required() {
+    let (directory, candidate) = fixture();
+    for (field, value, message) in [
+        (
+            "schemaVersion",
+            json!(1),
+            "Expected coordinated candidate schema 2",
+        ),
+        ("source", serde_json::Value::Null, "invalid type"),
+        ("runId", json!(""), "Invalid workflow identity"),
+        ("channel", json!("stable"), "Release channel mismatch"),
+    ] {
+        let mut record = serde_json::to_value(&candidate).unwrap();
+        record[field] = value;
+        files::write_json(&directory.path().join("release.json"), &record, 0o644).unwrap();
+        fs::write(
+            directory.path().join("SHA256SUMS"),
+            checksums(directory.path(), &candidate).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            validate(directory.path())
+                .unwrap_err()
+                .to_string()
+                .contains(message)
+        );
+    }
+}
+
+#[test]
 fn every_installer_and_azure_asset_is_bound_to_the_candidate() {
     let (directory, candidate) = fixture();
     for name in candidate.assets.keys() {

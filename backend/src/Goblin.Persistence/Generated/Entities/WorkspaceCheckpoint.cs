@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("workspace_checkpoints")]
-[Index("AttemptId", "TurnNumber", Name = "workspace_checkpoints_attempt_id_turn_number_key", IsUnique = true)]
+[Table("workspace_checkpoint")]
+[Index("AttemptId", "TurnNumber", Name = "workspace_checkpoint_attempt_id_turn_number_key", IsUnique = true)]
 public partial class WorkspaceCheckpoint
 {
     [Key]

@@ -99,7 +99,7 @@ pub fn ensure(path: &Path, replace: bool) -> Result<PathBuf> {
     Ok(path.to_owned())
 }
 
-pub fn dev(git_repository: &Path) -> Result<()> {
+pub fn dev(git_repository: &Path, client: Option<&crate::postgres::Client>) -> Result<()> {
     use std::os::unix::process::CommandExt;
     let path = match std::env::var_os(environment::GOBLIN_PASSWORD_HASH_FILE) {
         Some(p) => {
@@ -112,7 +112,13 @@ pub fn dev(git_repository: &Path) -> Result<()> {
             false,
         )?,
     };
-    Err(std::process::Command::new("dotnet")
+    let mut command = std::process::Command::new("dotnet");
+    if let Some(client) = client {
+        client.configure(&mut command, crate::postgres::Access::App);
+    } else {
+        command.env(environment::GOBLIN_WORK_ENABLED, "false");
+    }
+    Err(command
         .arg(git_repository.join("backend/src/Goblin.Web/bin/Debug/net10.0/Goblin.Web.dll"))
         .env(environment::GOBLIN_PASSWORD_HASH_FILE, path)
         .env_remove(environment::GOBLIN_LOCAL_PASSWORD)

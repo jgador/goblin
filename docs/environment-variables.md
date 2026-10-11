@@ -55,7 +55,10 @@ uses the existing .NET providers and their precedence. `ConnectionStrings__Gobli
 and `ConnectionStrings__GoblinAdmin` map to `ConnectionStrings:Goblin` and
 `ConnectionStrings:GoblinAdmin`; calls to `GetConnectionString("Goblin")` and
 `GetConnectionString("GoblinAdmin")` use configuration section names, not environment
-names. Existing JSON configuration remains supported.
+names. Existing runtime JSON configuration remains supported. PostgreSQL development
+profiles supply connections directly to child processes; they do not generate
+tooling appsettings files. `HOME` and optional `XDG_CONFIG_HOME` locate the user
+store. `db run --usage tests` explicitly supplies the test connection variables.
 
 Rust keeps `var` versus `var_os`, its current parsing, and subprocess credential
 removal. `env!("CARGO_MANIFEST_DIR")` and `env!("CARGO_PKG_VERSION")` are compiler
@@ -92,9 +95,9 @@ entries are not supported production configuration.
 Declarative Docker, Kubernetes, Bicep, GitHub Actions, and Bash files retain their
 literal platform syntax; they cannot import C#, Rust, or TypeScript constants.
 Deployment contract tests check template names against the catalogs. Shell-only
-operator inputs are documented in the Rust catalog too: `GOBLIN_CONFIG_ROOT`,
-`GOBLIN_IMAGE_PULL_WORKERS`, `GOBLIN_INSTALL_PROGRESS`, `GOBLIN_INSTALL_STATE`, and
-`GOBLIN_POSTGRES_CONFIGURE_APP`. Installer inputs are consumed by embedded scripts,
+operator inputs are documented in the Rust catalog too:
+`GOBLIN_IMAGE_PULL_WORKERS`, `GOBLIN_INSTALL_PROGRESS`, and `GOBLIN_INSTALL_STATE`.
+Installer inputs are consumed by embedded scripts,
 so changing their names or semantics requires checking the shipping installer.
 
 The application template `deploy/auth/sandbox.yaml`, Azure overlays, Docker image

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("workspace_sessions")]
+[Table("workspace_session")]
 public partial class WorkspaceSession
 {
     [Key]

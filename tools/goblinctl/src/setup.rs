@@ -91,20 +91,20 @@ pub fn update_scoped(
         state["version"] == 1,
         "Unsupported installation state version"
     );
-    // Upgrade retained v1 state when retrying with newer native tooling.
-    for id in STEPS {
-        if !state["steps"]
-            .as_array()
-            .context("Invalid steps")?
-            .iter()
-            .any(|s| s["id"] == id.as_str())
-        {
-            state["steps"]
-                .as_array_mut()
-                .context("Invalid steps")?
-                .push(json!({"id":id,"label":id.label(),"status":SetupStepStatus::Waiting,"attempt":0}));
-        }
-    }
+    let steps = state["steps"].as_array().context("Invalid steps")?;
+    ensure!(
+        steps.len() == STEPS.len()
+            && steps
+                .iter()
+                .zip(STEPS)
+                .all(|(step, id)| step["id"] == id.as_str()),
+        "Unsupported installation steps; recreate the development installation"
+    );
+    state["logGeneration"]
+        .as_str()
+        .context("Invalid log generation")?;
+    let revision = state["revision"].as_u64().context("Invalid revision")? + 1;
+    ensure!(state["logs"].is_array(), "Invalid logs");
     let mut event_step = scope.map_or("", SetupStep::as_str).to_owned();
     let mut event = String::new();
     match action {
@@ -223,16 +223,9 @@ pub fn update_scoped(
         }
     }
     state["updatedAt"] = json!(timestamp);
-    if state["logGeneration"].is_null() {
-        state["logGeneration"] = json!(timestamp);
-    }
-    let revision = state["revision"].as_u64().unwrap_or(0) + 1;
     state["revision"] = json!(revision);
     if !event.is_empty() {
         let entry = json!({"id":revision,"timestamp":timestamp,"attempt":state["attempt"],"step":event_step,"message":event});
-        if !state["logs"].is_array() {
-            state["logs"] = json!([]);
-        }
         let logs = state["logs"].as_array_mut().context("Invalid logs")?;
         logs.push(entry);
         if logs.len() > 300 {
@@ -357,8 +350,10 @@ async fn event_batch(path: &Path, cursor: &str) -> Result<String> {
         let state = files::json(path)?;
         let id = format!(
             "{}:{}",
-            state["logGeneration"].as_str().unwrap_or("legacy"),
-            state["revision"].as_u64().unwrap_or(0)
+            state["logGeneration"]
+                .as_str()
+                .context("Invalid log generation")?,
+            state["revision"].as_u64().context("Invalid revision")?
         );
         if cursor != id {
             return Ok(format!(

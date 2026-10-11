@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Goblin.Persistence.Entities;
 
-[Table("repository_setup_memories")]
-[Index("AttemptId", "TurnNumber", "Topic", Name = "repository_setup_memories_attempt_id_turn_number_topic_key", IsUnique = true)]
+[Table("repository_setup_memory")]
+[Index("AttemptId", "TurnNumber", "Topic", Name = "repository_setup_memory_attempt_id_turn_number_topic_key", IsUnique = true)]
 [Index("GithubConnectionId", "AccountId", "GitRepositoryId", "VerifiedAt", Name = "repository_setup_recall", IsDescending = new[] { false, false, false, true })]
 public partial class GitRepositorySetupMemory
 {
@@ -59,13 +59,13 @@ public partial class GitRepositorySetupMemory
     [InverseProperty("GitRepositorySetupMemories")]
     public virtual WorkspaceCheckpoint Checkpoint { get; set; } = null!;
 
-    [ForeignKey("GithubConnectionId")]
-    [InverseProperty("GitRepositorySetupMemories")]
-    public virtual GithubConnection GithubConnection { get; set; } = null!;
-
     [ForeignKey("GitRepositoryId")]
     [InverseProperty("GitRepositorySetupMemories")]
     public virtual GithubRepository GitRepository { get; set; } = null!;
+
+    [ForeignKey("GithubConnectionId")]
+    [InverseProperty("GitRepositorySetupMemories")]
+    public virtual GithubConnection GithubConnection { get; set; } = null!;
 
     [ForeignKey("WorkId")]
     [InverseProperty("GitRepositorySetupMemories")]

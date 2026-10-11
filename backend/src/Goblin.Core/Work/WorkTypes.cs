@@ -219,18 +219,18 @@ public sealed record GitRepositoryGrant
     public bool AllowPush { get; init; }
     public bool AllowPullRequest { get; init; }
 
-    public bool RequiresApproval() => PolicyVersion != 1;
+    public bool HasSupportedPolicy() => PolicyVersion == 2;
 
-    public bool PublishesChanges() => PolicyVersion == 1 || PolicyVersion == 2 && AllowPush;
+    public bool PublishesChanges() => HasSupportedPolicy() && AllowPush;
 
     public bool AllowsOperation(GitRepositoryOperationKind operation) =>
-        Enum.IsDefined(operation) && PolicyVersion is 1 or 2 &&
-        (PolicyVersion == 1 || operation switch
+        Enum.IsDefined(operation) && HasSupportedPolicy() &&
+        operation switch
         {
             GitRepositoryOperationKind.Publish => AllowPush,
             GitRepositoryOperationKind.PullRequest => AllowPush && AllowPullRequest,
             _ => true
-        });
+        };
 
     public void Authorize(long workId, long attemptId, string gitRepository, string requestedGitRepository, string branch, GitRepositoryOperationKind operation)
     {

@@ -143,8 +143,7 @@ branch-scoped OAuth token.
 The private CLI profile lives under the persisted data directory's `github-cli/`.
 Headless containers use a private file with mode 0600 rather than a system keyring.
 No host `GH_TOKEN`, `GITHUB_TOKEN`, browser command, or CLI configuration is inherited.
-The existing custom OAuth connection needs one new CLI sign-in; its legacy token is
-never imported into the new profile. Disconnect removes Goblin's saved profile;
+Disconnect removes Goblin's saved profile;
 remote revocation is available in GitHub's authorized application settings.
 
 GitHub branch rules provide a second safeguard; account bypass privileges matter.

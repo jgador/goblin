@@ -26,9 +26,7 @@ internal static class WorkStatePersistence
         row.UpdatedAt = now.UtcDateTime;
     }
 
-    internal static WorkItem Restore(Row row) => row.State is null
-        ? new(row.Id, row.Objective, new DateTimeOffset(row.CreatedAt, TimeSpan.Zero))
-        : Restore(row.State);
+    internal static WorkItem Restore(Row row) => Restore(row.State);
 
     internal static WorkSnapshot Snapshot(Row row) => Restore(row).Snapshot();
 

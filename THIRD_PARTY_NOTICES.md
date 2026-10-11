@@ -36,6 +36,12 @@ dependencies. Their own licenses apply. MIT, BSD, PostgreSQL, Zlib, Unicode, and
 other notices must be retained where required; an Apache alternative does not
 remove an additional license required by a dependency.
 
+The official [Wolverine 6.39.1](https://github.com/JasperFx/wolverine) NuGet
+packages use the MIT license. Its copyright notice and full terms are preserved
+in [backend/licenses/wolverine/LICENSE](backend/licenses/wolverine/LICENSE),
+included with the published application at `licenses/wolverine/LICENSE` and
+in the application image at `/app/licenses/wolverine/LICENSE`.
+
 The application image also includes independently licensed software such as
 Codex and its native helpers, GitHub CLI, Git, and the .NET runtime. Deployed
 services and operating-system packages retain their own licenses. In particular,
