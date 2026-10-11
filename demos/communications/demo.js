@@ -7,7 +7,7 @@
       id: "slack",
       name: "Slack",
       location: "#development",
-      sender: "Alex",
+      sender: "Josh Aspinwall",
       prompts: [
         {
           label: "Investigate a bug",
@@ -35,7 +35,7 @@
       id: "teams",
       name: "Microsoft Teams",
       location: "Engineering · Daily standup",
-      sender: "Sam",
+      sender: "Anders Hejlsberg",
       prompts: [
         {
           label: "Prepare a standup update",
@@ -64,7 +64,7 @@
       id: "github",
       name: "GitHub",
       location: "Pull request #42 · Discussion",
-      sender: "Jamie",
+      sender: "Stephen Toub",
       prompts: [
         {
           label: "Ask for a code review",
@@ -93,7 +93,7 @@
       id: "discord",
       name: "Discord",
       location: "# build-together",
-      sender: "Robin",
+      sender: "Renko Karman",
       prompts: [
         {
           label: "Explore an idea",
@@ -122,7 +122,7 @@
       id: "email",
       name: "Gmail",
       location: "Re: A quick project check-in",
-      sender: "Taylor",
+      sender: "Linus Torvalds",
       prompts: [
         {
           label: "Draft a project recap",
@@ -177,6 +177,15 @@
     byId("announcer").textContent = message;
   }
 
+  function updateCard(scene, prompt) {
+    const card = channelButtons.find((button) => button.dataset.channel === scene.id);
+    card.title = scene.sender + ": " + prompt.request + "\nGoblin: " + prompt.reply;
+    card.setAttribute(
+      "aria-label",
+      "Play the " + scene.name + " conversation with " + scene.sender + ". " + prompt.request,
+    );
+  }
+
   function displayScene(index) {
     const scene = scenes[index];
     const prompt = scene.prompts[selectedPrompts[index]];
@@ -188,7 +197,10 @@
     byId("conversation-location").textContent = scene.location;
     byId("conversation-icon").src = `assets/${scene.id}.svg`;
     byId("sender-name").textContent = scene.sender;
-    byId("human-avatar").textContent = scene.sender[0];
+    byId("human-avatar").textContent = scene.sender
+      .split(" ")
+      .map((part) => part[0])
+      .join("");
     byId("request-text").textContent = customMessage?.request ?? prompt.request;
     byId("reply-text").textContent = customMessage?.reply ?? prompt.reply;
     byId("receipt-text").textContent = prompt.receipt;
@@ -210,6 +222,7 @@
       else button.removeAttribute("aria-current");
     });
     paths.forEach((path, pathIndex) => path.classList.toggle("is-active", pathIndex === index));
+    updateCard(scene, prompt);
     renderDetails(scene, prompt);
   }
 
@@ -669,6 +682,7 @@
     announce("Your demo message in " + scene.name + ". " + customMessage.reply);
   });
 
+  scenes.forEach((scene) => updateCard(scene, scene.prompts[0]));
   render();
   setPlaying(playing);
 })();

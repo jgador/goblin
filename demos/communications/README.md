@@ -4,9 +4,14 @@ A standalone interactive concept showing Goblin at the center of Slack,
 Microsoft Teams, GitHub, Discord, and Gmail conversations. The layout follows
 `goblin-in-the-loop-v2.png` in the repository's `demos/communications/` directory:
 a pale green tool network, central Goblin mark, and a tabbed conversation panel.
+The tool network has no enclosing box; the conversation panel retains its border.
 Open `index.html` in a modern browser; no build, dependencies, or account
 connections are required. On narrow screens, the conversation follows the tool
 network vertically.
+
+The tool cards and conversations feature Josh Aspinwall (Slack), Anders Hejlsberg
+(Microsoft Teams), Stephen Toub (GitHub), Renko Karman (Discord), and Linus Torvalds
+(Gmail).
 
 Choose a tool card or chapter to play its exchange. Each chapter has three
 scripted prompts in the “Try another ask” selector below the scene. The player
