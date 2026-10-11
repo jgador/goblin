@@ -4,6 +4,9 @@ The public website runs as `Deployment/website` in namespace `goblin` on the
 Hetzner AK3S cluster. The `nginx` ingress class routes `goblinboard.com` to
 `Service/website`. TLS is stored in `Secret/website-tls`; the existing
 `letsencrypt-production` ClusterIssuer renews certificates through HTTP-01.
+The ingress uses `acme.cert-manager.io/http01-edit-in-place: "true"`, matching
+the AK3S dashboard. NGINX's controller rejects competing Ingress objects for the
+same host, so cert-manager must add challenge paths to the existing ingress.
 The website's CPU/memory settings and 1–3 replica HPA are shared with the local
 manifests. Their measurements were taken in WSL, not on Hetzner.
 
@@ -15,10 +18,13 @@ website neither installs nor modifies those components or the platform app.
 ## Protected release
 
 `.github/workflows/website.yml` checks all PRs and merge-queue candidates. A push
-to `master`, or a manual run on `master`, builds and tests the production image,
+changing production image inputs on `master`, or a manual run on `master`, builds and tests the production image,
 publishes it to `ghcr.io/jgador/goblin-website`, and waits for approval. GitHub
 Actions uses its own temporary package token; no registry password is stored.
 The deployed reference is the exact tested image digest, never a mutable tag.
+Documentation and infrastructure-only changes do not publish an unchanged
+image or request another website deployment. Apply infrastructure changes through
+the administrator bootstrap procedure; use a manual workflow run when needed.
 
 Configure the `website-production` GitHub environment with:
 
