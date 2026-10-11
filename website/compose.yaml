@@ -1,0 +1,28 @@
+name: goblin-website
+services:
+  website:
+    build:
+      context: ..
+      dockerfile: website/Dockerfile
+      target: development
+    init: true
+    read_only: true
+    ports:
+      - "127.0.0.1:5173:5173"
+    volumes:
+      - type: bind
+        source: .
+        target: /app
+        read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:5173/').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 2s
+      timeout: 2s
+      start_period: 5s
+      retries: 20

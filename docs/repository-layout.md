@@ -40,6 +40,15 @@ frontend/
   scripts/                 Browser build helpers
   package.json             Standalone frontend npm package and TypeScript dependency
   tsconfig.json            Browser compiler settings; no Node.js types
+website/
+  index.html, website.css, website.js  Standalone communications website
+  assets/                  Website fonts, provider marks, and Goblin artwork copies
+  references/              Retained design reference and earlier GIF export
+  package.json             Independently locked Vite development dependency
+  compose.yaml, Dockerfile Detached Docker development and static Nginx runtime
+  k8s/                     Website-only manifests for the existing local k3s cluster
+  manage.sh                Website development and local deployment commands
+  load-test.mjs            Fresh browser visits and website container resource measurements
 tests/
   integration/             HTTP tests against the C# test host
   e2e/                     Playwright browser journeys
@@ -70,6 +79,14 @@ fetches locked Rust dependencies; first install the Rust helpers with
 `tsconfig.json` compiles Node.js test tooling, while `frontend/tsconfig.json`
 compiles browser source independently. `global.json` stays at the root so the
 pinned .NET SDK applies to commands run from either the root or `backend/`.
+
+`website/` is an independent static site, with its own package manifest and
+lockfile. `make website-dev` installs its development tooling inside Docker;
+application install/build/test commands do not include it. The website's HTML,
+CSS, JavaScript, and assets are copied directly into a separate static image.
+See the [website guide](../website/README.md) for detached development and local
+k3s deployment. The application Docker build excludes `website/`; the website
+Dockerfile has its own narrow build-context allowlist.
 
 Node.js 24 or newer runs the `.mts` build helpers, secret-scanning scripts, and
 fake Codex fixture directly. `.mts` is TypeScript with explicit ES module
@@ -131,6 +148,12 @@ npm run typecheck
 | `make test-postgres DB_PROFILE=wsl` | Explicitly run the .NET database integration tests |
 | `make setup-password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
 | `make build-assets` | Build only the frontend |
+| `make website-dev` | Start the website in Docker detached, with live reload at localhost:5173 |
+| `make website-stop` | Stop the website development container |
+| `make website-status` / `make website-logs` | Inspect the website development container; logs accepts `ARGS=--follow` |
+| `make website-deploy` | Build the static website, import into existing local k3s, and await rollout |
+| `make website-preview` | Forward the k3s website to localhost:5174 while the terminal stays open |
+| `make website-load-test` | Measure the website container with one fresh browser visit/minute; defaults to ten visits plus a minute idle |
 | `npm --prefix frontend run build` | Run the frontend package build directly |
 | `make build-backend` | Build the .NET solution using any existing frontend output |
 | `make typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
@@ -166,6 +189,7 @@ only repeat the implementation.
 | Shared C#/Rust contract values | Generate and validate using [the contract guide](contract-values.md#cross-language-changes), including `make contracts-check`. |
 | Rust tooling | `make format-rust`, `make lint-rust CARGO_ARGS="-p <crate>"`, and `make test-rust CARGO_ARGS="-p <crate>"`. The last command includes documentation tests; review snapshots before accepting them. |
 | Browser code or UI behavior | `npm --prefix frontend run typecheck`, affected frontend tests, and relevant `make test-browser ARGS="tests/e2e/<journey>.spec.ts"` journeys when integrating the browser boundary. Inspect the changed interaction and visual result. |
+| Standalone website | `npm --prefix website run check`, then inspect the affected interactions and layouts with `make website-dev`. Check local container/deployment changes against the actual Docker or k3s runtime when available; these commands do not invoke the application or Azure installer. |
 | Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus real PostgreSQL checks with the explicit setup in [the database guide](database.md#application-configuration-and-verification). |
 | Codex transport or execution hosting | Existing transport/protocol tests and `make test-codex` where relevant; authenticated execution/isolation needs the real-runtime checks described in [execution hosting](execution-hosting.md#verification-limits). |
 | Installer or deployment contracts | Offline generation and deployment checks in `make test`; consult [formatting deployment assets](formatting.md#deployment-assets) for generated inputs. Azure installation stays manual. |

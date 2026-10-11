@@ -1,0 +1,13 @@
+**
+!website
+!website/package.json
+!website/package-lock.json
+!website/index.html
+!website/website.css
+!website/website.js
+!website/assets
+!website/assets/**
+!website/nginx.conf
+!LICENSE
+!NOTICE
+!THIRD_PARTY_NOTICES.md

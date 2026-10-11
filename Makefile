@@ -20,7 +20,8 @@ RUST_MIN_STACK ?= 8388608
 	deploy-generate dependencies-check dependencies-resolve secrets-setup secrets-scan \
 	secrets-staged secrets-history goblinctl local local-start local-status local-stop \
 	local-reset local-logs local-retry local-database local-password setup-password \
-	release-build release-check-installer release-local codex db-migrate db-scaffold test-postgres
+	release-build release-check-installer release-local codex db-migrate db-scaffold test-postgres \
+	website-dev website-stop website-status website-logs website-deploy website-preview website-load-test
 
 # List targets and their purpose; pass tool flags with ARGS or CARGO_ARGS.
 help:
@@ -84,6 +85,34 @@ dev: build
 
 # Start the development host with the same build and credential setup as dev.
 start: dev
+
+# Start the standalone website in Docker, detached, with browser live reload.
+website-dev:
+	bash website/manage.sh dev $(ARGS)
+
+# Stop the website development container without affecting the application.
+website-stop:
+	bash website/manage.sh stop $(ARGS)
+
+# Show the website development container's status.
+website-status:
+	bash website/manage.sh status $(ARGS)
+
+# Read website development logs; use ARGS=--follow to stream them.
+website-logs:
+	bash website/manage.sh logs $(ARGS)
+
+# Build the static website, import it into local k3s, and wait for its rollout.
+website-deploy:
+	bash website/manage.sh deploy
+
+# Forward the k3s website to localhost:5174; keep this terminal open.
+website-preview:
+	bash website/manage.sh preview
+
+# Measure the k3s website container at one fresh browser visit per minute.
+website-load-test:
+	bash website/manage.sh load-test $(ARGS)
 
 # Preserve all pretest checks, builds, generators, and offline application tests.
 test: contracts-check test-contracts test-task-runner dependencies-check build deploy-generate test-rust test-release protocol-check kubernetes-check test-backend test-js

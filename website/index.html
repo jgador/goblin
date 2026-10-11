@@ -6,22 +6,22 @@
     <meta name="theme-color" content="#f7faf6" />
     <meta
       name="description"
-      content="All your work, one coworker. Explore Goblin in the loop with your team across Slack, Teams, GitHub, Discord, and Gmail."
+      content="Your self-hosted AI coworker. Explore Goblin in the loop with your team across Slack, Teams, GitHub, Discord, and Gmail."
     />
     <title>Goblin · In the loop</title>
     <link rel="icon" href="assets/goblin.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="demo.css" />
-    <script src="demo.js" defer></script>
+    <link rel="stylesheet" href="website.css" />
+    <script src="website.js" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#conversation-panel">Skip to the conversation</a>
     <main>
-      <section class="player" id="player" aria-label="Interactive Goblin communications demo">
+      <section class="player" id="player" aria-label="Interactive Goblin communications">
         <div class="film-body">
           <section class="network-panel" aria-labelledby="title">
             <header class="intro">
-              <h1 id="title">All your work, <span>one coworker</span></h1>
-              <p>Connect your tools so Goblin can receive, understand, and act.</p>
+              <h1 id="title">Your self-hosted <span>AI coworker.</span></h1>
+              <p>Connect your tools. Put Goblin to work.</p>
             </header>
             <div class="network" id="network">
               <svg
@@ -89,11 +89,11 @@
                   <path d="M543 438V490M607 438V490" marker-end="url(#arrow-green)" />
                 </g>
                 <g class="connector-dots">
-                  <circle cx="535" cy="200" r="5" />
-                  <circle cx="620" cy="200" r="5" />
-                  <circle cx="500" cy="272" r="5" />
-                  <circle cx="653" cy="272" r="5" />
-                  <circle cx="575" cy="420" r="5" />
+                  <circle id="dot-slack" cx="535" cy="200" r="5" />
+                  <circle id="dot-teams" cx="620" cy="200" r="5" />
+                  <circle id="dot-github" cx="500" cy="272" r="5" />
+                  <circle id="dot-email" cx="653" cy="272" r="5" />
+                  <circle id="dot-discord" cx="575" cy="420" r="5" />
                 </g>
                 <g class="packet" id="packet" visibility="hidden">
                   <circle class="packet-halo" r="15" />
@@ -104,12 +104,12 @@
                 class="channel channel-slack"
                 data-channel="slack"
                 type="button"
-                aria-label="Play the Slack conversation with Josh Aspinwall"
+                aria-label="Play the Slack conversation with Josh A."
                 aria-pressed="true"
               >
                 <span class="card-top"
                   ><img src="assets/slack.svg" alt="Slack" /><span class="card-name">Slack</span
-                  ><strong class="person-name">Josh Aspinwall</strong
+                  ><strong class="person-name">Josh A.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mini-message"
@@ -118,7 +118,7 @@
                       ><span class="skeleton long"></span
                       ><span class="skeleton short"></span></span></span
                   ><span class="mini-message mini-reply"
-                    ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span
+                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
                     ><span class="mini-bubble"
                       ><span class="skeleton long"></span
                       ><span class="typing-dots"><i></i><i></i><i></i></span></span></span></span
@@ -127,13 +127,13 @@
                 class="channel channel-teams"
                 data-channel="teams"
                 type="button"
-                aria-label="Play the Microsoft Teams conversation with Anders Hejlsberg"
+                aria-label="Play the Microsoft Teams conversation with Anders H."
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/teams.svg" alt="Microsoft Teams" /><span class="card-name"
                     >Microsoft Teams</span
-                  ><strong class="person-name">Anders Hejlsberg</strong
+                  ><strong class="person-name">Anders H.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mini-message"
@@ -142,7 +142,7 @@
                       ><span class="skeleton long"></span
                       ><span class="skeleton short"></span></span></span
                   ><span class="mini-message mini-reply"
-                    ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span
+                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
                     ><span class="mini-bubble"
                       ><span class="skeleton long"></span
                       ><span class="typing-dots"><i></i><i></i><i></i></span></span></span></span
@@ -151,12 +151,12 @@
                 class="channel channel-github"
                 data-channel="github"
                 type="button"
-                aria-label="Play the GitHub conversation with Stephen Toub"
+                aria-label="Play the GitHub conversation with Stephen T."
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/github.svg" alt="GitHub" /><span class="card-name">GitHub</span
-                  ><strong class="person-name">Stephen Toub</strong
+                  ><strong class="person-name">Stephen T.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="repo-preview"
@@ -176,7 +176,32 @@
                         <rect x="5" y="10" width="14" height="11" rx="2" />
                         <path d="M8 10V6a4 4 0 0 1 8 0v4m-4 4v3" /></svg></span></span
                   ><span class="repo-actions"
-                    ><span
+                    ><span title="Code"
+                      ><svg
+                        class=""
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.65"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="m8 7-5 5 5 5m8-10 5 5-5 5" /></svg></span
+                    ><span title="Issues"
+                      ><svg
+                        class=""
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.65"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="9" />
+                        <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /></svg></span
+                    ><span title="Pull requests"
                       ><svg
                         class=""
                         viewBox="0 0 24 24"
@@ -189,9 +214,9 @@
                       >
                         <circle cx="6" cy="5" r="2" />
                         <circle cx="6" cy="19" r="2" />
-                        <circle cx="18" cy="5" r="2" />
-                        <path d="M6 7v10m12-10v2c0 4-12 2-12 6" /></svg></span
-                    ><span
+                        <circle cx="18" cy="19" r="2" />
+                        <path d="M6 7v10m12 0V9a4 4 0 0 0-4-4h-2m3-3-3 3 3 3" /></svg></span
+                    ><span title="Actions"
                       ><svg
                         class=""
                         viewBox="0 0 24 24"
@@ -202,8 +227,9 @@
                         stroke-linejoin="round"
                         aria-hidden="true"
                       >
-                        <path d="M12 21V3m-7 7 7-7 7 7" /></svg></span
-                    ><span
+                        <circle cx="12" cy="12" r="9" />
+                        <path d="m10 8 6 4-6 4Z" /></svg></span
+                    ><span title="Projects"
                       ><svg
                         class=""
                         viewBox="0 0 24 24"
@@ -214,46 +240,19 @@
                         stroke-linejoin="round"
                         aria-hidden="true"
                       >
-                        <circle cx="6" cy="5" r="2" />
-                        <circle cx="6" cy="19" r="2" />
-                        <circle cx="18" cy="5" r="2" />
-                        <path d="M6 7v10m12-10v2c0 4-12 2-12 6" /></svg></span
-                    ><span
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="8" />
-                        <path d="M14 4a8 8 0 0 1 0 16" /></svg></span
-                    ><span
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="m8 5-7 7 7 7m8-14 7 7-7 7" /></svg></span></span></span
+                        <rect x="3" y="4" width="18" height="16" rx="2" />
+                        <path d="M9 4v16m6-16v16M5.5 8h1m5 0h1m5 0h1" /></svg></span></span></span
                 ><span class="connection-port" aria-hidden="true"></span></button
               ><button
                 class="channel channel-email"
                 data-channel="email"
                 type="button"
-                aria-label="Play the Gmail conversation with Linus Torvalds"
+                aria-label="Play the Gmail conversation with Linus T."
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/email.svg" alt="Gmail" /><span class="card-name">Gmail</span
-                  ><strong class="person-name">Linus Torvalds</strong
+                  ><strong class="person-name">Linus T.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mail-row"
@@ -305,13 +304,13 @@
                 class="channel channel-discord"
                 data-channel="discord"
                 type="button"
-                aria-label="Play the Discord conversation with Renko Karman"
+                aria-label="Play the Discord conversation with Renko K."
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/discord.svg" alt="Discord" /><span class="card-name"
                     >Discord</span
-                  ><strong class="person-name">Renko Karman</strong
+                  ><strong class="person-name">Renko K.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mini-message"
@@ -326,64 +325,9 @@
                       ><span class="typing-dots"><i></i><i></i><i></i></span></span></span></span
                 ><span class="connection-port" aria-hidden="true"></span>
               </button>
-              <span class="route-badge route-slack" aria-hidden="true"
-                ><svg
-                  class=""
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.65"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M7 18 3 21v-6a8 8 0 0 1-1-4c0-5 4-8 10-8s10 3 10 8-4 8-10 8H7Z" />
-                  <path d="M7 8h10M7 12h7" /></svg></span
-              ><span class="route-badge route-teams" aria-hidden="true"
-                ><svg
-                  class=""
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.65"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M7 18 3 21v-6a8 8 0 0 1-1-4c0-5 4-8 10-8s10 3 10 8-4 8-10 8H7Z" />
-                  <path d="M7 8h10M7 12h7" /></svg></span
-              ><span class="route-badge route-github" aria-hidden="true"
-                ><img src="assets/github.svg" alt="" /></span
-              ><span class="route-badge route-email" aria-hidden="true"
-                ><svg
-                  class=""
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.65"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="2" y="4" width="20" height="16" rx="2" />
-                  <path d="m3 5 9 8 9-8" /></svg></span
-              ><span class="route-badge route-discord" aria-hidden="true"
-                ><svg
-                  class=""
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.65"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M7 18 3 21v-6a8 8 0 0 1-1-4c0-5 4-8 10-8s10 3 10 8-4 8-10 8H7Z" />
-                  <path d="M7 8h10M7 12h7" /></svg
-              ></span>
               <div class="goblin-hub" id="goblin-hub">
                 <div class="hub-core">
-                  <span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span>
+                  <span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span>
                 </div>
                 <span class="hub-name">goblin</span
                 ><span class="hub-status sr-only" id="hub-status">Here for your team</span>
@@ -511,7 +455,7 @@
             <div class="conversation-heading">
               <img id="conversation-icon" src="assets/slack.svg" alt="" />
               <h2 id="conversation-title">Slack</h2>
-              <p id="conversation-location">#development</p>
+              <p id="conversation-location">#log-pipeline</p>
               <button
                 class="icon-button"
                 id="channel-info"
@@ -543,21 +487,25 @@
                   <span class="avatar human-avatar" id="human-avatar">JA</span>
                   <div class="message-content">
                     <div class="message-meta">
-                      <strong id="sender-name">Josh Aspinwall</strong
+                      <strong id="sender-name">Josh A.</strong
                       ><span class="message-time">10:24 AM</span>
                     </div>
-                    <p id="request-text">Hey Goblin, can you take a look at the login bug?</p>
+                    <p id="request-text">
+                      Hey Goblin, rewrite the log ingestion pipeline to handle traffic spikes, then
+                      deploy it to our Kubernetes staging cluster.
+                    </p>
                   </div>
                 </div>
-                <div class="typing-row" id="typing-row" hidden>
-                  <span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span
-                  ><span
-                    >Goblin is thinking<span class="typing-dots"><i></i><i></i><i></i></span
+                <div class="typing-row" id="typing-row" role="status" hidden>
+                  <span class="avatar goblin-avatar" aria-hidden="true"
+                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
                   ></span>
+                  <span class="thinking-dot" aria-hidden="true"></span>
+                  <span class="sr-only">Goblin is thinking</span>
                 </div>
                 <div class="message reply-message" id="reply-message">
                   <span class="avatar goblin-avatar"
-                    ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span
+                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
                   ></span>
                   <div class="message-content">
                     <div class="message-meta">
@@ -576,8 +524,8 @@
                             stroke-linejoin="round"
                             aria-hidden="true"
                           >
-                            <path d="m5 12 4 4L19 6" /></svg></span
-                        ><span id="step-one">Understand the request</span>
+                            <path d="m5 13 4 4L19 7" /></svg></span
+                        ><span id="step-one">Trace ingestion and buffering</span>
                       </div>
                       <div>
                         <span class="check-dot"
@@ -591,8 +539,8 @@
                             stroke-linejoin="round"
                             aria-hidden="true"
                           >
-                            <path d="m5 12 4 4L19 6" /></svg></span
-                        ><span id="step-two">Gather the relevant context</span>
+                            <path d="m5 13 4 4L19 7" /></svg></span
+                        ><span id="step-two">Check throughput and delivery</span>
                       </div>
                       <div>
                         <span class="check-dot"
@@ -606,8 +554,8 @@
                             stroke-linejoin="round"
                             aria-hidden="true"
                           >
-                            <path d="m5 12 4 4L19 6" /></svg></span
-                        ><span id="step-three">Prepare a proposed change</span>
+                            <path d="m5 13 4 4L19 7" /></svg></span
+                        ><span id="step-three">Prepare the Kubernetes rollout</span>
                       </div>
                       <div>
                         <span class="check-dot pending"></span
@@ -620,7 +568,7 @@
                 </div>
                 <div class="message artifact-message" id="artifact-message">
                   <span class="avatar goblin-avatar"
-                    ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span
+                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
                   ></span>
                   <div class="message-content">
                     <div class="message-meta">
@@ -630,7 +578,7 @@
                       <button class="deliverable" type="button" data-preview="pr">
                         <img src="assets/github.svg" alt="" /><span
                           ><strong id="artifact-title"
-                            >PR #482
+                            >Log ingestion rewrite
                             <svg
                               class=""
                               viewBox="0 0 24 24"
@@ -643,7 +591,7 @@
                             >
                               <path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6" /></svg></strong
                           ><span class="artifact-description" id="artifact-description"
-                            >A proposed fix for the login flow</span
+                            >Bounded buffering, backpressure, and Kubernetes staging</span
                           ><span class="artifact-detail">Ready for your review</span></span
                         ></button
                       ><button
@@ -665,7 +613,7 @@
                             <path d="M5 2h10l5 5v15H5V2Z" />
                             <path d="M14 2v6h6M9 12h7m-7 4h7" /></svg></span
                         ><span
-                          ><strong id="document-title">Investigation notes</strong
+                          ><strong id="document-title">Load-test and rollout plan</strong
                           ><span class="artifact-detail"
                             >Context, findings, and next steps</span
                           ></span
@@ -674,12 +622,9 @@
                     </div>
                   </div>
                 </div>
-                <p class="thread-placeholder" id="thread-placeholder" hidden>
-                  A little nudge.<br />A conversation in motion.
-                </p>
               </div>
               <form class="composer" id="message-form">
-                <label class="sr-only" for="message-input">Message Goblin in this demo</label
+                <label class="sr-only" for="message-input">Message Goblin</label
                 ><textarea
                   id="message-input"
                   rows="2"
@@ -693,7 +638,7 @@
                       class="icon-button"
                       type="button"
                       id="attach-button"
-                      aria-label="Attach a file to the demo message"
+                      aria-label="Attach a file to your message"
                     >
                       <svg
                         class=""
@@ -735,7 +680,7 @@
                       </svg>
                     </button>
                   </div>
-                  <button class="send-button" type="submit" aria-label="Send demo message">
+                  <button class="send-button" type="submit" aria-label="Send message">
                     <svg
                       class=""
                       viewBox="0 0 24 24"
@@ -784,10 +729,10 @@
               class="timeline"
               type="range"
               min="0"
-              max="60"
+              max="36"
               step="0.1"
               value="0"
-              aria-valuetext="0 seconds of 60 seconds"
+              aria-valuetext="0 seconds of 36 seconds"
             />
           </div>
           <div class="transport">
@@ -821,7 +766,8 @@
                   <path d="M4 11a8 8 0 1 1 1 6M4 4v7h7" />
                 </svg></button
               ><span class="time-code"
-                ><span id="elapsed">00:00</span><span class="time-divider">/</span>01:00</span
+                ><span id="elapsed">00:00</span><span class="time-divider">/</span
+                ><span id="total-duration">00:36</span></span
               >
             </div>
             <nav class="chapters" aria-label="Conversation chapters">
@@ -856,30 +802,6 @@
           </div>
         </div>
 
-        <div class="demo-options">
-          <div class="scenario-selector">
-            <label for="scenario">Try another ask</label
-            ><select id="scenario">
-              <option value="0">Investigate a bug</option>
-            </select>
-          </div>
-          <span class="demo-caption">Interactive concept · Example conversations</span
-          ><button class="about-button" id="about-button" type="button">
-            About this demo
-            <svg
-              class=""
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.65"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6" />
-            </svg>
-          </button>
-        </div>
         <span class="sr-only" id="stage-count">01 / 05</span
         ><span class="sr-only" id="conversation-number">01</span>
       </section>
@@ -901,7 +823,42 @@
         Every exchange is scripted; nothing is sent to an external service.
       </p>
       <p>
-        The demo imagines channels including Teams, Discord, and email. Their appearance here does
+        The GitHub dialogue is fictional, inspired by Stephen T.’s public
+        <a href="https://github.com/dotnet/runtime/issues/96277" target="_blank" rel="noopener noreferrer"
+          >dotnet/runtime issue #96277</a
+        > about reducing allocations in LINQ’s OrderBy().Take(). It is not an actual exchange
+        with Stephen T. or an endorsement.
+      </p>
+      <p>
+        The Teams dialogue is fictional, inspired by Anders H.’s public
+        <a href="https://github.com/microsoft/TypeScript/issues/62606" target="_blank" rel="noopener noreferrer"
+          >TypeScript issue #62606</a
+        > about property declaration order changing a type-checking error. The issue is closed;
+        this scenario imagines a regression coverage review, not an actual exchange or endorsement.
+      </p>
+      <p>
+        The email dialogue is fictional, inspired by
+        <a href="https://lists.openwall.net/netdev/2024/09/11/354" target="_blank" rel="noopener noreferrer"
+          >Linus T.’s September 2024 reply</a
+        > about an AtomISP build fix, accepted as
+        <a href="https://github.com/torvalds/linux/commit/7c6a3a65ace70f12b27b1a27c9a69cb791dc6e91" target="_blank" rel="noopener noreferrer"
+          >Linux commit 7c6a3a65ace7</a
+        >. It revisits a historical patch review, not an actual Goblin exchange or endorsement.
+      </p>
+      <p>
+        Renko K.’s Discord dialogue is fictional, inspired by
+        <a href="https://www.circlesarrows.com/about-us" target="_blank" rel="noopener noreferrer"
+          >Circles Arrows’s public company description</a
+        > and its graph database tools,
+        <a href="https://www.circlesarrows.com/blueprint41" target="_blank" rel="noopener noreferrer"
+          >Blueprint41</a
+        > and
+        <a href="https://www.circlesarrows.com/compare41" target="_blank" rel="noopener noreferrer"
+          >Compare41</a
+        >. The sample project is invented; it is not an actual exchange or endorsement.
+      </p>
+      <p>
+        The website illustrates channels including Teams, Discord, and email. Their appearance here does
         not mean those integrations are currently available.
       </p>
       <p>

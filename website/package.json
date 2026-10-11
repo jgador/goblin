@@ -1,0 +1,17 @@
+{
+  "name": "@goblin/website",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "check": "node --check website.js && node --check vite.config.js && node --check load-test.mjs"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}
