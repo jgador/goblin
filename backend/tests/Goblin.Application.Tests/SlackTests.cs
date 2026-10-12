@@ -174,8 +174,11 @@ public sealed class SlackTests
     private static async Task WriteExecutableAsync(string path, string contents)
     {
         if (!OperatingSystem.IsLinux()) throw new PlatformNotSupportedException();
-        await File.WriteAllTextAsync(path, contents);
-        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        // Publish by rename so the executable is never launched while open for writing.
+        string staged = path + ".staged";
+        await File.WriteAllTextAsync(staged, contents);
+        File.SetUnixFileMode(staged, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        File.Move(staged, path, overwrite: true);
     }
 
     private static string TemporaryDirectory()
