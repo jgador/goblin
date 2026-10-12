@@ -2119,7 +2119,10 @@ dialog ul {
 }
 @media (max-width: 600px) {
   .network {
-    min-height: 540px;
+    /* Keep the connected scene together without a desktop-sized empty stage. */
+    aspect-ratio: auto;
+    height: clamp(440px, 100vw, 540px);
+    min-height: 0;
   }
   .person-name {
     width: 100%;
@@ -2149,5 +2152,107 @@ dialog ul {
   .channel-github .repo-actions svg {
     width: 10px;
     height: 10px;
+  }
+}
+
+/* Reflow narrow screens only; keep the existing artwork and desktop styling. */
+@media (max-width: 980px) {
+  .intro h1 {
+    white-space: normal;
+  }
+  .benefits {
+    flex-wrap: wrap;
+  }
+  .benefits > div {
+    min-width: 0;
+  }
+  .benefits p {
+    white-space: normal;
+  }
+  .conversation-heading > div {
+    min-width: 0;
+  }
+  .message-content,
+  .detail-view,
+  #preview-body {
+    overflow-wrap: anywhere;
+  }
+  .transport {
+    flex-wrap: wrap;
+  }
+  .chapters {
+    order: 3;
+    flex: 1 0 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 12px;
+  }
+  .transport-options {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .network-panel {
+    padding: 20px 6px 16px;
+  }
+  .channel-discord {
+    top: auto;
+    bottom: 0;
+    height: 132px;
+  }
+  .channel-discord .card-top {
+    min-height: 50px;
+  }
+  .benefits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .conversation-panel {
+    height: clamp(540px, 85svh, 740px);
+  }
+  .panel-tabs {
+    padding-inline: 12px;
+  }
+  .panel-tabs button {
+    min-height: 44px;
+    min-width: 0;
+  }
+  .conversation-heading {
+    flex-shrink: 0;
+  }
+  .message-meta {
+    flex-wrap: wrap;
+    gap: 3px 8px;
+  }
+  .deliverable strong {
+    flex-wrap: wrap;
+  }
+  .composer textarea {
+    /* Avoid automatic zoom while entering a message on mobile Safari. */
+    font-size: 16px;
+  }
+  .composer .icon-button,
+  .send-button,
+  .transport button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .timeline-wrap {
+    height: 44px;
+  }
+  .timeline {
+    touch-action: pan-y;
+  }
+  .chapters {
+    justify-content: flex-start;
+    column-gap: 14px;
+  }
+  dialog {
+    max-height: calc(100svh - 32px);
+    padding: 24px;
+    overflow-y: auto;
+  }
+  .player:fullscreen {
+    padding: 8px;
   }
 }
