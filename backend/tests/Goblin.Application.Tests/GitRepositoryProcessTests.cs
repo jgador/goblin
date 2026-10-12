@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -122,15 +123,45 @@ public sealed class GitRepositoryProcessTests : IDisposable
     {
         if (!OperatingSystem.IsLinux()) return;
         string path = Path.Combine(_root, "changes.patch");
-        string marker = Path.Combine(_root, "cancel-child-survived");
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => GitRepositoryProcess.WriteOutputAsync(_root,
-            GitRepositoryProcess.CreateEnvironment(_root), path, cancellation.Token, "-c",
-            $"alias.output=!f() {{ (sleep 1; touch '{marker}') & printf 'partial'; wait; }}; f", "output"));
-        await Task.Delay(1500);
-        Assert.False(File.Exists(marker));
-        Assert.False(File.Exists(path));
-        Assert.Empty(Directory.GetFiles(_root, "changes.patch.*.tmp"));
+        string childPid = Path.Combine(_root, "cancel-child.pid");
+        using var cancellation = new CancellationTokenSource();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // The child waits indefinitely, so cancellation cannot race a fixed sleep.
+        string command = $$"""
+            alias.output=!f() {
+                sleep infinity &
+                printf 'partial'
+                echo $! > '{{childPid}}.tmp'
+                mv '{{childPid}}.tmp' '{{childPid}}'
+                wait
+            }; f
+            """;
+        Task operation = GitRepositoryProcess.WriteOutputAsync(_root,
+            GitRepositoryProcess.CreateEnvironment(_root), path, cancellation.Token, "-c", command, "output");
+        Process? child = null;
+        try
+        {
+            while (!File.Exists(childPid)) await Task.Delay(20, timeout.Token);
+            child = Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(childPid, timeout.Token),
+                CultureInfo.InvariantCulture));
+            Assert.False(child.HasExited);
+            Assert.Single(Directory.GetFiles(_root, "changes.patch.*.tmp"));
+
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation).WaitAsync(timeout.Token);
+            await child.WaitForExitAsync(timeout.Token);
+            Assert.True(child.HasExited);
+            Assert.False(File.Exists(path));
+            Assert.Empty(Directory.GetFiles(_root, "changes.patch.*.tmp"));
+        }
+        finally
+        {
+            cancellation.Cancel();
+            if (child is not null && !child.HasExited) child.Kill(entireProcessTree: true);
+            child?.Dispose();
+            try { await operation.WaitAsync(timeout.Token); }
+            catch (OperationCanceledException) { }
+        }
     }
 
     public void Dispose() => Directory.Delete(_root, true);
