@@ -1,4 +1,4 @@
-name: Deliver Goblin installation site
+name: GitHub Pages
 on:
   workflow_call:
     inputs:
@@ -14,10 +14,10 @@ permissions:
   id-token: write
   attestations: read
 concurrency:
-  group: goblin-installation-site
+  group: github-pages
   cancel-in-progress: false
 jobs:
-  site:
+  deploy:
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
@@ -31,21 +31,21 @@ jobs:
         with:
           node-version: '24'
       - uses: ./.github/actions/setup-rust
-      - name: Build the catalog from authenticated published assets
+      - name: Build the GitHub Pages catalog from authenticated published assets
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
-        run: node scripts/release-github.mts site "$VERSION" "$RECOMMENDATION"
+        run: node scripts/release-github.mts github-pages "$VERSION" "$RECOMMENDATION"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .artifacts/pages
+          path: .artifacts/github-pages/output
       - uses: actions/deploy-pages@v4
         id: deploy
-      - name: Verify the delivered installation links
+      - name: Verify the GitHub Pages installation links
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
           RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
-        run: node scripts/release-github.mts check-site "$VERSION" "$RECOMMENDATION"
+        run: node scripts/release-github.mts check-github-pages "$VERSION" "$RECOMMENDATION"

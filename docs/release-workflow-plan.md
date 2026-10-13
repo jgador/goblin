@@ -4,6 +4,8 @@ Steps 1–6 are implemented. The release guide in [releases.md](releases.md) is 
 operating procedure. Local validation covers installer selection, candidate
 integrity, coordinated publication and interruption recovery; exercising the new
 workflow in GitHub Actions remains a rollout check. Azure installation is manual.
+The coordinated workflow is **Platform Release**; workflow and job names follow
+[the GitHub Actions convention](github-actions.md).
 
 ## Release operation
 
@@ -25,21 +27,21 @@ workflow in GitHub Actions remains a rollout check. Azure installation is manual
    and the setup/installation browser journeys. A separate job seals and attests the
    original candidate only after verification succeeds. One protected publication
    job obtains approval for the pair, revalidates its identity, source and existing
-   versions, then publishes new goblinctl first and Goblin second. Installation-site
-   delivery follows; recommendation changes only when requested.
+   versions, then publishes new goblinctl first and Goblin second. GitHub Pages
+   deployment follows; recommendation changes only when requested.
 5. **Recover partial publication.** Use GitHub's explicit **Re-run failed jobs**
    action on the original run. Successful preparation and sealing jobs retain their
    artifact IDs, manifest digest and original preparation attempt. Publication checks
    existing tags and bytes, adds only missing draft assets and never overwrites a
    published version. GitHub may require environment approval again for a retried
    publication job. Missing artifacts or changed source/bytes require fresh
-   preparation and approval. Site delivery is reported separately and can be repaired
+   preparation and approval. GitHub Pages deployment is reported separately and can be repaired
    without publishing again.
 6. **Service release lines and consolidate workflows.** The same operation releases
-   backports while master advances. Application-only changes can reuse the installer;
+   backports while master advances. Platform-only changes can reuse the installer;
    changed bundles require a matching published installer or a new build. The
    standalone Publish goblinctl workflow and automatic pin-PR handoff are removed.
-   Source checks, installation delivery and recommendation/recovery remain.
+   Source checks, GitHub Pages deployment and recommendation/recovery remain.
 
 ## Artifact and approval boundaries
 
@@ -70,9 +72,9 @@ components are verified and skipped during recovery. Authentication or mismatche
 published assets stop the operation for maintainer attention.
 
 Installer assets remain on the goblinctl release. Goblin's release record includes
-their hashes and exact installer manifest. Installation-site verification downloads
-and authenticates that installer before accepting the Goblin release; the site
-itself carries only Goblin's templates, UI, record and checksums.
+their hashes and exact installer manifest. GitHub Pages verification downloads
+and authenticates that installer before accepting the Goblin release; the GitHub
+Pages installation catalog carries only Goblin's templates, UI, record and checksums.
 
 ## Compatibility and rollout checks
 
@@ -86,22 +88,24 @@ must satisfy the line/channel and availability rules. Commits do not infer seman
 version significance. Releases, drafts and standalone tags reserve versions;
 candidate artifacts alone do not. Publication rechecks both version slots.
 
-Historical schema-1 Goblin records remain readable. New publication requires a
-sealed schema-2 candidate. Installer authentication accepts only the historical
-goblinctl-release.yml or coordinated goblin-release.yml signing identity on master.
-Deleting the standalone workflow does not remove trust in its historical releases.
+Current publication requires a sealed schema-2 candidate. Installer authentication
+accepts only the `platform-release.yml` signing identity on master. Installers
+signed by superseded workflows require a new version published through **Platform
+Release** before reuse. Existing tags and assets remain unchanged. Start a fresh
+run from updated master after the rename; reruns retain the original workflow
+revision. See [release signing identity](github-actions.md#release-signing-identity).
 
 Verify these scenarios before the first production publication:
 
 - A real GitHub run prepares and seals a candidate from a protected release branch.
-- An application-only backport reuses matching goblinctl from an older source.
+- A platform-only backport reuses matching goblinctl from an older source.
 - Added, removed or changed installer bundles cause a new build from the release
   branch, even when master has moved ahead.
 - Version conflicts and incorrect signatures stop before publication writes.
 - Publication interrupted after a tag, draft, asset or component completes resumes
   only the unfinished writes, using the same candidate.
 - Missing/expired artifacts and conflicting published bytes fail explicitly.
-- Site failure leaves release publication successful; delivery and recommendation
+- GitHub Pages failure leaves release publication successful; deployment and recommendation
   can be repaired independently.
 
 No automated check authenticates to Azure or provisions cloud resources. Offline
