@@ -9,8 +9,8 @@ workflow in GitHub Actions remains a rollout check. Azure installation is manual
 
 1. **Stabilization branches and checks.** Develop on master and cut a checked
    release/<major>.<minor> branch when a line is ready. Both branch families require
-   PRs and passing goblin-checks. Branch creation requires no installer publication
-   or dependency-pin update.
+   PRs and passing `test_results` from CI. Branch creation requires no installer
+   publication or dependency-pin update.
 2. **Targeted backports.** Fix master first, then cherry-pick with provenance into
    each affected release line through its own PR. Include prerequisites deliberately.
    Apply this process to application code, goblinctl and bundled assets alike.

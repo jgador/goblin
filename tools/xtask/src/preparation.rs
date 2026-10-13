@@ -235,12 +235,12 @@ fn pages(route: &str) -> Result<Vec<Value>> {
 
 fn successful_check(pages: &[Value], source: &str) -> Result<u64> {
     let latest = pages.iter().filter_map(|page| page["check_runs"].as_array()).flatten()
-        .filter(|check| check["name"] == "goblin-checks" && check["app"]["id"] == 15368 && check["head_sha"] == source)
+        .filter(|check| check["name"] == "test_results" && check["app"]["id"] == 15368 && check["head_sha"] == source)
         .max_by_key(|check| check["id"].as_u64().unwrap_or(0))
-        .context("No goblin-checks run for this exact source; select a checked commit or run Goblin checks on the release branch and prepare its checked tip")?;
+        .context("No test_results run for this exact source; select a checked commit or run CI on the release branch and prepare its checked tip")?;
     ensure!(
         latest["status"] == "completed" && latest["conclusion"] == "success",
-        "The latest goblin-checks run for this source has not passed; fix or finish those checks before preparing again"
+        "The latest test_results run for this source has not passed; fix or finish those checks before preparing again"
     );
     latest["id"]
         .as_u64()
@@ -266,7 +266,7 @@ fn freeze(root: &Path, options: &Options) -> Result<Source> {
         .context("Source is not merged into the selected release branch; merge the backport PR or select a commit from that line")?;
     let check_run_id = successful_check(
         &pages(&format!(
-            "commits/{revision}/check-runs?check_name=goblin-checks&filter=latest&per_page=100"
+            "commits/{revision}/check-runs?check_name=test_results&filter=latest&per_page=100"
         ))?,
         &revision,
     )?;

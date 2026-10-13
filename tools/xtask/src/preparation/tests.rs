@@ -247,12 +247,13 @@ fn explicit_versions_cannot_replace_reserved_or_incompatible_installers() {
 #[test]
 fn only_latest_successful_actions_gate_for_the_exact_source_qualifies() {
     let source = "a".repeat(40);
-    let success = json!({"id":10,"head_sha":source,"name":"goblin-checks","app":{"id":15368},"status":"completed","conclusion":"success"});
+    let success = json!({"id":10,"head_sha":source,"name":"test_results","app":{"id":15368},"status":"completed","conclusion":"success"});
     assert_eq!(
         successful_check(&[json!({"check_runs":[success]})], &source).unwrap(),
         10
     );
     for (field, value) in [
+        ("name", json!("tests")),
         ("conclusion", json!("failure")),
         ("status", json!("in_progress")),
         ("head_sha", json!("b".repeat(40))),

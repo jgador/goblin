@@ -1,4 +1,4 @@
-name: Goblin checks
+name: CI
 on:
   pull_request:
   push:
@@ -8,11 +8,10 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: goblin-checks-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  source:
-    name: Source and deployment tests
+  tests:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -40,12 +39,11 @@ jobs:
           make browser-install
           make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
           git diff --exit-code
-  gate:
-    name: goblin-checks
-    needs: source
+  test_results:
+    needs: tests
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - env:
-          RESULT: ${{ needs.source.result }}
+          RESULT: ${{ needs.tests.result }}
         run: '[[ "$RESULT" == success ]]'

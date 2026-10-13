@@ -29,7 +29,7 @@ git fetch origin
 ```
 
 Confirm that `origin/master` is the intended stabilization point and that
-`goblin-checks` passed for that exact commit. Then, for the `0.1` line:
+`test_results` passed for that exact commit. Then, for the `0.1` line:
 
 ```bash
 git switch --create release/0.1 origin/master
@@ -40,7 +40,11 @@ Use the appropriate major/minor name for another line. Creating the branch does
 not require publishing goblinctl, updating its dependency pin, or creating a tag.
 Unreleased goblinctl changes may be present in the source being stabilized.
 
-PRs targeting `master` or `release/*`, and pushes to either, run `goblin-checks`.
+PRs targeting `master` or `release/*`, and pushes to either, run **CI**.
+The `tests` job builds and verifies the source, release artifacts, and installation
+contracts. The required `test_results` job passes only when `tests` succeeds and
+reports failure when `tests` fails, is cancelled, or is skipped. Job IDs use short
+lowercase names with at most one underscore; GitHub displays those IDs directly.
 The same active ruleset requires PRs, an up-to-date passing check, and resolved
 review conversations; it blocks deletion and force pushes. It has no bypass
 actors and requires no second reviewer, so a sole maintainer can merge a passing
@@ -75,7 +79,7 @@ git push --set-upstream origin backport/0.1/123-fix-description
 
 Open a PR with **base `release/0.1`** and this backport branch as the head. Link the
 original issue/PR and commit, explain why the release line needs the fix, and note
-conflict resolutions and verification. Wait for `goblin-checks` and merge through
+conflict resolutions and verification. Wait for `test_results` and merge through
 the protected PR flow. Confirm the checks on the resulting release-branch commit
 before using it as a later candidate.
 
@@ -92,7 +96,7 @@ release.
 ## Prepare a coordinated candidate
 
 1. Merge source changes or backports into the intended release line. Wait for
-   **goblin-checks** to pass for the exact commit.
+   **test_results** to pass for the exact commit.
 2. Open **Actions → Prepare Goblin release → Run workflow** on `master`.
    The workflow uses the checked-in preparation tooling from this run; **Source
    branch** selects the product source, for example `release/0.1`.
@@ -211,9 +215,15 @@ repository ruleset for `master` and release branches. The
 The ruleset uses GitHub's
 `refs/heads/release/**/*` pattern to cover both immediate and nested release
 branch names; Actions uses `release/**`. Verify the live ruleset as well as the
-file. Install `checks.yml` before activating protection in a new repository so
-the required `goblin-checks` job exists. Its PR trigger covers all target branches;
+file. Install `ci.yml` before activating protection in a new repository so
+the required `test_results` job exists. Its PR trigger covers all target branches;
 its push trigger covers `master` and `release/**`.
+
+When adopting the CI rename in an existing repository, wait for `test_results` to
+pass on the rename PR, then replace the active ruleset's `goblin-checks` requirement
+with `test_results` from GitHub Actions before merging. Editing the JSON template
+does not update the active GitHub ruleset. Release preparation requires a source
+commit with a passing `test_results` check.
 
 Preparation and verification need read access to source checks, releases and
 attestations. Signing has separate OIDC/attestation permissions; the protected
@@ -227,10 +237,10 @@ delivery job and does not block recovery of release publication.
   independently checked against release/<major>.<minor>.
 - Configure GitHub Pages with **Source: GitHub Actions**. The delivery workflow
   builds the distribution branch and deploys its generated artifact.
-- Keep **goblin-checks** as the required source check. No pin-PR permissions or
+- Keep **test_results** as the required source check. No pin-PR permissions or
   separate goblinctl-release approval are needed by the coordinated workflow.
 
-The existing ruleset, master approval policy and Pages hosting already provide
+Verify the active required check, master approval policy and Pages hosting against
 these settings. Azure credentials and subscription settings are not required.
 
 ### Manual Azure installation
