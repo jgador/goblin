@@ -6,17 +6,18 @@ Develop one official ChatGPT and Slack integration for independent self-hosted G
 
 Branch: `experiments/official-integrations`, created once from master `f9fb7522ee10fe5ec6fce9a57c553c25dde72a38`.
 
-Iteration OI-001, 2026-10-13 UTC: a .NET 10 **local stdio prototype** and documented feasibility assessment. Not a published official plugin, OAuth server, live ChatGPT connection, Slack app release or verified tunnel installation.
+Iteration OI-002, 2026-10-13 UTC: added a tested customer resource-server authorization component using real JWT signature verification and a local Work-grant contract. The existing .NET 10 **local stdio prototype** remains separate and still uses an owner-session bridge. Not a published official plugin, OAuth server, live ChatGPT connection, Slack app release or verified tunnel installation.
 
 ## Next incremental task
 
-Replace the prototype's broad owner-session bridge with a customer-enforced read-only connector authorization boundary. First inspect existing local identity/conversation permissions and choose a small adapter/application contract for a verified principal, resource binding and explicit Work read grants. Add focused rejection tests for incorrect audience/resource, missing scope, expired/revoked grants and unauthorized Work IDs. Do not invent ChatGPT identity or implement an ad hoc production OAuth server. Keep remote hosting/public distribution gated until platform eligibility is established.
+Connect the tested `ConnectorReadBoundary` to an isolated private HTTP/MCP adapter with standards-based protected-resource metadata and sanitized 401/403 behavior. Inspect customer-owned persistence/identity boundaries before defining a durable local grant implementation and direct WorkStore status projection. The production backend and existing stdio host must remain unchanged until authorization and Work selection are enforced at the customer application boundary without an owner cookie. Start with one small, testable transport/application adapter; do not ship an always-allow or in-memory test grant store as production authorization. No ad hoc OAuth issuer or assumed ChatGPT identity. Keep public distribution gated until platform eligibility is established.
 
 Then evaluate a standards-based customer-owned OAuth provider with PKCE S256 and discovery, and a private MCP transport/tunnel configuration. Only test live platforms if noninteractive credentials and permissions are already provisioned. Further Slack implementation waits for an independent event-delivery proof.
 
 ## Completed changes and commit references
 
-- OI-001: `feat(mcp): prototype permission-controlled local Work status reads`. The implementation and this state are in the same commit. Resolve its exact SHA with `git log -1 --format=%H -- experiments/official-integrations/STATE.md`; a commit cannot contain its own SHA. On the next iteration append the resolved previous SHA here.
+- OI-001: published commit `e0331f140f347da51a8ff0935e54786013678660`, `feat(mcp): prototype permission-controlled local Work status reads`.
+- OI-002: `feat(mcp): verify connector tokens before local Work grants`. This state and the increment share a commit; resolve its published SHA from `git log -1 --format=%H -- experiments/official-integrations/STATE.md` and record it in the next iteration.
 - `FEASIBILITY.md`: official-docs assessment for template URLs, private tunnels, desktop plugins, customer OAuth, Sign in with ChatGPT, Slack OAuth/PKCE, Socket Mode, Marketplace and necessary platform data exchange.
 - `mcp/`: official C# MCP SDK 1.4.1, pinned with a NuGet lockfile; .NET 10 SDK 10.0.100 used. One read-only `goblin_get_work_status` tool. Explicit positive Work ID grants, fixed HTTPS/loopback origin, no redirect following, five-second HTTP timeout, 128 KiB response limit, safe errors, no HTTP logging, status validation against Goblin.Core.Work.WorkStatus, bigint IDs/versions returned as strings.
 - `tests/`: executable focused contract checks using mocked HTTP responses plus a real SDK stdio client/server subprocess. Synthetic random session created only in memory; child environment inheritance disabled. No passwords or real customer credentials used.
@@ -59,6 +60,19 @@ Reproduction: follow README's targeted serial build and test commands. All subpr
 ## Iteration budget and continuation
 
 One small implementation per run. Read this state first. Reuse this branch, preserve remote commits and never force-push, merge to master or auto-create PRs. Maximum 20 minutes; stop implementing near 18 minutes, reserve remaining time for sanitized state and `$commit-push`. Bound every command and terminate child processes. Limit repeated failures to one corrective attempt.
+
+## OI-002 results, 2026-10-13 UTC
+
+- Inspected existing `ExternalConversationStore`: local identity confirmation scopes access to installation/workspace/user; authorization is rechecked before processing. MCP permission claims must never implicitly become local owner access.
+- Added isolated `ConnectorReadBoundary` and `ICustomerWorkReadGrants`. Trusted customer issuer/public key and exact resource audience; RS256 signature, access-token type, expiry/not-before, exact scope and subject/token identity validation. Public key material is defensively copied. No token-issued URLs are fetched. Every call checks local grants before Work source access; grant-store failures are closed and sanitized.
+- Added Microsoft.IdentityModel.JsonWebTokens 8.19.1 and updated the NuGet lockfile. No production/core/Slack lifecycle changes, new public routes, OAuth issuance, network discovery or environment variables.
+- Current narrow JWT profile requires RS256/at+jwt plus nonempty sub/jti/scope and expiry. It is not claimed to implement all RFC 9068 requirements or all identity-provider token formats. Bearer status reads can repeat until expiry/revocation; no one-time replay guarantee.
+- Baseline build passed. First increment build failed once with CS8602 on possibly-null scope; one corrective change added an explicit empty/null scope rejection. Corrective and final serial builds passed with zero warnings/errors.
+- **43 focused checks passed:** previous 22 plus 21 connector checks. New cases cover valid signed/granted read, wrong issuer/audience/trailing slash, wrong signature/algorithm, unsigned/missing-expiry/identity/future/expired tokens, missing exact scope/sub/jti, malformed/oversized token, unauthorized Work/unlinked actor, local grant revocation/expiry and unavailable grant storage. Denied reads never invoke the test Work source. Real RSA/JWT verifier and SDK stdio transport; in-memory grants and mocked backend/source only.
+- Test commands use 40-second outer timeout; stdio client uses a 15-second deadline and disposal. Ephemeral signing keys/tokens live only in memory; no isolated installation, password, customer data or live authentication was used.
+- Formatter skipped because the previously recorded cached-SDK Roslyn assembly blocker is unchanged. Manual spacing review and whitespace checks apply. No full backend/core/contracts-generation suite needed for unchanged production/core/contracts.
+- Live customer IdP/JWKS rotation, durable grant revocation, authenticated database reads, HTTP MCP hosting and ChatGPT/Slack OAuth/tunnel/Marketplace remain unverified. Missing noninteractive credentials and partner eligibility remain recorded blockers; no login retry.
+- Publish through connected GitHub Git-data tools with the observed branch head as the non-forced expected parent. Do not retry known Git CLI credential failure. Continuing branch baseline is `e0331f140f347da51a8ff0935e54786013678660`.
 
 ## Publication transport
 

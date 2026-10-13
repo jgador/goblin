@@ -11,5 +11,6 @@
     <ProjectReference Include="../../../backend/src/Goblin.Core/Goblin.Core.csproj" />
     <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.1" />
   </ItemGroup>
 </Project>

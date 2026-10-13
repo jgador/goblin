@@ -46,3 +46,11 @@ Existing `Goblin.Integrations.Slack` uses a customer app manifest, app-level and
 - Model/runtime provider calls during Work execution remain governed by existing Goblin configuration, separately from these adapters.
 
 No live platform account was authenticated, no customer data used, and no provider API inference requested in this iteration.
+
+## OI-002 authorization evidence
+
+On 2026-10-13 UTC, the [OpenAI token-verification requirements](https://developers.openai.com/plugins/build/auth) were rechecked: resource servers verify signatures, issuer, audience, token validity and scopes, then apply local policy. Microsoft documents that [ValidateTokenAsync](https://learn.microsoft.com/en-us/dotnet/api/microsoft.identitymodel.jsonwebtokens.jsonwebtokenhandler.validatetokenasync?view=msal-web-dotnet-latest) returns an `IsValid` result that must be checked; [ValidAlgorithms](https://learn.microsoft.com/en-us/dotnet/api/microsoft.identitymodel.tokens.tokenvalidationparameters.validalgorithms?view=msal-web-dotnet-latest) restricts accepted algorithms. The [JWT access-token profile](https://www.rfc-editor.org/rfc/rfc9068.html) distinguishes access tokens from identity tokens with the `at+jwt` type.
+
+`ConnectorReadBoundary` now prototypes those cryptographic checks plus a customer-grant contract. It remains disconnected from production Web routes and durable grants. Existing Slack identity policy was inspected: local confirmation enables an identity scoped to installation/workspace/user, and authorization is rechecked before processing. MCP grants must preserve that local-authority separation without reusing Slack-specific identity records or auto-granting owner access from email/profile claims.
+
+Tests establish only the boundary's behavior with real ephemeral RSA-signed JWTs, in-memory grants and a test Work source. Public distribution feasibility, partner eligibility and live OAuth/tunnel/Slack status are unchanged.

@@ -36,3 +36,13 @@ Do not publish this session bridge as a remote server. There is no OAuth impleme
 The focused checks do not create a Goblin installation or require an owner password. When a future check does, generate a fresh cryptographic `GOBLIN_LOCAL_PASSWORD` in its runtime environment and pass a private, disposable `GOBLIN_PASSWORD_HASH_FILE` path to existing setup. Never reuse an existing checkout's secret directory, echo secrets, use a shared default, or commit verifiers. Keep secrets outside agent execution and clean up disposable installation files/processes.
 
 Every iteration has a 20-minute maximum, stops implementation near minute 18, records sanitized results and invokes the authorized `$commit-push` workflow for the same experiment branch. Never merge or create a PR automatically.
+
+## Customer authorization boundary experiment
+
+`ConnectorReadBoundary` is an isolated server-side component, not yet wired to a public endpoint or the stdio host. It verifies signed JWT access tokens using Microsoft IdentityModel before querying `ICustomerWorkReadGrants` and the injected Work status source. The existing local stdio cookie bridge is unchanged and still unsuitable for public distribution.
+
+Its current narrow token contract is RS256, `typ=at+jwt`, a configured exact HTTPS issuer/resource audience, required expiry, optional not-before enforcement, and nonempty `sub`, `jti` and exact `goblin.work.status.read` scope. Issuer public keys are provided by trusted customer configuration and defensively copied; token-supplied key locations are never followed. Identity tokens, unsigned tokens and audience trailing-slash variations are rejected. This is not an OAuth issuer, general-purpose identity-provider configuration, or a complete RFC 9068 implementation.
+
+Every call rechecks a customer-held grant using issuer, subject, resource, token identity and Work ID. A valid signature or scope alone cannot authorize a read. Revoked/expired local grants and grant-store failures deny access before the source is invoked. Ordinary read access tokens are reusable until expiry/revocation; this component does not claim one-time-token replay protection.
+
+Tests generate ephemeral RSA keys and JWTs in memory and exercise the real cryptographic verifier. Grant storage and Work status source are in-memory test implementations. No token issuance flow, JWKS discovery/rotation, durable grant storage, production Web middleware, authenticated database read or live platform connection is covered yet. A production adapter must place grant authorization and Work selection within the appropriate customer-owned persistence boundary before replacing the cookie bridge.
