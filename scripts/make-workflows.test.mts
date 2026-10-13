@@ -5,6 +5,7 @@ import {
     mkdir,
     mkdtemp,
     readFile,
+    readdir,
     rm,
     symlink,
     writeFile,
@@ -78,6 +79,49 @@ if (command.join(" ") === ${JSON.stringify(fail)}) process.exit(17);
         await rm(directory, { recursive: true, force: true });
     }
 }
+
+test("clean-artifacts recursively removes output while preserving the root marker and symlink targets", async () => {
+    await mkdir(artifacts, { recursive: true });
+    const directory = await mkdtemp(join(artifacts.pathname, "cleanup-"));
+    try {
+        await copyFile(new URL("Makefile", root), join(directory, "Makefile"));
+        const output = join(directory, ".artifacts");
+        const nested = join(output, "nested directory", "child");
+        await mkdir(nested, { recursive: true });
+        await writeFile(join(output, ".gitkeep"), "keep root marker\n");
+        await writeFile(join(output, ".hidden-output"), "temporary output\n");
+        await writeFile(join(nested, ".gitkeep"), "nested marker\n");
+        await writeFile(join(nested, "output.log"), "temporary output\n");
+        const unrelated = join(directory, "unrelated");
+        await mkdir(unrelated);
+        await writeFile(join(unrelated, "keep.txt"), "keep unrelated file\n");
+        await symlink(unrelated, join(output, "linked-directory"));
+        await writeFile(join(directory, "clean-artifacts"), "target name\n");
+
+        const result = spawnSync(
+            "make",
+            ["--no-print-directory", "clean-artifacts"],
+            {
+                cwd: directory,
+                encoding: "utf8",
+            },
+        );
+        assert.ifError(result.error);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(result.stdout, "Cleaned .artifacts (kept .gitkeep).\n");
+        assert.deepEqual(await readdir(output), [".gitkeep"]);
+        assert.equal(
+            await readFile(join(output, ".gitkeep"), "utf8"),
+            "keep root marker\n",
+        );
+        assert.equal(
+            await readFile(join(unrelated, "keep.txt"), "utf8"),
+            "keep unrelated file\n",
+        );
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
 
 test("parallel Make invocation preserves the full test lifecycle and shares build prerequisites", async () => {
     const { result, entries, commands } = await workflow(["test"]);

@@ -131,6 +131,7 @@ npm run typecheck
 
 | Command | Purpose |
 | --- | --- |
+| `make clean-artifacts` | Recursively delete everything in `.artifacts/` except its root `.gitkeep`, then print confirmation |
 | `make install` | Install both locked Node packages and fetch locked Rust dependencies |
 | `make setup-rust` | Install the pinned Rust development tools |
 | `make format-rust` | Format Rust using Codex conventions |
