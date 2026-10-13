@@ -48,14 +48,14 @@ jobs:
             echo '::error::Run preparation on jgador/goblin master and select the release branch in Source branch.'
             exit 1
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           fetch-depth: 0
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
       - name: Check the publication approval configuration
@@ -91,11 +91,11 @@ jobs:
     needs: prepare
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.source }}
           path: .artifacts/source
@@ -107,10 +107,10 @@ jobs:
           merge-multiple: true
       - uses: ./.github/actions/setup-rust
       - uses: ./.github/actions/setup-deployment
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           global-json-file: .artifacts/source/global.json
       - name: Verify installer inputs and reproduce candidate Azure assets
@@ -142,7 +142,7 @@ jobs:
       artifact: ${{ steps.upload.outputs.artifact-id }}
       sha256: ${{ steps.identity.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
@@ -193,12 +193,12 @@ jobs:
       checks: read
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ github.workflow_sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
       - uses: ./.github/actions/setup-rust
