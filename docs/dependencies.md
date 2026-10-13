@@ -118,7 +118,7 @@ that same type. The authenticated release check invokes the published installer'
 actual validator, and deployment tests check installation behavior.
 
 The release fingerprint includes installer code, scripts, and embedded PostgreSQL
-manifests. **Prepare Goblin release** reports changes since the pinned release.
+manifests. **Platform Release** reports changes since the pinned release.
 A new binary is needed to distribute installer changes, but those changes can
 merge and be batched before a maintainer chooses to release.
 Changing an application image such as Headlamp does not change installer inputs.
@@ -126,7 +126,10 @@ Image digests establish artifact identity; behavioral compatibility still requir
 integration tests. Images inside upstream k3s, cert-manager, and Agent Sandbox
 releases remain managed by those upstream releases.
 
-CI runs `dependencies check --locked` and source tests. **Prepare Goblin release**
+CI runs `dependencies check --locked` and source tests. **Platform Release**
 selects and verifies the installer, then obtains one approval to publish the exact
 Goblin–goblinctl pair. It creates no dependency-pin PR. The [release guide](releases.md) describes the
 complete routine and installation verification.
+The **GitHub Pages** workflow deploys the authenticated installation catalog after
+publication. **Website Release** independently publishes and deploys the public
+website; see [GitHub Actions](github-actions.md) for their names and boundaries.

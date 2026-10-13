@@ -17,9 +17,12 @@ website neither installs nor modifies those components or the platform app.
 
 ## Protected release
 
-`.github/workflows/website.yml` checks all PRs and merge-queue candidates. A push
-changing production image inputs on `master`, or a manual run on `master`, builds and tests the production image,
-publishes it to `ghcr.io/jgador/goblin-website`, and waits for approval. GitHub
+**Website Release** (`.github/workflows/website-release.yml`) uses `validate` to check
+source, production configuration, and the container for all PRs and merge-queue candidates.
+Workflow and job names follow [the GitHub Actions convention](../../docs/github-actions.md).
+A push changing production image inputs on `master`, or a manual run on `master`,
+builds and tests the production image, publishes it to
+`ghcr.io/jgador/goblin-website`, and waits for approval. GitHub
 Actions uses its own temporary package token; no registry password is stored.
 The deployed reference is the exact tested image digest, never a mutable tag.
 Documentation and infrastructure-only changes do not publish an unchanged
@@ -49,8 +52,12 @@ the exact digest. Rerun the failed job after updating visibility. Kubernetes
 does not receive the short-lived GitHub package token.
 
 Apply `github-ruleset.json` as an additional repository branch ruleset once this
-workflow is present in the PR. It requires `website-checks` on `master` without
-changing the application's release-branch rules or existing `test_results` gate.
+workflow is present in the PR. It requires `validate` from GitHub Actions on
+`master`, alongside the platform's existing `test_results` gate and release-branch
+rules. When adopting the rename, wait for `validate` to pass on the PR, then replace
+the active website ruleset's `website-checks` requirement with `validate` from
+GitHub Actions before merging. Editing the JSON template does not update the
+active ruleset.
 
 ## Administrator bootstrap
 

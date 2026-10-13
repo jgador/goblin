@@ -33,6 +33,7 @@ Use current code and tests to check implementation claims in dated plans and aud
 | C# types or constructors | [Construction conventions](docs/formatting.md#c-construction-and-contracts) and, when changing record semantics, [record audit](docs/csharp-record-audit.md) |
 | Rust under `tools/` | [Pinned toolchain, conventions, and checks](docs/rust-development.md) |
 | Verification or build/test tooling | [Commands and test selection](docs/repository-layout.md#choosing-verification) |
+| GitHub Actions workflows or required checks | [Workflow names and rollout](docs/github-actions.md) |
 | Agent instructions, skills, or task prompts | [Agent workflow guide](docs/agent-workflow.md) |
 
 # Project constraints

@@ -1,5 +1,12 @@
 # Goblin: In the loop
 
+The public website at `goblinboard.com` is released by
+[Website Release](../.github/workflows/website-release.yml). The separate
+[GitHub Pages workflow](../.github/workflows/github-pages.yml) deploys the
+installation catalog at `jgador.github.io/goblin/`. See
+[workflow naming](../docs/github-actions.md) and
+[production deployment](production/README.md).
+
 A standalone interactive concept showing Goblin at the center of Slack,
 Microsoft Teams, GitHub, Discord, and Gmail conversations. The layout follows
 `references/goblin-in-the-loop-v2.png` in this directory:

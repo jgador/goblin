@@ -227,7 +227,7 @@ pub fn execute(root: &Path, task: Task) -> Result<()> {
                 workflow.trim(),
             )?;
             summary(&format!(
-                "```text\nGoblin {}\nInstaller: goblinctl {}\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve **Publish Goblin and goblinctl**. Approval publishes this exact pair. Source: `{}`.",
+                "```text\nGoblin {}\nInstaller: goblinctl {}\nDeployment checks: passed\nAzure installation: manual\nReady to publish\n```\n\nUse **Review deployments** to approve the `publish` job in **Platform Release**. Approval publishes this exact pair. Source: `{}`.",
                 record.version, record.installer.version, record.source.revision
             ))
         }

@@ -13,11 +13,11 @@ import {
     rmSync,
     writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const githubRepository = "jgador/goblin";
-export const siteUrl = "https://jgador.github.io/goblin";
+export const githubPagesUrl = "https://jgador.github.io/goblin";
+const githubPagesDirectory = resolve(".artifacts/github-pages");
 export const releaseFiles = [
     "azuredeploy.json",
     "azuredeploy.portal.json",
@@ -32,7 +32,7 @@ export function validVersion(value: string): string {
     return value;
 }
 export function deployUrl(version: string): string {
-    const base = `${siteUrl}/versions/${validVersion(version)}`;
+    const base = `${githubPagesUrl}/versions/${validVersion(version)}`;
     return `https://portal.azure.com/#create/Microsoft.Template/uri/${encodeURIComponent(`${base}/azuredeploy.portal.json`)}/createUIDefinitionUri/${encodeURIComponent(`${base}/createUiDefinition.json`)}`;
 }
 export function missingAssets(
@@ -143,7 +143,7 @@ function preflight() {
         );
     }
     summary(
-        "Coordinated release approval is configured. Installation-site delivery is reported separately.",
+        "Coordinated release approval is configured. GitHub Pages deployment is reported separately.",
     );
 }
 export interface Publication {
@@ -302,7 +302,7 @@ export function publishAssets(
             githubRepository +
             "/releases/tag/" +
             spec.tag +
-            "). Installation-site delivery and recommendation are reported separately.",
+            "). GitHub Pages deployment and recommendation are reported separately.",
     );
 }
 export function publishPair(
@@ -337,7 +337,7 @@ function authenticateCandidate(directory: string, record: any) {
         "--repo",
         githubRepository,
         "--signer-workflow",
-        githubRepository + "/.github/workflows/goblin-release.yml",
+        githubRepository + "/.github/workflows/platform-release.yml",
         "--signer-digest",
         record.workflowRevision,
         "--source-ref",
@@ -424,7 +424,7 @@ function publish(directory: string) {
                 " at " +
                 record.source.revision +
                 "\n\nDeployment checks passed. Azure installation remains manual.\n\n[Install Goblin](" +
-                siteUrl +
+                githubPagesUrl +
                 "/?version=" +
                 record.version +
                 ")\n\n[Verification run](https://github.com/" +
@@ -501,13 +501,16 @@ export function updateCatalog(catalog: any, entry: any, recommend: boolean) {
     );
     return catalog;
 }
-function site(version: string, recommendation: string) {
+function buildGithubPages(version: string, recommendation: string) {
     assert.ok(["recommend", "preserve"].includes(recommendation));
-    const downloadDir = mkdtempSync(join(tmpdir(), "goblin-site-release-"));
+    mkdirSync(githubPagesDirectory, { recursive: true });
+    const downloadDir = mkdtempSync(
+        join(githubPagesDirectory, "github-pages-release-"),
+    );
     try {
         const record = publishedRelease(version, downloadDir);
-        const path = resolve(".artifacts/site");
-        assert.ok(!existsSync(path), "Site worktree already exists");
+        const path = join(githubPagesDirectory, "worktree");
+        assert.ok(!existsSync(path), "GitHub Pages worktree already exists");
         const branch = api("git/ref/heads/gh-pages");
         if (branch) {
             run("git", ["fetch", "origin", "gh-pages"]);
@@ -531,7 +534,7 @@ function site(version: string, recommendation: string) {
                 assert.equal(
                     sha(join(destination, name)),
                     sha(join(downloadDir, name)),
-                    "Versioned site assets changed",
+                    "Versioned GitHub Pages assets changed",
                 );
         } else {
             mkdirSync(destination, { recursive: true });
@@ -570,37 +573,40 @@ function site(version: string, recommendation: string) {
                     "user.email=41898282+github-actions[bot]@users.noreply.github.com",
                     "commit",
                     "-m",
-                    `Install catalog: Goblin ${version} (${recommendation})`,
+                    `GitHub Pages catalog: Goblin ${version} (${recommendation})`,
                 ],
                 path,
             );
             run("git", ["push", "origin", "HEAD:refs/heads/gh-pages"], path);
         }
-        // Upload only the generated site, never worktree Git metadata.
-        cpSync(path, ".artifacts/pages", {
+        // Upload only the generated GitHub Pages content, never worktree Git metadata.
+        cpSync(path, join(githubPagesDirectory, "output"), {
             recursive: true,
             filter: (source) => source !== join(path, ".git"),
         });
         summary(
-            `Installation site prepared for Goblin ${version}. Recommendation: ${catalog.recommended ?? "none"}. The Pages deployment job must complete before this is live.`,
+            `GitHub Pages prepared for Goblin ${version}. Recommendation: ${catalog.recommended ?? "none"}. The github_pages / deploy job must complete before this is live.`,
         );
     } finally {
         rmSync(downloadDir, { recursive: true, force: true });
     }
 }
-async function checkSite(version: string, recommendation: string) {
-    const directory = mkdtempSync(join(tmpdir(), "goblin-site-check-"));
+async function checkGithubPages(version: string, recommendation: string) {
+    mkdirSync(githubPagesDirectory, { recursive: true });
+    const directory = mkdtempSync(
+        join(githubPagesDirectory, "github-pages-check-"),
+    );
     try {
         publishedRelease(version, directory);
         for (const name of releaseFiles) {
             const response = await fetch(
-                `${siteUrl}/versions/${version}/${name}`,
+                `${githubPagesUrl}/versions/${version}/${name}`,
                 { signal: AbortSignal.timeout(30_000), cache: "no-store" },
             );
             assert.equal(
                 response.status,
                 200,
-                `Site asset unavailable: ${name}`,
+                `GitHub Pages asset unavailable: ${name}`,
             );
             const digest = createHash("sha256")
                 .update(Buffer.from(await response.arrayBuffer()))
@@ -608,10 +614,10 @@ async function checkSite(version: string, recommendation: string) {
             assert.equal(
                 digest,
                 sha(join(directory, name)),
-                `Site asset differs: ${name}`,
+                `GitHub Pages asset differs: ${name}`,
             );
         }
-        const response = await fetch(`${siteUrl}/releases.json`, {
+        const response = await fetch(`${githubPagesUrl}/releases.json`, {
             signal: AbortSignal.timeout(30_000),
             cache: "no-store",
         });
@@ -623,7 +629,7 @@ async function checkSite(version: string, recommendation: string) {
         if (recommendation === "recommend")
             assert.equal(catalog.recommended, version);
         summary(
-            `Installation site: passed. [Install Goblin ${version}](${siteUrl}/?version=${version}).${recommendation === "recommend" ? " This version is now recommended." : " Recommendation unchanged."}`,
+            `GitHub Pages: passed. [Install Goblin ${version}](${githubPagesUrl}/?version=${version}).${recommendation === "recommend" ? " This version is now recommended." : " Recommendation unchanged."}`,
         );
     } finally {
         rmSync(directory, { recursive: true, force: true });
@@ -643,14 +649,16 @@ async function main() {
         case "publish":
             publish(resolve(value));
             break;
-        case "site":
-            site(validVersion(value), mode);
+        case "github-pages":
+            buildGithubPages(validVersion(value), mode);
             break;
-        case "check-site":
-            await checkSite(validVersion(value), mode);
+        case "check-github-pages":
+            await checkGithubPages(validVersion(value), mode);
             break;
         default:
-            throw new Error("Expected preflight, publish, site, or check-site");
+            throw new Error(
+                "Expected preflight, publish, github-pages, or check-github-pages",
+            );
     }
 }
 if (import.meta.main) await main();

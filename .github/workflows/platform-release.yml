@@ -1,4 +1,4 @@
-name: Prepare Goblin release
+name: Platform Release
 on:
   workflow_dispatch:
     inputs:
@@ -87,7 +87,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   verify:
-    name: Verify the frozen source and candidate
     needs: prepare
     runs-on: ubuntu-24.04
     steps:
@@ -130,8 +129,7 @@ jobs:
           git diff --exit-code
       - name: Check the candidate and source after testing
         run: cargo xtask release check-candidate --directory .artifacts/goblin --source-root .artifacts/source
-  ready:
-    name: Seal the verified candidate
+  seal:
     needs: [prepare, verify]
     runs-on: ubuntu-24.04
     permissions:
@@ -180,8 +178,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
   publish:
-    name: Publish Goblin and goblinctl
-    needs: [prepare, ready]
+    needs: [prepare, seal]
     runs-on: ubuntu-24.04
     environment: goblin-release
     concurrency:
@@ -204,7 +201,7 @@ jobs:
       - uses: ./.github/actions/setup-rust
       - uses: actions/download-artifact@v4
         with:
-          artifact-ids: ${{ needs.ready.outputs.artifact }}
+          artifact-ids: ${{ needs.seal.outputs.artifact }}
           path: .artifacts/goblin
           merge-multiple: true
       - name: Publish or recover the approved release pair
@@ -212,15 +209,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SOURCE: ${{ needs.prepare.outputs.source }}
           PREPARED_ATTEMPT: ${{ needs.prepare.outputs.attempt }}
-          CANDIDATE_SHA256: ${{ needs.ready.outputs.sha256 }}
+          CANDIDATE_SHA256: ${{ needs.seal.outputs.sha256 }}
         run: node scripts/release-github.mts publish .artifacts/goblin
       - name: Explain publication recovery
         if: failure()
         run: |
           echo 'Publication did not complete. Use **Re-run failed jobs** on this run to retry with the retained candidate. Existing tags and bytes must match; published versions are never overwritten. Missing/expired artifacts require fresh preparation and approval.' >> "$GITHUB_STEP_SUMMARY"
-  installation-site:
+  github_pages:
     needs: [prepare, publish]
-    uses: ./.github/workflows/goblin-install-site.yml
+    uses: ./.github/workflows/github-pages.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
       recommend: ${{ inputs.recommend }}
@@ -230,17 +227,16 @@ jobs:
       id-token: write
       attestations: read
   report:
-    name: Report publication and installation delivery
     if: always()
-    needs: [publish, installation-site]
+    needs: [publish, github_pages]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - env:
           PUBLICATION: ${{ needs.publish.result }}
-          DELIVERY: ${{ needs.installation-site.result }}
+          DEPLOYMENT: ${{ needs.github_pages.result }}
         run: |
-          echo "Release publication: **$PUBLICATION**. Installation-site delivery: **$DELIVERY**." >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$PUBLICATION" == success && "$DELIVERY" != success ]]; then
-            echo 'The releases are published. Re-run the failed delivery job or use **Recommend Goblin release** with recommendation unchecked to repair delivery only.' >> "$GITHUB_STEP_SUMMARY"
+          echo "Release publication: **$PUBLICATION**. GitHub Pages deployment: **$DEPLOYMENT**." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$PUBLICATION" == success && "$DEPLOYMENT" != success ]]; then
+            echo 'The releases are published. Re-run the failed github_pages job or use **Recommend Release** with recommendation unchecked to repair the GitHub Pages deployment only.' >> "$GITHUB_STEP_SUMMARY"
           fi
