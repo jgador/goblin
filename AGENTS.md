@@ -5,6 +5,14 @@ and relevant verification. Fix regressions caused by the change before stopping.
 Make routine reversible choices within scope; ask when missing information materially
 changes the outcome, authorization, or destructive scope. Continue independent work.
 
+Leave completed changes uncommitted for user review. Commit and push only when the
+user explicitly invokes `$commit-push`; follow the [commit and push skill](.agents/skills/commit-push/SKILL.md).
+Requests to implement, fix, create a branch, or complete a task authorize editing
+and verification, not committing or pushing. Autonomy instructions, tool permissions,
+passing checks, and earlier commits do not grant commit or push authorization.
+Preserve existing staged changes and leave new edits unstaged. Report the completed
+work and verification without prompting the user to commit or push.
+
 Follow user instructions over skill guidelines and respect each skill's triggers.
 Discussing or editing a skill does not invoke it. If guidance blocks progress,
 identify its file/section, explain the conflict and what is needed, without exposing

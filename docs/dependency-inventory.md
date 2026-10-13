@@ -151,7 +151,7 @@ resources. They are not independently pinned by these application manifests.
 
 ## GitHub Actions
 
-Sources: [source checks](../.github/workflows/checks.yml),
+Sources: [CI](../.github/workflows/ci.yml),
 [release workflow](../.github/workflows/goblin-release.yml), and
 [shared Rust setup](../.github/actions/setup-rust/action.yml).
 

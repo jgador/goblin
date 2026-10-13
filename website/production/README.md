@@ -50,7 +50,7 @@ does not receive the short-lived GitHub package token.
 
 Apply `github-ruleset.json` as an additional repository branch ruleset once this
 workflow is present in the PR. It requires `website-checks` on `master` without
-changing the application's release-branch rules or existing `goblin-checks` gate.
+changing the application's release-branch rules or existing `test_results` gate.
 
 ## Administrator bootstrap
 

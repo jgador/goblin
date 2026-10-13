@@ -365,7 +365,7 @@ function publish(directory: string) {
     authenticateCandidate(directory, record);
     preflight();
     const check = api("check-runs/" + record.source.checkRunId);
-    assert.equal(check?.name, "goblin-checks");
+    assert.equal(check?.name, "test_results");
     assert.equal(check?.app?.id, 15368);
     assert.equal(check?.head_sha, record.source.revision);
     assert.equal(check?.status, "completed");
