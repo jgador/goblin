@@ -54,3 +54,9 @@ On 2026-10-13 UTC, the [OpenAI token-verification requirements](https://develope
 `ConnectorReadBoundary` now prototypes those cryptographic checks plus a customer-grant contract. It remains disconnected from production Web routes and durable grants. Existing Slack identity policy was inspected: local confirmation enables an identity scoped to installation/workspace/user, and authorization is rechecked before processing. MCP grants must preserve that local-authority separation without reusing Slack-specific identity records or auto-granting owner access from email/profile claims.
 
 Tests establish only the boundary's behavior with real ephemeral RSA-signed JWTs, in-memory grants and a test Work source. Public distribution feasibility, partner eligibility and live OAuth/tunnel/Slack status are unchanged.
+
+## OI-003 private HTTP adapter
+
+On 2026-10-13 UTC, [OpenAI resource metadata and authentication challenges](https://developers.openai.com/plugins/build/auth) were rechecked. The isolated adapter advertises a configured resource/authorization server and includes a fixed metadata URL in 401 responses. It does not implement the authorization server, client registration or consent flow.
+
+The pinned C# SDK's [HTTP context guidance](https://csharp.sdk.modelcontextprotocol.io/v1/concepts/httpcontext/httpcontext.html) identifies stale-context risks with legacy SSE and guarantees fresh request context in stateless mode. Its [transport guidance](https://csharp.sdk.modelcontextprotocol.io/v1/concepts/transports/transports.html) documents explicit stateless mode and restrictive Host/Origin handling. The experiment therefore uses stateless Streamable HTTP, checks bearer authentication on each request, and verifies local grants inside each status call. No public plugin eligibility or live platform capability changed.

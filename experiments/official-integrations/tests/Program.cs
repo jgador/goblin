@@ -92,6 +92,7 @@ if (args.Length == 2)
 else Console.WriteLine("SKIP stdio: supply dotnet executable and built prototype DLL.");
 
 passed += await ConnectorBoundaryChecks.RunAsync();
+passed += await PrivateHttpChecks.RunAsync();
 Console.WriteLine($"PASS {passed} focused checks. Backend responses mocked; no live ChatGPT, Slack or PostgreSQL coverage.");
 return;
 

@@ -71,7 +71,7 @@ public sealed class WorkStatusReader
     }
 }
 
-public sealed class WorkReadFailure : Exception
+public class WorkReadFailure : Exception
 {
     public WorkReadFailure(string message) : base(message) { }
 }

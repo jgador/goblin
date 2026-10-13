@@ -7,18 +7,20 @@ namespace Goblin.Mcp.Prototype;
 // Verified transport identity is evidence, not a local Work permission.
 public sealed class ConnectorIdentity
 {
-    internal ConnectorIdentity(string issuer, string subject, string resource, string tokenId)
+    internal ConnectorIdentity(string issuer, string subject, string resource, string tokenId, DateTimeOffset expiresAt)
     {
         Issuer = issuer;
         Subject = subject;
         Resource = resource;
         TokenId = tokenId;
+        ExpiresAt = expiresAt;
     }
 
     public string Issuer { get; }
     public string Subject { get; }
     public string Resource { get; }
     public string TokenId { get; }
+    public DateTimeOffset ExpiresAt { get; }
 }
 
 // Implement inside the customer's trust boundary. Recheck local approval and
@@ -26,6 +28,11 @@ public sealed class ConnectorIdentity
 public interface ICustomerWorkReadGrants
 {
     Task<bool> CanReadAsync(ConnectorIdentity identity, long workId, CancellationToken token);
+}
+
+public sealed class ConnectorAuthenticationFailure : WorkReadFailure
+{
+    public ConnectorAuthenticationFailure() : base("Connector Work read access is not authorized.") { }
 }
 
 // Isolated resource-server experiment. No token issuance, public endpoint,
@@ -39,6 +46,9 @@ public sealed class ConnectorReadBoundary
     private readonly JsonWebTokenHandler _handler = new() { MaximumTokenSizeInBytes = 8192, MapInboundClaims = false };
     private readonly ICustomerWorkReadGrants _grants;
     private readonly Func<long, CancellationToken, Task<WorkStatusResult>> _read;
+
+    public string Issuer => _issuer;
+    public string Resource => _resource;
 
     public ConnectorReadBoundary(string issuer, string resource, RsaSecurityKey publicKey,
         ICustomerWorkReadGrants grants, Func<long, CancellationToken, Task<WorkStatusResult>> read)
@@ -89,22 +99,36 @@ public sealed class ConnectorReadBoundary
 
     public async Task<WorkStatusResult> ReadAsync(string accessToken, long workId, CancellationToken token)
     {
+        ConnectorIdentity identity = await AuthenticateAsync(accessToken, token);
+        return await ReadAsync(identity, workId, token);
+    }
+
+    public async Task<ConnectorIdentity> AuthenticateAsync(string accessToken, CancellationToken token)
+    {
         token.ThrowIfCancellationRequested();
-        if (workId <= 0 || string.IsNullOrWhiteSpace(accessToken) || accessToken.Length > 8192)
-            throw Denied();
+        if (string.IsNullOrWhiteSpace(accessToken) || accessToken.Length > 8192)
+            throw new ConnectorAuthenticationFailure();
         TokenValidationResult verified;
         try { verified = await _handler.ValidateTokenAsync(accessToken, _validation).WaitAsync(token); }
         catch (Exception error) when (error is SecurityTokenException or ArgumentException)
         {
-            throw Denied();
+            throw new ConnectorAuthenticationFailure();
         }
         if (!verified.IsValid || verified.SecurityToken is not JsonWebToken jwt ||
             !jwt.TryGetPayloadValue("sub", out string? subject) || string.IsNullOrWhiteSpace(subject) ||
             !jwt.TryGetPayloadValue("jti", out string? tokenId) || string.IsNullOrWhiteSpace(tokenId) ||
             !jwt.TryGetPayloadValue("scope", out string? scope) || string.IsNullOrWhiteSpace(scope) ||
             !scope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(ReadScope, StringComparer.Ordinal))
-            throw Denied();
-        var identity = new ConnectorIdentity(_issuer, subject, _resource, tokenId);
+            throw new ConnectorAuthenticationFailure();
+        return new ConnectorIdentity(_issuer, subject, _resource, tokenId, new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero));
+    }
+
+    public async Task<WorkStatusResult> ReadAsync(ConnectorIdentity identity, long workId, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (identity.Issuer != _issuer || identity.Resource != _resource || identity.ExpiresAt <= DateTimeOffset.UtcNow)
+            throw new ConnectorAuthenticationFailure();
+        if (workId <= 0) throw Denied();
         bool allowed;
         try { allowed = await _grants.CanReadAsync(identity, workId, token); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }

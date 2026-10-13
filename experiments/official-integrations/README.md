@@ -46,3 +46,16 @@ Its current narrow token contract is RS256, `typ=at+jwt`, a configured exact HTT
 Every call rechecks a customer-held grant using issuer, subject, resource, token identity and Work ID. A valid signature or scope alone cannot authorize a read. Revoked/expired local grants and grant-store failures deny access before the source is invoked. Ordinary read access tokens are reusable until expiry/revocation; this component does not claim one-time-token replay protection.
 
 Tests generate ephemeral RSA keys and JWTs in memory and exercise the real cryptographic verifier. Grant storage and Work status source are in-memory test implementations. No token issuance flow, JWKS discovery/rotation, durable grant storage, production Web middleware, authenticated database read or live platform connection is covered yet. A production adapter must place grant authorization and Work selection within the appropriate customer-owned persistence boundary before replacing the cookie bridge.
+
+## Private Streamable HTTP adapter
+
+`http/` is a library-only ASP.NET Core composition adapter, with no executable, listener, default grant store or default Work source. A caller must supply a configured `ConnectorReadBoundary`. It does not register routes in Goblin.Web or change the existing stdio executable.
+
+- `PrivateMcpHttpAdapter.AddServices` registers SDK Streamable HTTP in explicit stateless mode and the single status tool. Call `Map` before other terminal middleware when composing an isolated host.
+- The configured resource must be an exact HTTPS URL ending in `/mcp`. Metadata at `/.well-known/oauth-protected-resource/mcp` advertises this fixed resource, the configured customer issuer and the read scope. Neither metadata nor challenges are derived from incoming Host/forwarded headers.
+- Every MCP HTTP request requires one Authorization Bearer header. Missing/invalid credentials return a sanitized HTTP 401 and a metadata/scope challenge. Owner cookies and query tokens are not accepted.
+- Host must match the configured resource authority; an Origin, when present, must match its origin. Disallowed Host/Origin returns sanitized HTTP 403. No broad CORS or forwarded-header trust is added.
+- A verified, expiry-bounded identity is kept only in the current HTTP context. Work grants are checked again for each tool invocation. Ungranted Work is returned as a standard MCP tool error, not an HTTP 403, because authentication succeeded and the tool-specific decision occurs inside the protocol request.
+- Stateless mode does not issue MCP session IDs or expose legacy `/mcp/sse`. There are no cross-request principal caches or owner-session fallback paths.
+
+The focused executable also runs ASP.NET TestServer checks without listening on a network socket. These use the actual middleware and MCP HTTP transport, plus real JWT verification, but still use in-memory grants and a test Work source. They do not prove TLS/reverse-proxy behavior, durable authorization, live OAuth discovery/consent, real Goblin database reads or ChatGPT/tunnel connectivity. The existing formatting blocker is not retried.
