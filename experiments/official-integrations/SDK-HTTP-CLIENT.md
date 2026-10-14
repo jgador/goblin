@@ -1,0 +1,23 @@
+# Pinned SDK HTTP-client interoperability
+
+Reviewed 2026-10-14 UTC. Test-only actual C# MCP client/server interoperability inside TestServer, not ChatGPT connectivity, OAuth linking or a live Goblin installation.
+
+`tests/SdkHttpClientChecks.cs` creates the pinned SDK 1.4.1 `HttpClientTransport` and `McpClient` against each isolated fixed/rotating HTTP adapter. It supplies TestServer's handler through the SDK's supported caller-owned `HttpClient` constructor. The fixture explicitly selects `StreamableHttp`, disables OAuth and stream reconnection attempts, supplies no known session, and owns no remote session. There is no AutoDetect/SSE fallback, browser/auth callback, discovery/token exchange or external HTTP client. The observed test handler rejects every request target except the exact synthetic customer `/mcp` URL; it records only request counts and presence of session headers, not credentials or bodies.
+
+The only credential is an ephemeral RSA-signed access-token fixture held in memory, sent through the caller-owned client's bearer header. Changing that header between completed calls tests fresh request identity resolution on the same SDK client; no credential refresh or automatic permission approval is involved. The customer-source double verifies exact issuer/subject/resource/Work ID on each invocation and returns only four status fields, separating grant checks from actual status projections.
+
+Checks cover SDK initialization without Work access/session IDs, single safe tool discovery and exact OAuth scope mirror, four-field status results with bigint precision and UTC time, revoked/ungranted/invalid-ID denial, changed-subject isolation, pre-cancelled calls, fixed target/stateless headers, and rotating pre-tool lease invalidation followed by fresh verification of still-published keys on the next call. These complement existing hand-built JSON-RPC requests and actual SDK stdio/composition/cache checks rather than replacing them. Permission errors carry no reauthorization challenge. Cache flush still is not provider revocation or atomic cancellation of admitted/in-flight reads.
+
+Clients/transports are explicitly disposed before host stop with five-second waits and async-using cleanup guards. Caller-owned HTTP clients/handlers, hosts and ephemeral keys are disposed. The suite has a 20-second deadline, HTTP/connection waits five seconds and the enclosing test process a 50-second timeout. No test installation, initial password/verifier or live resource is created.
+
+## Official APIs reviewed
+
+- [SDK v1 HttpClientTransport](https://csharp.sdk.modelcontextprotocol.io/v1/api/ModelContextProtocol.Client.HttpClientTransport.html) documents the caller-supplied client and ownership constructor plus session/client disposal.
+- [SDK v1 options](https://csharp.sdk.modelcontextprotocol.io/v1/api/ModelContextProtocol.Client.HttpClientTransportOptions.html) and [tagged 1.4.1 source](https://github.com/modelcontextprotocol/csharp-sdk/blob/v1.4.1/src/ModelContextProtocol.Core/Client/HttpClientTransportOptions.cs) document explicit mode, optional OAuth, session ownership and reconnection limits. [Tagged transport source](https://github.com/modelcontextprotocol/csharp-sdk/blob/v1.4.1/src/ModelContextProtocol.Core/Client/HttpClientTransport.cs) confirms that OAuth provider construction is conditional on non-null OAuth options.
+- [OpenAI authentication](https://developers.openai.com/plugins/build/auth) requires resource-server token checks and local policy regardless of client declarations. This synthetic SDK client is not ChatGPT or verified OpenAI identity evidence.
+
+## Limits and exchange
+
+Actual client/server wire serialization, request pipeline and RSA/JWT verification are exercised. Keys/owner/grants/Work source remain synthetic and in-memory. No socket, DNS/TLS/provider, real owner session, OAuth consent/PKCE/token flow, durable SQL, ChatGPT/tunnel or Slack end-to-end test is performed. The [primary tool OAuth metadata gap](TOOL-OAUTH-METADATA.md) remains; a compatibility mirror accepted by this C# client does not establish current ChatGPT UI acceptance, public distribution or SIWC eligibility.
+
+No production code, listener, dependency version/lockfile, authoritative customer storage or existing integration changes. A future real connection necessarily exchanges descriptors, OAuth code/token copies and selected Work IDs/status fields with OpenAI, or selected messages/events with Slack. Those platform-held copies are not exclusively on-premises; no Goblin-operated central auth/data service is introduced.

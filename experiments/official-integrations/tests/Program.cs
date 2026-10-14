@@ -97,6 +97,7 @@ passed += await ConnectorBoundaryChecks.RunAsync();
 passed += await PrivateHttpChecks.RunAsync();
 passed += await RotatingHttpChecks.RunAsync();
 passed += await HttpCompositionChecks.RunAsync();
+passed += await SdkHttpClientChecks.RunAsync();
 passed += await PostgresSourceChecks.RunAsync();
 passed += await GrantAdministrationChecks.RunAsync();
 passed += await PostgresFixtureChecks.RunAsync();
