@@ -20,6 +20,8 @@ public sealed class CustomerSigningKeyCache
     private readonly ICustomerJwksDocumentSource _source;
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly Lock _stateGate = new();
+    private object _generation = new();
     private Dictionary<string, RSAParameters> _keys = new(StringComparer.Ordinal);
     private long? _loadedAt;
     private long? _attemptAt;
@@ -43,23 +45,48 @@ public sealed class CustomerSigningKeyCache
         if (!await _gate.WaitAsync(TimeSpan.FromSeconds(5), token)) throw new ConnectorAuthenticationFailure();
         try
         {
-            bool fresh = _loadedAt is long loaded && _clock.GetElapsedTime(loaded) < TimeSpan.FromMinutes(10);
-            if (fresh && _keys.TryGetValue(kid, out RSAParameters current)) return Copy(kid, current);
-            if (_attemptAt is long attempted && _clock.GetElapsedTime(attempted) < TimeSpan.FromMinutes(1))
-                throw new ConnectorAuthenticationFailure();
-            _attemptAt = _clock.GetTimestamp();
+            object generation;
+            lock (_stateGate)
+            {
+                token.ThrowIfCancellationRequested();
+                bool fresh = _loadedAt is long loaded && _clock.GetElapsedTime(loaded) < TimeSpan.FromMinutes(10);
+                if (fresh && _keys.TryGetValue(kid, out RSAParameters current)) return Copy(kid, current);
+                if (_attemptAt is long attempted && _clock.GetElapsedTime(attempted) < TimeSpan.FromMinutes(1))
+                    throw new ConnectorAuthenticationFailure();
+                _attemptAt = _clock.GetTimestamp();
+                generation = _generation;
+            }
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(TimeSpan.FromSeconds(5));
             string document = await _source.ReadAsync(_configuration.JwksEndpoint, deadline.Token).WaitAsync(deadline.Token);
             Dictionary<string, RSAParameters> replacement = Parse(document);
-            _keys = replacement;
-            _loadedAt = _clock.GetTimestamp();
-            if (!_keys.TryGetValue(kid, out RSAParameters selected)) throw new ConnectorAuthenticationFailure();
-            return Copy(kid, selected);
+            lock (_stateGate)
+            {
+                token.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(generation, _generation)) throw new ConnectorAuthenticationFailure();
+                _keys = replacement;
+                _loadedAt = _clock.GetTimestamp();
+                if (!_keys.TryGetValue(kid, out RSAParameters selected)) throw new ConnectorAuthenticationFailure();
+                return Copy(kid, selected);
+            }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception) { throw new ConnectorAuthenticationFailure(); }
         finally { _gate.Release(); }
+    }
+
+    // Reachable only through trusted owner administration (and friend tests).
+    // Does not wait for the network gate, run cancellation callbacks or fetch.
+    internal void Invalidate(CancellationToken token)
+    {
+        lock (_stateGate)
+        {
+            token.ThrowIfCancellationRequested();
+            _generation = new object();
+            _keys = new(StringComparer.Ordinal);
+            _loadedAt = null;
+            _attemptAt = null;
+        }
     }
 
     private static Dictionary<string, RSAParameters> Parse(string document)
