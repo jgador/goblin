@@ -38,7 +38,10 @@ public sealed class CustomerSigningKeyCache
 
     public string Issuer => _configuration.Issuer;
 
-    public async Task<RsaSecurityKey> GetAsync(string kid, CancellationToken token)
+    public async Task<RsaSecurityKey> GetAsync(string kid, CancellationToken token) =>
+        (await GetLeaseAsync(kid, token)).PublicKey;
+
+    internal async Task<CustomerSigningKeyLease> GetLeaseAsync(string kid, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (!ValidKid(kid)) throw new ConnectorAuthenticationFailure();
@@ -50,7 +53,8 @@ public sealed class CustomerSigningKeyCache
             {
                 token.ThrowIfCancellationRequested();
                 bool fresh = _loadedAt is long loaded && _clock.GetElapsedTime(loaded) < TimeSpan.FromMinutes(10);
-                if (fresh && _keys.TryGetValue(kid, out RSAParameters current)) return Copy(kid, current);
+                if (fresh && _keys.TryGetValue(kid, out RSAParameters current))
+                    return new(this, _generation, Copy(kid, current));
                 if (_attemptAt is long attempted && _clock.GetElapsedTime(attempted) < TimeSpan.FromMinutes(1))
                     throw new ConnectorAuthenticationFailure();
                 _attemptAt = _clock.GetTimestamp();
@@ -66,13 +70,26 @@ public sealed class CustomerSigningKeyCache
                 if (!ReferenceEquals(generation, _generation)) throw new ConnectorAuthenticationFailure();
                 _keys = replacement;
                 _loadedAt = _clock.GetTimestamp();
+                // A replacement retires all prior leases, even when keys overlap.
+                _generation = new object();
                 if (!_keys.TryGetValue(kid, out RSAParameters selected)) throw new ConnectorAuthenticationFailure();
-                return Copy(kid, selected);
+                return new(this, _generation, Copy(kid, selected));
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception) { throw new ConnectorAuthenticationFailure(); }
         finally { _gate.Release(); }
+    }
+
+    internal void RequireCurrent(object generation, CancellationToken token)
+    {
+        lock (_stateGate)
+        {
+            token.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(generation, _generation) || _loadedAt is not long loaded ||
+                _clock.GetElapsedTime(loaded) >= TimeSpan.FromMinutes(10))
+                throw new ConnectorAuthenticationFailure();
+        }
     }
 
     // Reachable only through trusted owner administration (and friend tests).
@@ -133,5 +150,26 @@ public sealed class CustomerSigningKeyCache
     {
         [JsonPropertyName("keys")]
         public JsonWebKey[]? Keys { get; init; }
+    }
+}
+
+internal sealed class CustomerSigningKeyLease
+{
+    private readonly CustomerSigningKeyCache _owner;
+    private readonly object _generation;
+
+    internal CustomerSigningKeyLease(CustomerSigningKeyCache owner, object generation, RsaSecurityKey publicKey)
+    {
+        _owner = owner;
+        _generation = generation;
+        PublicKey = publicKey;
+    }
+
+    internal RsaSecurityKey PublicKey { get; }
+
+    internal void RequireCurrent(CustomerSigningKeyCache expectedOwner, CancellationToken token)
+    {
+        if (!ReferenceEquals(_owner, expectedOwner)) throw new ConnectorAuthenticationFailure();
+        _owner.RequireCurrent(_generation, token);
     }
 }

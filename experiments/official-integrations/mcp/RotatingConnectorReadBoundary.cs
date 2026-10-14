@@ -24,6 +24,12 @@ public sealed class RotatingConnectorReadBoundary
 
     public async Task<WorkStatusResult> ReadAsync(string accessToken, long workId, CancellationToken token)
     {
+        RotatingConnectorIdentity identity = await AuthenticateAsync(accessToken, token);
+        return await ReadAsync(identity, workId, token);
+    }
+
+    public async Task<RotatingConnectorIdentity> AuthenticateAsync(string accessToken, CancellationToken token)
+    {
         token.ThrowIfCancellationRequested();
         string kid;
         try
@@ -35,8 +41,58 @@ public sealed class RotatingConnectorReadBoundary
             kid = untrusted.Kid;
         }
         catch (Exception) { throw new ConnectorAuthenticationFailure(); }
-        RsaSecurityKey key = await _keys.GetAsync(kid, token);
-        var verified = new ConnectorReadBoundary(_keys.Issuer, _resource, key, _source);
-        return await verified.ReadAsync(accessToken, workId, token);
+        CustomerSigningKeyLease lease = await _keys.GetLeaseAsync(kid, token);
+        return await VerifyAsync(accessToken, lease, token);
     }
+
+    // Internal phases make reject-only pre/post verification gates testable;
+    // application callers can acquire identity only via AuthenticateAsync.
+    internal async Task<RotatingConnectorIdentity> VerifyAsync(string accessToken, CustomerSigningKeyLease lease, CancellationToken token)
+    {
+        lease.RequireCurrent(_keys, token);
+        var verifier = new ConnectorReadBoundary(_keys.Issuer, _resource, lease.PublicKey, _source);
+        ConnectorIdentity identity = await verifier.AuthenticateAsync(accessToken, token);
+        return CompleteAuthentication(identity, verifier, lease, token);
+    }
+
+    internal RotatingConnectorIdentity CompleteAuthentication(ConnectorIdentity identity, ConnectorReadBoundary verifier,
+        CustomerSigningKeyLease lease, CancellationToken token)
+    {
+        lease.RequireCurrent(_keys, token);
+        if (identity.Issuer != _keys.Issuer || identity.Resource != _resource ||
+            verifier.Issuer != _keys.Issuer || verifier.Resource != _resource)
+            throw new ConnectorAuthenticationFailure();
+        return new(this, identity, verifier, lease);
+    }
+
+    public async Task<WorkStatusResult> ReadAsync(RotatingConnectorIdentity identity, long workId, CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if (identity is null || !ReferenceEquals(identity.Owner, this)) throw new ConnectorAuthenticationFailure();
+        identity.Lease.RequireCurrent(_keys, token);
+        // No database/source await under the cache lock. Invalidation after this
+        // check cannot retroactively stop an already-started authorized read.
+        return await identity.Verifier.ReadAsync(identity.Verified, workId, token);
+    }
+}
+
+public sealed class RotatingConnectorIdentity
+{
+    internal RotatingConnectorIdentity(RotatingConnectorReadBoundary owner, ConnectorIdentity verified,
+        ConnectorReadBoundary verifier, CustomerSigningKeyLease lease)
+    {
+        Owner = owner;
+        Verified = verified;
+        Verifier = verifier;
+        Lease = lease;
+    }
+
+    internal RotatingConnectorReadBoundary Owner { get; }
+    internal ConnectorIdentity Verified { get; }
+    internal ConnectorReadBoundary Verifier { get; }
+    internal CustomerSigningKeyLease Lease { get; }
+    public string Issuer => Verified.Issuer;
+    public string Subject => Verified.Subject;
+    public string Resource => Verified.Resource;
+    public DateTimeOffset ExpiresAt => Verified.ExpiresAt;
 }
