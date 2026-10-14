@@ -64,3 +64,7 @@ The pinned C# SDK's [HTTP context guidance](https://csharp.sdk.modelcontextproto
 ## OI-004 guarded persistence boundary
 
 On 2026-10-14 UTC, the [OpenAI authentication requirements](https://developers.openai.com/plugins/build/auth) and [Npgsql data-source/parameter documentation](https://www.npgsql.org/doc/basic-usage.html) were rechecked. Token verification does not replace application authorization. The new source contract therefore requires local grant authorization and minimal Work projection together; see [PERSISTENCE.md](PERSISTENCE.md) for the single-query prototype, undeployed schema and revocation limits. PostgreSQL credentials/tools are absent, so persistence is not verified and no production migration or listener is enabled. This does not resolve or establish public distribution eligibility, ChatGPT identity access or independent Slack event routing.
+
+## OI-008 customer-owned OAuth candidate
+
+Reviewed 2026-10-14 UTC: [Keycloak's official MCP guide](https://www.keycloak.org/securing-apps/mcp-authz-server) identifies experimental resource-indicator/CIMD support, while OpenAI documents predefined public OAuth clients as an alternative registration path. [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) records the conditional candidate, strict token-profile/rotation gates and separately reachable authorization server. The new offline metadata preflight does not establish live provider operation, public distribution or ChatGPT identity eligibility. No provider deployment, login, central service or Slack change.

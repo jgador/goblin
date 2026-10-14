@@ -67,3 +67,7 @@ The focused executable also runs ASP.NET TestServer checks without listening on 
 ## Opt-in PostgreSQL fixture checks
 
 The focused executable includes 19 offline fixture-safety contracts, eight embedded-schema/typed-Npgsql-parameter contracts and a separate gated live Work/grant query path. Defaults do not read database credentials. Live mode requires the two stdio arguments followed by `--postgres` plus both established, certificate-configured disposable test connections. See [POSTGRES-HARNESS.md](POSTGRES-HARNESS.md) before enabling it: random fixture ownership is checked, unconfirmed creation/changed identity refuses deletion, and cleanup never forces a DROP. Current sandbox live checks remain skipped. Fourteen staged live checks are not counted as passing; future minimal-fixture results would not establish production schema/audit/concurrency, real owner authentication or end-to-end platform coverage.
+
+## Customer OAuth discovery review
+
+`CustomerOAuthDiscoveryPreflight` is an offline, unregistered metadata review for a predefined public-client policy. It fetches no URLs, loads no keys and cannot authorize Work. Twenty-six synthetic checks cover pinned issuer, bounded/duplicate-safe typed JSON, S256/code/none/read-scope advertisements and restricted endpoint origins. See [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) for the concrete provider candidate, experimental resource-indicator/CIMD gates, token-header configuration, rotation gap and private OAuth reachability. A metadata pass is not live provider or OAuth success.
