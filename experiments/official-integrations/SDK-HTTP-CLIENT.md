@@ -18,6 +18,14 @@ The tagged [Streamable HTTP session source](https://github.com/modelcontextproto
 
 Clients/transports are explicitly disposed before host stop with five-second waits and async-using cleanup guards. Caller-owned HTTP clients/handlers, hosts and ephemeral keys are disposed. The suite has a 20-second deadline, HTTP/connection waits five seconds and the enclosing test process a 50-second timeout. No test installation, initial password/verifier or live resource is created.
 
+## Pinned HTTPS key-source composition
+
+OI-020 adds one separate rotating adapter/SDK-client fixture using the actual `CustomerHttpsJwksDocumentSource`, its owned HttpClient, cache and RSA/JWT verifier. Only the friend-only transport is replaced by a mock returning an ephemeral public RSA document; the original fixed/rotating fixtures and their checks remain unchanged. Six new checks cover startup without key/Work access, cold SDK initialization with one exact pinned GET, credential isolation/response disposal, safe cached status read, local revocation and explicit later restoration, and source-owned handler disposal before the outer cleanup guard.
+
+The mock refuses any target/method/body/header shape other than the configured public-key GET and the source's two Accept media types. Thus bearer, cookie, proxy authorization and MCP headers cannot reach it in this fixture. It records only counts/safe-shape/disposal flags, not credential values or incoming request bodies. The key response content is disposed after initialization. Authentication can fetch a key during initialization, before any Work read; later permitted and denied reads reuse that cache without additional GETs. Cache freshness does not grant local Work access.
+
+This verifies composition and ownership, not network privacy guarantees for arbitrary handlers or live TLS/provider behavior. Key transport, Work permissions and data remain synthetic; no real owner authority is used. No OAuth discovery/token exchange, provider login, public listener or platform data is involved. The suite keeps its existing 20-second/five-second deadlines and source's streaming/timeout policies. [OpenAI token-verification guidance](https://developers.openai.com/plugins/build/auth), reviewed 2026-10-14 UTC, leaves resource-server verification and application authorization with the customer server.
+
 ## Official APIs reviewed
 
 - [SDK v1 HttpClientTransport](https://csharp.sdk.modelcontextprotocol.io/v1/api/ModelContextProtocol.Client.HttpClientTransport.html) documents the caller-supplied client and ownership constructor plus session/client disposal.

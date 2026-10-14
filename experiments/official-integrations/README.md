@@ -67,6 +67,8 @@ Actual pinned SDK HTTP-client checks now complement the hand-built JSON-RPC requ
 
 The same fixture now checks missing/malformed/expired bearer failures during initialization and later tool calls: exact safe HTTP 401/challenge, one rejected request, no Work access, no automatic fallback/login/retry and explicit later credential restoration. SDK HTTP exceptions remain distinct from authenticated local-permission MCP errors; no production authentication policy changes.
 
+One additional rotating SDK/TestServer fixture now composes the actual pinned HTTPS key source with a friend-only mocked key transport. Six checks verify a credential-free pinned GET during cold initialization, cached safe reads and local revocation/restoration, response disposal and source-owned handler cleanup. This is not live TLS/provider/OAuth or ChatGPT/Slack evidence; see [SDK-HTTP-CLIENT.md](SDK-HTTP-CLIENT.md).
+
 ## Local-owner approval/revocation policy
 
 `CustomerGrantAdministration` is an unregistered policy requiring a trusted request-scoped local-owner authority and an atomic mutation/audit store. It pins issuer/resource, requires one explicit subject/Work ID and bounded future expiry, rechecks owner authority for every approval/revoke, and permits revoke without connector login. No production authority, store, route, grant writer or MCP mutation tool exists. See [GRANT-ADMINISTRATION.md](GRANT-ADMINISTRATION.md) for composition gates, uncertainty handling and the 24 test-double policy checks. These do not establish real owner authentication or durable audit coverage.

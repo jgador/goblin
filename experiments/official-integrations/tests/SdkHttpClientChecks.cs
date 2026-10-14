@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Goblin.Mcp.Http.Prototype;
 using Goblin.Mcp.Prototype;
@@ -227,8 +228,93 @@ internal static class SdkHttpClientChecks
             await transport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             await app.StopAsync(token);
         }
+        await RunHttpsCompositionAsync(key, token, Check);
         Console.WriteLine($"PASS {checks} SDK HTTP client checks; real client/server/TestServer/JWT, synthetic sources only.");
         return checks;
+    }
+
+    private static async Task RunHttpsCompositionAsync(RSA key, CancellationToken token, Func<string, Func<Task>, Task> check)
+    {
+        Uri address = new(Issuer + "/certs");
+        string document = JsonSerializer.Serialize(new
+        {
+            keys = new[] { JsonWebKeyConverter.ConvertFromRSASecurityKey(new RsaSecurityKey(key.ExportParameters(false)) { KeyId = "current" }) }
+        });
+        // The source owns its mocked transport. The outer guard also covers
+        // construction failure; the ownership assertion precedes guard disposal.
+        using var keyHandler = new PinnedKeyHandler(address, document);
+        var configuration = new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"), new Uri(Issuer + "/token"), address, false);
+        using var documents = new CustomerHttpsJwksDocumentSource(configuration, keyHandler);
+        var source = new LocalStatus();
+        var cache = new CustomerSigningKeyCache(configuration, documents, TimeProvider.System);
+        var boundary = new RotatingConnectorReadBoundary(cache, Resource, source);
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseTestServer();
+        PrivateMcpHttpAdapter.AddServices(builder.Services, boundary);
+        await using WebApplication app = builder.Build();
+        PrivateMcpHttpAdapter.Map(app, boundary);
+        await check("HTTPS-key composition startup performs no key fetch or Work access", () =>
+        {
+            Require(keyHandler.Calls == 0 && source.Calls == 0);
+            return Task.CompletedTask;
+        });
+        await app.StartAsync(token);
+        using var observed = new ObservedHandler(app.GetTestServer().CreateHandler());
+        using var http = new HttpClient(observed) { Timeout = TimeSpan.FromSeconds(5) };
+        string credential = Issue(key, "linked");
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", credential);
+        await using var transport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = new Uri(Resource), Name = "Goblin synthetic HTTPS-key composition",
+            TransportMode = HttpTransportMode.StreamableHttp, ConnectionTimeout = TimeSpan.FromSeconds(5),
+            OAuth = null, MaxReconnectionAttempts = 0, KnownSessionId = null, OwnsSession = false
+        }, http, ownsHttpClient: false);
+        await using McpClient client = await McpClient.CreateAsync(transport, cancellationToken: token);
+        await check("SDK cold initialization retrieves only one credential-free pinned public-key GET", () =>
+        {
+            Require(keyHandler.Calls == 1 && keyHandler.SafeRequests && keyHandler.ContentDisposed &&
+                source.Calls == 0 && !observed.SawSession);
+            return Task.CompletedTask;
+        });
+
+        Task<CallToolResult> Call() => client.CallToolAsync("goblin_get_work_status",
+            new Dictionary<string, object?> { ["workId"] = "42" }, cancellationToken: token).AsTask();
+
+        await check("SDK status read composes the HTTPS source/cache/verifier with local Work permission", async () =>
+        {
+            CallToolResult result = await Call();
+            Require(result.IsError != true && result.Content.Count == 1 && result.Content[0] is TextContentBlock);
+            string body = ((TextContentBlock)result.Content[0]).Text;
+            using JsonDocument json = JsonDocument.Parse(body);
+            WorkStatusResult? status = JsonSerializer.Deserialize<WorkStatusResult>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            Require(json.RootElement.EnumerateObject().Count() == 4 && status?.WorkId == "42" &&
+                status.Version == "9007199254740993" && status.Status == "Ready" && status.UpdatedAt == source.UpdatedAt &&
+                !body.Contains(credential, StringComparison.Ordinal) && source.Calls == 1 && source.Reads == 1 && keyHandler.Calls == 1);
+        });
+        await check("cached public keys cannot bypass revoked local Work permission", async () =>
+        {
+            source.Denied = true;
+            CallToolResult result = await Call();
+            string body = JsonSerializer.Serialize(result);
+            Require(result.IsError == true && !body.Contains(credential, StringComparison.Ordinal) &&
+                !body.Contains("mcp/www_authenticate", StringComparison.Ordinal) && !body.Contains("9007199254740993", StringComparison.Ordinal) &&
+                source.Calls == 2 && source.Reads == 1 && keyHandler.Calls == 1);
+        });
+        await check("explicit local permission restoration permits a later independent SDK read", async () =>
+        {
+            source.Denied = false;
+            Require((await Call()).IsError != true && source.Calls == 3 && source.Reads == 2 && keyHandler.Calls == 1);
+        });
+        await client.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await transport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await app.StopAsync(token);
+        documents.Dispose();
+        await check("composed HTTPS key source disposes its owned mocked handler and response content", () =>
+        {
+            Require(keyHandler.WasDisposed && keyHandler.ContentDisposed && keyHandler.SafeRequests && keyHandler.Calls == 1);
+            return Task.CompletedTask;
+        });
     }
 
     private static string Issue(RSA key, string subject, bool expired = false) => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
@@ -275,6 +361,54 @@ internal static class SdkHttpClientChecks
                     json.RootElement.GetProperty("error").GetString() == "Connector authentication is required.";
             }
             return response;
+        }
+    }
+
+    private sealed class PinnedKeyHandler : HttpMessageHandler
+    {
+        private readonly Uri _address;
+        private readonly string _document;
+        private KeyContent? _content;
+        public int Calls { get; private set; }
+        public bool SafeRequests { get; private set; } = true;
+        public bool WasDisposed { get; private set; }
+        public bool ContentDisposed => _content?.WasDisposed == true;
+
+        public PinnedKeyHandler(Uri address, string document)
+        {
+            _address = address;
+            _document = document;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            Calls++;
+            SafeRequests &= request.Method == HttpMethod.Get && request.RequestUri?.OriginalString == _address.OriginalString &&
+                request.Content is null && request.Headers.All(header => header.Key.Equals("Accept", StringComparison.OrdinalIgnoreCase)) &&
+                request.Headers.Accept.Select(value => value.MediaType).SequenceEqual(new[] { "application/jwk-set+json", "application/json" });
+            Require(SafeRequests && !WasDisposed);
+            _content = new KeyContent(_document);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = _content });
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) WasDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class KeyContent : StringContent
+    {
+        public bool WasDisposed { get; private set; }
+
+        public KeyContent(string document) : base(document, Encoding.UTF8, "application/jwk-set+json") { }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) WasDisposed = true;
+            base.Dispose(disposing);
         }
     }
 
