@@ -10,31 +10,31 @@
       location: "#log-pipeline",
       sender: "Josh A.",
       steps: [
-        "Trace ingestion and buffering",
-        "Check throughput and delivery",
-        "Prepare the Kubernetes rollout",
+        "Understand the traffic problem",
+        "Prepare and check the changes",
+        "Plan the deployment",
       ],
       prompts: [
         {
-          label: "Rewrite the log pipeline",
+          label: "Handle higher traffic",
           request:
-            "Hey Goblin, rewrite the log ingestion pipeline to handle traffic spikes, then deploy it to our Kubernetes staging cluster.",
+            "Help us handle higher traffic without losing accepted logs. Prepare a tested change and a deployment plan for review.",
           reply:
-            "I’ll separate ingestion from processing, add bounded buffering and backpressure, then deploy the worker to staging. I’ll bring back the changes, load-test results, and rollback steps for review.",
-          receipt: "From a pipeline rewrite to a staging rollout, in one thread.",
+            "I’ll investigate the problem, prepare the changes, and report the results here. I’ll ask when a decision needs your input.",
+          receipt: "Proposed changes and a deployment plan, ready for review.",
           checks: [
             "Trace the current ingestion path and measure throughput, queue lag, and memory under burst traffic.",
             "Keep event IDs stable, acknowledge only after durable enqueue, and verify downstream deduplication when events are replayed.",
-            "Deploy the rewritten worker to Kubernetes staging and compare delivery counts, latency, and resource use with the baseline.",
+            "Test bounded buffering and backpressure in Kubernetes staging; compare delivery counts, latency, and resource use with the baseline, and prepare deployment and rollback steps for review.",
           ],
         },
         {
-          label: "Deploy to Kubernetes",
+          label: "Protect logs during deployment",
           request:
-            "Make the new ingestion worker ready for Kubernetes. Include health probes, resource limits, and a graceful shutdown so pod rollouts don’t lose accepted logs.",
+            "Prepare the ingestion worker for Kubernetes so deployments do not lose accepted logs.",
           reply:
-            "I’ll add the manifests, drain in-flight batches on shutdown, and size the termination grace period. I’ll test a staging rollout under load and check that accepted events reach storage.",
-          receipt: "Deployment details, with delivery checks built in.",
+            "I’ll prepare the deployment changes, test shutdown and replacement under load, and report whether accepted logs reach storage.",
+          receipt: "Delivery checks to support a deployment decision.",
           artifacts: [
             "Kubernetes deployment changes",
             "Health probes, resource limits, and graceful shutdown",
@@ -47,12 +47,12 @@
           ],
         },
         {
-          label: "Review the rollout",
+          label: "Review release readiness",
           request:
-            "Give me a rollout summary for the ingestion rewrite: throughput, queue lag, rejected events, and how we roll back before moving beyond staging.",
+            "Help us decide whether the ingestion changes are ready for a wider release. Provide a summary of the staging results and explain how to restore the previous version.",
           reply:
-            "I’ll compare the staging results with the old pipeline, flag delivery gaps or rising queue lag, and document how to restore the previous worker without discarding queued logs.",
-          receipt: "The rollout evidence and rollback plan, back in Slack.",
+            "I’ll compare throughput and delivery with the previous version, identify remaining risks, and prepare a rollback plan for review.",
+          receipt: "Evidence to decide whether the release is ready.",
           artifacts: [
             "Ingestion rollout review",
             "Throughput, queue lag, rejected events, and delivery counts",
@@ -79,18 +79,18 @@
           "Anders H.’s closed issue reports a generic assignment error that disappears when two property declarations are reversed. This conversation imagines reviewing regression coverage.",
       },
       steps: [
-        "Compare property declaration orders",
-        "Check generic assignability",
-        "Prepare regression coverage",
+        "Understand the reported problem",
+        "Check valid and invalid cases",
+        "Prepare tests for review",
       ],
       prompts: [
         {
-          label: "Check property-order behavior",
+          label: "Keep type checks consistent",
           request:
-            "Goblin, use microsoft/TypeScript#62606 to check for regressions. Swapping schema and readonlySchema should not turn a valid assignment into an error.",
+            "Check TypeScript #62606 for regressions. Valid assignments should work regardless of property declaration order.",
           reply:
-            "I’ll compare both declaration orders in the original DerivedTable example, then run the focused compiler tests. I’ll bring the diagnostics and a proposed regression test back here.",
-          receipt: "A subtle compiler bug, with a clear regression check.",
+            "I’ll test both declaration orders, compare the diagnostics, and prepare a regression test for review.",
+          receipt: "Regression coverage the compiler team can review.",
           checks: [
             "Use the original DerivedTable example from the closed issue as the regression case.",
             "Check that the valid assignment is accepted with either property declaration order.",
@@ -100,10 +100,10 @@
         {
           label: "Preserve type safety",
           request:
-            "Include the Readonly mapped type and indexed access intersections. Invalid assignments still need to fail; accepting both property orders isn’t enough.",
+            "Make sure the proposed regression tests also reject invalid assignments. Consistent property order checks must preserve type safety.",
           reply:
-            "I’ll pair the original case with assignments that omit a required property or use the wrong property type. I’ll check both declaration orders and keep the expected errors in the test baselines.",
-          receipt: "Consistent checking, with type safety preserved.",
+            "I’ll add cases with missing properties and incorrect types, test both declaration orders, and include the expected errors.",
+          receipt: "Valid and invalid cases, ready for review.",
           artifacts: [
             "Assignability test plan",
             "Property order, Readonly, and indexed access intersections",
@@ -118,10 +118,10 @@
         {
           label: "Prepare the team update",
           request:
-            "Give the team a short update on #62606: the original symptom, the regression cases we need, and what still needs review.",
+            "Prepare a short team update on TypeScript #62606. Explain the original problem, the proposed tests, and what needs review.",
           reply:
-            "I’ll link the closed issue, explain how swapping two declarations changed an error, and outline the valid and invalid assignment cases. I’ll distinguish proposed coverage from verified test results.",
-          receipt: "Compiler context, ready for the team to review.",
+            "I’ll link the closed issue and outline the coverage. I’ll state which tests are proposed and which results have been verified.",
+          receipt: "A shared explanation of the issue and next decisions.",
           artifacts: [
             "Compiler team update",
             "TypeScript #62606 · Symptom, coverage, and review",
@@ -148,18 +148,18 @@
           "The public issue explores using a PriorityQueue for OrderBy().Take(), with memory, throughput, and stable ordering to consider.",
       },
       steps: [
-        "Trace OrderBy().Take()",
-        "Compare time and allocations",
-        "Prepare findings for review",
+        "Understand current performance",
+        "Compare speed and memory use",
+        "Prepare a recommendation",
       ],
       prompts: [
         {
-          label: "Investigate LINQ allocations",
+          label: "Reduce memory use",
           request:
-            "@goblin, take a look at dotnet/runtime#96277. Can we reduce the memory used by OrderBy(...).Take(10) without slowing it down?",
+            "Investigate dotnet/runtime#96277. Can OrderBy(...).Take(10) use less memory without slowing down?",
           reply:
-            "I’ll compare the current LINQ path with a bounded PriorityQueue. The thread reports lower allocations but slower runtime results, so I’ll measure both before recommending a change.",
-          receipt: "A real performance question, ready for investigation.",
+            "I’ll compare memory use and execution time, check that ordering stays correct, and report the tradeoffs for review.",
+          receipt: "Evidence to guide a performance decision.",
           checks: [
             "Compare the existing OrderBy().Take() path with a bounded priority queue inside System.Linq.",
             "Measure execution time and allocated bytes; lower allocation alone is not a speedup.",
@@ -169,10 +169,10 @@
         {
           label: "Preserve ordering",
           request:
-            "Keep OrderBy stable. Equal keys must stay in source order, and Take must return the smallest elements for ascending order.",
+            "Keep the same ordering when reducing memory use. Equal keys must stay in source order, and Take must return the correct elements.",
           reply:
-            "I’ll use the source index to break ties, reverse the heap comparison to retain the smallest values, and restore ascending output. I’ll cover duplicate keys, descending order, and Skip().Take().",
-          receipt: "Lower memory, with the same ordering guarantees.",
+            "I’ll check equal keys, ascending and descending order, and Skip().Take(). I’ll include the proposed correctness tests for review.",
+          receipt: "Ordering checks to support a safe change.",
           artifacts: [
             "Ordering checklist",
             "Stable ties, heap direction, and Skip/Take boundaries",
@@ -185,12 +185,12 @@
           ],
         },
         {
-          label: "Find the performance threshold",
+          label: "Find when the change helps",
           request:
-            "Where does the queue actually win? Compare small and large sources, vary Take and Skip, and include ToArray and ToList.",
+            "Find when the proposed change would help. Compare small and large inputs, different Take and Skip counts, and ToArray and ToList.",
           reply:
-            "I’ll benchmark inside System.Linq across source sizes and take/skip counts. I’ll report time and allocated bytes, including cases where the existing path wins, before proposing a threshold.",
-          receipt: "A measured tradeoff, ready for your review.",
+            "I’ll measure time and memory across those cases, report improvements and regressions, and recommend when to use the change.",
+          receipt: "A benchmark plan to support the decision.",
           artifacts: [
             "Benchmark plan",
             "Throughput and allocations across source and result sizes",
@@ -228,18 +228,18 @@
         ],
       },
       steps: [
-        "Understand the graph model",
-        "Trace data and relationships",
+        "Understand the team’s question",
+        "Connect the sample records",
         "Prepare an example for review",
       ],
       prompts: [
         {
-          label: "Model a graph in C#",
+          label: "Make graph data easier to use",
           request:
-            "Goblin, sketch a Blueprint41 sample for customers, orders, and products. Keep the model easy for a C# developer to follow.",
+            "Help the team understand how to use our sample graph in C#. Show a customer’s orders and products with Blueprint41.",
           reply:
-            "I’ll draft the entities and relationships, add a small fictional dataset, and show how to query a customer’s orders. I’ll include a schema change example for the team to review.",
-          receipt: "A graph model the team can build on.",
+            "I’ll prepare a small fictional dataset, a query example, and a schema change for review.",
+          receipt: "A practical example the team can use.",
           checks: [
             "Define Customer, Order, and Product entities and their relationships using fictional sample records.",
             "Outline a Blueprint41 example using generated C# data objects to query a customer’s orders.",
@@ -247,15 +247,15 @@
           ],
         },
         {
-          label: "Review graph differences",
+          label: "Review changes before synchronising",
           request:
-            "Before we sync the sample graphs, help me review the Compare41 differences. Which nodes, relationships, and properties would change?",
+            "Help us review the Compare41 results before synchronising the sample graphs. Show which nodes, relationships, and properties would change.",
           reply:
-            "I’ll turn the comparison into a scoped change list, flag deletions and relationship changes, and draft a validation checklist for the selected subgraph.",
-          receipt: "See what changes before you sync.",
+            "I’ll list the proposed changes, highlight deletions, and prepare checks so the team can decide what to apply.",
+          receipt: "A clear view of the changes before approval.",
           artifacts: [
             "Graph comparison review",
-            "Compare41 · Nodes, relationships, and sync scope",
+            "Compare41 · Proposed changes and comparison scope",
             "Validation checklist",
           ],
           checks: [
@@ -265,12 +265,12 @@
           ],
         },
         {
-          label: "Plan an AI prototype with graph data",
+          label: "Connect answers to evidence",
           request:
-            "Can we turn this sample graph into a useful AI prototype? Let people ask which products a customer ordered and see what supports the answer.",
+            "Plan a small AI example that answers which products a customer ordered and shows the records supporting the answer.",
           reply:
-            "I’ll plan one question-to-answer flow, ground the answer in the sample graph, and show the records behind it. I’ll include missing-data cases and keep the prototype small enough to review.",
-          receipt: "A useful answer, connected to its evidence.",
+            "I’ll use the sample graph to plan the query and show the supporting records. I’ll include cases where information is missing.",
+          receipt: "Answers the team can check against the source data.",
           artifacts: [
             "Graph AI prototype plan",
             "A customer question, a graph query, and supporting records",
@@ -304,31 +304,31 @@
         ],
       },
       steps: [
-        "Reproduce the AtomISP build failure",
-        "Review the focused backport",
-        "Prepare findings for the thread",
+        "Understand the reported failure",
+        "Compare the build results",
+        "Prepare findings for review",
       ],
       prompts: [
         {
-          label: "Revisit a kernel build failure",
+          label: "Review a kernel build fix",
           request:
-            "Goblin, revisit the AtomISP build failure behind 7c6a3a65ace7. Check the focused fix against the reported Slackware 15.0 32-bit setup.",
+            "Review whether the AtomISP fix addresses the reported build failure. Use the historical 32-bit setup described with commit 7c6a3a65ace7.",
           reply:
-            "I’ll compare the affected 5.15 build with and without the patch, inspect the nested min/max expansion, and record compiler memory and build results for review.",
-          receipt: "A real build problem, with evidence to review.",
+            "I’ll compare builds with and without the patch, record the results, and make any unverified details clear.",
+          receipt: "Build evidence to support a review.",
           checks: [
-            "Reconstruct the reported 32-bit build environment and record the kernel revision, compiler, and configuration.",
-            "Compare the affected AtomISP build before and after the focused patch, including preprocessed output and compiler memory use.",
+            "Reconstruct the reported Slackware 15.0 32-bit build environment and record the kernel revision, compiler, and configuration.",
+            "Compare the affected AtomISP build on 5.15 before and after the focused patch, including preprocessed output and compiler memory use.",
             "Return build logs and measured results; keep any unverified reproduction details explicit.",
           ],
         },
         {
           label: "Review the focused backport",
           request:
-            "Keep the backport to the AtomISP fix. Check the inline helpers and clamp_t preserve the results without pulling in the wider min/max rewrite.",
+            "Check that the focused AtomISP backport preserves behaviour and can be applied to the target version without the wider min/max rewrite.",
           reply:
-            "I’ll compare the signed and unsigned helper results at the shift and clamp boundaries, check the affected callers, and review the patch against the target tree.",
-          receipt: "A small patch, with its behavior checked.",
+            "I’ll compare helper results, check the affected callers, and document the patch dependencies and remaining review questions.",
+          receipt: "A focused patch with clear review checks.",
           artifacts: [
             "AtomISP backport review",
             "Inline helpers, clamp limits, and affected callers",
@@ -341,12 +341,12 @@
           ],
         },
         {
-          label: "Summarize the patch decision",
+          label: "Explain the patch decision",
           request:
-            "Draft a short recap of the thread: why the AtomISP patch was taken directly, and why the other two patches were left for their maintainers.",
+            "Prepare a short summary explaining why the AtomISP patch was accepted directly and the other two patches were left for their maintainers.",
           reply:
-            "I’ll explain the reported build problem, the more readable inline helpers, and the backport rationale. I’ll link your reply and the accepted commit, and keep the other two changes separate.",
-          receipt: "The patch and its rationale, kept in the thread.",
+            "I’ll explain the build problem and the backport decision, link the public reply and accepted commit, and keep historical facts separate from proposed checks.",
+          receipt: "The decision and its sources, ready to share.",
           artifacts: [
             "Patch discussion recap",
             "AtomISP · Build fix, backport rationale, and maintainer review",
@@ -484,11 +484,11 @@
     byId("artifact-message").hidden = phase !== "received";
     byId("goblin-hub").classList.toggle("is-thinking", phase === "thinking");
     const status = {
-      ready: "Here for your team",
-      asking: "A new conversation",
-      thinking: "Thinking it through…",
-      replying: "Bringing an answer back",
-      received: "Right here, in the loop",
+      ready: "Ready for a request",
+      asking: "Receiving a request",
+      thinking: "Preparing a response",
+      replying: "Returning a response",
+      received: "Ready for your review",
     };
     byId("hub-status").textContent = status[phase];
     if (phase === "received")
@@ -533,7 +533,7 @@
       const label = byId("travel-label");
       label.style.left = `${screenPoint.x - networkRect.left}px`;
       label.style.top = `${screenPoint.y - networkRect.top}px`;
-      label.textContent = phase === "asking" ? "Hey, Goblin…" : "On it. ↗";
+      label.textContent = phase === "asking" ? "Request" : "Response";
     }
     timeline.value = String(position);
     timeline.style.setProperty("--progress", `${(position / duration) * 100}%`);
@@ -751,12 +751,17 @@
   const network = byId("network");
   const composer = byId("message-composer");
   const conversationPanel = byId("conversation-panel");
-  function placeComposer() {
-    if (compactLayout.matches) conversationPanel.after(composer);
-    else byId("view-conversation").append(composer);
+  const benefits = document.querySelector(".benefits");
+  function placeSupportingContent() {
+    if (compactLayout.matches) {
+      conversationPanel.after(composer, benefits);
+    } else {
+      byId("view-conversation").append(composer);
+      network.parentElement.append(benefits);
+    }
   }
-  compactLayout.addEventListener("change", placeComposer);
-  placeComposer();
+  compactLayout.addEventListener("change", placeSupportingContent);
+  placeSupportingContent();
   const discordEndpoint = byId("dot-discord");
   const connectorRoutes = {
     slack: ({ x, y }) => {
@@ -886,9 +891,9 @@
 
   const artifactLabels = {
     slack: [
-      "Log ingestion rewrite",
-      "Bounded buffering, backpressure, and Kubernetes staging",
-      "Load-test and rollout plan",
+      "Proposed changes",
+      "Verification summary and deployment plan",
+      "Verification and deployment plan",
     ],
     teams: [
       "Compiler regression plan",
@@ -922,17 +927,17 @@
     byId("document-title").textContent = labels[2];
     const activity = byId("view-activity");
     activity.replaceChildren(
-      element("h3", "Every step, in the loop"),
-      element("p", "An example of how one conversation becomes a clear next step."),
+      element("h3", "Follow the progress"),
+      element("p", "See the request, its context, and the proposed result together."),
     );
     [
       ["Request received in " + scene.name, prompt.request],
       [
-        "Context brought together",
+        "Related information collected",
         scene.source?.summary || "The request and its conversation stay connected.",
       ],
       ["A response prepared", prompt.reply],
-      ["Ready for a human review", "You decide what happens next."],
+      ["Ready for review", "Review the proposed result and decide what happens next."],
     ].forEach(([title, description]) => {
       const item = element("div", null, "activity-item");
       item.append(element("strong", title), element("p", description));
@@ -954,14 +959,14 @@
     checks.forEach((text) => list.append(element("li", text)));
     workCard.append(list);
     work.replaceChildren(
-      element("h3", "From a message to work"),
-      element("p", "The conversation stays attached to the work it starts."),
+      element("h3", "Review the proposed work"),
+      element("p", "Check the planned steps and the conversation that explains them."),
       workCard,
     );
     const files = byId("view-files");
     files.replaceChildren(
-      element("h3", "The useful details"),
-      element("p", "Example deliverables, ready to bring back to the conversation."),
+      element("h3", "Explore the proposed result"),
+      element("p", "Open an example deliverable to see what your team could review."),
     );
     const fileCard = byId("artifact-message").querySelector(".artifact-card").cloneNode(true);
     fileCard.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));

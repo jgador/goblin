@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#f7faf6" />
     <meta
       name="description"
-      content="Your self-hosted AI coworker. Explore Goblin in the loop with your team across Slack, Teams, GitHub, Discord, and Gmail."
+      content="Turn team conversations into results with Goblin, your self-hosted AI coworker. Explore examples of assigning tasks, following progress, and reviewing work."
     />
     <title>Goblin · In the loop</title>
     <link rel="icon" href="assets/goblin.svg" type="image/svg+xml" />
@@ -31,10 +31,23 @@
         <div class="film-body">
           <section class="network-panel" aria-labelledby="title">
             <header class="intro">
-              <h1 id="title">Your self-hosted <span>AI coworker.</span></h1>
-              <p>Connect your tools. Put Goblin to work.</p>
+              <p class="intro-kicker">Your self-hosted AI coworker.</p>
+              <h1 id="title">Turn team conversations <span>into results.</span></h1>
+              <p>
+                Assign tasks, follow progress, and review the work. Goblin keeps conversations and
+                results connected, so your team spends less time coordinating.
+              </p>
+              <p class="network-instruction" id="network-instruction">
+                Select a channel to see an example task.
+              </p>
             </header>
-            <div class="network" id="network">
+            <div
+              class="network"
+              id="network"
+              role="group"
+              aria-label="Example communication channels"
+              aria-describedby="network-instruction"
+            >
               <svg
                 class="connections"
                 viewBox="0 0 1100 700"
@@ -373,7 +386,7 @@
                   <span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span>
                 </div>
                 <span class="hub-name">goblin</span
-                ><span class="hub-status sr-only" id="hub-status">Here for your team</span>
+                ><span class="hub-status sr-only" id="hub-status">Ready for a request</span>
               </div>
               <div class="travel-label" id="travel-label" aria-hidden="true"></div>
             </div>
@@ -392,7 +405,10 @@
                   >
                     <path d="m13 1-10 13h8l-1 9 11-14h-8l1-8Z" /></svg
                 ></span>
-                <p>One place for all your tools</p>
+                <p>
+                  <strong>Spend less time switching tools</strong>
+                  <span>Follow conversations, progress, and results in one place.</span>
+                </p>
               </div>
               <div>
                 <span
@@ -409,7 +425,10 @@
                     <ellipse cx="12" cy="5" rx="8" ry="3" />
                     <path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0" /></svg
                 ></span>
-                <p>Keeps context across tools</p>
+                <p>
+                  <strong>Spend less time repeating information</strong>
+                  <span>Keep each task connected to the conversation that started it.</span>
+                </p>
               </div>
               <div>
                 <span
@@ -426,7 +445,10 @@
                     <path d="m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6l9-4Z" />
                     <path d="m8 12 3 3 5-6" /></svg
                 ></span>
-                <p>On-prem or your cloud</p>
+                <p>
+                  <strong>Control where Goblin runs</strong>
+                  <span>Host Goblin on infrastructure you control.</span>
+                </p>
               </div>
               <div>
                 <span
@@ -443,7 +465,10 @@
                     <circle cx="9" cy="7" r="4" />
                     <path d="M1 22v-3a8 8 0 0 1 16 0v3M17 3a4 4 0 0 1 0 8m3 3c3 1 3 4 3 8" /></svg
                 ></span>
-                <p>Works with your team</p>
+                <p>
+                  <strong>Stay involved in decisions</strong>
+                  <span>Assign the work, review the results, and decide what happens next.</span>
+                </p>
               </div>
             </div>
           </section>
@@ -452,6 +477,10 @@
             id="conversation-panel"
             aria-label="Example conversation"
           >
+            <p class="example-notice">
+              <strong>Illustrative example</strong>
+              <span>Teams, Discord, and email show planned integrations.</span>
+            </p>
             <div class="panel-tabs" role="tablist" aria-label="Explore the example">
               <button
                 id="tab-conversation"
@@ -534,8 +563,8 @@
                       ><span class="message-time">10:24 AM</span>
                     </div>
                     <p id="request-text">
-                      Hey Goblin, rewrite the log ingestion pipeline to handle traffic spikes, then
-                      deploy it to our Kubernetes staging cluster.
+                      Help us handle higher traffic without losing accepted logs. Prepare a tested
+                      change and a deployment plan for review.
                     </p>
                   </div>
                 </div>
@@ -568,7 +597,7 @@
                             aria-hidden="true"
                           >
                             <path d="m5 13 4 4L19 7" /></svg></span
-                        ><span id="step-one">Trace ingestion and buffering</span>
+                        ><span id="step-one">Understand the traffic problem</span>
                       </div>
                       <div>
                         <span class="check-dot"
@@ -583,7 +612,7 @@
                             aria-hidden="true"
                           >
                             <path d="m5 13 4 4L19 7" /></svg></span
-                        ><span id="step-two">Check throughput and delivery</span>
+                        ><span id="step-two">Prepare and check the changes</span>
                       </div>
                       <div>
                         <span class="check-dot"
@@ -598,11 +627,11 @@
                             aria-hidden="true"
                           >
                             <path d="m5 13 4 4L19 7" /></svg></span
-                        ><span id="step-three">Prepare the Kubernetes rollout</span>
+                        ><span id="step-three">Plan the deployment</span>
                       </div>
                       <div>
                         <span class="check-dot pending"></span
-                        ><span>Your review, then the next step</span>
+                        ><span>Review the proposed result</span>
                       </div>
                     </div>
                     <p class="reply-summary" id="reply-text"></p>
@@ -618,10 +647,14 @@
                       <strong>Goblin</strong><span class="message-time">10:26 AM</span>
                     </div>
                     <div class="artifact-card">
+                      <div class="review-heading">
+                        <strong>Ready for review</strong>
+                        <span>Illustrative result</span>
+                      </div>
                       <button class="deliverable" type="button" data-preview="pr">
                         <img src="assets/github.svg" alt="" /><span
                           ><strong id="artifact-title"
-                            >Log ingestion rewrite
+                            >Proposed changes
                             <svg
                               class=""
                               viewBox="0 0 24 24"
@@ -634,7 +667,7 @@
                             >
                               <path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6" /></svg></strong
                           ><span class="artifact-description" id="artifact-description"
-                            >Bounded buffering, backpressure, and Kubernetes staging</span
+                            >Verification summary and deployment plan</span
                           ><span class="artifact-detail">Ready for your review</span></span
                         ></button
                       ><button
@@ -656,9 +689,9 @@
                             <path d="M5 2h10l5 5v15H5V2Z" />
                             <path d="M14 2v6h6M9 12h7m-7 4h7" /></svg></span
                         ><span
-                          ><strong id="document-title">Load-test and rollout plan</strong
+                          ><strong id="document-title">Verification and deployment plan</strong
                           ><span class="artifact-detail"
-                            >Context, findings, and next steps</span
+                            >Findings and decisions for review</span
                           ></span
                         >
                       </button>
@@ -843,10 +876,10 @@
         ×</button
       ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span>
       <p class="eyebrow">IN THE LOOP</p>
-      <h2 id="about-title">A glimpse of connected work.</h2>
+      <h2 id="about-title">From a conversation to a result.</h2>
       <p>
-        This interactive concept shows Goblin at the center of everyday development conversations.
-        Every exchange is scripted; nothing is sent to an external service.
+        This interactive example shows how Goblin connects a team request to progress and a proposed
+        result for review. Every exchange is scripted; nothing is sent to an external service.
       </p>
       <p>
         The GitHub dialogue is fictional, inspired by Stephen T.’s public
@@ -888,8 +921,10 @@
         not mean those integrations are currently available.
       </p>
       <p>
-        Choose a channel, explore the tabs, or try a message. You can also scrub the timeline or
-        press Space to pause. Reduced-motion preferences are respected.
+        Select a channel to see an example task. Use Activity, Work, and Files to explore progress,
+        review details, and proposed results. The message box is a visual preview and does not accept
+        messages. Use the timeline to change the playback position or press Space to pause.
+        Reduced-motion preferences are respected.
       </p>
     </dialog>
     <dialog id="preview-dialog" aria-labelledby="preview-title">

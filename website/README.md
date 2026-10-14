@@ -7,6 +7,27 @@ installation catalog at `jgador.github.io/goblin/`. See
 [workflow naming](../docs/github-actions.md) and
 [production deployment](production/README.md).
 
+The page leads with **“Turn team conversations into results.”** and explains the
+benefit in neutral international English: “Assign tasks, follow progress, and
+review the work. Goblin keeps conversations and results connected, so your team
+spends less time coordinating.” The page metadata follows the same message.
+“Your self-hosted AI coworker” remains a smaller product description, and
+“In the loop” remains part of the branding.
+
+Four captions describe what the team gains:
+
+| Benefit | Supporting copy |
+| --- | --- |
+| Spend less time switching tools | Follow conversations, progress, and results in one place. |
+| Spend less time repeating information | Keep each task connected to the conversation that started it. |
+| Control where Goblin runs | Host Goblin on infrastructure you control. |
+| Stay involved in decisions | Assign the work, review the results, and decide what happens next. |
+
+“Select a channel to see an example task” introduces the existing hub and
+conversation panel directly. There is no separate example button or destination.
+A visible “Illustrative example” label and planned-integration note explain the
+demonstration's scope alongside the channels.
+
 A standalone interactive concept showing Goblin at the center of Slack,
 Microsoft Teams, GitHub, Discord, and Gmail conversations. The layout follows
 `references/goblin-in-the-loop-v2.png` in this directory:
@@ -20,8 +41,10 @@ platform. Each card has one thin, muted fiber-like connector meeting the card
 and logo edges. A soft light travels from the card to Goblin and back, showing
 both directions without a separate dotted path. Motion pauses with the player
 and follows the reduced-motion setting. The playback speed control also adjusts
-the fiber lights. On phones, the read-only message preview follows the conversation
-panel; on wider screens, it sits inside the Conversation view.
+the fiber lights. On phones, the read-only message preview and benefit descriptions
+follow the conversation panel, keeping the hub and example together. On wider
+screens, the message preview sits inside the Conversation view and the benefits
+sit below the hub. Their positions update when crossing the phone breakpoint.
 
 The central Goblin icon and wordmark scale together when vertical space is tight,
 keeping an 18-pixel gap above the Discord connector endpoint in wide, short windows.
@@ -39,13 +62,19 @@ The tool cards and conversations feature Josh A. (Slack), Anders H.
 (Gmail).
 
 Josh A.’s three Slack scenarios use a fictional log ingestion pipeline:
-rewrite it for burst traffic, deploy the worker to Kubernetes staging, and review
-the rollout before a wider release. Replies, work details, and deliverable previews
-cover bounded buffering, backpressure, durable enqueue, deduplication, health
-probes, graceful shutdown, load testing, and rollback without discarding queued
-logs. The dialogue is invented, not a quotation or a description of any actual
-system or work by Josh. No pipeline has been rewritten, load-tested, or deployed
-as part of this conversation.
+handle higher traffic without losing accepted logs, protect logs during
+deployment, and review whether a wider release is ready. The primary request is
+“Help us handle higher traffic without losing accepted logs. Prepare a tested
+change and a deployment plan for review.” Goblin's reply explains the intended
+work and when a team decision is needed. The conversation uses three plain stages:
+understand the traffic problem, prepare and check the changes, and plan the
+deployment. Work details and deliverable previews retain the technical checks for
+bounded buffering, backpressure, durable enqueue, deduplication, health probes,
+graceful shutdown, load testing, and rollback without discarding queued logs.
+The illustrated result offers proposed changes, a verification summary, and a
+deployment plan for review. The dialogue is invented, not a quotation or a
+description of any actual system or work by Josh. No pipeline has been rewritten,
+load-tested, or deployed as part of this conversation.
 
 The expanded GitHub card shows Code, Issues, Pull requests, Actions, and Projects
 icons, with their names on hover. They illustrate repository navigation; clicking
@@ -119,6 +148,9 @@ or synchronized, and no integration with these products is implied.
 
 Choose a tool card or chapter to play its primary scripted exchange. Additional
 scripted examples remain in the scene data; there is no scenario dropdown. The player
+uses shorter requests and replies that describe the desired outcome before the
+implementation details. All fifteen stored examples retain their scenario-specific
+checks and source attribution where applicable. The player
 supports pause/play, replay, timeline scrubbing, playback speed, fullscreen when
 available, and the Space keyboard shortcut. The initial Slack response is visible
 on arrival. Reduced-motion users start paused with a complete conversation and
@@ -144,6 +176,10 @@ The pulse follows the pause control and is disabled for reduced motion.
 
 The Conversation, Activity, Work, and Files tabs show related example content.
 Tabs support arrow keys, Home, and End. Deliverables open illustrative previews.
+The conversation and Files cards display “Ready for review” with an
+“Illustrative result” label. Activity connects the request to its proposed result,
+Work explains the planned checks, and Files lets visitors explore the deliverables.
+No successful execution or verification is claimed by the illustrated review state.
 The message composer is a read-only visual preview.
 Its attachment, mention, smile, and send icons are decorative. It does not
 accept messages or files; choose a channel to explore a scripted conversation.
