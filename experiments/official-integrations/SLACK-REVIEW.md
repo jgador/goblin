@@ -1,0 +1,44 @@
+# Slack independent-installation review
+
+Reviewed 2026-10-14 UTC (2026-10-15 in the Philippines). Documentation and existing-code review only. No app creation, OAuth exchange, CLI login/deployment, listener, token rotation or live Slack connection.
+
+## Feasibility verdict
+
+The reviewed Events API routes do not provide the required customer-exclusive delivery for one shared official app using Goblin's existing mentions/DM behavior. This is a scoped conclusion about these documented routes, not every possible future Slack feature. Retain one customer-owned Slack app per independently operated Goblin installation. One maintained Goblin implementation/manifest is not the same thing as one Marketplace app.
+
+| Route | Current official evidence | Consequence |
+| --- | --- | --- |
+| Socket Mode | [Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode/) requires an app-level token; up to ten connections can receive payloads without a connection-to-workspace routing guarantee. It cannot currently be listed in the public Marketplace. | Separate app-level tokens for the same app do not establish customer-exclusive routing. Never distribute an official app-level token to independent customers. |
+| Off-Marketplace distribution | [Transport comparison](https://docs.slack.dev/apis/events-api/comparing-http-socket-mode/) supports distributed Socket Mode apps. | Distribution is supported, but does not resolve the routing/privacy requirement. Do not describe all Socket Mode distribution as forbidden. |
+| HTTP events | [HTTP Request URLs](https://docs.slack.dev/apis/events-api/using-http-request-urls/) specifies one Events API Request URL per app across workspaces; further dispatch happens after receipt. | An OAuth redirect is not an event destination. A universal receiver/router would introduce the prohibited customer-data plane. |
+| OAuth callbacks | [OAuth installation](https://docs.slack.dev/authentication/installing-with-oauth/) requires an approved redirect or its subdirectory and consistent authorize/access redirect values. Conventional confidential-client exchange uses the app secret. | A customer's supplied URL is not automatically registered/trusted. Do not ship an official app secret to customers or infer arbitrary callback support. |
+| Public-client PKCE | [PKCE](https://docs.slack.dev/authentication/using-pkce/) describes S256 and code-verifier exchange without a client secret. Enabling it requires Slack support to undo. Desktop/custom-scheme and PKCE-localhost redirects cannot request bot scopes. PKCE refresh tokens expire after 30 days; custom schemes force rotation. | A reviewed HTTPS callback may permit a narrower local exchange, but still needs provisioned callback/rotation validation. It does not solve app-level tokens or event routing. Do not enable PKCE here. |
+
+Slack's [March 30, 2026 announcement](https://docs.slack.dev/changelog/2026/03/30/pkce/) confirms PKCE general availability. The [access-method reference](https://docs.slack.dev/reference/methods/oauth.v2.access/) documents `code_verifier`; optional parameter listings alone do not prove an app's authentication policy. No secretless exchange was exercised in this review.
+
+An alternative customer-local Web API polling design is not evaluated here. Before considering one, establish documented discovery of the required messages, minimal permissions, rate limits, pagination, durable deduplication and authorization behavior. It would change the current event-driven integration; do not assume feasibility or add a silent polling fallback from this review.
+
+## Existing code to preserve
+
+| Boundary | Inspected owner and current behavior |
+| --- | --- |
+| Single manifest | [manifest.json](../../backend/src/Goblin.Integrations.Slack/manifest.json), embedded and served by `Assets.Manifest`: bot scopes `app_mentions:read`, `im:history`, `chat:write`, `users:read`; events `app_mention`, `message.im`; Socket Mode enabled; organization-wide deployment and token rotation disabled. No redirect list or HTTP event URL. |
+| Customer setup | [SlackSetup](../../backend/src/Goblin.Integrations.Slack/SlackSetup.cs) uses the pinned CLI only in disposable private setup directories with explicit user authorization. It deploys the existing manifest, checks expected workspace/app, logs out setup authorization, then re-verifies runtime tokens. Interrupted setup preserves an app reference for recovery, not permission to silently create another app. Do not invoke it unattended here. |
+| Token verification | [SlackApi](../../backend/src/Goblin.Integrations.Slack/SlackApi.cs) checks required bot scopes, obtains workspace/user/bot identity through `auth.test`, resolves app identity with `bots.info`, then checks the Socket Mode hello app ID. This verifies the pair, not workspace-exclusive routing for a shared app. |
+| Local storage | [SlackCredentialStore](../../backend/src/Goblin.Integrations.Slack/SlackCredentialStore.cs) stores AES-GCM ciphertext and its deployment key locally, with Unix private permissions and symlink refusal. Colocated encryption does not protect against compromise of that host/key. No refresh-token/expiry lifecycle exists in the inspected runtime credential model. |
+| Event handling | [SlackEvents](../../backend/src/Goblin.Integrations.Slack/SlackEvents.cs) rejects mismatched workspace/app and nonhuman/broad events. [SlackConnection](../../backend/src/Goblin.Integrations.Slack/SlackConnection.cs) acknowledges valid parsed messages after durable acceptance; it also acknowledges envelopes whose parser returns null. Transport reconnection is distinct from retrying failed Work. |
+| Local identity approval | [SlackEndpoints](../../backend/src/Goblin.Web/Http/Endpoints/SlackEndpoints.cs) uses the existing local session for link/confirm/revoke. [ExternalConversationStore](../../backend/src/Goblin.Application/Work/ExternalConversationStore.cs) binds confirmation to installation/session, expiry, unused link and observed Slack user before enabling the local owner identity. Slack authentication is not automatic Goblin authorization. |
+
+**Code-based inference:** if independent installations shared one app, a foreign-workspace payload could arrive, be rejected by `SlackEvents.Parse`, and still be acknowledged by `SlackConnection.ReceiveAsync`. Filtering would happen after disclosure and could consume another installation's event. This was inferred from code, not reproduced against Slack. Changing ACK behavior would not fix the underlying privacy/routing barrier, and no such change is made.
+
+## Data exchanged and on-premises meaning
+
+Goblin's authoritative Work history, local identity approvals, deployment configuration and stored credentials remain customer-controlled. Slack necessarily holds its app registration/manifest/scopes, authorization and token records, workspace/user/channel/thread/event metadata and message copies. Runtime calls send platform tokens back to Slack. Users' mention/DM text and linking codes pass through Slack; selected Work questions, result/error excerpts, IDs and Goblin links are posted back. These platform-held copies are not exclusively on-premises. There is no Goblin-operated auth service, proxy, event receiver or customer store.
+
+The existing identity-confirmation and durable acceptance/notification policies must remain unchanged. Do not share official secrets/app-level credentials, accept a model-supplied installation as authorization, auto-grant a Slack identity, or add automatic Work execution retries.
+
+## Checks and next increment
+
+Eight read-only Node assertions passed against the real manifest/project embedding: Socket Mode, exact two events/four bot scopes, absent event Request URL, disabled rotation/org deployment, absent redirect list, and the owning embedded resource. These are artifact-consistency checks, not C# runtime, token verification, live routing or database coverage. Existing [SlackTests](../../backend/tests/Goblin.Application.Tests/SlackTests.cs) and [SlackApiTests](../../backend/tests/Goblin.Application.Tests/SlackApiTests.cs) were inspected, not run; the previous 392 MCP-focused checks are historical and were not rerun for this prose-only increment.
+
+Next: strengthen the existing `ManifestOnlyReceivesDirectMessagesAndMentions` test with exact minimal bot scopes, no user scopes/redirect/event URL, and unchanged rotation/org flags. Run only that manifest test under bounded build/test controls. Use the product's embedded manifest, not a copied template. Missing backend dependencies must be recorded as sandbox-blocked; no CLI login/network workaround. Live provider/OAuth/owner/database/ChatGPT/Slack setup and public-distribution gates remain unresolved.

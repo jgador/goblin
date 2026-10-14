@@ -2,6 +2,8 @@
 
 Start with [STATE.md](STATE.md) for the next bounded task and [FEASIBILITY.md](FEASIBILITY.md) for supported routes and restrictions.
 
+[SLACK-REVIEW.md](SLACK-REVIEW.md) records the dated existing-code/OAuth-PKCE/Socket Mode/Marketplace review. Shared-app customer-exclusive delivery remains unsupported by the reviewed event routes; retain dedicated customer-owned apps and the single existing product manifest. Eight artifact-consistency checks are not live integration success.
+
 ## Build and focused checks
 
 Requires the .NET 10 SDK pinned by the repository. Keep temporary outputs in `.artifacts/official-integrations`. No Docker, PostgreSQL, Kubernetes or platform login is needed for the focused checks.

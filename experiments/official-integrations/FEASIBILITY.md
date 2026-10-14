@@ -27,6 +27,8 @@ This is a local service-session prototype, **not per-user OAuth authorization**.
 
 Existing `Goblin.Integrations.Slack` uses a customer app manifest, app-level and bot tokens, Socket Mode, and encrypted credential files inside the installation. Identity linking requires local confirmation through the existing conversation adapter. Preserve this path.
 
+[Slack code and platform review](SLACK-REVIEW.md), 2026-10-14 UTC, maps these restrictions to the actual manifest, token verification/storage, local identity confirmation and post-filter acknowledgement. Secretless PKCE does not establish independent event delivery; keep a dedicated customer-owned app per independent Goblin installation. Eight read-only manifest checks passed, not live Slack or C# runtime validation.
+
 | Question | Verified restriction or unresolved issue |
 | --- | --- |
 | Marketplace and Socket Mode | [Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode/) excludes public Marketplace listing. [Transport comparison](https://docs.slack.dev/apis/events-api/comparing-http-socket-mode/) permits distributed Socket Mode apps outside Marketplace. Distribution does not establish independent customer event routing. |
