@@ -45,7 +45,7 @@ Its current narrow token contract is RS256, `typ=at+jwt`, a configured exact HTT
 
 Every call rechecks a customer-held grant using issuer, subject, resource and Work ID. A valid signature or scope alone cannot authorize a read. Revoked/expired local grants and storage failures must deny access without returning Work data. Token identity is verified but per-token denylisting is not implemented. Ordinary read access tokens are reusable until token expiry or local grant revocation; this component does not claim one-time-token replay protection.
 
-Tests generate ephemeral RSA keys and JWTs in memory and exercise the real cryptographic verifier. HTTP/stdio fixtures still use test grants/backend sources. The guarded PostgreSQL source additionally has fake ADO.NET command/projection checks; see [PERSISTENCE.md](PERSISTENCE.md) for its undeployed schema and snapshot/revocation limits. No token issuance flow, JWKS discovery/rotation, verified durable storage, production Web middleware, authenticated database read or live platform connection is covered yet.
+Tests generate ephemeral RSA keys and JWTs in memory and exercise the real cryptographic verifier. HTTP/stdio fixtures still use test grants/backend sources. The guarded PostgreSQL source additionally has fake ADO.NET command/projection checks; see [PERSISTENCE.md](PERSISTENCE.md) for its undeployed schema and snapshot/revocation limits. Isolated signing-key rotation now has synthetic document/cache checks, not live retrieval/provider coverage. No token issuance flow, live JWKS discovery/rotation, verified durable storage, production Web middleware, authenticated database read or live platform connection is covered yet.
 
 ## Private Streamable HTTP adapter
 
@@ -71,3 +71,7 @@ The focused executable includes 19 offline fixture-safety contracts, eight embed
 ## Customer OAuth discovery review
 
 `CustomerOAuthDiscoveryPreflight` is an offline, unregistered metadata review for a predefined public-client policy. It fetches no URLs, loads no keys and cannot authorize Work. Twenty-six synthetic checks cover pinned issuer, bounded/duplicate-safe typed JSON, S256/code/none/read-scope advertisements and restricted endpoint origins. See [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) for the concrete provider candidate, experimental resource-indicator/CIMD gates, token-header configuration, rotation gap and private OAuth reachability. A metadata pass is not live provider or OAuth success.
+
+## Isolated signing-key rotation
+
+`CustomerSigningKeyCache` and `RotatingConnectorReadBoundary` compose synthetic trusted-endpoint key retrieval with existing RSA/JWT verification and per-Work authorization. Monotonic ten-minute cache age, one-minute global refresh cooldown, atomic bounded key-set replacement and five-second gate/retrieval deadlines are experimental policy. No network source, HTTP/stdio registration or production change. See [SIGNING-KEY-ROTATION.md](SIGNING-KEY-ROTATION.md) for limits, removal/emergency-invalidation caveats and next transport gate.
