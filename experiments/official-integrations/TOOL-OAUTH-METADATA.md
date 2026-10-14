@@ -10,7 +10,9 @@ Both private HTTP status tools now declare `_meta.securitySchemes` through the p
 
 The official [SDK 1.4.1 Tool source](https://github.com/modelcontextprotocol/csharp-sdk/blob/v1.4.1/src/ModelContextProtocol.Core/Protocol/Tool.cs) is sealed, has `Meta` but no top-level `securitySchemes` property or JSON extension-data member. Its [metadata attribute source](https://github.com/modelcontextprotocol/csharp-sdk/blob/v1.4.1/src/ModelContextProtocol.Core/Server/McpMetaAttribute.cs) and [API reference](https://csharp.sdk.modelcontextprotocol.io/v1/api/ModelContextProtocol.Server.McpMetaAttribute.html) explicitly support JSON-valued listing metadata, not invocation-result metadata. Actual SDK HTTP serialization tests verify the mirror and the absence of the top-level field. A complete required declaration cannot be represented by the pinned ordinary descriptor API inspected here.
 
-No serializer fork, reflection mutation, response rewriting, undocumented property, dependency upgrade or invented authentication capability is introduced. Primary top-level support remains an adoption gate requiring a separately reviewed supported SDK/API path. OpenAI's two-half OAuth UI requirement is not satisfied by this change.
+No serializer fork, reflection mutation, response rewriting, undocumented property, dependency upgrade or invented authentication capability is introduced. Primary top-level support remains an adoption gate requiring a separately reviewed supported SDK/API path. OpenAI's two-half tool-level OAuth UI requirement is not satisfied by this change. This is not evidence that whole-server OAuth discovery is impossible; existing HTTP 401/resource metadata is a separate path, still requiring live provider/platform validation.
+
+The 2026-10-14 [supported-API review](PLATFORM-REVIEW.md) inspected the latest official 2.2.0 release's ordinary Tool/attribute/create-options APIs. They do not resolve the primary-field gap, so the experiment deliberately retains 1.4.1. No newer-package runtime compatibility or ChatGPT UI success is claimed.
 
 ## Authorization and verification
 

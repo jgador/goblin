@@ -1,6 +1,6 @@
 # Official integrations feasibility
 
-Reviewed 2026-10-13 UTC. This is a prototype and documentation assessment, not a published integration or a successful live customer installation.
+Initial review 2026-10-13 UTC; [supported-API/distribution recheck](PLATFORM-REVIEW.md) 2026-10-14 UTC. This is a prototype and documentation assessment, not a published integration or a successful live customer installation.
 
 ## ChatGPT
 

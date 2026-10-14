@@ -77,6 +77,8 @@ The focused executable includes 19 offline fixture-safety contracts, eight embed
 
 ## Customer OAuth discovery review
 
+[PLATFORM-REVIEW.md](PLATFORM-REVIEW.md) records the 2026-10-14 SDK 2.2.0 source/distribution review and explicit decision to retain 1.4.1. Whole-server discovery is distinct from unproven tool-level linking UI. Public templates, desktop distribution and ChatGPT identity remain restricted; customer-specific private connections are the closest documented route. No production listener or platform authentication was enabled.
+
 `CustomerOAuthDiscoveryPreflight` is an offline, unregistered metadata review for a predefined public-client policy. It fetches no URLs, loads no keys and cannot authorize Work. Twenty-six synthetic checks cover pinned issuer, bounded/duplicate-safe typed JSON, S256/code/none/read-scope advertisements and restricted endpoint origins. See [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) for the concrete provider candidate, experimental resource-indicator/CIMD gates, token-header configuration, rotation gap and private OAuth reachability. A metadata pass is not live provider or OAuth success.
 
 ## Isolated signing-key rotation
