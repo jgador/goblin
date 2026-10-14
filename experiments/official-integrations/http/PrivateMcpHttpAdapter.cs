@@ -17,9 +17,16 @@ public static class PrivateMcpHttpAdapter
     internal static readonly object IdentityKey = new();
     public const string MetadataPath = "/.well-known/oauth-protected-resource/mcp";
 
-    public static void AddServices(IServiceCollection services, ConnectorReadBoundary boundary)
+    public static void AddServices(IServiceCollection services, ConnectorReadBoundary boundary) =>
+        AddServices<ConnectorReadBoundary, PrivateWorkTools>(services, boundary, boundary.Resource);
+
+    public static void AddServices(IServiceCollection services, RotatingConnectorReadBoundary boundary) =>
+        AddServices<RotatingConnectorReadBoundary, RotatingPrivateWorkTools>(services, boundary, boundary.Resource);
+
+    private static void AddServices<TBoundary, TTools>(IServiceCollection services, TBoundary boundary, string resourceId)
+        where TBoundary : class where TTools : class
     {
-        Uri resource = new(boundary.Resource);
+        Uri resource = new(resourceId);
         if (resource.AbsolutePath != "/mcp")
             throw new ArgumentException("The private prototype requires the exact /mcp resource path.");
         services.AddSingleton(boundary);
@@ -27,12 +34,19 @@ public static class PrivateMcpHttpAdapter
         services.AddMcpServer().WithHttpTransport(options =>
         {
             options.Stateless = true;
-        }).WithTools<PrivateWorkTools>();
+        }).WithTools<TTools>();
     }
 
-    public static void Map(WebApplication app, ConnectorReadBoundary boundary)
+    public static void Map(WebApplication app, ConnectorReadBoundary boundary) =>
+        Map(app, boundary.Issuer, boundary.Resource, boundary.AuthenticateAsync);
+
+    public static void Map(WebApplication app, RotatingConnectorReadBoundary boundary) =>
+        Map(app, boundary.Issuer, boundary.Resource, boundary.AuthenticateAsync);
+
+    private static void Map<TIdentity>(WebApplication app, string issuer, string resourceId,
+        Func<string, CancellationToken, Task<TIdentity>> authenticate) where TIdentity : class
     {
-        Uri resource = new(boundary.Resource);
+        Uri resource = new(resourceId);
         string origin = resource.GetLeftPart(UriPartial.Authority);
         string metadataUrl = origin + MetadataPath;
         string challenge = $"Bearer resource_metadata=\"{metadataUrl}\", scope=\"{ConnectorReadBoundary.ReadScope}\"";
@@ -62,7 +76,7 @@ public static class PrivateMcpHttpAdapter
             }
             try
             {
-                context.Items[IdentityKey] = await boundary.AuthenticateAsync(header.Parameter, context.RequestAborted);
+                context.Items[IdentityKey] = await authenticate(header.Parameter, context.RequestAborted);
             }
             catch (ConnectorAuthenticationFailure)
             {
@@ -71,7 +85,7 @@ public static class PrivateMcpHttpAdapter
             }
             await next(context);
         });
-        app.MapGet(MetadataPath, () => new ProtectedResourceMetadata(boundary.Resource, [boundary.Issuer], [ConnectorReadBoundary.ReadScope]));
+        app.MapGet(MetadataPath, () => new ProtectedResourceMetadata(resourceId, [issuer], [ConnectorReadBoundary.ReadScope]));
         app.MapMcp("/mcp");
     }
 

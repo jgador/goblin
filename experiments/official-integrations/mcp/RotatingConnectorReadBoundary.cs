@@ -12,6 +12,9 @@ public sealed class RotatingConnectorReadBoundary
     private readonly ICustomerWorkStatusSource _source;
     private readonly JsonWebTokenHandler _handler = new() { MaximumTokenSizeInBytes = 8192, MapInboundClaims = false };
 
+    public string Issuer => _keys.Issuer;
+    public string Resource => _resource;
+
     public RotatingConnectorReadBoundary(CustomerSigningKeyCache keys, string resource, ICustomerWorkStatusSource source)
     {
         _keys = keys ?? throw new ArgumentNullException(nameof(keys));

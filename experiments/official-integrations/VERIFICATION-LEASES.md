@@ -1,6 +1,6 @@
 # Generation-bound rotating verification leases
 
-Reviewed 2026-10-14 UTC. Library-only experiment, not a production listener, OAuth issuer, real owner authority or live platform integration. The existing fixed-key HTTP adapter and stdio executable remain unchanged; protection described here applies only to `RotatingConnectorReadBoundary`.
+Reviewed 2026-10-14 UTC. Library-only experiment, not a production listener, OAuth issuer, real owner authority or live platform integration. Fixed-key HTTP behavior and the stdio executable are preserved; protection described here applies only to `RotatingConnectorReadBoundary`, including its optional isolated HTTP composition.
 
 ## Implemented checks
 
@@ -30,4 +30,4 @@ Focused tests use real ephemeral RSA/JWT verification with synthetic JWKS, clock
 
 Lease/generation/verified identity remain customer-runtime memory; no Goblin central service or storage exists. If connected later, key retrieval goes directly to the customer identity provider, OpenAI handles connector codes/access/refresh tokens and selected tool fields, and Slack handles its selected messages/events. Authoritative credentials/configuration/Work history remain customer-owned; selected platform data and token copies are not exclusively on-premises. Public distribution and SIWC/Slack restrictions are unaffected.
 
-Next: isolated HTTP composition carrying the verified leased identity in the request context, with actual TestServer/SDK checks for invalidation between middleware authentication and tool access, Host/Origin/challenge behavior and fresh local grants. Preserve the fixed-key path and keep production listener disabled; real owner authority, PostgreSQL and provisioned noninteractive TLS/provider checks remain required.
+The [isolated HTTP composition](ROTATING-HTTP.md) now carries the verified leased identity in request context, with actual TestServer/SDK checks for invalidation between middleware authentication and tool access, Host/Origin/challenge behavior and fresh local grants. The fixed-key path is preserved and production listeners remain disabled. Real owner authority, PostgreSQL and provisioned noninteractive TLS/provider checks remain required.

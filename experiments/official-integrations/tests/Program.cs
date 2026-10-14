@@ -95,6 +95,7 @@ else Console.WriteLine("SKIP stdio: supply dotnet executable and built prototype
 
 passed += await ConnectorBoundaryChecks.RunAsync();
 passed += await PrivateHttpChecks.RunAsync();
+passed += await RotatingHttpChecks.RunAsync();
 passed += await PostgresSourceChecks.RunAsync();
 passed += await GrantAdministrationChecks.RunAsync();
 passed += await PostgresFixtureChecks.RunAsync();
