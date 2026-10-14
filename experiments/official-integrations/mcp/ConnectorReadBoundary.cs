@@ -23,11 +23,11 @@ public sealed class ConnectorIdentity
     public DateTimeOffset ExpiresAt { get; }
 }
 
-// Implement inside the customer's trust boundary. Recheck local approval and
-// grant/token revocation on every call. A signed JWT alone never grants access.
-public interface ICustomerWorkReadGrants
+// Implement inside the customer's persistence boundary. Local authorization
+// and the minimal Work projection must share one database statement/snapshot.
+public interface ICustomerWorkStatusSource
 {
-    Task<bool> CanReadAsync(ConnectorIdentity identity, long workId, CancellationToken token);
+    Task<WorkStatusResult> ReadAuthorizedAsync(ConnectorIdentity identity, long workId, CancellationToken token);
 }
 
 public sealed class ConnectorAuthenticationFailure : WorkReadFailure
@@ -44,14 +44,13 @@ public sealed class ConnectorReadBoundary
     private readonly string _resource;
     private readonly TokenValidationParameters _validation;
     private readonly JsonWebTokenHandler _handler = new() { MaximumTokenSizeInBytes = 8192, MapInboundClaims = false };
-    private readonly ICustomerWorkReadGrants _grants;
-    private readonly Func<long, CancellationToken, Task<WorkStatusResult>> _read;
+    private readonly ICustomerWorkStatusSource _source;
 
     public string Issuer => _issuer;
     public string Resource => _resource;
 
     public ConnectorReadBoundary(string issuer, string resource, RsaSecurityKey publicKey,
-        ICustomerWorkReadGrants grants, Func<long, CancellationToken, Task<WorkStatusResult>> read)
+        ICustomerWorkStatusSource source)
     {
         ValidateAddress(issuer);
         ValidateAddress(resource);
@@ -72,8 +71,7 @@ public sealed class ConnectorReadBoundary
             throw new ArgumentException("Configure a public RSA signing key of at least 2048 bits.");
         _issuer = issuer;
         _resource = resource;
-        _grants = grants;
-        _read = read;
+        _source = source ?? throw new ArgumentNullException(nameof(source));
         _validation = new TokenValidationParameters
         {
             ValidIssuer = issuer,
@@ -129,13 +127,9 @@ public sealed class ConnectorReadBoundary
         if (identity.Issuer != _issuer || identity.Resource != _resource || identity.ExpiresAt <= DateTimeOffset.UtcNow)
             throw new ConnectorAuthenticationFailure();
         if (workId <= 0) throw Denied();
-        bool allowed;
-        try { allowed = await _grants.CanReadAsync(identity, workId, token); }
+        try { return await _source.ReadAuthorizedAsync(identity, workId, token); }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
         catch (Exception) { throw Denied(); }
-        if (!allowed) throw Denied();
-        token.ThrowIfCancellationRequested();
-        return await _read(workId, token);
     }
 
     private static WorkReadFailure Denied() => new("Connector Work read access is not authorized.");

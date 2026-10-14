@@ -93,6 +93,7 @@ else Console.WriteLine("SKIP stdio: supply dotnet executable and built prototype
 
 passed += await ConnectorBoundaryChecks.RunAsync();
 passed += await PrivateHttpChecks.RunAsync();
+passed += await PostgresSourceChecks.RunAsync();
 Console.WriteLine($"PASS {passed} focused checks. Backend responses mocked; no live ChatGPT, Slack or PostgreSQL coverage.");
 return;
 

@@ -13,8 +13,8 @@ internal static class ConnectorBoundaryChecks
         var grants = new LocalGrants();
         int reads = 0, checks = 0;
         var boundary = new ConnectorReadBoundary("https://identity.customer.example/", "https://goblin.customer.example/mcp",
-            new RsaSecurityKey(issuerKey.ExportParameters(false)), grants,
-            (id, _) => { reads++; return Task.FromResult(new WorkStatusResult(id.ToString(), "7", "Ready", DateTimeOffset.UtcNow)); });
+            new RsaSecurityKey(issuerKey.ExportParameters(false)), new TestGrantStatusSource(grants,
+                (id, _) => { reads++; return Task.FromResult(new WorkStatusResult(id.ToString(), "7", "Ready", DateTimeOffset.UtcNow)); }));
         string valid = Issue(signing);
         await boundary.ReadAsync(valid, 42, default);
         Require(reads == 1 && grants.Calls == 1);
@@ -87,7 +87,7 @@ internal static class ConnectorBoundaryChecks
         if (!value) throw new Exception("Connector security assertion failed.");
     }
 
-    private sealed class LocalGrants : ICustomerWorkReadGrants
+    private sealed class LocalGrants : ITestWorkReadGrants
     {
         public bool Revoked { get; set; }
         public bool Unavailable { get; set; }

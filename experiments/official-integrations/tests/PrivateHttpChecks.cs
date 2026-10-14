@@ -21,8 +21,8 @@ internal static class PrivateHttpChecks
         var grants = new Grants();
         int reads = 0, checks = 0;
         var boundary = new ConnectorReadBoundary("https://identity.customer.example/", "https://goblin.customer.example/mcp",
-            new RsaSecurityKey(key.ExportParameters(false)), grants,
-            (id, _) => { reads++; return Task.FromResult(new WorkStatusResult(id.ToString(), "5", "Ready", DateTimeOffset.UtcNow)); });
+            new RsaSecurityKey(key.ExportParameters(false)), new TestGrantStatusSource(grants,
+                (id, _) => { reads++; return Task.FromResult(new WorkStatusResult(id.ToString(), "5", "Ready", DateTimeOffset.UtcNow)); }));
         WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
         builder.Logging.ClearProviders();
         builder.WebHost.UseTestServer();
@@ -187,7 +187,7 @@ internal static class PrivateHttpChecks
         if (!value) throw new Exception("Private HTTP contract assertion failed.");
     }
 
-    private sealed class Grants : ICustomerWorkReadGrants
+    private sealed class Grants : ITestWorkReadGrants
     {
         public bool Revoked { get; set; }
         public int Calls { get; private set; }
