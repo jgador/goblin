@@ -150,8 +150,9 @@ internal static class PostgresFixtureChecks
                 Require(await result.ReadAsync(deadline.Token) && result.GetString(0) == plan.Name &&
                     result.GetString(1) == (admin ? "goblin_admin" : "goblin_app"));
             }
+            await PostgresWorkGrantChecks.RunLiveAsync(plan, deadline.Token);
             await fixture.DisposeAsync();
-            Console.WriteLine("PASS live PostgreSQL fixture connectivity/roles and cleanup. No Work/grant/audit coverage.");
+            Console.WriteLine("PASS live PostgreSQL minimal Work/grant fixture and cleanup; production schema, audit and owner-session unverified.");
         }
         catch (Exception)
         {
