@@ -5,6 +5,8 @@ using Goblin.Mcp.Prototype;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 
+bool postgres = args.Length == 3 && args[2] == "--postgres";
+if (args.Length is not (0 or 2) && !postgres) throw new ArgumentException("Supply dotnet, prototype DLL and optional --postgres.");
 int passed = 0;
 string session = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 var options = new PrototypeOptions("https://customer.example/", session, [42]);
@@ -61,7 +63,7 @@ await CheckAsync("empty grants fail closed", () =>
 });
 
 // Actual SDK stdio transport with a child host. No live customer or ChatGPT connection.
-if (args.Length == 2)
+if (args.Length >= 2)
 {
     await CheckAsync("real stdio initialization discovery and permission denial", async () =>
     {
@@ -95,7 +97,9 @@ passed += await ConnectorBoundaryChecks.RunAsync();
 passed += await PrivateHttpChecks.RunAsync();
 passed += await PostgresSourceChecks.RunAsync();
 passed += await GrantAdministrationChecks.RunAsync();
+passed += await PostgresFixtureChecks.RunAsync();
 Console.WriteLine($"PASS {passed} focused checks. Backend responses mocked; no live ChatGPT, Slack or PostgreSQL coverage.");
+await PostgresFixtureChecks.LiveAsync(postgres);
 return;
 
 async Task CheckAsync(string name, Func<Task> run)

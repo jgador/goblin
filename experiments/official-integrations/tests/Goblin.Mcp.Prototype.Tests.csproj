@@ -5,10 +5,13 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../mcp/Goblin.Mcp.Prototype.csproj" />
     <ProjectReference Include="../http/Goblin.Mcp.Http.Prototype.csproj" />
+    <ProjectReference Include="../../../backend/src/Goblin.Contracts/Goblin.Contracts.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 </Project>

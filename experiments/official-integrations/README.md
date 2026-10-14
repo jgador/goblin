@@ -63,3 +63,7 @@ The focused executable also runs ASP.NET TestServer checks without listening on 
 ## Local-owner approval/revocation policy
 
 `CustomerGrantAdministration` is an unregistered policy requiring a trusted request-scoped local-owner authority and an atomic mutation/audit store. It pins issuer/resource, requires one explicit subject/Work ID and bounded future expiry, rechecks owner authority for every approval/revoke, and permits revoke without connector login. No production authority, store, route, grant writer or MCP mutation tool exists. See [GRANT-ADMINISTRATION.md](GRANT-ADMINISTRATION.md) for composition gates, uncertainty handling and the 24 test-double policy checks. These do not establish real owner authentication or durable audit coverage.
+
+## Opt-in PostgreSQL fixture checks
+
+The focused executable now includes 19 offline fixture-safety contracts and a separate live smoke path. Defaults do not read database credentials. Live mode requires the two stdio arguments followed by `--postgres` plus both established, certificate-configured disposable test connections. See [POSTGRES-HARNESS.md](POSTGRES-HARNESS.md) before enabling it: random fixture ownership is checked, unconfirmed creation/changed identity refuses deletion, and cleanup never forces a DROP. Current sandbox live checks remain skipped; even a future smoke pass would not establish Work/grant/audit or end-to-end platform coverage.
