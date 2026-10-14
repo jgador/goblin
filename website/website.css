@@ -173,8 +173,7 @@ main {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 790px;
-  height: calc(100svh - 76px);
+  min-height: max(790px, calc(100svh - 76px));
   padding: 20px 30px 20px;
 }
 .intro {
@@ -185,18 +184,34 @@ main {
   letter-spacing: -1.5px;
   font-weight: 500;
   line-height: 1.25;
-  white-space: nowrap;
+  white-space: normal;
 }
 .intro h1 span {
+  display: block;
   color: #087637;
   font-weight: 700;
 }
 .intro p {
-  font-size: clamp(13px, 1.24vw, 23px);
+  max-width: 62ch;
+  font-size: clamp(13px, 1.05vw, 17px);
   line-height: 1.5;
-  color: #89909e;
+  color: #657083;
   letter-spacing: -0.35px;
-  margin-top: 1px;
+  margin-top: 10px;
+}
+.intro .intro-kicker {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: #587765;
+}
+.intro .network-instruction {
+  margin-top: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: #435e50;
 }
 .network {
   /* Match the Discord connector's x=575 axis in the 1100-wide SVG. */
@@ -727,16 +742,16 @@ main {
   opacity: 0;
 }
 .benefits {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: start;
   gap: 15px;
   margin-top: 22px;
   min-height: 45px;
 }
 .benefits > div {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
 }
 .benefits > div > span {
@@ -755,13 +770,53 @@ main {
   height: 21px;
 }
 .benefits p {
-  font-size: clamp(10px, 0.88vw, 16px);
-  color: #6f7d8d;
-  letter-spacing: -0.25px;
-  white-space: nowrap;
+  font-size: clamp(11px, 0.88vw, 14px);
+  line-height: 1.5;
+  color: #657083;
+}
+.benefits strong {
+  display: block;
+  color: #435e50;
+  font-weight: 600;
+}
+.benefits p span {
+  display: block;
+  margin-top: 5px;
+}
+.example-notice {
+  padding: 13px 23px;
+  border-bottom: 1px solid var(--line);
+  background: #f3f8f0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #657083;
+}
+.example-notice strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #435e50;
+  margin-bottom: 3px;
+}
+.review-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 5px 10px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+.review-heading strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+.review-heading span {
+  font-size: 10px;
+  color: #657083;
 }
 .conversation-panel {
-  height: calc(100svh - 76px);
+  height: auto;
   min-height: 790px;
   display: flex;
   flex-direction: column;
@@ -1576,6 +1631,7 @@ dialog ul {
     padding: 9px;
   }
   .benefits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 9px;
   }
   .benefits > div {
@@ -1586,7 +1642,7 @@ dialog ul {
     height: 31px;
   }
   .benefits p {
-    font-size: 8px;
+    font-size: 11px;
   }
   .hub-core .goblin-mark {
     width: 90px;
@@ -1784,7 +1840,7 @@ dialog ul {
     height: 17px;
   }
   .benefits p {
-    font-size: 9px;
+    font-size: 11px;
   }
   .conversation-panel {
     height: 760px;
@@ -2062,7 +2118,7 @@ dialog ul {
     height: 28px;
   }
   .benefits p {
-    font-size: 9px;
+    font-size: 11px;
   }
   .benefits svg {
     width: 15px;
@@ -2484,7 +2540,13 @@ dialog ul {
     font-size: 22px;
   }
   .benefits {
-    display: none;
+    display: grid;
+  }
+  .film-body > .benefits {
+    margin: 12px 14px;
+  }
+  .example-notice {
+    padding-inline: 16px;
   }
   .composer {
     display: grid;
