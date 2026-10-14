@@ -71,6 +71,8 @@ One additional rotating SDK/TestServer fixture now composes the actual pinned HT
 
 Six further checks cover cold initialization with mocked key redirects, HTTP 503 and malformed documents: one sanitized MCP 401, no Work access, no source detail/bearer leakage or follow/retry, and failed-response/owned-handler disposal. Authentication failure must have the specific Unauthorized HTTP classification, not a timeout or arbitrary exception counted as a pass.
 
+Three additional checks deliberately create a second SDK transport on each failed host during a deterministically frozen cache cooldown. Each new request stays safely denied without another key GET or Work access. This is an explicit synthetic test action, not automatic reconnect or Work retry; real provider/platform behavior and recovery after cooldown remain unverified.
+
 ## Local-owner approval/revocation policy
 
 `CustomerGrantAdministration` is an unregistered policy requiring a trusted request-scoped local-owner authority and an atomic mutation/audit store. It pins issuer/resource, requires one explicit subject/Work ID and bounded future expiry, rechecks owner authority for every approval/revoke, and permits revoke without connector login. No production authority, store, route, grant writer or MCP mutation tool exists. See [GRANT-ADMINISTRATION.md](GRANT-ADMINISTRATION.md) for composition gates, uncertainty handling and the 24 test-double policy checks. These do not establish real owner authentication or durable audit coverage.

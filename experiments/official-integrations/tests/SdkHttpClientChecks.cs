@@ -333,7 +333,9 @@ internal static class SdkHttpClientChecks
             var configuration = new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"), new Uri(Issuer + "/token"), address, false);
             using var documents = new CustomerHttpsJwksDocumentSource(configuration, keyHandler);
             var source = new LocalStatus();
-            var boundary = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, documents, TimeProvider.System), Resource, source);
+            // Freeze only cache age/cooldown; JWT validity and request deadlines
+            // retain real time. No sleep is needed to stay inside the cooldown.
+            var boundary = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, documents, new FrozenCacheClock()), Resource, source);
             WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
             builder.Logging.ClearProviders();
             builder.WebHost.UseTestServer();
@@ -345,17 +347,21 @@ internal static class SdkHttpClientChecks
             using var http = new HttpClient(observed) { Timeout = TimeSpan.FromSeconds(5) };
             string credential = Issue(key, "linked");
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", credential);
-            await using var transport = new HttpClientTransport(new HttpClientTransportOptions
+
+            HttpClientTransport Transport() => new(new HttpClientTransportOptions
             {
                 Endpoint = new Uri(Resource), Name = "Goblin synthetic HTTPS-key failure",
                 TransportMode = HttpTransportMode.StreamableHttp, ConnectionTimeout = TimeSpan.FromSeconds(5),
                 OAuth = null, MaxReconnectionAttempts = 0, KnownSessionId = null, OwnsSession = false
             }, http, ownsHttpClient: false);
-            await check("cold SDK key " + failure.Name + " produces one safe HTTP 401 without Work access or retry", async () =>
+
+            await using var transport = Transport();
+
+            async Task DenyCreationAsync(HttpClientTransport candidate, int expectedRequests)
             {
                 try
                 {
-                    await using McpClient unexpected = await McpClient.CreateAsync(transport, cancellationToken: token);
+                    await using McpClient unexpected = await McpClient.CreateAsync(candidate, cancellationToken: token);
                     throw new Exception("Expected key-source authentication failure.");
                 }
                 catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.Unauthorized)
@@ -363,12 +369,22 @@ internal static class SdkHttpClientChecks
                     Require(!error.ToString().Contains(credential, StringComparison.Ordinal) &&
                         !error.ToString().Contains(detail, StringComparison.Ordinal) && !error.ToString().Contains(redirect.AbsoluteUri, StringComparison.Ordinal));
                 }
-                Require(observed.Requests == 1 && observed.UnauthorizedResponses == 1 && observed.SafeUnauthorizedBody && observed.UnauthorizedNoStore &&
+                Require(observed.Requests == expectedRequests && observed.UnauthorizedResponses == expectedRequests && observed.SafeUnauthorizedBody && observed.UnauthorizedNoStore &&
                     !observed.SawSession && !observed.NonPostUnauthorized &&
                     observed.LastChallenge == $"Bearer resource_metadata=\"https://goblin.customer.example{PrivateMcpHttpAdapter.MetadataPath}\", scope=\"{ConnectorReadBoundary.ReadScope}\"" &&
                     keyHandler.Calls == 1 && keyHandler.SafeRequests && keyHandler.ContentDisposed && source.Calls == 0 && source.Reads == 0);
-            });
+            }
+
+            await check("cold SDK key " + failure.Name + " produces one safe HTTP 401 without Work access or retry",
+                () => DenyCreationAsync(transport, 1));
             await transport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await check("explicit second SDK creation after key " + failure.Name + " stays denied without cooldown refetch", async () =>
+            {
+                await using var secondTransport = Transport();
+                await DenyCreationAsync(secondTransport, 2);
+                await secondTransport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+                Require(observed.Requests == 2 && observed.UnauthorizedResponses == 2 && keyHandler.Calls == 1 && source.Calls == 0);
+            });
             await app.StopAsync(token);
             documents.Dispose();
             await check("cold SDK key " + failure.Name + " disposes failed response and owned handler", () =>
@@ -424,6 +440,11 @@ internal static class SdkHttpClientChecks
             }
             return response;
         }
+    }
+
+    private sealed class FrozenCacheClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
     }
 
     private sealed class PinnedKeyHandler : HttpMessageHandler
