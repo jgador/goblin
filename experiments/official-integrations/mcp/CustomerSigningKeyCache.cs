@@ -6,9 +6,9 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Goblin.Mcp.Prototype;
 
-// The future customer-owned adapter must honor cancellation, cap bytes while
+// Customer-owned adapters must honor cancellation, cap bytes while
 // reading, enforce TLS and the pinned address, and never follow redirects.
-// No concrete network adapter is registered or implemented in this increment.
+// The HTTPS implementation remains unregistered and independently bounded.
 public interface ICustomerJwksDocumentSource
 {
     Task<string> ReadAsync(Uri pinnedAddress, CancellationToken token);

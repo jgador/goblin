@@ -1,6 +1,6 @@
 # Customer signing-key rotation prototype
 
-Reviewed 2026-10-14 UTC. Library-only experiment, not a deployed Keycloak connection or a replacement for customer-owned Work permissions. No production listener, HTTP adapter registration, OAuth issuance, identity mapping, network adapter or shared service is added.
+Reviewed 2026-10-14 UTC. Library-only experiment, not a deployed Keycloak connection or a replacement for customer-owned Work permissions. No production listener, HTTP adapter registration, OAuth issuance, identity mapping or shared service is added. A separate unregistered [pinned HTTPS document source](HTTPS-KEY-DOCUMENTS.md) now has mocked transport coverage, not live provider/TLS verification.
 
 ## Evidence and composition
 
@@ -27,7 +27,7 @@ An unverified token can request a missing key and consume the refresh opportunit
 
 ## Retrieval and data boundaries
 
-The future customer-owned source must enforce TLS/host trust, prohibit redirects, cap bytes while streaming, honor cancellation and release connections/tasks. The current post-read size check cannot enforce upstream allocation or terminate a noncooperative adapter. Only cancellation-cooperative, in-memory documents are supplied in tests; no DNS/HTTPS certificate/redirect/network behavior is proven. Public signing keys stay in customer memory, not a Goblin central cache. No bearer token, password, private signing key, Work data or credentials are passed to the document source.
+Customer-owned sources must enforce TLS/host trust, prohibit redirects, cap bytes while streaming, honor cancellation and release connections/tasks. The cache's post-read size check cannot enforce upstream allocation or terminate a noncooperative adapter. [CustomerHttpsJwksDocumentSource](HTTPS-KEY-DOCUMENTS.md) implements a pinned, credential-free, explicitly bounded streaming policy with mocked HTTP/stream checks; it remains unregistered. No DNS/HTTPS certificate/provider/network behavior is proven. Public signing keys stay in customer memory, not a Goblin central cache. No bearer token, password, private signing key, Work data or credentials are passed to the document source.
 
 If connected later, OpenAI still handles connector codes/access/refresh tokens and requested/returned Work fields; Slack sees selected messages/events under its own integration. Authoritative credentials/configuration/history remain customer-owned, but platform-handled tokens and selected data are necessarily exchanged. Rotation is not Sign in with ChatGPT eligibility or end-user authorization.
 
@@ -35,4 +35,4 @@ If connected later, OpenAI still handles connector codes/access/refresh tokens a
 
 Focused checks use ephemeral RSA/JWT material, synthetic JWKS documents and a test Work source. They cover active/passive overlap, replacement/removal, bounded unknown-key storms, failure cooldown/expiry, defensive copies, issuer/algorithm/type separation, wrong audience/scope/signature, ignored URL headers, local denial, malformed/private/duplicate documents, caller cancellation and a real five-second retrieval timeout. These are not Keycloak exports or live provider/ChatGPT/Slack/database tests.
 
-Next: a pinned HTTPS document-source adapter with mocked HTTP transport, streaming byte/deadline limits, redirect refusal and cancellation/concurrency checks. Inspect official .NET APIs before implementation. Keep it unregistered; live TLS/provider tests require provisioned noninteractive setup. PostgreSQL's 14 staged checks stay gated while recorded setup blockers remain.
+The pinned HTTPS source's mocked transport increment is described in [HTTPS-KEY-DOCUMENTS.md](HTTPS-KEY-DOCUMENTS.md). Next: trusted-owner emergency cache invalidation and bounded in-flight/concurrency behavior. Keep both components unregistered; live TLS/provider tests require provisioned noninteractive setup. PostgreSQL's 14 staged checks stay gated while recorded setup blockers remain.
