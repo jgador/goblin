@@ -105,6 +105,7 @@ passed += await PostgresWorkGrantChecks.RunContractsAsync();
 passed += OAuthDiscoveryChecks.Run();
 passed += await SigningKeyRotationChecks.RunAsync();
 passed += await HttpsJwksSourceChecks.RunAsync();
+passed += await HttpsKeyCancellationChecks.RunAsync();
 passed += await SigningKeyInvalidationChecks.RunAsync();
 passed += await VerificationLeaseChecks.RunAsync();
 Console.WriteLine($"PASS {passed} focused checks. Backend responses mocked; no live ChatGPT, Slack or PostgreSQL coverage.");
