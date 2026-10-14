@@ -20,6 +20,7 @@ public sealed class RotatingPrivateWorkTools
     }
 
     [McpServerTool(Name = "goblin_get_work_status", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpMeta("securitySchemes", JsonValue = PrivateMcpHttpAdapter.OAuthSecuritySchemesJson)]
     [Description("Read status for a Goblin Work ID authorized by this installation. Returns no history or credentials.")]
     public async Task<WorkStatusResult> GetStatusAsync(string workId, CancellationToken cancellationToken)
     {

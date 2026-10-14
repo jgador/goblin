@@ -134,6 +134,26 @@ internal static class RotatingHttpChecks
             Require(tools.GetArrayLength() == 1 && tools[0].GetProperty("name").GetString() == "goblin_get_work_status" &&
                 tools[0].GetProperty("annotations").GetProperty("readOnlyHint").GetBoolean() && source.Calls == 0);
         });
+        await Check("rotating HTTP tool declares exact OAuth scope in the official compatibility mirror", async () =>
+        {
+            using var response = await Rpc("tools/list", null, valid);
+            using JsonDocument payload = await Payload(response, token);
+            var tool = payload.RootElement.GetProperty("result").GetProperty("tools")[0];
+            var schemes = tool.GetProperty("_meta").GetProperty("securitySchemes");
+            Require(schemes.ValueKind == JsonValueKind.Array && schemes.GetArrayLength() == 1 &&
+                schemes[0].GetProperty("type").GetString() == "oauth2" &&
+                schemes[0].GetProperty("scopes").GetArrayLength() == 1 &&
+                schemes[0].GetProperty("scopes")[0].GetString() == ConnectorReadBoundary.ReadScope && source.Calls == 0);
+        });
+        await Check("rotating SDK descriptor exposes only workId and records top-level OAuth metadata gap", async () =>
+        {
+            using var response = await Rpc("tools/list", null, valid);
+            using JsonDocument payload = await Payload(response, token);
+            var tool = payload.RootElement.GetProperty("result").GetProperty("tools")[0];
+            var properties = tool.GetProperty("inputSchema").GetProperty("properties");
+            Require(properties.EnumerateObject().Count() == 1 && properties.TryGetProperty("workId", out _) &&
+                !tool.TryGetProperty("securitySchemes", out _) && !tool.ToString().Contains(valid, StringComparison.Ordinal));
+        });
         await Check("rotating HTTP tool reads verified identity with repeated local grants", async () =>
         {
             Require(!await Call() && !await Call() && source.Calls == 2);
@@ -159,6 +179,14 @@ internal static class RotatingHttpChecks
         {
             int before = source.Calls;
             Require(await Call("-1") && source.Calls == before && await Call("43") && source.Calls == before + 1);
+        });
+        await Check("rotating local permission denial is not an OAuth reauthorization challenge", async () =>
+        {
+            using var response = await Rpc("tools/call", new { name = "goblin_get_work_status", arguments = new { workId = "43" } }, valid);
+            using JsonDocument payload = await Payload(response, token);
+            Require(payload.RootElement.GetProperty("result").GetProperty("isError").GetBoolean() &&
+                !response.Headers.Contains("WWW-Authenticate") &&
+                !payload.RootElement.ToString().Contains("mcp/www_authenticate", StringComparison.Ordinal));
         });
         foreach (string mode in new[] { "anonymous", "cookie", "query", "multiple" })
             await Check("rotating request context cannot leak authentication to " + mode, async () =>

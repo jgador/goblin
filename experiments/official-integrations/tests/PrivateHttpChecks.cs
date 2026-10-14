@@ -104,6 +104,26 @@ internal static class PrivateHttpChecks
             Require(available.GetArrayLength() == 1 && available[0].GetProperty("name").GetString() == "goblin_get_work_status" &&
                 available[0].GetProperty("annotations").GetProperty("readOnlyHint").GetBoolean());
         });
+        await Check("fixed HTTP tool declares exact OAuth scope in the official compatibility mirror", async () =>
+        {
+            using var response = await Rpc("tools/list", null, valid);
+            using JsonDocument result = await Payload(response, deadline.Token);
+            var tool = result.RootElement.GetProperty("result").GetProperty("tools")[0];
+            var schemes = tool.GetProperty("_meta").GetProperty("securitySchemes");
+            Require(schemes.ValueKind == JsonValueKind.Array && schemes.GetArrayLength() == 1 &&
+                schemes[0].GetProperty("type").GetString() == "oauth2" &&
+                schemes[0].GetProperty("scopes").GetArrayLength() == 1 &&
+                schemes[0].GetProperty("scopes")[0].GetString() == ConnectorReadBoundary.ReadScope && reads == 0 && grants.Calls == 0);
+        });
+        await Check("fixed SDK descriptor exposes only workId and records top-level OAuth metadata gap", async () =>
+        {
+            using var response = await Rpc("tools/list", null, valid);
+            using JsonDocument result = await Payload(response, deadline.Token);
+            var tool = result.RootElement.GetProperty("result").GetProperty("tools")[0];
+            var properties = tool.GetProperty("inputSchema").GetProperty("properties");
+            Require(properties.EnumerateObject().Count() == 1 && properties.TryGetProperty("workId", out _) &&
+                !tool.TryGetProperty("securitySchemes", out _) && !tool.ToString().Contains(valid, StringComparison.Ordinal));
+        });
         await Check("authorized HTTP tool reads only the granted Work", async () =>
         {
             using var response = await Rpc("tools/call", new { name = "goblin_get_work_status", arguments = new { workId = "42" } }, valid);
@@ -116,6 +136,13 @@ internal static class PrivateHttpChecks
             using var response = await Rpc("tools/call", new { name = "goblin_get_work_status", arguments = new { workId = "43" } }, valid);
             using JsonDocument result = await Payload(response, deadline.Token);
             Require(IsError(result) && reads == 1);
+        });
+        await Check("fixed local permission denial is not an OAuth reauthorization challenge", async () =>
+        {
+            using var response = await Rpc("tools/call", new { name = "goblin_get_work_status", arguments = new { workId = "43" } }, valid);
+            using JsonDocument result = await Payload(response, deadline.Token);
+            Require(IsError(result) && reads == 1 && !response.Headers.Contains("WWW-Authenticate") &&
+                !result.RootElement.ToString().Contains("mcp/www_authenticate", StringComparison.Ordinal));
         });
         grants.Revoked = true;
         await Check("revocation rechecked on a fresh HTTP call using the same bearer", async () =>

@@ -68,3 +68,7 @@ On 2026-10-14 UTC, the [OpenAI authentication requirements](https://developers.o
 ## OI-008 customer-owned OAuth candidate
 
 Reviewed 2026-10-14 UTC: [Keycloak's official MCP guide](https://www.keycloak.org/securing-apps/mcp-authz-server) identifies experimental resource-indicator/CIMD support, while OpenAI documents predefined public OAuth clients as an alternative registration path. [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) records the conditional candidate, strict token-profile/rotation gates and separately reachable authorization server. The new offline metadata preflight does not establish live provider operation, public distribution or ChatGPT identity eligibility. No provider deployment, login, central service or Slack change.
+
+## OI-014 tool metadata restriction
+
+Reviewed 2026-10-14 UTC: the [OpenAI reference](https://developers.openai.com/plugins/reference) supports a metadata compatibility mirror, but the pinned official C# SDK's sealed descriptor lacks primary top-level `securitySchemes` support. [TOOL-OAUTH-METADATA.md](TOOL-OAUTH-METADATA.md) records tagged-source evidence and actual SDK serialization tests. Only the supported mirror is prototyped; no OAuth UI compatibility, complete linking flow, public distribution or ChatGPT identity eligibility is established. Anonymous Work access and local authorization policy remain unchanged.

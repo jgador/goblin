@@ -15,6 +15,9 @@ namespace Goblin.Mcp.Http.Prototype;
 public static class PrivateMcpHttpAdapter
 {
     internal static readonly object IdentityKey = new();
+    // Official compatibility mirror only. SDK 1.4.1 has no top-level
+    // securitySchemes property; this declaration does not enable OAuth UI.
+    internal const string OAuthSecuritySchemesJson = "[{\"type\":\"oauth2\",\"scopes\":[\"" + ConnectorReadBoundary.ReadScope + "\"]}]";
     public const string MetadataPath = "/.well-known/oauth-protected-resource/mcp";
 
     public static void AddServices(IServiceCollection services, ConnectorReadBoundary boundary) =>
@@ -117,6 +120,7 @@ public sealed class PrivateWorkTools
     }
 
     [McpServerTool(Name = "goblin_get_work_status", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpMeta("securitySchemes", JsonValue = PrivateMcpHttpAdapter.OAuthSecuritySchemesJson)]
     [Description("Read status for a Goblin Work ID authorized by this installation. Returns no history or credentials.")]
     public async Task<WorkStatusResult> GetStatusAsync(string workId, CancellationToken cancellationToken)
     {
