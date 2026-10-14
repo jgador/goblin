@@ -10,7 +10,7 @@ DB_PROFILE ?= wsl
 ARGS ?=
 RUST_MIN_STACK ?= 8388608
 
-.PHONY: help install install-node install-rust setup-rust build build-assets \
+.PHONY: help clean-artifacts install install-node install-rust setup-rust build build-assets \
 	build-tools build-backend build-native typecheck typecheck-scripts check dev start \
 	test test-backend test-js test-frontend test-rust test-rust-doc test-release \
 	test-contracts test-task-runner test-secrets test-codex test-headlamp test-browser browser-install \
@@ -26,6 +26,11 @@ RUST_MIN_STACK ?= 8388608
 # List targets and their purpose; pass tool flags with ARGS or CARGO_ARGS.
 help:
 	@awk '/^# / { description = substr($$0, 3); next } /^[a-z][a-z-]*:/ { printf "  %-25s %s\n", $$1, description }' $(MAKEFILE_LIST)
+
+# Recursively delete everything in .artifacts except its root .gitkeep.
+clean-artifacts:
+	@find .artifacts -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf -- {} +
+	@printf 'Cleaned .artifacts (kept .gitkeep).\n'
 
 # Install locked Node packages and fetch the pinned Rust workspace dependencies.
 install: install-node install-rust

@@ -113,6 +113,51 @@ main {
   margin: auto;
   padding: 14px;
 }
+.site-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  height: 48px;
+  padding-left: 7px;
+}
+.site-kicker {
+  margin-top: 12px;
+  color: #587765;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.site-kicker span {
+  padding: 0 8px;
+  color: #a8b9ab;
+}
+.project-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 108px;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid #dce9dc;
+  border-radius: 999px;
+  background: white;
+  color: #274236;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.project-link:hover {
+  border-color: #91bb96;
+  box-shadow: 0 4px 15px #3b6e3915;
+}
+.project-link img {
+  width: 21px;
+  height: 21px;
+}
 .film-body {
   display: grid;
   grid-template-columns: minmax(0, 2.54fr) minmax(350px, 1fr);
@@ -129,7 +174,7 @@ main {
   flex-direction: column;
   min-width: 0;
   min-height: 790px;
-  height: calc(100svh - 28px);
+  height: calc(100svh - 76px);
   padding: 20px 30px 20px;
 }
 .intro {
@@ -158,7 +203,7 @@ main {
   --hub-center-x: 52.272727%;
   position: relative;
   flex: 1;
-  min-height: 575px;
+  min-height: 520px;
   isolation: isolate;
 }
 .connections {
@@ -178,6 +223,71 @@ main {
 .connection.is-active {
   stroke: #66ad59;
   stroke-width: 1.35;
+}
+.mobile-connectors {
+  display: none;
+}
+.mobile-connector {
+  opacity: 0.48;
+}
+.mobile-connector-slack {
+  color: #e01e5a;
+  --fiber-duration: 4.1s;
+  --fiber-delay: -1.2s;
+}
+.mobile-connector-teams {
+  color: #5a62c3;
+  --fiber-duration: 4.3s;
+  --fiber-delay: -3.4s;
+}
+.mobile-connector-github {
+  color: #161614;
+  --fiber-duration: 4.6s;
+  --fiber-delay: -2.1s;
+}
+.mobile-connector-email {
+  color: #fc413d;
+  --fiber-duration: 4.7s;
+  --fiber-delay: -0.5s;
+}
+.mobile-connector-discord {
+  color: #5865f2;
+  --fiber-duration: 3.6s;
+  --fiber-delay: -2.8s;
+}
+.mobile-fiber-sheath,
+.mobile-fiber-track,
+.mobile-fiber-glow,
+.mobile-fiber-light {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.mobile-fiber-sheath {
+  stroke-width: 3;
+  opacity: 0.18;
+}
+.mobile-fiber-track {
+  stroke-width: 1.1;
+}
+.mobile-fiber-glow,
+.mobile-fiber-light {
+  stroke-dasharray: 4 106;
+  stroke-dashoffset: 4;
+}
+.mobile-fiber-glow {
+  stroke-width: 5;
+  opacity: 0.45;
+  filter: blur(2px);
+}
+.mobile-fiber-light {
+  stroke-width: 1.8;
+}
+@keyframes fiber-travel {
+  50% {
+    stroke-dashoffset: -100;
+  }
 }
 #line-github,
 #line-email {
@@ -651,7 +761,7 @@ main {
   white-space: nowrap;
 }
 .conversation-panel {
-  height: calc(100svh - 28px);
+  height: calc(100svh - 76px);
   min-height: 790px;
   display: flex;
   flex-direction: column;
@@ -928,39 +1038,53 @@ main {
 .composer {
   border: 1px solid #dce5e0;
   border-radius: 14px;
-  padding: 12px 12px 10px;
-  margin: 12px 16px 23px;
-  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 66px;
+  padding: 9px 11px 9px 16px;
+  margin: 12px 7px 0;
+  background: #fff;
+  box-shadow: 0 7px 22px #3b6e3909;
 }
-.composer::before {
-  content: "";
-  position: absolute;
-  top: -12px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #edf0ed;
+.conversation-panel .composer {
+  display: grid;
+  flex-shrink: 0;
+  min-height: 92px;
+  margin: 8px 23px 16px;
+  padding: 8px 12px;
+  gap: 3px;
+}
+.conversation-panel .composer textarea {
+  width: 100%;
+  height: 32px;
+  min-height: 32px;
+  padding-block: 5px;
+}
+.conversation-panel .composer-actions {
+  width: 100%;
+  justify-content: space-between;
 }
 .composer textarea {
   resize: none;
   display: block;
-  width: 100%;
-  height: 60px;
-  min-height: 45px;
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
   border: 0;
   background: transparent;
-  padding: 0 2px;
+  padding: 9px 2px;
   color: #466053;
   font-size: 14px;
   line-height: 1.5;
+  cursor: default;
+  caret-color: transparent;
+  pointer-events: none;
 }
 .composer textarea::placeholder {
   color: #9aa4b6;
-}
-.composer textarea:focus-visible {
-  outline-offset: 2px;
-  outline-width: 2px;
-  border-radius: 4px;
 }
 .composer-actions,
 .composer-actions > div {
@@ -968,6 +1092,11 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 5px;
+}
+.composer-actions {
+  flex-shrink: 0;
+  gap: 12px;
+  pointer-events: none;
 }
 .icon-button {
   display: inline-grid;
@@ -1006,15 +1135,6 @@ main {
 .send-button svg {
   width: 19px;
   height: 19px;
-}
-.attachment-name {
-  display: block;
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #50735a;
-  padding: 4px;
 }
 .detail-view {
   padding: 25px;
@@ -1317,12 +1437,12 @@ dialog ul {
     height: 42px;
   }
   .composer textarea {
-    height: 62px;
+    height: 42px;
     font-size: 16px;
   }
   .composer {
-    padding: 13px 14px 11px;
-    min-height: 124px;
+    padding: 10px 14px;
+    min-height: 68px;
   }
   .deliverable {
     padding: 18px 0;
@@ -1360,7 +1480,7 @@ dialog ul {
   }
   .network-panel {
     padding: 22px 20px 18px;
-    min-height: 750px;
+    min-height: 790px;
   }
   .intro {
     padding-left: 0;
@@ -1497,6 +1617,7 @@ dialog ul {
   }
   .intro h1 {
     font-size: clamp(27px, 4.3vw, 40px);
+    white-space: normal;
   }
   .intro p {
     font-size: clamp(13px, 2.1vw, 18px);
@@ -2074,6 +2195,10 @@ dialog ul {
   .travel-label {
     display: none;
   }
+  .mobile-fiber-glow,
+  .mobile-fiber-light {
+    display: none;
+  }
 }
 
 .person-name {
@@ -2093,6 +2218,95 @@ dialog ul {
   }
   .card-more {
     display: none;
+  }
+  .channel-discord {
+    padding: 10px 11px;
+  }
+  .channel-discord .card-top {
+    min-height: 27px;
+    margin-bottom: 5px;
+    padding-bottom: 4px;
+  }
+  .channel-discord .card-body,
+  .channel-email .card-body {
+    gap: 5px;
+  }
+  .channel-discord .mini-bubble {
+    min-height: 27px;
+    padding: 6px 8px;
+  }
+  .mail-row {
+    min-height: 25px;
+  }
+  .mail-reply {
+    margin-left: 25px;
+    padding: 6px;
+  }
+}
+@media (min-width: 1251px) and (max-height: 950px) {
+  .channel {
+    padding: 14px 16px;
+  }
+  .card-top {
+    min-height: 38px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+  }
+  .card-top > img {
+    width: 45px;
+    height: 45px;
+  }
+  .card-body {
+    gap: 7px;
+  }
+  .mini-avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+  .mini-bubble {
+    min-height: 40px;
+    padding: 8px 11px;
+  }
+  .mini-reply {
+    margin-left: 22px;
+  }
+  .mini-reply .mini-bubble {
+    padding: 8px 11px;
+  }
+  .channel-discord {
+    padding: 10px 14px;
+  }
+  .channel-discord .card-top {
+    min-height: 28px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+  .channel-discord .card-top > img {
+    width: 38px;
+    height: 29px;
+  }
+  .channel-discord .card-body {
+    gap: 6px;
+  }
+  .channel-discord .mini-bubble {
+    min-height: 32px;
+    padding: 7px 9px;
+  }
+  .channel-discord .mini-reply {
+    margin-left: 20px;
+  }
+  .mail-row {
+    min-height: 28px;
+  }
+  .mail-row .mini-avatar {
+    width: 27px;
+    height: 27px;
+    font-size: 12px;
+  }
+  .mail-reply {
+    margin-left: 30px;
+    padding: 8px;
   }
 }
 @media (max-width: 980px) {
@@ -2117,37 +2331,218 @@ dialog ul {
     height: 28px;
   }
 }
-@media (max-width: 600px) {
-  .network {
-    min-height: 540px;
+@media (min-width: 601px) and (max-width: 700px) {
+  .benefits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 12px;
   }
-  .person-name {
+}
+@media (max-width: 600px) {
+  .site-header {
+    height: 44px;
+    padding-left: 5px;
+  }
+  .site-kicker {
+    margin-top: 11px;
+    font-size: 10px;
+  }
+  .project-link {
+    min-width: 98px;
+    height: 38px;
+    padding: 0 11px;
+    gap: 7px;
+    font-size: 12px;
+  }
+  .network-panel {
+    padding: 14px 10px 16px;
+  }
+  .intro {
+    padding: 0 5px 12px;
+  }
+  .intro h1 {
+    font-size: clamp(23px, 6vw, 27px);
+    line-height: 1.2;
+  }
+  .intro p {
+    margin-top: 5px;
+  }
+  .network {
+    --hub-center-x: 50%;
+    width: min(100%, 480px);
+    height: 330px;
+    min-height: 0;
+    aspect-ratio: auto;
+    margin-inline: auto;
+  }
+  .mobile-connectors {
+    display: inline;
+  }
+  .mobile-fiber-glow,
+  .mobile-fiber-light {
+    animation: fiber-travel var(--fiber-duration) linear var(--fiber-delay) infinite;
+  }
+  .connection,
+  .return-lines,
+  .connector-dots,
+  .packet,
+  .connection-port,
+  .travel-label {
+    display: none;
+  }
+  .channel,
+  .channel-discord {
+    display: flex;
+    align-items: center;
+    width: max(90px, 31%);
+    height: 72px;
+    padding: 8px 9px;
+    border-radius: 13px;
+    box-shadow: 0 4px 15px #3b6e3912;
+  }
+  .channel[aria-pressed="true"] {
+    border-color: #8fc396;
+    background: #f6fbf5;
+  }
+  .channel-slack {
+    top: 13%;
+  }
+  .channel-teams {
+    top: 15%;
+  }
+  .channel-github {
+    top: 66%;
+  }
+  .channel-email {
+    top: 65%;
+  }
+  .channel-discord {
+    top: 3%;
+    width: min(31%, 120px);
+    height: 68px;
+    padding: 8px;
+  }
+  .channel .card-top,
+  .channel-discord .card-top {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-rows: min-content min-content;
+    align-content: center;
     width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    column-gap: 6px;
+    row-gap: 5px;
+  }
+  .channel .card-top > img,
+  .channel-discord .card-top > img {
+    grid-column: 1;
+    grid-row: 2;
+    width: 22px;
+    height: 22px;
+    max-height: none;
+  }
+  .channel .card-name {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+    position: static;
+    width: auto;
+    height: auto;
+    clip: auto;
+    overflow: visible;
+    color: #2e5340;
     font-size: 11px;
-    line-height: 1.3;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  .channel .person-name {
+    display: block;
+    grid-column: 1 / -1;
+    grid-row: 1;
+    color: #587064;
+    font-size: 11px;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .channel .card-more,
+  .channel .card-body {
+    display: none;
+  }
+  .goblin-hub {
+    top: 37%;
+  }
+  .hub-core .goblin-mark {
+    width: 78px;
+    height: 80px;
+  }
+  .hub-name {
+    margin-top: 4px;
+    font-size: 22px;
+  }
+  .benefits {
+    display: none;
+  }
+  .composer {
+    display: grid;
+    min-height: 100px;
+    margin: 16px 4px 0;
+    padding: 9px 12px 8px;
+    gap: 4px;
+  }
+  .film-body > .composer {
+    margin: 4px 0 0;
+  }
+  .composer textarea {
+    height: 42px;
+    min-height: 42px;
+    width: 100%;
+    font-size: 16px;
+  }
+  .composer-actions {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .composer-actions > div {
+    gap: 0;
+  }
+  .composer .icon-button {
+    width: 30px;
+    height: 34px;
+  }
+  .composer .icon-button svg {
+    width: 18px;
+    height: 18px;
+  }
+  .composer .at-button {
+    font-size: 20px;
+  }
+  .composer .send-button {
+    width: 36px;
+    height: 36px;
+  }
+  .conversation-panel {
+    height: 680px;
+  }
+}
+
+@media (max-width: 360px) {
+  .channel {
+    padding-inline: 7px;
   }
   .channel .card-top {
-    height: auto;
-    min-height: 57px;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-content: start;
-    margin-bottom: 8px;
-    padding-bottom: 8px;
+    grid-template-columns: 20px minmax(0, 1fr);
+    column-gap: 4px;
   }
   .channel .card-top > img {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
   }
-  .channel-github .repo-actions {
-    gap: 2px;
-  }
-  .channel-github .repo-actions > span {
-    min-width: 0;
-    flex: 1;
-  }
-  .channel-github .repo-actions svg {
-    width: 10px;
-    height: 10px;
+  .channel .card-name,
+  .channel .person-name {
+    font-size: 10px;
   }
 }

@@ -43,8 +43,8 @@ customer-specific names, optional resource-name overrides, a static public IP,
 an Azure DNS hostname, single-node Kubernetes, cert-manager, and the Agent Sandbox controller.
 The guided installer uses Azure's native custom-template flow, with configuration
 and SSH-key download inside Azure Portal. Choose **Goblin version** on the
-installation page; the recommended release is selected by default. Azure opens
-with the matching source and installer already resolved. See the
+GitHub Pages installation page; the recommended release is selected by default.
+Azure opens with the matching source and installer already resolved. See the
 [release guide](docs/releases.md).
 
 If a downloaded SSH key fails on Windows with `Load key ...: Permission denied`

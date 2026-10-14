@@ -366,6 +366,7 @@
   const player = byId("player");
   const timeline = byId("timeline");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const compactLayout = window.matchMedia("(max-width: 600px)");
   // Illustrative pacing: chat is quick; email and repository work take longer.
   const sceneTimings = scenes.reduce((timings, { flow }) => {
     const asking = 0.5;
@@ -387,6 +388,18 @@
   const connections = document.querySelector(".connections");
   const paths = scenes.map((scene) => byId(`line-${scene.id}`));
   const pathLengths = paths.map((path) => path.getTotalLength());
+  const mobileConnectors = Object.fromEntries(
+    scenes.map((scene) => {
+      const group = byId(`mobile-connector-${scene.id}`);
+      return [
+        scene.id,
+        {
+          strands: [...group.querySelectorAll("path")],
+        },
+      ];
+    }),
+  );
+  const mobileFiberLights = [...document.querySelectorAll(".mobile-fiber-glow, .mobile-fiber-light")];
   const connectorPorts = scenes.map((scene) =>
     document.querySelector(`[data-channel="${scene.id}"] .connection-port`),
   );
@@ -405,7 +418,6 @@
   let scrubResume = false;
   let dialogResume = false;
   let previewResume = false;
-  let customMessage = null;
 
   function receivedPosition(index) {
     const timing = sceneTimings[index];
@@ -445,16 +457,11 @@
       .split(" ")
       .map((part) => part[0])
       .join("");
-    byId("request-text").textContent = customMessage?.request ?? prompt.request;
-    byId("reply-text").textContent = customMessage?.reply ?? prompt.reply;
+    byId("request-text").textContent = prompt.request;
+    byId("reply-text").textContent = prompt.reply;
     byId("receipt-text").textContent = prompt.receipt;
-    const steps = (!customMessage && scene.steps) || [
-      "Understand the request",
-      "Gather the relevant context",
-      "Prepare a proposed change",
-    ];
     ["step-one", "step-two", "step-three"].forEach((id, stepIndex) => {
-      byId(id).textContent = steps[stepIndex];
+      byId(id).textContent = scene.steps[stepIndex];
     });
     channelButtons.forEach((button) =>
       button.setAttribute("aria-pressed", String(button.dataset.channel === scene.id)),
@@ -474,7 +481,7 @@
     const prompt = scenes[currentScene].prompts[0];
     byId("typing-row").hidden = phase !== "thinking" && phase !== "replying";
     byId("reply-message").hidden = phase !== "received";
-    byId("artifact-message").hidden = phase !== "received" || customMessage !== null;
+    byId("artifact-message").hidden = phase !== "received";
     byId("goblin-hub").classList.toggle("is-thinking", phase === "thinking");
     const status = {
       ready: "Here for your team",
@@ -493,10 +500,7 @@
     const timing = sceneTimings[index];
     const localTime = position - timing.start;
     const travelSeconds = scenes[index].flow.travelSeconds;
-    if (index !== currentScene) {
-      if (currentScene >= 0 && index !== currentScene) customMessage = null;
-      displayScene(index);
-    }
+    if (index !== currentScene) displayScene(index);
     const phase =
       localTime < timing.asking
         ? "ready"
@@ -509,7 +513,8 @@
               : "received";
     setPhase(phase);
     byId("incoming-message").style.opacity = "1";
-    const inTransit = !reducedMotion.matches && (phase === "asking" || phase === "replying");
+    const inTransit =
+      !compactLayout.matches && !reducedMotion.matches && (phase === "asking" || phase === "replying");
     byId("packet").setAttribute("visibility", inTransit ? "visible" : "hidden");
     byId("travel-label").style.opacity = inTransit ? "1" : "0";
     if (inTransit) {
@@ -549,6 +554,25 @@
     byId("pause-icon").toggleAttribute("hidden", !playing);
   }
 
+  function updateMobileFiberSpeed() {
+    if (!compactLayout.matches || reducedMotion.matches) return;
+    mobileFiberLights.forEach(updateFiberAnimationRate);
+  }
+
+  function updateFiberAnimationRate(light) {
+    light.getAnimations().forEach((animation) => {
+      if (animation.playbackRate !== speeds[speedIndex]) {
+        animation.updatePlaybackRate(speeds[speedIndex]);
+      }
+    });
+  }
+
+  connections.addEventListener("animationstart", (event) => {
+    if (event.animationName === "fiber-travel" && event.target instanceof Element) {
+      updateFiberAnimationRate(event.target);
+    }
+  });
+
   function tick(timestamp) {
     animationFrame = null;
     if (!playing) return;
@@ -571,7 +595,6 @@
 
   function togglePlayback() {
     if (position >= duration) {
-      customMessage = null;
       currentScene = -1;
       position = 0;
       render();
@@ -582,7 +605,6 @@
   function selectChannel(id) {
     const index = scenes.findIndex((scene) => scene.id === id);
     if (index < 0) return;
-    customMessage = null;
     position = reducedMotion.matches ? receivedPosition(index) : sceneTimings[index].start;
     currentScene = -1;
     render();
@@ -601,7 +623,6 @@
   );
   byId("play-button").addEventListener("click", togglePlayback);
   byId("replay-button").addEventListener("click", () => {
-    customMessage = null;
     currentScene = -1;
     position = 0;
     render();
@@ -610,6 +631,7 @@
   });
   byId("speed-button").addEventListener("click", () => {
     speedIndex = (speedIndex + 1) % speeds.length;
+    updateMobileFiberSpeed();
     byId("speed-button").textContent = `${speeds[speedIndex]}×`;
     byId("speed-button").setAttribute(
       "aria-label",
@@ -723,9 +745,18 @@
       setPlaying(false);
     }
     render();
+    requestAnimationFrame(updateMobileFiberSpeed);
   });
   const hub = byId("goblin-hub");
   const network = byId("network");
+  const composer = byId("message-composer");
+  const conversationPanel = byId("conversation-panel");
+  function placeComposer() {
+    if (compactLayout.matches) conversationPanel.after(composer);
+    else byId("view-conversation").append(composer);
+  }
+  compactLayout.addEventListener("change", placeComposer);
+  placeComposer();
   const discordEndpoint = byId("dot-discord");
   const connectorRoutes = {
     slack: ({ x, y }) => {
@@ -740,10 +771,70 @@
     email: ({ x, y }) => `M${x} ${y}H750Q716 ${y} 716 325V302Q716 272 686 272H653`,
     discord: ({ x, y }) => `M${x} ${y}L575 420`,
   };
+  function mobileCurve(start, end, vertical) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const first = vertical
+      ? { x: start.x, y: start.y + dy * 0.38 }
+      : { x: start.x + dx * 0.42, y: start.y };
+    const second = vertical
+      ? { x: end.x, y: end.y - dy * 0.38 }
+      : { x: end.x - dx * 0.42, y: end.y };
+    return [start, first, second, end];
+  }
+  function svgPoint(point, toSvg) {
+    const converted = new DOMPoint(point.x, point.y).matrixTransform(toSvg);
+    return `${converted.x.toFixed(2)} ${converted.y.toFixed(2)}`;
+  }
+  function mobileTrackPath(points, toSvg) {
+    return `M${svgPoint(points[0], toSvg)}C${points
+      .slice(1)
+      .map((point) => svgPoint(point, toSvg))
+      .join(" ")}`;
+  }
+  function updateMobileConnectors(toSvg) {
+    const cards = Object.fromEntries(
+      channelButtons.map((button) => [button.dataset.channel, button.getBoundingClientRect()]),
+    );
+    const logo = hub.querySelector(".hub-core .goblin-mark img").getBoundingClientRect();
+    const endpoints = {
+      slack: {
+        start: { x: cards.slack.right - 1, y: cards.slack.bottom - 9 },
+        end: { x: logo.left + 1, y: logo.top + 9 },
+      },
+      teams: {
+        start: { x: cards.teams.left + 1, y: cards.teams.bottom - 9 },
+        end: { x: logo.right - 1, y: logo.top + 9 },
+      },
+      github: {
+        start: { x: cards.github.right - 1, y: cards.github.top + 9 },
+        end: { x: logo.left + 1, y: logo.bottom - 9 },
+      },
+      email: {
+        start: { x: cards.email.left + 1, y: cards.email.top + 9 },
+        end: { x: logo.right - 1, y: logo.bottom - 9 },
+      },
+      discord: {
+        start: { x: cards.discord.left + cards.discord.width / 2, y: cards.discord.bottom - 1 },
+        end: { x: logo.left + logo.width / 2, y: logo.top + 1 },
+      },
+    };
+    scenes.forEach((scene) => {
+      const { start, end } = endpoints[scene.id];
+      const curve = mobileCurve(start, end, scene.id === "discord");
+      const path = mobileTrackPath(curve, toSvg);
+      mobileConnectors[scene.id].strands.forEach((strand) => strand.setAttribute("d", path));
+    });
+    updateMobileFiberSpeed();
+  }
   function updateConnectorGeometry() {
     const matrix = connections.getScreenCTM();
     if (!matrix) return;
     const toSvg = matrix.inverse();
+    if (compactLayout.matches) {
+      updateMobileConnectors(toSvg);
+      return;
+    }
     // Cancel the SVG's unequal axis scaling so circles keep their pixel shape and size.
     packetScale.x = 1 / Math.hypot(matrix.a, matrix.b);
     packetScale.y = 1 / Math.hypot(matrix.c, matrix.d);
@@ -769,6 +860,10 @@
     packetHalo.setAttribute("r", String(radius * 3));
   }
   function fitHubAboveConnector() {
+    if (compactLayout.matches) {
+      hub.style.setProperty("--hub-scale", "1");
+      return;
+    }
     // The SVG scales with the diagram while the logo and wordmark have pixel sizes.
     // Measure the unscaled group so resizing cannot compound its scale factor.
     const hubTop = network.getBoundingClientRect().top + hub.offsetTop;
@@ -777,15 +872,17 @@
     hub.style.setProperty("--hub-scale", String(scale));
   }
   const networkLayoutObserver = new ResizeObserver(() => {
+    if (compactLayout.matches) fitHubAboveConnector();
     updateConnectorGeometry();
-    fitHubAboveConnector();
+    if (!compactLayout.matches) fitHubAboveConnector();
     render();
   });
   networkLayoutObserver.observe(network);
   networkLayoutObserver.observe(hub);
   channelButtons.forEach((button) => networkLayoutObserver.observe(button));
+  if (compactLayout.matches) fitHubAboveConnector();
   updateConnectorGeometry();
-  fitHubAboveConnector();
+  if (!compactLayout.matches) fitHubAboveConnector();
 
   const artifactLabels = {
     slack: [
@@ -829,12 +926,12 @@
       element("p", "An example of how one conversation becomes a clear next step."),
     );
     [
-      ["Request received in " + scene.name, customMessage?.request ?? prompt.request],
+      ["Request received in " + scene.name, prompt.request],
       [
         "Context brought together",
-        (!customMessage && scene.source?.summary) || "The request and its conversation stay connected.",
+        scene.source?.summary || "The request and its conversation stay connected.",
       ],
-      ["A response prepared", customMessage?.reply ?? prompt.reply],
+      ["A response prepared", prompt.reply],
       ["Ready for a human review", "You decide what happens next."],
     ].forEach(([title, description]) => {
       const item = element("div", null, "activity-item");
@@ -845,11 +942,11 @@
     const workCard = element("div", null, "work-card");
     workCard.append(
       element("span", "Awaiting review", "review-badge"),
-      element("h4", customMessage ? "Your request" : prompt.label),
-      element("p", customMessage?.reply ?? prompt.reply),
+      element("h4", prompt.label),
+      element("p", prompt.reply),
     );
     const list = element("ul");
-    const checks = (!customMessage && prompt.checks) || [
+    const checks = prompt.checks || [
       "Understand the request",
       "Gather the relevant context",
       "Prepare a proposed next step",
@@ -864,18 +961,11 @@
     const files = byId("view-files");
     files.replaceChildren(
       element("h3", "The useful details"),
-      element(
-        "p",
-        customMessage
-          ? "Your message stays in this browser. No files have been generated or uploaded."
-          : "Example deliverables, ready to bring back to the conversation.",
-      ),
+      element("p", "Example deliverables, ready to bring back to the conversation."),
     );
-    if (!customMessage) {
-      const fileCard = byId("artifact-message").querySelector(".artifact-card").cloneNode(true);
-      fileCard.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
-      files.append(fileCard);
-    }
+    const fileCard = byId("artifact-message").querySelector(".artifact-card").cloneNode(true);
+    fileCard.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
+    files.append(fileCard);
   }
   const tabs = [...document.querySelectorAll("[data-tab]")];
   function selectTab(tab) {
@@ -957,58 +1047,6 @@
   previewDialog.addEventListener("close", () => {
     if (previewResume) setPlaying(true);
     previewResume = false;
-  });
-  const messageInput = byId("message-input");
-  const attachmentInput = byId("attachment-input");
-  byId("attach-button").addEventListener("click", () => attachmentInput.click());
-  attachmentInput.addEventListener("change", () => {
-    const file = attachmentInput.files[0];
-    byId("attachment-name").textContent = file ? file.name + " · local attachment" : "";
-    byId("attachment-name").hidden = !file;
-    if (file) announce("File selected. It will not be uploaded.");
-  });
-  function insertText(text) {
-    messageInput.setRangeText(text, messageInput.selectionStart, messageInput.selectionEnd, "end");
-    messageInput.focus();
-  }
-  byId("mention-button").addEventListener("click", () => insertText("@Goblin "));
-  byId("emoji-button").addEventListener("click", () => insertText("🙂"));
-  messageInput.addEventListener("focus", () => setPlaying(false));
-  messageInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-      event.preventDefault();
-      byId("message-form").requestSubmit();
-    }
-  });
-  byId("message-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const request = messageInput.value.trim();
-    if (!request) {
-      messageInput.focus();
-      return;
-    }
-    setPlaying(false);
-    const scene = scenes[currentScene];
-    customMessage = {
-      request:
-        request +
-        (attachmentInput.files[0]
-          ? " (Selected file: " + attachmentInput.files[0].name + ")"
-          : ""),
-      reply:
-        "Here’s an example next step: clarify the goal, gather the relevant context, and prepare a draft for your review. This message stays in your browser.",
-    };
-    position = receivedPosition(currentScene);
-    displayScene(currentScene);
-    render();
-    byId("sender-name").textContent = "You";
-    byId("human-avatar").textContent = "Y";
-    byId("step-three").textContent = "Outline a possible next step";
-    messageInput.value = "";
-    attachmentInput.value = "";
-    byId("attachment-name").hidden = true;
-    byId("thread").scrollTop = 0;
-    announce("Your message in " + scene.name + ". " + customMessage.reply);
   });
 
   scenes.forEach((scene) => updateCard(scene, scene.prompts[0]));

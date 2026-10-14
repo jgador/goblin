@@ -1,21 +1,35 @@
 # Goblin: In the loop
 
+The public website at `goblinboard.com` is released by
+[Website Release](../.github/workflows/website-release.yml). The separate
+[GitHub Pages workflow](../.github/workflows/github-pages.yml) deploys the
+installation catalog at `jgador.github.io/goblin/`. See
+[workflow naming](../docs/github-actions.md) and
+[production deployment](production/README.md).
+
 A standalone interactive concept showing Goblin at the center of Slack,
 Microsoft Teams, GitHub, Discord, and Gmail conversations. The layout follows
 `references/goblin-in-the-loop-v2.png` in this directory:
 a pale green tool network, central Goblin mark, and a tabbed conversation panel.
 The tool network has no enclosing box; the conversation panel retains its border.
 Open `index.html` in a modern browser; the page itself requires no build,
-dependencies, or account connections. On narrow screens, the conversation follows the tool
-network vertically.
+dependencies, or account connections. The header links to the Goblin GitHub
+project without showing repository metrics. On phones, five compact channel
+cards form a loose ring around Goblin, with each person's name above their
+platform. Each card has one thin, muted fiber-like connector meeting the card
+and logo edges. A soft light travels from the card to Goblin and back, showing
+both directions without a separate dotted path. Motion pauses with the player
+and follows the reduced-motion setting. The playback speed control also adjusts
+the fiber lights. On phones, the read-only message preview follows the conversation
+panel; on wider screens, it sits inside the Conversation view.
 
 The central Goblin icon and wordmark scale together when vertical space is tight,
 keeping an 18-pixel gap above the Discord connector endpoint in wide, short windows.
-Every connector starts at the measured center of its card's dot and ends at its
-Goblin-side dot. Paths and animation lengths update with the layout. Endpoint
-dots, moving dots, and their halos stay circular at a consistent pixel size
-(9-pixel dots on desktop, 6 on mobile), independent of the SVG's aspect ratio.
-Cards highlight without shifting on hover, keeping their connectors attached.
+On wider layouts, every connector starts at the measured center of its card's
+dot and ends at its Goblin-side dot. Paths and animation lengths update with
+the layout. Endpoint dots, moving dots, and their halos stay circular at a
+consistent 9-pixel size, independent of the SVG's aspect ratio. Cards highlight
+without shifting on hover, keeping their connectors attached.
 Connector lines have no floating icon badges; the cards identify each platform.
 Goblin avatars inside the channel cards use 45% opacity to keep the central hub
 visually prominent. The hub and conversation panel avatars retain full opacity.
@@ -33,9 +47,9 @@ logs. The dialogue is invented, not a quotation or a description of any actual
 system or work by Josh. No pipeline has been rewritten, load-tested, or deployed
 as part of this conversation.
 
-The GitHub card shows Code, Issues, Pull requests, Actions, and Projects icons,
-with their names on hover. They illustrate repository navigation; clicking the
-card plays the GitHub conversation.
+The expanded GitHub card shows Code, Issues, Pull requests, Actions, and Projects
+icons, with their names on hover. They illustrate repository navigation; clicking
+the card plays the GitHub conversation.
 
 Its three scenarios are based on Stephen T.’s public
 [dotnet/runtime issue #96277](https://github.com/dotnet/runtime/issues/96277),
@@ -130,12 +144,9 @@ The pulse follows the pause control and is disabled for reduced motion.
 
 The Conversation, Activity, Work, and Files tabs show related example content.
 Tabs support arrow keys, Home, and End. Deliverables open illustrative previews.
-The composer accepts a local message with Enter or the send button;
-Shift+Enter adds a line. Attachment selection displays a filename only. The
-mention and smile controls insert text. Messages and filenames are rendered as
-text, stay in memory, and are discarded on reload. No attachment contents are
-read or uploaded. A custom message pauses playback; choose a channel or replay
-to return to the scripted examples.
+The message composer is a read-only visual preview.
+Its attachment, mention, smile, and send icons are decorative. It does not
+accept messages or files; choose a channel to explore a scripted conversation.
 
 These conversations are illustrative. The website makes no external requests and
 does not execute Work. Teams, Discord, and email depict future possibilities,

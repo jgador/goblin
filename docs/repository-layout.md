@@ -131,6 +131,7 @@ npm run typecheck
 
 | Command | Purpose |
 | --- | --- |
+| `make clean-artifacts` | Recursively delete everything in `.artifacts/` except its root `.gitkeep`, then print confirmation |
 | `make install` | Install both locked Node packages and fetch locked Rust dependencies |
 | `make setup-rust` | Install the pinned Rust development tools |
 | `make format-rust` | Format Rust using Codex conventions |
@@ -198,6 +199,10 @@ only repeat the implementation.
 test configuration. `make check` adds Rust formatting/lints and type checks. These
 are useful integration/CI gates, not prerequisites for every local edit. Required
 CI checks still apply; scoped local results do not imply that CI ran.
+See [GitHub Actions](github-actions.md) for workflow names, required checks, and
+rename rollout steps.
+**Website Release** publishes and deploys `goblinboard.com`; **GitHub Pages**
+deploys the installation catalog at `jgador.github.io/goblin/`.
 
 Offline installer tests run as an ordinary user. `make build-tools` builds the
 test-only `host_fixture` Rust example, which calls host configuration with a

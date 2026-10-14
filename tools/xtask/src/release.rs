@@ -363,6 +363,13 @@ pub fn verify_archive(directory: &Path) -> Result<Release> {
     Ok(release)
 }
 
+fn installer_signer_identity(github_repository: &str) -> String {
+    format!(
+        r"^https://github\.com/{}/\.github/workflows/platform-release\.yml@refs/heads/master$",
+        regex::escape(github_repository)
+    )
+}
+
 fn authenticate(github_repository: &str, artifact: &Path) -> Result<()> {
     files::run(
         Command::new("gh")
@@ -372,7 +379,7 @@ fn authenticate(github_repository: &str, artifact: &Path) -> Result<()> {
                 "--repo",
                 github_repository,
                 "--cert-identity-regex",
-                &format!("^https://github\\.com/{}/\\.github/workflows/goblin-release\\.yml@refs/heads/master$", regex::escape(github_repository)),
+                &installer_signer_identity(github_repository),
                 "--deny-self-hosted-runners",
             ]),
     )
@@ -502,6 +509,30 @@ pub fn candidate(root: &Path, depfile: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn installer_authentication_accepts_only_platform_release_on_master() {
+        let repository = "sample-owner/platform.tools";
+        let identity = regex::Regex::new(&installer_signer_identity(repository)).unwrap();
+        let accepted = format!(
+            "https://github.com/{repository}/.github/workflows/platform-release.yml@refs/heads/master"
+        );
+        assert!(identity.is_match(&accepted));
+        for rejected in [
+            accepted.replace("platform-release.yml", "goblin-release.yml"),
+            accepted.replace("platform-release.yml", "goblinctl-release.yml"),
+            accepted.replace("platform-release.yml", "website.yml"),
+            accepted.replace("refs/heads/master", "refs/heads/release/0.1"),
+            accepted.replace("refs/heads/master", "refs/tags/master"),
+            accepted.replace("sample-owner", "other-owner"),
+            accepted.replace("platform.tools", "platform-tools"),
+            accepted.replace("github.com", "githubXcom"),
+            format!("{accepted}/extra"),
+            format!("https://other.example/{accepted}"),
+        ] {
+            assert!(!identity.is_match(&rejected), "Accepted {rejected}");
+        }
+    }
 
     fn snapshot() -> Inputs {
         let files = BTreeMap::from([

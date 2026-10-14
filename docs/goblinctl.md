@@ -159,11 +159,14 @@ The local ownership file retains its existing `repo` JSON key.
 
 ## Releases
 
-[Prepare Goblin release](releases.md) reuses a matching published installer or
+[Platform Release](releases.md) reuses a matching published installer or
 builds one from the selected release branch. Goblin and goblinctl keep independent
 versions; preparation supplies an unused installer version without a Cargo bump or
 dependency-pin PR. After verification, one approval publishes the exact pair,
 with any new goblinctl published first.
+The `github_pages` job then deploys the installation catalog through **GitHub
+Pages**. **Recommend Release** can update that catalog's default or repair the
+GitHub Pages deployment for an existing release.
 
 An optional development pin update uses `cargo xtask release pin-installer --version X.Y.Z`.
 It authenticates the archive and manifest, verifies matching inputs/capabilities,

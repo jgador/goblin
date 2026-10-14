@@ -112,7 +112,7 @@ using `cargo insta accept`; the tool is installed for tests that need it.
 
 `make test` builds the full application and runs nextest plus Rust documentation
 tests, generated-protocol checks, .NET tests, HTTP tests, and deployment tests.
-Real PostgreSQL checks remain opt-in. `.github/workflows/checks.yml` runs the
+Real PostgreSQL checks remain opt-in. `.github/workflows/ci.yml` runs the
 Rust checks for pull requests and `master`; the release workflow uses the same
 toolchain/helper setup action.
 
