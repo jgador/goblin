@@ -106,8 +106,84 @@ internal static class HttpsKeyCancellationChecks
                 handler.Responses.All(response => response.WasDisposed) && handler.Bodies.All(body => body.WasDisposed));
             return Task.CompletedTask;
         });
+        await RunWaitingCallerAsync(document, credential, configuration, token, Pass);
         Console.WriteLine($"PASS {checks} in-flight key cancellation checks; actual source/cache/JWT, mocked streams and Work only.");
         return checks;
+    }
+
+    private static async Task RunWaitingCallerAsync(string document, string credential, OAuthDiscoverySummary configuration,
+        CancellationToken token, Func<string, Func<Task>, Task> pass)
+    {
+        using var handler = new CancellationHandler(document);
+        using var documents = new CustomerHttpsJwksDocumentSource(configuration, handler);
+        var source = new LocalStatus();
+        var boundary = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, documents, new CacheClock()), Resource, source);
+        using var firstCaller = CancellationTokenSource.CreateLinkedTokenSource(token);
+        using var waiter = CancellationTokenSource.CreateLinkedTokenSource(token);
+        Task<RotatingConnectorIdentity> first = boundary.AuthenticateAsync(credential, firstCaller.Token);
+        Task<RotatingConnectorIdentity>? queued = null;
+        try
+        {
+            await handler.BodyStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+            await pass("queued caller cancellation leaves the single ongoing key body and first caller intact", async () =>
+            {
+                queued = boundary.AuthenticateAsync(credential, waiter.Token);
+                Require(!queued.IsCompleted && !first.IsCompleted && handler.Calls == 1 && source.Calls == 0);
+                waiter.Cancel();
+                try { await queued.WaitAsync(TimeSpan.FromSeconds(5), token); throw new Exception("Expected queued caller cancellation."); }
+                catch (OperationCanceledException error) when (waiter.IsCancellationRequested && !firstCaller.IsCancellationRequested && !token.IsCancellationRequested)
+                {
+                    Require(error.InnerException is null && !error.ToString().Contains(credential, StringComparison.Ordinal));
+                }
+                Require(queued.IsCanceled && !first.IsCompleted && !firstCaller.IsCancellationRequested &&
+                    handler.Calls == 1 && handler.SafeRequests && !handler.Bodies[0].ReadCancelled && !handler.Bodies[0].WasDisposed &&
+                    !handler.Responses[0].WasDisposed && !handler.Requests[0].WasDisposed && source.Calls == 0 && source.Reads == 0);
+            });
+            await pass("explicit body release authenticates the original caller without another GET or Work access", async () =>
+            {
+                handler.BodyRelease.TrySetResult(true);
+                RotatingConnectorIdentity identity = await first.WaitAsync(TimeSpan.FromSeconds(5), token);
+                await handler.Requests[0].Disposed.Task.WaitAsync(TimeSpan.FromSeconds(5), token);
+                Require(identity.Issuer == Issuer && identity.Subject == "linked" && identity.Resource == Resource &&
+                    handler.Calls == 1 && handler.SafeRequests && !handler.Bodies[0].ReadCancelled && handler.Bodies[0].WasDisposed &&
+                    handler.Responses[0].WasDisposed && queued?.IsCanceled == true && source.Calls == 0 && source.Reads == 0);
+            });
+            await pass("cached authentication after queued cancellation still cannot bypass local Work denial", async () =>
+            {
+                RotatingConnectorIdentity fresh = await boundary.AuthenticateAsync(credential, token).WaitAsync(TimeSpan.FromSeconds(5), token);
+                Require(!ReferenceEquals(fresh, await first) && fresh.Subject == "linked" && handler.Calls == 1 && source.Calls == 0);
+                try { await boundary.ReadAsync(credential, 42, token); throw new Exception("Expected local permission denial."); }
+                catch (WorkReadFailure error) { Require(!error.ToString().Contains(credential, StringComparison.Ordinal)); }
+                Require(source.Calls == 1 && source.Reads == 0 && handler.Calls == 1 && queued?.IsCanceled == true);
+            });
+            await pass("explicit permission restoration permits independent cached read after queued cancellation", async () =>
+            {
+                source.Denied = false;
+                WorkStatusResult result = await boundary.ReadAsync(credential, 42, token);
+                Require(result.WorkId == "42" && result.Version == "9007199254740993" && result.Status == "Ready" &&
+                    result.UpdatedAt == source.UpdatedAt && source.Calls == 2 && source.Reads == 1 && handler.Calls == 1 && queued?.IsCanceled == true);
+            });
+        }
+        finally
+        {
+            waiter.Cancel();
+            firstCaller.Cancel();
+            handler.BodyRelease.TrySetResult(true);
+            try { await first.WaitAsync(TimeSpan.FromSeconds(5)); }
+            catch (OperationCanceledException) when (firstCaller.IsCancellationRequested) { }
+            if (queued is not null)
+            {
+                try { await queued.WaitAsync(TimeSpan.FromSeconds(5)); }
+                catch (OperationCanceledException) when (waiter.IsCancellationRequested) { }
+            }
+        }
+        documents.Dispose();
+        await pass("queued cancellation composition disposes owned handler and its single observed exchange", () =>
+        {
+            Require(handler.WasDisposed && handler.Calls == 1 && handler.Requests.Count == 1 && handler.Responses.Count == 1 &&
+                handler.Bodies.Count == 1 && handler.Requests[0].WasDisposed && handler.Responses[0].WasDisposed && handler.Bodies[0].WasDisposed);
+            return Task.CompletedTask;
+        });
     }
 
     private static void Require(bool value)
@@ -131,6 +207,7 @@ internal static class HttpsKeyCancellationChecks
         private readonly byte[] _document;
         private bool _recover;
         public TaskCompletionSource<bool> BodyStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> BodyRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public List<RequestProbe> Requests { get; } = [];
         public List<OwnedResponse> Responses { get; } = [];
         public List<BodyStream> Bodies { get; } = [];
@@ -159,7 +236,7 @@ internal static class HttpsKeyCancellationChecks
             var probe = new RequestProbe();
             request.Content = probe;
             Requests.Add(probe);
-            var body = new BodyStream(_document, !_recover, BodyStarted);
+            var body = new BodyStream(_document, !_recover, BodyStarted, BodyRelease.Task);
             Bodies.Add(body);
             var response = new OwnedResponse { RequestMessage = request, Content = new StreamContent(body) };
             response.Content.Headers.ContentType = new("application/jwk-set+json");
@@ -205,13 +282,15 @@ internal static class HttpsKeyCancellationChecks
     {
         private readonly bool _pause;
         private readonly TaskCompletionSource<bool> _started;
+        private readonly Task _release;
         public bool WasDisposed { get; private set; }
         public bool ReadCancelled { get; private set; }
 
-        public BodyStream(byte[] document, bool pause, TaskCompletionSource<bool> started) : base(document, writable: false)
+        public BodyStream(byte[] document, bool pause, TaskCompletionSource<bool> started, Task release) : base(document, writable: false)
         {
             _pause = pause;
             _started = started;
+            _release = release;
         }
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken token = default)
@@ -219,7 +298,7 @@ internal static class HttpsKeyCancellationChecks
             if (_pause)
             {
                 _started.TrySetResult(true);
-                try { await Task.Delay(Timeout.InfiniteTimeSpan, token); }
+                try { await _release.WaitAsync(token); }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { ReadCancelled = true; throw; }
             }
             return await base.ReadAsync(buffer, token);

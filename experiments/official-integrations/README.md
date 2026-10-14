@@ -99,6 +99,8 @@ Seventeen additional synthetic checks cover strict callback-issuer capability pa
 
 Six additional direct source/cache/verifier checks cancel a caller during a mocked key-body read, independently observe owned-resource disposal and prove later cache admission after an explicit test-clock advance. Local permission still controls each separate Work read. No production behavior, SDK HTTP mapping or platform cancellation behavior is changed or claimed; see [HTTPS-KEY-DOCUMENTS.md](HTTPS-KEY-DOCUMENTS.md).
 
+Five further checks cancel only a queued authentication while the original key-body retrieval remains paused and intact. Explicit body release completes the first authentication with one total key GET; later cached authentication and local permission denial/restoration remain independent. Signal-driven mocked behavior only, with bounded cleanup and no retries or production changes.
+
 `CustomerSigningKeyAdministration` requires local-owner authority for each atomic cache flush. A generation check prevents pre-flush refreshes from republishing keys; no production owner authority or public mutation exists. Cache clearing is not a provider key denylist or retroactive read revocation. See [KEY-CACHE-INVALIDATION.md](KEY-CACHE-INVALIDATION.md) for tests and limits.
 
 The isolated rotating boundary now retains a cache/boundary-bound verified identity, checking generation and cache age before/after signature validation and before each new per-Work read. Successful replacement retires previous leases; admitted/in-flight reads remain an explicit limit. Fixed-key HTTP behavior and stdio composition are preserved. See [VERIFICATION-LEASES.md](VERIFICATION-LEASES.md) and [ROTATING-HTTP.md](ROTATING-HTTP.md) for verification and adoption gates.
