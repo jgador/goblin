@@ -73,6 +73,8 @@ Six further checks cover cold initialization with mocked key redirects, HTTP 503
 
 Three additional checks deliberately create a second SDK transport on each failed host during a deterministically frozen cache cooldown. Each new request stays safely denied without another key GET or Work access. This is an explicit synthetic test action, not automatic reconnect or Work retry; real provider/platform behavior and recovery after cooldown remain unverified.
 
+Controlled synthetic recovery now advances only the fixture's monotonic cache clock by 61 seconds, publishes valid ephemeral public keys and explicitly creates a new SDK client on each failed host. Nine new checks require one additional credential-free pinned GET, initialization without Work access, local permission denial and a separate safe cached read after explicit permission restoration. No sleep, automatic recovery/retry or production change; live provider/platform recovery remains unverified.
+
 ## Local-owner approval/revocation policy
 
 `CustomerGrantAdministration` is an unregistered policy requiring a trusted request-scoped local-owner authority and an atomic mutation/audit store. It pins issuer/resource, requires one explicit subject/Work ID and bounded future expiry, rechecks owner authority for every approval/revoke, and permits revoke without connector login. No production authority, store, route, grant writer or MCP mutation tool exists. See [GRANT-ADMINISTRATION.md](GRANT-ADMINISTRATION.md) for composition gates, uncertainty handling and the 24 test-double policy checks. These do not establish real owner authentication or durable audit coverage.

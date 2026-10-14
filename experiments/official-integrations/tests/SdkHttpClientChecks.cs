@@ -333,9 +333,10 @@ internal static class SdkHttpClientChecks
             var configuration = new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"), new Uri(Issuer + "/token"), address, false);
             using var documents = new CustomerHttpsJwksDocumentSource(configuration, keyHandler);
             var source = new LocalStatus();
-            // Freeze only cache age/cooldown; JWT validity and request deadlines
-            // retain real time. No sleep is needed to stay inside the cooldown.
-            var boundary = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, documents, new FrozenCacheClock()), Resource, source);
+            // Control only cache age/cooldown; JWT validity and request deadlines
+            // retain real time. Advance explicitly, without sleeping or retrying Work.
+            var clock = new ControlledCacheClock();
+            var boundary = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, documents, clock), Resource, source);
             WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
             builder.Logging.ClearProviders();
             builder.WebHost.UseTestServer();
@@ -385,11 +386,51 @@ internal static class SdkHttpClientChecks
                 await secondTransport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
                 Require(observed.Requests == 2 && observed.UnauthorizedResponses == 2 && keyHandler.Calls == 1 && source.Calls == 0);
             });
+            string publicDocument = JsonSerializer.Serialize(new
+            {
+                keys = new[] { JsonWebKeyConverter.ConvertFromRSASecurityKey(new RsaSecurityKey(key.ExportParameters(false)) { KeyId = "current" }) }
+            });
+            keyHandler.PublishPublicKeys(publicDocument);
+            clock.Advance(TimeSpan.FromSeconds(61));
+            source.Denied = true;
+            await using var recoveredTransport = Transport();
+            await using McpClient recoveredClient = await McpClient.CreateAsync(recoveredTransport, cancellationToken: token);
+            await check("explicit SDK creation after key " + failure.Name + " recovers beyond controlled cooldown without Work access", () =>
+            {
+                Require(keyHandler.Calls == 2 && keyHandler.SafeRequests && keyHandler.ContentDisposed &&
+                    observed.UnauthorizedResponses == 2 && !observed.SawSession && source.Calls == 0 && source.Reads == 0);
+                return Task.CompletedTask;
+            });
+            await check("recovered SDK key " + failure.Name + " still enforces local Work denial without reauthorization", async () =>
+            {
+                CallToolResult denied = await recoveredClient.CallToolAsync("goblin_get_work_status", new Dictionary<string, object?> { ["workId"] = "42" }, cancellationToken: token);
+                string body = JsonSerializer.Serialize(denied);
+                Require(denied.IsError == true && denied.StructuredContent is null &&
+                    !(denied.Meta?.ContainsKey("mcp/www_authenticate") ?? false) &&
+                    !body.Contains(credential, StringComparison.Ordinal) && !body.Contains("9007199254740993", StringComparison.Ordinal) &&
+                    source.Calls == 1 && source.Reads == 0 && source.LastSubject == "linked" &&
+                    keyHandler.Calls == 2 && observed.UnauthorizedResponses == 2 && !observed.SawSession);
+            });
+            await check("explicit local permission restoration after key " + failure.Name + " permits a separate cached status read", async () =>
+            {
+                source.Denied = false;
+                CallToolResult result = await recoveredClient.CallToolAsync("goblin_get_work_status", new Dictionary<string, object?> { ["workId"] = "42" }, cancellationToken: token);
+                Require(result.IsError != true && result.Content.Count == 1 && result.Content[0] is TextContentBlock);
+                string body = ((TextContentBlock)result.Content[0]).Text;
+                using JsonDocument json = JsonDocument.Parse(body);
+                WorkStatusResult? status = JsonSerializer.Deserialize<WorkStatusResult>(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                Require(json.RootElement.EnumerateObject().Count() == 4 && status?.WorkId == "42" &&
+                    status.Version == "9007199254740993" && status.Status == "Ready" && status.UpdatedAt == source.UpdatedAt &&
+                    !body.Contains(credential, StringComparison.Ordinal) &&
+                    source.Calls == 2 && source.Reads == 1 && keyHandler.Calls == 2 && observed.UnauthorizedResponses == 2 && !observed.SawSession);
+            });
+            await recoveredClient.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await recoveredTransport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
             await app.StopAsync(token);
             documents.Dispose();
-            await check("cold SDK key " + failure.Name + " disposes failed response and owned handler", () =>
+            await check("recovered SDK key " + failure.Name + " disposes failed and recovered responses and owned handler", () =>
             {
-                Require(keyHandler.WasDisposed && keyHandler.ContentDisposed && keyHandler.Calls == 1 && source.Calls == 0);
+                Require(keyHandler.WasDisposed && keyHandler.ContentDisposed && keyHandler.Calls == 2 && source.Calls == 2 && source.Reads == 1);
                 return Task.CompletedTask;
             });
         }
@@ -442,17 +483,27 @@ internal static class SdkHttpClientChecks
         }
     }
 
-    private sealed class FrozenCacheClock : TimeProvider
+    private sealed class ControlledCacheClock : TimeProvider
     {
-        public override long GetTimestamp() => 0;
+        private long _timestamp;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => Interlocked.Read(ref _timestamp);
+
+        public void Advance(TimeSpan elapsed)
+        {
+            Require(elapsed > TimeSpan.Zero);
+            Interlocked.Add(ref _timestamp, elapsed.Ticks);
+        }
     }
 
     private sealed class PinnedKeyHandler : HttpMessageHandler
     {
         private readonly Uri _address;
-        private readonly string _document;
-        private readonly HttpStatusCode _status;
-        private readonly Uri? _location;
+        private string _document;
+        private HttpStatusCode _status;
+        private Uri? _location;
         private KeyContent? _content;
         public int Calls { get; private set; }
         public bool SafeRequests { get; private set; } = true;
@@ -467,6 +518,14 @@ internal static class SdkHttpClientChecks
             _document = document;
             _status = status;
             _location = location;
+        }
+
+        public void PublishPublicKeys(string document)
+        {
+            Require(ContentDisposed && !WasDisposed);
+            _document = document;
+            _status = HttpStatusCode.OK;
+            _location = null;
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
