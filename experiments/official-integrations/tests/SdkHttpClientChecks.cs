@@ -69,13 +69,46 @@ internal static class SdkHttpClientChecks
             using var observed = new ObservedHandler(app.GetTestServer().CreateHandler());
             using var http = new HttpClient(observed) { Timeout = TimeSpan.FromSeconds(5) };
             string valid = Issue(key, "linked");
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", valid);
-            await using var transport = new HttpClientTransport(new HttpClientTransportOptions
+
+            HttpClientTransport Transport() => new(new HttpClientTransportOptions
             {
                 Endpoint = new Uri(Resource), Name = "Goblin synthetic HTTP contract",
                 TransportMode = HttpTransportMode.StreamableHttp, ConnectionTimeout = TimeSpan.FromSeconds(5),
                 OAuth = null, MaxReconnectionAttempts = 0, KnownSessionId = null, OwnsSession = false
             }, http, ownsHttpClient: false);
+
+            async Task Unauthorized(Func<Task> action, string? credential)
+            {
+                int requests = observed.Requests, failures = observed.UnauthorizedResponses, calls = source.Calls;
+                try { await action(); throw new Exception("Expected HTTP authentication failure."); }
+                catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    Require((credential is null || !error.ToString().Contains(credential, StringComparison.Ordinal)) &&
+                        !error.ToString().Contains(valid, StringComparison.Ordinal));
+                }
+                Require(observed.Requests == requests + 1 && observed.UnauthorizedResponses == failures + 1 &&
+                    observed.LastChallenge == $"Bearer resource_metadata=\"https://goblin.customer.example{PrivateMcpHttpAdapter.MetadataPath}\", scope=\"{ConnectorReadBoundary.ReadScope}\"" &&
+                    observed.SafeUnauthorizedBody && observed.UnauthorizedNoStore && !observed.NonPostUnauthorized && source.Calls == calls);
+            }
+
+            string?[] invalidCredentials = [null, "malformed", Issue(key, "linked", expired: true)];
+            for (int index = 0; index < invalidCredentials.Length; index++)
+            {
+                string? credential = invalidCredentials[index];
+                string label = new[] { "missing", "malformed", "expired" }[index];
+                await Check(path + " SDK initialization rejects " + label + " bearer once with safe HTTP 401", async () =>
+                {
+                    http.DefaultRequestHeaders.Authorization = credential is null ? null : new AuthenticationHeaderValue("Bearer", credential);
+                    await using var failedTransport = Transport();
+                    await Unauthorized(async () =>
+                    {
+                        await using McpClient unexpected = await McpClient.CreateAsync(failedTransport, cancellationToken: token);
+                    }, credential);
+                    await failedTransport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+                });
+            }
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", valid);
+            await using var transport = Transport();
             await using McpClient client = await McpClient.CreateAsync(transport, cancellationToken: token);
 
             Task<CallToolResult> Call(string id = "42", CancellationToken? cancellation = null) =>
@@ -168,6 +201,22 @@ internal static class SdkHttpClientChecks
                     Require((await Call()).IsError != true && documents.Calls == 2 && source.Reads == 3);
                 });
             }
+            for (int index = 0; index < invalidCredentials.Length; index++)
+            {
+                string? credential = invalidCredentials[index];
+                string label = new[] { "missing", "malformed", "expired" }[index];
+                await Check(path + " initialized SDK tool call rejects " + label + " bearer without Work access or retry", async () =>
+                {
+                    http.DefaultRequestHeaders.Authorization = credential is null ? null : new AuthenticationHeaderValue("Bearer", credential);
+                    try { await Unauthorized(async () => { await Call(); }, credential); }
+                    finally { http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", valid); }
+                });
+            }
+            await Check(path + " SDK client accepts explicit credential restoration on a later call", async () =>
+            {
+                int before = source.Reads;
+                Require((await Call()).IsError != true && source.Reads == before + 1);
+            });
             await Check(path + " SDK transport stays stateless on one pinned TestServer target", () =>
             {
                 Require(!observed.SawSession && observed.Requests > 5);
@@ -182,11 +231,11 @@ internal static class SdkHttpClientChecks
         return checks;
     }
 
-    private static string Issue(RSA key, string subject) => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+    private static string Issue(RSA key, string subject, bool expired = false) => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
     {
         Issuer = Issuer, Audience = Resource, TokenType = "at+jwt",
         Claims = new Dictionary<string, object> { ["sub"] = subject, ["jti"] = "ephemeral", ["scope"] = ConnectorReadBoundary.ReadScope },
-        NotBefore = DateTime.UtcNow.AddMinutes(-1), Expires = DateTime.UtcNow.AddMinutes(10),
+        NotBefore = DateTime.UtcNow.AddMinutes(-10), Expires = DateTime.UtcNow.AddMinutes(expired ? -5 : 10),
         SigningCredentials = new SigningCredentials(new RsaSecurityKey(key) { KeyId = "current" }, SecurityAlgorithms.RsaSha256)
     });
 
@@ -199,6 +248,11 @@ internal static class SdkHttpClientChecks
     {
         public int Requests { get; private set; }
         public bool SawSession { get; private set; }
+        public int UnauthorizedResponses { get; private set; }
+        public string? LastChallenge { get; private set; }
+        public bool SafeUnauthorizedBody { get; private set; }
+        public bool UnauthorizedNoStore { get; private set; }
+        public bool NonPostUnauthorized { get; private set; }
 
         public ObservedHandler(HttpMessageHandler inner) { InnerHandler = inner; }
 
@@ -209,6 +263,17 @@ internal static class SdkHttpClientChecks
             SawSession |= request.Headers.Contains("Mcp-Session-Id");
             HttpResponseMessage response = await base.SendAsync(request, token);
             SawSession |= response.Headers.Contains("Mcp-Session-Id");
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                UnauthorizedResponses++;
+                LastChallenge = response.Headers.WwwAuthenticate.ToString();
+                UnauthorizedNoStore = response.Headers.CacheControl?.NoStore == true;
+                NonPostUnauthorized |= request.Method != HttpMethod.Post;
+                string body = await response.Content.ReadAsStringAsync(token);
+                using JsonDocument json = JsonDocument.Parse(body);
+                SafeUnauthorizedBody = body.Length <= 512 && json.RootElement.EnumerateObject().Count() == 1 &&
+                    json.RootElement.GetProperty("error").GetString() == "Connector authentication is required.";
+            }
             return response;
         }
     }

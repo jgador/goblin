@@ -65,6 +65,8 @@ The focused executable also runs ASP.NET TestServer checks without listening on 
 
 Actual pinned SDK HTTP-client checks now complement the hand-built JSON-RPC requests: fixed/rotating initialization, tool/scope discovery, safe status projection, fresh local authorization/changed bearer subject, cancellation and rotating lease invalidation through TestServer. OAuth and stream reconnection are disabled and the test handler pins one target; no live platform connection is made. See [SDK-HTTP-CLIENT.md](SDK-HTTP-CLIENT.md) for evidence and limits.
 
+The same fixture now checks missing/malformed/expired bearer failures during initialization and later tool calls: exact safe HTTP 401/challenge, one rejected request, no Work access, no automatic fallback/login/retry and explicit later credential restoration. SDK HTTP exceptions remain distinct from authenticated local-permission MCP errors; no production authentication policy changes.
+
 ## Local-owner approval/revocation policy
 
 `CustomerGrantAdministration` is an unregistered policy requiring a trusted request-scoped local-owner authority and an atomic mutation/audit store. It pins issuer/resource, requires one explicit subject/Work ID and bounded future expiry, rechecks owner authority for every approval/revoke, and permits revoke without connector login. No production authority, store, route, grant writer or MCP mutation tool exists. See [GRANT-ADMINISTRATION.md](GRANT-ADMINISTRATION.md) for composition gates, uncertainty handling and the 24 test-double policy checks. These do not establish real owner authentication or durable audit coverage.
