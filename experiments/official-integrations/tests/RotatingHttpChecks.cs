@@ -27,7 +27,7 @@ internal static class RotatingHttpChecks
             keys = new[] { JsonWebKeyConverter.ConvertFromRSASecurityKey(new RsaSecurityKey(key.ExportParameters(false)) { KeyId = "current" }) }
         }));
         var cache = new CustomerSigningKeyCache(new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"),
-            new Uri(Issuer + "/token"), new Uri(Issuer + "/certs")), documents, TimeProvider.System);
+            new Uri(Issuer + "/token"), new Uri(Issuer + "/certs"), false), documents, TimeProvider.System);
         var source = new LocalStatus();
         var boundary = new RotatingConnectorReadBoundary(cache, Resource, source);
         var owner = new Owner();

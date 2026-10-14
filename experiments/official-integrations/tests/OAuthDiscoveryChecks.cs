@@ -11,7 +11,8 @@ internal static class OAuthDiscoveryChecks
         string valid = Sample();
         OAuthDiscoverySummary result = policy.Review(valid);
         Require(result.Issuer == Issuer && result.TokenEndpoint.AbsoluteUri == Issuer + "/protocol/openid-connect/token" &&
-            result.JwksEndpoint.AbsoluteUri == Issuer + "/protocol/openid-connect/certs");
+            result.JwksEndpoint.AbsoluteUri == Issuer + "/protocol/openid-connect/certs" &&
+            !result.AdvertisesAuthorizationResponseIssuerIdentification);
         int checks = 1;
         Console.WriteLine("PASS synthetic customer OAuth discovery passes narrow offline policy");
 
@@ -27,6 +28,30 @@ internal static class OAuthDiscoveryChecks
             }
             throw new Exception("Expected OAuth preflight denial.");
         }
+
+        void Advisory(string name, string document, bool expected)
+        {
+            OAuthDiscoverySummary summary = policy.Review(document);
+            Require(summary.AdvertisesAuthorizationResponseIssuerIdentification == expected && summary.Issuer == result.Issuer &&
+                summary.AuthorizationEndpoint == result.AuthorizationEndpoint && summary.TokenEndpoint == result.TokenEndpoint &&
+                summary.JwksEndpoint == result.JwksEndpoint);
+            checks++;
+            Console.WriteLine("PASS " + name);
+        }
+
+        Advisory("explicit false issuer advertisement stays conservative", IssAdvertisement("false"), false);
+        Advisory("true issuer advertisement is reported without changing pinned endpoints", IssAdvertisement("true"), true);
+        Advisory("a later missing advertisement does not inherit prior true metadata", valid, false);
+        Advisory("issuer capability name is case sensitive, without optimistic fallback",
+            IssAdvertisement("true").Replace("authorization_response_iss_parameter_supported", "AUTHORIZATION_RESPONSE_ISS_PARAMETER_SUPPORTED",
+                StringComparison.Ordinal), false);
+        foreach (string value in new[] { "null", "\"true\"", "\"false\"", "1", "0", "[]", "{}", "tru" })
+            Deny("non-Boolean or malformed issuer advertisement is sanitized", IssAdvertisement(value));
+        Deny("duplicate true issuer advertisements are rejected", IssAdvertisement("true", IssAdvertisement("true")));
+        Deny("conflicting issuer advertisements are rejected", IssAdvertisement("false", IssAdvertisement("true")));
+        Deny("issuer advertisement cannot relax exact trusted issuer", IssAdvertisement("true", Sample(issuer: Issuer + "/")));
+        Deny("issuer advertisement cannot relax S256", IssAdvertisement("true", Sample(challenge: ["plain"])));
+        Deny("issuer advertisement cannot allow foreign keys", IssAdvertisement("true", Sample(keys: "https://other.customer.example/keys")));
 
         Deny("discovery issuer is exact, without trailing slash normalization", Sample(issuer: Issuer + "/"));
         Deny("plain-only PKCE is rejected", Sample(challenge: ["plain"]));
@@ -76,6 +101,9 @@ internal static class OAuthDiscoveryChecks
             ["token_endpoint_auth_methods_supported"] = authMethods ?? ["none"],
             ["scopes_supported"] = scopes ?? [ConnectorReadBoundary.ReadScope]
         });
+
+    private static string IssAdvertisement(string jsonValue, string? document = null) =>
+        (document ?? Sample()).Insert(1, "\"authorization_response_iss_parameter_supported\":" + jsonValue + ",");
 
     private static void Require(bool value)
     {

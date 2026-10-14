@@ -154,7 +154,7 @@ internal static class HttpCompositionChecks
             _rotating = rotating;
             _fixed = new ConnectorReadBoundary(Issuer, Resource, new RsaSecurityKey(rsa.ExportParameters(false)), _source);
             var configuration = new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"),
-                new Uri(Issuer + "/token"), new Uri(Issuer + "/certs"));
+                new Uri(Issuer + "/token"), new Uri(Issuer + "/certs"), false);
             _rotation = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, _source, TimeProvider.System), Resource, _source);
         }
 

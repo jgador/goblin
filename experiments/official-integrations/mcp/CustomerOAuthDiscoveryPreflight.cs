@@ -6,18 +6,24 @@ namespace Goblin.Mcp.Prototype;
 
 public sealed class OAuthDiscoverySummary
 {
-    internal OAuthDiscoverySummary(string issuer, Uri authorization, Uri token, Uri keys)
+    internal OAuthDiscoverySummary(string issuer, Uri authorization, Uri token, Uri keys,
+        bool advertisesAuthorizationResponseIssuerIdentification)
     {
         Issuer = issuer;
         AuthorizationEndpoint = authorization;
         TokenEndpoint = token;
         JwksEndpoint = keys;
+        AdvertisesAuthorizationResponseIssuerIdentification = advertisesAuthorizationResponseIssuerIdentification;
     }
 
     public string Issuer { get; }
     public Uri AuthorizationEndpoint { get; }
     public Uri TokenEndpoint { get; }
     public Uri JwksEndpoint { get; }
+
+    // Caller-supplied advertisement only, not verified callback behavior or
+    // permission to choose a production redirect URI or authorize Work.
+    public bool AdvertisesAuthorizationResponseIssuerIdentification { get; }
 }
 
 // Offline configuration review for a pre-registered public OAuth client.
@@ -51,7 +57,8 @@ public sealed class CustomerOAuthDiscoveryPreflight
                 !Includes(metadata.GrantTypes, "authorization_code") || !Includes(metadata.ResponseTypes, "code") ||
                 !Includes(metadata.TokenAuthMethods, "none") || !Includes(metadata.Scopes, ConnectorReadBoundary.ReadScope))
                 throw Denied();
-            return new(_issuer, Endpoint(metadata.AuthorizationEndpoint), Endpoint(metadata.TokenEndpoint), Endpoint(metadata.JwksUri));
+            return new(_issuer, Endpoint(metadata.AuthorizationEndpoint), Endpoint(metadata.TokenEndpoint), Endpoint(metadata.JwksUri),
+                metadata.AuthorizationResponseIssParameterSupported);
         }
         catch (Exception error) when (error is JsonException or ArgumentException or InvalidOperationException)
         {
@@ -85,6 +92,11 @@ public sealed class CustomerOAuthDiscoveryPreflight
     {
         [JsonPropertyName("issuer")]
         public string? Issuer { get; init; }
+
+        // Non-nullable Boolean: absent defaults false; explicit null or other
+        // JSON types are rejected by the ordinary typed deserializer.
+        [JsonPropertyName("authorization_response_iss_parameter_supported")]
+        public bool AuthorizationResponseIssParameterSupported { get; init; }
 
         [JsonPropertyName("authorization_endpoint")]
         public string? AuthorizationEndpoint { get; init; }

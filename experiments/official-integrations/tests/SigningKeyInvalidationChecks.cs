@@ -175,7 +175,7 @@ internal static class SigningKeyInvalidationChecks
 
     private static OAuthDiscoverySummary Configuration() => new("https://identity.customer.example/realm",
         new Uri("https://identity.customer.example/realm/authorize"), new Uri("https://identity.customer.example/realm/token"),
-        new Uri("https://identity.customer.example/realm/certs"));
+        new Uri("https://identity.customer.example/realm/certs"), false);
 
     private static string Document(RSA rsa, string kid) => JsonSerializer.Serialize(new
     {

@@ -16,7 +16,7 @@ Inspected tagged [Tool](https://github.com/modelcontextprotocol/csharp-sdk/blob/
 | --- | --- | --- |
 | Whole-server authentication | [Authentication](https://developers.openai.com/plugins/build/auth) describes HTTP 401 with protected-resource discovery, customer authorization-server metadata, resource binding and PKCE S256. | Keep bearer-required initialization/discovery and per-request verification; do not allow anonymous Work calls to expose linking UI. |
 | Tool-level linking UI | The same guide requires per-tool declarations and runtime authentication challenge metadata. | The compatibility mirror alone does not prove this UI. Local permission/lease denial must not become a reconsent prompt. |
-| Provider callbacks | The guide distinguishes exact management-page callback URLs; stable callbacks depend on advertised and actually returned issuer identification. | Offline metadata cannot prove callback behavior. Current preflight does not review this advertisement; extend its advisory summary next, without generating callback allowlists. |
+| Provider callbacks | The guide distinguishes exact management-page callback URLs; stable callbacks depend on advertised and actually returned issuer identification. | Offline metadata cannot prove callback behavior. OI-019 adds a strict, conservative advisory advertisement summary only, without generating callback allowlists. |
 
 The descriptor gap is not evidence that all whole-server OAuth is impossible. Conversely, HTTP challenge contracts and SDK clients with OAuth disabled are not a ChatGPT linking test. Complete provider, callback, consent, TLS/reachability and platform verification remain required. Customer-local authorization is mandatory even after authentication succeeds.
 

@@ -42,7 +42,7 @@ internal static class SdkHttpClientChecks
                 keys = new[] { JsonWebKeyConverter.ConvertFromRSASecurityKey(new RsaSecurityKey(key.ExportParameters(false)) { KeyId = "current" }) }
             }));
             var cache = new CustomerSigningKeyCache(new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"),
-                new Uri(Issuer + "/token"), new Uri(Issuer + "/certs")), documents, TimeProvider.System);
+                new Uri(Issuer + "/token"), new Uri(Issuer + "/certs"), false), documents, TimeProvider.System);
             var rotation = new RotatingConnectorReadBoundary(cache, Resource, source);
             var fixedBoundary = new ConnectorReadBoundary(Issuer, Resource,
                 new RsaSecurityKey(key.ExportParameters(false)) { KeyId = "current" }, source);

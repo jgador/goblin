@@ -35,6 +35,10 @@ This is conservative experiment policy, not a universal OAuth conformance valida
 
 Twenty-six focused checks use synthetic JSON only, including exact issuer, missing/wrong capabilities, unsafe/foreign endpoints, duplicate/malformed/oversized data and sanitized failures. No real Keycloak export/token/discovery or live OAuth coverage is claimed.
 
+The preflight now also returns `AdvertisesAuthorizationResponseIssuerIdentification` from the exact `authorization_response_iss_parameter_supported` JSON name. Missing/false is conservative; only JSON Boolean true reports the advertisement. Explicit null, other JSON types, malformed values and duplicates fail with the same sanitized error. Seventeen additional synthetic checks cover this advisory value, unchanged pinned endpoints, no retained prior true value, case-sensitive names and preservation of issuer/S256/key-origin requirements. The internal summary constructor's six direct test callers explicitly supply false; no production caller or registration changes.
+
+Reviewed 2026-10-14 UTC: [OpenAI callback issuer guidance](https://developers.openai.com/plugins/build/auth) requires the actual authorization response issuer to match, including error responses. An advertisement is not proof of that behavior, client enforcement or stable-callback eligibility. Copy the exact callback shown by the connection management page only after provider/platform validation. This component creates no callback URL or allowlist and performs no callback, discovery fetch, token exchange or Work authorization.
+
 ## Distribution and unavoidable exchange
 
 Customer-specific private ChatGPT connections remain the nearest documented path. A compatible provider does not establish one public plugin's eligibility to route to arbitrary customer-hosted URLs; the trusted-developer/template-domain restrictions in [FEASIBILITY.md](FEASIBILITY.md) remain unresolved. Slack routing/app-secret restrictions are unaffected.

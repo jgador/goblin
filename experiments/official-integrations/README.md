@@ -81,6 +81,8 @@ The focused executable includes 19 offline fixture-safety contracts, eight embed
 
 `CustomerOAuthDiscoveryPreflight` is an offline, unregistered metadata review for a predefined public-client policy. It fetches no URLs, loads no keys and cannot authorize Work. Twenty-six synthetic checks cover pinned issuer, bounded/duplicate-safe typed JSON, S256/code/none/read-scope advertisements and restricted endpoint origins. See [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) for the concrete provider candidate, experimental resource-indicator/CIMD gates, token-header configuration, rotation gap and private OAuth reachability. A metadata pass is not live provider or OAuth success.
 
+Seventeen additional synthetic checks cover strict callback-issuer capability parsing. The summary's `AdvertisesAuthorizationResponseIssuerIdentification` reports only caller-supplied metadata, defaults conservatively to false and cannot establish actual callback behavior, select a production redirect URI or authorize Work. Null/non-Boolean/duplicate advertisements fail sanitized; existing provider/security policy remains enforced.
+
 ## Isolated signing-key rotation
 
 `CustomerSigningKeyCache` and `RotatingConnectorReadBoundary` compose trusted-endpoint key retrieval with existing RSA/JWT verification and per-Work authorization. Monotonic ten-minute cache age, one-minute global refresh cooldown, atomic bounded key-set replacement and five-second gate/retrieval deadlines are experimental policy. Optional isolated HTTP composition is now available; no stdio or production registration. See [SIGNING-KEY-ROTATION.md](SIGNING-KEY-ROTATION.md) for limits and removal/emergency-invalidation caveats.

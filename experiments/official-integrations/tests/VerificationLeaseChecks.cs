@@ -137,7 +137,7 @@ internal static class VerificationLeaseChecks
     }
 
     private static OAuthDiscoverySummary Configuration() => new(Issuer, new Uri(Issuer + "/authorize"),
-        new Uri(Issuer + "/token"), new Uri(Issuer + "/certs"));
+        new Uri(Issuer + "/token"), new Uri(Issuer + "/certs"), false);
 
     private static string Document(params (RSA Key, string Kid)[] keys) => JsonSerializer.Serialize(new
     {

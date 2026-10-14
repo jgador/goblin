@@ -141,7 +141,7 @@ internal static class HttpsJwksSourceChecks
     }
 
     private static OAuthDiscoverySummary Configuration(Uri? address = null) =>
-        new(Issuer, new Uri(Issuer + "/authorize"), new Uri(Issuer + "/token"), address ?? Address);
+        new(Issuer, new Uri(Issuer + "/authorize"), new Uri(Issuer + "/token"), address ?? Address, false);
 
     private static void Require(bool value)
     {
