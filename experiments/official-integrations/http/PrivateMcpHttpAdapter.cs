@@ -20,18 +20,29 @@ public static class PrivateMcpHttpAdapter
     internal const string OAuthSecuritySchemesJson = "[{\"type\":\"oauth2\",\"scopes\":[\"" + ConnectorReadBoundary.ReadScope + "\"]}]";
     public const string MetadataPath = "/.well-known/oauth-protected-resource/mcp";
 
-    public static void AddServices(IServiceCollection services, ConnectorReadBoundary boundary) =>
+    public static void AddServices(IServiceCollection services, ConnectorReadBoundary boundary)
+    {
+        ArgumentNullException.ThrowIfNull(boundary);
         AddServices<ConnectorReadBoundary, PrivateWorkTools>(services, boundary, boundary.Resource);
+    }
 
-    public static void AddServices(IServiceCollection services, RotatingConnectorReadBoundary boundary) =>
+    public static void AddServices(IServiceCollection services, RotatingConnectorReadBoundary boundary)
+    {
+        ArgumentNullException.ThrowIfNull(boundary);
         AddServices<RotatingConnectorReadBoundary, RotatingPrivateWorkTools>(services, boundary, boundary.Resource);
+    }
 
     private static void AddServices<TBoundary, TTools>(IServiceCollection services, TBoundary boundary, string resourceId)
         where TBoundary : class where TTools : class
     {
+        ArgumentNullException.ThrowIfNull(services);
         Uri resource = new(resourceId);
         if (resource.AbsolutePath != "/mcp")
             throw new ArgumentException("The private prototype requires the exact /mcp resource path.");
+        if (services.Any(service => service.ServiceType == typeof(PrivateHttpBinding) ||
+            service.ServiceType == typeof(ConnectorReadBoundary) || service.ServiceType == typeof(RotatingConnectorReadBoundary)))
+            throw BindingFailure();
+        services.AddSingleton(new PrivateHttpBinding(boundary));
         services.AddSingleton(boundary);
         services.AddHttpContextAccessor();
         services.AddMcpServer().WithHttpTransport(options =>
@@ -40,11 +51,50 @@ public static class PrivateMcpHttpAdapter
         }).WithTools<TTools>();
     }
 
-    public static void Map(WebApplication app, ConnectorReadBoundary boundary) =>
+    public static void Map(WebApplication app, ConnectorReadBoundary boundary)
+    {
+        RequireMapping(app, boundary);
         Map(app, boundary.Issuer, boundary.Resource, boundary.AuthenticateAsync);
+    }
 
-    public static void Map(WebApplication app, RotatingConnectorReadBoundary boundary) =>
+    public static void Map(WebApplication app, RotatingConnectorReadBoundary boundary)
+    {
+        RequireMapping(app, boundary);
         Map(app, boundary.Issuer, boundary.Resource, boundary.AuthenticateAsync);
+    }
+
+    private static void RequireMapping<TBoundary>(WebApplication app, TBoundary boundary) where TBoundary : class
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(boundary);
+        PrivateHttpBinding? binding = app.Services.GetService<PrivateHttpBinding>();
+        if (binding is null) throw BindingFailure();
+        // IEnumerable resolution catches duplicates hidden by last-registration
+        // wins, including registrations added after AddServices.
+        var fixedBoundaries = app.Services.GetServices<ConnectorReadBoundary>().Take(2).ToArray();
+        var rotatingBoundaries = app.Services.GetServices<RotatingConnectorReadBoundary>().Take(2).ToArray();
+        object? registered = fixedBoundaries.Length == 1 && rotatingBoundaries.Length == 0 ? fixedBoundaries[0] :
+            rotatingBoundaries.Length == 1 && fixedBoundaries.Length == 0 ? rotatingBoundaries[0] : null;
+        binding.RequireMapping(boundary, registered);
+    }
+
+    private static InvalidOperationException BindingFailure() =>
+        new("Configure and map exactly one private MCP boundary instance per host.");
+
+    private sealed class PrivateHttpBinding
+    {
+        private readonly object _boundary;
+        private int _mapped;
+
+        public PrivateHttpBinding(object boundary) { _boundary = boundary; }
+
+        public void RequireMapping(object boundary, object? registered)
+        {
+            if (!ReferenceEquals(boundary, _boundary) || !ReferenceEquals(registered, _boundary) ||
+                Interlocked.CompareExchange(ref _mapped, 1, 0) != 0)
+                throw BindingFailure();
+        }
+    }
 
     private static void Map<TIdentity>(WebApplication app, string issuer, string resourceId,
         Func<string, CancellationToken, Task<TIdentity>> authenticate) where TIdentity : class

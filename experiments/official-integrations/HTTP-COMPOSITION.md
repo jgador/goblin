@@ -1,0 +1,23 @@
+# Private HTTP composition binding
+
+Reviewed 2026-10-14 UTC. Isolated library-only startup guard; no production route/listener or platform registration.
+
+`PrivateMcpHttpAdapter.AddServices` owns registration of one fixed or rotating connector boundary. It rejects an existing private binding or either boundary family before changing the registry. A private singleton marker retains only that exact trusted configuration object. `Map` requires the marker, exactly one unkeyed boundary in one family, and reference equality between its argument, the registered boundary and marker. Equal issuer/resource/key values do not make a different boundary object acceptable.
+
+Both boundary-family enumerations check up to two returned entries, avoiding reliance on single-service last-registration-wins behavior. [Microsoft's registration documentation](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/service-registration) explains that single resolution selects the last registration, while enumerable resolution includes all instances. Late duplicate, appended override, remove-and-replace or mixed-family registrations therefore fail before adapter middleware or metadata/MCP routes are added. An atomic map claim also rejects repeated mapping before any additional pipeline changes. Existing correct fixed and rotating callers use the same public methods unchanged.
+
+## Startup ownership and limits
+
+- Use one service collection and one adapter registration per isolated host. Do not manually pre-register either boundary, add/replace boundary services later, or share a built registration marker across providers. Separate collections create independent markers, even if test hosts deliberately share a boundary object. Real customer hosts should have separate keys, sources and configuration.
+- Compose on the startup thread, before serving requests and before terminal middleware. The atomic map claim is not permission to mutate the application's routing pipeline concurrently.
+- Mismatch validation happens before the claim, so correcting only the `Map` argument is possible while the original DI provider is intact. Duplicate/mixed DI configuration must be corrected by constructing a fresh builder/provider. If valid mapping later fails inside ASP.NET/SDK composition, discard that host: there is no rollback or mapping retry after the claim.
+- The built-in DI provider can instantiate all enumerable registrations before `Take(2)` inspects them. This is not a bound on hostile factory work or a sandbox for untrusted startup code. DI composition is customer-trusted; arbitrary provider replacement, reflection or malicious host mutation is outside this guard's security model. No key fetch, network call or Work read is required by the guard itself.
+- Guard-generated binding failures have one fixed message with no issuer/resource/key or inner error. Null arguments use normal argument validation; exceptions raised by trusted DI factories or later ASP.NET/SDK composition are not wrapped by this guard. Existing request-level Host/Origin/bearer/scope/Work permissions and rotating lease limits are unchanged; this does not create owner authority, tokens or grants.
+
+[OpenAI authentication guidance](https://developers.openai.com/plugins/build/auth) still requires token and resource-server policy checks. Startup object binding prevents accidental verifier/source composition drift; it does not establish OAuth protocol conformance, ChatGPT identity or eligibility. The [tool OAuth metadata gap](TOOL-OAUTH-METADATA.md), public distribution/tunnel/SIWC and Slack routing restrictions remain gates.
+
+## Verification and exchange
+
+Targeted tests use actual Microsoft DI, ASP.NET endpoint registration and TestServer, with forbidden key/Work sources proving zero accesses during startup. Cases cover duplicate/equivalent/mixed registration, pre-registration, missing registration, mismatched same-family/opposite-family mapping, repeated mapping, late DI mutation and independent markers. Unregistered failed mapping is probed over TestServer: both metadata and MCP remain 404 without an authentication challenge. Existing real SDK/JWT fixed/rotating HTTP regressions remain required. No network listener, actual TLS/provider/owner, durable SQL, ChatGPT or Slack end-to-end result is claimed.
+
+The marker is customer-runtime memory only; no centralized Goblin auth/data service exists. Authoritative customer configuration/credentials/history remain on-premises. If connected later, OpenAI necessarily handles descriptors, OAuth code/token copies and selected Work IDs/status fields, and Slack handles selected messages/events. These platform-held copies are not exclusively on-premises.
