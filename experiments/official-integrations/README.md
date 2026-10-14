@@ -59,3 +59,7 @@ Tests generate ephemeral RSA keys and JWTs in memory and exercise the real crypt
 - Stateless mode does not issue MCP session IDs or expose legacy `/mcp/sse`. There are no cross-request principal caches or owner-session fallback paths.
 
 The focused executable also runs ASP.NET TestServer checks without listening on a network socket. These use the actual middleware and MCP HTTP transport, plus real JWT verification, but still use in-memory grants and a test Work source. They do not prove TLS/reverse-proxy behavior, durable authorization, live OAuth discovery/consent, real Goblin database reads or ChatGPT/tunnel connectivity. The existing formatting blocker is not retried.
+
+## Local-owner approval/revocation policy
+
+`CustomerGrantAdministration` is an unregistered policy requiring a trusted request-scoped local-owner authority and an atomic mutation/audit store. It pins issuer/resource, requires one explicit subject/Work ID and bounded future expiry, rechecks owner authority for every approval/revoke, and permits revoke without connector login. No production authority, store, route, grant writer or MCP mutation tool exists. See [GRANT-ADMINISTRATION.md](GRANT-ADMINISTRATION.md) for composition gates, uncertainty handling and the 24 test-double policy checks. These do not establish real owner authentication or durable audit coverage.
