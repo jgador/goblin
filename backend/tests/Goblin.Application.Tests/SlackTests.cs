@@ -109,8 +109,17 @@ public sealed class SlackTests
     {
         using JsonDocument document = JsonDocument.Parse(Assets.Manifest);
         JsonElement manifest = document.RootElement;
-        Assert.True(manifest.GetProperty("settings").GetProperty("socket_mode_enabled").GetBoolean());
-        string?[] events = [.. manifest.GetProperty("settings").GetProperty("event_subscriptions").GetProperty("bot_events").EnumerateArray().Select(x => x.GetString())];
+        JsonElement settings = manifest.GetProperty("settings");
+        Assert.True(settings.GetProperty("socket_mode_enabled").GetBoolean());
+        Assert.False(settings.GetProperty("token_rotation_enabled").GetBoolean());
+        Assert.False(settings.GetProperty("org_deploy_enabled").GetBoolean());
+        JsonElement oauth = manifest.GetProperty("oauth_config");
+        Assert.False(oauth.TryGetProperty("redirect_urls", out _));
+        JsonElement scopes = oauth.GetProperty("scopes");
+        Assert.Equal(new[] { "bot" }, scopes.EnumerateObject().Select(property => property.Name));
+        string?[] botScopes = [.. scopes.GetProperty("bot").EnumerateArray().Select(scope => scope.GetString())];
+        Assert.Equal(new[] { "app_mentions:read", "chat:write", "im:history", "users:read" }, botScopes.OrderBy(scope => scope, StringComparer.Ordinal));
+        string?[] events = [.. settings.GetProperty("event_subscriptions").GetProperty("bot_events").EnumerateArray().Select(x => x.GetString())];
         Assert.Equal(new[] { "app_mention", "message.im" }, events);
         Assert.DoesNotContain("request_url", Assets.Manifest);
     }
