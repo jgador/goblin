@@ -17,6 +17,17 @@
     <a class="skip-link" href="#conversation-panel">Skip to the conversation</a>
     <main>
       <section class="player" id="player" aria-label="Interactive Goblin communications">
+        <header class="site-header">
+          <span class="site-kicker">Goblin <span aria-hidden="true">/</span> In the loop</span>
+          <a
+            class="project-link"
+            href="https://github.com/jgador/goblin"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="View the Goblin project on GitHub"
+            title="View Goblin on GitHub"
+          ><img src="assets/github.svg" alt="" /><span>GitHub</span></a>
+        </header>
         <div class="film-body">
           <section class="network-panel" aria-labelledby="title">
             <header class="intro">
@@ -54,6 +65,38 @@
                     <path d="m2 1 4 4-4 4" fill="none" stroke="#974cd2" stroke-width="1.5" />
                   </marker>
                 </defs>
+                <g class="mobile-connectors">
+                  <g class="mobile-connector mobile-connector-slack" id="mobile-connector-slack">
+                    <path class="mobile-fiber-sheath" />
+                    <path class="mobile-fiber-track" />
+                    <path class="mobile-fiber-glow" pathLength="100" />
+                    <path class="mobile-fiber-light" pathLength="100" />
+                  </g>
+                  <g class="mobile-connector mobile-connector-teams" id="mobile-connector-teams">
+                    <path class="mobile-fiber-sheath" />
+                    <path class="mobile-fiber-track" />
+                    <path class="mobile-fiber-glow" pathLength="100" />
+                    <path class="mobile-fiber-light" pathLength="100" />
+                  </g>
+                  <g class="mobile-connector mobile-connector-github" id="mobile-connector-github">
+                    <path class="mobile-fiber-sheath" />
+                    <path class="mobile-fiber-track" />
+                    <path class="mobile-fiber-glow" pathLength="100" />
+                    <path class="mobile-fiber-light" pathLength="100" />
+                  </g>
+                  <g class="mobile-connector mobile-connector-email" id="mobile-connector-email">
+                    <path class="mobile-fiber-sheath" />
+                    <path class="mobile-fiber-track" />
+                    <path class="mobile-fiber-glow" pathLength="100" />
+                    <path class="mobile-fiber-light" pathLength="100" />
+                  </g>
+                  <g class="mobile-connector mobile-connector-discord" id="mobile-connector-discord">
+                    <path class="mobile-fiber-sheath" />
+                    <path class="mobile-fiber-track" />
+                    <path class="mobile-fiber-glow" pathLength="100" />
+                    <path class="mobile-fiber-light" pathLength="100" />
+                  </g>
+                </g>
                 <path
                   class="connection"
                   id="line-slack"
@@ -623,23 +666,18 @@
                   </div>
                 </div>
               </div>
-              <form class="composer" id="message-form">
+              <div class="composer" id="message-composer">
                 <label class="sr-only" for="message-input">Message Goblin</label
                 ><textarea
                   id="message-input"
-                  rows="2"
-                  maxlength="600"
+                  rows="1"
+                  readonly
+                  tabindex="-1"
                   placeholder="Message Goblin..."
-                ></textarea
-                ><span class="attachment-name" id="attachment-name" hidden></span>
-                <div class="composer-actions">
+                ></textarea>
+                <div class="composer-actions" aria-hidden="true">
                   <div>
-                    <button
-                      class="icon-button"
-                      type="button"
-                      id="attach-button"
-                      aria-label="Attach a file to your message"
-                    >
+                    <span class="icon-button">
                       <svg
                         class=""
                         viewBox="0 0 24 24"
@@ -651,20 +689,9 @@
                         aria-hidden="true"
                       >
                         <path d="m9 16 8-8a3 3 0 0 0-4-4L4 13a5 5 0 0 0 7 7L21 10M8 13l7-7" />
-                      </svg></button
-                    ><button
-                      class="icon-button at-button"
-                      type="button"
-                      id="mention-button"
-                      aria-label="Mention Goblin"
-                    >
-                      @</button
-                    ><button
-                      class="icon-button"
-                      type="button"
-                      id="emoji-button"
-                      aria-label="Add a smile"
-                    >
+                      </svg></span
+                    ><span class="icon-button at-button">@</span
+                    ><span class="icon-button">
                       <svg
                         class=""
                         viewBox="0 0 24 24"
@@ -678,9 +705,9 @@
                         <circle cx="12" cy="12" r="10" />
                         <path d="M7 14c2 5 8 5 10 0M8 8v1m8-1v1" />
                       </svg>
-                    </button>
+                    </span>
                   </div>
-                  <button class="send-button" type="submit" aria-label="Send message">
+                  <span class="send-button">
                     <svg
                       class=""
                       viewBox="0 0 24 24"
@@ -693,10 +720,9 @@
                     >
                       <path d="m3 3 19 9-19 9 4-9-4-9Zm4 9h15" />
                     </svg>
-                  </button>
+                  </span>
                 </div>
-                <input id="attachment-input" type="file" hidden />
-              </form>
+              </div>
             </div>
             <div
               class="panel-view detail-view"

@@ -12,7 +12,8 @@ without signing in to Azure or managing cloud resources.
 
 Start with the **Deploy to Azure** button in the [root README](../../README.md).
 
-1. Choose **Goblin version** on the installation page, then **Deploy to Azure**.
+1. Choose **Goblin version** on the GitHub Pages installation page, then
+   **Deploy to Azure**.
    The recommended release is selected by default. In Azure, select your
    subscription, a dedicated resource group (e.g. `rg-goblin-prod`), and region.
    The form displays the selected Goblin version.

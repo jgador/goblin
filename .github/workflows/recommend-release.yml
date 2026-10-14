@@ -1,13 +1,13 @@
-name: Recommend Goblin release
+name: Recommend Release
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: Published Goblin version to recommend or redeliver
+        description: Published Goblin version to recommend or redeploy to GitHub Pages
         type: string
         required: true
       recommend:
-        description: Make this version the installation default (uncheck to repair delivery only)
+        description: Make this version the installation default (uncheck to repair GitHub Pages only)
         type: boolean
         default: true
 permissions:
@@ -16,9 +16,9 @@ permissions:
   id-token: write
   attestations: read
 jobs:
-  site:
+  github_pages:
     if: github.ref == 'refs/heads/master'
-    uses: ./.github/workflows/goblin-install-site.yml
+    uses: ./.github/workflows/github-pages.yml
     with:
       version: ${{ inputs.version }}
       recommend: ${{ inputs.recommend }}
