@@ -229,6 +229,7 @@ internal static class SdkHttpClientChecks
             await app.StopAsync(token);
         }
         await RunHttpsCompositionAsync(key, token, Check);
+        await RunHttpsKeyFailuresAsync(key, token, Check);
         Console.WriteLine($"PASS {checks} SDK HTTP client checks; real client/server/TestServer/JWT, synthetic sources only.");
         return checks;
     }
@@ -317,6 +318,67 @@ internal static class SdkHttpClientChecks
         });
     }
 
+    private static async Task RunHttpsKeyFailuresAsync(RSA key, CancellationToken token, Func<string, Func<Task>, Task> check)
+    {
+        const string detail = "SYNTHETIC_KEY_SOURCE_DETAIL";
+        Uri address = new(Issuer + "/certs"), redirect = new("https://untrusted.example/" + detail);
+        foreach (var failure in new[]
+        {
+            (Name: "redirect", Status: HttpStatusCode.Found, Body: "{\"error\":\"" + detail + "\"}", Location: (Uri?)redirect),
+            (Name: "non-200", Status: HttpStatusCode.ServiceUnavailable, Body: "{\"error\":\"" + detail + "\"}", Location: (Uri?)null),
+            (Name: "malformed document", Status: HttpStatusCode.OK, Body: "{ " + detail, Location: (Uri?)null)
+        })
+        {
+            using var keyHandler = new PinnedKeyHandler(address, failure.Body, failure.Status, failure.Location);
+            var configuration = new OAuthDiscoverySummary(Issuer, new Uri(Issuer + "/authorize"), new Uri(Issuer + "/token"), address, false);
+            using var documents = new CustomerHttpsJwksDocumentSource(configuration, keyHandler);
+            var source = new LocalStatus();
+            var boundary = new RotatingConnectorReadBoundary(new CustomerSigningKeyCache(configuration, documents, TimeProvider.System), Resource, source);
+            WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = [] });
+            builder.Logging.ClearProviders();
+            builder.WebHost.UseTestServer();
+            PrivateMcpHttpAdapter.AddServices(builder.Services, boundary);
+            await using WebApplication app = builder.Build();
+            PrivateMcpHttpAdapter.Map(app, boundary);
+            await app.StartAsync(token);
+            using var observed = new ObservedHandler(app.GetTestServer().CreateHandler());
+            using var http = new HttpClient(observed) { Timeout = TimeSpan.FromSeconds(5) };
+            string credential = Issue(key, "linked");
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", credential);
+            await using var transport = new HttpClientTransport(new HttpClientTransportOptions
+            {
+                Endpoint = new Uri(Resource), Name = "Goblin synthetic HTTPS-key failure",
+                TransportMode = HttpTransportMode.StreamableHttp, ConnectionTimeout = TimeSpan.FromSeconds(5),
+                OAuth = null, MaxReconnectionAttempts = 0, KnownSessionId = null, OwnsSession = false
+            }, http, ownsHttpClient: false);
+            await check("cold SDK key " + failure.Name + " produces one safe HTTP 401 without Work access or retry", async () =>
+            {
+                try
+                {
+                    await using McpClient unexpected = await McpClient.CreateAsync(transport, cancellationToken: token);
+                    throw new Exception("Expected key-source authentication failure.");
+                }
+                catch (HttpRequestException error) when (error.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    Require(!error.ToString().Contains(credential, StringComparison.Ordinal) &&
+                        !error.ToString().Contains(detail, StringComparison.Ordinal) && !error.ToString().Contains(redirect.AbsoluteUri, StringComparison.Ordinal));
+                }
+                Require(observed.Requests == 1 && observed.UnauthorizedResponses == 1 && observed.SafeUnauthorizedBody && observed.UnauthorizedNoStore &&
+                    !observed.SawSession && !observed.NonPostUnauthorized &&
+                    observed.LastChallenge == $"Bearer resource_metadata=\"https://goblin.customer.example{PrivateMcpHttpAdapter.MetadataPath}\", scope=\"{ConnectorReadBoundary.ReadScope}\"" &&
+                    keyHandler.Calls == 1 && keyHandler.SafeRequests && keyHandler.ContentDisposed && source.Calls == 0 && source.Reads == 0);
+            });
+            await transport.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            await app.StopAsync(token);
+            documents.Dispose();
+            await check("cold SDK key " + failure.Name + " disposes failed response and owned handler", () =>
+            {
+                Require(keyHandler.WasDisposed && keyHandler.ContentDisposed && keyHandler.Calls == 1 && source.Calls == 0);
+                return Task.CompletedTask;
+            });
+        }
+    }
+
     private static string Issue(RSA key, string subject, bool expired = false) => new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
     {
         Issuer = Issuer, Audience = Resource, TokenType = "at+jwt",
@@ -368,16 +430,22 @@ internal static class SdkHttpClientChecks
     {
         private readonly Uri _address;
         private readonly string _document;
+        private readonly HttpStatusCode _status;
+        private readonly Uri? _location;
         private KeyContent? _content;
         public int Calls { get; private set; }
         public bool SafeRequests { get; private set; } = true;
         public bool WasDisposed { get; private set; }
         public bool ContentDisposed => _content?.WasDisposed == true;
 
-        public PinnedKeyHandler(Uri address, string document)
+        public PinnedKeyHandler(Uri address, string document) : this(address, document, HttpStatusCode.OK, null) { }
+
+        public PinnedKeyHandler(Uri address, string document, HttpStatusCode status, Uri? location)
         {
             _address = address;
             _document = document;
+            _status = status;
+            _location = location;
         }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
@@ -389,7 +457,9 @@ internal static class SdkHttpClientChecks
                 request.Headers.Accept.Select(value => value.MediaType).SequenceEqual(new[] { "application/jwk-set+json", "application/json" });
             Require(SafeRequests && !WasDisposed);
             _content = new KeyContent(_document);
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { RequestMessage = request, Content = _content });
+            var response = new HttpResponseMessage(_status) { RequestMessage = request, Content = _content };
+            response.Headers.Location = _location;
+            return Task.FromResult(response);
         }
 
         protected override void Dispose(bool disposing)
