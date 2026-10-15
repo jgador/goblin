@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
@@ -54,16 +55,30 @@ public sealed class SlackApiTests
         Assert.Contains("rate limiting", (await Assert.ThrowsAsync<SlackFailure>(() => limited.PostAsync(Credentials, "D123", "123.4", "hello", default))).Message);
     }
 
-    [Fact]
-    public async Task AuthenticationStillRequiresAllRuntimeScopes()
+    [Theory]
+    [InlineData("app_mentions:read")]
+    [InlineData("im:history")]
+    [InlineData("chat:write")]
+    [InlineData("users:read")]
+    public async Task AuthenticationStillRequiresAllRuntimeScopes(string missingScope)
     {
-        using var api = new SlackApi(new Handler(_ =>
+        string[] requiredScopes = ["app_mentions:read", "im:history", "chat:write", "users:read"];
+        string grantedScopes = string.Join(",", requiredScopes.Where(scope => scope != missingScope));
+        int requests = 0;
+        using var api = new SlackApi(new Handler(request =>
         {
+            requests++;
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("https://slack.com/api/auth.test", request.RequestUri!.AbsoluteUri);
             HttpResponseMessage response = Response("{\"ok\":true,\"team_id\":\"T123\",\"user_id\":\"U123\",\"bot_id\":\"B123\"}");
-            response.Headers.Add("x-oauth-scopes", "chat:write");
+            response.Headers.Add("x-oauth-scopes", grantedScopes);
             return Task.FromResult(response);
         }));
-        Assert.Contains("required Slack scopes", (await Assert.ThrowsAsync<SlackFailure>(() => api.VerifyAsync(Credentials.AppToken, Credentials.BotToken, default))).Message);
+        SlackFailure error = await Assert.ThrowsAsync<SlackFailure>(() => api.VerifyAsync(Credentials.AppToken, Credentials.BotToken, default));
+        Assert.Contains("required Slack scopes", error.Message);
+        Assert.DoesNotContain(Credentials.AppToken, error.Message);
+        Assert.DoesNotContain(Credentials.BotToken, error.Message);
+        Assert.Equal(1, requests);
     }
 
     [Theory]
