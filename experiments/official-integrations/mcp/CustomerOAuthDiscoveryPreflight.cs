@@ -31,6 +31,7 @@ public sealed class OAuthDiscoverySummary
 // A pass proves only this narrow advertised-metadata policy, not a live flow.
 public sealed class CustomerOAuthDiscoveryPreflight
 {
+    internal const int MaximumMetadataBytes = 16384;
     private readonly string _issuer;
     private readonly Uri _origin;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -50,7 +51,7 @@ public sealed class CustomerOAuthDiscoveryPreflight
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(metadataJson) || StrictUtf8.GetByteCount(metadataJson) > 16384)
+            if (string.IsNullOrWhiteSpace(metadataJson) || StrictUtf8.GetByteCount(metadataJson) > MaximumMetadataBytes)
                 throw Denied();
             Metadata metadata = JsonSerializer.Deserialize<Metadata>(metadataJson, JsonOptions) ?? throw Denied();
             if (metadata.Issuer != _issuer || !Includes(metadata.CodeChallengeMethods, "S256") ||

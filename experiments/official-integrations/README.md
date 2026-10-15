@@ -87,9 +87,29 @@ The focused executable includes 19 offline fixture-safety contracts, eight embed
 
 ## Customer OAuth discovery review
 
+The prototype also has a credential-free offline command. Supply an operator-reviewed exact expected issuer and an existing local UTF-8 discovery document, not a token or live URL to fetch:
+
+```bash
+timeout 10 dotnet .artifacts/official-integrations/build/bin/Goblin.Mcp.Prototype/debug/Goblin.Mcp.Prototype.dll \
+  --review-oauth-metadata https://identity.customer.example/realms/goblin /customer/private/oidc-metadata.json
+```
+
+The path above is an example to replace with your own trusted local file. No Goblin session/environment configuration is required for this mode. It exits before credential loading, HTTP client/host construction or MCP startup; the no-argument stdio mode is unchanged. Unknown/nonempty argument lists fail closed instead of starting MCP. Exit 0 means only that the document matches the existing narrow offline policy; output is a fixed advisory summary plus the unverified issuer-response advertisement Boolean. Exit 1 returns a fixed error, without paths, issuer, endpoints, raw metadata or parser details. No key/token loading, client registration, discovery fetch, listener or Work permission is created.
+
+Input must be nonempty, no more than 16 KiB, strict UTF-8, and pass the library's duplicate/depth/type/capability/exact-issuer/same-origin policy. Leaf symlinks, directories and oversized inputs are refused; streaming reads are also capped and use a five-second cancellation deadline. This is a trusted operator-file tool, not a hostile-filesystem sandbox or remote upload endpoint: do not use network mounts, special files or concurrently attacker-writable paths. Metadata advertisements are not proof of trusted transport, resource binding, client enforcement, callback behavior, token claims, live ChatGPT eligibility or local authorization.
+
+Run just the command boundary and existing preflight checks after building the focused test project:
+
+```bash
+timeout 60 dotnet .artifacts/official-integrations/build/bin/Goblin.Mcp.Prototype.Tests/debug/Goblin.Mcp.Prototype.Tests.dll \
+  "$(command -v dotnet)" \
+  "$PWD/.artifacts/official-integrations/build/bin/Goblin.Mcp.Prototype/debug/Goblin.Mcp.Prototype.dll" \
+  --oauth-metadata-only
+```
+
 [PLATFORM-REVIEW.md](PLATFORM-REVIEW.md) records the 2026-10-14 SDK 2.2.0 source/distribution review and explicit decision to retain 1.4.1. Whole-server discovery is distinct from unproven tool-level linking UI. Public templates, desktop distribution and ChatGPT identity remain restricted; customer-specific private connections are the closest documented route. No production listener or platform authentication was enabled.
 
-`CustomerOAuthDiscoveryPreflight` is an offline, unregistered metadata review for a predefined public-client policy. It fetches no URLs, loads no keys and cannot authorize Work. Twenty-six synthetic checks cover pinned issuer, bounded/duplicate-safe typed JSON, S256/code/none/read-scope advertisements and restricted endpoint origins. See [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) for the concrete provider candidate, experimental resource-indicator/CIMD gates, token-header configuration, rotation gap and private OAuth reachability. A metadata pass is not live provider or OAuth success.
+`CustomerOAuthDiscoveryPreflight` is an offline metadata review for a predefined public-client policy, outside production authentication. It fetches no URLs, loads no keys and cannot authorize Work. Twenty-six synthetic checks cover pinned issuer, bounded/duplicate-safe typed JSON, S256/code/none/read-scope advertisements and restricted endpoint origins. See [KEYCLOAK-COMPATIBILITY.md](KEYCLOAK-COMPATIBILITY.md) for the concrete provider candidate, experimental resource-indicator/CIMD gates, token-header configuration, rotation gap and private OAuth reachability. A metadata pass is not live provider or OAuth success.
 
 Seventeen additional synthetic checks cover strict callback-issuer capability parsing. The summary's `AdvertisesAuthorizationResponseIssuerIdentification` reports only caller-supplied metadata, defaults conservatively to false and cannot establish actual callback behavior, select a production redirect URI or authorize Work. Null/non-Boolean/duplicate advertisements fail sanitized; existing provider/security policy remains enforced.
 

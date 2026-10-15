@@ -87,7 +87,7 @@ internal static class OAuthDiscoveryChecks
         return checks;
     }
 
-    private static string Sample(string issuer = Issuer, string? token = null, string? keys = null,
+    internal static string Sample(string issuer = Issuer, string? token = null, string? keys = null,
         string[]? challenge = null, string[]? grants = null, string[]? responses = null, string[]? authMethods = null, string[]? scopes = null) =>
         JsonSerializer.Serialize(new Dictionary<string, object>
         {

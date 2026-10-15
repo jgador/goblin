@@ -5,6 +5,14 @@ using Goblin.Mcp.Prototype;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 
+if (args.Length == 3 && args[2] == "--oauth-metadata-only")
+{
+    int metadataChecks = OAuthDiscoveryChecks.Run();
+    metadataChecks += await OfflineOAuthCommandChecks.RunAsync(args[0], args[1]);
+    Console.WriteLine($"PASS {metadataChecks} focused offline metadata checks; no OAuth or Work authorization performed.");
+    return;
+}
+
 bool postgres = args.Length == 3 && args[2] == "--postgres";
 if (args.Length is not (0 or 2) && !postgres) throw new ArgumentException("Supply dotnet, prototype DLL and optional --postgres.");
 int passed = 0;
@@ -103,6 +111,7 @@ passed += await GrantAdministrationChecks.RunAsync();
 passed += await PostgresFixtureChecks.RunAsync();
 passed += await PostgresWorkGrantChecks.RunContractsAsync();
 passed += OAuthDiscoveryChecks.Run();
+passed += await OfflineOAuthCommandChecks.RunAsync(args.Length >= 2 ? args[0] : null, args.Length >= 2 ? args[1] : null);
 passed += await SigningKeyRotationChecks.RunAsync();
 passed += await HttpsJwksSourceChecks.RunAsync();
 passed += await HttpsKeyCancellationChecks.RunAsync();

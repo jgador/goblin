@@ -3,6 +3,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+// Offline review must exit before reading session configuration or creating a host.
+if (args.Length != 0)
+    return await OfflineOAuthMetadataCommand.RunAsync(args, Console.Out, Console.Error, CancellationToken.None);
+
 PrototypeOptions options;
 try { options = PrototypeOptions.Read(Environment.GetEnvironmentVariable); }
 catch (ArgumentException)
