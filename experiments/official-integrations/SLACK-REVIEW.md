@@ -2,6 +2,8 @@
 
 Reviewed 2026-10-14 UTC (2026-10-15 in the Philippines). Documentation and existing-code review only. No app creation, OAuth exchange, CLI login/deployment, listener, token rotation or live Slack connection.
 
+Callback prerequisite reviewed again 2026-10-15 UTC in OI-029; see the bounded polling feasibility section below. This does not replace the earlier event-routing assessment or establish live OAuth success.
+
 ## Feasibility verdict
 
 The reviewed Events API routes do not provide the required customer-exclusive delivery for one shared official app using Goblin's existing mentions/DM behavior. This is a scoped conclusion about these documented routes, not every possible future Slack feature. Retain one customer-owned Slack app per independently operated Goblin installation. One maintained Goblin implementation/manifest is not the same thing as one Marketplace app.
@@ -16,7 +18,26 @@ The reviewed Events API routes do not provide the required customer-exclusive de
 
 Slack's [March 30, 2026 announcement](https://docs.slack.dev/changelog/2026/03/30/pkce/) confirms PKCE general availability. The [access-method reference](https://docs.slack.dev/reference/methods/oauth.v2.access/) documents `code_verifier`; optional parameter listings alone do not prove an app's authentication policy. No secretless exchange was exercised in this review.
 
-An alternative customer-local Web API polling design is not evaluated here. Before considering one, establish documented discovery of the required messages, minimal permissions, rate limits, pagination, durable deduplication and authorization behavior. It would change the current event-driven integration; do not assume feasibility or add a silent polling fallback from this review.
+Customer-local Web API polling remains unimplemented. OI-029 evaluates its credential/callback prerequisite below, not message discovery, minimal permissions, rate limits, pagination, durable deduplication or authorization behavior. It would change the current event-driven integration; do not assume feasibility or add a silent polling fallback from this review.
+
+## OI-029 polling prerequisite: conditional enrollment, not arbitrary domains
+
+Official sources reopened 2026-10-15 UTC: [PKCE](https://docs.slack.dev/authentication/using-pkce/), [OAuth installation](https://docs.slack.dev/authentication/installing-with-oauth/), [manifest reference](https://docs.slack.dev/reference/app-manifest/) and [manifest update](https://docs.slack.dev/reference/methods/apps.manifest.update/). No app setting, registration, consent or token exchange was performed.
+
+| Candidate | Documented boundary | Assessment for independent installations |
+| --- | --- | --- |
+| Registered customer HTTPS callback with PKCE | PKCE's initial code/verifier exchange omits the app secret. The desktop bot-scope ban is specified for custom schemes and PKCE localhost redirects, not all HTTPS callbacks. | A pre-enrolled HTTPS callback is a conditional candidate for local bot-token exchange. Do not label all secretless bot authorization unsupported, or treat this as exercised interoperability. |
+| Arbitrary customer domain in redirect_uri | OAuth requires a match or a path beneath a configured redirect; authorize and exchange values must agree. The manifest caps redirect_urls at 1,000 entries. | No documented unregistered-domain onboarding was established. A path beneath an approved origin is not another customer's origin. The cap is on entries, not a claimed maximum number of customers. |
+| Customer self-registration through manifest update | This management API requires an app configuration access token with app_configurations:write. | A runtime bot token/public client ID is not configuration authority. Never give independent customers an official app's management credential to edit its redirects. |
+| Localhost or custom-scheme workaround | PKCE classifies these as desktop redirects and disallows bot scopes. | Not a substitute for Goblin's current bot mentions/DM behavior. Do not quietly switch to user-token impersonation. |
+
+**Inference and stop decision:** an app owner could pre-register a bounded set of customer-controlled HTTPS endpoints directly in Slack, leaving initial code exchange at each installation and avoiding a Goblin callback service. That is a narrower manually enrolled deployment, not proof of scalable public self-service for arbitrary on-premises origins. A Goblin-hosted callback redirector, tenant subdomain proxy or distributed app-management credential would change the stated trust boundary and is not implemented. The callback URLs themselves would be shared app configuration held by Slack, distinct from each installation's local runtime configuration. No claim that every configuration copy is exclusively on-premises.
+
+Only the user's browser returning through the registered HTTPS callback is described here; browser reachability, endpoint ownership, local owner-bound state, one-use/expiry/replay protection, exact URI binding, trusted workspace/app identity and PKCE web-token renewal/revocation still need validation. PKCE does not grant Goblin Work permissions. Slack necessarily sees requested scopes, redirect metadata, codes/verifier exchange and issued platform tokens. Keep transient secrets local and out of logs/history; no customer credential or message goes through a Goblin service.
+
+Code inspection confirms this cannot be dropped into the present adapter: SlackEndpoints has setup/connect/local-link routes but no OAuth callback; SlackSetup provisions a customer app; SlackApi.VerifyAsync requires both bot and app-level tokens and opens Socket Mode. SlackCredentials has no refresh-token/expiry state. An HTTPS PKCE bot token alone is therefore not a compatible connection, and neither the manifest nor these owners is changed.
+
+Stop before polling discovery/implementation because general callback enrollment is unproven, and the pre-enrolled candidate still needs a separate token-lifecycle and polling/privacy proof. Do not add Socket Mode credentials, duplicate manifests or silent polling fallback. Existing dedicated customer apps remain the supported baseline. This is not a universal impossibility claim about one-app polling or a Marketplace approval result.
 
 ## Existing code to preserve
 
@@ -51,4 +72,4 @@ OI-028, 2026-10-15 UTC: expanded the existing `AuthenticationStillRequiresAllRun
 
 The cached no-restore build failed once because assets referenced missing NuGet files (43 warnings, five CS0006 metadata errors, ~22 seconds). The one corrective bounded restoring .NET 10 build passed with zero warnings/errors (~56 seconds including ~38-second restore). The exact method filter executed **four cases, all passed**, in ~0.72 seconds. Read-only fixture-shape checks passed separately; earlier manifest/MCP results were not rerun. No production code, manifest, dependencies, setup, database or live Slack authentication changed or exercised.
 
-Next: evaluate the customer-local polling alternative's credential/callback prerequisite against current official docs. First prove one public app can authorize independent customer HTTPS callbacks with bot scopes and PKCE without a shared secret/app-level token or Goblin-operated redirect/router. Only if supported, investigate message discovery, minimal scopes, rate limits, pagination, durable deduplication and local authorization. This is an unproven alternative, not an enabled fallback or claim of one-app independent delivery.
+OI-029 checked that prerequisite as described above. Documentation/link/whitespace review only; prior four C# scope cases, manifest checks and 392 MCP checks were not rerun. No runtime success is claimed. Next returns to the closest customer-owned ChatGPT path: expose the existing strict offline OAuth metadata review through a bounded, credential-free operator entry point, reporting readiness gaps without performing discovery, registration, authentication or granting Work access. Live platform and independent Slack delivery gates remain unchanged.
