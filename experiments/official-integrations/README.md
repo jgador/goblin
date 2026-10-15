@@ -106,7 +106,17 @@ The paths above are examples to replace with your own trusted local files. No Go
 
 The protected-resource check requires a canonical HTTPS expected resource at exactly `/mcp`, an independently pinned HTTPS issuer, exactly one matching `authorization_servers` entry and exactly the sole `goblin.work.status.read` scope. Comparisons preserve exact strings, including rejection of equivalent-looking alternate ports/casing/paths. Trust is never taken from the document. This intentionally matches the existing private adapter, not every RFC 9728 document: the general protocol permits multiple servers and optional scope advertisements, but this diagnostic profile does not. Unknown optional metadata is ignored, not trusted or fetched. It does not cross-check a second discovery file or prove that a real server echoes the resource or enforces audiences/scopes.
 
-Input must be nonempty, no more than 16 KiB, strict UTF-8, and pass the library's duplicate/depth/type/capability/exact-issuer/same-origin policy. Leaf symlinks, directories and oversized inputs are refused; streaming reads are also capped and use a five-second cancellation deadline. This is a trusted operator-file tool, not a hostile-filesystem sandbox or remote upload endpoint: do not use network mounts, special files or concurrently attacker-writable paths. Metadata advertisements are not proof of trusted transport, resource binding, client enforcement, callback behavior, token claims, live ChatGPT eligibility or local authorization.
+To review both metadata roles against the same independently pinned resource and issuer, use the combined mode. The protected-resource file comes first, discovery second:
+
+```bash
+timeout 10 dotnet .artifacts/official-integrations/build/bin/Goblin.Mcp.Prototype/debug/Goblin.Mcp.Prototype.dll \
+  --review-metadata-pair https://goblin.customer.example/mcp https://identity.customer.example/realms/goblin \
+  /customer/private/protected-resource.json /customer/private/oidc-metadata.json
+```
+
+Both existing policies must pass before any success or issuer-advertisement output. A valid first file plus missing, malformed or mismatched discovery produces only the fixed rejection, with no partial success. Each file keeps the 16 KiB/UTF-8/path rules; both reads/reviews share one five-second cancellation deadline rather than resetting it per file. The combined advisory result does not establish trusted discovery transport, a simultaneous filesystem snapshot, live resource echo, callbacks, token claims, registration, identity or Work permission. Files and expected settings remain operator-supplied and local, with no network lookup. The single-file modes remain available.
+
+Each input must be nonempty, no more than 16 KiB, strict UTF-8, and pass its policy's duplicate/depth/type/pinned-setting rules. Discovery also retains its capability/same-origin endpoint requirements. Leaf symlinks, directories and oversized inputs are refused; streaming reads are capped under the command's five-second cancellation deadline. This is a trusted operator-file tool, not a hostile-filesystem sandbox or remote upload endpoint: do not use network mounts, special files or concurrently attacker-writable paths. Metadata advertisements are not proof of trusted transport, resource binding, client enforcement, callback behavior, token claims, live ChatGPT eligibility or local authorization.
 
 Run just the command boundary and existing preflight checks after building the focused test project:
 
