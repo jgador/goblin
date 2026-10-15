@@ -8,6 +8,7 @@ using ModelContextProtocol.Client;
 if (args.Length == 3 && args[2] == "--oauth-metadata-only")
 {
     int metadataChecks = OAuthDiscoveryChecks.Run();
+    metadataChecks += await ProtectedResourceMetadataChecks.RunAsync();
     metadataChecks += await OfflineOAuthCommandChecks.RunAsync(args[0], args[1]);
     Console.WriteLine($"PASS {metadataChecks} focused offline metadata checks; no OAuth or Work authorization performed.");
     return;
@@ -111,6 +112,7 @@ passed += await GrantAdministrationChecks.RunAsync();
 passed += await PostgresFixtureChecks.RunAsync();
 passed += await PostgresWorkGrantChecks.RunContractsAsync();
 passed += OAuthDiscoveryChecks.Run();
+passed += await ProtectedResourceMetadataChecks.RunAsync();
 passed += await OfflineOAuthCommandChecks.RunAsync(args.Length >= 2 ? args[0] : null, args.Length >= 2 ? args[1] : null);
 passed += await SigningKeyRotationChecks.RunAsync();
 passed += await HttpsJwksSourceChecks.RunAsync();

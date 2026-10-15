@@ -76,7 +76,7 @@ public sealed class CustomerOAuthDiscoveryPreflight
         return address;
     }
 
-    private static Uri Address(string? value)
+    internal static Uri Address(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Any(char.IsControl) || value.Contains('\\') ||
             StrictUtf8.GetByteCount(value) > 2048 || !Uri.TryCreate(value, UriKind.Absolute, out Uri? address) ||

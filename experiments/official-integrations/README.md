@@ -87,14 +87,24 @@ The focused executable includes 19 offline fixture-safety contracts, eight embed
 
 ## Customer OAuth discovery review
 
-The prototype also has a credential-free offline command. Supply an operator-reviewed exact expected issuer and an existing local UTF-8 discovery document, not a token or live URL to fetch:
+The prototype also has credential-free offline commands. Supply operator-reviewed expected settings and an existing local UTF-8 metadata document, not a token or live URL to fetch. For authorization-server discovery:
 
 ```bash
 timeout 10 dotnet .artifacts/official-integrations/build/bin/Goblin.Mcp.Prototype/debug/Goblin.Mcp.Prototype.dll \
   --review-oauth-metadata https://identity.customer.example/realms/goblin /customer/private/oidc-metadata.json
 ```
 
-The path above is an example to replace with your own trusted local file. No Goblin session/environment configuration is required for this mode. It exits before credential loading, HTTP client/host construction or MCP startup; the no-argument stdio mode is unchanged. Unknown/nonempty argument lists fail closed instead of starting MCP. Exit 0 means only that the document matches the existing narrow offline policy; output is a fixed advisory summary plus the unverified issuer-response advertisement Boolean. Exit 1 returns a fixed error, without paths, issuer, endpoints, raw metadata or parser details. No key/token loading, client registration, discovery fetch, listener or Work permission is created.
+For the current private HTTP adapter's protected-resource profile, pin the resource and issuer separately:
+
+```bash
+timeout 10 dotnet .artifacts/official-integrations/build/bin/Goblin.Mcp.Prototype/debug/Goblin.Mcp.Prototype.dll \
+  --review-resource-metadata https://goblin.customer.example/mcp \
+  https://identity.customer.example/realms/goblin /customer/private/protected-resource.json
+```
+
+The paths above are examples to replace with your own trusted local files. No Goblin session/environment configuration is required for these modes. They exit before credential loading, HTTP client/host construction or MCP startup; the no-argument stdio mode is unchanged. Unknown/nonempty argument lists fail closed instead of starting MCP. Exit 0 means only that the document matches its narrow offline policy; discovery output adds the unverified issuer-response advertisement Boolean, while protected-resource output is only a fixed advisory status. Exit 1 returns a fixed error, without paths, issuer, endpoints, raw metadata or parser details. No key/token loading, client registration, discovery fetch, listener or Work permission is created.
+
+The protected-resource check requires a canonical HTTPS expected resource at exactly `/mcp`, an independently pinned HTTPS issuer, exactly one matching `authorization_servers` entry and exactly the sole `goblin.work.status.read` scope. Comparisons preserve exact strings, including rejection of equivalent-looking alternate ports/casing/paths. Trust is never taken from the document. This intentionally matches the existing private adapter, not every RFC 9728 document: the general protocol permits multiple servers and optional scope advertisements, but this diagnostic profile does not. Unknown optional metadata is ignored, not trusted or fetched. It does not cross-check a second discovery file or prove that a real server echoes the resource or enforces audiences/scopes.
 
 Input must be nonempty, no more than 16 KiB, strict UTF-8, and pass the library's duplicate/depth/type/capability/exact-issuer/same-origin policy. Leaf symlinks, directories and oversized inputs are refused; streaming reads are also capped and use a five-second cancellation deadline. This is a trusted operator-file tool, not a hostile-filesystem sandbox or remote upload endpoint: do not use network mounts, special files or concurrently attacker-writable paths. Metadata advertisements are not proof of trusted transport, resource binding, client enforcement, callback behavior, token claims, live ChatGPT eligibility or local authorization.
 

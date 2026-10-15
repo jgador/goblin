@@ -72,6 +72,12 @@ internal static class OfflineOAuthCommandChecks
             {
                 await ProcessCheck(command, true);
                 await ProcessCheck(["--unknown", Issuer, path], false);
+                string resourcePath = Path.Combine(directory, "resource.json");
+                string[] resourceCommand = ["--review-resource-metadata", ProtectedResourceMetadataChecks.Resource, Issuer, resourcePath];
+                await File.WriteAllTextAsync(resourcePath, ProtectedResourceMetadataChecks.Sample());
+                await ProcessCheck(resourceCommand, true, resource: true);
+                await File.WriteAllTextAsync(resourcePath, ProtectedResourceMetadataChecks.Sample(servers: ["https://PRIVATE.example/"]));
+                await ProcessCheck(resourceCommand, false, resource: true);
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
                 string session = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
                 var transport = new StdioClientTransport(new StdioClientTransportOptions
@@ -98,7 +104,7 @@ internal static class OfflineOAuthCommandChecks
             }
             else Console.WriteLine("SKIP offline command child processes: supply dotnet and prototype DLL.");
 
-            async Task ProcessCheck(string[] arguments, bool accepted)
+            async Task ProcessCheck(string[] arguments, bool accepted, bool resource = false)
             {
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 var start = new ProcessStartInfo(dotnet!)
@@ -120,10 +126,10 @@ internal static class OfflineOAuthCommandChecks
                     Task<string> error = process.StandardError.ReadToEndAsync(deadline.Token);
                     await process.WaitForExitAsync(deadline.Token);
                     Require(process.ExitCode == (accepted ? 0 : 1));
-                    Require(await output == (accepted ? Expected(false) : ""));
+                    Require(await output == (accepted ? resource ? ProtectedResourceMetadataChecks.Expected() : Expected(false) : ""));
                     Require(await error == (accepted ? "" : OfflineOAuthMetadataCommand.Failure + Environment.NewLine));
                     checks++;
-                    Console.WriteLine(accepted
+                    Console.WriteLine(resource ? "PASS actual protected-resource command has fixed output and no inherited environment" : accepted
                         ? "PASS actual offline command succeeds with no inherited environment/session"
                         : "PASS actual unknown command fails before session configuration or MCP startup");
                 }
