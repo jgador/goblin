@@ -2,6 +2,8 @@
 
 Start with [STATE.md](STATE.md) for the next bounded task and [FEASIBILITY.md](FEASIBILITY.md) for supported routes and restrictions.
 
+[ACTIVATION-GAPS.md](ACTIVATION-GAPS.md) is the 2026-10-15 activation handoff: actual entry points, missing owner/persistence/provider wiring, platform eligibility and exact resume prerequisites. Development automation is paused at these gates; the integration is not complete.
+
 [SLACK-REVIEW.md](SLACK-REVIEW.md) records the dated existing-code/OAuth-PKCE/Socket Mode/Marketplace review. Shared-app customer-exclusive delivery remains unsupported by the reviewed event routes; retain dedicated customer-owned apps and the single existing product manifest. Eight artifact-consistency checks are not live integration success.
 
 ## Build and focused checks
