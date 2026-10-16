@@ -1,0 +1,61 @@
+{
+  "TokenizerCases": 2007,
+  "TokenizerMismatches": 0,
+  "Fp32NormMin": 0.9999999450447513,
+  "Fp32NormMax": 1.000000063148666,
+  "Int8NormMin": 0.9999999421744094,
+  "Int8NormMax": 1.0000000586313742,
+  "Fp32Int8CosineMean": 0.9955092754971075,
+  "Fp32Int8CosineMin": 0.9937010717822214,
+  "Fp32SingletonBatchCosine": 0.9999999205790076,
+  "Int8SingletonBatchCosine": 0.9953636209500654,
+  "IndependentPythonCpuReference": [
+    {
+      "Model": "bge-fp32",
+      "Cases": 64,
+      "ReferenceCosineMin": 0.9999999439393832,
+      "ReferenceMaxAbsoluteError": 7.360572812364907e-08,
+      "NormMin": 0.9999999450447513,
+      "NormMax": 1.000000063148666,
+      "SingletonBatchCosine": 0.9999999205790076,
+      "QuantizedOperators": {
+        "DynamicQuantizeLinear": 0,
+        "MatMulInteger": 0
+      }
+    },
+    {
+      "Model": "bge-int8",
+      "Cases": 64,
+      "ReferenceCosineMin": 0.9999999567510736,
+      "ReferenceMaxAbsoluteError": 7.260894774319127e-08,
+      "NormMin": 0.9999999421744094,
+      "NormMax": 1.0000000586313742,
+      "SingletonBatchCosine": 0.9953636209500654,
+      "QuantizedOperators": {
+        "DynamicQuantizeLinear": 48,
+        "MatMulInteger": 72
+      }
+    },
+    {
+      "Model": "nomic-fp32",
+      "Cases": 8,
+      "ReferenceCosineMin": 0.9999999999999885,
+      "ReferenceMaxAbsoluteError": 5.155899973630085e-08,
+      "NormMin": 0.999999975906429,
+      "NormMax": 1.0000000024478966,
+      "SingletonBatchCosine": 0.9999999609689404,
+      "QuantizedOperators": {
+        "DynamicQuantizeLinear": 0,
+        "MatMulInteger": 0
+      }
+    }
+  ],
+  "DatabaseChecks": {
+    "ReadyRecords": 2000,
+    "VectorBytesEach": 1536,
+    "Integrity": "ok",
+    "NoiseFtsSearchable": true,
+    "FtsUpdateDeleteAndVectorInvalidation": true
+  },
+  "SQLiteVersion": "3.53.3"
+}
