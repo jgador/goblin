@@ -9,6 +9,7 @@ replace those terms or grant rights to hosted services.
 
 | Material | Source and license |
 | --- | --- |
+| Imported agent skills identified by `source: "emilkowalski/skills"` in `skills-lock.json`, under `.agents/skills/`, including their recipes and reference files | [Emil Kowalski's skills, revision 2d228630ba1446365f614a108cb8252f1feda202](https://github.com/emilkowalski/skills/tree/2d228630ba1446365f614a108cb8252f1feda202), MIT. Copyright (c) 2026 Emil Kowalski. The full upstream license accompanies the skills in [.agents/skills/licenses/emilkowalski-skills/LICENSE](.agents/skills/licenses/emilkowalski-skills/LICENSE). These imported instructions and examples retain their MIT license; repository-authored skills remain under Goblin's project license. |
 | Upstream schemas in `backend/schemas/codex/` and models generated from them in `backend/src/Goblin.Protocol/Generated/` | [OpenAI Codex 0.161.0](https://github.com/openai/codex/tree/rust-v0.161.0), Apache-2.0. The upstream notice is preserved in `NOTICE`. Goblin selects schema fields and generates C# models; see the protocol project's README. |
 | `backend/schemas/kubernetes/kubernetes-v1.37.0-swagger.json.gz` and models generated from it | [Kubernetes v1.37.0](https://github.com/kubernetes/kubernetes/tree/v1.37.0), Apache-2.0. Goblin compresses the upstream schema and generates selected C# models. |
 | `backend/schemas/kubernetes/sandbox-v1beta1.json` and models generated from it | [Kubernetes SIGs Agent Sandbox v1.0.4](https://github.com/kubernetes-sigs/agent-sandbox/tree/v1.0.4), Apache-2.0. Goblin extracts the schema from the release CRD and generates selected C# models. |
@@ -31,6 +32,15 @@ Apache-2.0 does not grant permission to use Goblin's or upstream projects'
 trademarks, except for the descriptive uses specified in section 6 of the license.
 
 ## Dependencies and distributions
+
+When copying or redistributing the imported agent skills or substantial portions
+of their instructions and examples, include their full MIT copyright and
+permission notice. The license permits personal and commercial use, modification,
+and redistribution; it does not require a visible website credit. Using the
+skills as development guidance does not by itself relicense Goblin's original
+code. Copied or adapted upstream examples retain their applicable MIT notice.
+The imported skills are development material and are not shipped in the
+application or website images.
 
 The npm and Cargo lockfiles and .NET package references identify Goblin's software
 dependencies. Their own licenses apply. MIT, BSD, PostgreSQL, Zlib, Unicode, and
@@ -65,3 +75,32 @@ These copies describe Goblin's license and do not replace dependencies' terms.
 OpenAI, Slack, GitHub, Azure, container registries, and other hosted services have
 separate account, API, and distribution terms. Apache-2.0 grants no service access
 or commercial-distribution authorization from those providers.
+
+## Emil Kowalski skills: MIT license
+
+The notice below also covers any copied or adapted examples from these skills
+that accompany a Goblin distribution.
+
+```text
+MIT License
+
+Copyright (c) 2026 Emil Kowalski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

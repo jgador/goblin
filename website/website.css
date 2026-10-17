@@ -17,6 +17,10 @@
   --muted: #7e899d;
   --line: #e2ece2;
   --surface: #fff;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --motion-feedback: 125ms;
+  --motion-gaze: 200ms;
+  --motion-entrance: 300ms;
   font-family: Inter, Arial, sans-serif;
   font-size: 14px;
   color: var(--ink);
@@ -147,11 +151,6 @@ main {
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.project-link:hover {
-  border-color: #91bb96;
-  box-shadow: 0 4px 15px #3b6e3915;
 }
 .project-link img {
   width: 21px;
@@ -241,33 +240,21 @@ main {
 }
 .mobile-connector-slack {
   color: #e01e5a;
-  --fiber-duration: 4.1s;
-  --fiber-delay: -1.2s;
 }
 .mobile-connector-teams {
   color: #5a62c3;
-  --fiber-duration: 4.3s;
-  --fiber-delay: -3.4s;
 }
 .mobile-connector-github {
   color: #161614;
-  --fiber-duration: 4.6s;
-  --fiber-delay: -2.1s;
 }
 .mobile-connector-email {
   color: #fc413d;
-  --fiber-duration: 4.7s;
-  --fiber-delay: -0.5s;
 }
 .mobile-connector-discord {
   color: #5865f2;
-  --fiber-duration: 3.6s;
-  --fiber-delay: -2.8s;
 }
 .mobile-fiber-sheath,
-.mobile-fiber-track,
-.mobile-fiber-glow,
-.mobile-fiber-light {
+.mobile-fiber-track {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -279,24 +266,6 @@ main {
 }
 .mobile-fiber-track {
   stroke-width: 1.1;
-}
-.mobile-fiber-glow,
-.mobile-fiber-light {
-  stroke-dasharray: 4 106;
-  stroke-dashoffset: 4;
-}
-.mobile-fiber-glow {
-  stroke-width: 5;
-  opacity: 0.45;
-  filter: blur(2px);
-}
-.mobile-fiber-light {
-  stroke-width: 1.8;
-}
-@keyframes fiber-travel {
-  50% {
-    stroke-dashoffset: -100;
-  }
 }
 #line-github,
 #line-email {
@@ -339,13 +308,6 @@ main {
   padding: 18px 20px;
   box-shadow: 0 10px 30px #3b6e391f;
   box-shadow: 0 8px 25px #3b6e3904;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s;
-}
-.channel:hover {
-  border-color: #9ac692;
-  box-shadow: 0 10px 35px #3b6e3912;
 }
 .channel[aria-pressed="true"] {
   border-color: #c4ddc2;
@@ -715,35 +677,23 @@ main {
   height: auto;
   overflow: visible;
 }
-/* A one-time entrance assembles the mark before the demonstration script animates it.
-   The SVG's user units set each transform origin. */
-.hub-character .mark-block-left {
+/* A one-time, restrained entrance. SVG origins use the mark's own coordinates. */
+#hub-block-left {
   transform-origin: 160.52px 602.03px;
-  animation: hub-block-pop 0.6s 0.05s backwards;
+  animation: hub-enter var(--motion-entrance) var(--ease-out) backwards;
 }
-.hub-character .mark-block-right {
+#hub-block-right {
   transform-origin: 487.68px 602.03px;
-  animation: hub-block-pop 0.6s 0.18s backwards;
+  animation: hub-enter var(--motion-entrance) var(--ease-out) 50ms backwards;
 }
-.hub-character .mark-blocks {
-  transform-origin: 324.1px 602.03px;
-  animation: hub-blocks-land 0.35s 0.54s backwards;
-}
-.hub-character .mark-head {
+#hub-head {
   transform-origin: 325px 274.84px;
-  animation: hub-head-drop 0.75s 0.22s backwards;
+  animation: hub-enter var(--motion-entrance) var(--ease-out) 100ms backwards;
 }
-.hub-character .mark-eye-left {
-  transform-origin: 198.98px 101.28px;
-  animation: hub-eyes-open 0.45s 0.78s backwards;
-}
-.hub-character .mark-eye-right {
-  transform-origin: 449.23px 101.28px;
-  animation: hub-eyes-open 0.45s 0.78s backwards;
-}
-/* The entrance lasts about a second, so it finishes even when the demo starts paused. */
-.is-paused .hub-character * {
-  animation-play-state: running !important;
+.has-entered #hub-block-left,
+.has-entered #hub-block-right,
+.has-entered #hub-head {
+  animation: none;
 }
 .hub-name {
   font-size: clamp(25px, 2vw, 40px);
@@ -752,11 +702,10 @@ main {
   margin-top: 12px;
   color: #114f3c;
 }
-.goblin-hub.is-thinking .hub-core::before {
-  animation: breathe 1.5s ease-in-out infinite;
-}
 .travel-label {
   position: absolute;
+  left: 0;
+  top: 0;
   z-index: 4;
   transform: translate(-50%, -140%);
   border: 1px solid #d4e4d0;
@@ -824,6 +773,38 @@ main {
   font-weight: 600;
   color: #435e50;
   margin-bottom: 3px;
+}
+.example-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 3px;
+}
+.example-controls strong {
+  margin-bottom: 0;
+}
+.playback-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 85px;
+  min-height: 44px;
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border: 1px solid #dce6d8;
+  border-radius: 8px;
+  background: #fcfdf9;
+  color: #435e50;
+  font-size: 11px;
+}
+.playback-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+.playback-toggle:disabled {
+  cursor: default;
 }
 .review-heading {
   display: flex;
@@ -1103,9 +1084,6 @@ main {
   width: 26px;
   height: 26px;
 }
-.deliverable:hover strong {
-  text-decoration: underline;
-}
 .typing-row {
   display: flex;
   align-items: center;
@@ -1119,7 +1097,7 @@ main {
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--green);
-  animation: thinking-pulse 1.4s ease-in-out infinite;
+  animation: thinking-pulse 1.4s linear infinite;
 }
 .composer {
   border: 1px solid #dce5e0;
@@ -1197,10 +1175,6 @@ main {
   width: 21px;
   height: 21px;
 }
-.icon-button:hover {
-  background: #f1f6ef;
-  color: #2e7140;
-}
 .at-button {
   font-size: 23px;
   padding-bottom: 9px;
@@ -1214,9 +1188,6 @@ main {
   border-radius: 50%;
   color: white;
   box-shadow: 0 2px 6px #315f3720;
-}
-.send-button:hover {
-  background: #245d39;
 }
 .send-button svg {
   width: 19px;
@@ -1365,84 +1336,49 @@ dialog ul {
 .is-paused * {
   animation-play-state: paused !important;
 }
-@keyframes breathe {
-  50% {
-    opacity: 0.45;
-    transform: scale(0.95);
-  }
-}
 @keyframes thinking-pulse {
   0%,
   100% {
     opacity: 1;
-    transform: scale(1);
   }
   50% {
     opacity: 0.55;
-    transform: scale(0.75);
   }
 }
-@keyframes hub-block-pop {
-  0% {
-    transform: scale(0);
-    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
-  }
-  45% {
-    transform: scale(1.12, 1.08);
-  }
-  68% {
-    transform: scale(0.96);
-  }
-  85% {
-    transform: scale(1.02);
-  }
-  100% {
-    transform: none;
-  }
-}
-@keyframes hub-blocks-land {
-  30% {
-    transform: scale(1.04, 0.94);
-  }
-  65% {
-    transform: scale(0.99, 1.02);
-  }
-}
-@keyframes hub-head-drop {
-  0% {
+@keyframes hub-enter {
+  from {
     opacity: 0;
-    transform: translateY(-300px) scale(0.94, 1.12);
-    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+    transform: translateY(8px) scale(0.96);
   }
-  20% {
+  to {
     opacity: 1;
-  }
-  45% {
-    transform: translateY(0) scale(1.1, 0.84);
-    animation-timing-function: ease-out;
-  }
-  62% {
-    transform: translateY(0) scale(0.96, 1.06);
-  }
-  80% {
-    transform: translateY(0) scale(1.02, 0.98);
-  }
-  100% {
     transform: none;
   }
 }
-@keyframes hub-eyes-open {
-  0% {
-    transform: scale(1.06, 0.08);
+@media (hover: hover) and (pointer: fine) {
+  .project-link:hover {
+    border-color: #91bb96;
+    box-shadow: 0 4px 15px #3b6e3915;
   }
-  40% {
-    transform: scale(0.97, 1.15);
+  .channel:hover {
+    border-color: #9ac692;
+    box-shadow: 0 10px 35px #3b6e3912;
   }
-  70% {
-    transform: scale(1.01, 0.96);
+  .deliverable:hover strong {
+    text-decoration: underline;
   }
-  100% {
-    transform: none;
+  button.icon-button:hover,
+  .playback-toggle:enabled:hover {
+    background: #f1f6ef;
+    color: #2e7140;
+  }
+  .playback-toggle:enabled,
+  .preview-done {
+    transition: opacity var(--motion-feedback) ease;
+  }
+  .playback-toggle:enabled:hover,
+  .preview-done:hover {
+    opacity: 0.8;
   }
 }
 @media (min-width: 1600px) {
@@ -2202,18 +2138,13 @@ dialog ul {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
+  #hub-block-left,
+  #hub-block-right,
+  #hub-head,
+  .thinking-dot {
+    animation: none;
   }
   .travel-label {
-    display: none;
-  }
-  .mobile-fiber-glow,
-  .mobile-fiber-light {
     display: none;
   }
 }
@@ -2386,10 +2317,6 @@ dialog ul {
   }
   .mobile-connectors {
     display: inline;
-  }
-  .mobile-fiber-glow,
-  .mobile-fiber-light {
-    animation: fiber-travel var(--fiber-duration) linear var(--fiber-delay) infinite;
   }
   .connection,
   .return-lines,

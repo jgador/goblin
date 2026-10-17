@@ -78,32 +78,22 @@
                   <g class="mobile-connector mobile-connector-slack" id="mobile-connector-slack">
                     <path class="mobile-fiber-sheath" />
                     <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
                   </g>
                   <g class="mobile-connector mobile-connector-teams" id="mobile-connector-teams">
                     <path class="mobile-fiber-sheath" />
                     <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
                   </g>
                   <g class="mobile-connector mobile-connector-github" id="mobile-connector-github">
                     <path class="mobile-fiber-sheath" />
                     <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
                   </g>
                   <g class="mobile-connector mobile-connector-email" id="mobile-connector-email">
                     <path class="mobile-fiber-sheath" />
                     <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
                   </g>
                   <g class="mobile-connector mobile-connector-discord" id="mobile-connector-discord">
                     <path class="mobile-fiber-sheath" />
                     <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
                   </g>
                 </g>
                 <path
@@ -416,27 +406,9 @@
                             <g id="hub-eyes">
                               <g class="mark-eye-left">
                                 <rect id="hub-eye-left" x="169.08" y="83.24" width="59.79" height="36.09" rx="16.19" fill="#fff" />
-                                <path
-                                  id="hub-smile-left"
-                                  d="M173.98 111.28Q198.98 75.28 223.98 111.28"
-                                  fill="none"
-                                  stroke="#fff"
-                                  stroke-width="15"
-                                  stroke-linecap="round"
-                                  opacity="0"
-                                />
                               </g>
                               <g class="mark-eye-right">
                                 <rect id="hub-eye-right" x="419.33" y="83.23" width="59.79" height="36.09" rx="16.19" fill="#fff" />
-                                <path
-                                  id="hub-smile-right"
-                                  d="M424.23 111.28Q449.23 75.28 474.23 111.28"
-                                  fill="none"
-                                  stroke="#fff"
-                                  stroke-width="15"
-                                  stroke-linecap="round"
-                                  opacity="0"
-                                />
                               </g>
                             </g>
                           </g>
@@ -536,10 +508,37 @@
             id="conversation-panel"
             aria-label="Example conversation"
           >
-            <p class="example-notice">
-              <strong>Illustrative example</strong>
-              <span>Teams, Discord, and email show planned integrations.</span>
-            </p>
+            <div class="example-notice">
+              <div class="example-controls">
+                <strong>Illustrative example</strong>
+                <button
+                  class="playback-toggle"
+                  id="playback-toggle"
+                  type="button"
+                  aria-label="Pause animation"
+                >
+                  <svg
+                    id="playback-pause-icon"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 3h3v10H4zm5 0h3v10H9z" />
+                  </svg>
+                  <svg
+                    id="playback-play-icon"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    aria-hidden="true"
+                    hidden
+                  >
+                    <path d="m5 3 8 5-8 5z" />
+                  </svg>
+                  <span id="playback-label">Pause</span>
+                </button>
+              </div>
+              <p>Teams, Discord, and email show planned integrations.</p>
+            </div>
             <div class="panel-tabs" role="tablist" aria-label="Explore the example">
               <button
                 id="tab-conversation"
@@ -901,7 +900,8 @@
         not mean those integrations are currently available.
       </p>
       <p>
-        Select a channel to see an example task. Use Activity, Work, and Files to explore progress,
+        Select a channel to see an example task. Pause the animation to read at your own pace.
+        Use Activity, Work, and Files to explore progress,
         review details, and proposed results. The message box is a visual preview and does not accept
         messages. Reduced-motion preferences are respected.
       </p>

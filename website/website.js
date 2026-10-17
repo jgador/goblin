@@ -359,6 +359,7 @@
 
   const byId = (id) => document.getElementById(id);
   const demo = byId("player");
+  const playbackToggle = byId("playback-toggle");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const compactLayout = window.matchMedia("(max-width: 600px)");
   // Illustrative pacing: chat is quick; email and repository work take longer.
@@ -397,9 +398,12 @@
   const packetDot = packet.querySelector(".packet-dot");
   const packetHalo = packet.querySelector(".packet-halo");
   const packetScale = { x: 1, y: 1 };
+  const travelLabel = byId("travel-label");
+  let packetToNetwork = null;
   const hubCharacter = createHubCharacter();
   let position = receivedPosition(0);
   let animating = !reducedMotion.matches;
+  let userPaused = false;
   let currentScene = -1;
   let currentPhase = "";
   let lastFrame = null;
@@ -410,105 +414,17 @@
     return timing.start + timing.received + 0.2;
   }
 
-  // Animates the hub's Goblin mark through each conversation. CSS plays the entrance so
-  // the mark is never painted at rest first; this takes over once it has finished.
+  // Gaze explains the active exchange; the character settles while the reply is read.
+  // Retarget from the current transform so rapid channel changes never restart a jump.
   function createHubCharacter() {
-    const mark = { centerX: 324.1, bottom: 602.03, headX: 325, headBottom: 274.84, eyeY: 101.28 };
-    const settle = { stiffness: 120, damping: 14, mass: 0.8 };
-    const lively = { stiffness: 110, damping: 10, mass: 0.9 };
-    const body = byId("hub-body");
-    const head = byId("hub-head");
     const gaze = byId("hub-eyes");
-    const blocks = [
-      { element: byId("hub-block-left"), centerX: 160.52, phase: 0 },
-      { element: byId("hub-block-right"), centerX: 487.68, phase: Math.PI },
-    ];
-    const eyes = ["left", "right"].map((side, index) => ({
-      shape: byId(`hub-eye-${side}`),
-      smile: byId(`hub-smile-${side}`),
-      x: [198.98, 449.23][index],
-    }));
-    const moving = [body, head, gaze, ...blocks.map(({ element }) => element)];
     const looks = new Map();
-    let clock = 0;
-    let resting = true;
+    const tokens = getComputedStyle(document.documentElement);
+    const easing = tokens.getPropertyValue("--ease-out").trim();
+    const gazeDuration = parseFloat(tokens.getPropertyValue("--motion-gaze"));
+    let target = "none";
+    let animation = null;
 
-    const clamp = (value) => Math.min(1, Math.max(0, value));
-    const ease = (value) => value * value * (3 - 2 * value);
-    const progress = (time, start, end, curve = ease) =>
-      curve(clamp((time - start) / (end - start)));
-    const wave = (time, period, phase = 0) => Math.sin((2 * Math.PI * time) / period + phase);
-    const backOut = (value) => 1 + 3 * (value - 1) ** 3 + 2 * (value - 1) ** 2;
-    const pivot = (x, y, transform) => `translate(${x} ${y}) ${transform} translate(${-x} ${-y})`;
-    const hash = (value) => {
-      const noise = Math.sin(value * 12.9898) * 43758.5453;
-      return noise - Math.floor(noise);
-    };
-
-    // Step response of a damped spring, matching the promo video's motion.
-    function spring(time, { stiffness, damping, mass } = settle) {
-      if (time <= 0) return 0;
-      const omega = Math.sqrt(stiffness / mass);
-      const zeta = damping / (2 * Math.sqrt(stiffness * mass));
-      if (zeta >= 1) return 1 - Math.exp(-omega * time) * (1 + omega * time);
-      const damped = omega * Math.sqrt(1 - zeta * zeta);
-      return (
-        1 -
-        Math.exp(-zeta * omega * time) *
-          (Math.cos(damped * time) + ((zeta * omega) / damped) * Math.sin(damped * time))
-      );
-    }
-
-    // Springs towards each [time, value] target in turn, starting from zero.
-    function springPath(time, keys, config) {
-      let value = 0;
-      let previous = 0;
-      for (const [start, target] of keys) {
-        value += (target - previous) * spring(time - start, config);
-        previous = target;
-      }
-      return value;
-    }
-
-    // A damped wobble that starts at 1 on impact.
-    const impact = (time, start) =>
-      time < start ? 0 : Math.exp(-(time - start) / 0.17) * Math.cos((time - start) * 18);
-
-    function blink(time) {
-      const period = 3.4;
-      const cycle = Math.floor(time / period);
-      let amount = 0;
-      for (const index of [cycle - 1, cycle]) {
-        const start = index * period + hash(index + 1) * 1.6;
-        const starts = hash(index + 7) > 0.65 ? [start, start + 0.32] : [start];
-        for (const blinkStart of starts) {
-          const elapsed = time - blinkStart;
-          if (elapsed > 0 && elapsed < 0.3)
-            amount = Math.max(
-              amount,
-              elapsed < 0.1 ? (elapsed / 0.1) ** 2 : 1 - ease(clamp((elapsed - 0.13) / 0.17)),
-            );
-        }
-      }
-      return Math.min(1, amount);
-    }
-
-    function setAttributes(element, values) {
-      Object.entries(values).forEach(([name, value]) => element.setAttribute(name, value));
-    }
-
-    function rest() {
-      if (resting) return;
-      resting = true;
-      moving.forEach((element) => element.removeAttribute("transform"));
-      eyes.forEach(({ shape, smile }) => {
-        shape.removeAttribute("transform");
-        shape.removeAttribute("opacity");
-        setAttributes(smile, { opacity: "0", transform: "" });
-      });
-    }
-
-    // Records where each channel card sits relative to the mark so the eyes can find it.
     function measure() {
       const logo = byId("hub-character").getBoundingClientRect();
       const centerX = logo.left + logo.width / 2;
@@ -519,142 +435,44 @@
         const y = card.top + card.height / 2 - centerY;
         const length = Math.hypot(x, y) || 1;
         looks.set(button.dataset.channel, {
-          x: (24 * x) / length,
-          y: ((y < 0 ? 18 : 14) * y) / length,
-          side: Math.abs(x / length) > 0.2 ? Math.sign(x) : -1,
+          x: (16 * x) / length,
+          y: (8 * y) / length,
         });
       });
     }
 
-    function update(scene, time, timing) {
-      if (reducedMotion.matches) {
-        rest();
-        return;
-      }
-      resting = false;
-      const { asking, thinking, replying, received } = timing;
-      const look = looks.get(scene.id) ?? { x: 0, y: 0, side: -1 };
-      const awake = progress(clock, 1.3, 1.7);
-
-      // Look at the requesting channel, glance up when the request arrives, squint and
-      // drift while thinking, watch the response leave, and then face forward again.
-      const considering =
-        progress(time, thinking + 0.3, thinking + 0.5) *
-        (1 - progress(time, replying - 0.15, replying + 0.05));
-      const gazeX =
-        springPath(time, [
-          [asking - 0.1, look.x],
-          [thinking, look.x * 0.4],
-          [replying - 0.05, look.x],
-          [received, 0],
-        ]) +
-        9 * wave(time - thinking, 1.3) * considering;
-      const gazeY = springPath(time, [
-        [asking - 0.1, look.y],
-        [thinking, -14],
-        [replying - 0.05, look.y],
-        [received, 0],
-      ]);
-      const curious = springPath(
-        time,
-        [
-          [thinking, 1],
-          [thinking + 0.55, 0],
-        ],
-        lively,
+    function update(scene, phase, instant) {
+      const look = looks.get(scene.id) ?? { x: 0, y: 0 };
+      const transform =
+        reducedMotion.matches || phase === "ready" || phase === "received"
+          ? "none"
+          : phase === "thinking"
+            ? "translate(0px, -8px)"
+            : `translate(${look.x}px, ${look.y}px)`;
+      if (transform === target && !instant) return;
+      const previous = instant ? transform : getComputedStyle(gaze).transform;
+      animation?.cancel();
+      animation = null;
+      target = transform;
+      gaze.style.transform = transform;
+      if (instant || reducedMotion.matches || previous === transform) return;
+      animation = gaze.animate(
+        [{ transform: previous }, { transform }],
+        { duration: gazeDuration, easing },
       );
-      const size = springPath(time, [
-        [thinking, 0.3],
-        [thinking + 0.5, -0.28],
-        [replying, 0],
-      ]);
-      const nod = springPath(time, [
-        [replying, 8],
-        [replying + 0.2, 0],
-      ]);
-
-      // Hop with anticipation, stretch in the air, and squash on landing.
-      const launch = received + 0.28;
-      const land = received + 0.78;
-      const hop = (offset) => {
-        const amount = (time - offset - launch) / (land - launch);
-        return amount <= 0 || amount >= 1 ? 0 : -70 * 4 * amount * (1 - amount);
-      };
-      const airborne = (time - launch) / (land - launch);
-      const crouch =
-        progress(time, received + 0.05, launch - 0.07) -
-        progress(time, launch - 0.07, launch + 0.03);
-      const stretch = airborne > 0 && airborne < 1 ? 0.08 * Math.abs(1 - 2 * airborne) : 0;
-      const landing = impact(time, land);
-      const lift = hop(0);
-      const smiling =
-        progress(time, launch + 0.07, launch + 0.17) - progress(time, land + 0.5, land + 0.67);
-      const arc =
-        progress(time, launch + 0.17, launch + 0.37, backOut) *
-        (1 - progress(time, land + 0.4, land + 0.5));
-
-      const bodyScaleX = 1 + awake * (0.05 * crouch - stretch / 2 + 0.06 * landing);
-      const bodyScaleY = 1 + awake * (-0.1 * crouch + stretch - 0.12 * landing);
-      body.setAttribute(
-        "transform",
-        pivot(
-          mark.centerX,
-          mark.bottom,
-          `translate(0 ${awake * lift}) scale(${bodyScaleX} ${bodyScaleY})`,
-        ),
-      );
-      blocks.forEach(({ element, centerX, phase }) => {
-        const raise = 26 * considering * Math.max(0, wave(time - thinking, 0.87, phase)) ** 2;
-        const breathe = 0.015 * wave(clock, 2, phase + Math.PI / 2) - 0.05 * impact(time, land);
-        element.setAttribute(
-          "transform",
-          pivot(
-            centerX,
-            mark.bottom,
-            `translate(0 ${-awake * raise}) scale(1 ${1 + awake * breathe})`,
-          ),
-        );
-      });
-
-      const headX = 0.3 * gazeX;
-      const headY = -5 * wave(clock, 2) - 10 * curious + nod + 0.5 * (hop(0.07) - lift);
-      const tilt = 8 * look.side * curious + 0.05 * gazeX;
-      const squash = 0.06 * impact(time, land + 0.07);
-      const headScale = `scale(${1 + (awake * squash) / 2} ${1 - awake * squash})`;
-      head.setAttribute(
-        "transform",
-        `translate(${awake * headX} ${awake * headY}) ` +
-          pivot(mark.headX, 200, `rotate(${awake * tilt})`) +
-          " " +
-          pivot(mark.headX, mark.headBottom, headScale),
-      );
-      gaze.setAttribute("transform", `translate(${awake * gazeX} ${awake * gazeY})`);
-
-      const shut = awake * Math.max(blink(clock), smiling);
-      eyes.forEach(({ shape, smile, x }) => {
-        const grow =
-          1 + awake * (size + (Math.sign(x - mark.headX) === look.side ? 0.12 * curious : 0));
-        const scaleY = grow + (0.08 - grow) * shut;
-        const scaleX = (1 - 0.12 * (grow - 1)) * (1 + 0.06 * shut);
-        setAttributes(shape, {
-          transform: pivot(x, mark.eyeY, `scale(${scaleX} ${scaleY})`),
-          opacity: awake * smiling > 0.97 ? "0" : "1",
-        });
-        const happy = awake * arc;
-        setAttributes(smile, {
-          opacity: String(Math.min(1, happy * 4)),
-          transform: pivot(x, mark.eyeY, `scale(1 ${Math.max(0.05, happy)})`),
-        });
-      });
     }
 
-    return {
-      advance: (seconds) => {
-        clock += seconds;
-      },
-      measure,
-      update,
-    };
+    function pause(paused) {
+      if (!animation || animation.playState === "finished") return;
+      if (paused) {
+        const time = animation.currentTime;
+        animation.pause();
+        // Resolve a pending pause at this frame rather than advancing to the next one.
+        animation.currentTime = time;
+      } else animation.play();
+    }
+
+    return { measure, update, pause };
   }
 
   function announce(message) {
@@ -704,6 +522,7 @@
     byId("reply-message").hidden = phase !== "received";
     byId("artifact-message").hidden = phase !== "received";
     byId("goblin-hub").classList.toggle("is-thinking", phase === "thinking");
+    travelLabel.textContent = phase === "asking" ? "Request" : "Response";
     const status = {
       ready: "Ready for a request",
       asking: "Receiving a request",
@@ -716,7 +535,7 @@
       announce(`Goblin replies in ${scenes[currentScene].name}: ${prompt.reply}`);
   }
 
-  function render() {
+  function render(instant = false) {
     const index = sceneTimings.findLastIndex(({ start }) => position >= start);
     const timing = sceneTimings[index];
     const localTime = position - timing.start;
@@ -733,29 +552,29 @@
               ? "replying"
               : "received";
     setPhase(phase);
-    hubCharacter.update(scenes[index], localTime, timing);
-    byId("incoming-message").style.opacity = "1";
+    hubCharacter.update(scenes[index], phase, instant);
+    if (demo.classList.contains("is-paused")) hubCharacter.pause(true);
     const inTransit =
-      !compactLayout.matches && !reducedMotion.matches && (phase === "asking" || phase === "replying");
-    byId("packet").setAttribute("visibility", inTransit ? "visible" : "hidden");
-    byId("travel-label").style.opacity = inTransit ? "1" : "0";
+      !compactLayout.matches &&
+      !reducedMotion.matches &&
+      packetToNetwork &&
+      (phase === "asking" || phase === "replying");
+    packet.setAttribute("visibility", inTransit ? "visible" : "hidden");
+    travelLabel.style.opacity = inTransit ? "1" : "0";
     if (inTransit) {
       const progress =
         phase === "asking"
           ? (localTime - timing.asking) / travelSeconds
           : 1 - (localTime - timing.replying) / travelSeconds;
-      const eased = progress * progress * (3 - 2 * progress);
-      const point = paths[index].getPointAtLength(eased * pathLengths[index]);
-      packet.setAttribute(
-        "transform",
-        `translate(${point.x} ${point.y}) scale(${packetScale.x} ${packetScale.y})`,
+      // Linear travel makes the direction legible; layout is measured only on resize.
+      const point = paths[index].getPointAtLength(progress * pathLengths[index]);
+      packet.style.transform =
+        `translate(${point.x}px, ${point.y}px) scale(${packetScale.x}, ${packetScale.y})`;
+      const networkPoint = new DOMPoint(point.x, point.y).matrixTransform(
+        packetToNetwork,
       );
-      const screenPoint = point.matrixTransform(connections.getScreenCTM());
-      const networkRect = byId("network").getBoundingClientRect();
-      const label = byId("travel-label");
-      label.style.left = `${screenPoint.x - networkRect.left}px`;
-      label.style.top = `${screenPoint.y - networkRect.top}px`;
-      label.textContent = phase === "asking" ? "Request" : "Response";
+      travelLabel.style.transform =
+        `translate(${networkPoint.x}px, ${networkPoint.y}px) translate(-50%, -140%)`;
     }
   }
 
@@ -765,7 +584,6 @@
     if (lastFrame !== null) {
       const elapsed = Math.min((timestamp - lastFrame) / 1000, 0.1);
       position = (position + elapsed) % duration;
-      hubCharacter.advance(elapsed);
     }
     lastFrame = timestamp;
     render();
@@ -775,32 +593,68 @@
   function syncAnimation() {
     animating =
       !reducedMotion.matches &&
+      !userPaused &&
       byId("tab-conversation").getAttribute("aria-selected") === "true" &&
       !aboutDialog.open &&
       !previewDialog.open;
     if (animationFrame !== null) cancelAnimationFrame(animationFrame);
     animationFrame = null;
     lastFrame = null;
-    demo.classList.toggle("is-paused", !animating || document.hidden);
+    const paused = !animating || document.hidden;
+    if (userPaused) demo.classList.add("has-entered");
+    demo.classList.toggle("is-paused", paused);
+    hubCharacter.pause(paused);
+    playbackToggle.disabled = reducedMotion.matches;
+    playbackToggle.setAttribute(
+      "aria-label",
+      reducedMotion.matches
+        ? "Animation disabled for reduced motion"
+        : userPaused ? "Resume animation" : "Pause animation",
+    );
+    byId("playback-label").textContent = reducedMotion.matches
+      ? "Motion off"
+      : userPaused ? "Resume" : "Pause";
+    byId("playback-pause-icon").toggleAttribute(
+      "hidden", userPaused || reducedMotion.matches,
+    );
+    byId("playback-play-icon").toggleAttribute(
+      "hidden", !userPaused || reducedMotion.matches,
+    );
     if (animating && !document.hidden) animationFrame = requestAnimationFrame(tick);
   }
 
-  function selectChannel(id) {
+  function selectChannel(id, keyboard = false) {
     const index = scenes.findIndex((scene) => scene.id === id);
     if (index < 0) return;
-    position = reducedMotion.matches ? receivedPosition(index) : sceneTimings[index].start;
+    if (keyboard) userPaused = true;
+    position = reducedMotion.matches || userPaused
+      ? receivedPosition(index)
+      : sceneTimings[index].start;
     currentScene = -1;
-    render();
+    render(keyboard || reducedMotion.matches);
     syncAnimation();
-    if (!reducedMotion.matches)
+    if (currentPhase !== "received")
       announce(
         `${scenes[index].name} conversation. ${scenes[index].prompts[0].request}`,
       );
   }
 
   channelButtons.forEach((button) =>
-    button.addEventListener("click", () => selectChannel(button.dataset.channel)),
+    button.addEventListener("click", (event) =>
+      selectChannel(button.dataset.channel, event.detail === 0)),
   );
+
+  playbackToggle.addEventListener("click", () => {
+    userPaused = !userPaused;
+    syncAnimation();
+    announce(userPaused ? "Animation paused." : "Animation resumed.");
+  });
+
+  // A preference change must not replay the one-time entrance later.
+  if (reducedMotion.matches) demo.classList.add("has-entered");
+  byId("hub-head").addEventListener("animationend", (event) => {
+    if (event.animationName === "hub-enter") demo.classList.add("has-entered");
+  });
 
   const aboutDialog = byId("about-dialog");
   byId("channel-info").addEventListener("click", () => {
@@ -824,9 +678,10 @@
   document.addEventListener("visibilitychange", syncAnimation);
   reducedMotion.addEventListener("change", () => {
     if (reducedMotion.matches) {
+      demo.classList.add("has-entered");
       position = receivedPosition(currentScene);
     }
-    render();
+    render(true);
     syncAnimation();
   });
   const hub = byId("goblin-hub");
@@ -918,9 +773,14 @@
     if (!matrix) return;
     const toSvg = matrix.inverse();
     if (compactLayout.matches) {
+      packetToNetwork = null;
       updateMobileConnectors(toSvg);
       return;
     }
+    const networkRect = network.getBoundingClientRect();
+    packetToNetwork = new DOMMatrix()
+      .translate(-networkRect.left, -networkRect.top)
+      .multiply(matrix);
     // Cancel the SVG's unequal axis scaling so circles keep their pixel shape and size.
     packetScale.x = 1 / Math.hypot(matrix.a, matrix.b);
     packetScale.y = 1 / Math.hypot(matrix.c, matrix.d);
