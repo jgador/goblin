@@ -206,13 +206,6 @@ main {
   letter-spacing: 0;
   color: #587765;
 }
-.intro .network-instruction {
-  margin-top: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: #435e50;
-}
 .network {
   /* Match the Discord connector's x=575 axis in the 1100-wide SVG. */
   --hub-center-x: 52.272727%;

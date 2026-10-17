@@ -23,10 +23,13 @@ Four captions describe what the team gains:
 | Control where Goblin runs | Host Goblin on infrastructure you control. |
 | Stay involved in decisions | Assign the work, review the results, and decide what happens next. |
 
-“Select a channel to see an example task” introduces the existing hub and
-conversation panel directly. There is no separate example button or destination.
-A visible “Illustrative example” label and planned-integration note explain the
-demonstration's scope alongside the channels.
+The hub and conversation panel follow the introduction directly, without a
+separate instruction line, example button, or destination. The demonstration
+plays on its own unless reduced motion is preferred, each channel card's
+accessible name describes the conversation it plays, and the about dialog
+explains how to explore it. A visible “Illustrative example” label and
+planned-integration note explain the demonstration's scope alongside the
+channels.
 
 A standalone interactive concept showing Goblin at the center of Slack,
 Microsoft Teams, GitHub, Discord, and Gmail conversations. The layout follows
