@@ -547,6 +547,12 @@ function buildGithubPages(version: string, recommendation: string) {
             "assets/branding/svg/icon-light.svg",
             join(path, "assets/icon.svg"),
         );
+        for (const weight of ["medium", "semibold"])
+            cpSync(
+                `assets/branding/fonts/inter-18pt-${weight}.ttf`,
+                join(path, `assets/inter-${weight}.ttf`),
+            );
+        cpSync("assets/branding/fonts/OFL.txt", join(path, "assets/OFL.txt"));
         const catalogPath = join(path, "releases.json");
         const catalog = existsSync(catalogPath)
             ? json(catalogPath)

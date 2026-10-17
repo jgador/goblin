@@ -62,13 +62,17 @@ let selected =
         sessionStorage.getItem("goblin.selectedWork") ??
         "",
     activeChat = "";
-type WorkspaceView = "work" | "chat" | "new" | "integrations" | "knowledge";
-const pageFromPath = (): "integrations" | "knowledge" | undefined =>
+type WorkspaceView =
+    "work" | "chat" | "new" | "integrations" | "knowledge" | "settings";
+const pageFromPath = ():
+    "integrations" | "knowledge" | "settings" | undefined =>
     /^\/integrations\/?$/.test(location.pathname)
         ? "integrations"
         : /^\/knowledge\/?$/.test(location.pathname)
           ? "knowledge"
-          : undefined;
+          : /^\/settings\/?$/.test(location.pathname)
+            ? "settings"
+            : undefined;
 let view: WorkspaceView =
         pageFromPath() ??
         (location.pathname.startsWith("/work") && selected ? "work" : "new"),
@@ -77,7 +81,8 @@ let view: WorkspaceView =
     conversationsOpen = false;
 let selectInitialWork =
     !pageFromPath() && !query.has("new") && !query.has("conversation");
-const isDirectoryPage = () => view === "integrations" || view === "knowledge";
+const isDirectoryPage = () =>
+    view === "integrations" || view === "knowledge" || view === "settings";
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
@@ -88,7 +93,11 @@ let sidebarCollapsed =
 let sessionChecked = false,
     workUnavailable = false;
 let timezoneError = "";
-let initialSettings = query.get("settings");
+let settingsSection = query.get("section") ?? "connections";
+let settingsReturn: { view: WorkspaceView; id: string } = {
+    view: "new",
+    id: "",
+};
 const drafts = new Map<string, string>();
 const setupDrafts = new Map<
     string,
@@ -129,7 +138,9 @@ const draftKey = () =>
         ? `work:${selected}`
         : view === "chat"
           ? `chat:${activeChat}`
-          : view;
+          : view === "settings"
+            ? `settings:${settingsSection}`
+            : view;
 
 let github: {
     configured: boolean;
@@ -153,7 +164,23 @@ error = submission.recoveryNotice;
 let renderedContext = "";
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const system = new SystemResources();
-const settings = new Settings(system);
+let settingsOpener: { id?: string; action?: string; provider?: string } = {};
+const settings = new Settings(system, (provider) => {
+    if (view !== "settings") {
+        const trigger =
+            document.activeElement instanceof HTMLElement
+                ? document.activeElement.closest<HTMLElement>("[data-action]")
+                : null;
+        settingsOpener = {
+            id: trigger?.id,
+            action: trigger?.dataset.action,
+            provider: trigger?.dataset.provider,
+        };
+    }
+    navigate("settings", provider);
+    render();
+    document.getElementById("settings-title")?.focus();
+});
 const integrations = new IntegrationsDirectory(
     () => {
         if (authenticated && view === "integrations") render();
@@ -164,7 +191,6 @@ const timezoneSetup = new TimeZoneSetup();
 window.addEventListener("goblin-timezone-changed", () => render(true));
 window.addEventListener("goblin-workspace-locked", () => {
     authenticated = false;
-    initialSettings = query.get("settings");
     forgetWorkspace();
     render();
 });
@@ -328,25 +354,6 @@ async function refresh(preserveError = false) {
         if (query.get("returnTo") === "headlamp") {
             location.replace("/headlamp/");
             return;
-        }
-        // Connection setup remains accessible even when Work storage is unavailable.
-        if (initialSettings) {
-            const target = initialSettings;
-            initialSettings = null;
-            void settings.open(
-                [
-                    "codex",
-                    "github",
-                    "system",
-                    "cluster",
-                    "logs",
-                    "timezone",
-                    "integrations",
-                    "slack",
-                ].includes(target)
-                    ? target
-                    : "connections",
-            );
         }
         void refreshConnections();
         void system.refresh();
@@ -540,11 +547,21 @@ function navigate(
     historyMode: "auto" | "restore" = "auto",
 ) {
     selectInitialWork = false;
+    if (next === "settings" && view !== "settings")
+        settingsReturn = {
+            view,
+            id: view === "work" ? selected : view === "chat" ? activeChat : "",
+        };
+    const leavingSettings = view === "settings" && next !== "settings";
+    if (leavingSettings) settings.reset();
     drafts.set(draftKey(), draft);
     if (
         historyMode === "auto" &&
-        next !== view &&
-        (isDirectoryPage() || next === "integrations" || next === "knowledge")
+        (next !== view || (next === "settings" && id !== settingsSection)) &&
+        (isDirectoryPage() ||
+            next === "integrations" ||
+            next === "knowledge" ||
+            next === "settings")
     )
         history.pushState(null, "", location.href);
     view = next;
@@ -558,6 +575,14 @@ function navigate(
             "",
             "/?conversation=" + encodeURIComponent(id),
         );
+    } else if (next === "settings") {
+        settingsSection = id || "connections";
+        history.replaceState(
+            null,
+            "",
+            `/settings?section=${encodeURIComponent(settingsSection)}`,
+        );
+        search = "";
     } else if (next === "integrations" || next === "knowledge") {
         history.replaceState(null, "", `/${next}`);
         search = "";
@@ -571,6 +596,10 @@ function navigate(
     modelPickerOpen = false;
     modelListOpen = false;
     if (mobile.matches) sidebarCollapsed = true;
+    if (leavingSettings && authenticated) {
+        modelCatalogs.clear();
+        void refreshConnections();
+    }
 }
 function renderSidebar() {
     const matches = work.filter(({ work: w }) =>
@@ -605,7 +634,7 @@ function renderSidebar() {
     return `<aside id="workspace-sidebar" class="sidebar" aria-label="Workspace" ${sidebarCollapsed || activityOpen ? "inert" : ""} ${mobile.matches && !sidebarCollapsed ? 'role="dialog" aria-modal="true"' : ""}>
         <div class="sidebar-heading"><a class="brand" href="/" data-action="new-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button></div>
         <button class="new-chat" data-action="new-work">${icon("plus")}New work</button>
-        <nav class="primary-navigation" aria-label="Workspace navigation"><h2><button class="nav-button ${isDirectoryPage() ? "" : "active"}" data-action="browse-work" aria-current="${isDirectoryPage() ? "false" : "page"}">${icon("sidebar")}Work</button></h2><button class="nav-button" data-action="settings-agents">${icon("agents")}Agents</button><a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><a id="nav-integrations" class="nav-button ${view === "integrations" ? "active" : ""}" href="/integrations" data-action="integrations" aria-current="${view === "integrations" ? "page" : "false"}">${icon("integrations")}Integrations</a><button class="nav-button sidebar-settings" data-action="settings">${icon("settings")}Settings</button></nav>
+        <nav class="primary-navigation" aria-label="Workspace navigation"><h2><button class="nav-button ${isDirectoryPage() ? "" : "active"}" data-action="browse-work" aria-current="${isDirectoryPage() ? "false" : "page"}">${icon("sidebar")}Work</button></h2><button class="nav-button" data-action="settings-agents">${icon("agents")}Agents</button><a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><a id="nav-integrations" class="nav-button ${view === "integrations" ? "active" : ""}" href="/integrations" data-action="integrations" aria-current="${view === "integrations" ? "page" : "false"}">${icon("integrations")}Integrations</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
         <nav class="work-views" aria-label="Work views">${[
             ["all", "All work", "work", work.length],
             [
@@ -646,7 +675,7 @@ function renderSidebar() {
         <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button></aside>`;
 }
 function renderHeader() {
-    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "integrations" ? "Integrations" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
+    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "integrations" ? "Integrations" : view === "settings" ? "Settings" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
 }
 function renderSearchResults() {
     if (isDirectoryPage() || !search || !sidebarCollapsed) return "";
@@ -677,7 +706,7 @@ function renderHome() {
     const disconnected =
         !connections.length ||
         connections.every((c) => c.availability === "Disconnected");
-    return `<section class="home"><div class="home-content"><img class="home-portrait" src="/assets/branding/icon.svg" alt=""><h1>What should we work on?</h1><p class="home-description">A little help for your next big thing.</p>${composer("new", "Describe the intended outcome…")}<div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
+    return `<section class="home"><div class="home-content"><img class="home-portrait" src="/assets/branding/icon.svg" alt=""><p class="page-eyebrow">FROM CONVERSATION TO RESULTS</p><h1>What should we work on?</h1><p class="home-description">Bring an idea. Give it a goal. We’ll take it from here, together.</p>${composer("new", "Describe the intended outcome…")}<div class="home-links"><a href="/integrations" data-action="integrations">${icon("integrations")}<span><strong>Bring your tools together</strong><small>Connect where your team works.</small></span></a><a href="/settings?section=connections" data-action="settings">${icon("spark")}<span><strong>Meet your AI coworker</strong><small>Manage your AI connection.</small></span></a></div><div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
 }
 function refreshHome(html: string) {
     const next = document.createElement("template");
@@ -796,20 +825,22 @@ function render(preserveHome = false, forceSelect = false) {
     ).map((x) => [x.dataset.scroll, x.scrollTop] as const);
     renderedContext = context;
     document.title =
-        view === "integrations"
-            ? "Integrations · Goblin"
-            : view === "knowledge"
-              ? "Knowledge · Goblin"
-              : view === "work" && authenticated && current()
-                ? current()!.work.objective.slice(0, 70) + " · Goblin"
-                : "Goblin";
+        view === "settings"
+            ? "Settings · Goblin"
+            : view === "integrations"
+              ? "Integrations · Goblin"
+              : view === "knowledge"
+                ? "Knowledge · Goblin"
+                : view === "work" && authenticated && current()
+                  ? current()!.work.objective.slice(0, 70) + " · Goblin"
+                  : "Goblin";
     if (!authenticated) {
         root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
         const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
             <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
-            ${view === "integrations" ? integrations.render() : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
+            ${view === "settings" ? '<div id="settings-host"></div>' : view === "integrations" ? integrations.render() : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&
             sameContext &&
@@ -817,7 +848,17 @@ function render(preserveHome = false, forceSelect = false) {
             root.querySelector(".home")
         )
             refreshHome(html);
-        else root.innerHTML = html;
+        else {
+            // Reuse the live settings forms across workspace polling renders.
+            // Passwords, device sign-in, selection and local form state stay in their controllers.
+            if (view === "settings") settings.element.remove();
+            root.innerHTML = html;
+            if (view === "settings")
+                settings.attach(
+                    root.querySelector<HTMLElement>("#settings-host")!,
+                    settingsSection,
+                );
+        }
     }
     for (const [id, value] of preserved) {
         const field = document.getElementById(id) as
@@ -891,7 +932,9 @@ function render(preserveHome = false, forceSelect = false) {
         if (element && (sameContext || name === "sidebar"))
             element.scrollTop = top;
     }
-    if (authenticated) ensureModels();
+    if (active?.isConnected && active.closest(".settings-page"))
+        active.focus({ preventScroll: true });
+    if (authenticated && view !== "settings") ensureModels();
 }
 function renderDetail() {
     const item = current()!;
@@ -1151,6 +1194,28 @@ document.addEventListener("click", async (event) => {
         document.getElementById(action + "-title")?.focus();
         return;
     }
+    if (action === "return-settings") {
+        navigate(settingsReturn.view, settingsReturn.id);
+        render();
+        const opener = Array.from(
+            root.querySelectorAll<HTMLElement>("[data-action]"),
+        ).find(
+            (element) =>
+                element.dataset.action === settingsOpener.action &&
+                element.dataset.provider === settingsOpener.provider &&
+                element.getClientRects().length > 0,
+        );
+        (
+            (settingsOpener.id
+                ? document.getElementById(settingsOpener.id)
+                : null) ??
+            opener ??
+            root.querySelector<HTMLElement>(
+                ".directory-heading h1, #reply, #work-title-heading",
+            )
+        )?.focus();
+        return;
+    }
     if (action === "add-integration") {
         integrations.openPicker();
         return;
@@ -1370,7 +1435,6 @@ document.addEventListener("click", async (event) => {
             return;
         }
         authenticated = false;
-        initialSettings = query.get("settings");
         forgetWorkspace();
         error = "";
         render();
@@ -1710,7 +1774,7 @@ function trapFocus(event: KeyboardEvent, selector: string) {
     }
 }
 document.addEventListener("keydown", (event) => {
-    if (settings.isOpen || integrations.isPickerOpen) return;
+    if (integrations.isPickerOpen) return;
     if (
         view === "integrations" &&
         event.target instanceof HTMLElement &&
@@ -1866,12 +1930,14 @@ window.addEventListener("popstate", () => {
     const conversation = params.get("conversation");
     navigate(
         section ?? (item ? "work" : conversation ? "chat" : "new"),
-        item ?? conversation ?? "",
+        section === "settings"
+            ? (params.get("section") ?? "connections")
+            : (item ?? conversation ?? ""),
         "restore",
     );
     render();
     root.querySelector<HTMLElement>(
-        ".directory-heading h1, #work-title-heading, #reply",
+        "#settings-title, .directory-heading h1, #work-title-heading, #reply",
     )?.focus();
 });
 window.addEventListener("online", () => void refresh());

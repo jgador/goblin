@@ -1,6 +1,80 @@
 import { test, expect } from "@playwright/test";
 import { startSetup } from "../support/setup.js";
 
+test("setup summarizes concurrent tasks and preserves disclosures and focus across updates", async ({
+    page,
+}) => {
+    const setup = await startSetup();
+    try {
+        await page.goto(setup.url);
+        const progress = page.getByRole("progressbar", {
+            name: "Installation progress",
+        });
+        const serverStage = page
+            .locator(".setup-stage")
+            .filter({ hasText: "Prepare your server" });
+        const serverSummary = serverStage.locator("summary");
+        await expect(progress).toHaveAttribute("value", "0");
+        await expect(serverStage).not.toHaveAttribute("open", "");
+        await serverSummary.focus();
+        await page.keyboard.press("Enter");
+        await expect(serverStage).toHaveAttribute("open", "");
+        setup.transition("begin");
+        setup.transition("start", "prepare");
+        setup.transition("complete");
+        setup.transition("start", "k3s");
+        setup.transition("start", "image");
+        await expect(page.locator("#activity")).toHaveText(
+            "2 tasks running on your server.",
+        );
+        await expect(
+            page.locator('.setup-stage[data-status="running"]'),
+        ).toHaveCount(2);
+        await expect(serverSummary).toBeFocused();
+        await expect(serverStage).toHaveAttribute("open", "");
+        await expect(page.locator(".installation-log")).not.toHaveAttribute(
+            "open",
+            "",
+        );
+        setup.transition("complete", "k3s");
+        await expect(progress).toHaveAttribute(
+            "aria-valuetext",
+            "2 of 12 tasks complete",
+        );
+        await expect(page.locator("#completed-count")).toHaveText("2");
+        await expect(serverSummary).toBeFocused();
+        await page.keyboard.press("Enter");
+        setup.transition("detail", "Building application assets");
+        await expect(serverStage).not.toHaveAttribute("open", "");
+        setup.transition("fail-step", "image");
+        setup.transition("failed");
+        await expect(page.locator("#setup-status")).toHaveText(
+            "Needs attention",
+        );
+        await expect(page.locator(".installation-log")).toHaveAttribute(
+            "open",
+            "",
+        );
+        await expect(
+            page.locator('.setup-stage[data-status="failed"]'),
+        ).toHaveAttribute("open", "");
+        await expect(page.getByRole("alert")).toContainText(
+            "Your progress is saved.",
+        );
+        await page.locator(".installation-log > summary").click();
+        await page.waitForResponse((response) =>
+            response.url().endsWith("/setup/status"),
+        );
+        await expect(page.locator(".installation-log")).not.toHaveAttribute(
+            "open",
+            "",
+        );
+        await expect(progress).toHaveAttribute("value", "2");
+    } finally {
+        await setup.close();
+    }
+});
+
 test("installation logs stream concurrent progress, survive refresh, and render output as text", async ({
     page,
 }) => {
@@ -16,6 +90,7 @@ test("installation logs stream concurrent progress, survive refresh, and render 
         await expect(
             page.getByRole("timer", { name: "Elapsed time" }),
         ).toHaveText(/\d+m \d+s/);
+        await page.locator(".installation-log > summary").click();
         const log = page.getByRole("log", { name: "Installation log" });
         await expect(log).toContainText("Downloading image 1/8");
         setup.transition("detail", "<img src=x onerror=alert(1)>");
@@ -44,6 +119,7 @@ test("installation logs stream concurrent progress, survive refresh, and render 
         await page.getByLabel("Follow latest").check();
         await expect.poll(distanceFromLatest).toBeLessThan(2);
         await page.reload();
+        await page.locator(".installation-log > summary").click();
         await expect(log).toContainText("Downloading image 1/8");
         await expect(log).toContainText("Download completed");
         setup.transition("failed");
@@ -88,17 +164,20 @@ test("setup displays its bundled brand icon at desktop and mobile sizes", async 
                     .locator("body")
                     .evaluate((element) => element.scrollWidth <= innerWidth),
             ).toBe(true);
-            const steps = await page
-                .getByRole("list", { name: "Installation steps" })
-                .boundingBox();
+            const steps = await page.locator(".setup-steps").boundingBox();
             const log = await page.locator(".installation-log").boundingBox();
-            if (width === 1280) {
-                expect(log!.y).toBeCloseTo(steps!.y, 0);
-                expect(log!.x).toBeGreaterThan(steps!.x + steps!.width);
-            } else {
-                expect(log!.y).toBeGreaterThan(steps!.y + steps!.height);
-                expect(log!.x).toBeCloseTo(steps!.x, 0);
-            }
+            expect(log!.y).toBeGreaterThan(steps!.y + steps!.height);
+            expect(log!.x).toBeCloseTo(steps!.x, 0);
+            await expect(page.locator(".setup-stage")).toHaveCount(4);
+            await expect(
+                page.getByRole("progressbar", {
+                    name: "Installation progress",
+                }),
+            ).toBeVisible();
+            await expect(page.locator(".installation-log")).not.toHaveAttribute(
+                "open",
+                "",
+            );
         }
     } finally {
         await setup.close();
@@ -114,14 +193,14 @@ test("setup shows live progress, failure and a successful retry across refreshes
         await expect(
             page.getByRole("heading", { name: "Getting things ready." }),
         ).toBeVisible();
-        await expect(page.getByRole("listitem")).toHaveCount(12);
+        await expect(page.locator(".stage-tasks li")).toHaveCount(12);
         setup.transition("begin");
         setup.transition("start", "k3s");
         await expect(page.locator('li[data-status="running"]')).toContainText(
             "Install Kubernetes",
         );
         setup.transition("failed");
-        await expect(page.getByRole("heading")).toHaveText(
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(
             "Setup needs attention.",
         );
         await expect(page.locator("#recovery")).toBeVisible();
@@ -181,9 +260,12 @@ test("setup tolerates the handoff gap and opens the Kubernetes application", asy
                 body: "<h1>Goblin workspace</h1>",
             }),
         );
-        await expect(page.getByRole("heading")).toHaveText("Goblin workspace", {
-            timeout: 15000,
-        });
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+            "Goblin workspace",
+            {
+                timeout: 15000,
+            },
+        );
     } finally {
         await setup.close();
     }
@@ -196,7 +278,7 @@ test("a localhost visit moves to the configured origin and opens Goblin even if 
     try {
         const alias = setup.url.replace("127.0.0.1", "localhost");
         await page.goto(alias);
-        await expect(page.getByRole("listitem")).toHaveCount(12);
+        await expect(page.locator(".stage-tasks li")).toHaveCount(12);
         setup.transition("begin");
         setup.transition("public-url", setup.url);
         await expect(page).toHaveURL(setup.url + "/");
@@ -223,9 +305,12 @@ test("a localhost visit moves to the configured origin and opens Goblin even if 
                 body: "<h1>Goblin workspace</h1>",
             }),
         );
-        await expect(page.getByRole("heading")).toHaveText("Goblin workspace", {
-            timeout: 15000,
-        });
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+            "Goblin workspace",
+            {
+                timeout: 15000,
+            },
+        );
     } finally {
         await setup.close();
     }

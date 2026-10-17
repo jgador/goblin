@@ -118,7 +118,7 @@ test("first access preselects Philippine time and saves only the confirmed works
     try {
         await fixture(other, state);
         const second = await other.newPage();
-        await second.goto("http://127.0.0.1:8798/?settings=timezone");
+        await second.goto("http://127.0.0.1:8798/settings?section=timezone");
         await expect(
             second.getByRole("dialog", { name: "Choose your timezone" }),
         ).not.toBeVisible();
@@ -133,7 +133,7 @@ test("first access preselects Philippine time and saves only the confirmed works
         await expect(
             second.getByRole("status").filter({ hasText: "Timezone saved" }),
         ).toBeVisible();
-        await page.goto("/?settings=timezone");
+        await page.goto("/settings?section=timezone");
         // A saved choice takes precedence over the detected Philippine timezone.
         await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue(
             "UTC",
@@ -208,8 +208,8 @@ test("Settings detects concurrent changes and a failed read never overwrites the
 }) => {
     const state: State = { timeZone: "UTC", writes: [] };
     await fixture(context, state);
-    await page.goto("/?settings=timezone");
-    const panel = page.getByRole("dialog", { name: "Settings" });
+    await page.goto("/settings?section=timezone");
+    const panel = page.getByRole("region", { name: "Settings" });
     await expect(panel.getByLabel("Timezone", { exact: true })).toHaveValue(
         "UTC",
     );
@@ -275,8 +275,8 @@ test("country and city search keeps the chosen timezone until a matching option 
 }) => {
     const state: State = { timeZone: "Asia/Manila", writes: [] };
     await fixture(context, state);
-    await page.goto("/?settings=timezone");
-    const panel = page.getByRole("dialog", { name: "Settings" });
+    await page.goto("/settings?section=timezone");
+    const panel = page.getByRole("region", { name: "Settings" });
     const select = panel.getByLabel("Timezone", { exact: true });
     const search = panel.getByLabel("Find a timezone");
     await expect(select).toHaveValue("Asia/Manila");
@@ -418,7 +418,7 @@ test("Settings checks a new IP location without replacing the saved timezone", a
 }) => {
     const state: State = { timeZone: "UTC", writes: [] };
     await fixture(context, state);
-    await page.goto("/?settings=timezone");
+    await page.goto("/settings?section=timezone");
     const select = page.getByLabel("Timezone", { exact: true });
     await expect(select).toHaveValue("UTC");
     expect(state.ipRequests).toBe(0);
@@ -441,14 +441,14 @@ test("Settings checks a new IP location without replacing the saved timezone", a
     ]);
 });
 
-test("closing Settings cancels its pending IP lookup", async ({
+test("leaving Settings cancels its pending IP lookup", async ({
     page,
     context,
 }) => {
     const state: State = { timeZone: "Asia/Manila", writes: [] };
     await fixture(context, state);
     await context.route("https://ipwho.is/**", () => {});
-    await page.goto("/?settings=timezone");
+    await page.goto("/settings?section=timezone");
     await expect(page.getByLabel("Timezone", { exact: true })).toHaveValue(
         "Asia/Manila",
     );
@@ -459,10 +459,10 @@ test("closing Settings cancels its pending IP lookup", async ({
     const aborted = page.waitForEvent("requestfailed", (request) =>
         request.url().startsWith("https://ipwho.is/"),
     );
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await aborted;
     await expect(
-        page.getByRole("dialog", { name: "Settings" }),
+        page.getByRole("region", { name: "Settings" }),
     ).not.toBeVisible();
     expect(state.timeZone).toBe("Asia/Manila");
     expect(state.writes).toEqual([]);

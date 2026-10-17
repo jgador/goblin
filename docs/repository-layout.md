@@ -231,9 +231,18 @@ these checks.
 The frontend build writes JavaScript, HTML, CSS, and static assets to
 `frontend/dist/`. The backend project copies this directory into its output and
 published `wwwroot/`. Browser URLs are mapped explicitly in
-`backend/src/Goblin.Web/GoblinApplication.cs`: `/`, `/app.js`, and `/styles.css`
-serve the `connection/` files; `/work` and `/work/*` serve the `work/` files.
-Runtime assets keep their `/assets/*` URLs.
+`backend/src/Goblin.Web/Http/StaticAssets.cs`. `/`, `/work`, `/integrations`,
+`/knowledge`, and `/settings` serve the workspace shell. Settings selects its
+section with `?section=connections` (or `codex`, `github`, `agents`, `timezone`,
+`integrations`, `slack`, `system`, `cluster`, or `logs`). Page routes also accept
+a trailing slash and show the workspace access screen before unlocking.
+The connection panel is shared with Settings through `/connection/panel.html`.
+Runtime assets keep their `/assets/*` URLs, including locally bundled Inter fonts.
+
+The platform and installer use the website’s green palette, white panels, and
+Inter typography. Shared platform controls and font declarations live in
+`frontend/src/controls.css`. The standalone installer embeds its own fonts; the
+GitHub Pages release task copies the same font files and their license.
 
 The root `dist/` holds compiled test tooling. It is separate from the frontend
 build and is not included in the application image. Both output directories,

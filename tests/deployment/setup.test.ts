@@ -19,6 +19,20 @@ test("setup serves the official Goblin icon from its standalone bundle", async (
         html,
         /<script\b[^>]*src="\/setup\/app\.js"[^>]*type="module"/,
     );
+    for (const weight of ["medium", "semibold"]) {
+        const font = await fetch(setup.url + `/setup/inter-${weight}.ttf`);
+        assert.equal(font.status, 200);
+        assert.equal(font.headers.get("content-type"), "font/ttf");
+        assert.deepEqual(
+            Buffer.from(await font.arrayBuffer()),
+            await readFile(`assets/branding/fonts/inter-18pt-${weight}.ttf`),
+        );
+    }
+    const license = await fetch(setup.url + "/setup/OFL.txt");
+    assert.equal(
+        await license.text(),
+        await readFile("assets/branding/fonts/OFL.txt", "utf8"),
+    );
     const contracts = await fetch(setup.url + "/setup/contract-values.js");
     assert.equal(contracts.status, 200);
     assert.equal(

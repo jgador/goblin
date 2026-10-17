@@ -16,6 +16,7 @@ replace those terms or grant rights to hosted services.
 | `assets/branding/fonts/inter-18pt-*.ttf` | [Inter 4.001, revision 66647c0bb](https://github.com/rsms/inter/tree/66647c0bb), SIL Open Font License 1.1. The original copyright and full terms accompany the fonts in `assets/branding/fonts/OFL.txt`. The fonts remain under OFL-1.1. |
 | `frontend/src/settings/timezone-places.ts` | Generated from `zone.tab` and `tzdata.zi` in [IANA tzdb 2026c](https://github.com/eggert/tz/tree/2026c). These timezone data are public domain; the generated file records their provenance. |
 | `frontend/public/assets/providers/*.svg` | GitHub, Slack, and Microsoft Teams logos from [SVG Logos, revision 37a6b807](https://github.com/gilbarbara/logos/tree/37a6b807fd71c622efea27a9309b5d4edc792969/logos), CC0-1.0. Unmodified copies of `github-icon.svg`, `slack-icon.svg`, and `microsoft-teams.svg`; the full license is preserved in `frontend/public/assets/providers/LICENSE.txt`. Provider trademarks remain the property of their respective owners. |
+| `frontend/public/assets/fonts/`, installer font assets | Copies of the Inter fonts above. The frontend and installation catalog include `OFL.txt`; the standalone installer serves the font license at `/setup/OFL.txt` and installs it as `Inter-OFL.txt` with its other licenses. |
 | `website/assets/` | Website copies of Inter fonts retain `OFL.txt`; provider artwork retains `PROVIDER-LICENSE.txt`. See [the website's asset notes](website/README.md) for provenance and brand artwork exclusions. |
 
 ## Brand artwork

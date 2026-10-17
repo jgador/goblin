@@ -1,37 +1,168 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Setting up Goblin</title>
-  <link rel="icon" href="/setup/icon.svg" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/setup/styles.css">
-  <script src="/setup/app.js" type="module"></script>
-</head>
-<body>
-  <main>
-    <div class="brand"><img class="brand-logo" src="/setup/icon.svg" alt="" width="650" height="602"><span>goblin</span></div>
-    <p class="eyebrow">YOUR WORKSPACE</p>
-    <h1 aria-live="polite">Getting things ready.</h1>
-    <p class="intro">Goblin is being installed on your server. You can close this page and return anytime.</p>
-    <div class="installation-progress">
-      <ol id="steps" aria-label="Installation steps"></ol>
-      <details class="installation-log" open>
-        <summary>Installation log</summary>
-        <div class="log-toolbar">
-          <div class="log-status">
-            <span id="log-connection" role="status">Connecting…</span>
-            <span id="elapsed" role="timer" aria-label="Elapsed time"></span>
-          </div>
-          <label><input id="follow-log" type="checkbox" checked> Follow latest</label>
-        </div>
-        <div id="install-log" role="log" aria-label="Installation log" aria-live="off" tabindex="0"><p class="log-empty">Waiting for installation activity…</p></div>
-      </details>
-    </div>
-    <p id="connection" class="connection" role="status"></p>
-    <p id="recovery" hidden>Installation progress has been saved. Your administrator can review the installation log and retry using Azure Run Command or SSH.</p>
-    <noscript>Enable JavaScript to see live installation progress.</noscript>
-    <footer>This page will open Goblin automatically when installation finishes.</footer>
-  </main>
-</body>
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="theme-color" content="#f7f9f6" />
+        <title>Setting up Goblin</title>
+        <link
+            rel="icon"
+            href="/setup/icon.svg"
+            type="image/svg+xml"
+            sizes="any"
+        />
+        <link rel="stylesheet" href="/setup/styles.css" />
+        <script src="/setup/app.js" type="module"></script>
+    </head>
+    <body>
+        <header class="setup-header">
+            <div class="brand">
+                <img
+                    class="brand-logo"
+                    src="/setup/icon.svg"
+                    alt=""
+                    width="650"
+                    height="602"
+                /><span>goblin</span>
+            </div>
+            <span class="header-label">Workspace setup</span>
+            <span id="setup-status" class="setup-status" role="status"
+                >Connecting</span
+            >
+        </header>
+        <main>
+            <section class="setup-intro" aria-labelledby="setup-heading">
+                <p class="eyebrow">A HOME FOR YOUR COWORKER</p>
+                <h1 id="setup-heading" aria-live="polite">
+                    Getting things ready.
+                </h1>
+                <p id="intro" class="intro">
+                    We’re preparing a space for your conversations, work, and
+                    results. Goblin will open here when it’s ready.
+                </p>
+                <div class="progress-summary">
+                    <div class="progress-meta">
+                        <p
+                            class="progress-count"
+                            role="status"
+                            aria-atomic="true"
+                        >
+                            <strong id="completed-count">0</strong
+                            ><span
+                                >of <span id="total-count">12</span> tasks
+                                complete</span
+                            >
+                        </p>
+                        <span
+                            id="elapsed"
+                            role="timer"
+                            aria-label="Elapsed time"
+                            >0m 0s</span
+                        >
+                    </div>
+                    <progress
+                        id="overall-progress"
+                        value="0"
+                        max="12"
+                        aria-label="Installation progress"
+                    ></progress>
+                    <p id="activity" class="activity">
+                        Waiting for installation to begin.
+                    </p>
+                </div>
+                <div class="setup-note">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        aria-hidden="true"
+                    >
+                        <rect x="3.5" y="4.5" width="17" height="12" rx="2" />
+                        <path d="M8 20h8M12 16.5V20m-3-10 2 2 4-4" />
+                    </svg>
+                    <div>
+                        <strong>No need to keep this page open.</strong>
+                        <p>
+                            Installation continues on your server. Return to
+                            this address whenever you’re ready.
+                        </p>
+                    </div>
+                </div>
+                <p id="connection" class="connection" role="status"></p>
+                <div id="recovery" class="recovery" role="alert" hidden>
+                    <strong>Your progress is saved.</strong>
+                    <p>
+                        Review the installation log for details. Your
+                        administrator can retry from the server terminal or
+                        Azure Run Command.
+                    </p>
+                </div>
+                <noscript
+                    >Enable JavaScript to see live installation
+                    progress.</noscript
+                >
+            </section>
+            <div class="setup-content">
+                <section
+                    class="setup-steps"
+                    aria-labelledby="setup-steps-heading"
+                >
+                    <div class="panel-heading">
+                        <h2 id="setup-steps-heading">Installation progress</h2>
+                        <span>4 stages</span>
+                    </div>
+                    <div id="stages"></div>
+                    <p class="panel-note">
+                        <span aria-hidden="true">↳</span> Some tasks run
+                        together to get you ready sooner.
+                    </p>
+                </section>
+                <details class="installation-log">
+                    <summary>
+                        <span>Installation log</span
+                        ><span class="log-summary-status" id="log-connection"
+                            >Connecting…</span
+                        >
+                    </summary>
+                    <div class="log-toolbar">
+                        <span>Live output from your server</span
+                        ><label
+                            ><input id="follow-log" type="checkbox" checked />
+                            Follow latest</label
+                        >
+                    </div>
+                    <div
+                        id="install-log"
+                        role="log"
+                        aria-label="Installation log"
+                        aria-live="off"
+                        tabindex="0"
+                    >
+                        <p class="log-empty">
+                            Waiting for installation activity…
+                        </p>
+                    </div>
+                </details>
+                <aside class="next-step">
+                    <span class="next-icon" aria-hidden="true">✳</span>
+                    <div>
+                        <p class="eyebrow">UP NEXT</p>
+                        <h2>Make yourself at home.</h2>
+                        <p>
+                            Connect your AI account, start a conversation, and
+                            give Goblin its first task.
+                        </p>
+                    </div>
+                </aside>
+            </div>
+        </main>
+        <footer>
+            <span>YOUR SERVER. YOUR WORKSPACE.</span
+            ><span>Built for working together.</span>
+        </footer>
+    </body>
 </html>

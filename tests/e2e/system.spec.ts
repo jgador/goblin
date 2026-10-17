@@ -102,7 +102,7 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
     await expect(
         page.getByRole("link", { name: "Open cluster" }),
     ).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await expect(
         page.getByRole("button", { name: "System resources", exact: true }),
     ).toBeFocused();
@@ -141,8 +141,8 @@ test("System supports mobile, pending sandboxes, unavailable metrics, and lock c
         memoryBytes: 0,
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/?settings=system");
-    const dialog = page.getByRole("dialog", { name: "Settings" });
+    await page.goto("/settings?section=system");
+    const dialog = page.getByRole("region", { name: "Settings" });
     const panel = page.getByRole("region", { name: "System resources" });
     await expect(
         panel.getByText("run-123456789123456789-1", { exact: true }),
@@ -166,7 +166,8 @@ test("System supports mobile, pending sandboxes, unavailable metrics, and lock c
         path: test.info().outputPath("system-mobile.png"),
         fullPage: true,
     });
-    await dialog.getByRole("button", { name: "Lock workspace" }).click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page.getByRole("button", { name: "Lock workspace" }).last().click();
     await expect(dialog).not.toBeVisible();
     await expect(page.getByText("my-goblin-vm")).not.toBeAttached();
 });
@@ -185,7 +186,7 @@ test("Unavailable monitoring does not claim zero or healthy", async ({
             },
         }),
     );
-    await page.goto("/?settings=system");
+    await page.goto("/settings?section=system");
     const panel = page.getByRole("region", { name: "System resources" });
     await expect(
         panel.getByText("System metrics are temporarily unavailable."),

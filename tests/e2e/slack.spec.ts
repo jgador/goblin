@@ -93,13 +93,13 @@ test("Slack setup supports manual code entry and explicit owner linking", async 
         }
         await route.fulfill({ json: state });
     });
-    await page.goto("/?settings=integrations");
+    await page.goto("/settings?section=integrations");
     await page.getByRole("link", { name: "Open integrations" }).click();
     await page
         .getByRole("button", { name: "Connect Slack", exact: true })
         .click();
     await page
-        .getByRole("dialog", { name: "Settings", exact: true })
+        .getByRole("region", { name: "Settings", exact: true })
         .getByRole("button", { name: "Connect Slack", exact: true })
         .click();
     await expect(page.getByLabel("Slack authorization command")).toHaveValue(

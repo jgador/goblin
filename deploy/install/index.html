@@ -1,27 +1,88 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Install Goblin</title>
-  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css">
-  <script src="app.js" defer></script>
-</head>
-<body>
-  <main>
-    <div class="brand"><img class="brand-logo" src="assets/icon.svg" alt="" width="650" height="602"><span>goblin</span></div>
-    <p class="eyebrow">YOUR WORKSPACE</p>
-    <h1>Install Goblin</h1>
-    <p>Your workspace, in your Azure account.</p>
-    <div class="install-card">
-      <label for="version">Goblin version</label>
-      <select id="version" disabled aria-describedby="status"><option value="">Loading releases…</option></select>
-      <p id="status" role="status">Loading available versions.</p>
-      <a id="deploy" class="button" aria-disabled="true">Deploy to Azure</a>
-    </div>
-    <p class="note">Azure opens with your selected version. Choose a password during setup, then follow installation progress at the address Azure provides.</p>
-    <a id="notes" hidden>Release notes</a>
-  </main>
-</body>
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="theme-color" content="#f7f9f6" />
+        <title>Install Goblin</title>
+        <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+        <link rel="stylesheet" href="style.css" />
+        <script src="app.js" defer></script>
+    </head>
+    <body>
+        <header class="install-header">
+            <a class="brand" href="https://goblinboard.com"
+                ><img
+                    class="brand-logo"
+                    src="assets/icon.svg"
+                    alt=""
+                    width="650"
+                    height="602"
+                /><span>goblin</span></a
+            ><span>Your self-hosted AI coworker</span>
+        </header>
+        <main>
+            <section class="install-intro">
+                <p class="eyebrow">MAKE YOURSELF AT HOME</p>
+                <h1>
+                    Your next coworker.<br /><span>Your own workspace.</span>
+                </h1>
+                <p>
+                    Give Goblin a home in your Azure account. Your team’s
+                    conversations, work, and results stay together.
+                </p>
+            </section>
+            <section class="install-options" aria-label="Install Goblin">
+                <div class="install-card">
+                    <p class="eyebrow">INSTALL GOBLIN</p>
+                    <h2>Ready when you are.</h2>
+                    <label for="version">Goblin version</label>
+                    <select id="version" disabled aria-describedby="status">
+                        <option value="">Loading releases…</option>
+                    </select>
+                    <p id="status" role="status">Loading available versions.</p>
+                    <a id="deploy" class="button" aria-disabled="true"
+                        >Deploy to Azure</a
+                    >
+                </div>
+                <p class="note">
+                    Azure opens with your selected version. Choose a password
+                    during setup, then follow installation progress at the
+                    address Azure provides.
+                </p>
+                <a id="notes" hidden>Release notes</a>
+            </section>
+            <ol class="install-guide">
+                <li>
+                    <span>01</span>
+                    <div>
+                        <strong>Choose your version</strong>
+                        <p>Start with the recommended release.</p>
+                    </div>
+                </li>
+                <li>
+                    <span>02</span>
+                    <div>
+                        <strong>Set up your workspace</strong>
+                        <p>
+                            Azure guides you through your server and password.
+                        </p>
+                    </div>
+                </li>
+                <li>
+                    <span>03</span>
+                    <div>
+                        <strong>Connect and get to work</strong>
+                        <p>
+                            Follow installation progress, then connect your AI
+                            account.
+                        </p>
+                    </div>
+                </li>
+            </ol>
+        </main>
+    </body>
 </html>

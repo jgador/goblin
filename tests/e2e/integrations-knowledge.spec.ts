@@ -156,7 +156,7 @@ test("manage preserves GitHub permissions, disconnects, and restores focus", asy
     await page
         .getByRole("button", { name: "Manage GitHub", exact: true })
         .click();
-    const settings = page.getByRole("dialog", {
+    const settings = page.getByRole("region", {
         name: "Settings",
         exact: true,
     });
@@ -172,7 +172,7 @@ test("manage preserves GitHub permissions, disconnects, and restores focus", asy
     await expect(
         settings.getByRole("button", { name: "Connect GitHub", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await expect(page.locator('[data-integration="github"]')).toContainText(
         "Not connected",
     );
@@ -213,7 +213,7 @@ test("Add integration opens existing setup and unavailable Slack never claims a 
             exact: false,
         }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await expect(
         page.getByRole("button", { name: "View setup Slack", exact: true }),
     ).toBeFocused();
@@ -340,7 +340,7 @@ test("connection management stays accessible when Work storage is unavailable", 
     await expect(
         page.getByRole("button", { name: "Check connection", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await page.getByRole("link", { name: "Knowledge", exact: true }).click();
     await expect(
         page.getByRole("heading", { name: "No indexed sources" }),
