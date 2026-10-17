@@ -7,62 +7,75 @@ installation catalog at `jgador.github.io/goblin/`. See
 [workflow naming](../docs/github-actions.md) and
 [production deployment](production/README.md).
 
-The page leads with **“Turn team conversations into results.”** and explains the
-benefit in neutral international English: “Assign tasks, follow progress, and
-review the work. Goblin keeps conversations and results connected, so your team
-spends less time coordinating.” The page metadata follows the same message.
-“Your self-hosted AI coworker” remains a smaller product description, and
-“In the loop” remains part of the branding.
+The page leads with **“Turn team conversations into results.”**, followed by the
+short description **“Your self-hosted AI coworker.”** The headline explains the
+outcome; the supporting line identifies the product. The demo follows directly,
+without a longer explanatory paragraph or separate instructions that repeat what
+the example shows. “In the loop” remains part of the branding.
 
-Four captions describe what the team gains:
+The design follows a quiet, product-focused philosophy: explain the value first,
+make the example easy to explore, and keep decoration subordinate to the work.
+It uses Inter, a pale neutral background, dark green text, and one green accent
+for actions and selection. Shared CSS tokens own colors, borders, three corner
+radii, restrained shadows, and motion. Text, space, and alignment establish
+hierarchy; decorative miniature applications do not compete with the example.
+
+The header combines the Goblin mark and wordmark with a GitHub project link.
+The compact introduction brings the interactive example higher on the page.
+An accessible section heading names the demo without adding visible copy.
+The interactive example puts simple channel cards and the Goblin hub beside the
+conversation on wider screens, with their top edges aligned. Each card names its
+platform and conversation type; the selected card has a green border and tint.
+The benefits have their own full-width section after the entire demo, introduced
+by “A little less coordination. A lot more room to do the work.” This section
+stays visually separate from the hub and uses four columns on desktop.
+The diagram gives its connections more vertical room while keeping the cards
+compact. It stays alongside the longer conversation while scrolling when the
+desktop viewport is tall enough to show the whole diagram. Some open space is
+intentional; the benefits are not filler for the diagram column.
+At widths of 1050 pixels and below, the hub and conversation stack. The benefits
+follow both in document order, then a small open-source footer.
 
 | Benefit | Supporting copy |
 | --- | --- |
-| Spend less time switching tools | Follow conversations, progress, and results in one place. |
-| Spend less time repeating information | Keep each task connected to the conversation that started it. |
-| Control where Goblin runs | Host Goblin on infrastructure you control. |
-| Stay involved in decisions | Assign the work, review the results, and decide what happens next. |
+| Less switching. More focus. | Follow conversations, progress, and results in one place. |
+| Context stays connected. | Keep each task connected to the conversation that started it. |
+| Your infrastructure. | Host Goblin on infrastructure you control. |
+| You decide what’s next. | Assign the work, review the results, and decide what happens next. |
 
-The hub and conversation panel follow the introduction directly, without a
-separate instruction line, example button, or destination. The demonstration
-plays on its own unless reduced motion is preferred. A visible Pause/Resume
-control lets visitors read at their own pace; it shows “Motion off” when reduced
-motion is preferred. Each channel card's accessible name describes the
-conversation it plays, and the about dialog explains how to explore it.
-A visible “Illustrative example” label and
-planned-integration note explain the demonstration's scope alongside the
-channels.
+A visible “Illustrative example” label and planned-integration note explain
+scope beside Pause/Resume. Reduced-motion preferences show “Motion off”.
+Replies use readable body text, followed by a numbered “Proposed steps” list and
+an integrated result card. Numbers describe the proposed sequence rather than
+implying successful execution. The message composer has been removed: the demo
+accepts no messages, and its footer states that the conversation is scripted.
+Activity, Work, Files, and native dialog previews remain interactive.
 
-A standalone interactive concept showing Goblin at the center of Slack,
-Microsoft Teams, GitHub, Discord, and Gmail conversations. The layout follows
-`references/goblin-in-the-loop-v2.png` in this directory:
-a pale green tool network, central Goblin mark, and a tabbed conversation panel.
-The tool network has no enclosing box; the conversation panel retains its border.
-Open `index.html` in a modern browser; the page itself requires no build,
-dependencies, or account connections. The header links to the Goblin GitHub
-project without showing repository metrics. Each channel card names its
-platform beside the platform's mark. On phones, five compact channel cards form
-a loose ring around Goblin. Each card has one thin, muted fiber-like connector
-meeting the card and logo edges. These connectors stay static so the active
-conversation remains the focus. On phones, the read-only message preview and
-benefit descriptions follow the conversation panel, keeping
-the hub and example together. On wider screens, the message preview sits inside
-the Conversation view and the benefits sit below the hub. Their positions update
-when crossing the phone breakpoint.
+On phones, five compact channel cards form a loose ring around Goblin. Thin
+connector tracks meet the card and logo edges. A short fiber light travels from
+the selected card to Goblin for the request, then back to that card for the
+response, following the conversation's timing. Other tracks stay quiet. The light
+pauses with playback and is hidden during thinking, completed replies, and reduced
+motion. The conversation follows in normal document flow, with all replies and
+deliverables available without a fixed-height nested scroller. Benefits use two
+columns, then one at the narrowest width. Controls have at least 44-pixel touch
+targets, hover styling is limited to
+fine pointers, zoom remains available, and page padding respects safe areas.
 
-The central Goblin icon and wordmark scale together when vertical space is tight,
-keeping an 18-pixel gap above the Discord connector endpoint in wide, short windows.
-On wider layouts, the tool network keeps its own height instead of stretching
-with the conversation panel, so arriving replies lengthen only the panel and do
-not resize the diagram or hub during the animation.
-On wider layouts, every connector starts at the measured center of its card's
-dot and ends at its Goblin-side dot. Paths and animation lengths update with
-the layout. Endpoint dots, moving dots, and their halos stay circular at a
-consistent 9-pixel size, independent of the SVG's aspect ratio. Cards highlight
-without shifting on hover, keeping their connectors attached.
-Connector lines have no floating icon badges; the cards identify each platform.
-Goblin avatars inside the channel cards use 45% opacity to keep the central hub
-visually prominent. The hub and conversation panel avatars retain full opacity.
+The network retains its own height while messages appear. The conversation
+reserves space for replies during playback so arriving content does not move
+later sections. Hidden replies and controls are also inert and excluded from
+accessibility views. On wider layouts, every connector starts at its measured
+card dot and ends at the Goblin-side dot. Paths and animation lengths update
+with layout changes; moving dots and halos remain circular independent of SVG
+aspect ratio. Hover leaves card geometry stable so connectors stay attached.
+The icon, wordmark, and status scale together with an 18-pixel gap above the
+Discord endpoint when necessary.
+
+The website remains static HTML, CSS, and JavaScript with no account connections
+or build required to serve it. Open `index.html` in a modern browser or use the
+development commands below. The older `references/goblin-in-the-loop-v2.png`
+is retained as historical context, not the current layout specification.
 
 The hub's Goblin mark is a live SVG character rather than a video. On load, its
 blocks and head enter with a 300ms opacity/transform animation, staggered by 50ms,
@@ -71,17 +84,20 @@ a subtle gaze: eyes look toward the active channel during travel, glance up whil
 thinking, and return to center when the reply arrives. The gaze uses interruptible
 200ms Web Animations API transforms. Entrance and gaze share the strong
 `--ease-out` CSS token (`cubic-bezier(0.23, 1, 0.32, 1)`). There are no repeated
-hops, squashes, idle blinks, or mobile light loops while visitors read.
+hops, squashes, or idle blinks while visitors read. Mobile fiber lights run only
+during the active request and response, with no independent background loops.
 All demonstration motion pauses with playback, tabs, dialogs, and page visibility.
 Reduced motion shows the static mark; changing that preference does not replay
 the entrance. Pointer hover feedback is gated to devices with hover and a fine
-pointer. Subtle 125ms opacity feedback remains available with reduced motion.
+pointer. Pointer button presses use 160ms scale feedback; keyboard interaction
+and reduced motion stay immediate. Channel cards do not scale on press, keeping
+the connector endpoints fixed.
 
 The scenarios are associated with Josh A. (Slack), Anders H. (Microsoft
 Teams), Stephen T. (GitHub), Renko K. (Discord), and Linus T. (Gmail). The
 channel cards and conversation panel show platforms rather than people: each
-request appears under its platform's mark and name, and only the card avatars
-keep the participants' initials.
+request appears under its platform's mark and name. Channel cards use provider
+logos and do not display participant avatars.
 
 Josh A.’s three Slack scenarios use a fictional log ingestion pipeline:
 handle higher traffic without losing accepted logs, protect logs during
@@ -98,9 +114,8 @@ deployment plan for review. The dialogue is invented, not a quotation or a
 description of any actual system or work by Josh. No pipeline has been rewritten,
 load-tested, or deployed as part of this conversation.
 
-The expanded GitHub card shows Code, Issues, Pull requests, Actions, and Projects
-icons, with their names on hover. They illustrate repository navigation; clicking
-the card plays the GitHub conversation.
+The GitHub card identifies an issue discussion; selecting it plays the
+GitHub conversation. Decorative repository navigation previews are removed.
 
 Its three scenarios are based on Stephen T.’s public
 [dotnet/runtime issue #96277](https://github.com/dotnet/runtime/issues/96277),
@@ -188,16 +203,19 @@ Message travel varies by channel. Each one-way trip takes
 0.6 seconds for Slack, 1 second for Teams and Discord, 1.6 seconds for Gmail,
 and 2.4 seconds for GitHub. The thinking pause also grows from quick chat
 exchanges to longer email and repository investigations. Replies appear when
-the returning dot arrives. Travel is linear along the path; only packet and label
-transforms change per frame, with geometry measured on layout changes.
+the returning dot or mobile fiber light arrives. Travel is linear along the path,
+with geometry measured on layout changes. Mobile curves are sampled in screen
+pixels to keep the light's speed and thickness consistent as the layout changes.
+Playback updates only transforms and opacity; the fiber light fades at each
+endpoint without moving the cards or logo.
 These are illustrative timings, not measured service latencies. Each exchange
 has a half-second lead-in and holds its completed reply
 for 2–3 seconds before the next channel. Exchange lengths follow their timing:
 5 seconds for Slack, 6 for Teams, 11 for GitHub, 6 for Discord, and 8 for Gmail.
 The full loop is 36 seconds, derived from the exchange timings.
 While a reply is being prepared, the conversation panel shows a gently pulsing
-green dot beside a stationary Goblin avatar, with a screen-reader status instead
-of visible thinking text.
+green dot beside a stationary Goblin avatar and visible “Preparing a response”
+status text.
 The opacity-only pulse pauses with the demonstration and is disabled for
 reduced motion.
 
@@ -207,9 +225,8 @@ The conversation and Files cards display “Ready for review” with an
 “Illustrative result” label. Activity connects the request to its proposed result,
 Work explains the planned checks, and Files lets visitors explore the deliverables.
 No successful execution or verification is claimed by the illustrated review state.
-The message composer is a read-only visual preview.
-Its attachment, mention, smile, and send icons are decorative. It does not
-accept messages or files; choose a channel to explore a scripted conversation.
+Choose a channel to explore a scripted conversation. The example accepts no
+messages or files and includes no editable message composer.
 
 These conversations are illustrative. The website makes no external requests and
 does not execute Work. Teams, Discord, and email depict future possibilities,
@@ -219,11 +236,10 @@ explains the website's scope.
 
 The Goblin icons are unchanged copies of the official artwork in the repository's
 `assets/branding/svg/` directory. The center hub draws the light-background
-icon's shapes inline with the same geometry and colors, so its parts can move,
-adding brief arc eyes during the hop; it sits directly on the page with a soft
-glow. Conversation avatars and the Slack and Teams
-card avatars also use the light-background icon without a surrounding tile.
-The Discord card and About dialog use the white icon on a green surface.
+icon's shapes inline with the same geometry and colors, so its parts can move;
+it sits directly on the page with a soft glow. Conversation avatars use the
+light-background icon without a surrounding tile. The About dialog uses the
+same icon on its white surface.
 Brand artwork remains outside the repository's Apache
 license grant. Inter fonts retain their SIL Open Font License in `assets/OFL.txt`.
 Slack, Teams, and GitHub artwork comes from existing frontend provider assets
@@ -235,7 +251,7 @@ channel names and marks belong to their respective owners.
 The production application, its asset map, and its security policy are independent
 of this website. Verify changes with `npm --prefix website run check`
 from the repository root, plus browser checks of channel scenarios, tabs,
-previews, composer, automatic animation, narrow layouts, and reduced motion.
+previews, automatic animation, narrow layouts, keyboard controls, and reduced motion.
 
 The existing `references/goblin-in-the-loop.gif` is an earlier exported design;
 it is not regenerated as part of this website update. Use `index.html` for the
