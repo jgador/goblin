@@ -170,6 +170,8 @@ main {
   overflow: hidden;
 }
 .network-panel {
+  /* Keep the diagram's height independent of the conversation length so replies do not resize it. */
+  align-self: start;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -205,13 +207,6 @@ main {
   font-weight: 600;
   letter-spacing: 0;
   color: #587765;
-}
-.intro .network-instruction {
-  margin-top: 16px;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: #435e50;
 }
 .network {
   /* Match the Discord connector's x=575 axis in the 1100-wide SVG. */
@@ -406,11 +401,12 @@ main {
   max-height: 100%;
 }
 .card-name {
-  position: absolute;
-  clip: rect(0, 0, 0, 0);
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
+  align-self: center;
+  min-width: 0;
+  color: #29463c;
+  font-size: clamp(13px, 1vw, 16px);
+  line-height: 1.4;
+  font-weight: 600;
 }
 .card-more {
   color: #a7aebe;
@@ -714,9 +710,41 @@ main {
   box-shadow: none;
   position: relative;
 }
-.hub-core .goblin-mark img {
+.hub-core .goblin-mark svg {
+  display: block;
   width: 78%;
   height: auto;
+  overflow: visible;
+}
+/* A one-time entrance assembles the mark before the demonstration script animates it.
+   The SVG's user units set each transform origin. */
+.hub-character .mark-block-left {
+  transform-origin: 160.52px 602.03px;
+  animation: hub-block-pop 0.6s 0.05s backwards;
+}
+.hub-character .mark-block-right {
+  transform-origin: 487.68px 602.03px;
+  animation: hub-block-pop 0.6s 0.18s backwards;
+}
+.hub-character .mark-blocks {
+  transform-origin: 324.1px 602.03px;
+  animation: hub-blocks-land 0.35s 0.54s backwards;
+}
+.hub-character .mark-head {
+  transform-origin: 325px 274.84px;
+  animation: hub-head-drop 0.75s 0.22s backwards;
+}
+.hub-character .mark-eye-left {
+  transform-origin: 198.98px 101.28px;
+  animation: hub-eyes-open 0.45s 0.78s backwards;
+}
+.hub-character .mark-eye-right {
+  transform-origin: 449.23px 101.28px;
+  animation: hub-eyes-open 0.45s 0.78s backwards;
+}
+/* The entrance lasts about a second, so it finishes even when playback starts paused. */
+.is-paused .hub-character * {
+  animation-play-state: running !important;
 }
 .hub-name {
   font-size: clamp(25px, 2vw, 40px);
@@ -910,13 +938,17 @@ main {
   width: 38px;
   height: 38px;
 }
-.human-avatar {
+.channel-avatar {
   display: grid;
   place-items: center;
+  border: 1px solid #e3e9e4;
   border-radius: 50%;
-  background: #e8f2e7;
-  color: #487c51;
-  font-size: 16px;
+  background: #fff;
+}
+.channel-avatar img {
+  width: 58%;
+  height: 58%;
+  object-fit: contain;
 }
 .message-content {
   flex: 1;
@@ -1442,6 +1474,69 @@ dialog ul {
   50% {
     opacity: 0.55;
     transform: scale(0.75);
+  }
+}
+@keyframes hub-block-pop {
+  0% {
+    transform: scale(0);
+    animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1);
+  }
+  45% {
+    transform: scale(1.12, 1.08);
+  }
+  68% {
+    transform: scale(0.96);
+  }
+  85% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes hub-blocks-land {
+  30% {
+    transform: scale(1.04, 0.94);
+  }
+  65% {
+    transform: scale(0.99, 1.02);
+  }
+}
+@keyframes hub-head-drop {
+  0% {
+    opacity: 0;
+    transform: translateY(-300px) scale(0.94, 1.12);
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  20% {
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(0) scale(1.1, 0.84);
+    animation-timing-function: ease-out;
+  }
+  62% {
+    transform: translateY(0) scale(0.96, 1.06);
+  }
+  80% {
+    transform: translateY(0) scale(1.02, 0.98);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes hub-eyes-open {
+  0% {
+    transform: scale(1.06, 0.08);
+  }
+  40% {
+    transform: scale(0.97, 1.15);
+  }
+  70% {
+    transform: scale(1.01, 0.96);
+  }
+  100% {
+    transform: none;
   }
 }
 @media (min-width: 1600px) {
@@ -2257,19 +2352,11 @@ dialog ul {
   }
 }
 
-.person-name {
-  align-self: center;
-  min-width: 0;
-  color: #29463c;
-  font-size: clamp(13px, 1vw, 16px);
-  line-height: 1.4;
-  font-weight: 600;
-}
 .card-top > img {
   flex-shrink: 0;
 }
 @media (min-width: 981px) and (max-width: 1250px) {
-  .person-name {
+  .card-name {
     font-size: 11px;
   }
   .card-more {
@@ -2369,7 +2456,7 @@ dialog ul {
   .network {
     min-height: 570px;
   }
-  .person-name {
+  .card-name {
     font-size: 13px;
   }
   .card-top {
@@ -2482,7 +2569,7 @@ dialog ul {
   .channel-discord .card-top {
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr);
-    grid-template-rows: min-content min-content;
+    align-items: center;
     align-content: center;
     width: 100%;
     height: auto;
@@ -2496,33 +2583,16 @@ dialog ul {
   .channel .card-top > img,
   .channel-discord .card-top > img {
     grid-column: 1;
-    grid-row: 2;
     width: 22px;
     height: 22px;
     max-height: none;
   }
   .channel .card-name {
     grid-column: 2;
-    grid-row: 2;
-    align-self: center;
-    position: static;
-    width: auto;
-    height: auto;
-    clip: auto;
-    overflow: visible;
     color: #2e5340;
     font-size: 11px;
     font-weight: 600;
     line-height: 1.2;
-  }
-  .channel .person-name {
-    display: block;
-    grid-column: 1 / -1;
-    grid-row: 1;
-    color: #587064;
-    font-size: 11px;
-    line-height: 1.2;
-    white-space: nowrap;
   }
   .channel .card-more,
   .channel .card-body {
@@ -2603,8 +2673,7 @@ dialog ul {
     width: 20px;
     height: 20px;
   }
-  .channel .card-name,
-  .channel .person-name {
+  .channel .card-name {
     font-size: 10px;
   }
 }

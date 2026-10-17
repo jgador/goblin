@@ -37,16 +37,12 @@
                 Assign tasks, follow progress, and review the work. Goblin keeps conversations and
                 results connected, so your team spends less time coordinating.
               </p>
-              <p class="network-instruction" id="network-instruction">
-                Select a channel to see an example task.
-              </p>
             </header>
             <div
               class="network"
               id="network"
               role="group"
               aria-label="Example communication channels"
-              aria-describedby="network-instruction"
             >
               <svg
                 class="connections"
@@ -160,12 +156,11 @@
                 class="channel channel-slack"
                 data-channel="slack"
                 type="button"
-                aria-label="Play the Slack conversation with Josh A."
+                aria-label="Play the Slack conversation"
                 aria-pressed="true"
               >
                 <span class="card-top"
                   ><img src="assets/slack.svg" alt="Slack" /><span class="card-name">Slack</span
-                  ><strong class="person-name">Josh A.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mini-message"
@@ -183,13 +178,12 @@
                 class="channel channel-teams"
                 data-channel="teams"
                 type="button"
-                aria-label="Play the Microsoft Teams conversation with Anders H."
+                aria-label="Play the Microsoft Teams conversation"
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/teams.svg" alt="Microsoft Teams" /><span class="card-name"
                     >Microsoft Teams</span
-                  ><strong class="person-name">Anders H.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mini-message"
@@ -207,12 +201,11 @@
                 class="channel channel-github"
                 data-channel="github"
                 type="button"
-                aria-label="Play the GitHub conversation with Stephen T."
+                aria-label="Play the GitHub conversation"
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/github.svg" alt="GitHub" /><span class="card-name">GitHub</span
-                  ><strong class="person-name">Stephen T.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="repo-preview"
@@ -303,12 +296,11 @@
                 class="channel channel-email"
                 data-channel="email"
                 type="button"
-                aria-label="Play the Gmail conversation with Linus T."
+                aria-label="Play the Gmail conversation"
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/email.svg" alt="Gmail" /><span class="card-name">Gmail</span
-                  ><strong class="person-name">Linus T.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mail-row"
@@ -360,13 +352,12 @@
                 class="channel channel-discord"
                 data-channel="discord"
                 type="button"
-                aria-label="Play the Discord conversation with Renko K."
+                aria-label="Play the Discord conversation"
                 aria-pressed="false"
               >
                 <span class="card-top"
                   ><img src="assets/discord.svg" alt="Discord" /><span class="card-name"
                     >Discord</span
-                  ><strong class="person-name">Renko K.</strong
                   ><span class="card-more" aria-hidden="true">•••</span></span
                 ><span class="card-body" aria-hidden="true"
                   ><span class="mini-message"
@@ -383,7 +374,75 @@
               </button>
               <div class="goblin-hub" id="goblin-hub">
                 <div class="hub-core">
-                  <span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span>
+                  <span class="goblin-mark"
+                    ><svg
+                      class="hub-character"
+                      id="hub-character"
+                      viewBox="0 0 650 602.02"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <g id="hub-body">
+                        <g class="mark-blocks">
+                          <g id="hub-block-left">
+                            <rect
+                              class="mark-block-left"
+                              x="23.09"
+                              y="327.17"
+                              width="274.86"
+                              height="274.86"
+                              rx="32.02"
+                              fill="#595a5a"
+                            />
+                          </g>
+                          <g id="hub-block-right">
+                            <rect
+                              class="mark-block-right"
+                              x="350.25"
+                              y="327.17"
+                              width="274.86"
+                              height="274.86"
+                              rx="32.02"
+                              fill="#939393"
+                            />
+                          </g>
+                        </g>
+                        <g id="hub-head">
+                          <g class="mark-head">
+                            <path
+                              fill="#10182a"
+                              d="M625.11,86.18v-53.95c0-17.8-14.43-32.22-32.22-32.22H55.31C37.51,0,23.09,14.43,23.09,32.22v54.04c-12.9.93-23.09,11.66-23.09,24.8v52.72c0,13.14,10.18,23.87,23.09,24.8v54.04c0,17.8,14.43,32.22,32.22,32.22h537.58c17.8,0,32.22-14.43,32.22-32.22v-53.95c13.75,0,24.89-11.14,24.89-24.89v-52.72c0-13.75-11.14-24.89-24.89-24.89Z"
+                            />
+                            <g id="hub-eyes">
+                              <g class="mark-eye-left">
+                                <rect id="hub-eye-left" x="169.08" y="83.24" width="59.79" height="36.09" rx="16.19" fill="#fff" />
+                                <path
+                                  id="hub-smile-left"
+                                  d="M173.98 111.28Q198.98 75.28 223.98 111.28"
+                                  fill="none"
+                                  stroke="#fff"
+                                  stroke-width="15"
+                                  stroke-linecap="round"
+                                  opacity="0"
+                                />
+                              </g>
+                              <g class="mark-eye-right">
+                                <rect id="hub-eye-right" x="419.33" y="83.23" width="59.79" height="36.09" rx="16.19" fill="#fff" />
+                                <path
+                                  id="hub-smile-right"
+                                  d="M424.23 111.28Q449.23 75.28 474.23 111.28"
+                                  fill="none"
+                                  stroke="#fff"
+                                  stroke-width="15"
+                                  stroke-linecap="round"
+                                  opacity="0"
+                                />
+                              </g>
+                            </g>
+                          </g>
+                        </g>
+                      </g></svg
+                  ></span>
                 </div>
                 <span class="hub-name">goblin</span
                 ><span class="hub-status sr-only" id="hub-status">Ready for a request</span>
@@ -556,10 +615,12 @@
             >
               <div class="thread" id="thread">
                 <div class="message incoming-message" id="incoming-message">
-                  <span class="avatar human-avatar" id="human-avatar">JA</span>
+                  <span class="avatar channel-avatar"
+                    ><img id="sender-icon" src="assets/slack.svg" alt=""
+                  /></span>
                   <div class="message-content">
                     <div class="message-meta">
-                      <strong id="sender-name">Josh A.</strong
+                      <strong id="sender-name">Slack</strong
                       ><span class="message-time">10:24 AM</span>
                     </div>
                     <p id="request-text">

@@ -45,6 +45,8 @@ website/
   assets/                  Website fonts, provider marks, and Goblin artwork copies
   references/              Retained design reference and earlier GIF export
   package.json             Independently locked Vite development dependency
+  video/                   Development-only Remotion promo video with its own lockfile
+  video/renders/           Committed promo and logo MP4 renders; not deployed
   compose.yaml, Dockerfile Detached Docker development and static Nginx runtime
   k8s/                     Website-only manifests for the existing local k3s cluster
   manage.sh                Website development and local deployment commands
@@ -155,6 +157,8 @@ npm run typecheck
 | `make website-deploy` | Build the static website, import into existing local k3s, and await rollout |
 | `make website-preview` | Forward the k3s website to localhost:5174 while the terminal stays open |
 | `make website-load-test` | Measure the website container with one fresh browser visit/minute; defaults to ten visits plus a minute idle |
+| `npm --prefix website/video run render` | Render the website promo video to `website/video/renders/` after `npm --prefix website/video ci` |
+| `npm --prefix website/video run render:logo` | Render the looping Goblin logo animation to `website/video/renders/` after `npm --prefix website/video ci` |
 | `npm --prefix frontend run build` | Run the frontend package build directly |
 | `make build-backend` | Build the .NET solution using any existing frontend output |
 | `make typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
