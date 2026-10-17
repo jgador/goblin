@@ -358,8 +358,7 @@
   ];
 
   const byId = (id) => document.getElementById(id);
-  const player = byId("player");
-  const timeline = byId("timeline");
+  const demo = byId("player");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   const compactLayout = window.matchMedia("(max-width: 600px)");
   // Illustrative pacing: chat is quick; email and repository work take longer.
@@ -375,11 +374,7 @@
     return timings;
   }, []);
   const duration = sceneTimings.at(-1).end;
-  timeline.max = String(duration);
-  byId("total-duration").textContent = formatTime(duration);
-  const speeds = [1, 1.5, 0.75];
   const channelButtons = [...document.querySelectorAll("[data-channel]")];
-  const chapterButtons = [...document.querySelectorAll("[data-chapter]")];
   const connections = document.querySelector(".connections");
   const paths = scenes.map((scene) => byId(`line-${scene.id}`));
   const pathLengths = paths.map((path) => path.getTotalLength());
@@ -394,7 +389,6 @@
       ];
     }),
   );
-  const mobileFiberLights = [...document.querySelectorAll(".mobile-fiber-glow, .mobile-fiber-light")];
   const connectorPorts = scenes.map((scene) =>
     document.querySelector(`[data-channel="${scene.id}"] .connection-port`),
   );
@@ -405,15 +399,11 @@
   const packetScale = { x: 1, y: 1 };
   const hubCharacter = createHubCharacter();
   let position = receivedPosition(0);
-  let playing = !reducedMotion.matches;
-  let speedIndex = 0;
+  let animating = !reducedMotion.matches;
   let currentScene = -1;
   let currentPhase = "";
   let lastFrame = null;
   let animationFrame = null;
-  let scrubResume = false;
-  let dialogResume = false;
-  let previewResume = false;
 
   function receivedPosition(index) {
     const timing = sceneTimings[index];
@@ -667,11 +657,6 @@
     };
   }
 
-  function formatTime(value) {
-    const seconds = Math.floor(value);
-    return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  }
-
   function announce(message) {
     byId("announcer").textContent = message;
   }
@@ -706,10 +691,6 @@
     channelButtons.forEach((button) =>
       button.setAttribute("aria-pressed", String(button.dataset.channel === scene.id)),
     );
-    chapterButtons.forEach((button) => {
-      if (button.dataset.chapter === scene.id) button.setAttribute("aria-current", "step");
-      else button.removeAttribute("aria-current");
-    });
     paths.forEach((path, pathIndex) => path.classList.toggle("is-active", pathIndex === index));
     updateCard(scene, prompt);
     renderDetails(scene, prompt);
@@ -776,49 +757,13 @@
       label.style.top = `${screenPoint.y - networkRect.top}px`;
       label.textContent = phase === "asking" ? "Request" : "Response";
     }
-    timeline.value = String(position);
-    timeline.style.setProperty("--progress", `${(position / duration) * 100}%`);
-    byId("elapsed").textContent = formatTime(position);
-    timeline.setAttribute(
-      "aria-valuetext",
-      `${Math.round(position)} seconds of ${duration} seconds. ${scenes[index].name} conversation.`,
-    );
   }
-
-  function updatePlaybackControls() {
-    player.classList.toggle("is-paused", !playing);
-    byId("play-button").setAttribute(
-      "aria-label",
-      playing ? "Pause animation" : position >= duration ? "Replay animation" : "Play animation",
-    );
-    byId("play-icon").toggleAttribute("hidden", playing);
-    byId("pause-icon").toggleAttribute("hidden", !playing);
-  }
-
-  function updateMobileFiberSpeed() {
-    if (!compactLayout.matches || reducedMotion.matches) return;
-    mobileFiberLights.forEach(updateFiberAnimationRate);
-  }
-
-  function updateFiberAnimationRate(light) {
-    light.getAnimations().forEach((animation) => {
-      if (animation.playbackRate !== speeds[speedIndex]) {
-        animation.updatePlaybackRate(speeds[speedIndex]);
-      }
-    });
-  }
-
-  connections.addEventListener("animationstart", (event) => {
-    if (event.animationName === "fiber-travel" && event.target instanceof Element) {
-      updateFiberAnimationRate(event.target);
-    }
-  });
 
   function tick(timestamp) {
     animationFrame = null;
-    if (!playing) return;
+    if (!animating) return;
     if (lastFrame !== null) {
-      const elapsed = Math.min((timestamp - lastFrame) / 1000, 0.1) * speeds[speedIndex];
+      const elapsed = Math.min((timestamp - lastFrame) / 1000, 0.1);
       position = (position + elapsed) % duration;
       hubCharacter.advance(elapsed);
     }
@@ -827,22 +772,17 @@
     animationFrame = requestAnimationFrame(tick);
   }
 
-  function setPlaying(value) {
-    playing = value;
+  function syncAnimation() {
+    animating =
+      !reducedMotion.matches &&
+      byId("tab-conversation").getAttribute("aria-selected") === "true" &&
+      !aboutDialog.open &&
+      !previewDialog.open;
     if (animationFrame !== null) cancelAnimationFrame(animationFrame);
     animationFrame = null;
     lastFrame = null;
-    updatePlaybackControls();
-    if (playing && !document.hidden) animationFrame = requestAnimationFrame(tick);
-  }
-
-  function togglePlayback() {
-    if (position >= duration) {
-      currentScene = -1;
-      position = 0;
-      render();
-    }
-    setPlaying(!playing);
+    demo.classList.toggle("is-paused", !animating || document.hidden);
+    if (animating && !document.hidden) animationFrame = requestAnimationFrame(tick);
   }
 
   function selectChannel(id) {
@@ -851,7 +791,7 @@
     position = reducedMotion.matches ? receivedPosition(index) : sceneTimings[index].start;
     currentScene = -1;
     render();
-    setPlaying(!reducedMotion.matches);
+    syncAnimation();
     if (!reducedMotion.matches)
       announce(
         `${scenes[index].name} conversation. ${scenes[index].prompts[0].request}`,
@@ -861,88 +801,14 @@
   channelButtons.forEach((button) =>
     button.addEventListener("click", () => selectChannel(button.dataset.channel)),
   );
-  chapterButtons.forEach((button) =>
-    button.addEventListener("click", () => selectChannel(button.dataset.chapter)),
-  );
-  byId("play-button").addEventListener("click", togglePlayback);
-  byId("replay-button").addEventListener("click", () => {
-    currentScene = -1;
-    position = 0;
-    render();
-    setPlaying(true);
-    announce("Replaying from the beginning.");
-  });
-  byId("speed-button").addEventListener("click", () => {
-    speedIndex = (speedIndex + 1) % speeds.length;
-    updateMobileFiberSpeed();
-    byId("speed-button").textContent = `${speeds[speedIndex]}×`;
-    byId("speed-button").setAttribute(
-      "aria-label",
-      `Playback speed: ${speeds[speedIndex]} times. Click to change.`,
-    );
-    announce(`Playback speed ${speeds[speedIndex]} times.`);
-  });
-
-  timeline.addEventListener("pointerdown", () => {
-    scrubResume = playing;
-    setPlaying(false);
-  });
-  timeline.addEventListener("input", () => {
-    position = Number(timeline.value);
-    render();
-    if (position >= duration) setPlaying(false);
-  });
-  function finishScrubbing() {
-    if (scrubResume && position < duration) setPlaying(true);
-    scrubResume = false;
-  }
-  window.addEventListener("pointerup", finishScrubbing);
-  window.addEventListener("pointercancel", finishScrubbing);
-  timeline.addEventListener("keydown", (event) => {
-    if (
-      [
-        "ArrowLeft",
-        "ArrowRight",
-        "ArrowUp",
-        "ArrowDown",
-        "Home",
-        "End",
-        "PageUp",
-        "PageDown",
-      ].includes(event.key)
-    )
-      setPlaying(false);
-  });
-
-  const fullscreenButton = byId("fullscreen-button");
-  fullscreenButton.hidden = !document.fullscreenEnabled;
-  fullscreenButton.addEventListener("click", async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await player.requestFullscreen();
-    } catch {
-      announce("Fullscreen is unavailable in this browser. You can continue watching here.");
-    }
-  });
-  document.addEventListener("fullscreenchange", () => {
-    fullscreenButton.setAttribute(
-      "aria-label",
-      document.fullscreenElement ? "Exit fullscreen" : "Enter fullscreen",
-    );
-    render();
-  });
 
   const aboutDialog = byId("about-dialog");
   byId("channel-info").addEventListener("click", () => {
-    dialogResume = playing;
-    setPlaying(false);
     aboutDialog.showModal();
+    syncAnimation();
   });
   byId("close-about").addEventListener("click", () => aboutDialog.close());
-  aboutDialog.addEventListener("close", () => {
-    if (dialogResume) setPlaying(true);
-    dialogResume = false;
-  });
+  aboutDialog.addEventListener("close", syncAnimation);
   aboutDialog.addEventListener("click", (event) => {
     if (event.target !== aboutDialog) return;
     const rect = aboutDialog.getBoundingClientRect();
@@ -955,40 +821,13 @@
       aboutDialog.close();
   });
 
-  document.addEventListener("keydown", (event) => {
-    if (
-      event.code !== "Space" ||
-      event.repeat ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey ||
-      aboutDialog.open ||
-      byId("preview-dialog").open
-    )
-      return;
-    if (
-      event.target instanceof Element &&
-      event.target.closest("button, input, select, textarea, a, [contenteditable]")
-    )
-      return;
-    event.preventDefault();
-    togglePlayback();
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      if (animationFrame !== null) cancelAnimationFrame(animationFrame);
-      animationFrame = null;
-      lastFrame = null;
-      player.classList.add("is-paused");
-    } else setPlaying(playing);
-  });
+  document.addEventListener("visibilitychange", syncAnimation);
   reducedMotion.addEventListener("change", () => {
     if (reducedMotion.matches) {
       position = receivedPosition(currentScene);
-      setPlaying(false);
     }
     render();
-    requestAnimationFrame(updateMobileFiberSpeed);
+    syncAnimation();
   });
   const hub = byId("goblin-hub");
   const network = byId("network");
@@ -1073,7 +912,6 @@
       const path = mobileTrackPath(curve, toSvg);
       mobileConnectors[scene.id].strands.forEach((strand) => strand.setAttribute("d", path));
     });
-    updateMobileFiberSpeed();
   }
   function updateConnectorGeometry() {
     const matrix = connections.getScreenCTM();
@@ -1225,7 +1063,7 @@
       button.tabIndex = active ? 0 : -1;
       byId("view-" + button.dataset.tab).hidden = !active;
     });
-    if (tab.dataset.tab !== "conversation") setPlaying(false);
+    syncAnimation();
   }
   tabs.forEach((tab, index) => {
     tab.addEventListener("click", () => selectTab(tab));
@@ -1243,8 +1081,6 @@
   });
   const previewDialog = byId("preview-dialog");
   function openPreview(kind) {
-    previewResume = playing;
-    setPlaying(false);
     const scene = scenes[currentScene];
     const prompt = scene.prompts[0];
     const body = byId("preview-body");
@@ -1287,6 +1123,7 @@
       body.append(attribution);
     }
     previewDialog.showModal();
+    syncAnimation();
   }
   document.addEventListener("click", (event) => {
     const button = event.target.closest("[data-preview]");
@@ -1294,12 +1131,9 @@
   });
   byId("close-preview").addEventListener("click", () => previewDialog.close());
   byId("preview-done").addEventListener("click", () => previewDialog.close());
-  previewDialog.addEventListener("close", () => {
-    if (previewResume) setPlaying(true);
-    previewResume = false;
-  });
+  previewDialog.addEventListener("close", syncAnimation);
 
   scenes.forEach((scene) => updateCard(scene, scene.prompts[0]));
   render();
-  setPlaying(playing);
+  syncAnimation();
 })();

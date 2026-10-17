@@ -43,18 +43,17 @@ platform beside the platform's mark. On phones, five compact channel cards form
 a loose ring around Goblin. Each card has one thin, muted fiber-like connector
 meeting the card and logo edges. A soft light travels from the card to Goblin and
 back, showing both directions without a separate dotted path. Motion pauses with
-the player and follows the reduced-motion setting. The playback speed control
-also adjusts the fiber lights. On phones, the read-only message preview and
-benefit descriptions follow the conversation panel, keeping the hub and example
-together. On wider screens, the message preview sits inside the Conversation view
-and the benefits sit below the hub. Their positions update when crossing the
-phone breakpoint.
+the demonstration and follows the reduced-motion setting. On phones, the read-only
+message preview and benefit descriptions follow the conversation panel, keeping
+the hub and example together. On wider screens, the message preview sits inside
+the Conversation view and the benefits sit below the hub. Their positions update
+when crossing the phone breakpoint.
 
 The central Goblin icon and wordmark scale together when vertical space is tight,
 keeping an 18-pixel gap above the Discord connector endpoint in wide, short windows.
 On wider layouts, the tool network keeps its own height instead of stretching
 with the conversation panel, so arriving replies lengthen only the panel and do
-not resize the diagram or hub during playback.
+not resize the diagram or hub during the animation.
 On wider layouts, every connector starts at the measured center of its card's
 dot and ends at its Goblin-side dot. Paths and animation lengths update with
 the layout. Endpoint dots, moving dots, and their halos stay circular at a
@@ -66,13 +65,13 @@ visually prominent. The hub and conversation panel avatars retain full opacity.
 
 The hub's Goblin mark is a live SVG character rather than a video. On load, a
 CSS entrance pops the blocks in, drops the head onto them, and opens the eyes
-in about 1.2 seconds; it always completes, even when the player is paused.
+in about 1.2 seconds; it always completes, even when the demonstration is paused.
 Afterward, `website.js` drives the mark from the demonstration: it breathes and
 blinks while idle, looks toward the requesting channel card, tilts curiously when
 the request arrives, squints while the blocks lift in turn during thinking,
 watches the reply leave, and hops with brief arc eyes when the reply arrives.
-These reactions follow the playback speed, freeze with the pause control, and
-match the timeline when scrubbing. Reduced motion shows the static mark.
+These reactions follow the scripted exchange and pause when visitors explore
+another tab or open a dialog. Reduced motion shows the static mark.
 
 The scenarios are associated with Josh A. (Slack), Anders H. (Microsoft
 Teams), Stephen T. (GitHub), Renko K. (Discord), and Linus T. (Gmail). The
@@ -165,33 +164,32 @@ the website assigns him no unverified title. Source links appear in the About
 dialog and Discord deliverable previews. No graph database has been queried
 or synchronized, and no integration with these products is implied.
 
-Choose a channel card or chapter to play its primary scripted exchange. Additional
-scripted examples remain in the scene data; there is no scenario dropdown. The player
-uses shorter requests and replies that describe the desired outcome before the
-implementation details. All fifteen stored examples retain their scenario-specific
-checks and source attribution where applicable. The player
-supports pause/play, replay, timeline scrubbing, playback speed, fullscreen when
-available, and the Space keyboard shortcut. The initial Slack response is visible
-on arrival. Reduced-motion users start paused with a complete conversation and
-can choose chapters without moving message effects.
-During playback, the animation loops from Gmail back to Slack automatically and
-continues until paused. Channel timing and the selected playback speed persist
-across loops.
+Choose a channel card to see its primary scripted exchange. Additional
+scripted examples remain in the scene data; there is no scenario dropdown. The
+demonstration uses shorter requests and replies that describe the desired outcome
+before the implementation details. All fifteen stored examples retain their
+scenario-specific checks and source attribution where applicable. The initial
+Slack response is visible on arrival. Reduced-motion users see a complete
+conversation and can choose channel cards without moving message effects.
 
-Message travel varies by channel. At 1× playback, each one-way trip takes
+The animation loops from Gmail back to Slack automatically at its fixed pace.
+It pauses in other tabs, while a dialog is open, or when the browser page is hidden,
+then resumes when the conversation is visible again. Changing the reduced-motion
+preference updates the animation immediately.
+
+Message travel varies by channel. Each one-way trip takes
 0.6 seconds for Slack, 1 second for Teams and Discord, 1.6 seconds for Gmail,
 and 2.4 seconds for GitHub. The thinking pause also grows from quick chat
 exchanges to longer email and repository investigations. Replies appear when
 the returning dot arrives. These are illustrative timings, not measured service
-latencies. Each chapter has a half-second lead-in and holds its completed reply
-for 2–3 seconds before the next channel. Chapter lengths follow their exchange:
+latencies. Each exchange has a half-second lead-in and holds its completed reply
+for 2–3 seconds before the next channel. Exchange lengths follow their timing:
 5 seconds for Slack, 6 for Teams, 11 for GitHub, 6 for Discord, and 8 for Gmail.
-The full loop is 36 seconds; the timeline derives its duration from these chapter
-timings, and the speed control scales all timings.
+The full loop is 36 seconds, derived from the exchange timings.
 While a reply is being prepared, the conversation panel shows a gently pulsing
 green dot beside a stationary Goblin avatar, with a screen-reader status instead
 of visible thinking text.
-The pulse follows the pause control and is disabled for reduced motion.
+The pulse pauses with the demonstration and is disabled for reduced motion.
 
 The Conversation, Activity, Work, and Files tabs show related example content.
 Tabs support arrow keys, Home, and End. Deliverables open illustrative previews.
@@ -227,7 +225,7 @@ channel names and marks belong to their respective owners.
 The production application, its asset map, and its security policy are independent
 of this website. Verify changes with `npm --prefix website run check`
 from the repository root, plus browser checks of channel scenarios, tabs,
-previews, composer, playback controls, narrow layouts, and reduced motion.
+previews, composer, automatic animation, narrow layouts, and reduced motion.
 
 The existing `references/goblin-in-the-loop.gif` is an earlier exported design;
 it is not regenerated as part of this website update. Use `index.html` for the

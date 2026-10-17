@@ -17,7 +17,6 @@
   --muted: #7e899d;
   --line: #e2ece2;
   --surface: #fff;
-  --progress: 0%;
   font-family: Inter, Arial, sans-serif;
   font-size: 14px;
   color: var(--ink);
@@ -742,7 +741,7 @@ main {
   transform-origin: 449.23px 101.28px;
   animation: hub-eyes-open 0.45s 0.78s backwards;
 }
-/* The entrance lasts about a second, so it finishes even when playback starts paused. */
+/* The entrance lasts about a second, so it finishes even when the demo starts paused. */
 .is-paused .hub-character * {
   animation-play-state: running !important;
 }
@@ -1310,94 +1309,6 @@ main {
 .detail-view .artifact-card {
   margin-top: 22px;
 }
-.playback {
-  margin: 15px 6px 0;
-}
-.timeline-wrap {
-  height: 13px;
-  display: flex;
-  align-items: center;
-}
-.timeline {
-  appearance: none;
-  width: 100%;
-  height: 3px;
-  border-radius: 9px;
-  background: linear-gradient(to right, #4a8750 var(--progress), #e0e9df var(--progress));
-  margin: 0;
-  cursor: pointer;
-}
-.timeline::-webkit-slider-thumb {
-  appearance: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #417f49;
-}
-.timeline::-moz-range-thumb {
-  border: 0;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #417f49;
-}
-.transport {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 15px;
-  min-height: 43px;
-}
-.transport-main,
-.transport-options {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.play-button {
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #edf4e8;
-}
-.play-button svg {
-  width: 19px;
-  height: 19px;
-}
-.time-code {
-  display: flex;
-  gap: 8px;
-  font-size: 10px;
-  color: #889783;
-  font-variant-numeric: tabular-nums;
-}
-.time-divider {
-  opacity: 0.5;
-}
-.chapters {
-  display: flex;
-  gap: 20px;
-}
-.chapters button {
-  font-size: 11px;
-  color: #889580;
-  padding: 10px 0;
-}
-.chapters button span {
-  font-size: 9px;
-  opacity: 0.6;
-  margin-right: 5px;
-}
-.chapters button[aria-current] {
-  color: #33713b;
-}
-.speed-button {
-  font-size: 11px;
-  min-width: 30px;
-  min-height: 30px;
-}
 dialog {
   border: 1px solid #dce6d8;
   border-radius: 22px;
@@ -1450,11 +1361,6 @@ dialog ul {
   color: white;
   border-radius: 9px;
   font-size: 12px;
-}
-.player:fullscreen {
-  background: #f8fbf7;
-  overflow: auto;
-  padding: 14px;
 }
 .is-paused * {
   animation-play-state: paused !important;
@@ -1746,9 +1652,6 @@ dialog ul {
   .hub-name {
     font-size: 25px;
   }
-  .chapters {
-    gap: 12px;
-  }
 }
 @media (max-width: 980px) {
   main {
@@ -1966,22 +1869,6 @@ dialog ul {
   }
   .task-checklist {
     max-width: 560px;
-  }
-  .chapters {
-    gap: 15px;
-  }
-  .transport {
-    gap: 10px;
-  }
-  .transport-main {
-    gap: 4px;
-  }
-  .transport-options {
-    gap: 3px;
-  }
-  .time-code {
-    font-size: 9px;
-    gap: 4px;
   }
 }
 @media (max-width: 600px) {
@@ -2308,27 +2195,6 @@ dialog ul {
   }
   .composer {
     margin: 12px 14px 16px;
-  }
-  .chapters {
-    order: 3;
-    flex: 1 0 100%;
-    justify-content: space-between;
-    gap: 0;
-  }
-  .chapters button {
-    font-size: 10px;
-  }
-  .transport {
-    flex-wrap: wrap;
-  }
-  .transport-options {
-    margin-left: auto;
-  }
-  .transport-main {
-    gap: 8px;
-  }
-  .chapters button span {
-    font-size: 8px;
   }
   .travel-label {
     font-size: 8px;
