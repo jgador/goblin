@@ -1,1006 +1,1055 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#f7faf6" />
-    <meta
-      name="description"
-      content="Turn team conversations into results with Goblin, your self-hosted AI coworker. Explore examples of assigning tasks, following progress, and reviewing work."
-    />
-    <title>Goblin · In the loop</title>
-    <link rel="icon" href="assets/goblin.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="website.css" />
-    <script src="website.js" defer></script>
-  </head>
-  <body>
-    <a class="skip-link" href="#conversation-panel">Skip to the conversation</a>
-    <main>
-      <section class="player" id="player" aria-label="Interactive Goblin communications">
-        <header class="site-header">
-          <span class="site-kicker">Goblin <span aria-hidden="true">/</span> In the loop</span>
-          <a
-            class="project-link"
-            href="https://github.com/jgador/goblin"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="View the Goblin project on GitHub"
-            title="View Goblin on GitHub"
-          ><img src="assets/github.svg" alt="" /><span>GitHub</span></a>
-        </header>
-        <div class="film-body">
-          <section class="network-panel" aria-labelledby="title">
-            <header class="intro">
-              <p class="intro-kicker">Your self-hosted AI coworker.</p>
-              <h1 id="title">Turn team conversations <span>into results.</span></h1>
-              <p>
-                Assign tasks, follow progress, and review the work. Goblin keeps conversations and
-                results connected, so your team spends less time coordinating.
-              </p>
-            </header>
-            <div
-              class="network"
-              id="network"
-              role="group"
-              aria-label="Example communication channels"
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
+        <meta name="theme-color" content="#f7f9f6" />
+        <meta
+            name="description"
+            content="Turn team conversations into results with Goblin, your self-hosted AI coworker. Explore examples of assigning tasks, following progress, and reviewing work."
+        />
+        <title>Goblin · In the loop</title>
+        <link rel="icon" href="assets/goblin.svg" type="image/svg+xml" />
+        <link rel="stylesheet" href="website.css" />
+        <script src="website.js" defer></script>
+    </head>
+    <body>
+        <a class="skip-link" href="#conversation-panel"
+            >Skip to the conversation</a
+        >
+        <main>
+            <section
+                class="player"
+                id="player"
+                aria-label="Interactive Goblin communications"
             >
-              <svg
-                class="connections"
-                viewBox="0 0 1100 700"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <defs>
-                  <marker
-                    id="arrow-green"
-                    viewBox="0 0 10 10"
-                    refX="8"
-                    refY="5"
-                    markerWidth="7"
-                    markerHeight="7"
-                    orient="auto"
-                  >
-                    <path d="m2 1 4 4-4 4" fill="none" stroke="#31893b" stroke-width="1.5" />
-                  </marker>
-                  <marker
-                    id="arrow-purple"
-                    viewBox="0 0 10 10"
-                    refX="8"
-                    refY="5"
-                    markerWidth="7"
-                    markerHeight="7"
-                    orient="auto"
-                  >
-                    <path d="m2 1 4 4-4 4" fill="none" stroke="#974cd2" stroke-width="1.5" />
-                  </marker>
-                </defs>
-                <g class="mobile-connectors">
-                  <g class="mobile-connector mobile-connector-slack" id="mobile-connector-slack">
-                    <path class="mobile-fiber-sheath" />
-                    <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
-                  </g>
-                  <g class="mobile-connector mobile-connector-teams" id="mobile-connector-teams">
-                    <path class="mobile-fiber-sheath" />
-                    <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
-                  </g>
-                  <g class="mobile-connector mobile-connector-github" id="mobile-connector-github">
-                    <path class="mobile-fiber-sheath" />
-                    <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
-                  </g>
-                  <g class="mobile-connector mobile-connector-email" id="mobile-connector-email">
-                    <path class="mobile-fiber-sheath" />
-                    <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
-                  </g>
-                  <g class="mobile-connector mobile-connector-discord" id="mobile-connector-discord">
-                    <path class="mobile-fiber-sheath" />
-                    <path class="mobile-fiber-track" />
-                    <path class="mobile-fiber-glow" pathLength="100" />
-                    <path class="mobile-fiber-light" pathLength="100" />
-                  </g>
-                </g>
-                <path
-                  class="connection"
-                  id="line-slack"
-                  d="M330 68H340Q365 68 365 96V101Q365 126 394 126H464Q535 126 535 200"
-                />
-                <path
-                  class="connection"
-                  id="line-teams"
-                  d="M800 68H790Q765 68 765 96V101Q765 126 736 126H691Q620 126 620 200"
-                />
-                <path
-                  class="connection"
-                  id="line-github"
-                  d="M320 355H382Q420 355 420 325V302Q420 272 450 272H500"
-                />
-                <path
-                  class="connection"
-                  id="line-email"
-                  d="M815 355H750Q716 355 716 325V302Q716 272 686 272H653"
-                />
-                <path class="connection" id="line-discord" d="M575 504V420" />
-                <g class="return-lines">
-                  <path d="M515 206V174Q515 151 487 151H389" marker-end="url(#arrow-green)" />
-                  <path d="M640 206V174Q640 151 668 151H743" marker-end="url(#arrow-green)" />
-                  <path
-                    d="M500 288H464Q438 288 438 318V351Q438 386 401 386H334"
-                    marker-end="url(#arrow-purple)"
-                  />
-                  <path
-                    d="M653 288H675Q704 288 704 318V351Q704 386 741 386H804"
-                    marker-end="url(#arrow-purple)"
-                  />
-                  <path d="M543 438V490M607 438V490" marker-end="url(#arrow-green)" />
-                </g>
-                <g class="connector-dots">
-                  <circle id="dot-slack" cx="535" cy="200" r="5" />
-                  <circle id="dot-teams" cx="620" cy="200" r="5" />
-                  <circle id="dot-github" cx="500" cy="272" r="5" />
-                  <circle id="dot-email" cx="653" cy="272" r="5" />
-                  <circle id="dot-discord" cx="575" cy="420" r="5" />
-                </g>
-                <g class="packet" id="packet" visibility="hidden">
-                  <circle class="packet-halo" r="15" />
-                  <circle class="packet-dot" r="5" />
-                </g>
-              </svg>
-              <button
-                class="channel channel-slack"
-                data-channel="slack"
-                type="button"
-                aria-label="Play the Slack conversation"
-                aria-pressed="true"
-              >
-                <span class="card-top"
-                  ><img src="assets/slack.svg" alt="Slack" /><span class="card-name">Slack</span
-                  ><span class="card-more" aria-hidden="true">•••</span></span
-                ><span class="card-body" aria-hidden="true"
-                  ><span class="mini-message"
-                    ><span class="mini-avatar">JA</span
-                    ><span class="mini-bubble"
-                      ><span class="skeleton long"></span
-                      ><span class="skeleton short"></span></span></span
-                  ><span class="mini-message mini-reply"
-                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
-                    ><span class="mini-bubble"
-                      ><span class="skeleton long"></span
-                      ><span class="typing-dots"><i></i><i></i><i></i></span></span></span></span
-                ><span class="connection-port" aria-hidden="true"></span></button
-              ><button
-                class="channel channel-teams"
-                data-channel="teams"
-                type="button"
-                aria-label="Play the Microsoft Teams conversation"
-                aria-pressed="false"
-              >
-                <span class="card-top"
-                  ><img src="assets/teams.svg" alt="Microsoft Teams" /><span class="card-name"
-                    >Microsoft Teams</span
-                  ><span class="card-more" aria-hidden="true">•••</span></span
-                ><span class="card-body" aria-hidden="true"
-                  ><span class="mini-message"
-                    ><span class="mini-avatar">AH</span
-                    ><span class="mini-bubble"
-                      ><span class="skeleton long"></span
-                      ><span class="skeleton short"></span></span></span
-                  ><span class="mini-message mini-reply"
-                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
-                    ><span class="mini-bubble"
-                      ><span class="skeleton long"></span
-                      ><span class="typing-dots"><i></i><i></i><i></i></span></span></span></span
-                ><span class="connection-port" aria-hidden="true"></span></button
-              ><button
-                class="channel channel-github"
-                data-channel="github"
-                type="button"
-                aria-label="Play the GitHub conversation"
-                aria-pressed="false"
-              >
-                <span class="card-top"
-                  ><img src="assets/github.svg" alt="GitHub" /><span class="card-name">GitHub</span
-                  ><span class="card-more" aria-hidden="true">•••</span></span
-                ><span class="card-body" aria-hidden="true"
-                  ><span class="repo-preview"
-                    ><span
-                      ><span class="skeleton long"></span><span class="skeleton short"></span></span
-                    ><span class="repo-lock"
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <rect x="5" y="10" width="14" height="11" rx="2" />
-                        <path d="M8 10V6a4 4 0 0 1 8 0v4m-4 4v3" /></svg></span></span
-                  ><span class="repo-actions"
-                    ><span title="Code"
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="m8 7-5 5 5 5m8-10 5 5-5 5" /></svg></span
-                    ><span title="Issues"
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="9" />
-                        <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" /></svg></span
-                    ><span title="Pull requests"
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="6" cy="5" r="2" />
-                        <circle cx="6" cy="19" r="2" />
-                        <circle cx="18" cy="19" r="2" />
-                        <path d="M6 7v10m12 0V9a4 4 0 0 0-4-4h-2m3-3-3 3 3 3" /></svg></span
-                    ><span title="Actions"
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="9" />
-                        <path d="m10 8 6 4-6 4Z" /></svg></span
-                    ><span title="Projects"
-                      ><svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <rect x="3" y="4" width="18" height="16" rx="2" />
-                        <path d="M9 4v16m6-16v16M5.5 8h1m5 0h1m5 0h1" /></svg></span></span></span
-                ><span class="connection-port" aria-hidden="true"></span></button
-              ><button
-                class="channel channel-email"
-                data-channel="email"
-                type="button"
-                aria-label="Play the Gmail conversation"
-                aria-pressed="false"
-              >
-                <span class="card-top"
-                  ><img src="assets/email.svg" alt="Gmail" /><span class="card-name">Gmail</span
-                  ><span class="card-more" aria-hidden="true">•••</span></span
-                ><span class="card-body" aria-hidden="true"
-                  ><span class="mail-row"
-                    ><span class="mini-avatar">LT</span
-                    ><svg
-                      class=""
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.65"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
+                <header class="site-header">
+                    <a class="site-brand" href="./" aria-label="Goblin home"
+                        ><img src="assets/goblin.svg" alt="" /><span
+                            >goblin</span
+                        ></a
+                    ><span class="site-kicker">In the loop</span>
+                    <a
+                        class="project-link"
+                        href="https://github.com/jgador/goblin"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="View the Goblin project on GitHub"
+                        title="View Goblin on GitHub"
+                        ><img src="assets/github.svg" alt="" /><span
+                            >View on GitHub</span
+                        ></a
                     >
-                      <rect x="2" y="4" width="20" height="16" rx="2" />
-                      <path d="m3 5 9 8 9-8" /></svg
-                    ><span class="skeleton"></span
-                    ><span class="mail-time">11:24 AM</span></span
-                  ><span class="mail-row"
-                    ><span class="mini-avatar">LT</span
-                    ><svg
-                      class=""
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.65"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <rect x="2" y="4" width="20" height="16" rx="2" />
-                      <path d="m3 5 9 8 9-8" /></svg
-                    ><span class="skeleton"></span><span class="mail-time">9:08 AM</span></span
-                  ><span class="mail-reply"
-                    ><svg
-                      class=""
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.65"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="m9 4-6 6 6 6M3 10h10c5 0 8 3 8 8" /></svg
-                    ><span class="skeleton"></span></span></span
-                ><span class="connection-port" aria-hidden="true"></span></button
-              ><button
-                class="channel channel-discord"
-                data-channel="discord"
-                type="button"
-                aria-label="Play the Discord conversation"
-                aria-pressed="false"
-              >
-                <span class="card-top"
-                  ><img src="assets/discord.svg" alt="Discord" /><span class="card-name"
-                    >Discord</span
-                  ><span class="card-more" aria-hidden="true">•••</span></span
-                ><span class="card-body" aria-hidden="true"
-                  ><span class="mini-message"
-                    ><span class="mini-avatar">RK</span
-                    ><span class="mini-bubble"
-                      ><span class="skeleton long"></span
-                      ><span class="skeleton short"></span></span></span
-                  ><span class="mini-message mini-reply"
-                    ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span
-                    ><span class="mini-bubble"
-                      ><span class="skeleton long"></span
-                      ><span class="typing-dots"><i></i><i></i><i></i></span></span></span></span
-                ><span class="connection-port" aria-hidden="true"></span>
-              </button>
-              <div class="goblin-hub" id="goblin-hub">
-                <div class="hub-core">
-                  <span class="goblin-mark"
-                    ><svg
-                      class="hub-character"
-                      id="hub-character"
-                      viewBox="0 0 650 602.02"
-                      aria-hidden="true"
-                      focusable="false"
-                    >
-                      <g id="hub-body">
-                        <g class="mark-blocks">
-                          <g id="hub-block-left">
-                            <rect
-                              class="mark-block-left"
-                              x="23.09"
-                              y="327.17"
-                              width="274.86"
-                              height="274.86"
-                              rx="32.02"
-                              fill="#595a5a"
-                            />
-                          </g>
-                          <g id="hub-block-right">
-                            <rect
-                              class="mark-block-right"
-                              x="350.25"
-                              y="327.17"
-                              width="274.86"
-                              height="274.86"
-                              rx="32.02"
-                              fill="#939393"
-                            />
-                          </g>
-                        </g>
-                        <g id="hub-head">
-                          <g class="mark-head">
-                            <path
-                              fill="#10182a"
-                              d="M625.11,86.18v-53.95c0-17.8-14.43-32.22-32.22-32.22H55.31C37.51,0,23.09,14.43,23.09,32.22v54.04c-12.9.93-23.09,11.66-23.09,24.8v52.72c0,13.14,10.18,23.87,23.09,24.8v54.04c0,17.8,14.43,32.22,32.22,32.22h537.58c17.8,0,32.22-14.43,32.22-32.22v-53.95c13.75,0,24.89-11.14,24.89-24.89v-52.72c0-13.75-11.14-24.89-24.89-24.89Z"
-                            />
-                            <g id="hub-eyes">
-                              <g class="mark-eye-left">
-                                <rect id="hub-eye-left" x="169.08" y="83.24" width="59.79" height="36.09" rx="16.19" fill="#fff" />
-                                <path
-                                  id="hub-smile-left"
-                                  d="M173.98 111.28Q198.98 75.28 223.98 111.28"
-                                  fill="none"
-                                  stroke="#fff"
-                                  stroke-width="15"
-                                  stroke-linecap="round"
-                                  opacity="0"
-                                />
-                              </g>
-                              <g class="mark-eye-right">
-                                <rect id="hub-eye-right" x="419.33" y="83.23" width="59.79" height="36.09" rx="16.19" fill="#fff" />
-                                <path
-                                  id="hub-smile-right"
-                                  d="M424.23 111.28Q449.23 75.28 474.23 111.28"
-                                  fill="none"
-                                  stroke="#fff"
-                                  stroke-width="15"
-                                  stroke-linecap="round"
-                                  opacity="0"
-                                />
-                              </g>
-                            </g>
-                          </g>
-                        </g>
-                      </g></svg
-                  ></span>
-                </div>
-                <span class="hub-name">goblin</span
-                ><span class="hub-status sr-only" id="hub-status">Ready for a request</span>
-              </div>
-              <div class="travel-label" id="travel-label" aria-hidden="true"></div>
-            </div>
-            <div class="benefits">
-              <div>
-                <span
-                  ><svg
-                    class=""
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.65"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m13 1-10 13h8l-1 9 11-14h-8l1-8Z" /></svg
-                ></span>
-                <p>
-                  <strong>Spend less time switching tools</strong>
-                  <span>Follow conversations, progress, and results in one place.</span>
-                </p>
-              </div>
-              <div>
-                <span
-                  ><svg
-                    class=""
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.65"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <ellipse cx="12" cy="5" rx="8" ry="3" />
-                    <path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0" /></svg
-                ></span>
-                <p>
-                  <strong>Spend less time repeating information</strong>
-                  <span>Keep each task connected to the conversation that started it.</span>
-                </p>
-              </div>
-              <div>
-                <span
-                  ><svg
-                    class=""
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.65"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6l9-4Z" />
-                    <path d="m8 12 3 3 5-6" /></svg
-                ></span>
-                <p>
-                  <strong>Control where Goblin runs</strong>
-                  <span>Host Goblin on infrastructure you control.</span>
-                </p>
-              </div>
-              <div>
-                <span
-                  ><svg
-                    class=""
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.65"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M1 22v-3a8 8 0 0 1 16 0v3M17 3a4 4 0 0 1 0 8m3 3c3 1 3 4 3 8" /></svg
-                ></span>
-                <p>
-                  <strong>Stay involved in decisions</strong>
-                  <span>Assign the work, review the results, and decide what happens next.</span>
-                </p>
-              </div>
-            </div>
-          </section>
-          <aside
-            class="conversation-panel"
-            id="conversation-panel"
-            aria-label="Example conversation"
-          >
-            <p class="example-notice">
-              <strong>Illustrative example</strong>
-              <span>Teams, Discord, and email show planned integrations.</span>
-            </p>
-            <div class="panel-tabs" role="tablist" aria-label="Explore the example">
-              <button
-                id="tab-conversation"
-                type="button"
-                role="tab"
-                data-tab="conversation"
-                aria-selected="true"
-                aria-controls="view-conversation"
-                tabindex="0"
-              >
-                Conversation</button
-              ><button
-                id="tab-activity"
-                type="button"
-                role="tab"
-                data-tab="activity"
-                aria-selected="false"
-                aria-controls="view-activity"
-                tabindex="-1"
-              >
-                Activity</button
-              ><button
-                id="tab-work"
-                type="button"
-                role="tab"
-                data-tab="work"
-                aria-selected="false"
-                aria-controls="view-work"
-                tabindex="-1"
-              >
-                Work</button
-              ><button
-                id="tab-files"
-                type="button"
-                role="tab"
-                data-tab="files"
-                aria-selected="false"
-                aria-controls="view-files"
-                tabindex="-1"
-              >
-                Files
-              </button>
-            </div>
-            <div class="conversation-heading">
-              <img id="conversation-icon" src="assets/slack.svg" alt="" />
-              <h2 id="conversation-title">Slack</h2>
-              <p id="conversation-location">#log-pipeline</p>
-              <button
-                class="icon-button"
-                id="channel-info"
-                type="button"
-                aria-label="About this example channel"
-              >
-                <svg
-                  class=""
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.65"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6" />
-                </svg>
-              </button>
-            </div>
-            <div
-              class="panel-view"
-              id="view-conversation"
-              role="tabpanel"
-              aria-labelledby="tab-conversation"
-            >
-              <div class="thread" id="thread">
-                <div class="message incoming-message" id="incoming-message">
-                  <span class="avatar channel-avatar"
-                    ><img id="sender-icon" src="assets/slack.svg" alt=""
-                  /></span>
-                  <div class="message-content">
-                    <div class="message-meta">
-                      <strong id="sender-name">Slack</strong
-                      ><span class="message-time">10:24 AM</span>
-                    </div>
-                    <p id="request-text">
-                      Help us handle higher traffic without losing accepted logs. Prepare a tested
-                      change and a deployment plan for review.
-                    </p>
-                  </div>
-                </div>
-                <div class="typing-row" id="typing-row" role="status" hidden>
-                  <span class="avatar goblin-avatar" aria-hidden="true"
-                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
-                  ></span>
-                  <span class="thinking-dot" aria-hidden="true"></span>
-                  <span class="sr-only">Goblin is thinking</span>
-                </div>
-                <div class="message reply-message" id="reply-message">
-                  <span class="avatar goblin-avatar"
-                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
-                  ></span>
-                  <div class="message-content">
-                    <div class="message-meta">
-                      <strong>Goblin</strong><span class="message-time">10:24 AM</span>
-                    </div>
-                    <div class="task-checklist">
-                      <div>
-                        <span class="check-dot"
-                          ><svg
-                            class=""
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.65"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="m5 13 4 4L19 7" /></svg></span
-                        ><span id="step-one">Understand the traffic problem</span>
-                      </div>
-                      <div>
-                        <span class="check-dot"
-                          ><svg
-                            class=""
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.65"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="m5 13 4 4L19 7" /></svg></span
-                        ><span id="step-two">Prepare and check the changes</span>
-                      </div>
-                      <div>
-                        <span class="check-dot"
-                          ><svg
-                            class=""
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.65"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="m5 13 4 4L19 7" /></svg></span
-                        ><span id="step-three">Plan the deployment</span>
-                      </div>
-                      <div>
-                        <span class="check-dot pending"></span
-                        ><span>Review the proposed result</span>
-                      </div>
-                    </div>
-                    <p class="reply-summary" id="reply-text"></p>
-                    <span id="receipt-text" class="sr-only"></span>
-                  </div>
-                </div>
-                <div class="message artifact-message" id="artifact-message">
-                  <span class="avatar goblin-avatar"
-                    ><span class="goblin-mark"><img src="assets/goblin.svg" alt="" /></span
-                  ></span>
-                  <div class="message-content">
-                    <div class="message-meta">
-                      <strong>Goblin</strong><span class="message-time">10:26 AM</span>
-                    </div>
-                    <div class="artifact-card">
-                      <div class="review-heading">
-                        <strong>Ready for review</strong>
-                        <span>Illustrative result</span>
-                      </div>
-                      <button class="deliverable" type="button" data-preview="pr">
-                        <img src="assets/github.svg" alt="" /><span
-                          ><strong id="artifact-title"
-                            >Proposed changes
-                            <svg
-                              class=""
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="1.65"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              aria-hidden="true"
-                            >
-                              <path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6" /></svg></strong
-                          ><span class="artifact-description" id="artifact-description"
-                            >Verification summary and deployment plan</span
-                          ><span class="artifact-detail">Ready for your review</span></span
-                        ></button
-                      ><button
-                        class="deliverable document-deliverable"
-                        type="button"
-                        data-preview="file"
-                      >
-                        <span class="file-icon"
-                          ><svg
-                            class=""
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.65"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            aria-hidden="true"
-                          >
-                            <path d="M5 2h10l5 5v15H5V2Z" />
-                            <path d="M14 2v6h6M9 12h7m-7 4h7" /></svg></span
-                        ><span
-                          ><strong id="document-title">Verification and deployment plan</strong
-                          ><span class="artifact-detail"
-                            >Findings and decisions for review</span
-                          ></span
-                        >
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="composer" id="message-composer">
-                <label class="sr-only" for="message-input">Message Goblin</label
-                ><textarea
-                  id="message-input"
-                  rows="1"
-                  readonly
-                  tabindex="-1"
-                  placeholder="Message Goblin..."
-                ></textarea>
-                <div class="composer-actions" aria-hidden="true">
-                  <div>
-                    <span class="icon-button">
-                      <svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <path d="m9 16 8-8a3 3 0 0 0-4-4L4 13a5 5 0 0 0 7 7L21 10M8 13l7-7" />
-                      </svg></span
-                    ><span class="icon-button at-button">@</span
-                    ><span class="icon-button">
-                      <svg
-                        class=""
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.65"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        aria-hidden="true"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M7 14c2 5 8 5 10 0M8 8v1m8-1v1" />
-                      </svg>
-                    </span>
-                  </div>
-                  <span class="send-button">
-                    <svg
-                      class=""
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.65"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="m3 3 19 9-19 9 4-9-4-9Zm4 9h15" />
-                    </svg>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div
-              class="panel-view detail-view"
-              id="view-activity"
-              role="tabpanel"
-              aria-labelledby="tab-activity"
-              hidden
-            ></div>
-            <div
-              class="panel-view detail-view"
-              id="view-work"
-              role="tabpanel"
-              aria-labelledby="tab-work"
-              hidden
-            ></div>
-            <div
-              class="panel-view detail-view"
-              id="view-files"
-              role="tabpanel"
-              aria-labelledby="tab-files"
-              hidden
-            ></div>
-          </aside>
-        </div>
-        <div class="playback">
-          <div class="timeline-wrap">
-            <label class="sr-only" for="timeline">Video position</label
-            ><input
-              id="timeline"
-              class="timeline"
-              type="range"
-              min="0"
-              max="36"
-              step="0.1"
-              value="0"
-              aria-valuetext="0 seconds of 36 seconds"
-            />
-          </div>
-          <div class="transport">
-            <div class="transport-main">
-              <button
-                class="play-button"
-                id="play-button"
-                type="button"
-                aria-label="Pause animation"
-              >
-                <svg id="pause-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <rect x="7" y="5" width="3" height="14" rx="1" />
-                  <rect x="14" y="5" width="3" height="14" rx="1" /></svg
-                ><svg
-                  id="play-icon"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                  hidden
-                >
-                  <path d="m8 5 12 7-12 7Z" />
-                </svg></button
-              ><button
-                class="icon-button"
-                id="replay-button"
-                type="button"
-                aria-label="Replay from the beginning"
-                title="Replay from the beginning"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-                  <path d="M4 11a8 8 0 1 1 1 6M4 4v7h7" />
-                </svg></button
-              ><span class="time-code"
-                ><span id="elapsed">00:00</span><span class="time-divider">/</span
-                ><span id="total-duration">00:36</span></span
-              >
-            </div>
-            <nav class="chapters" aria-label="Conversation chapters">
-              <button type="button" data-chapter="slack" aria-current="step">
-                <span>01</span> Slack</button
-              ><button type="button" data-chapter="teams"><span>02</span> Teams</button
-              ><button type="button" data-chapter="github"><span>03</span> GitHub</button
-              ><button type="button" data-chapter="discord"><span>04</span> Discord</button
-              ><button type="button" data-chapter="email"><span>05</span> Gmail</button>
-            </nav>
-            <div class="transport-options">
-              <button
-                class="speed-button"
-                id="speed-button"
-                type="button"
-                aria-label="Playback speed: 1 times. Click to change."
-                title="Change playback speed"
-              >
-                1×</button
-              ><button
-                class="icon-button"
-                id="fullscreen-button"
-                type="button"
-                aria-label="Enter fullscreen"
-                title="Fullscreen"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-                  <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
+                </header>
+                <header class="intro">
+                    <h1 id="title">
+                        Turn team conversations <span>into results.</span>
+                    </h1>
+                    <p>Your self-hosted AI coworker.</p>
+                </header>
 
-        <span class="sr-only" id="stage-count">01 / 05</span
-        ><span class="sr-only" id="conversation-number">01</span>
-      </section>
-      <div id="announcer" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
-    </main>
-    <dialog id="about-dialog" aria-labelledby="about-title">
-      <button
-        class="dialog-close icon-button"
-        id="close-about"
-        type="button"
-        aria-label="Close about dialog"
-      >
-        ×</button
-      ><span class="goblin-mark"><img src="assets/goblin-dark.svg" alt="" /></span>
-      <p class="eyebrow">IN THE LOOP</p>
-      <h2 id="about-title">From a conversation to a result.</h2>
-      <p>
-        This interactive example shows how Goblin connects a team request to progress and a proposed
-        result for review. Every exchange is scripted; nothing is sent to an external service.
-      </p>
-      <p>
-        The GitHub dialogue is fictional, inspired by Stephen T.’s public
-        <a href="https://github.com/dotnet/runtime/issues/96277" target="_blank" rel="noopener noreferrer"
-          >dotnet/runtime issue #96277</a
-        > about reducing allocations in LINQ’s OrderBy().Take(). It is not an actual exchange
-        with Stephen T. or an endorsement.
-      </p>
-      <p>
-        The Teams dialogue is fictional, inspired by Anders H.’s public
-        <a href="https://github.com/microsoft/TypeScript/issues/62606" target="_blank" rel="noopener noreferrer"
-          >TypeScript issue #62606</a
-        > about property declaration order changing a type-checking error. The issue is closed;
-        this scenario imagines a regression coverage review, not an actual exchange or endorsement.
-      </p>
-      <p>
-        The email dialogue is fictional, inspired by
-        <a href="https://lists.openwall.net/netdev/2024/09/11/354" target="_blank" rel="noopener noreferrer"
-          >Linus T.’s September 2024 reply</a
-        > about an AtomISP build fix, accepted as
-        <a href="https://github.com/torvalds/linux/commit/7c6a3a65ace70f12b27b1a27c9a69cb791dc6e91" target="_blank" rel="noopener noreferrer"
-          >Linux commit 7c6a3a65ace7</a
-        >. It revisits a historical patch review, not an actual Goblin exchange or endorsement.
-      </p>
-      <p>
-        Renko K.’s Discord dialogue is fictional, inspired by
-        <a href="https://www.circlesarrows.com/about-us" target="_blank" rel="noopener noreferrer"
-          >Circles Arrows’s public company description</a
-        > and its graph database tools,
-        <a href="https://www.circlesarrows.com/blueprint41" target="_blank" rel="noopener noreferrer"
-          >Blueprint41</a
-        > and
-        <a href="https://www.circlesarrows.com/compare41" target="_blank" rel="noopener noreferrer"
-          >Compare41</a
-        >. The sample project is invented; it is not an actual exchange or endorsement.
-      </p>
-      <p>
-        The website illustrates channels including Teams, Discord, and email. Their appearance here does
-        not mean those integrations are currently available.
-      </p>
-      <p>
-        Select a channel to see an example task. Use Activity, Work, and Files to explore progress,
-        review details, and proposed results. The message box is a visual preview and does not accept
-        messages. Use the timeline to change the playback position or press Space to pause.
-        Reduced-motion preferences are respected.
-      </p>
-    </dialog>
-    <dialog id="preview-dialog" aria-labelledby="preview-title">
-      <button
-        class="dialog-close icon-button"
-        id="close-preview"
-        type="button"
-        aria-label="Close preview"
-      >
-        ×
-      </button>
-      <p class="eyebrow">EXAMPLE · FOR REVIEW</p>
-      <h2 id="preview-title"></h2>
-      <div id="preview-body"></div>
-      <button class="preview-done" id="preview-done" type="button">Back to the conversation</button>
-    </dialog>
-  </body>
+                <section class="demo-section" aria-labelledby="demo-title">
+                    <h2 class="sr-only" id="demo-title">
+                        Explore an example conversation with Goblin
+                    </h2>
+                    <div class="film-body">
+                        <section
+                            class="network-panel"
+                            aria-label="A request connects your team to Goblin"
+                        >
+                            <div
+                                class="network"
+                                id="network"
+                                role="group"
+                                aria-label="Example communication channels"
+                            >
+                                <svg
+                                    class="connections"
+                                    viewBox="0 0 1100 700"
+                                    preserveAspectRatio="none"
+                                    aria-hidden="true"
+                                >
+                                    <defs>
+                                        <marker
+                                            id="arrow-green"
+                                            viewBox="0 0 10 10"
+                                            refX="8"
+                                            refY="5"
+                                            markerWidth="7"
+                                            markerHeight="7"
+                                            orient="auto"
+                                        >
+                                            <path
+                                                d="m2 1 4 4-4 4"
+                                                fill="none"
+                                                stroke="#31893b"
+                                                stroke-width="1.5"
+                                            />
+                                        </marker>
+                                        <marker
+                                            id="arrow-purple"
+                                            viewBox="0 0 10 10"
+                                            refX="8"
+                                            refY="5"
+                                            markerWidth="7"
+                                            markerHeight="7"
+                                            orient="auto"
+                                        >
+                                            <path
+                                                d="m2 1 4 4-4 4"
+                                                fill="none"
+                                                stroke="#a3bfa6"
+                                                stroke-width="1.5"
+                                            />
+                                        </marker>
+                                    </defs>
+                                    <g class="mobile-connectors">
+                                        <g
+                                            class="mobile-connector mobile-connector-slack"
+                                            id="mobile-connector-slack"
+                                        >
+                                            <path class="mobile-fiber-sheath" />
+                                            <path class="mobile-fiber-track" />
+                                        </g>
+                                        <g
+                                            class="mobile-connector mobile-connector-teams"
+                                            id="mobile-connector-teams"
+                                        >
+                                            <path class="mobile-fiber-sheath" />
+                                            <path class="mobile-fiber-track" />
+                                        </g>
+                                        <g
+                                            class="mobile-connector mobile-connector-github"
+                                            id="mobile-connector-github"
+                                        >
+                                            <path class="mobile-fiber-sheath" />
+                                            <path class="mobile-fiber-track" />
+                                        </g>
+                                        <g
+                                            class="mobile-connector mobile-connector-email"
+                                            id="mobile-connector-email"
+                                        >
+                                            <path class="mobile-fiber-sheath" />
+                                            <path class="mobile-fiber-track" />
+                                        </g>
+                                        <g
+                                            class="mobile-connector mobile-connector-discord"
+                                            id="mobile-connector-discord"
+                                        >
+                                            <path class="mobile-fiber-sheath" />
+                                            <path class="mobile-fiber-track" />
+                                        </g>
+                                    </g>
+                                    <path
+                                        class="connection"
+                                        id="line-slack"
+                                        d="M330 68H340Q365 68 365 96V101Q365 126 394 126H464Q535 126 535 200"
+                                    />
+                                    <path
+                                        class="connection"
+                                        id="line-teams"
+                                        d="M800 68H790Q765 68 765 96V101Q765 126 736 126H691Q620 126 620 200"
+                                    />
+                                    <path
+                                        class="connection"
+                                        id="line-github"
+                                        d="M320 355H382Q420 355 420 325V302Q420 272 450 272H500"
+                                    />
+                                    <path
+                                        class="connection"
+                                        id="line-email"
+                                        d="M815 355H750Q716 355 716 325V302Q716 272 686 272H653"
+                                    />
+                                    <path
+                                        class="connection"
+                                        id="line-discord"
+                                        d="M575 504V420"
+                                    />
+                                    <g class="return-lines">
+                                        <path
+                                            d="M515 206V174Q515 151 487 151H389"
+                                            marker-end="url(#arrow-green)"
+                                        />
+                                        <path
+                                            d="M640 206V174Q640 151 668 151H743"
+                                            marker-end="url(#arrow-green)"
+                                        />
+                                        <path
+                                            d="M500 288H464Q438 288 438 318V351Q438 386 401 386H334"
+                                            marker-end="url(#arrow-purple)"
+                                        />
+                                        <path
+                                            d="M653 288H675Q704 288 704 318V351Q704 386 741 386H804"
+                                            marker-end="url(#arrow-purple)"
+                                        />
+                                        <path
+                                            d="M543 438V490M607 438V490"
+                                            marker-end="url(#arrow-green)"
+                                        />
+                                    </g>
+                                    <g class="connector-dots">
+                                        <circle
+                                            id="dot-slack"
+                                            cx="535"
+                                            cy="200"
+                                            r="5"
+                                        />
+                                        <circle
+                                            id="dot-teams"
+                                            cx="620"
+                                            cy="200"
+                                            r="5"
+                                        />
+                                        <circle
+                                            id="dot-github"
+                                            cx="500"
+                                            cy="272"
+                                            r="5"
+                                        />
+                                        <circle
+                                            id="dot-email"
+                                            cx="653"
+                                            cy="272"
+                                            r="5"
+                                        />
+                                        <circle
+                                            id="dot-discord"
+                                            cx="575"
+                                            cy="470"
+                                            r="5"
+                                        />
+                                    </g>
+                                    <g
+                                        class="packet"
+                                        id="packet"
+                                        visibility="hidden"
+                                    >
+                                        <circle class="packet-halo" r="15" />
+                                        <circle class="packet-dot" r="5" />
+                                    </g>
+                                </svg>
+                                <button
+                                    class="channel channel-slack"
+                                    data-channel="slack"
+                                    type="button"
+                                    aria-label="Play the Slack conversation"
+                                    aria-pressed="true"
+                                >
+                                    <span class="card-top"
+                                        ><img
+                                            src="assets/slack.svg"
+                                            alt=""
+                                        /><span class="card-copy"
+                                            ><span class="card-name">Slack</span
+                                            ><span class="card-description"
+                                                >Team conversation</span
+                                            ></span
+                                        ></span
+                                    >
+                                    <span
+                                        class="connection-port"
+                                        aria-hidden="true"
+                                    ></span>
+                                </button>
+                                <button
+                                    class="channel channel-teams"
+                                    data-channel="teams"
+                                    type="button"
+                                    aria-label="Play the Microsoft Teams conversation"
+                                    aria-pressed="false"
+                                >
+                                    <span class="card-top"
+                                        ><img
+                                            src="assets/teams.svg"
+                                            alt=""
+                                        /><span class="card-copy"
+                                            ><span class="card-name"
+                                                >Microsoft Teams</span
+                                            ><span class="card-description"
+                                                >Team conversation</span
+                                            ></span
+                                        ></span
+                                    >
+                                    <span
+                                        class="connection-port"
+                                        aria-hidden="true"
+                                    ></span>
+                                </button>
+                                <button
+                                    class="channel channel-github"
+                                    data-channel="github"
+                                    type="button"
+                                    aria-label="Play the GitHub conversation"
+                                    aria-pressed="false"
+                                >
+                                    <span class="card-top"
+                                        ><img
+                                            src="assets/github.svg"
+                                            alt=""
+                                        /><span class="card-copy"
+                                            ><span class="card-name"
+                                                >GitHub</span
+                                            ><span class="card-description"
+                                                >Issue discussion</span
+                                            ></span
+                                        ></span
+                                    >
+                                    <span
+                                        class="connection-port"
+                                        aria-hidden="true"
+                                    ></span>
+                                </button>
+                                <button
+                                    class="channel channel-email"
+                                    data-channel="email"
+                                    type="button"
+                                    aria-label="Play the Gmail conversation"
+                                    aria-pressed="false"
+                                >
+                                    <span class="card-top"
+                                        ><img
+                                            src="assets/email.svg"
+                                            alt=""
+                                        /><span class="card-copy"
+                                            ><span class="card-name">Gmail</span
+                                            ><span class="card-description"
+                                                >Patch review</span
+                                            ></span
+                                        ></span
+                                    >
+                                    <span
+                                        class="connection-port"
+                                        aria-hidden="true"
+                                    ></span>
+                                </button>
+                                <button
+                                    class="channel channel-discord"
+                                    data-channel="discord"
+                                    type="button"
+                                    aria-label="Play the Discord conversation"
+                                    aria-pressed="false"
+                                >
+                                    <span class="card-top"
+                                        ><img
+                                            src="assets/discord.svg"
+                                            alt=""
+                                        /><span class="card-copy"
+                                            ><span class="card-name"
+                                                >Discord</span
+                                            ><span class="card-description"
+                                                >Team conversation</span
+                                            ></span
+                                        ></span
+                                    >
+                                    <span
+                                        class="connection-port"
+                                        aria-hidden="true"
+                                    ></span>
+                                </button>
+                                <div class="goblin-hub" id="goblin-hub">
+                                    <div class="hub-core">
+                                        <span class="goblin-mark"
+                                            ><svg
+                                                class="hub-character"
+                                                id="hub-character"
+                                                viewBox="0 0 650 602.02"
+                                                aria-hidden="true"
+                                                focusable="false"
+                                            >
+                                                <g id="hub-body">
+                                                    <g class="mark-blocks">
+                                                        <g id="hub-block-left">
+                                                            <rect
+                                                                class="mark-block-left"
+                                                                x="23.09"
+                                                                y="327.17"
+                                                                width="274.86"
+                                                                height="274.86"
+                                                                rx="32.02"
+                                                                fill="#595a5a"
+                                                            />
+                                                        </g>
+                                                        <g id="hub-block-right">
+                                                            <rect
+                                                                class="mark-block-right"
+                                                                x="350.25"
+                                                                y="327.17"
+                                                                width="274.86"
+                                                                height="274.86"
+                                                                rx="32.02"
+                                                                fill="#939393"
+                                                            />
+                                                        </g>
+                                                    </g>
+                                                    <g id="hub-head">
+                                                        <g class="mark-head">
+                                                            <path
+                                                                fill="#10182a"
+                                                                d="M625.11,86.18v-53.95c0-17.8-14.43-32.22-32.22-32.22H55.31C37.51,0,23.09,14.43,23.09,32.22v54.04c-12.9.93-23.09,11.66-23.09,24.8v52.72c0,13.14,10.18,23.87,23.09,24.8v54.04c0,17.8,14.43,32.22,32.22,32.22h537.58c17.8,0,32.22-14.43,32.22-32.22v-53.95c13.75,0,24.89-11.14,24.89-24.89v-52.72c0-13.75-11.14-24.89-24.89-24.89Z"
+                                                            />
+                                                            <g id="hub-eyes">
+                                                                <g
+                                                                    class="mark-eye-left"
+                                                                >
+                                                                    <rect
+                                                                        id="hub-eye-left"
+                                                                        x="169.08"
+                                                                        y="83.24"
+                                                                        width="59.79"
+                                                                        height="36.09"
+                                                                        rx="16.19"
+                                                                        fill="#fff"
+                                                                    />
+                                                                </g>
+                                                                <g
+                                                                    class="mark-eye-right"
+                                                                >
+                                                                    <rect
+                                                                        id="hub-eye-right"
+                                                                        x="419.33"
+                                                                        y="83.23"
+                                                                        width="59.79"
+                                                                        height="36.09"
+                                                                        rx="16.19"
+                                                                        fill="#fff"
+                                                                    />
+                                                                </g>
+                                                            </g>
+                                                        </g>
+                                                    </g>
+                                                </g></svg
+                                        ></span>
+                                    </div>
+                                    <span class="hub-name">goblin</span
+                                    ><span class="hub-status" id="hub-status"
+                                        >Ready for a request</span
+                                    >
+                                </div>
+                                <div
+                                    class="mobile-fiber-pulse"
+                                    id="mobile-fiber-pulse"
+                                    aria-hidden="true"
+                                ></div>
+                                <div
+                                    class="travel-label"
+                                    id="travel-label"
+                                    aria-hidden="true"
+                                ></div>
+                            </div>
+                            <p class="network-caption">
+                                <span
+                                    class="caption-dot"
+                                    aria-hidden="true"
+                                ></span
+                                >Conversations and results, connected.
+                            </p>
+                        </section>
+                        <aside
+                            class="conversation-panel"
+                            id="conversation-panel"
+                            aria-label="Example conversation"
+                        >
+                            <div class="example-notice">
+                                <div class="example-controls">
+                                    <strong
+                                        ><span
+                                            class="caption-dot"
+                                            aria-hidden="true"
+                                        ></span
+                                        >Illustrative example</strong
+                                    >
+                                    <button
+                                        class="playback-toggle"
+                                        id="playback-toggle"
+                                        type="button"
+                                        aria-label="Pause animation"
+                                    >
+                                        <svg
+                                            id="playback-pause-icon"
+                                            viewBox="0 0 16 16"
+                                            fill="currentColor"
+                                            aria-hidden="true"
+                                        >
+                                            <path
+                                                d="M4 3h3v10H4zm5 0h3v10H9z"
+                                            />
+                                        </svg>
+                                        <svg
+                                            id="playback-play-icon"
+                                            viewBox="0 0 16 16"
+                                            fill="currentColor"
+                                            aria-hidden="true"
+                                            hidden
+                                        >
+                                            <path d="m5 3 8 5-8 5z" />
+                                        </svg>
+                                        <span id="playback-label">Pause</span>
+                                    </button>
+                                </div>
+                                <p class="integration-note">
+                                    Teams, Discord, and email show planned
+                                    integrations.
+                                </p>
+                            </div>
+                            <div
+                                class="panel-tabs"
+                                role="tablist"
+                                aria-label="Explore the example"
+                            >
+                                <button
+                                    id="tab-conversation"
+                                    type="button"
+                                    role="tab"
+                                    data-tab="conversation"
+                                    aria-selected="true"
+                                    aria-controls="view-conversation"
+                                    tabindex="0"
+                                >
+                                    Conversation</button
+                                ><button
+                                    id="tab-activity"
+                                    type="button"
+                                    role="tab"
+                                    data-tab="activity"
+                                    aria-selected="false"
+                                    aria-controls="view-activity"
+                                    tabindex="-1"
+                                >
+                                    Activity</button
+                                ><button
+                                    id="tab-work"
+                                    type="button"
+                                    role="tab"
+                                    data-tab="work"
+                                    aria-selected="false"
+                                    aria-controls="view-work"
+                                    tabindex="-1"
+                                >
+                                    Work</button
+                                ><button
+                                    id="tab-files"
+                                    type="button"
+                                    role="tab"
+                                    data-tab="files"
+                                    aria-selected="false"
+                                    aria-controls="view-files"
+                                    tabindex="-1"
+                                >
+                                    Files
+                                </button>
+                            </div>
+                            <div class="conversation-heading">
+                                <img
+                                    id="conversation-icon"
+                                    src="assets/slack.svg"
+                                    alt=""
+                                />
+                                <div class="conversation-context">
+                                    <h3 id="conversation-title">Slack</h3>
+                                    <p id="conversation-location">
+                                        #log-pipeline
+                                    </p>
+                                </div>
+                                <button
+                                    class="icon-button"
+                                    id="channel-info"
+                                    type="button"
+                                    aria-label="About this example channel"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.65"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        aria-hidden="true"
+                                    >
+                                        <circle cx="12" cy="12" r="9" />
+                                        <path d="M12 11v6m0-10v1" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <div
+                                class="panel-view"
+                                id="view-conversation"
+                                role="tabpanel"
+                                aria-labelledby="tab-conversation"
+                            >
+                                <div class="thread" id="thread">
+                                    <div
+                                        class="message incoming-message"
+                                        id="incoming-message"
+                                    >
+                                        <span class="avatar channel-avatar"
+                                            ><img
+                                                id="sender-icon"
+                                                src="assets/slack.svg"
+                                                alt=""
+                                        /></span>
+                                        <div class="message-content">
+                                            <div class="message-meta">
+                                                <strong id="sender-name"
+                                                    >Slack</strong
+                                                ><span class="message-time"
+                                                    >10:24 AM</span
+                                                >
+                                            </div>
+                                            <p id="request-text">
+                                                Help us handle higher traffic
+                                                without losing accepted logs.
+                                                Prepare a tested change and a
+                                                deployment plan for review.
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="typing-row"
+                                        id="typing-row"
+                                        role="status"
+                                        hidden
+                                    >
+                                        <span
+                                            class="avatar goblin-avatar"
+                                            aria-hidden="true"
+                                            ><span class="goblin-mark"
+                                                ><img
+                                                    src="assets/goblin.svg"
+                                                    alt="" /></span
+                                        ></span>
+                                        <span
+                                            class="thinking-dot"
+                                            aria-hidden="true"
+                                        ></span>
+                                        <span class="thinking-label"
+                                            >Preparing a response</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="message reply-message"
+                                        id="reply-message"
+                                    >
+                                        <span class="avatar goblin-avatar"
+                                            ><span class="goblin-mark"
+                                                ><img
+                                                    src="assets/goblin.svg"
+                                                    alt="" /></span
+                                        ></span>
+                                        <div class="message-content">
+                                            <div class="message-meta">
+                                                <strong>Goblin</strong
+                                                ><span class="message-time"
+                                                    >10:24 AM</span
+                                                >
+                                            </div>
+                                            <p
+                                                class="reply-summary"
+                                                id="reply-text"
+                                            ></p>
+                                            <p class="steps-label">
+                                                Proposed steps
+                                            </p>
+                                            <ol class="task-checklist">
+                                                <li>
+                                                    <span
+                                                        class="check-dot"
+                                                        aria-hidden="true"
+                                                        >01</span
+                                                    ><span id="step-one"
+                                                        >Understand the traffic
+                                                        problem</span
+                                                    >
+                                                </li>
+                                                <li>
+                                                    <span
+                                                        class="check-dot"
+                                                        aria-hidden="true"
+                                                        >02</span
+                                                    ><span id="step-two"
+                                                        >Prepare and check the
+                                                        changes</span
+                                                    >
+                                                </li>
+                                                <li>
+                                                    <span
+                                                        class="check-dot"
+                                                        aria-hidden="true"
+                                                        >03</span
+                                                    ><span id="step-three"
+                                                        >Plan the
+                                                        deployment</span
+                                                    >
+                                                </li>
+                                            </ol>
+                                            <div
+                                                class="artifact-message"
+                                                id="artifact-message"
+                                            >
+                                                <div class="artifact-card">
+                                                    <div class="review-heading">
+                                                        <strong
+                                                            >Ready for
+                                                            review</strong
+                                                        >
+                                                        <span
+                                                            >Illustrative
+                                                            result</span
+                                                        >
+                                                    </div>
+                                                    <button
+                                                        class="deliverable"
+                                                        type="button"
+                                                        data-preview="pr"
+                                                    >
+                                                        <img
+                                                            src="assets/github.svg"
+                                                            alt=""
+                                                        /><span
+                                                            ><strong
+                                                                id="artifact-title"
+                                                                >Proposed
+                                                                changes
+                                                                <svg
+                                                                    viewBox="0 0 24 24"
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    stroke-width="1.65"
+                                                                    stroke-linecap="round"
+                                                                    stroke-linejoin="round"
+                                                                    aria-hidden="true"
+                                                                >
+                                                                    <path
+                                                                        d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6"
+                                                                    /></svg></strong
+                                                            ><span
+                                                                class="artifact-description"
+                                                                id="artifact-description"
+                                                                >Verification
+                                                                summary and
+                                                                deployment
+                                                                plan</span
+                                                            ><span
+                                                                class="artifact-detail"
+                                                                >Ready for your
+                                                                review</span
+                                                            ></span
+                                                        ></button
+                                                    ><button
+                                                        class="deliverable document-deliverable"
+                                                        type="button"
+                                                        data-preview="file"
+                                                    >
+                                                        <span class="file-icon"
+                                                            ><svg
+                                                                viewBox="0 0 24 24"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                stroke-width="1.65"
+                                                                stroke-linecap="round"
+                                                                stroke-linejoin="round"
+                                                                aria-hidden="true"
+                                                            >
+                                                                <path
+                                                                    d="M5 2h10l5 5v15H5V2Z"
+                                                                />
+                                                                <path
+                                                                    d="M14 2v6h6M9 12h7m-7 4h7"
+                                                                /></svg></span
+                                                        ><span
+                                                            ><strong
+                                                                id="document-title"
+                                                                >Verification
+                                                                and deployment
+                                                                plan</strong
+                                                            ><span
+                                                                class="artifact-detail"
+                                                                >Findings and
+                                                                decisions for
+                                                                review</span
+                                                            ></span
+                                                        >
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <span
+                                                id="receipt-text"
+                                                class="sr-only"
+                                            ></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                class="panel-view detail-view"
+                                id="view-activity"
+                                role="tabpanel"
+                                aria-labelledby="tab-activity"
+                                hidden
+                            ></div>
+                            <div
+                                class="panel-view detail-view"
+                                id="view-work"
+                                role="tabpanel"
+                                aria-labelledby="tab-work"
+                                hidden
+                            ></div>
+                            <div
+                                class="panel-view detail-view"
+                                id="view-files"
+                                role="tabpanel"
+                                aria-labelledby="tab-files"
+                                hidden
+                            ></div>
+                            <p class="simulation-note">
+                                Scripted example. No messages are sent.
+                            </p>
+                        </aside>
+                    </div>
+                </section>
+                <section
+                    class="benefits-section"
+                    aria-labelledby="benefits-title"
+                >
+                    <h2 id="benefits-title">
+                        A little less coordination.<br />A lot more room to do
+                        the work.
+                    </h2>
+                    <div class="benefits">
+                        <div>
+                            <span
+                                ><svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.65"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="m13 1-10 13h8l-1 9 11-14h-8l1-8Z"
+                                    /></svg
+                            ></span>
+                            <p>
+                                <strong>Less switching. More focus.</strong>
+                                <span
+                                    >Follow conversations, progress, and results
+                                    in one place.</span
+                                >
+                            </p>
+                        </div>
+                        <div>
+                            <span
+                                ><svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.65"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <ellipse cx="12" cy="5" rx="8" ry="3" />
+                                    <path
+                                        d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"
+                                    /></svg
+                            ></span>
+                            <p>
+                                <strong>Context stays connected.</strong>
+                                <span
+                                    >Keep each task connected to the
+                                    conversation that started it.</span
+                                >
+                            </p>
+                        </div>
+                        <div>
+                            <span
+                                ><svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.65"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        d="m12 2 9 4v6c0 6-9 10-9 10S3 18 3 12V6l9-4Z"
+                                    />
+                                    <path d="m8 12 3 3 5-6" /></svg
+                            ></span>
+                            <p>
+                                <strong>Your infrastructure.</strong>
+                                <span
+                                    >Host Goblin on infrastructure you
+                                    control.</span
+                                >
+                            </p>
+                        </div>
+                        <div>
+                            <span
+                                ><svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.65"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    aria-hidden="true"
+                                >
+                                    <circle cx="9" cy="7" r="4" />
+                                    <path
+                                        d="M1 22v-3a8 8 0 0 1 16 0v3M17 3a4 4 0 0 1 0 8m3 3c3 1 3 4 3 8"
+                                    /></svg
+                            ></span>
+                            <p>
+                                <strong>You decide what’s next.</strong>
+                                <span
+                                    >Assign the work, review the results, and
+                                    decide what happens next.</span
+                                >
+                            </p>
+                        </div>
+                    </div>
+                </section>
+                <footer class="site-footer">
+                    <span
+                        >Goblin <span aria-hidden="true">/</span> In the
+                        loop</span
+                    >
+                    <p>Open source. Self-hosted. Yours to run.</p>
+                    <a
+                        href="https://github.com/jgador/goblin"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Explore the project
+                        <span aria-hidden="true">↗</span></a
+                    >
+                </footer>
+                <span class="sr-only" id="stage-count">01 / 05</span
+                ><span class="sr-only" id="conversation-number">01</span>
+            </section>
+            <div
+                id="announcer"
+                class="sr-only"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+            ></div>
+        </main>
+        <dialog id="about-dialog" aria-labelledby="about-title">
+            <button
+                class="dialog-close icon-button"
+                id="close-about"
+                type="button"
+                aria-label="Close about dialog"
+            >
+                ×</button
+            ><span class="goblin-mark"
+                ><img src="assets/goblin.svg" alt=""
+            /></span>
+            <p class="eyebrow">IN THE LOOP</p>
+            <h2 id="about-title">From a conversation to a result.</h2>
+            <p>
+                This interactive example shows how Goblin connects a team
+                request to progress and a proposed result for review. Every
+                exchange is scripted; nothing is sent to an external service.
+            </p>
+            <p>
+                The GitHub dialogue is fictional, inspired by Stephen T.’s
+                public
+                <a
+                    href="https://github.com/dotnet/runtime/issues/96277"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >dotnet/runtime issue #96277</a
+                >
+                about reducing allocations in LINQ’s OrderBy().Take(). It is not
+                an actual exchange with Stephen T. or an endorsement.
+            </p>
+            <p>
+                The Teams dialogue is fictional, inspired by Anders H.’s public
+                <a
+                    href="https://github.com/microsoft/TypeScript/issues/62606"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >TypeScript issue #62606</a
+                >
+                about property declaration order changing a type-checking error.
+                The issue is closed; this scenario imagines a regression
+                coverage review, not an actual exchange or endorsement.
+            </p>
+            <p>
+                The email dialogue is fictional, inspired by
+                <a
+                    href="https://lists.openwall.net/netdev/2024/09/11/354"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Linus T.’s September 2024 reply</a
+                >
+                about an AtomISP build fix, accepted as
+                <a
+                    href="https://github.com/torvalds/linux/commit/7c6a3a65ace70f12b27b1a27c9a69cb791dc6e91"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Linux commit 7c6a3a65ace7</a
+                >. It revisits a historical patch review, not an actual Goblin
+                exchange or endorsement.
+            </p>
+            <p>
+                Renko K.’s Discord dialogue is fictional, inspired by
+                <a
+                    href="https://www.circlesarrows.com/about-us"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Circles Arrows’s public company description</a
+                >
+                and its graph database tools,
+                <a
+                    href="https://www.circlesarrows.com/blueprint41"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Blueprint41</a
+                >
+                and
+                <a
+                    href="https://www.circlesarrows.com/compare41"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >Compare41</a
+                >. The sample project is invented; it is not an actual exchange
+                or endorsement.
+            </p>
+            <p>
+                The website illustrates channels including Teams, Discord, and
+                email. Their appearance here does not mean those integrations
+                are currently available.
+            </p>
+            <p>
+                Select a channel to see an example task. Pause the animation to
+                read at your own pace. Use Activity, Work, and Files to explore
+                progress, review details, and proposed results. All messages are
+                scripted examples. Reduced-motion preferences are respected.
+            </p>
+        </dialog>
+        <dialog id="preview-dialog" aria-labelledby="preview-title">
+            <button
+                class="dialog-close icon-button"
+                id="close-preview"
+                type="button"
+                aria-label="Close preview"
+            >
+                ×
+            </button>
+            <p class="eyebrow">EXAMPLE · FOR REVIEW</p>
+            <h2 id="preview-title"></h2>
+            <div id="preview-body"></div>
+            <button class="preview-done" id="preview-done" type="button">
+                Back to the conversation
+            </button>
+        </dialog>
+    </body>
 </html>

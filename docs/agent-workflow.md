@@ -68,6 +68,14 @@ workflow; keep them concise and specific about when that workflow is useful. Avo
 keyword triggers that load a whole workflow for a tangential mention. A skill with
 several independent workflows should link to the relevant details as needed.
 
+The design and animation skills identified in `skills-lock.json` come from
+[Emil Kowalski's skills](https://github.com/emilkowalski/skills). Their imported
+instructions, recipes, and reference files retain the upstream MIT license,
+including `Copyright (c) 2026 Emil Kowalski`. Keep the full
+[license](../.agents/skills/licenses/emilkowalski-skills/LICENSE) with any copies
+or substantial portions. See [third-party notices](../THIRD_PARTY_NOTICES.md)
+for the checked revision and license scope.
+
 Respect the existing selection boundaries:
 
 | Skill | Intended use |
