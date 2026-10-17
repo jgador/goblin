@@ -8,7 +8,6 @@
       name: "Slack",
       flow: { travelSeconds: 0.6, thinkingSeconds: 0.8 },
       location: "#log-pipeline",
-      sender: "Josh A.",
       steps: [
         "Understand the traffic problem",
         "Prepare and check the changes",
@@ -71,7 +70,6 @@
       name: "Microsoft Teams",
       flow: { travelSeconds: 1, thinkingSeconds: 1.4 },
       location: "TypeScript · Compiler discussion",
-      sender: "Anders H.",
       source: {
         label: "microsoft/TypeScript#62606",
         url: "https://github.com/microsoft/TypeScript/issues/62606",
@@ -140,7 +138,6 @@
       name: "GitHub",
       flow: { travelSeconds: 2.4, thinkingSeconds: 2.8 },
       location: "dotnet/runtime · Issue #96277",
-      sender: "Stephen T.",
       source: {
         label: "dotnet/runtime#96277",
         url: "https://github.com/dotnet/runtime/issues/96277",
@@ -209,7 +206,6 @@
       name: "Discord",
       flow: { travelSeconds: 1, thinkingSeconds: 1.4 },
       location: "# graph-tooling",
-      sender: "Renko K.",
       source: {
         label: "Circles Arrows · About us",
         url: "https://www.circlesarrows.com/about-us",
@@ -289,7 +285,6 @@
       name: "Gmail",
       flow: { travelSeconds: 1.6, thinkingSeconds: 2 },
       location: "Re: [PATCH] AtomISP min/max expansion",
-      sender: "Linus T.",
       source: {
         label: "Linus’s reply · 11 Sep 2024",
         url: "https://lists.openwall.net/netdev/2024/09/11/354",
@@ -408,6 +403,7 @@
   const packetDot = packet.querySelector(".packet-dot");
   const packetHalo = packet.querySelector(".packet-halo");
   const packetScale = { x: 1, y: 1 };
+  const hubCharacter = createHubCharacter();
   let position = receivedPosition(0);
   let playing = !reducedMotion.matches;
   let speedIndex = 0;
@@ -424,6 +420,253 @@
     return timing.start + timing.received + 0.2;
   }
 
+  // Animates the hub's Goblin mark through each conversation. CSS plays the entrance so
+  // the mark is never painted at rest first; this takes over once it has finished.
+  function createHubCharacter() {
+    const mark = { centerX: 324.1, bottom: 602.03, headX: 325, headBottom: 274.84, eyeY: 101.28 };
+    const settle = { stiffness: 120, damping: 14, mass: 0.8 };
+    const lively = { stiffness: 110, damping: 10, mass: 0.9 };
+    const body = byId("hub-body");
+    const head = byId("hub-head");
+    const gaze = byId("hub-eyes");
+    const blocks = [
+      { element: byId("hub-block-left"), centerX: 160.52, phase: 0 },
+      { element: byId("hub-block-right"), centerX: 487.68, phase: Math.PI },
+    ];
+    const eyes = ["left", "right"].map((side, index) => ({
+      shape: byId(`hub-eye-${side}`),
+      smile: byId(`hub-smile-${side}`),
+      x: [198.98, 449.23][index],
+    }));
+    const moving = [body, head, gaze, ...blocks.map(({ element }) => element)];
+    const looks = new Map();
+    let clock = 0;
+    let resting = true;
+
+    const clamp = (value) => Math.min(1, Math.max(0, value));
+    const ease = (value) => value * value * (3 - 2 * value);
+    const progress = (time, start, end, curve = ease) =>
+      curve(clamp((time - start) / (end - start)));
+    const wave = (time, period, phase = 0) => Math.sin((2 * Math.PI * time) / period + phase);
+    const backOut = (value) => 1 + 3 * (value - 1) ** 3 + 2 * (value - 1) ** 2;
+    const pivot = (x, y, transform) => `translate(${x} ${y}) ${transform} translate(${-x} ${-y})`;
+    const hash = (value) => {
+      const noise = Math.sin(value * 12.9898) * 43758.5453;
+      return noise - Math.floor(noise);
+    };
+
+    // Step response of a damped spring, matching the promo video's motion.
+    function spring(time, { stiffness, damping, mass } = settle) {
+      if (time <= 0) return 0;
+      const omega = Math.sqrt(stiffness / mass);
+      const zeta = damping / (2 * Math.sqrt(stiffness * mass));
+      if (zeta >= 1) return 1 - Math.exp(-omega * time) * (1 + omega * time);
+      const damped = omega * Math.sqrt(1 - zeta * zeta);
+      return (
+        1 -
+        Math.exp(-zeta * omega * time) *
+          (Math.cos(damped * time) + ((zeta * omega) / damped) * Math.sin(damped * time))
+      );
+    }
+
+    // Springs towards each [time, value] target in turn, starting from zero.
+    function springPath(time, keys, config) {
+      let value = 0;
+      let previous = 0;
+      for (const [start, target] of keys) {
+        value += (target - previous) * spring(time - start, config);
+        previous = target;
+      }
+      return value;
+    }
+
+    // A damped wobble that starts at 1 on impact.
+    const impact = (time, start) =>
+      time < start ? 0 : Math.exp(-(time - start) / 0.17) * Math.cos((time - start) * 18);
+
+    function blink(time) {
+      const period = 3.4;
+      const cycle = Math.floor(time / period);
+      let amount = 0;
+      for (const index of [cycle - 1, cycle]) {
+        const start = index * period + hash(index + 1) * 1.6;
+        const starts = hash(index + 7) > 0.65 ? [start, start + 0.32] : [start];
+        for (const blinkStart of starts) {
+          const elapsed = time - blinkStart;
+          if (elapsed > 0 && elapsed < 0.3)
+            amount = Math.max(
+              amount,
+              elapsed < 0.1 ? (elapsed / 0.1) ** 2 : 1 - ease(clamp((elapsed - 0.13) / 0.17)),
+            );
+        }
+      }
+      return Math.min(1, amount);
+    }
+
+    function setAttributes(element, values) {
+      Object.entries(values).forEach(([name, value]) => element.setAttribute(name, value));
+    }
+
+    function rest() {
+      if (resting) return;
+      resting = true;
+      moving.forEach((element) => element.removeAttribute("transform"));
+      eyes.forEach(({ shape, smile }) => {
+        shape.removeAttribute("transform");
+        shape.removeAttribute("opacity");
+        setAttributes(smile, { opacity: "0", transform: "" });
+      });
+    }
+
+    // Records where each channel card sits relative to the mark so the eyes can find it.
+    function measure() {
+      const logo = byId("hub-character").getBoundingClientRect();
+      const centerX = logo.left + logo.width / 2;
+      const centerY = logo.top + logo.height / 2;
+      channelButtons.forEach((button) => {
+        const card = button.getBoundingClientRect();
+        const x = card.left + card.width / 2 - centerX;
+        const y = card.top + card.height / 2 - centerY;
+        const length = Math.hypot(x, y) || 1;
+        looks.set(button.dataset.channel, {
+          x: (24 * x) / length,
+          y: ((y < 0 ? 18 : 14) * y) / length,
+          side: Math.abs(x / length) > 0.2 ? Math.sign(x) : -1,
+        });
+      });
+    }
+
+    function update(scene, time, timing) {
+      if (reducedMotion.matches) {
+        rest();
+        return;
+      }
+      resting = false;
+      const { asking, thinking, replying, received } = timing;
+      const look = looks.get(scene.id) ?? { x: 0, y: 0, side: -1 };
+      const awake = progress(clock, 1.3, 1.7);
+
+      // Look at the requesting channel, glance up when the request arrives, squint and
+      // drift while thinking, watch the response leave, and then face forward again.
+      const considering =
+        progress(time, thinking + 0.3, thinking + 0.5) *
+        (1 - progress(time, replying - 0.15, replying + 0.05));
+      const gazeX =
+        springPath(time, [
+          [asking - 0.1, look.x],
+          [thinking, look.x * 0.4],
+          [replying - 0.05, look.x],
+          [received, 0],
+        ]) +
+        9 * wave(time - thinking, 1.3) * considering;
+      const gazeY = springPath(time, [
+        [asking - 0.1, look.y],
+        [thinking, -14],
+        [replying - 0.05, look.y],
+        [received, 0],
+      ]);
+      const curious = springPath(
+        time,
+        [
+          [thinking, 1],
+          [thinking + 0.55, 0],
+        ],
+        lively,
+      );
+      const size = springPath(time, [
+        [thinking, 0.3],
+        [thinking + 0.5, -0.28],
+        [replying, 0],
+      ]);
+      const nod = springPath(time, [
+        [replying, 8],
+        [replying + 0.2, 0],
+      ]);
+
+      // Hop with anticipation, stretch in the air, and squash on landing.
+      const launch = received + 0.28;
+      const land = received + 0.78;
+      const hop = (offset) => {
+        const amount = (time - offset - launch) / (land - launch);
+        return amount <= 0 || amount >= 1 ? 0 : -70 * 4 * amount * (1 - amount);
+      };
+      const airborne = (time - launch) / (land - launch);
+      const crouch =
+        progress(time, received + 0.05, launch - 0.07) -
+        progress(time, launch - 0.07, launch + 0.03);
+      const stretch = airborne > 0 && airborne < 1 ? 0.08 * Math.abs(1 - 2 * airborne) : 0;
+      const landing = impact(time, land);
+      const lift = hop(0);
+      const smiling =
+        progress(time, launch + 0.07, launch + 0.17) - progress(time, land + 0.5, land + 0.67);
+      const arc =
+        progress(time, launch + 0.17, launch + 0.37, backOut) *
+        (1 - progress(time, land + 0.4, land + 0.5));
+
+      const bodyScaleX = 1 + awake * (0.05 * crouch - stretch / 2 + 0.06 * landing);
+      const bodyScaleY = 1 + awake * (-0.1 * crouch + stretch - 0.12 * landing);
+      body.setAttribute(
+        "transform",
+        pivot(
+          mark.centerX,
+          mark.bottom,
+          `translate(0 ${awake * lift}) scale(${bodyScaleX} ${bodyScaleY})`,
+        ),
+      );
+      blocks.forEach(({ element, centerX, phase }) => {
+        const raise = 26 * considering * Math.max(0, wave(time - thinking, 0.87, phase)) ** 2;
+        const breathe = 0.015 * wave(clock, 2, phase + Math.PI / 2) - 0.05 * impact(time, land);
+        element.setAttribute(
+          "transform",
+          pivot(
+            centerX,
+            mark.bottom,
+            `translate(0 ${-awake * raise}) scale(1 ${1 + awake * breathe})`,
+          ),
+        );
+      });
+
+      const headX = 0.3 * gazeX;
+      const headY = -5 * wave(clock, 2) - 10 * curious + nod + 0.5 * (hop(0.07) - lift);
+      const tilt = 8 * look.side * curious + 0.05 * gazeX;
+      const squash = 0.06 * impact(time, land + 0.07);
+      const headScale = `scale(${1 + (awake * squash) / 2} ${1 - awake * squash})`;
+      head.setAttribute(
+        "transform",
+        `translate(${awake * headX} ${awake * headY}) ` +
+          pivot(mark.headX, 200, `rotate(${awake * tilt})`) +
+          " " +
+          pivot(mark.headX, mark.headBottom, headScale),
+      );
+      gaze.setAttribute("transform", `translate(${awake * gazeX} ${awake * gazeY})`);
+
+      const shut = awake * Math.max(blink(clock), smiling);
+      eyes.forEach(({ shape, smile, x }) => {
+        const grow =
+          1 + awake * (size + (Math.sign(x - mark.headX) === look.side ? 0.12 * curious : 0));
+        const scaleY = grow + (0.08 - grow) * shut;
+        const scaleX = (1 - 0.12 * (grow - 1)) * (1 + 0.06 * shut);
+        setAttributes(shape, {
+          transform: pivot(x, mark.eyeY, `scale(${scaleX} ${scaleY})`),
+          opacity: awake * smiling > 0.97 ? "0" : "1",
+        });
+        const happy = awake * arc;
+        setAttributes(smile, {
+          opacity: String(Math.min(1, happy * 4)),
+          transform: pivot(x, mark.eyeY, `scale(1 ${Math.max(0.05, happy)})`),
+        });
+      });
+    }
+
+    return {
+      advance: (seconds) => {
+        clock += seconds;
+      },
+      measure,
+      update,
+    };
+  }
+
   function formatTime(value) {
     const seconds = Math.floor(value);
     return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -435,10 +678,10 @@
 
   function updateCard(scene, prompt) {
     const card = channelButtons.find((button) => button.dataset.channel === scene.id);
-    card.title = scene.sender + ": " + prompt.request + "\nGoblin: " + prompt.reply;
+    card.title = scene.name + ": " + prompt.request + "\nGoblin: " + prompt.reply;
     card.setAttribute(
       "aria-label",
-      "Play the " + scene.name + " conversation with " + scene.sender + ". " + prompt.request,
+      "Play the " + scene.name + " conversation. " + prompt.request,
     );
   }
 
@@ -452,11 +695,8 @@
     byId("conversation-title").textContent = scene.name;
     byId("conversation-location").textContent = scene.location;
     byId("conversation-icon").src = `assets/${scene.id}.svg`;
-    byId("sender-name").textContent = scene.sender;
-    byId("human-avatar").textContent = scene.sender
-      .split(" ")
-      .map((part) => part[0])
-      .join("");
+    byId("sender-name").textContent = scene.name;
+    byId("sender-icon").src = `assets/${scene.id}.svg`;
     byId("request-text").textContent = prompt.request;
     byId("reply-text").textContent = prompt.reply;
     byId("receipt-text").textContent = prompt.receipt;
@@ -512,6 +752,7 @@
               ? "replying"
               : "received";
     setPhase(phase);
+    hubCharacter.update(scenes[index], localTime, timing);
     byId("incoming-message").style.opacity = "1";
     const inTransit =
       !compactLayout.matches && !reducedMotion.matches && (phase === "asking" || phase === "replying");
@@ -576,9 +817,11 @@
   function tick(timestamp) {
     animationFrame = null;
     if (!playing) return;
-    if (lastFrame !== null)
-      position =
-        (position + Math.min((timestamp - lastFrame) / 1000, 0.1) * speeds[speedIndex]) % duration;
+    if (lastFrame !== null) {
+      const elapsed = Math.min((timestamp - lastFrame) / 1000, 0.1) * speeds[speedIndex];
+      position = (position + elapsed) % duration;
+      hubCharacter.advance(elapsed);
+    }
     lastFrame = timestamp;
     render();
     animationFrame = requestAnimationFrame(tick);
@@ -801,7 +1044,7 @@
     const cards = Object.fromEntries(
       channelButtons.map((button) => [button.dataset.channel, button.getBoundingClientRect()]),
     );
-    const logo = hub.querySelector(".hub-core .goblin-mark img").getBoundingClientRect();
+    const logo = byId("hub-character").getBoundingClientRect();
     const endpoints = {
       slack: {
         start: { x: cards.slack.right - 1, y: cards.slack.bottom - 9 },
@@ -880,6 +1123,7 @@
     if (compactLayout.matches) fitHubAboveConnector();
     updateConnectorGeometry();
     if (!compactLayout.matches) fitHubAboveConnector();
+    hubCharacter.measure();
     render();
   });
   networkLayoutObserver.observe(network);
@@ -888,6 +1132,7 @@
   if (compactLayout.matches) fitHubAboveConnector();
   updateConnectorGeometry();
   if (!compactLayout.matches) fitHubAboveConnector();
+  hubCharacter.measure();
 
   const artifactLabels = {
     slack: [

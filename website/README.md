@@ -38,19 +38,23 @@ a pale green tool network, central Goblin mark, and a tabbed conversation panel.
 The tool network has no enclosing box; the conversation panel retains its border.
 Open `index.html` in a modern browser; the page itself requires no build,
 dependencies, or account connections. The header links to the Goblin GitHub
-project without showing repository metrics. On phones, five compact channel
-cards form a loose ring around Goblin, with each person's name above their
-platform. Each card has one thin, muted fiber-like connector meeting the card
-and logo edges. A soft light travels from the card to Goblin and back, showing
-both directions without a separate dotted path. Motion pauses with the player
-and follows the reduced-motion setting. The playback speed control also adjusts
-the fiber lights. On phones, the read-only message preview and benefit descriptions
-follow the conversation panel, keeping the hub and example together. On wider
-screens, the message preview sits inside the Conversation view and the benefits
-sit below the hub. Their positions update when crossing the phone breakpoint.
+project without showing repository metrics. Each channel card names its
+platform beside the platform's mark. On phones, five compact channel cards form
+a loose ring around Goblin. Each card has one thin, muted fiber-like connector
+meeting the card and logo edges. A soft light travels from the card to Goblin and
+back, showing both directions without a separate dotted path. Motion pauses with
+the player and follows the reduced-motion setting. The playback speed control
+also adjusts the fiber lights. On phones, the read-only message preview and
+benefit descriptions follow the conversation panel, keeping the hub and example
+together. On wider screens, the message preview sits inside the Conversation view
+and the benefits sit below the hub. Their positions update when crossing the
+phone breakpoint.
 
 The central Goblin icon and wordmark scale together when vertical space is tight,
 keeping an 18-pixel gap above the Discord connector endpoint in wide, short windows.
+On wider layouts, the tool network keeps its own height instead of stretching
+with the conversation panel, so arriving replies lengthen only the panel and do
+not resize the diagram or hub during playback.
 On wider layouts, every connector starts at the measured center of its card's
 dot and ends at its Goblin-side dot. Paths and animation lengths update with
 the layout. Endpoint dots, moving dots, and their halos stay circular at a
@@ -60,9 +64,21 @@ Connector lines have no floating icon badges; the cards identify each platform.
 Goblin avatars inside the channel cards use 45% opacity to keep the central hub
 visually prominent. The hub and conversation panel avatars retain full opacity.
 
-The tool cards and conversations feature Josh A. (Slack), Anders H.
-(Microsoft Teams), Stephen T. (GitHub), Renko K. (Discord), and Linus T.
-(Gmail).
+The hub's Goblin mark is a live SVG character rather than a video. On load, a
+CSS entrance pops the blocks in, drops the head onto them, and opens the eyes
+in about 1.2 seconds; it always completes, even when the player is paused.
+Afterward, `website.js` drives the mark from the demonstration: it breathes and
+blinks while idle, looks toward the requesting channel card, tilts curiously when
+the request arrives, squints while the blocks lift in turn during thinking,
+watches the reply leave, and hops with brief arc eyes when the reply arrives.
+These reactions follow the playback speed, freeze with the pause control, and
+match the timeline when scrubbing. Reduced motion shows the static mark.
+
+The scenarios are associated with Josh A. (Slack), Anders H. (Microsoft
+Teams), Stephen T. (GitHub), Renko K. (Discord), and Linus T. (Gmail). The
+channel cards and conversation panel show platforms rather than people: each
+request appears under its platform's mark and name, and only the card avatars
+keep the participants' initials.
 
 Josh A.’s three Slack scenarios use a fictional log ingestion pipeline:
 handle higher traffic without losing accepted logs, protect logs during
@@ -149,7 +165,7 @@ the website assigns him no unverified title. Source links appear in the About
 dialog and Discord deliverable previews. No graph database has been queried
 or synchronized, and no integration with these products is implied.
 
-Choose a tool card or chapter to play its primary scripted exchange. Additional
+Choose a channel card or chapter to play its primary scripted exchange. Additional
 scripted examples remain in the scene data; there is no scenario dropdown. The player
 uses shorter requests and replies that describe the desired outcome before the
 implementation details. All fifteen stored examples retain their scenario-specific
@@ -194,8 +210,10 @@ for human review. The channel information icon opens the About dialog, which
 explains the website's scope.
 
 The Goblin icons are unchanged copies of the official artwork in the repository's
-`assets/branding/svg/` directory. The center hub uses the light-background icon
-directly on the page with a soft glow. Conversation avatars and the Slack and Teams
+`assets/branding/svg/` directory. The center hub draws the light-background
+icon's shapes inline with the same geometry and colors, so its parts can move,
+adding brief arc eyes during the hop; it sits directly on the page with a soft
+glow. Conversation avatars and the Slack and Teams
 card avatars also use the light-background icon without a surrounding tile.
 The Discord card and About dialog use the white icon on a green surface.
 Brand artwork remains outside the repository's Apache
@@ -219,6 +237,63 @@ Production domain: <https://goblinboard.com>. See the
 [protected production deployment](production/README.md) for AK3S ingress,
 GitHub approval, TLS, and the DNS cutover procedure.
 The earlier ChatGPT-hosted copy is independent of this deployment.
+
+## Promo video
+
+`video/` is a development-only [Remotion](https://www.remotion.dev/) project. It
+renders a 30-second, 1920 × 1080, 30 fps landscape promo for social posts and
+launches. React components rebuild the website's hub, channel cards, and Slack
+conversation. A scripted camera moves from the headline to the network,
+where the Slack card is spotlighted, then through the conversation and review. It
+pulls back to the full network, where a shield badge on the Goblin mark and a
+“Self-hosted” caption label mark the hosting benefit, and ends on the website and
+repository addresses. A second composition, `GoblinLogo`, is a 12-second,
+1080 × 1080 seamless loop of the Goblin mark as a character. Its blocks pop in and
+the head drops onto them. It then blinks, looks around, tilts curiously, and
+thinks while the blocks take turns lifting. Finally it hops with happy eyes and
+leaves, so the clip ends on the same empty stage it starts with. The package has
+its own lockfile. It is excluded from the website image, release workflow paths,
+CI installation, and the development container's dependencies.
+
+Run these commands from the repository root:
+
+```bash
+npm --prefix website/video ci
+npm --prefix website/video run studio
+npm --prefix website/video run render
+npm --prefix website/video run render:logo
+npm --prefix website/video run check
+```
+
+`studio` opens an interactive preview at **http://localhost:3000**. `render`
+writes `video/renders/goblin-promo.mp4` and `render:logo` writes
+`video/renders/goblin-logo.mp4`. These committed renders sit outside `assets/`,
+so they are not served by the website or included in its image and release
+paths; re-render and commit them when a composition changes. The
+first render downloads Remotion's Chrome Headless Shell into the package's
+`node_modules`. `check` type-checks the project.
+
+`video/src/content.ts` mirrors the hero copy in `index.html` and the first Slack
+scenario in `website.js`; update it when that wording changes. `video/src/timeline.ts`
+holds frame timing and `video/src/camera.ts` holds the camera shots.
+`video/src/GoblinLogo.tsx` holds the logo loop's beats and motion. It redraws the
+parts of `assets/goblin.svg` in their original shapes and colours, adding only
+brief arc eyes for the happy moment; update its geometry if the mark changes. The
+project uses `assets/` as its public directory, so the video uses the same Inter
+fonts, Goblin artwork, and provider marks as the website, under the notices above.
+Like the website, the promo shows the “Illustrative example” notice. Only the Slack
+`#log-pipeline` conversation is depicted. The end card states that the Slack
+dialogue is fictional and does not describe an actual system or work, and that
+Teams, Discord, and email are planned integrations.
+
+Remotion reads `tsconfig.json` through the TypeScript JavaScript API, which the
+repository's TypeScript 7 compiler does not expose, so `video/remotion.config.ts`
+sets the automatic JSX runtime for its bundler directly.
+
+Remotion is source-available under its own
+[license](https://www.remotion.dev/license), not an open-source license. It is
+free for individuals, non-profit organizations, and for-profit organizations with
+up to three employees; larger for-profit organizations need a company license.
 
 ## Develop in Docker
 
