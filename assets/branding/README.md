@@ -37,13 +37,13 @@ of `svg/icon-light.svg`. It supplies both the header and favicon.
 The header uses CSS sizing with automatic height to preserve the SVG's proportions
 and sharpness. The UI currently uses the light-background artwork only.
 
-The GitHub Pages installation page uses the same official `svg/icon-light.svg`
+The website installation page uses the same official `svg/icon-light.svg`
 artwork for its header and favicon. `goblinctl` embeds the original file
 directly in the standalone setup bundle, served at `/setup/icon.svg`, so branding
 is available before the application is built. Regenerate the setup bundle and
 Azure templates after changing its sources (see `deploy/azure/reference.md`).
 
-The [Slack integration plan](../../docs/slack-integration-plan.md) selects
+The [Slack integration](../../docs/slack-integration.md) selects
 [`slack/icon-light.png`](slack/icon-light.png), a 1024 × 1024 PNG derived from
 `svg/icon-light.svg`. It uses the text-free artwork for light backgrounds, centered
 at 896 pixels wide on an opaque white square, preserving the original colors and
@@ -55,12 +55,13 @@ The runtime copy is `frontend/public/assets/branding/slack.png`, served at
 To regenerate, render the source SVG at 896 pixels wide, preserve its
 aspect ratio, center it on a 1024-pixel white square, and export as PNG.
 
-Keep original design resources here. Put assets used by the website under
+Keep original design resources here. Put assets used by the application under
 `frontend/public/assets/`, and register their browser URLs in the static-file
 map in `backend/src/Goblin.Web/Http/StaticAssets.cs`. The frontend build copies
 those runtime files into `frontend/dist/assets/` automatically.
-This design library is excluded from the Docker build context.
+The standalone website owns its deployed copies under `website/assets/`.
+This design library is excluded from the application Docker build context.
 
-macOS packaging metadata (`.DS_Store` and `__MACOSX`) from the import is preserved
-locally under `.artifacts/branding-import-metadata/`, retaining its original
-relative paths. That directory is ignored by Git and Docker.
+Original designer metadata stays in the supplied source report. Any optional
+local import metadata is task output under `.artifacts/`, not part of the tracked
+asset library. Preserve original relative paths when retaining import metadata.

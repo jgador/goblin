@@ -1,13 +1,13 @@
 # TypeScript refactoring review
 
 This review covers the repository's TypeScript browser code, Node scripts,
-configuration, fixtures, and tests as of October 1, 2026. The main remaining
+configuration, fixtures, and tests reviewed against the current owners. The main remaining
 maintenance problem is ownership in `frontend/src/work/app.ts`: loading, command
 construction, navigation, draft preservation, markup, and interaction still share
 module globals. Extract these responsibilities in working increments while
 preserving the existing browser technology and visual design.
 
-Follow the [architecture plan](architecture-refactoring-plan.md),
+Follow the [architecture guide](architecture.md),
 [Work lifecycle](work-lifecycle.md), [contract values](contract-values.md), and
 [environment variable guide](environment-variables.md). Browser modules observe
 persisted Work and submit commands. Work transitions, attention, retries,
@@ -16,7 +16,7 @@ reconciliation, and execution ownership remain backend responsibilities.
 ## Completed foundations
 
 The preceding refactor extracted model selection, catalog loading, and picker
-markup. This continuation adds the following boundaries:
+markup. The current code includes the following boundaries:
 
 - `api/client.ts` handles Goblin JSON requests, same-origin credentials, read
   timeouts, public error envelopes, and safe fallbacks for non-JSON failures.
@@ -67,14 +67,14 @@ requests from JSON requests so newly extracted modules load normally.
 
 ## Browser file inventory
 
-All files under `frontend/src` were included in the review. Paths in this table
-are relative to that directory. Recommendations below describe remaining work.
+Paths in this owner inventory are relative to `frontend/src`. Recommendations
+describe remaining work; the table groups modules rather than tracking file counts.
 
 | Files | Finding and recommendation |
 | --- | --- |
 | `work/app.ts` | Highest priority. Its global state still coordinates unrelated responsibilities and its action handler mixes local UI changes with durable command construction. Follow the extraction sequence above. |
 | `work/contracts.ts`, `api/contracts.ts`, `api/workspace-contracts.ts` | Keep public views separate from internal controller state. Add typed Work/conversation payloads and endpoint-specific adapter methods; account APIs already have path-indexed request/response types. Check nullable wire fields against the backend before tightening them. |
-| `work/command-submission.ts` | Keep recovery and exclusivity here. The payload intentionally remains opaque in this increment; typed builders are the next step. Storage validation checks restoration safety, while the server validates authority and lifecycle. |
+| `work/command-submission.ts` | Keep recovery and exclusivity here. The payload remains opaque; typed builders are the next step. Storage validation checks restoration safety, while the server validates authority and lifecycle. |
 | `api/client.ts`, `api/read-scope.ts` | Shared transport and reset foundations. Keep successful response assertions at this boundary; add validation where external data can affect behavior. Add new abstractions only when a consumer needs them. |
 | `work/model-selection.ts`, `work/model-catalog.ts`, `work/model-picker.ts` | Useful existing boundaries with selection and stale-request coverage. Keep runtime model names extensible. Narrow catalog adapter signatures to model operations when the wider API typing work lands. |
 | `work/surface.ts` | Rendering, search text, and derived progress share a file. Extract pure presentation selectors if they acquire independent consumers; preserve the distinction between product progress and runtime events. |
@@ -87,13 +87,15 @@ are relative to that directory. Recommendations below describe remaining work.
 | `settings/system.ts` | Already owns cancellation and stale readings. Keep machine DTOs at an API boundary and extract formatting/chart markup only when it simplifies consumers. Do not display unavailable metrics as healthy zeroes. |
 | `settings/timezone.ts` | Preference access, external location lookup, and display formatting are separate concepts. Split the external lookup adapter when extending it; retain visitor-browser lookup, omitted credentials, timeouts, and local fallback. |
 | `settings/timezone-picker.ts` | DOM interaction, filtering, suggestion state, and saving are combined. Extract pure option/search/suggestion functions if this UI grows, while retaining cancellation and optimistic concurrency on saves. |
+| `settings/slack.ts`, `integrations/directory.ts` | Keep setup sessions, identity proof/confirmation, and connection status under explicit mount/dispose owners. Preserve polling cancellation, secret-field clearing, and unavailable-state handling. The directory reuses Settings instead of granting authority itself. |
+| `knowledge/page.ts` | Empty presentation with unavailable search; no indexing/retrieval API exists. Do not fabricate sources or results during a frontend refactor. |
 | `api/values.ts`, `settings/timezone-places.ts` | Generated data. Change the owning declarations or generators; do not refactor generated output manually. |
 
 ## Tooling and test file inventory
 
-Every TypeScript file in these groups was included in the review. Test files
-should retain readable journeys and explicit negative fixtures; reducing their
-line counts is not an objective.
+This inventory identifies maintenance owners and representative tests. Test files
+should retain readable journeys and explicit negative fixtures; reducing line
+counts is not an objective. New modules/tests must be considered with their callers.
 
 | Files | Finding and recommendation |
 | --- | --- |
@@ -103,6 +105,8 @@ line counts is not an objective.
 | `scripts/update-timezone-places.mts` | Scoped generator. Preserve checked-in output, IANA provenance, and alias processing. No broad redesign needed. |
 | `scripts/generate-contract-values.mts`, `scripts/generate-contract-values.test.mts`, `tests/contracts/values.typecheck.ts` | Ownership and stale-output checks are valuable. Keep extraction intentionally narrow and fail on unsupported declarations. Expand compile-time checks alongside typed payloads. |
 | `scripts/release-github.mts`, `scripts/release-github.test.mts` | High priority outside the browser: `any` permits unchecked release catalogs, GitHub API results, and release records. Parse external JSON into validated owned types, then separate pure catalog/identity rules from GitHub effects. Preserve immutable published assets, approval requirements, and recovery semantics; keep Azure installation manual. |
+| `scripts/installation-assets.mts`, `website/package-installation.mts` | Keep authenticated release discovery, snapshot provenance, and shipped-file selection explicit. Verify hashes and signer identity before accepting external bytes; preserve frozen approval inputs. |
+| `tests/e2e/slack.spec.ts`, `tests/e2e/integrations-knowledge.spec.ts` | Retain setup recovery, linked-identity confirmation, disconnected/unavailable states, and directory navigation. Fixtures do not establish live Slack behavior. |
 | `scripts/check-secrets.mts`, `scripts/check-secrets.test.mts`, `scripts/install-git-hooks.mts` | Security-sensitive existing behavior with substantial negative coverage. Keep index/worktree/history and redaction contracts. Prefer typed scanner reports at the tool boundary and shared fixtures over rewriting scanning logic. |
 | `scripts/check-codex.ts`, `scripts/check-headlamp.ts`, `scripts/check-logs-ui.ts` | Repeated isolated backend/browser setup and port discovery. Share resource ownership and cleanup so failures before the main `try` cannot leak children or contexts. Keep real-runtime checks opt-in and all in-repository investigation output under `.artifacts`. |
 | `tests/support/backend.ts`, `tests/support/setup.ts` | Startup waits need explicit deadlines, child-error handling, and cleanup registered before awaiting startup. Share a bounded line-protocol launcher without moving execution into browser or HTTP request ownership. |
@@ -120,22 +124,13 @@ line counts is not an objective.
 
 ## Verification and limits
 
-Frontend and tooling compilation, 42 frontend behavioral tests, contract and
-dependency checks, nine contract/release tests, browser asset dependency checks,
-and protocol/Kubernetes generator checks pass. The backend builds without warnings.
-The full `make test` run passed, including 142 JavaScript cases and one skipped
-PostgreSQL-dependent HTTP case.
+This is an unfinished maintenance plan, not a record of checks passing today.
+For each extraction, run affected frontend/module tests, typechecking, static asset
+dependency checks, and the relevant browser journeys. Preserve stale-read rejection,
+exact command identities/recovery, focus, drafts, and authorization. See
+[test selection](repository-layout.md#choosing-verification).
 
-All 54 relevant browser cases pass across Work, model selection, connections,
-settings, timezone, and installation. One stale timezone message assertion was
-corrected to expect the public API failure message; all ten timezone cases were
-then rerun successfully. These journeys cover stale reads after locking, exact
-command recovery after refresh, corrupt recovery state, drafts, focus, and layout.
-
-Separate checks against a disposable PostgreSQL 18.6 instance passed ten
-persistence tests and 114 application tests, including durable command recovery.
-The ordinary suite skips PostgreSQL-dependent tests without configured test
-connections. The real logging pipeline and VMUI browser checks also passed,
-including collector recovery after an outage and ingestion access restrictions.
-These checks used local fixtures and did not exercise live GitHub publication,
+PostgreSQL-backed application/Work journeys are opt-in and establish durability
+only when run against the configured disposable database. Browser mocks, local
+logging fixtures, and schema checks do not establish live GitHub publication,
 authenticated model execution, or an Azure deployment.

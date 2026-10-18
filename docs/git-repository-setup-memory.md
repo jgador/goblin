@@ -70,13 +70,15 @@ portable setup instructions when useful.
 
 PostgreSQL remembers preparation knowledge and Git provenance. Workspace files
 and installed tools remain on the Work PVC; no filesystem archive is stored in
-PostgreSQL. Installs under `/runtime` or `/tmp` disappear on replacement; non-root
-tool installations can use writable workspace paths. Large dependency trees
+PostgreSQL. `/workspace`, `/runtime`, and `/tmp` share the Work PVC and persist
+across pod replacement. Tools installed outside those persistent mounts do not
+gain that durability; Codex credentials and sessions in `/run/codex` remain
+pod-lifetime data. See [workspace mounts](workspace-lifecycle.md#one-workspace-per-work). Large dependency trees
 consume PVC storage. Shared prepared environments and
 cross-Work dependency caches are separate work; this feature reduces repeated
 discovery and does not guarantee that installation can be skipped.
 
 The schema is part of the unreleased `0001_initial.sql`, with EF mappings
-regenerated from a fresh database. No compatibility migration is added. Existing
-local data is not reset by this change; a local database using an older baseline
-must be updated deliberately before running the new application.
+regenerated from a fresh database. Existing development databases with a changed
+baseline require deliberate recreation, as described in [database setup](database.md#apply-the-sql-schema).
+No compatibility migration or automatic reset is provided.

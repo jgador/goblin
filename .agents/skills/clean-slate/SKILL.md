@@ -161,10 +161,10 @@ removes these verified artifacts after their writers have stopped:
 | Target relative to this checkout | Cleanup scope |
 | --- | --- |
 | `.goblin-platform/` | Private Codex login/tokens, session databases, history, home, workspace, and other application state. |
-| `.goblin-browser-test/` | Fake-login state, browser-test password, and private test workspace. |
+| `.artifacts/playwright/` | Verified inactive browser-test state, results, and screenshots; preserve active test runs and unrelated task output. |
 | `.goblin-local/` | Installation source snapshots, bundles, and logs. |
 | `.goblin-secrets/` | Ignored test credentials, including `owner-password`; preserve `.gitkeep` and any other tracked files. |
-| `test-results/`, `playwright-report/` | Generated reports, traces, screenshots, and browser artifacts, excluding any tracked files. |
+| Other task directories under `.artifacts/` | Only enumerated inactive test/runtime data proven to belong to this reset; preserve source review reports and unrelated task artifacts. |
 
 Also address these conditional leftovers; report anything that cannot safely be
 removed rather than claiming the environment is completely clean:

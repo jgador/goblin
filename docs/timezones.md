@@ -83,7 +83,7 @@ silently replace another visitor's choice. Saves atomically replace the file;
 unreadable configuration and failed writes surface an error. A failed initial
 save keeps onboarding open. The suggestion is never saved merely by visiting.
 
-The log adapter targets the pinned VictoriaLogs 1.52.0 storage contract
+The log adapter targets the pinned VictoriaLogs 1.53.0 storage contract
 (`VLUI:TIMEZONE` containing, for example, `{ "value": "Asia/Manila" }`). Its document
 response loads an authenticated script before VMUI's bundle. The real log UI check
 covers this integration and should be run when upgrading VictoriaLogs.

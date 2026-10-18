@@ -1,17 +1,16 @@
 # Codex model selection
 
-The composer on New Work, saved conversations, and Work has a compact model
-button. Its popover shows the current model and reasoning effort, with a slider
-for Low, Medium, High, and Extra High. Unsupported stops are disabled for the
-chosen model. The model row opens a list with the Codex default plus three
-visible models; **Show more** loads up to ten. A choice made before
-Work exists follows the new or tracked Work through agent assignment.
-Conversation messages save context; they do not run a model. If the assigned
-agent uses another connection, the picker resets and asks for a new choice.
-Before an attempt starts, choices are browser-tab drafts in session storage.
-Start and Retry record the requested model and effort on the new attempt in
-PostgreSQL; later agent or catalog changes do not rewrite that attempt. The
-execution view shows both the requested model and the model Codex reported.
+Model and reasoning choices live in **Options** on the selected Work's Start/Retry
+panel. Conversation composers save context without model controls. The popover
+shows the current model and effort, with Low, Medium, High, and Extra High stops;
+unsupported stops are disabled. The model list initially shows the Codex default
+and three visible models; **Show more** loads up to ten.
+
+Before an attempt starts, choices are browser-tab drafts in session storage for
+that Work. A changed connection invalidates an incompatible draft. Start and Retry
+record the requested model and effort on the new attempt in PostgreSQL; later
+agent or catalog changes do not rewrite it. Execution details show both the
+requested model and the model Codex reported.
 
 The controller uses Codex App Server `model/list`, follows its pagination cursor,
 and discards hidden models. The complete visible catalog is stored as one JSONB
@@ -23,7 +22,8 @@ Refresh is scheduled after a successful account change, when the Codex
 executable changes, when the picker opens with a catalog older than 24 hours,
 or when the user presses **Refresh models**. The controller coalesces concurrent
 refreshes. A failed fetch retains the last successful catalog, marks it stale,
-and waits one minute before an automatic retry. Manual refresh can retry sooner.
+and applies a one-minute cooldown before another eligible automatic refresh.
+Manual refresh can retry sooner.
 If no catalog exists, Work can still use the Codex default. A changed account
 never receives the previous account's catalog.
 

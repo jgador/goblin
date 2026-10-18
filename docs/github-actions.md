@@ -90,11 +90,10 @@ paths, required-check templates, scripts that select checks or signer workflows,
 and operating documentation together. Preserve triggers, commands, permissions,
 approval environments, and concurrency behavior when changing names.
 
-For the Website Release rename, wait for `validate` to pass on the rename PR.
-Then replace the active website ruleset's `website-checks` requirement with `validate`, selecting
-**GitHub Actions** as the source, before merging. The local
-[website ruleset template](../website/production/github-ruleset.json) does not
-update the live ruleset. Keep CI's existing `test_results` requirement.
+The checked-in website ruleset requires `validate` from GitHub Actions; CI uses
+`test_results`. The [ruleset template](../website/production/github-ruleset.json)
+does not update the live ruleset. When changing check names, review the active
+ruleset and arrange its update before merging.
 
 ## Release signing identity
 
@@ -106,7 +105,6 @@ rejects self-hosted runners.
 
 Installers signed by superseded workflow paths cannot be reused by the current
 release tooling. Publish a new installer version through **Platform Release**
-before reuse; preserve existing tags and published bytes. After this rename is
-merged, start a fresh release run from updated `master`, since reruns retain the
-original workflow revision. Actual signing, publication, and website installation deployment
+before reuse; preserve existing tags and published bytes. After changing the signing workflow, start a fresh release run from updated
+`master`, since reruns retain the original workflow revision. Actual signing, publication, and website installation deployment
 require verification in GitHub Actions; local checks cover their offline contracts.

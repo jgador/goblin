@@ -53,8 +53,8 @@ inside the process and emit only the file, line, snapshot, and rule/category.
 Inspect relevant context with candidate values replaced by `[REDACTED]`. Avoid
 raw `rg` matches, raw diffs, or scanner logs that could echo a secret. Use `rg`
 for discovery with filename-only output when appropriate. Keep any necessary
-scan snapshots in a private temporary directory outside the checkout and remove
-them afterward. Do not upload source, test candidate credentials against a
+scan snapshots in a mode-0700 task directory under `.artifacts/secrets-review/`
+and remove them afterward. Do not upload source, test candidate credentials against a
 provider, or put secret values in reports, shell arguments, logs, or chat.
 
 Cover these content signals without depending on exact token lengths:
@@ -97,7 +97,7 @@ build/package exclusions when pending changes could copy credentials into an
 artifact. Do not open ignored credential stores just to verify their exclusion;
 use Git inventory, ignore rules, paths, and metadata.
 
-For Goblin, specifically check `.goblin-platform/`, `.goblin-browser-test/`, Codex
+For Goblin, specifically check `.goblin-platform/`, `.artifacts/playwright/`, Codex
 `auth.json`, Goblin `owner-password`, environment files, and `.dockerignore`.
 The saved ChatGPT login and password verifier are private runtime data. Do not print
 or copy them. Keep this a secrets review; do not connect GitHub repositories,

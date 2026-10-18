@@ -8,9 +8,8 @@ source changes.
 The application runs as Sandbox/container/Service `platform` in namespace
 `goblin`, using image `goblin-platform`. The website has an independent local
 workflow in the same namespace; see [Kubernetes names](../../docs/kubernetes-names.md).
-Before applying renamed storage defaults to an existing installation, inventory
-and preserve its bound PVC and application data directory. A naming change does
-not authorize resetting this installation.
+Inspect bound PVCs and ownership before changing storage manifests. A naming
+change does not authorize resetting this installation.
 
 ## Start
 
@@ -152,7 +151,7 @@ make local-start ARGS="--http-port 8888"
 
 ## Password storage
 
-Local setup uses the same the Rust `goblinctl::credentials` module helper as Azure:
+Local setup uses the shared Rust `goblinctl::credentials` module helper as Azure:
 PBKDF2-SHA256, 600,000 iterations, and a random 16-byte salt. Only the verifier is
 saved to `.goblin-secrets/owner-password` in this checkout (file mode `0600`,
 directory mode `0700`). Git ignores everything in that folder except the empty
@@ -184,4 +183,4 @@ pod. Finish an in-progress installation before changing its password.
 The local source snapshot excludes Git-ignored files and rejects symlinks.
 Kubernetes readiness, cert-manager admission, image building, application readiness,
 and the browser handoff are real. Azure resource creation, DNS propagation,
-and Azure networking still require an Azure deployment test.
+and Azure networking require manual verification on the intended Azure VM.

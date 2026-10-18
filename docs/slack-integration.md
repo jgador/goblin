@@ -1,10 +1,8 @@
 # Goblin Slack integration
 
-Status: implemented in the working tree, 2026-10-02. The user completed live Slack
-authorization: app creation, installation, automatic icon upload, and Socket Mode
-all succeeded. Runtime credentials remained usable after setup logout, helper
-removal, and process restart. Live identity linking and DM-to-Work delivery also
-passed; channel mentions have parser coverage but were not exercised live.
+The integration supports customer-owned Slack apps, outbound Socket Mode, linked
+owner identities, durable DM/mention ingestion, and question/outcome delivery.
+The limitations and verification boundaries below describe the checked-in adapter.
 
 ## Ownership and connection
 
@@ -209,13 +207,9 @@ a post but before its delivery marker commits can duplicate a notification;
 it cannot repeat Work execution. Question text is escaped for Slack and bounded
 to 3,000 characters, with a link to the full question in Goblin.
 
-The unreleased schema baseline adds `external_conversation.notified_decision_id`
-and `external_conversation.notified_work_sequence`.
-An existing disposable development database requires deliberate recreation
-from the changed unreleased baseline before running the updated application; restarting the old installed image does not enable
-notification delivery. Existing eligible outcomes without a delivery marker are
-sent after the updated app connects. The migration runner still rejects edited
-applied baselines.
+External thread associations and delivery markers are part of the current SQL
+baseline. Development databases using superseded formats require deliberate
+recreation; see [database ownership](database.md#apply-the-sql-schema).
 
 Runtime credentials use AES-256-GCM in the deployment's private persistent data
 directory, with a locally generated key and owner-only file permissions.
@@ -239,30 +233,16 @@ live validation step.
 A real PostgreSQL test verifies local-session proof confirmation, concurrent
 duplicate delivery, one durable dispatch, thread continuity, and revocation.
 
-The supported Slack CLI loaded Goblin's embedded manifest through the actual
-hooks. Live authorization in the user's disposable workspace verified app
-creation, installation, icon upload, token survival after setup logout, encrypted
-runtime storage with mode 0600, and Socket Mode with the helper removed. A separate
-actual-CLI check verified ticket preparation, local-session isolation, discarded
-CLI logs, and cancellation cleanup without creating an app. After a process
-restart, the connection and local identity mapping survived, and a real DM created
-one Work item with Slack provenance. Its first attempt entered attention because
-the temporary test launcher could not start Codex's Node wrapper. Removing that
-override restored Goblin's native executable lookup. The real Codex initialization,
-isolated credential-storage, restart, and logout checks passed; the test instance
-now reports runtime readiness. An AI account still needs to be connected before
-an explicitly requested retry can execute the saved Work.
-
-`make test` passed. The additional full PostgreSQL run passed 123 application tests
-and four persistence tests; six certificate tests were skipped because that local
-fixture does not provide mutual TLS. Seven browser journeys passed. The final
-linking-acknowledgement change also passed the focused PostgreSQL and Slack tests.
-Administrator-approval recovery and live channel mentions remain unexercised.
+Live acceptance should cover app authorization/installation, token survival after
+setup logout and restart, identity linking, DM and channel-mention execution,
+question/outcome delivery, and administrator-approval recovery. Local fixtures
+and opt-in PostgreSQL tests do not establish current Slack service behavior or
+authenticated model execution.
 
 Run `make test` plus the relevant browser checks. PostgreSQL tests are opt-in;
 report their results separately. See [Work lifecycle](work-lifecycle.md),
 [repository authority](git-repository-intent.md), and the
-[architecture plan](architecture-refactoring-plan.md).
+[architecture guide](architecture.md).
 
 Optional future `goblinctl integrations slack` can share this setup service;
 the web UI remains primary. Teams and other conversation adapters are future work.

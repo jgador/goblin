@@ -6,14 +6,14 @@ unrecognized upstream fields are ignored rather than requiring entire API models
 JSON boundary DTOs use classes with explicit properties so serialization attributes
 sit directly on the properties they describe.
 Application projections, commands, configuration carriers, and persistence/worker
-snapshots also use classes. The [C# record audit](csharp-record-audit.md) lists every
-conversion and explains each retained domain value, state record, and test fixture.
+snapshots also use classes. [Construction conventions](formatting.md#c-construction-and-contracts)
+describe the value/copy semantics and JSON behavior that must be preserved.
 
 - HTTP POSTs retain bounded buffering and object/syntax validation. Endpoints bind
   the buffered bytes to their own request type without a DOM or serialization round trip.
 - Kubernetes monitoring uses node, pod, and kubelet summary projections. Missing or
   unusable numeric readings remain unknown. The generic Kubernetes API is the only
-  resource reader; its former dynamic overload is removed.
+  resource reader.
 - GitHub uses user, repository/permissions, and pull-request projections.
 - Slack uses Web API responses, Socket Mode envelopes/events, typed CLI setup
   files, and explicit CLI hook/config response contracts. Workspace-keyed CLI maps

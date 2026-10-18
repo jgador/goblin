@@ -73,11 +73,12 @@ Use `nameof` for stored named enum values in EF queries and `ContractValue.Parse
 when materializing typed views. Parsing requires an exact defined name, rejecting
 numeric strings and unknown values. Repository operation storage uses its explicit
 wire-name mapping. Do not use a permissive fallback that fabricates a valid state.
-There is no schema or migration change for this refactor.
+These parsing rules do not require changing stored text columns.
 
 Setup CLI actions and optional progress scopes use Rust enums; unknown actions and
 step IDs are rejected before changing state. The setup browser validates incoming
 state against generated values before rendering either polling or SSE updates.
 The setup module is embedded in goblinctl and covered by the existing installer
-release-input directory allowlist. These changes require a future goblinctl release
-before production installers receive them; this PR does not publish that release.
+release-input directory allowlist. Changes to embedded setup modules require a
+new installer release to reach
+installed hosts; the checked-in source and published installer have separate identities.

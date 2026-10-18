@@ -67,7 +67,8 @@ The authenticated `/api/work/commands` surface handles:
 | `DenyRepository` | Decline the saved `authorizationId`. |
 
 `delivery` has `baseBranch`, `push`, and `openPullRequest` properties. A structured
-selection overrides text extraction and is still subject to the preview. Requests
+selection overrides text extraction and still requires standing permission or an
+explicit enablement preview. Requests
 cannot supply their own executable grant. Approval accepts an ID rather than a
 replacement repository or delivery object. Command IDs and expected Work versions
 protect lost responses, duplicate submissions, and stale browser actions.
@@ -92,11 +93,9 @@ Slack cannot enable a disabled repository or retry failed Work. A blocked select
 is explained in the originating thread. Workers receive neither workspace
 management credentials nor database access. Teams and management MCP remain deferred.
 
-The request's repository object is now an application selection, not an executable
+The request's repository object is an application selection, not an executable
 grant. Supplied `grant` and `requestedBy` fields cannot become execution authority
-or attribution. Old command fingerprints containing a repository object have a
-different shape; refresh before resubmitting commands across this unreleased update.
-Existing attempt grants, Work snapshots, and field names remain readable.
+or attribution. Only current command, snapshot, and grant formats are supported.
 
 ## Commit attribution
 
@@ -115,12 +114,12 @@ publish an email would be needed for that richer attribution.
 
 ## Execution and checkpoints
 
-New grants use policy version 2, with independent `AllowPush` and
+Supported grants use policy version 2, with independent `AllowPush` and
 `AllowPullRequest` flags. PR creation requires both permissions. Fetch and local
 Git checkpoint verification are always available within the approved repository.
 The trusted broker validates the Work branch and operation; the GitHub adapter
-also checks publication permissions. Earlier persisted policy 1 grants retain their
-original behavior; new requests cannot choose that policy.
+also checks publication permissions. Policy version 1 is unsupported; requests
+cannot select or supply an executable policy.
 
 The worker publishes only when approved and creates a draft PR when requested on a
 result turn. Without push permission it sends a Git object bundle for local
@@ -129,18 +128,11 @@ GitHub to publish. PostgreSQL stores only checkpoint provenance. Files, includin
 unpublished commits and ignored outputs, stay on the Work PVC. A new attempt uses
 that retained checkout, without requiring its previous commit to exist on GitHub.
 
-The unreleased baseline adds `checkpoint` to the repository-operation constraint.
-Existing development databases require deliberate recreation from the changed
-unreleased baseline; do not apply an in-place constraint update or bypass migration
-checksums. See the [database guide](database.md#apply-the-sql-schema). No filesystem archive columns or new EF properties are
-introduced. Core, real PostgreSQL, Git bundle, and browser tests cover these gates;
-live GitHub and authenticated model execution remain separate integration checks.
+Repository-operation constraints and checkpoint metadata belong to the unreleased
+SQL baseline. Development databases with changed formats require deliberate
+recreation; do not apply an in-place constraint update or bypass migration checksums.
+See [database setup](database.md#apply-the-sql-schema).
 
-Verification on 2026-09-26: `make test` passed its build, generated-protocol checks,
-.NET tests, and all 88 HTTP/deployment checks. The final .NET run after the resume
-and retry regressions passed 279 tests, including 113 application tests against an
-isolated PostgreSQL 16 server. Six certificate tests were skipped because that
-server used a Unix socket. Seventeen relevant browser journeys passed; the six
-approval/control journeys passed again after adding chat-correction coverage.
-The pinned Codex initialization, isolated credential storage, replacement, and
-logout checks passed. No live GitHub publication or authenticated model task was run.
+Core, opt-in PostgreSQL, local Git bundle, and browser tests cover authorization,
+replay, checkpoints, and continuation. Live GitHub publication and authenticated
+model execution require separate integration checks.

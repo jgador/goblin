@@ -48,7 +48,7 @@ contains the original password encoded as Base64, which is reversible. Bootstrap
 cleanup removes its temporary hash file and working directory, but does not
 remove this extension-managed copy.
 
-The preview manifest mounts the Secret read-only and configures
+The platform manifest mounts the Secret read-only and configures
 `GOBLIN_PASSWORD_HASH_FILE`. If the Secret is missing, the pod cannot start; if
 its verifier is invalid, Goblin refuses to start. Workspace login uses only the
 configured password.
@@ -120,8 +120,9 @@ tail -n 100 /var/log/goblin-installer.log
 extension only. `setup-ready` means the status UI responded and the background
 worker was launched. The status JSON reports `waiting`, `running`, `failed`, or
 `ready` for the full installation, with per-step timestamps and attempt counts.
-Detailed logs stay on the VM; only safe progress messages are publicly readable.
-The UI has no install/retry controls and does not expose configuration or logs.
+Private diagnostics stay on the VM. The public UI exposes safe progress and
+sanitized installation-log output, including live streaming; it has no public
+install/retry controls and does not expose private configuration.
 
 If the Azure extension fails, inspect `/var/log/goblin-bootstrap.log`. If a
 background step fails, the status page identifies it and the Azure deployment
@@ -129,14 +130,16 @@ can still show success. After fixing an external issue such as blocked downloads
 retry through SSH or Azure Run Command:
 
 ```bash
-sudo systemctl start goblin-installer.service
+sudo goblinctl install retry
 ```
 
-The worker resumes after reboot while installation is incomplete. It rechecks
+An interrupted incomplete installation can resume after reboot. A failed attempt
+disables its worker and requires explicit retry; reboot alone does not retry it.
+The worker rechecks
 cluster readiness and reapplies manifests; it does not trust old completed-step
 markers, recreate PVCs, or regenerate passwords. A completed source download is
-reused across retries, including when a branch has moved. An explicit template
-redeployment starts a fresh source download and can change the owner password.
+reused across retries, including when a branch has moved. Template redeployment supplies a new installation request and can change the
+owner password; it is not a compatibility or in-place upgrade workflow.
 Azure does not rerun an unchanged successful extension automatically.
 
 Once Kubernetes exists, additional diagnostics are available:
@@ -167,7 +170,12 @@ The independent systemd worker installs and checks:
 6. The Goblin workload, execution namespace, and internal Traefik route.
 7. Public ingress and application readiness at the assigned hostname.
 
-Cert-manager 1.21 supports Kubernetes 1.33–1.36. Its readiness probe submits a
+The installer selects Kubernetes 1.37 through K3s and cert-manager 1.21.2.
+The [cert-manager support table](https://cert-manager.io/docs/releases/), checked
+on 2026-10-19, lists 1.33–1.36 for cert-manager 1.21. The selected Kubernetes
+version is outside that published range; resolving the deployment pins requires
+a separate compatibility change. Admission readiness alone does not establish
+full compatibility. The cert-manager readiness probe submits a
 Certificate with `--dry-run=server`, so no Certificate, Issuer, CA, or Secret is
 created. After cert-manager is ready, the application installer provisions PostgreSQL
 and runs schema migrations before application startup. For repair and local
@@ -259,8 +267,8 @@ configuration with `deploy/platform/sandbox.yaml`.
 The application component is `platform` (Sandbox, container, main Service and
 NetworkPolicy), in namespace `goblin`, with image `goblin-platform`. The website
 uses its independent workflow in that same namespace. New installations use
-PVC `platform-data`; existing storage requires an explicit, data-preserving
-transition before adopting that claim. See [Kubernetes names](../../docs/kubernetes-names.md).
+PVC `platform-data`. Inventory existing claim bindings before applying manifests;
+a new claim is not a preserved copy of existing files. See [Kubernetes names](../../docs/kubernetes-names.md).
 
 The overlay configures:
 
@@ -500,7 +508,7 @@ generated key. The template must accept that review state; the extension guard
 rejects a missing key at installation time for the portal entry point. Verify
 both review validation and the final key handoff in a live portal deployment.
 Also verify password masking, matching confirmation, length validation, and
-unlocking the installed preview with the deployment password. Automated tests
+unlocking the installed application with the deployment password. Automated tests
 exercise early Azure completion, the real worker with mocked infrastructure commands,
 cert-manager isolation, handoff failure/retry, verifier compatibility, and password
 persistence. Browser tests cover live progress, failure, refresh and handoff reconnect.

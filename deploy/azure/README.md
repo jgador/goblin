@@ -93,15 +93,16 @@ Its overall status becomes `ready` when Goblin is available. The URL is saved in
 in `/var/log/goblin-installer.log`. To retry after correcting a failure:
 
 ```bash
-sudo systemctl start goblin-installer.service
+sudo goblinctl install retry
 ```
 
 See the
 [reference](reference.md) for troubleshooting, naming, SSH access, and maintenance.
 
-For an existing VM provisioned by the infrastructure-only template, redeploy the
-updated template with the same resource names and Goblin password. The background installer updates
-the application and route while retaining the application's PVC, if present.
+Goblin supports current installation formats. Superseded development installations
+require deliberate recreation; template redeployment is not an in-place upgrade
+workflow. Manage Azure resources manually and preserve data according to the
+chosen recreation scope.
 
 ## Test locally
 

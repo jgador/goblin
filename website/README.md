@@ -262,7 +262,8 @@ current interactive design.
 Production domain: <https://goblinboard.com>. See the
 [protected production deployment](production/README.md) for AK3S ingress,
 GitHub approval, TLS, and the DNS cutover procedure.
-The earlier ChatGPT-hosted copy is independent of this deployment.
+The production overlay and workflow own this deployment; independent hosted
+copies are outside that workflow.
 
 ## Installation page
 
@@ -497,78 +498,36 @@ or AI execution. Local HTTP page-load times exclude public-network latency,
 TLS termination, and any ingress controller. A one-visitor/minute baseline
 does not establish maximum capacity or prove behavior during traffic spikes.
 
-### Measured baseline and per-pod sizing
+### Historical sizing evidence
 
-Measured on 2026-10-11 UTC (2026-10-12 in Manila), using the production
-Nginx 1.30.5 image in the local k3s cluster. The ten-minute traffic window
-followed a sixty-second idle baseline. The container had been freshly restarted
-before measurement so its lifetime memory peak includes that startup.
+The 2026-10-11 WSL run used Nginx 1.30.5, a sixty-second idle baseline, and ten
+new browser visits over ten minutes. These measurements explain the initial
+resource settings; they do not verify the current website or production host.
 
-| Measurement | Idle baseline | One new visitor/minute |
+| Measurement | Idle | One visitor/minute | Higher follow-up observation |
+| --- | ---: | ---: | ---: |
+| Average CPU, vCPU | 0.0000339 | 0.0000925 | — |
+| Peak CPU, roughly one-second window | 0.000269 | 0.004353 | 0.007494 |
+| Peak CPU, roughly 250 ms sample | 0.001073 | 0.012454 | 0.024859 |
+| Peak working-set memory | 2.594 MiB | 3.539 MiB | 6.262 MiB |
+| Container-lifetime memory peak, including startup | 5.211 MiB | 5.211 MiB | 6.566 MiB |
+
+The baseline recorded 120 successful HTTP responses across ten visits, 811.2 KiB
+per visit, and local page-load median/p95 of 91.6/107.2 ms. No restarts, OOM kills,
+or throttling occurred during its measurement window. Follow-up runs informed
+the higher CPU/memory observations above. Startup throttling was recorded before
+some measurement windows; window-only results do not imply zero lifetime throttling.
+
+| Resource | Request per pod | Limit per pod |
 | --- | ---: | ---: |
-| Average CPU, vCPU | 0.0000339 | 0.0000925 |
-| Peak CPU, approximately one-second window | 0.000269 | 0.004353 |
-| Peak CPU, approximately 250 ms sample | 0.001073 | 0.012454 |
-| Average memory working set | 2.163 MiB | 2.201 MiB |
-| Peak memory working set | 2.594 MiB | 3.539 MiB |
-| Peak sampled cgroup memory, including cache | 2.602 MiB | 3.547 MiB |
-| Container-lifetime memory peak, including startup | 5.211 MiB | 5.211 MiB |
+| CPU | 25m | 100m |
+| Memory | 16Mi | 32Mi |
 
-All ten visits succeeded: 120 HTTP 200 responses, 811.2 KiB transferred per
-visit, median local page load 91.6 ms, and p95 107.2 ms. There were no browser
-errors, restarts, OOM kills, memory-limit events, or CPU throttling during the
-measurement. CPU includes the normal health probes; it is not idle-subtracted.
-The initial harness trial rejected its own URL before issuing traffic; that
-URL-normalization defect was fixed and the failed trial is excluded here.
-
-Raw evidence from the completed sizing run is retained locally in
-[the summary](../.artifacts/website/load-test/2026-10-11T17-32-28.572Z/summary.json)
-and [the samples](../.artifacts/website/load-test/2026-10-11T17-32-28.572Z/samples.json).
-These generated artifacts are not committed; rerun the command to produce
-measurements for another host or a later website version.
-
-| Resource | Request per pod | Limit per pod | Headroom above measured usage |
-| --- | ---: | ---: | --- |
-| CPU | `25m` (0.025 vCPU) | `100m` (0.1 vCPU) | Request is 3.3× the higher follow-up one-second peak; limit is 4.0× its 250 ms peak |
-| Memory | `16Mi` | `32Mi` | Request is 2.6× the higher fresh-pod working-set peak; limit is 4.9× its lifetime peak |
-
-A follow-up cold-browser visit after rollout also passed all twelve requests,
-with no CPU throttling or memory-limit events during the visit. That fresh
-container had a higher working-set peak of 6.262 MiB and lifetime memory peak
-of 6.566 MiB. The final memory settings above use these higher observations,
-not just the lower ten-minute baseline. Its
-[validation summary](../.artifacts/website/load-test/2026-10-11T17-45-04.446Z/summary.json)
-and raw samples are retained alongside the baseline.
-
-A second follow-up under the larger memory allocation passed, with a higher
-one-second CPU peak of 0.007494 vCPU and 250 ms peak of 0.024859 vCPU.
-The final CPU settings use these higher observations to allow for run-to-run
-variation; [that run's summary](../.artifacts/website/load-test/2026-10-11T17-48-03.596Z/summary.json)
-retains the evidence. Memory remained below the prior fresh-pod peak.
-
-The raw counters show 0.333–0.445 seconds of CPU throttling before those
-follow-ups' idle baselines, including container startup, with the interim
-`50m` CPU cap. Serving the tested traffic was not throttled. The final CPU cap
-is `100m`. The runner reports pre-measurement counters separately from the
-idle and load windows; zero throttling during a visit does not mean zero
-throttling over the container's lifetime.
-
-The [final verification](../.artifacts/website/load-test/2026-10-11T17-50-43.487Z/summary.json)
-ran another fifteen-second idle baseline and full one-minute visit interval
-with the final `25m`/`16Mi` requests and `100m`/`32Mi` limits. All twelve
-requests passed; page load was 107.6 ms. CPU peaked at 0.004829 vCPU over one
-second and 0.016759 vCPU over 250 ms. The container-lifetime memory peak was
-4.719 MiB, below the higher value used for sizing. There were no restarts,
-OOM kills, memory-limit events, or CPU throttling during that measurement.
-Pre-measurement startup counters recorded 0.168 seconds of throttling across
-two periods. The HPA had active CPU metrics, and the Deployment stayed at one
-ready replica with the final resource settings.
-
-Requests reserve scheduling capacity; CPU can burst above its request up to
-the limit. These are rounded starting values for this workload, not a capacity
-guarantee. Remeasure after significant asset, traffic, runtime, or hosting changes.
-At three replicas, the total requests are `75m` CPU and `48Mi` memory; summed
-limits are `300m` CPU and `96Mi` memory, excluding cluster and ingress overhead.
+These are the checked-in starting budgets, not a capacity guarantee. At three
+replicas, requests total 75m/48Mi and limits total 300m/96Mi, excluding cluster and
+ingress overhead. Remeasure after asset, runtime, traffic, or host changes using
+the command above. New summaries/samples stay under `.artifacts/website/load-test/`;
+those local outputs are not checkout dependencies or permanent evidence links.
 
 ## Website autoscaling
 

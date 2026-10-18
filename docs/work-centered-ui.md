@@ -1,8 +1,7 @@
 # Work-centered workspace
 
 The workspace uses three regions: browse Work on the left, understand and control
-the selected Work in the center, and inspect its Activity on the right. This is a
-layout and information architecture change using the existing frontend,
+the selected Work in the center, and inspect its Activity on the right. It uses the existing frontend,
 typography, colors, controls, icons, and Settings surfaces.
 
 Opening the workspace selects the remembered Work, or the most recently updated
@@ -67,7 +66,21 @@ coordination), `contracts.ts` (Goblin HTTP views), and `surface.ts` (read-only
 presentation of durable state). The Web host explicitly serves the new surface
 module through its existing static asset allowlist. The Work and conversation
 stores persist default coworker assignment through the existing core command.
-Runtime adapters and the database schema remain unchanged.
+Runtime adapters and persistence own execution independently of this rendering layer.
+
+## Command recovery and conversations
+
+The browser distinguishes an unconfirmed submission from a saved transition. If
+a response is lost, session storage retains the original command and offers
+**Resend command**. Server receipts deduplicate its ID and payload. **Keep saved
+state** dismisses the pending submission. Polling, reconnect, and refresh retrieve
+authoritative state without replaying commands automatically.
+
+Untracked conversations store context and offer **Track this work**; they neither
+invent assistant replies nor execute. Tracking creates linked Work with the default
+agent assignment. Ordinary unsent drafts survive navigation and Settings within
+the page, but not a browser refresh. Model choices and pending command recovery
+have their own session-storage persistence.
 
 ## Integrations and Knowledge
 
@@ -84,7 +97,6 @@ public knowledge indexing, synchronization, or retrieval endpoint, so the page
 does not invent sources, record counts, sync times, or attributed search results.
 Existing repository setup memory remains behind its account/repository-scoped
 execution grant; Work conversations, decisions, and outputs stay with Work.
-No database, execution, or external permission contracts change.
 
 ## Workspace inspection and continuation
 
@@ -96,7 +108,7 @@ and inspection sessions remains available.
 ## Backend and schema gaps
 
 These are follow-up requirements, not local browser state or fabricated data.
-Follow [the architecture plan](architecture-refactoring-plan.md) and
+Follow [the architecture guide](architecture.md) and
 [Work lifecycle contracts](work-lifecycle.md) when implementing them.
 
 | Capability | Current boundary | Follow-up |
@@ -105,13 +117,13 @@ Follow [the architecture plan](architecture-refactoring-plan.md) and
 | Meaningful, evidence-backed milestones | The UI can prove lifecycle state, but has no milestone records or evidence associations. Runtime `ProgressReported` text is a report, not proof. | Model milestone identity, state, evidence references, source, and validation. Define how confirmed PRs, tests, deployments, and telemetry update milestones. Retain the distinction between proposed plans and verified completion. |
 | Rich decisions and provenance | Decisions are runtime questions and recorded answers. They do not identify a proposer, approver, policy, or arbitrary rationale. | Add core commands for proposals, decisions, and approvals; persist actor/source identity, rationale, evidence, and supersession. Do not infer named human approval from conversational wording. |
 | Multiple conversation sources per Work | Web conversations can attach to Work. Slack now stores approved actors, thread associations, deduplicated message/event references, and source provenance. | General cross-channel attachment and other external adapters remain future work. Preserve one Work across sources and accurate provenance before labeling other integrations. |
-| Unified external Activity | Activity currently projects Work history. There is no external event ingestion contract, visibility policy, or pagination. | Add a Goblin-owned activity projection with durable sequence, source, actor, original reference, Work/attempt/evidence correlation, deduplication, and access checks. Keep low-level runtime events in execution details. |
+| Unified external Activity | Activity projects Work history, including Slack ingress. Arbitrary external activity, pagination, and a general visibility policy are not implemented. | Add a Goblin-owned activity projection with durable sequence, source, actor, original reference, Work/attempt/evidence correlation, deduplication, and access checks. Keep low-level runtime events in execution details. |
 | Global discovery | Search is an in-browser search over loaded views; it does not search an independent file/project/people index. | Add permission-aware, paginated cross-entity search and contextual deep links. Do not download all histories as the dataset grows. |
 | Artifact previews and execution logs | Results render as text; GitHub references can be opened. Other references are inspectable but have no content endpoint. | Add authenticated artifact retrieval, safe content types/previews, authorization, retention, and redacted execution-log pagination. Never expose credentials or raw upstream errors. |
 | Natural-language steering | The composer saves context, answers a pending question, or requests changes. Arbitrary chat does not edit status, stop execution, or dispatch work. | Interpret proposed changes into explicit core commands with validation and any required approval. Commit state and Wolverine dispatch intent together; do not turn prose into an authoritative transition. |
 | Follow-up Work and optional metadata | No parent/follow-up relationship, due date, tags, project hierarchy, or standalone agent health aggregation is modeled here. | Introduce only product-justified fields and relationships with core commands and persisted projections; avoid a generic workflow engine. |
 
-Until first deployment, consolidate future schema changes in
+Until the first production deployment, consolidate future schema changes in
 `backend/database/migrations/0001_initial.sql`, regenerate EF mappings, and keep
 custom behavior outside generated files. PostgreSQL continues to own history;
 Wolverine coordinates dispatch. Attempts, agent identities, uncertain execution,
@@ -124,12 +136,3 @@ drawers, progressive disclosure, search, context isolation, and refresh behavior
 They do not establish persistence coverage. The durable Work browser journeys and
 real PostgreSQL suites remain opt-in with `GOBLIN_TEST_POSTGRES_APP` and the
 repository's database-test configuration; report skips explicitly.
-
-Validation for this increment (2026-09-23): `make test` passed (164 .NET tests,
-87 HTTP/deployment tests, and protocol checks). The full browser run passed 33
-tests; the final targeted workspace run passed nine, including the additional
-320px layout check. Real PostgreSQL coverage was not run: 24 .NET tests, one HTTP
-test, and six durable Work browser journeys were skipped. The pinned Codex
-initialization/storage/process-replacement/logout check also passed; it uses an
-isolated synthetic credential and does not establish authenticated model execution
-coverage.

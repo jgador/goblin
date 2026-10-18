@@ -5,9 +5,8 @@ executions. Work is durable whether or not it needs a sandbox. Codex 0.161.0 is
 the implemented runtime; the Work core and orchestration do not reference its
 protocol. Agent, Work, attempt, connection, and native session IDs stay distinct.
 
-The [workspace lifecycle](workspace-lifecycle.md) supersedes the original
-one-interaction-per-attempt behavior: questions can pause an attempt, runtime turns
-have distinct ownership. An AI release decision suspends compute and retains the
+Questions can pause an attempt, and runtime turns have distinct ownership; see
+[workspace lifecycle](workspace-lifecycle.md). An AI release decision suspends compute and retains the
 Work PVC; no filesystem archive is required.
 
 ## Choosing an environment
@@ -47,7 +46,8 @@ remote branch commit or PR; failed Work is never automatically retried. External
 CLI processes have a 120-second watchdog and the operation has a 120-second deadline.
 After controller loss, a saved boot identity and monotonic uptime bound child lifetime;
 remote absence alone is not proof that a write stopped. A replacement attempt gets
-a different branch and can continue from the previous published checkpoint.
+a different branch and continues from the surviving local Git HEAD on the Work
+PVC, including unpublished commits. A missing volume requires attention.
 
 Account/repository changes wait for queued, active, uncertain, and cleanup-pending
 repository attempts. A different GitHub account disables the existing repository
@@ -96,18 +96,14 @@ runtime; it does not claim VM isolation or protection from a compromised kernel.
 Linux text-worker journals identify a process by PID, kernel start ticks, boot ID,
 and PID namespace. Wall-clock `Process.StartTime` values can differ between the
 worker and controller and must not be used to establish that a process stopped.
-Older timestamp-only journals remain uncertain unless a saved outcome is available;
-they cannot authorize killing a process or launching a replacement. Observation
-also rereads the outcome after detecting exit so a just-published response is
-preserved. This does not reopen attempts already finalized as failed by an older
-version; recovering those saved outcomes requires a separate explicit repair.
+Observation rereads the outcome after detecting exit so a just-published response
+is preserved. Only the current journal format is supported.
 
-Suspended Sandbox identities and workspace PVCs are retained. Do not delete
-identity fences while messages or controllers from those attempts could still
-arrive. Unfinished Work retains its volume. Under storage pressure, volumes of completed
-Work are eligible only after verified preservation of the latest files and
-confirmed cleanup. No age-based expiration is implemented. The database remains the source of product
-history; runtime logs and sessions are only execution evidence.
+Suspended Sandbox identities and Work PVCs are retained. Identity fences must stay
+while delayed messages or controllers could still arrive. No automatic volume
+reclamation or age-based expiration is implemented; export and deletion require
+a separate retention policy. Runtime logs and sessions remain execution evidence,
+while PostgreSQL owns product history.
 
 Connection verification is separate from durable Work. Overlapping verification
 prompts are rejected; account changes wait for verification and cannot change
@@ -157,28 +153,21 @@ certificate. Neither Wolverine nor EF creates schema at application startup.
 
 ## Verification limits
 
-Tests exercise real PostgreSQL transactions and Wolverine delivery, process
-fencing/cancellation, contract dependencies, connection reservations, cleanup
-failure recovery, and browser decisions/approvals/repeated commands. The broker
-is additionally tested with real local Git bundles and a bare remote. The packaged
-non-root image obtained a real GitHub device code and cancelled sign-in without
-installing credentials. The pinned Codex initialization, isolated credential
-storage, process replacement, and logout checks also passed.
+Available tests cover core contracts, process fencing/cancellation, connection
+reservations, cleanup recovery, browser commands, and local Git bundles/bare
+remotes. PostgreSQL transaction and Wolverine-delivery coverage requires the
+opt-in database suites; certificate coverage requires their TLS fixture.
 
-The local PostgreSQL run used password authentication; six certificate-specific
-tests were skipped, so it does not establish certificate authentication coverage.
-Live Kubernetes validation of the updated repository network route is still
-required; it was not performed in this session.
+The pinned Codex initialization/storage/process-replacement/logout check uses a
+synthetic credential. It does not establish authenticated model execution.
+Kubernetes network/isolation checks and complete GitHub publication remain
+separate integration checks. Use [test selection](repository-layout.md#choosing-verification).
 
 The command-host regression runs the pinned Codex binary against a local model
 fixture. It verifies that a model-issued nested command writes a file for repository
 Work and remains blocked for text Work. This catches a disabled `code_mode_host`,
 which a direct app-server `command/exec` check does not detect.
 
-A subsequent WSL check used the connected ChatGPT account and the corrected
-production adapter in a Kubernetes container with the execution security settings.
-Codex successfully ran commands, wrote a file, and made a local Git commit. The
-temporary pod and credential Secret were removed afterward. This check did not
-publish to GitHub or open a PR; those workflows still need an authenticated test
-of the complete repository path. No cross-runtime continuation or second production
-integration is claimed; see [the bounded experiment](second-runtime-experiment.md).
+Authenticated execution and GitHub branch/PR delivery require configured
+service credentials and explicit live verification. Cross-runtime continuation
+is still a [planned experiment](second-runtime-experiment.md).

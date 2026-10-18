@@ -247,11 +247,9 @@ to applied scripts.
 
 **Before production:** consolidate schema changes into `0001_initial.sql` and
 deliberately recreate disposable development databases when it changes.
-The current development database using singular Wolverine names must be
-deliberately recreated before running the build that uses official Wolverine
-packages and their native names. Previously applied versions of this baseline
-cannot be reapplied: checksum validation must reject them. Verification uses
-isolated test databases and does not reset the running installation.
+Previously applied versions of the unreleased baseline cannot be reapplied:
+checksum validation must reject them. Use isolated test databases for verification
+without resetting the running installation.
 Do not add rename migrations, compatibility views, or bypass the journal.
 Recreate only the verified owned development database; schema changes do not
 authorize deleting Work PVCs or
@@ -295,7 +293,7 @@ To change the schema:
    `make db-scaffold DB_PROFILE=<profile>`. Wolverine and the journal remain excluded.
 3. Remove obsolete generated entities after table drops/renames, then run
    `dotnet build backend/Goblin.slnx` and the [database tests](#application-configuration-and-verification).
-4. Review and commit SQL, table selection, and generated C# together. A second
+4. Review SQL, table selection, and generated C# together. A second
    scaffold against the unchanged database must produce no additional diff
    relative to the first scaffold. Keep filtered unique relationship corrections
    in `WorkModelConfiguration.cs` outside generated files.

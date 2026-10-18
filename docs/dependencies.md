@@ -55,7 +55,7 @@ gets its digest updated from the lock. PostgreSQL uses tags only. Explicit
 build-image overrides also update the Dockerfile and logging check script.
 It preserves existing digests for unchanged tags. Use `resolve --refresh` to
 refresh all tags deliberately. It does not pull image layers or run package
-managers. Commit the updated files together.
+managers. Review the updated catalog, lock, and references together.
 
 `dependencies.lock.json` records resolved image digests and the selected goblinctl
 release manifest under `goblinctl.release`, including its source, checksum, and
@@ -78,23 +78,25 @@ cargo xtask release pin-installer --version X.Y.Z
 This updates the release selection and dependency lock together. Azure assets are
 generated during release preparation. It does not refresh Docker image tags.
 
-## Current stable images
+## Checked-in image selections
 
-The deployment and build image selections were checked against upstream stable
-releases on 2026-10-01. Fresh installations use PostgreSQL 18.6, Headlamp 0.45.0,
+The current manifests select PostgreSQL 18.6, Headlamp 0.45.0,
 VictoriaLogs 1.53.0, Fluent Bit 5.1.3, K3s 1.37.0, Agent Sandbox 1.0.4, and
 cert-manager 1.21.2. The build uses Node 26.10.0, .NET SDK 10.0.401, and ASP.NET
 Core 10.0.12. K3s, cert-manager, and Agent Sandbox retain ownership of their
 bundled component images. Prereleases are excluded; explicit version tags keep
 future upstream releases from silently changing the selected version.
 
+The selected Kubernetes 1.37/cert-manager 1.21 pair has a published support-range
+gap; see the [installation reference](../deploy/azure/reference.md#what-deployment-success-means).
+
 PostgreSQL 18 mounts its PVC at `/var/lib/postgresql` and stores the database in
-`/var/lib/postgresql/18/docker`. A PostgreSQL 16 data directory requires an
-explicit major-version migration or dump/restore into a fresh PVC. Changing the
-image tag cannot upgrade database files. The startup script refuses an older
-Goblin `pgdata` directory so it cannot initialize a new database beside existing
-history. Completed installations need a deliberate upgrade; these source changes
-do not alter a running installation.
+`/var/lib/postgresql/18/docker`. Superseded PostgreSQL data formats are unsupported.
+Changing an image tag cannot
+upgrade database files. The startup script rejects an older Goblin data layout.
+Recreate verified disposable development databases/installations deliberately
+when formats change; no in-place upgrade workflow is provided. Source edits do
+not change a running installation. See [database setup](database.md#apply-the-sql-schema).
 
 ## Source files and compatibility
 

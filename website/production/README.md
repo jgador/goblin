@@ -1,6 +1,6 @@
 # goblinboard.com on AK3S
 
-The public website runs as `Deployment/website` in namespace `goblin` on the
+The production configuration deploys the public website as `Deployment/website` in namespace `goblin` on the
 Hetzner AK3S cluster. The `nginx` ingress class routes `goblinboard.com` to
 `Service/website`. TLS is stored in `Secret/website-tls`; the existing
 `letsencrypt-production` ClusterIssuer renews certificates through HTTP-01.
@@ -68,13 +68,10 @@ publish job tests anonymous access and stops with instructions if it cannot pull
 the exact digest. Rerun the failed job after updating visibility. Kubernetes
 does not receive the short-lived GitHub package token.
 
-Apply `github-ruleset.json` as an additional repository branch ruleset once this
-workflow is present in the PR. It requires `validate` from GitHub Actions on
-`master`, alongside the platform's existing `test_results` gate and release-branch
-rules. When adopting the rename, wait for `validate` to pass on the PR, then replace
-the active website ruleset's `website-checks` requirement with `validate` from
-GitHub Actions before merging. Editing the JSON template does not update the
-active ruleset.
+The checked-in `github-ruleset.json` requires `validate` from GitHub Actions on
+`master` alongside the platform's `test_results` gate and release-branch rules.
+Applying or editing this template does not update the live ruleset automatically.
+Review active branch protections when changing required check names.
 
 ## Administrator bootstrap
 
@@ -119,13 +116,16 @@ WSL connection alone does not verify the runner's network path. The environment
 secret is written only inside the approved job, with mode 0600, and removed when
 the step exits. Do not print it or upload the `.artifacts/` directory.
 
-## Moving the existing domain
+## Initial DNS and TLS setup
 
-The old site advertises HSTS. Obtain a valid certificate before moving its A
-record, so browsers never encounter an uncertified replacement origin.
+When moving an existing HTTPS origin, obtain a valid certificate before changing
+its A record. Clients may retain HSTS from the previous origin. Inspect current
+DNS and TLS state before choosing a cutover procedure; this guide does not
+establish the current live state.
 
 1. Obtain a one-time Let's Encrypt certificate with manual DNS-01 validation.
-   Store the private account/key files under a mode-0700 ignored task directory.
+   Store the private account/key files under a mode-0700 task directory inside
+   `.artifacts/website-production/`; never upload that credential directory.
    Add the requested `_acme-challenge` TXT record in Cloudflare. Leave the
    existing A record and old site serving while validation completes.
 2. Import the full certificate chain and private key as `goblin/website-tls`.
@@ -154,8 +154,7 @@ certificate coverage. No existing unrelated DNS record is implicitly changed.
 ## Failure and rollback
 
 A successful image push is not a successful deployment. Check the approved job's
-rollout and HTTPS verification. Before initial DNS cutover the public test still
-reaches the old site; complete origin verification and DNS cutover, then rerun
+rollout and HTTPS verification. If DNS still targets an old origin, the public test reaches that origin; complete origin verification and DNS cutover, then rerun
 verification rather than reporting that the new public website is already live.
 
 A stalled rollout keeps an existing ready replica serving because

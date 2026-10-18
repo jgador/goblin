@@ -2,163 +2,79 @@
 
 Your self-hosted AI coworker.
 
-Goblin's original code and documentation are licensed under
-[Apache 2.0](LICENSE). See [third-party notices](THIRD_PARTY_NOTICES.md) for
-dependency licenses and the separate treatment of fonts and brand artwork.
+Goblin turns conversations into durable, reviewable Work. PostgreSQL records
+context, decisions, attempts, outputs, and approvals; Codex executes the attempts.
+New Work receives the default Goblin agent and waits for an explicit start.
+Failures require attention and explicit recovery. Runtime success alone does
+not complete Work.
 
-Goblin aims to turn everyday team conversations into completed, reviewable work.
+The C#/.NET application serves a TypeScript browser. Repository tasks use isolated
+Kubernetes sandboxes, GitHub access through Goblin's broker, and one persistent
+workspace per Work. Files and unpublished commits stay on its PVC. Slack supports
+customer-owned apps, linked owner identities, and durable DM/mention conversations.
+Codex is the only implemented runtime; additional runtimes, Teams, and Knowledge
+indexing remain future work.
 
-Codex is the current primary coding agent integration. Goblin's architecture is
-being prepared for other agents, including Claude and GitHub Copilot, with
-Goblin owning durable Work, history, and decisions across executions. Those
-additional integrations are future work. See the
-[architecture and rewrite plan](docs/architecture-refactoring-plan.md) for the
-four agreed rewrite areas and the first durable Work milestone.
+See [the documentation index](docs/README.md), [architecture](docs/architecture.md),
+and [Work interface](docs/work-centered-ui.md) for current behavior and limits.
 
-The repository separates application source into [`backend/`](backend/) (C# and
-Codex integration) and [`frontend/`](frontend/) (browser UI). Application-wide
-tests live in [`tests/`](tests/), deployment files in [`deploy/`](deploy/), and
-original artwork in [`assets/`](assets/). See the
-[repository layout](docs/repository-layout.md) for ownership and build commands.
-
-The standalone communications website lives in [`website/`](website/), separate
-from the application UI. Run `make website-dev` inside WSL to start its Docker
-development server detached, then open **http://localhost:5173**. Saving website
-files reloads the browser. Use `make website-stop` to stop it; see the
-[website guide](website/README.md) for logs, local k3s previews, resource load tests,
-and autoscaling.
-
-The [environment variable guide](docs/environment-variables.md) points to the
-C#, Rust, and TypeScript definition catalogs and explains configuration boundaries,
-shared variables, and how to add new settings.
-
-Deploy Goblin to your own Linux VM in Azure:
+## Install
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://goblinboard.com/install/)
 
-Deployment support for Google Cloud Platform, AWS, and other providers will follow later.
+Choose a version on the [installation page](https://goblinboard.com/install/), then
+deploy manually through Azure Portal. The installer provisions the application,
+PostgreSQL, Kubernetes execution, Headlamp, and saved logs. Open the deployment's
+`goblinUrl` to follow progress and use the password chosen during setup.
+The default Azure origin uses HTTP until an operator configures HTTPS.
+See the [Azure guide](deploy/azure/README.md) and [reference](deploy/azure/reference.md).
 
-The [Azure deployment guide](deploy/azure/README.md) includes an ARM template with
-customer-specific names, optional resource-name overrides, a static public IP,
-an Azure DNS hostname, single-node Kubernetes, cert-manager, and the Agent Sandbox controller.
-The guided installer uses Azure's native custom-template flow, with configuration
-and SSH-key download inside Azure Portal. Azure is available now; AWS and Google Cloud Platform installation are planned.
-Choose **Goblin version** on the
-[website installation page](https://goblinboard.com/install/); the recommended release is selected by default.
-Azure opens with the matching source and installer already resolved. See the
-[release guide](docs/releases.md).
-
-If a downloaded SSH key fails on Windows with `Load key ...: Permission denied`
-or a warning that permissions are too open, see
-[Windows SSH private-key permissions](deploy/azure/reference.md#windows-ssh-private-key-permissions).
-
-**Current status:** Azure provisioning starts a lightweight setup page at
-`http://<Azure-assigned-hostname>` while installation continues in the background.
-Open the deployment's `goblinUrl` output to follow progress. The same URL opens
-Goblin when ready; enter the password chosen during setup. The
-[authentication preview](docs/authentication-preview.md) lets you test
-ChatGPT and OpenAI API-key login, then automatically verifies model access and
-shows the connection status, locally or in an Agent Sandbox pod. GitHub integration, repository tasks,
-custom domains, and automatic HTTPS certificates remain future work.
-
-The background installer builds the application on the VM and configures Traefik using the
-public IP resource's actual DNS hostname, including a custom prefix. HTTP is
-enabled explicitly for this deployment; traffic is unencrypted until you add HTTPS.
-
-To test the full installation directly in WSL/Ubuntu, use the [local installer](deploy/local/README.md):
+To test the full installation in a dedicated WSL/Ubuntu environment with systemd:
 
 ```bash
 make local-start
 ```
 
-Open **http://localhost:8788** in Windows to follow installation and enter Goblin
-at the same address when ready. On first start, choose and confirm a Goblin password
-in the terminal. Local runs share the verifier in `.goblin-secrets/owner-password`.
+Open **http://localhost:8788** in Windows. First start asks for a password in the
+terminal. The [local installer guide](deploy/local/README.md) covers prerequisites,
+logs, stop/resume, and destructive reset. Goblin is preproduction and supports
+current installation/database formats; development installations can be recreated
+when those formats change.
 
-Kubernetes installations include [saved logs](docs/logging.md) at `/logs/`,
-available through **Settings → Logs**, backed by Fluent Bit and VictoriaLogs.
+## Develop
 
-Kubernetes installations also include [Headlamp](docs/cluster-view.md) at
-`/headlamp/` on Goblin's address. **Settings → Cluster → Open cluster** opens a
-read-only view of workloads, logs, events, and storage using your Goblin login.
-
-The sidebar’s **System** shortcut opens a [VM overview](docs/system-overview.md)
-with CPU, memory, disk space, recent usage, and service health. Readings cover the
-whole WSL or Azure Linux VM, including processes outside Kubernetes.
-
-To try authentication first:
+Install GNU Make, .NET 10, Node.js 24+, and the Ubuntu build prerequisites described
+in [Rust development](docs/rust-development.md), then run:
 
 ```bash
-# Requires GNU Make, .NET 10 SDK, Node.js 24+, and the Ubuntu build prerequisites.
 make setup-rust
 source "$HOME/.cargo/env"
 make install
 make dev ARGS=--without-database
 ```
 
-The [Rust development guide](docs/rust-development.md) documents the Codex-aligned
-toolchain, Make targets, nextest runner, formatting, and editor/debugger setup.
-Use `make help` for the full target list, or `make build`, `make test`,
-`make check`, and `make format` for common workflows. Frontend-only commands
-remain npm commands inside `frontend/`; see [repository tasks](docs/repository-layout.md#build-and-test).
+This starts connection management at **http://localhost:8787** without durable
+Work. For Work development, create a migrated PostgreSQL profile using the
+[database workflow](docs/database.md#wsl-and-windows-pgadmin), then run
+`make dev DB_PROFILE=wsl`. Both paths share the Rust password verifier.
+Use [authentication](docs/authentication.md) for Codex sign-in and connection checks,
+and [execution hosting](docs/execution-hosting.md) for repository configuration.
 
-For coding-agent contributions, [AGENTS.md](AGENTS.md) defines repository rules.
-The [agent workflow guide](docs/agent-workflow.md) covers task prompts, completion,
-and maintaining instructions, with guidance informed by GPT-6 Astra.
+`make help` lists tasks. Common commands are `make build`, `make test`,
+`make check`, and `make format`; choose verification using the
+[repository guide](docs/repository-layout.md#choosing-verification). PostgreSQL tests
+are opt-in, and fixtures do not establish authenticated model coverage.
+[AGENTS.md](AGENTS.md) defines contribution rules; [agent workflow](docs/agent-workflow.md),
+[formatting](docs/formatting.md), and [secret scanning](docs/secret-scanning.md) cover
+contributor tooling. The native [goblinctl CLI](docs/goblinctl.md) ships separately
+and needs no Rust compiler or Python on installed hosts.
 
-On first start, choose and confirm your password in the terminal. Open
-http://localhost:8787, enter that password, and click **Open workspace**.
-Both local launch paths use the shared Rust password implementation and the same application login.
-Only the verifier is saved locally; `.goblin-secrets/` is ignored except for its
-empty `.gitkeep`. Subsequent starts reuse it. See the [preview guide](docs/authentication-preview.md)
-for sign-in, persistence checks, and deployment to your VM.
+The public [website](website/README.md) is independent of the application. Run
+`make website-dev` for Docker development at **http://localhost:5173**,
+and `make website-stop` to stop it. Delivery procedures live in
+[releases](docs/releases.md), [GitHub Actions](docs/github-actions.md), and
+[website production](website/production/README.md).
 
-The permanent [goblinctl operator CLI](docs/goblinctl.md) ships as a separate native
-release; installed hosts do not require Python or a Rust compiler.
-
-The backend is C#/.NET 10 with ASP.NET Core Minimal APIs. It spawns the official
-Rust `codex app-server`; the browser UI remains TypeScript. Protocol models are
-generated from the checked-in schemas using `System.Text.Json`.
-`make dev` builds the browser assets and .NET solution, refreshes the `wsl`
-PostgreSQL profile, then starts the C# host. Create the profile using the
-[PostgreSQL workflow](docs/database.md#wsl-and-windows-pgadmin) first.
-Use `make typecheck` for TypeScript checks and a .NET build, or `make test`
-for schema drift checks (.NET), .NET tests, and HTTP integration tests.
-See the [App Server migration notes](docs/app-server-migration.md) for the current
-Codex integration, model regeneration, and direct .NET commands.
-
-The [workspace](docs/work-experience-preview.md) opens at http://localhost:8787.
-Start from the home composer, or select existing Work in the collapsible sidebar.
-AI connections, GitHub repository access, and Cluster are available in Settings.
-The first unlock suggests a [workspace timezone](docs/timezones.md) from IP location,
-with the browser timezone and then UTC as fallbacks. Search by country or city.
-Confirm it or choose another, then change it later under **Settings → Time & date**.
-The saved choice applies across browsers and devices, including displayed log times.
-Create and assign Work, execute with Codex, answer decisions, review outcomes,
-and approve completion. History and approvals are stored in PostgreSQL; failures
-require attention and explicit recovery.
-
-Durable Work requires a configured, migrated PostgreSQL database. The installer
-sets this up before starting Goblin. For direct local development, follow the
-[PostgreSQL workflow](docs/database.md#wsl-and-windows-pgadmin), then run
-`make dev DB_PROFILE=wsl`.
-Use `make dev ARGS=--without-database` to manage connections without PostgreSQL.
-[Execution hosting](docs/execution-hosting.md) covers repository sandboxes,
-GitHub sign-in, credentials, recovery, and current validation limits.
-
-To check for API keys and other secrets before committing, install the free local
-Gitleaks CLI and run `make secrets-setup` once per checkout. Run
-`make secrets-scan` for a manual check of the index and working tree, or
-`make secrets-history` to check existing commits before a push. See the
-[secret-scanning guide](docs/secret-scanning.md) for installation and scan scope.
-
-The repository-local Codex hook formats changed languages (TypeScript, Rust, and
-C#) after each completed turn. See [formatting setup](docs/formatting.md) for tool
-installation, manual commands, and the required hook trust step.
-
-The official artwork, exports, and packaged fonts are organized in
-[`assets/branding/`](assets/branding/README.md). The UI uses
-`frontend/public/assets/branding/icon.svg`, copied from the light-background, icon-only
-SVG, for both the favicon and interface branding. Keep this asset as a vector and size
-logos with CSS to preserve their proportions and sharpness on high-density
-screens.
+Goblin's original code and documentation use [Apache 2.0](LICENSE).
+[Third-party notices](THIRD_PARTY_NOTICES.md) describe dependency licenses and the
+separate treatment of [fonts and brand artwork](assets/branding/README.md).
