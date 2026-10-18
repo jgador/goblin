@@ -39,7 +39,7 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
             },
             { times: 1 },
         );
-        await page.goto(`${origin}/?settings=codex`);
+        await page.goto(`${origin}/settings?section=codex`);
         await expect(
             page.getByRole("heading", { name: "Open your workspace" }),
         ).toBeVisible();
@@ -170,7 +170,11 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
             "Connected",
         );
         expect(checks).toHaveLength(3);
-        await page.getByRole("button", { name: "Lock workspace" }).click();
+        await page.getByLabel("Workspace menu", { exact: true }).click();
+        await page
+            .locator("#workspace-menu")
+            .getByRole("button", { name: "Lock workspace" })
+            .click();
         await expect(
             page.getByRole("heading", { name: "Open your workspace" }),
         ).toBeVisible();
@@ -196,9 +200,11 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
             .getByLabel("OpenAI API key", { exact: true })
             .fill("sk-invalid-fake-browser-test-key");
         await page.getByRole("button", { name: "Connect API key" }).click();
-        await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
-            "OpenAI rejected this API key",
-        );
+        await expect(
+            page
+                .getByRole("region", { name: "Codex connection", exact: true })
+                .getByRole("alert"),
+        ).toContainText("OpenAI rejected this API key");
         await expect(
             page.getByLabel("OpenAI API key", { exact: true }),
         ).toHaveValue("");

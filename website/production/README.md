@@ -25,6 +25,23 @@ builds and tests the production image, publishes it to
 `ghcr.io/jgador/goblin-website`, and waits for approval. GitHub
 Actions uses its own temporary package token; no registry password is stored.
 The deployed reference is the exact tested image digest, never a mutable tag.
+The image also contains the installation page and a frozen catalog with versioned
+Azure templates. Validation lists the GitHub Releases API and downloads current
+published installation assets directly. It verifies GitHub digests, signed release
+manifests, template hashes, and checksums. The verified certificate must identify
+`platform-release.yml` on master; releases with valid signatures from other
+workflows are excluded, while invalid signatures fail validation. It retains the
+exact snapshot as a GitHub Actions artifact. Publish and deploy restore that artifact. The production
+image packages `install/azure/releases.json` and `install/azure/versions/` only;
+snapshot provenance stays outside the image.
+
+The deployed website catalog owns the recommendation. Before applying an approved
+image, deployment checks that this catalog has not changed since snapshot creation,
+preventing stale approvals from replacing a newer recommendation. Initial builds
+without a supplied snapshot use the tracked empty Azure catalog. There is no
+distribution branch or GitHub Pages dependency.
+Website snapshots include current-format releases only; older published artifacts
+remain intact on GitHub Releases.
 Documentation and infrastructure-only changes do not publish an unchanged
 image or request another website deployment. Apply infrastructure changes through
 the administrator bootstrap procedure; use a manual workflow run when needed.

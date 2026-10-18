@@ -332,7 +332,7 @@ test("disconnected Codex leads to connection setup and returns to Start work", a
             ],
         }),
     );
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await expect(
         page.getByRole("button", { name: "Start work", exact: true }),
     ).toBeEnabled();
@@ -376,7 +376,7 @@ test("repository setup validates locally and keeps the branch and Git identity t
         .getByLabel("Git commit email (optional)")
         .fill("reviewer@example.com");
     await page.getByRole("button", { name: "Manage repositories" }).click();
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await page
         .getByRole("button", { name: /Review the release checklist/ })
@@ -430,8 +430,8 @@ test("Settings keeps one content scroller and exposes repository loading without
         },
     );
     await page.locator('.sidebar [data-action="settings"]').click();
-    const dialog = page.getByRole("dialog", { name: "Settings" });
-    await dialog.getByRole("button", { name: "GitHub", exact: true }).click();
+    const dialog = page.getByRole("region", { name: "Settings" });
+    await dialog.getByRole("link", { name: "GitHub", exact: true }).click();
     await dialog.getByRole("button", { name: "Choose repositories" }).click();
     await expect(
         dialog.getByText("Loading repositories…", { exact: true }),
@@ -449,10 +449,13 @@ test("Settings keeps one content scroller and exposes repository loading without
         { width: 844, height: 390 },
     ]) {
         await page.setViewportSize(viewport);
+        await dialog.evaluate((element) => {
+            element.scrollTop = 0;
+        });
         await expect(
-            dialog.getByRole("button", { name: "Close settings" }),
+            dialog.getByRole("button", { name: "Back to workspace" }),
         ).toBeInViewport();
-        const content = dialog.locator(".settings-content");
+        const content = dialog;
         await content.evaluate((element) => {
             element.scrollTop = element.scrollHeight;
         });
@@ -463,7 +466,7 @@ test("Settings keeps one content scroller and exposes repository loading without
         ).toBeInViewport();
         expect(
             await dialog.evaluate(
-                (element) => element.scrollHeight <= element.clientHeight + 1,
+                (element) => element.clientHeight <= window.innerHeight,
             ),
         ).toBe(true);
         expect(
@@ -472,11 +475,12 @@ test("Settings keeps one content scroller and exposes repository loading without
             ),
         ).toBe(true);
     }
-    await dialog.getByRole("button", { name: "Cluster", exact: true }).click();
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await dialog.getByRole("link", { name: "Cluster", exact: true }).click();
     await expect(
         dialog.getByRole("heading", { name: "Cluster", exact: true }),
     ).toBeInViewport();
-    await page.keyboard.press("Escape");
+    await dialog.getByRole("button", { name: "Back to workspace" }).click();
     await expect(dialog).not.toBeVisible();
 });
 

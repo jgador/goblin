@@ -173,8 +173,8 @@ goblinctl first, then publishes Goblin using the same verified assets; a reused 
 without creating another installer release. Tags and published assets are immutable
 under this workflow.
 
-GitHub Pages deployment follows successful publication. The workflow reports
-release publication separately from GitHub Pages deployment. **Make this release
+Website installation deployment follows successful publication. The workflow reports
+release publication separately from website installation deployment. **Make this release
 the installation default** is unchecked by default; only an explicit selection updates
 the recommendation.
 
@@ -197,27 +197,49 @@ revision. Only the current release record schema is supported.
 
 ## Installation defaults and recommendation
 
-The [GitHub Pages installation page](https://jgador.github.io/goblin/) lists
+The [website installation page](https://goblinboard.com/install/) lists
 published Goblin versions and selects the recommendation. Each version opens its own Azure
 assets. Azure displays **Goblin version**, already bound to the source and installer.
 
-For existing published releases, promotion, rollback, and GitHub Pages recovery use
+For existing published releases, promotion, rollback, and installation hosting recovery use
 **Recommend Release** with an already published version. Uncheck its
-recommendation option to repair the GitHub Pages deployment while preserving the
+recommendation option to repair the website installation deployment while preserving the
 current default.
-An older published version remains independently installable.
+An older published version in the current installation format remains
+independently installable. Superseded preproduction manifest formats stay on
+GitHub Releases as historical artifacts, and are excluded from the website catalog.
+Production also excludes releases signed by another workflow. Invalid signatures
+fail verification; they are never treated as historical releases. A recommendation
+must use the current format and `platform-release.yml` signing identity.
 
-Before the first recommendation exists, the page requires a version selection.
-During development, explicitly recommend a tested preview. For a stable
+An empty catalog requires a published version before installation is enabled.
+A deployed catalog with no recommendation requires an explicit version selection.
+On first publication, the newest stable version is selected, otherwise the newest
+preview. During development, explicitly recommend a tested preview. For a stable
 announcement, publish and recommend the stable release; later previews do not
 replace it automatically. A recommendation affects new installations.
 
-GitHub Pages deployment follows coordinated publication through the reusable
-**GitHub Pages** workflow (`github-pages.yml`), called by the `github_pages` job.
-The `gh-pages` branch stores generated GitHub Pages assets, the published catalog,
-and its recommendation. GitHub Pages uses the Actions deployment source. Versioned assets
-also remain permanently attached to GitHub Releases. The repository-wide GitHub
-“latest release” does not determine Goblin's default.
+Installation asset preparation follows coordinated publication through the reusable
+**Installation Assets** workflow (`installation-assets.yml`). It authenticates the
+selected release and installer, then lists the GitHub Releases API to download all
+current-format Goblin assets. Signed manifests, GitHub asset digests, template hashes,
+and checksums must agree. Historical preproduction formats stay on GitHub Releases.
+
+The frozen snapshot is a GitHub Actions artifact passed into **Website Release**.
+The tested Nginx image serves `goblinboard.com/install/azure/`, through the existing
+`website-production` approval. No distribution branch or GitHub Pages is involved.
+The currently deployed website catalog preserves the recommendation; explicit
+recommendation changes take effect when the approved website image deploys.
+For the first publication, the newest supported stable release is preferred,
+otherwise the newest preview. A null deployed recommendation remains null.
+The repository-wide GitHub “latest release” never determines Goblin's default.
+Deployment rejects an advanced source or a changed deployed catalog while approval
+was pending. Versioned assets remain attached to GitHub Releases.
+
+The installation page presents Azure as available now. AWS and Google Cloud
+Platform are planned and have no deployment action or templates. Provider assets
+and catalogs belong under their own website directory; Azure remains the only
+implemented provider and all cloud installation remains manual.
 
 ## Repository setup
 
@@ -241,19 +263,21 @@ commit with a passing `test_results` check.
 Preparation and verification need read access to source checks, releases and
 attestations. Signing has separate OIDC/attestation permissions; the protected
 publication job has release write permissions. The workflow checks that approval
-is configured before starting preparation. GitHub Pages configuration affects the
-later `github_pages` job and does not block recovery of release publication.
+is configured before starting preparation. Website production configuration affects the
+later `installation` job and does not block recovery of release publication.
 
 - Configure **goblin-release** with at least one required maintainer reviewer.
   Allow that maintainer to approve their own run. Keep its deployment branch policy
   on **master**: this identifies the workflow, while the selected product source is
   independently checked against release/<major>.<minor>.
-- Configure GitHub Pages with **Source: GitHub Actions**. The **GitHub Pages** workflow
-  builds the distribution branch and deploys its generated artifact.
+- Configure the existing **website-production** environment and GHCR package as
+  described in [website production](../website/production/README.md). The
+  **Installation Assets** workflow calls Website Release, including its production
+  approval. No GitHub Pages configuration or Azure credentials are required.
 - Keep **test_results** as the required source check. No pin-PR permissions or
   separate goblinctl-release approval are needed by the coordinated workflow.
 
-Verify the active required check, master approval policy and GitHub Pages hosting
+Verify the active required check, master approval policy and website installation hosting
 against these settings. Azure credentials and subscription settings are not required.
 
 ### Manual Azure installation
@@ -263,7 +287,7 @@ delete Azure resources. There is no live Azure release check or scheduled cloud
 cleanup. Release preparation and publication require only the local checks and
 GitHub configuration described above.
 
-After publication, choose a release on the GitHub Pages installation page and follow
+After publication, choose a release on the website installation page and follow
 [manual Azure deployment guide](../deploy/azure/README.md). The templates and
 installer remain available for that process. The maintainer chooses the Azure
 subscription and manages the installation and its resources directly.
@@ -308,7 +332,7 @@ publication under a new version before reuse.
 ## Recover a failed operation
 
 Candidate artifacts expire after 30 days. Use the original run's **Re-run failed
-jobs** action for failed verification, signing, publication or GitHub Pages
+jobs** action for failed verification, signing, publication or website installation
 deployment. The workflow retains successful upstream outputs, including the artifact IDs and the
 original preparation attempt. A retried publication job may require environment
 approval again; there is still one publication job for the pair.
@@ -329,10 +353,10 @@ revision. Missing/expired artifacts require fresh preparation and approval, with
 unused versions where a prior tag or draft reserved the old version. Preserve
 completed publications; do not substitute new bytes into them.
 
-If release publication succeeded and only GitHub Pages deployment failed, rerun
-the failed `github_pages` job or use **Recommend Release** for that published version.
-Uncheck recommendation to repair GitHub Pages without changing the installation default.
-The releases remain published even while GitHub Pages deployment needs attention.
+If release publication succeeded and only website installation deployment failed, rerun
+the failed `installation` job or use **Recommend Release** for that published version.
+Uncheck recommendation to repair installation hosting without changing the installation default.
+The releases remain published even while website installation deployment needs attention.
 
 Automated release checks do not establish live Azure installation coverage. The
 app is built from source on the VM during manual installation; upstream OS and

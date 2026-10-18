@@ -5,6 +5,16 @@
 !website/index.html
 !website/website.css
 !website/website.js
+!website/install
+!website/install/**
+!website/package-installation.mts
+!scripts
+!scripts/installation-assets.mts
+!.artifacts
+!.artifacts/.gitkeep
+!.artifacts/installation-assets
+!.artifacts/installation-assets/output
+!.artifacts/installation-assets/output/**
 !website/assets
 !website/assets/**
 !website/nginx.conf

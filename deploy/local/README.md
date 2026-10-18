@@ -39,6 +39,11 @@ maintains a small TCP forwarder from loopback port 8788 to Linux port 80, so
 Windows access continues when Kubernetes takes over from the setup server.
 The setup UI stops and disables itself after installation; the forwarder remains.
 
+The progress page groups installation into four expandable stages. Its progress
+bar counts completed tasks, rather than estimating remaining time; tasks can run
+concurrently. Open a stage to inspect its tasks or expand **Installation log** for
+live output. If installation fails, the affected stage and log open automatically.
+
 Open **Settings → Cluster → Open cluster**, or
 **http://localhost:8788/headlamp/**, to inspect Kubernetes in Headlamp using your
 Goblin login. This is read-only access to workloads, logs, events, and storage.

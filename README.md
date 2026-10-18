@@ -34,7 +34,7 @@ shared variables, and how to add new settings.
 
 Deploy Goblin to your own Linux VM in Azure:
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://jgador.github.io/goblin/)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://goblinboard.com/install/)
 
 Deployment support for Google Cloud Platform, AWS, and other providers will follow later.
 
@@ -42,8 +42,9 @@ The [Azure deployment guide](deploy/azure/README.md) includes an ARM template wi
 customer-specific names, optional resource-name overrides, a static public IP,
 an Azure DNS hostname, single-node Kubernetes, cert-manager, and the Agent Sandbox controller.
 The guided installer uses Azure's native custom-template flow, with configuration
-and SSH-key download inside Azure Portal. Choose **Goblin version** on the
-GitHub Pages installation page; the recommended release is selected by default.
+and SSH-key download inside Azure Portal. Azure is available now; AWS and Google Cloud Platform installation are planned.
+Choose **Goblin version** on the
+[website installation page](https://goblinboard.com/install/); the recommended release is selected by default.
 Azure opens with the matching source and installer already resolved. See the
 [release guide](docs/releases.md).
 

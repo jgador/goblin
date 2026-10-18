@@ -36,8 +36,11 @@ Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
 
 On first start, choose and confirm your password in the terminal; input is hidden.
 Open **http://localhost:8787**, enter that password, and click **Open workspace**.
-The homepage opens your Work workspace. Open Settings to configure an AI connection;
-`/?settings=codex` also opens the Codex panel after unlocking.
+The homepage opens your Work workspace. Settings is a full workspace page with
+section navigation; `/settings?section=codex` opens the Codex connection after
+unlocking. Section links support refresh and browser Back/Forward. Use **Back to
+workspace** to return to the page you came from; unfinished Work drafts remain
+available during navigation. First-time timezone setup remains a focused dialog.
 Subsequent starts reuse its saved verifier. After locking the workspace or
 restarting Goblin, enter the password again. There is no default password or prefill.
 

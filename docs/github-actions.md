@@ -9,11 +9,11 @@ operation. Use **platform** for the main product built from `backend/` and
 
 | Element | Convention | Examples |
 | --- | --- | --- |
-| Workflow title (`name`) | One or two words in Title Case; uppercase acronyms and official product capitalization | `CI`, `Platform Release`, `GitHub Pages`, `Website Release` |
+| Workflow title (`name`) | One or two words in Title Case; uppercase acronyms and official product capitalization | `CI`, `Platform Release`, `Installation Assets`, `Website Release` |
 | Workflow filename | Short lowercase name; kebab-case between words, with `.yml` | `ci.yml`, `platform-release.yml` |
 | Job ID | Short lowercase name with at most one underscore | `tests`, `seal`, `test_results` |
 | Job display name | Omit job-level `name` so GitHub displays the job ID | `validate`, `publish`, `deploy` |
-| Step name | Descriptive phrase explaining the operation | `Verify the GitHub Pages installation links` |
+| Step name | Descriptive phrase explaining the operation | `Verify the website installation assets` |
 
 Keep the repository name out of workflow titles and job IDs when the Actions UI
 already supplies that context. Prefer specific operations such as `verify`, `seal`,
@@ -27,16 +27,16 @@ or `deploy` in independent workflows is fine when those jobs are not required
 branch checks.
 
 Reusable workflows can appear with caller/called job paths, such as
-`github_pages / deploy`; keep both IDs short.
+`installation / prepare`; keep both IDs short.
 
 ## Workflows and operations
 
 | Workflow | File | Jobs | Purpose |
 | --- | --- | --- | --- |
 | CI | [ci.yml](../.github/workflows/ci.yml) | `tests`, `test_results` | Verify source, release artifacts, and installation contracts; report the required result |
-| Platform Release | [platform-release.yml](../.github/workflows/platform-release.yml) | `prepare`, `verify`, `seal`, `publish`, `github_pages`, `report` | Prepare, verify, attest, and publish the coordinated platform/goblinctl releases, then deploy the GitHub Pages installation catalog |
-| GitHub Pages | [github-pages.yml](../.github/workflows/github-pages.yml) | `deploy` | Reusable deployment of the installation catalog and versioned assets to GitHub Pages |
-| Recommend Release | [recommend-release.yml](../.github/workflows/recommend-release.yml) | `github_pages` | Recommend an existing platform release or repair its GitHub Pages deployment |
+| Platform Release | [platform-release.yml](../.github/workflows/platform-release.yml) | `prepare`, `verify`, `seal`, `publish`, `installation`, `report` | Publish the verified release pair, then prepare installation assets and deploy the website through its production approval |
+| Installation Assets | [installation-assets.yml](../.github/workflows/installation-assets.yml) | `prepare`, `website` | Prepare the catalog from authenticated published assets, then call Website Release with the exact snapshot artifact |
+| Recommend Release | [recommend-release.yml](../.github/workflows/recommend-release.yml) | `installation` | Recommend an existing release or repair its installation hosting through Website Release |
 | Website Release | [website-release.yml](../.github/workflows/website-release.yml) | `validate`, `publish`, `deploy` | Verify the public website, publish its tested image to GHCR, and deploy the approved image to Kubernetes |
 
 A release makes a tested version and its artifacts available. A deployment puts
@@ -45,29 +45,43 @@ goblinctl keep independent versions and GitHub Releases; the coordinated workflo
 can reuse an authenticated installer instead of publishing another version.
 Platform installation in Azure remains manual. Website Release separates image
 publication from approved Kubernetes deployment. Use **Website** for the public
-website at `goblinboard.com` and **GitHub Pages** for the installation catalog at
-`jgador.github.io/goblin/`. GitHub Pages is the official product name and stays
-plural even when it hosts a single page.
+website at `goblinboard.com`, including the installation page, catalog, and Azure
+templates at `goblinboard.com/install/`. **Installation Assets** prepares release
+data; **Website Release** serves it through the existing website container.
 
 GitHub's **Review deployments** UI also manages environment approval for the
 release publication job. That UI label does not mean the job installs the platform.
 See [platform releases](releases.md) and [website production](../website/production/README.md)
 for operating procedures.
 
-## GitHub Pages commands and artifacts
+## Installation commands and artifacts
 
-The reusable workflow runs `node scripts/release-github.mts github-pages VERSION MODE`
-to prepare the catalog and `node scripts/release-github.mts check-github-pages VERSION MODE`
-to verify the deployed assets and recommendation. `MODE` is `recommend` or
-`preserve`. These are release operations that authenticate published assets and
-can update the `gh-pages` branch and installation default.
+The reusable workflow runs `node scripts/release-github.mts installation-assets VERSION MODE`
+to authenticate the chosen release/installer and prepare the catalog. `MODE` is
+`recommend` or `preserve`. It retains a read-only snapshot artifact and calls
+Website Release. It does not commit, push, or write a distribution branch.
 
-The generated worktree is `.artifacts/github-pages/worktree`; the Pages artifact
-contains only `.artifacts/github-pages/output`, excluding worktree Git metadata.
-Temporary release downloads and verification files also stay under
-`.artifacts/github-pages/` with `github-pages-*` prefixes. The `github-pages`
-concurrency group serializes deployments. Keep the existing `github-pages`
-environment, `gh-pages` branch, and published URL.
+Ordinary Website Release validation runs
+`node scripts/installation-assets.mts snapshot OUTPUT --authenticate`.
+Local preview uses the same command without `--authenticate`; public GitHub
+asset digests and manifest checksums are still checked. The script lists GitHub
+Releases, excludes drafts, unrelated products, and superseded manifest formats,
+and downloads current assets. CI verifies signatures against the recorded workflow
+revision, master ref, and GitHub-hosted runner requirement, then checks the verified
+certificate for the current `platform-release.yml` signer. Valid signatures from
+other workflows are excluded; invalid signatures fail the build. Only
+`azure/releases.json` and the five files per version enter the website image.
+
+Publish and deploy restore the validated `website-installation-<attempt>` artifact rather
+than fetching releases again. `source.json` records the deployed website catalog
+hash outside the image. `check-baseline OUTPUT` rejects a catalog changed during
+approval, while allowing an exact candidate to be rechecked after a completed rollout.
+Artifact names include the producing attempt; rerun jobs consume the retained
+artifact from their completed validation job. The website build snapshot stays under
+`.artifacts/installation-assets/output`; release downloads and test artifacts
+stay under `.artifacts/`. The `installation-assets` group serializes release
+preparation and its website run; `website-production` serializes deployment.
+No GitHub Pages configuration, permissions, or branch is required.
 
 ## Rename references and roll out required checks
 
@@ -94,5 +108,5 @@ Installers signed by superseded workflow paths cannot be reused by the current
 release tooling. Publish a new installer version through **Platform Release**
 before reuse; preserve existing tags and published bytes. After this rename is
 merged, start a fresh release run from updated `master`, since reruns retain the
-original workflow revision. Actual signing, publication, and GitHub Pages deployment
+original workflow revision. Actual signing, publication, and website installation deployment
 require verification in GitHub Actions; local checks cover their offline contracts.

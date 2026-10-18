@@ -164,9 +164,10 @@ builds one from the selected release branch. Goblin and goblinctl keep independe
 versions; preparation supplies an unused installer version without a Cargo bump or
 dependency-pin PR. After verification, one approval publishes the exact pair,
 with any new goblinctl published first.
-The `github_pages` job then deploys the installation catalog through **GitHub
-Pages**. **Recommend Release** can update that catalog's default or repair the
-GitHub Pages deployment for an existing release.
+The `installation` job prepares the installation catalog through **Installation
+Assets**, then calls **Website Release** to serve it at `goblinboard.com/install/`.
+The website deployment requires its existing production approval. **Recommend
+Release** can update the default or repair hosting for an existing release.
 
 An optional development pin update uses `cargo xtask release pin-installer --version X.Y.Z`.
 It authenticates the archive and manifest, verifies matching inputs/capabilities,

@@ -145,7 +145,7 @@ test-rust-doc:
 
 # Run release tooling and publication contract tests directly with Node.
 test-release:
-	node --test scripts/release-*.test.mts
+	node --test scripts/release-*.test.mts scripts/installation-assets.test.mts
 
 # Test contract generation, including rejection of stale or invalid definitions.
 test-contracts:

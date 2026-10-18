@@ -178,6 +178,76 @@ main {
     width: 18px;
     height: 18px;
 }
+.site-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+.nav-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 10px 12px;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+}
+.nav-link[aria-current="page"] {
+    color: var(--green);
+}
+.button-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    min-height: 48px;
+    padding: 13px 20px;
+    border: 1px solid var(--green);
+    border-radius: var(--radius-small);
+    background: var(--green);
+    color: var(--surface);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: transform var(--motion-feedback) var(--ease-out);
+}
+.button-primary:active:not(:focus-visible):not([aria-disabled="true"]) {
+    transform: scale(0.97);
+}
+.button-primary[aria-disabled="true"] {
+    border-color: var(--line);
+    background: var(--green-soft);
+    color: var(--muted);
+    cursor: default;
+}
+.install-invitation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+    margin-bottom: 56px;
+    padding: 36px 40px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--green-soft);
+}
+.install-invitation h2 {
+    margin-top: 10px;
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.045em;
+}
+.install-invitation div > p:last-child {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.65;
+}
+.install-invitation .button-primary {
+    flex-shrink: 0;
+}
 .intro {
     padding: 48px 0 40px;
     max-width: 850px;
@@ -1091,6 +1161,12 @@ button:not(.channel):not([role="tab"]):active:not(:focus-visible):enabled {
     transform: scale(0.97);
 }
 @media (hover: hover) and (pointer: fine) {
+    .nav-link:hover {
+        text-decoration: underline;
+    }
+    .button-primary:hover:not([aria-disabled="true"]) {
+        background: #1d623a;
+    }
     .project-link:hover {
         border-color: #9bb6a0;
         background: #fafcf9;
@@ -1193,6 +1269,25 @@ button:not(.channel):not([role="tab"]):active:not(:focus-visible):enabled {
     }
     .site-kicker {
         display: none;
+    }
+    .site-nav {
+        gap: 4px;
+    }
+    .nav-link {
+        padding-inline: 8px;
+    }
+    .project-link span {
+        display: none;
+    }
+    .install-invitation {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 24px;
+        margin-bottom: 40px;
+        padding: 28px 24px;
+    }
+    .install-invitation h2 {
+        font-size: 26px;
     }
     .project-link {
         min-height: 44px;
@@ -1398,6 +1493,12 @@ button:not(.channel):not([role="tab"]):active:not(:focus-visible):enabled {
     }
 }
 @media (prefers-reduced-motion: reduce) {
+    .button-primary {
+        transition: none;
+    }
+    .button-primary:active:not(:focus-visible) {
+        transform: none;
+    }
     #hub-block-left,
     #hub-block-right,
     #hub-head,

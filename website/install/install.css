@@ -1,0 +1,490 @@
+.installation-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-areas: "intro options" "providers options" "guide guide";
+    gap: 28px 80px;
+    max-width: 1100px;
+    margin: 48px auto 80px;
+    align-items: start;
+}
+.installation-intro {
+    grid-area: intro;
+}
+.cloud-providers {
+    grid-area: providers;
+}
+.cloud-providers-heading h2 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+}
+.cloud-providers-heading p {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.cloud-provider-list {
+    display: grid;
+    gap: 10px;
+    list-style: none;
+    padding: 0;
+    margin: 18px 0 0;
+}
+.cloud-provider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 80px;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+.cloud-provider-available {
+    border-color: #24744755;
+    background: var(--green-soft);
+}
+.cloud-provider-planned {
+    background: var(--background);
+}
+.cloud-provider > div {
+    flex: 1;
+    min-width: 0;
+}
+.cloud-provider h3 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+.cloud-provider p {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.cloud-provider-icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--muted);
+}
+.cloud-provider-available .cloud-provider-icon {
+    color: var(--green);
+}
+.cloud-provider-monogram {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.06em;
+}
+.provider-state {
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.provider-state-available {
+    color: var(--green);
+}
+.back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    margin-bottom: 32px;
+    color: var(--muted);
+    font-size: 13px;
+    text-decoration: none;
+}
+.installation-intro h1 {
+    margin-top: 16px;
+    font-size: clamp(48px, 5vw, 68px);
+    line-height: 1.05;
+    font-weight: 600;
+    letter-spacing: -0.05em;
+    text-wrap: balance;
+}
+.installation-intro h1 span {
+    color: var(--green);
+}
+.installation-intro > p:last-child {
+    max-width: 420px;
+    margin-top: 20px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.8;
+}
+.installation-options {
+    grid-area: options;
+    padding-top: 24px;
+}
+.installation-card {
+    padding: 32px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    box-shadow: var(--shadow-panel);
+}
+.installation-card h2 {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+}
+.installation-card-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.installation-provider {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--green-soft);
+    color: var(--green);
+}
+.installation-requirements {
+    margin: 16px 0 28px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+.version-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+.version-picker {
+    position: relative;
+}
+.version-trigger {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    min-height: 56px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-small);
+    background: var(--background);
+    color: var(--ink);
+    font-size: 16px;
+    cursor: pointer;
+    text-align: left;
+    touch-action: manipulation;
+    transition: transform var(--motion-feedback) var(--ease-out);
+}
+.version-value {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+.version-badge {
+    flex-shrink: 0;
+    padding: 4px 7px;
+    border-radius: 5px;
+    background: var(--green-soft);
+    color: var(--green);
+    font-size: 10px;
+    line-height: 1.4;
+    font-weight: 600;
+}
+.version-chevron {
+    width: 16px;
+    height: 16px;
+    color: var(--muted);
+}
+.version-trigger[aria-expanded="true"] {
+    border-color: var(--green);
+    background: var(--surface);
+    box-shadow: 0 0 0 3px var(--green-soft);
+}
+.version-trigger[aria-expanded="true"] .version-chevron {
+    transform: rotate(180deg);
+}
+.version-trigger:disabled {
+    background: var(--background);
+    color: var(--muted);
+    cursor: default;
+}
+.version-trigger:focus-visible {
+    outline: 3px solid var(--green);
+    outline-offset: 4px;
+}
+.version-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 5;
+    width: 100%;
+    max-height: min(320px, 45dvh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 5px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow:
+        0 12px 32px #19352b12,
+        0 3px 8px #19352b08;
+    transform-origin: top center;
+}
+.version-picker[data-side="above"] .version-menu {
+    top: auto;
+    bottom: calc(100% + 8px);
+    transform-origin: bottom center;
+}
+.version-picker[data-motion="pointer"] .version-menu {
+    transition:
+        opacity 160ms var(--ease-out),
+        transform 160ms var(--ease-out);
+}
+@starting-style {
+    .version-picker[data-motion="pointer"] .version-menu:not([hidden]) {
+        opacity: 0;
+        transform: scale(0.98);
+    }
+}
+.version-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 64px;
+    padding: 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}
+.version-option[data-active="true"] {
+    background: var(--green-soft);
+}
+.version-option-copy {
+    flex: 1;
+    min-width: 0;
+}
+.version-option-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    font-size: 13px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.version-option-description {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+.version-check {
+    flex-shrink: 0;
+    color: var(--green);
+    font-size: 16px;
+    opacity: 0;
+}
+.version-option[aria-selected="true"] .version-check {
+    opacity: 1;
+}
+#status {
+    min-height: 40px;
+    margin: 10px 0 18px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.65;
+}
+.installation-card .button-primary {
+    width: 100%;
+    min-height: 52px;
+}
+.installation-note {
+    margin-top: 16px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.release-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 4px 12px;
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+}
+.release-links a,
+.installation-docs {
+    text-decoration: none;
+}
+.release-links a,
+.installation-docs,
+.retry-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    font-size: 12px;
+}
+.installation-docs {
+    justify-content: center;
+    width: 100%;
+    margin-top: 12px;
+    color: var(--muted);
+}
+.retry-button {
+    color: var(--green);
+    padding: 0 8px;
+    margin: -8px 0 12px -8px;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+.installation-guide-section {
+    grid-area: guide;
+    margin-top: 24px;
+    padding-top: 28px;
+    border-top: 1px solid var(--line);
+}
+.installation-guide-section > h2 {
+    font-size: 18px;
+    letter-spacing: -0.035em;
+}
+.installation-guide {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 0;
+}
+.installation-guide li {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    padding: 20px 0;
+    border: 0;
+}
+.installation-guide li > span {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    color: var(--green);
+    font-size: 11px;
+}
+.installation-guide h2 {
+    margin-top: 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.installation-guide p {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+@media (hover: hover) and (pointer: fine) {
+    .back-link:hover {
+        color: var(--green);
+    }
+    .version-trigger:hover:not(:disabled) {
+        border-color: var(--green);
+    }
+    .release-links a:hover,
+    .installation-docs:hover {
+        color: var(--green);
+    }
+    .back-link:hover .link-label,
+    .release-links a:hover .link-label,
+    .installation-docs:hover .link-label {
+        text-decoration: underline;
+    }
+}
+.version-picker[data-motion="pointer"] .version-trigger:active:not(:disabled) {
+    transform: scale(0.98);
+}
+@media (prefers-reduced-motion: reduce) {
+    .version-picker[data-motion="pointer"]
+        .version-trigger:active:not(:disabled),
+    .version-picker[data-motion="pointer"] .version-menu {
+        transform: none;
+        transition: opacity 160ms var(--ease-out);
+    }
+}
+@media (max-width: 900px) {
+    .installation-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "intro" "providers" "options" "guide";
+        gap: 32px;
+        max-width: 560px;
+        margin-block: 32px 48px;
+    }
+    .back-link {
+        margin-bottom: 20px;
+    }
+    .installation-options {
+        padding-top: 0;
+    }
+    .installation-guide {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+    .installation-guide li {
+        border-top: 1px solid var(--line);
+    }
+}
+@media (max-width: 600px) {
+    .installation-card {
+        padding: 24px;
+    }
+    .installation-intro h1 {
+        font-size: clamp(44px, 12vw, 56px);
+    }
+    .installation-card h2 {
+        font-size: 21px;
+    }
+}
+@media (max-width: 360px) {
+    .cloud-provider {
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        padding: 14px;
+    }
+    .provider-state {
+        margin-left: 48px;
+    }
+    .installation-card {
+        padding: 20px;
+    }
+    .version-trigger {
+        flex-wrap: wrap;
+        gap: 6px 10px;
+    }
+    .version-trigger .version-badge {
+        order: 3;
+    }
+    .version-trigger:has(.version-badge:not([hidden])) .version-value {
+        flex-basis: calc(100% - 26px);
+    }
+}

@@ -4,7 +4,6 @@ import {
     assertApprovalEnvironment,
     deployUrl,
     missingAssets,
-    updateCatalog,
 } from "./release-github.mts";
 
 test("publication recovery only adds missing assets with the same identity", () => {
@@ -21,35 +20,6 @@ test("publication recovery only adds missing assets with the same identity", () 
     );
     assert.throws(() =>
         missingAssets({ "unrecognized-file": "anything" }, candidate),
-    );
-});
-
-test("publishing previews preserves the recommendation and explicit rollback restores an older release", () => {
-    const stable = {
-        version: "0.1.0",
-        channel: "stable",
-        manifestSha256: "stable",
-    };
-    const preview = {
-        version: "0.2.0-preview.1",
-        channel: "preview",
-        manifestSha256: "preview",
-    };
-    const catalog = { schemaVersion: 1, recommended: null, releases: [] };
-    updateCatalog(catalog, stable, true);
-    updateCatalog(catalog, preview, false);
-    assert.equal(catalog.recommended, stable.version);
-    updateCatalog(catalog, preview, true);
-    assert.equal(catalog.recommended, preview.version);
-    updateCatalog(catalog, stable, true);
-    assert.equal(catalog.recommended, stable.version);
-    assert.equal(catalog.releases.length, 2);
-    assert.throws(() =>
-        updateCatalog(
-            catalog,
-            { ...stable, manifestSha256: "replacement" },
-            true,
-        ),
     );
 });
 
@@ -70,11 +40,24 @@ test("a named environment without reviewers cannot silently publish", () => {
 
 test("installation links carry both assets from one version", () => {
     const link = decodeURIComponent(deployUrl("0.1.0-preview.2"));
-    assert.ok(
-        link.includes("/versions/0.1.0-preview.2/azuredeploy.portal.json"),
+    assert.ok(link.startsWith("https://portal.azure.com/"));
+    assert.equal(
+        (
+            link.match(
+                /https:\/\/goblinboard\.com\/install\/azure\/versions\//g,
+            ) ?? []
+        ).length,
+        2,
     );
     assert.ok(
-        link.includes("/versions/0.1.0-preview.2/createUiDefinition.json"),
+        link.includes(
+            "/azure/versions/0.1.0-preview.2/azuredeploy.portal.json",
+        ),
+    );
+    assert.ok(
+        link.includes(
+            "/azure/versions/0.1.0-preview.2/createUiDefinition.json",
+        ),
     );
     for (const version of [
         "master",

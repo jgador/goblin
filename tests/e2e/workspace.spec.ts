@@ -118,7 +118,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     await page
         .getByRole("button", { name: "Connect an AI provider", exact: true })
         .click();
-    const settings = page.getByRole("dialog", { name: "Settings" });
+    const settings = page.getByRole("region", { name: "Settings" });
     await expect(
         settings.getByRole("heading", { name: "AI connections" }),
     ).toBeVisible();
@@ -128,7 +128,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     await expect(
         settings.getByRole("button", { name: "Continue with ChatGPT" }),
     ).toBeVisible();
-    await page.keyboard.press("Escape");
+    await settings.getByRole("button", { name: "Back to workspace" }).click();
     await expect(draft).toHaveValue(
         "Keep my idea while I connect an AI account",
     );
@@ -437,14 +437,14 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     await expect(page.locator("#all-outputs")).toHaveAttribute("open", "");
     await expect(page.locator(".output-row summary:visible")).toHaveCount(4);
     await page.getByRole("button", { name: "Agent", exact: true }).click();
-    const settings = page.getByRole("dialog", { name: "Settings" });
+    const settings = page.getByRole("region", { name: "Settings" });
     await expect(
         settings.getByRole("heading", { name: "Agents", exact: true }),
     ).toBeVisible();
     await expect(
         settings.getByRole("heading", { name: "Goblin", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Close settings" }).click();
+    await page.getByRole("button", { name: "Back to workspace" }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator(".detail-body").evaluate((element) => {
         element.scrollTop = 0;

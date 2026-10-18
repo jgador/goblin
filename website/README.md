@@ -1,9 +1,10 @@
 # Goblin: In the loop
 
 The public website at `goblinboard.com` is released by
-[Website Release](../.github/workflows/website-release.yml). The separate
-[GitHub Pages workflow](../.github/workflows/github-pages.yml) deploys the
-installation catalog at `jgador.github.io/goblin/`. See
+[Website Release](../.github/workflows/website-release.yml). The
+[Installation Assets workflow](../.github/workflows/installation-assets.yml)
+prepares verified release data and calls Website Release to serve the installation
+page, catalog, and versioned Azure templates at `goblinboard.com/install/`. See
 [workflow naming](../docs/github-actions.md) and
 [production deployment](production/README.md).
 
@@ -20,7 +21,7 @@ for actions and selection. Shared CSS tokens own colors, borders, three corner
 radii, restrained shadows, and motion. Text, space, and alignment establish
 hierarchy; decorative miniature applications do not compete with the example.
 
-The header combines the Goblin mark and wordmark with a GitHub project link.
+The header combines the Goblin mark and wordmark with Install and GitHub links.
 The compact introduction brings the interactive example higher on the page.
 An accessible section heading names the demo without adding visible copy.
 The interactive example puts simple channel cards and the Goblin hub beside the
@@ -34,7 +35,8 @@ compact. It stays alongside the longer conversation while scrolling when the
 desktop viewport is tall enough to show the whole diagram. Some open space is
 intentional; the benefits are not filler for the diagram column.
 At widths of 1050 pixels and below, the hub and conversation stack. The benefits
-follow both in document order, then a small open-source footer.
+follow both in document order, then a compact “Give Goblin a home” installation
+invitation and a small open-source footer.
 
 | Benefit | Supporting copy |
 | --- | --- |
@@ -262,6 +264,62 @@ Production domain: <https://goblinboard.com>. See the
 GitHub approval, TLS, and the DNS cutover procedure.
 The earlier ChatGPT-hosted copy is independent of this deployment.
 
+## Installation page
+
+`install/` shares the website's header, typography, colors, radii, and button
+feedback. The provider overview identifies Microsoft Azure as available now and
+Amazon Web Services, Google Cloud Platform, and Other hosting providers as planned.
+The latter names DigitalOcean and Hetzner as examples. Planned providers have no
+deployment action. On desktop the provider overview sits beside the Azure
+version-selection card, with setup steps below; phones show providers, the card,
+and steps in that order. Azure's assets and catalog live under `install/azure/`;
+a future provider gets its own catalog and installation assets rather than
+sharing Azure's template contract.
+
+The release picker separates the version from its recommendation badge and shows
+each release's channel and a selection checkmark. The accessible combobox keeps
+focus on the trigger: arrows, Home/End, and version typeahead move through releases;
+Enter/Space selects; Escape, Tab, and outside clicks dismiss without changing the
+selection. Keyboard actions are immediate. Pointer openings use a 160ms transition
+from the trigger, and reduced motion removes movement. The menu opens above the
+trigger when space below is limited and scrolls for longer catalogs.
+
+The card fetches `install/azure/releases.json` from the same origin, selects the
+recommended version, and respects `?version=X.Y.Z`. Unavailable versions require
+an explicit selection; no releases and request failures leave deployment disabled.
+A failed request offers Try again. The deploy link binds both Azure Portal inputs
+to `install/azure/versions/<version>/`; Download template serves the matching CLI ARM
+template. Azure collects server choices, the Goblin password, and SSH key.
+The page explains subscription billing before the visitor opens the Portal.
+
+`make website-dev` downloads a snapshot directly from the GitHub Releases API
+when one is missing. It reads only published `goblin-v*` releases with the current
+manifest format, verifies GitHub asset digests and manifest checksums, and serves
+the snapshot locally. Opening tracked HTML directly uses an empty Azure catalog.
+
+Website Release also verifies signed release manifests and requires the verified
+certificate identity to match `platform-release.yml` on master. Valid releases
+signed by another workflow are excluded; invalid signatures fail validation.
+Local preview verifies release hashes without enforcing this signer policy, so it
+can show releases that are ineligible for production. The validated snapshot is
+retained as a GitHub Actions artifact. Publish and deploy use that exact artifact,
+without re-fetching releases. The Nginx image contains the Azure catalog and five
+files per release, with no Git metadata, installer binary, snapshot provenance,
+or build tooling. Original release assets remain attached to GitHub Releases.
+There is no dependency on a distribution branch or GitHub Pages.
+
+The default comes from the currently deployed website catalog. Explicit Recommend
+Release changes it; ordinary website deployments preserve it. On first publication,
+the newest supported stable version is preferred, otherwise the newest preview.
+An existing null recommendation stays null. Deployment rejects a changed website
+catalog while approval was pending. See [release operations](../docs/releases.md).
+
+The installation route permits same-origin connections through its CSP; the
+home page retains `connect-src 'none'`. Container and public verification compare
+every packaged template and catalog byte against the frozen snapshot. Versioned
+public files allow cross-origin reads so Azure Portal can load its templates;
+the page and catalog do not grant cross-origin access.
+
 ## Promo video
 
 `video/` is a development-only [Remotion](https://www.remotion.dev/) project. It
@@ -336,6 +394,11 @@ plugins with `sudo apt-get install docker-buildx-plugin docker-compose-plugin`.
 Docker Desktop and its Windows Compose command are not required.
 
 The development container bind-mounts this directory read-only at `/app`.
+It also mounts the validated installation catalog and versioned templates read-only.
+Vite serves those files under `/install/`, so `http://localhost:5173/install/`
+shows published releases. The same routing works when running Vite directly.
+The snapshot is reused across starts; to refresh it, stop the website, remove
+`.artifacts/installation-assets/output/`, and run `make website-dev` again.
 Vite watches the same files you edit in WSL and updates or reloads the browser
 when you save. Keep the checkout on WSL's Linux filesystem for reliable file
 watching. Node and the locked Vite dependency live at `/opt/website-dev` in the

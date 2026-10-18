@@ -21,6 +21,18 @@ pub fn web(path: &str) -> Option<(&'static str, &'static [u8])> {
             "text/css; charset=utf-8",
             include_bytes!("../../../deploy/azure/setup/styles.css"),
         ),
+        "/setup/inter-medium.ttf" => (
+            "font/ttf",
+            include_bytes!("../../../assets/branding/fonts/inter-18pt-medium.ttf"),
+        ),
+        "/setup/inter-semibold.ttf" => (
+            "font/ttf",
+            include_bytes!("../../../assets/branding/fonts/inter-18pt-semibold.ttf"),
+        ),
+        "/setup/OFL.txt" => (
+            "text/plain; charset=utf-8",
+            include_bytes!("../../../assets/branding/fonts/OFL.txt"),
+        ),
         "/setup/icon.svg" => (
             "image/svg+xml",
             include_bytes!("../../../assets/branding/svg/icon-light.svg"),
@@ -30,6 +42,10 @@ pub fn web(path: &str) -> Option<(&'static str, &'static [u8])> {
 }
 pub const BOOTSTRAP: &str = include_str!("../../../deploy/azure/bootstrap.sh");
 pub const LICENSING: &[(&str, &[u8])] = &[
+    (
+        "Inter-OFL.txt",
+        include_bytes!("../../../assets/branding/fonts/OFL.txt"),
+    ),
     ("LICENSE", include_bytes!("../../../LICENSE")),
     ("NOTICE", include_bytes!("../../../NOTICE")),
     (

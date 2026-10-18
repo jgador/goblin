@@ -42,6 +42,8 @@ frontend/
   tsconfig.json            Browser compiler settings; no Node.js types
 website/
   index.html, website.css, website.js  Standalone communications website
+  install/                 Installation UI and empty local release catalog
+  package-installation.mts Validates and packages provider assets from GitHub Releases into the image
   assets/                  Website fonts, provider marks, and Goblin artwork copies
   references/              Retained design reference and earlier GIF export
   package.json             Independently locked Vite development dependency
@@ -205,8 +207,9 @@ are useful integration/CI gates, not prerequisites for every local edit. Require
 CI checks still apply; scoped local results do not imply that CI ran.
 See [GitHub Actions](github-actions.md) for workflow names, required checks, and
 rename rollout steps.
-**Website Release** publishes and deploys `goblinboard.com`; **GitHub Pages**
-deploys the installation catalog at `jgador.github.io/goblin/`.
+**Installation Assets** prepares verified snapshots directly from GitHub Releases
+and calls **Website Release**, which serves the website and installation files at
+`goblinboard.com/install/` after production approval.
 
 Offline installer tests run as an ordinary user. `make build-tools` builds the
 test-only `host_fixture` Rust example, which calls host configuration with a
@@ -231,9 +234,18 @@ these checks.
 The frontend build writes JavaScript, HTML, CSS, and static assets to
 `frontend/dist/`. The backend project copies this directory into its output and
 published `wwwroot/`. Browser URLs are mapped explicitly in
-`backend/src/Goblin.Web/GoblinApplication.cs`: `/`, `/app.js`, and `/styles.css`
-serve the `connection/` files; `/work` and `/work/*` serve the `work/` files.
-Runtime assets keep their `/assets/*` URLs.
+`backend/src/Goblin.Web/Http/StaticAssets.cs`. `/`, `/work`, `/integrations`,
+`/knowledge`, and `/settings` serve the workspace shell. Settings selects its
+section with `?section=connections` (or `codex`, `github`, `agents`, `timezone`,
+`integrations`, `slack`, `system`, `cluster`, or `logs`). Page routes also accept
+a trailing slash and show the workspace access screen before unlocking.
+The connection panel is shared with Settings through `/connection/panel.html`.
+Runtime assets keep their `/assets/*` URLs, including locally bundled Inter fonts.
+
+The platform and installer use the website’s green palette, white panels, and
+Inter typography. Shared platform controls and font declarations live in
+`frontend/src/controls.css`. The standalone installer embeds its own fonts;
+the website installation page shares those fonts and their license.
 
 The root `dist/` holds compiled test tooling. It is separate from the frontend
 build and is not included in the application image. Both output directories,

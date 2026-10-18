@@ -13,6 +13,9 @@
     "tools/goblinctl/capabilities.json",
     "scripts/build-goblinctl-release.sh",
     "assets/branding/svg/icon-light.svg",
+    "assets/branding/fonts/inter-18pt-medium.ttf",
+    "assets/branding/fonts/inter-18pt-semibold.ttf",
+    "assets/branding/fonts/OFL.txt",
     "deploy/azure/bootstrap.sh",
     "deploy/azure/install-platform.sh",
     "deploy/local/postgres-service.yaml"
