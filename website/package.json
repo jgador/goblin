@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "check": "node --check website.js && node --check vite.config.js && node --check load-test.mjs && node --check release.mjs && node --check verify.mjs"
+    "check": "node --check website.js && node --check install/install.js && node --check package-installation.mts && node --check vite.config.js && node --check load-test.mjs && node --check release.mjs && node --check verify.mjs"
   },
   "devDependencies": {
     "vite": "8.3.4"

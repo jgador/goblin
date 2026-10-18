@@ -1,6 +1,17 @@
 name: Website Release
 
 on:
+  workflow_call:
+    inputs:
+      installation-artifact:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      recommend:
+        type: boolean
+        default: false
   pull_request:
   merge_group:
   push:
@@ -9,6 +20,10 @@ on:
       - website/index.html
       - website/website.css
       - website/website.js
+      - website/install/**
+      - website/package-installation.mts
+      - scripts/installation-assets.mts
+      - scripts/release-github.mts
       - website/assets/**
       - website/Dockerfile
       - website/Dockerfile.dockerignore
@@ -24,19 +39,43 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      attestations: read
+    outputs:
+      artifact: ${{ steps.snapshot.outputs.artifact }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Install pinned Kubernetes client
         run: bash website/install-kubectl.sh
+      - uses: actions/download-artifact@v4
+        if: inputs.installation-artifact != ''
+        with:
+          name: ${{ inputs.installation-artifact }}
+          path: .artifacts/installation-assets/output
+      - name: Snapshot authenticated installation assets from GitHub Releases
+        if: inputs.installation-artifact == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/installation-assets.mts snapshot .artifacts/installation-assets/output --authenticate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website-installation-${{ github.run_attempt }}
+          path: .artifacts/installation-assets/output
+          retention-days: 30
+          if-no-files-found: error
+      - id: snapshot
+        run: echo "artifact=website-installation-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
       - name: Check website source and production configuration
         run: |
           npm --prefix website run check
           node --test website/release.test.mjs
+          node --test scripts/installation-assets.test.mts scripts/release-github.test.mts
           bash -n website/check-container.sh website/install-kubectl.sh
       - name: Build and inspect the production container
         run: |
@@ -59,11 +98,15 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Require configured deployment protection
         env:
           GH_TOKEN: ${{ github.token }}
         run: node website/release.mjs check-environment
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.validate.outputs.artifact }}
+          path: .artifacts/installation-assets/output
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
@@ -84,7 +127,7 @@ jobs:
           printf '### Website candidate\n\nSource: %s\n\nImage: %s\n\nAwaiting website-production approval.\n' "$GITHUB_SHA" "$digest" >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
-    needs: publish
+    needs: [validate, publish]
     runs-on: ubuntu-24.04
     environment:
       name: website-production
@@ -101,7 +144,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Recheck protection and reject an outdated candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -109,6 +152,12 @@ jobs:
           node website/release.mjs check-environment
           current=$(gh api repos/jgador/goblin/branches/master --jq .commit.sha)
           [[ "$current" == "$GITHUB_SHA" ]] || { echo 'master advanced while this candidate awaited approval; deploy the newer run.' >&2; exit 1; }
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.validate.outputs.artifact }}
+          path: .artifacts/installation-assets/output
+      - name: Reject a superseded installation recommendation
+        run: node scripts/installation-assets.mts check-baseline .artifacts/installation-assets/output
       - name: Install pinned Kubernetes client
         run: bash website/install-kubectl.sh
       - name: Apply approved image and verify rollout
@@ -126,4 +175,7 @@ jobs:
           unset WEBSITE_KUBECONFIG
           node website/release.mjs deploy "$WEBSITE_IMAGE" "$kubeconfig" "$WEBSITE_DEPLOYMENT_UID"
       - name: Verify the public website matches this release
-        run: node website/verify.mjs https://goblinboard.com
+        env:
+          VERSION: ${{ inputs.version }}
+          RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
+        run: node website/verify.mjs https://goblinboard.com "$VERSION" "$RECOMMENDATION"

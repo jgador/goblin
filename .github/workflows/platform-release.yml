@@ -57,7 +57,7 @@ jobs:
       - uses: ./.github/actions/setup-deployment
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Check the publication approval configuration
         env:
           GH_TOKEN: ${{ github.token }}
@@ -108,7 +108,7 @@ jobs:
       - uses: ./.github/actions/setup-deployment
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: "24"
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: .artifacts/source/global.json
@@ -197,7 +197,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
+          node-version: "24"
       - uses: ./.github/actions/setup-rust
       - uses: actions/download-artifact@v4
         with:
@@ -215,28 +215,29 @@ jobs:
         if: failure()
         run: |
           echo 'Publication did not complete. Use **Re-run failed jobs** on this run to retry with the retained candidate. Existing tags and bytes must match; published versions are never overwritten. Missing/expired artifacts require fresh preparation and approval.' >> "$GITHUB_STEP_SUMMARY"
-  github_pages:
+  installation:
     needs: [prepare, publish]
-    uses: ./.github/workflows/github-pages.yml
+    uses: ./.github/workflows/installation-assets.yml
     with:
       version: ${{ needs.prepare.outputs.version }}
       recommend: ${{ inputs.recommend }}
     permissions:
-      contents: write
-      pages: write
-      id-token: write
+      contents: read
+      packages: write
+      actions: read
       attestations: read
+    secrets: inherit
   report:
     if: always()
-    needs: [publish, github_pages]
+    needs: [publish, installation]
     runs-on: ubuntu-24.04
     permissions: {}
     steps:
       - env:
           PUBLICATION: ${{ needs.publish.result }}
-          DEPLOYMENT: ${{ needs.github_pages.result }}
+          DEPLOYMENT: ${{ needs.installation.result }}
         run: |
-          echo "Release publication: **$PUBLICATION**. GitHub Pages deployment: **$DEPLOYMENT**." >> "$GITHUB_STEP_SUMMARY"
+          echo "Release publication: **$PUBLICATION**. Website installation: **$DEPLOYMENT**." >> "$GITHUB_STEP_SUMMARY"
           if [[ "$PUBLICATION" == success && "$DEPLOYMENT" != success ]]; then
-            echo 'The releases are published. Re-run the failed github_pages job or use **Recommend Release** with recommendation unchecked to repair the GitHub Pages deployment only.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'The releases are published. Re-run the failed installation job or use **Recommend Release** with recommendation unchecked to repair the website installation assets.' >> "$GITHUB_STEP_SUMMARY"
           fi

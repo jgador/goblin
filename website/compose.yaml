@@ -15,6 +15,12 @@ services:
         source: .
         target: /app
         read_only: true
+      - type: bind
+        source: ../.artifacts/installation-assets/output
+        target: /.artifacts/installation-assets/output
+        read_only: true
+        bind:
+          create_host_path: false
     tmpfs:
       - /tmp
     healthcheck:

@@ -35,6 +35,11 @@ case "$action" in
         fi
         case "$action" in
             dev)
+                installation_assets="$repo_dir/.artifacts/installation-assets/output"
+                if [[ ! -f "$installation_assets/azure/releases.json" ]]; then
+                    (cd "$repo_dir" && node scripts/installation-assets.mts snapshot "$installation_assets")
+                fi
+                mkdir -p "$installation_assets/azure/versions"
                 "${compose[@]}" up --build --detach --wait --wait-timeout 60 "$@"
                 printf '\nWebsite ready: http://localhost:5173\nIt is running detached; edit website/ for live reload.\n'
                 ;;

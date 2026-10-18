@@ -130,6 +130,7 @@ CI runs `dependencies check --locked` and source tests. **Platform Release**
 selects and verifies the installer, then obtains one approval to publish the exact
 Goblin–goblinctl pair. It creates no dependency-pin PR. The [release guide](releases.md) describes the
 complete routine and installation verification.
-The **GitHub Pages** workflow deploys the authenticated installation catalog after
-publication. **Website Release** independently publishes and deploys the public
-website; see [GitHub Actions](github-actions.md) for their names and boundaries.
+The **Installation Assets** workflow prepares the authenticated installation catalog
+after publication and calls **Website Release** to publish the website image and
+deploy it after production approval. The website serves the catalog and Azure
+templates directly; see [GitHub Actions](github-actions.md) for their boundaries.

@@ -1,5 +1,10 @@
 # Goblin release workflow plan
 
+This is a historical plan. Its installation-hosting details are superseded by
+[release operations](releases.md) and [GitHub Actions](github-actions.md).
+Current installation hosting uses GitHub Releases and the website, with no
+distribution branch or GitHub Pages dependency.
+
 Steps 1–6 are implemented. The release guide in [releases.md](releases.md) is the
 operating procedure. Local validation covers installer selection, candidate
 integrity, coordinated publication and interruption recovery; exercising the new

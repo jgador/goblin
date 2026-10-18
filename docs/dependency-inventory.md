@@ -154,7 +154,7 @@ resources. They are not independently pinned by these application manifests.
 Sources: [CI](../.github/workflows/ci.yml),
 [Platform Release](../.github/workflows/platform-release.yml),
 [Website Release](../.github/workflows/website-release.yml),
-[GitHub Pages](../.github/workflows/github-pages.yml), and
+[Installation Assets](../.github/workflows/installation-assets.yml), and
 [shared Rust setup](../.github/actions/setup-rust/action.yml).
 
 | Action | Selected reference |

@@ -1,0 +1,62 @@
+name: Installation Assets
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      recommend:
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  packages: write
+  actions: read
+  attestations: read
+concurrency:
+  group: installation-assets
+  cancel-in-progress: false
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      attestations: read
+    outputs:
+      artifact: ${{ steps.snapshot.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - uses: ./.github/actions/setup-rust
+      - name: Snapshot authenticated GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
+        run: node scripts/release-github.mts installation-assets "$VERSION" "$RECOMMENDATION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installation-source-${{ github.run_attempt }}
+          path: .artifacts/installation-assets/output
+          retention-days: 30
+          if-no-files-found: error
+      - id: snapshot
+        run: echo "artifact=installation-source-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+  website:
+    needs: prepare
+    uses: ./.github/workflows/website-release.yml
+    with:
+      installation-artifact: ${{ needs.prepare.outputs.artifact }}
+      version: ${{ inputs.version }}
+      recommend: ${{ inputs.recommend }}
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+      attestations: read

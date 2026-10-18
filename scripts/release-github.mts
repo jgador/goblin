@@ -5,34 +5,25 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
     appendFileSync,
-    cpSync,
     existsSync,
     mkdirSync,
     mkdtempSync,
     readFileSync,
     rmSync,
-    writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
+import {
+    installationUrl,
+    releaseFiles,
+    validVersion,
+    azureInstallationUrl,
+} from "./installation-assets.mts";
+export { releaseFiles, validVersion } from "./installation-assets.mts";
 
 const githubRepository = "jgador/goblin";
-export const githubPagesUrl = "https://jgador.github.io/goblin";
-const githubPagesDirectory = resolve(".artifacts/github-pages");
-export const releaseFiles = [
-    "azuredeploy.json",
-    "azuredeploy.portal.json",
-    "createUiDefinition.json",
-    "release.json",
-    "SHA256SUMS",
-];
-const versionPattern =
-    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-preview\.[1-9]\d*)?$/;
-export function validVersion(value: string): string {
-    assert.match(value, versionPattern, "Invalid Goblin version");
-    return value;
-}
+const installationDirectory = resolve(".artifacts/installation-assets");
 export function deployUrl(version: string): string {
-    const base = `${githubPagesUrl}/versions/${validVersion(version)}`;
+    const base = `${azureInstallationUrl}/versions/${validVersion(version)}`;
     return `https://portal.azure.com/#create/Microsoft.Template/uri/${encodeURIComponent(`${base}/azuredeploy.portal.json`)}/createUIDefinitionUri/${encodeURIComponent(`${base}/createUiDefinition.json`)}`;
 }
 export function missingAssets(
@@ -143,7 +134,7 @@ function preflight() {
         );
     }
     summary(
-        "Coordinated release approval is configured. GitHub Pages deployment is reported separately.",
+        "Coordinated release approval is configured. Website installation deployment is reported separately.",
     );
 }
 export interface Publication {
@@ -302,7 +293,7 @@ export function publishAssets(
             githubRepository +
             "/releases/tag/" +
             spec.tag +
-            "). GitHub Pages deployment and recommendation are reported separately.",
+            "). Installation assets and website deployment are reported separately.",
     );
 }
 export function publishPair(
@@ -424,7 +415,7 @@ function publish(directory: string) {
                 " at " +
                 record.source.revision +
                 "\n\nDeployment checks passed. Azure installation remains manual.\n\n[Install Goblin](" +
-                githubPagesUrl +
+                installationUrl +
                 "/?version=" +
                 record.version +
                 ")\n\n[Verification run](https://github.com/" +
@@ -473,146 +464,60 @@ function publishedRelease(version: string, directory: string) {
     ]);
     verify(directory);
     assert.equal(record.version, version);
-    assert.equal(released.prerelease, record.channel === "preview");
     assertTag(tag, record.source.revision);
     return record;
 }
-export function updateCatalog(catalog: any, entry: any, recommend: boolean) {
-    assert.equal(catalog.schemaVersion, 1);
-    assert.ok(Array.isArray(catalog.releases));
-    if (catalog.recommended !== null) validVersion(catalog.recommended);
-    for (const release of catalog.releases) validVersion(release.version);
-    const previous = catalog.releases.find(
-        (item: any) => item.version === entry.version,
-    );
-    if (previous)
-        assert.deepEqual(
-            previous,
-            entry,
-            "Published catalog entry is immutable",
-        );
-    else catalog.releases.unshift(entry);
-    if (recommend) catalog.recommended = entry.version;
-    assert.ok(
-        catalog.recommended === null ||
-            catalog.releases.some(
-                (item: any) => item.version === catalog.recommended,
-            ),
-    );
-    return catalog;
-}
-function buildGithubPages(version: string, recommendation: string) {
+async function buildInstallationAssets(
+    version: string,
+    recommendation: string,
+) {
     assert.ok(["recommend", "preserve"].includes(recommendation));
-    mkdirSync(githubPagesDirectory, { recursive: true });
-    const downloadDir = mkdtempSync(
-        join(githubPagesDirectory, "github-pages-release-"),
+    mkdirSync(installationDirectory, { recursive: true });
+    const directory = mkdtempSync(
+        join(installationDirectory, "installation-release-"),
     );
     try {
-        const record = publishedRelease(version, downloadDir);
-        const path = join(githubPagesDirectory, "worktree");
-        assert.ok(!existsSync(path), "GitHub Pages worktree already exists");
-        const branch = api("git/ref/heads/gh-pages");
-        if (branch) {
-            run("git", ["fetch", "origin", "gh-pages"]);
-            run("git", ["worktree", "add", "--detach", path, "FETCH_HEAD"]);
-        } else {
-            run("git", ["worktree", "add", "--detach", path, "HEAD"]);
-            run(
-                "git",
-                [
-                    "checkout",
-                    "--orphan",
-                    `pages-${process.env[Env.GITHUB_RUN_ID.name]}`,
-                ],
-                path,
-            );
-            run("git", ["rm", "-rf", "."], path);
-        }
-        const destination = join(path, "versions", version);
-        if (existsSync(destination)) {
-            for (const name of releaseFiles)
-                assert.equal(
-                    sha(join(destination, name)),
-                    sha(join(downloadDir, name)),
-                    "Versioned GitHub Pages assets changed",
-                );
-        } else {
-            mkdirSync(destination, { recursive: true });
-            for (const name of releaseFiles)
-                cpSync(join(downloadDir, name), join(destination, name));
-        }
-        cpSync("deploy/install", path, { recursive: true });
-        mkdirSync(join(path, "assets"), { recursive: true });
-        cpSync(
-            "assets/branding/svg/icon-light.svg",
-            join(path, "assets/icon.svg"),
-        );
-        for (const weight of ["medium", "semibold"])
-            cpSync(
-                `assets/branding/fonts/inter-18pt-${weight}.ttf`,
-                join(path, `assets/inter-${weight}.ttf`),
-            );
-        cpSync("assets/branding/fonts/OFL.txt", join(path, "assets/OFL.txt"));
-        const catalogPath = join(path, "releases.json");
-        const catalog = existsSync(catalogPath)
-            ? json(catalogPath)
-            : { schemaVersion: 1, recommended: null, releases: [] };
-        const entry = {
+        // Keep the release and installer authentication boundary for explicit
+        // publication/recommendation. Snapshot all other releases from their
+        // signed manifests and GitHub asset digests.
+        publishedRelease(version, directory);
+        run("node", [
+            "scripts/installation-assets.mts",
+            "snapshot",
+            join(installationDirectory, "output"),
+            "--authenticate",
+            "--version",
             version,
-            channel: record.channel,
-            sourceRevision: record.source.revision,
-            manifestSha256: sha(join(downloadDir, "release.json")),
-        };
-        writeFileSync(
-            catalogPath,
-            `${JSON.stringify(updateCatalog(catalog, entry, recommendation === "recommend"), null, 2)}\n`,
-        );
-        writeFileSync(join(path, ".nojekyll"), "");
-        run("git", ["add", "--all"], path);
-        if (run("git", ["diff", "--cached", "--name-only"], path)) {
-            run(
-                "git",
-                [
-                    "-c",
-                    "user.name=github-actions[bot]",
-                    "-c",
-                    "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-                    "commit",
-                    "-m",
-                    `GitHub Pages catalog: Goblin ${version} (${recommendation})`,
-                ],
-                path,
-            );
-            run("git", ["push", "origin", "HEAD:refs/heads/gh-pages"], path);
-        }
-        // Upload only the generated GitHub Pages content, never worktree Git metadata.
-        cpSync(path, join(githubPagesDirectory, "output"), {
-            recursive: true,
-            filter: (source) => source !== join(path, ".git"),
-        });
+            ...(recommendation === "recommend" ? ["--recommend"] : []),
+        ]);
         summary(
-            `GitHub Pages prepared for Goblin ${version}. Recommendation: ${catalog.recommended ?? "none"}. The github_pages / deploy job must complete before this is live.`,
+            "Installation snapshot prepared from GitHub Releases. Approve Website Release to serve it at " +
+                installationUrl +
+                "/.",
         );
     } finally {
-        rmSync(downloadDir, { recursive: true, force: true });
+        rmSync(directory, { recursive: true, force: true });
     }
 }
-async function checkGithubPages(version: string, recommendation: string) {
-    mkdirSync(githubPagesDirectory, { recursive: true });
+async function checkInstallationAssets(
+    version: string,
+    recommendation: string,
+) {
+    mkdirSync(installationDirectory, { recursive: true });
     const directory = mkdtempSync(
-        join(githubPagesDirectory, "github-pages-check-"),
+        join(installationDirectory, "installation-check-"),
     );
     try {
         publishedRelease(version, directory);
         for (const name of releaseFiles) {
             const response = await fetch(
-                `${githubPagesUrl}/versions/${version}/${name}`,
+                `${azureInstallationUrl}/versions/${version}/${name}`,
                 { signal: AbortSignal.timeout(30_000), cache: "no-store" },
             );
             assert.equal(
                 response.status,
                 200,
-                `GitHub Pages asset unavailable: ${name}`,
+                `Installation asset unavailable: ${name}`,
             );
             const digest = createHash("sha256")
                 .update(Buffer.from(await response.arrayBuffer()))
@@ -620,10 +525,10 @@ async function checkGithubPages(version: string, recommendation: string) {
             assert.equal(
                 digest,
                 sha(join(directory, name)),
-                `GitHub Pages asset differs: ${name}`,
+                `Installation asset differs: ${name}`,
             );
         }
-        const response = await fetch(`${githubPagesUrl}/releases.json`, {
+        const response = await fetch(`${azureInstallationUrl}/releases.json`, {
             signal: AbortSignal.timeout(30_000),
             cache: "no-store",
         });
@@ -635,7 +540,7 @@ async function checkGithubPages(version: string, recommendation: string) {
         if (recommendation === "recommend")
             assert.equal(catalog.recommended, version);
         summary(
-            `GitHub Pages: passed. [Install Goblin ${version}](${githubPagesUrl}/?version=${version}).${recommendation === "recommend" ? " This version is now recommended." : " Recommendation unchanged."}`,
+            `Website installation assets: passed. [Install Goblin ${version}](${installationUrl}/?version=${version}).${recommendation === "recommend" ? " This version is now recommended." : " Recommendation unchanged."}`,
         );
     } finally {
         rmSync(directory, { recursive: true, force: true });
@@ -655,15 +560,15 @@ async function main() {
         case "publish":
             publish(resolve(value));
             break;
-        case "github-pages":
-            buildGithubPages(validVersion(value), mode);
+        case "installation-assets":
+            await buildInstallationAssets(validVersion(value), mode);
             break;
-        case "check-github-pages":
-            await checkGithubPages(validVersion(value), mode);
+        case "check-installation-assets":
+            await checkInstallationAssets(validVersion(value), mode);
             break;
         default:
             throw new Error(
-                "Expected preflight, publish, github-pages, or check-github-pages",
+                "Expected preflight, publish, installation-assets, or check-installation-assets",
             );
     }
 }
