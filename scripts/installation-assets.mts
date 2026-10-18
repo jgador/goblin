@@ -127,9 +127,39 @@ export interface InstallationHost {
     releases(): Promise<any[]>;
     asset(release: any, name: string): Promise<Buffer>;
     catalog(): Promise<Buffer | null>;
-    authenticate?(directory: string, record: any): Promise<void>;
+    authenticate?(directory: string, record: any): Promise<boolean>;
 }
 const repository = "jgador/goblin";
+const releaseSigner = `https://github.com/${repository}/.github/workflows/platform-release.yml@refs/heads/master`;
+type VerifiedAttestation = {
+    verificationResult?: {
+        signature?: {
+            certificate?: {
+                buildSignerURI?: string;
+                subjectAlternativeName?: string;
+            };
+        };
+    };
+};
+export function isCurrentReleaseSigner(attestations: unknown): boolean {
+    assert.ok(
+        Array.isArray(attestations) && attestations.length > 0,
+        "No verified release attestations",
+    );
+    const certificates = attestations.map((item: VerifiedAttestation) => {
+        const certificate = item?.verificationResult?.signature?.certificate;
+        assert.equal(typeof certificate?.buildSignerURI, "string");
+        assert.equal(typeof certificate?.subjectAlternativeName, "string");
+        return certificate!;
+    });
+    // Inspect only the certificate identity returned by cryptographic verification.
+    // The provenance predicate is supplied by the signing workflow itself.
+    return certificates.some(
+        (certificate) =>
+            certificate.buildSignerURI === releaseSigner &&
+            certificate.subjectAlternativeName === releaseSigner,
+    );
+}
 async function publicCatalog() {
     const response = await fetch(azureInstallationUrl + "/releases.json", {
         cache: "no-store",
@@ -210,7 +240,8 @@ function githubHost(authenticate: boolean): InstallationHost {
         ...(authenticate
             ? {
                   async authenticate(directory: string, record: any) {
-                      execFileSync(
+                      assert.match(record.workflowRevision, /^[a-f0-9]{40}$/);
+                      const verified = execFileSync(
                           "gh",
                           [
                               "attestation",
@@ -218,17 +249,20 @@ function githubHost(authenticate: boolean): InstallationHost {
                               join(directory, "release.json"),
                               "--repo",
                               repository,
-                              "--signer-workflow",
-                              repository +
-                                  "/.github/workflows/platform-release.yml",
                               "--signer-digest",
                               record.workflowRevision,
                               "--source-ref",
                               "refs/heads/master",
                               "--deny-self-hosted-runners",
+                              "--format",
+                              "json",
                           ],
-                          { stdio: ["ignore", "pipe", "pipe"] },
+                          {
+                              encoding: "utf8",
+                              stdio: ["ignore", "pipe", "pipe"],
+                          },
                       );
+                      return isCurrentReleaseSigner(JSON.parse(verified));
                   },
               }
             : {}),
@@ -311,7 +345,12 @@ export async function snapshot(
                 record.channel,
                 version.includes("-preview.") ? "preview" : "stable",
             );
-            if (host.authenticate) await host.authenticate(path, record);
+            if (host.authenticate && !(await host.authenticate(path, record))) {
+                // Valid releases signed by another workflow remain on GitHub;
+                // they are outside the current installation trust contract.
+                rmSync(path, { recursive: true, force: true });
+                continue;
+            }
             catalog.releases.push({
                 version,
                 channel: record.channel,

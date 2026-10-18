@@ -297,8 +297,12 @@ when one is missing. It reads only published `goblin-v*` releases with the curre
 manifest format, verifies GitHub asset digests and manifest checksums, and serves
 the snapshot locally. Opening tracked HTML directly uses an empty Azure catalog.
 
-Website Release also verifies signed release manifests before retaining the
-snapshot as a GitHub Actions artifact. Publish and deploy use that exact artifact,
+Website Release also verifies signed release manifests and requires the verified
+certificate identity to match `platform-release.yml` on master. Valid releases
+signed by another workflow are excluded; invalid signatures fail validation.
+Local preview verifies release hashes without enforcing this signer policy, so it
+can show releases that are ineligible for production. The validated snapshot is
+retained as a GitHub Actions artifact. Publish and deploy use that exact artifact,
 without re-fetching releases. The Nginx image contains the Azure catalog and five
 files per release, with no Git metadata, installer binary, snapshot provenance,
 or build tooling. Original release assets remain attached to GitHub Releases.

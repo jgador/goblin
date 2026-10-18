@@ -208,7 +208,9 @@ current default.
 An older published version in the current installation format remains
 independently installable. Superseded preproduction manifest formats stay on
 GitHub Releases as historical artifacts, and are excluded from the website catalog.
-A recommendation must use the current format.
+Production also excludes releases signed by another workflow. Invalid signatures
+fail verification; they are never treated as historical releases. A recommendation
+must use the current format and `platform-release.yml` signing identity.
 
 An empty catalog requires a published version before installation is enabled.
 A deployed catalog with no recommendation requires an explicit version selection.

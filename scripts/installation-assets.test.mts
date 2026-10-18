@@ -18,6 +18,7 @@ import {
     validateAssets,
     validateCatalog,
     releaseFiles,
+    isCurrentReleaseSigner,
 } from "./installation-assets.mts";
 
 function fixture(t: test.TestContext) {
@@ -303,6 +304,64 @@ test("snapshot authentication failures stop packaging and empty repositories pro
         recommended: null,
         releases: [],
     });
+});
+
+test("release eligibility uses the verified certificate identity rather than the provenance predicate", () => {
+    const current =
+        "https://github.com/jgador/goblin/.github/workflows/platform-release.yml@refs/heads/master";
+    const attestation = (identity: string) => ({
+        verificationResult: {
+            signature: {
+                certificate: {
+                    buildSignerURI: identity,
+                    subjectAlternativeName: identity,
+                },
+            },
+            statement: {
+                predicate: { runDetails: { builder: { id: current } } },
+            },
+        },
+    });
+    assert.ok(isCurrentReleaseSigner([attestation(current)]));
+    for (const identity of [
+        current.replace("platform-release.yml", "goblin-release.yml"),
+        current.replace("refs/heads/master", "refs/tags/master"),
+        current.replace("jgador/goblin", "example/project"),
+    ])
+        assert.equal(isCurrentReleaseSigner([attestation(identity)]), false);
+    for (const invalid of [null, [], [{}], [{ verificationResult: {} }]])
+        assert.throws(() => isCurrentReleaseSigner(invalid));
+});
+
+test("authenticated snapshots exclude unsupported signers and require compatible requested and hosted releases", async (t) => {
+    const { directory, host, catalog } = fixture(t);
+    host.authenticate = async () => false;
+    host.catalog = async () => null;
+    const output = join(directory, "unsupported");
+    assert.deepEqual(await snapshot(output, {}, host), {
+        schemaVersion: 1,
+        recommended: null,
+        releases: [],
+    });
+    assert.deepEqual(validateAssets(output).releases, []);
+    await assert.rejects(
+        snapshot(
+            join(directory, "requested"),
+            { version: "0.1.0-preview.1" },
+            host,
+        ),
+        /Requested release is not installable/,
+    );
+    host.catalog = async () => Buffer.from(JSON.stringify(catalog));
+    await assert.rejects(
+        snapshot(join(directory, "hosted"), {}, host),
+        /Previously hosted release changed or disappeared/,
+    );
+    host.authenticate = async () => true;
+    assert.equal(
+        (await snapshot(join(directory, "current"), {}, host)).releases.length,
+        1,
+    );
 });
 
 test("website packaging includes only provider catalogs and validated release files", async (t) => {

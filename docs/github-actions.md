@@ -66,7 +66,10 @@ Ordinary Website Release validation runs
 Local preview uses the same command without `--authenticate`; public GitHub
 asset digests and manifest checksums are still checked. The script lists GitHub
 Releases, excludes drafts, unrelated products, and superseded manifest formats,
-and downloads current assets. CI verifies signed manifests too. Only
+and downloads current assets. CI verifies signatures against the recorded workflow
+revision, master ref, and GitHub-hosted runner requirement, then checks the verified
+certificate for the current `platform-release.yml` signer. Valid signatures from
+other workflows are excluded; invalid signatures fail the build. Only
 `azure/releases.json` and the five files per version enter the website image.
 
 Publish and deploy restore the validated `website-installation-<attempt>` artifact rather

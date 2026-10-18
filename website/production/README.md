@@ -28,8 +28,10 @@ The deployed reference is the exact tested image digest, never a mutable tag.
 The image also contains the installation page and a frozen catalog with versioned
 Azure templates. Validation lists the GitHub Releases API and downloads current
 published installation assets directly. It verifies GitHub digests, signed release
-manifests, template hashes, and checksums, then retains the exact snapshot as a
-GitHub Actions artifact. Publish and deploy restore that artifact. The production
+manifests, template hashes, and checksums. The verified certificate must identify
+`platform-release.yml` on master; releases with valid signatures from other
+workflows are excluded, while invalid signatures fail validation. It retains the
+exact snapshot as a GitHub Actions artifact. Publish and deploy restore that artifact. The production
 image packages `install/azure/releases.json` and `install/azure/versions/` only;
 snapshot provenance stays outside the image.
 
