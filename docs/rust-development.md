@@ -112,9 +112,11 @@ using `cargo insta accept`; the tool is installed for tests that need it.
 
 `make test` builds the full application and runs nextest plus Rust documentation
 tests, generated-protocol checks, .NET tests, HTTP tests, and deployment tests.
-Real PostgreSQL checks remain opt-in. `.github/workflows/ci.yml` runs the
-full source, installer, and installation-browser checks for pull requests,
-merge-queue candidates, and supported push branches. Release CI uses the same
+Real PostgreSQL checks remain opt-in. `.github/workflows/ci.yml` selects Rust
+formatting/lints/tests for Rust inputs and retains integration, installer, and
+installation-browser checks for language changes. Documentation-only runs skip
+runtime verification; shared/unclassified inputs select all groups. See
+[CI selection](github-actions.md#ci-selection-and-required-result). Release CI uses the same
 toolchain/helper setup action.
 
 ## Editor and debugging

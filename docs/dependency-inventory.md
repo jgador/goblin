@@ -44,8 +44,10 @@ and digests with versions; regenerate selected schemas and Azure review assets;
 and coordinate duplicated pins. Prefer stable releases and deliberate major-version
 review. Define dashboard, vulnerability-PR, and merge policies explicitly.
 
-Current PR CI already runs `make check`, release-build/installer checks, and browser
-installation journeys. Updates still need checks for the affected integration.
+PR CI selects language checks plus shared integration and installer/browser
+checks from dependency filenames and source extensions. Shared or unclassified
+inputs select all groups; see [CI selection](github-actions.md#ci-selection-and-required-result).
+Updates still need checks for the affected integration.
 PostgreSQL tests are opt-in, authenticated runtime checks need actual service
 access, and Azure installation remains manual.
 

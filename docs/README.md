@@ -42,6 +42,7 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 | [Dependencies](dependencies.md), [Dependency inventory](dependency-inventory.md) | Selected deployment pins and authoritative dependency inputs |
 | [Releases](releases.md), [GitHub Actions](github-actions.md) | Immutable release candidates, approvals, and required checks |
 | [Secret scanning](secret-scanning.md), [Agent workflow](agent-workflow.md) | Contributor security and instruction maintenance |
+| [Agentic maintenance](agentic-maintenance.md) | Owner-only CI policy and documentation upkeep, API budgets, and draft PR publication |
 | [Brand assets](../assets/branding/README.md), [Third-party notices](../THIRD_PARTY_NOTICES.md) | Asset ownership and license provenance |
 
 ## Remaining proposals

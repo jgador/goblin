@@ -44,9 +44,13 @@ not require publishing goblinctl, updating its dependency pin, or creating a tag
 Unreleased goblinctl changes may be present in the source being stabilized.
 
 PRs targeting `master` or `release/*`, and pushes to either, run **CI**.
-The `tests` job builds and verifies the source, release artifacts, and installation
-contracts. The required `test_results` job passes only when `tests` succeeds and
-reports failure when `tests` fails, is cancelled, or is skipped. Job IDs use short
+The `changes` job selects verification from extensions and recognized filenames.
+Selected language, integration, and installer jobs verify affected source and
+contracts. The required `test_results` job passes only when detection and every
+selected job succeed; documentation-only changes pass with intentional runtime
+skips. Failed detection, failed/cancelled selected jobs, and unexpected skips fail
+the required result. See [CI selection](github-actions.md#ci-selection-and-required-result).
+Job IDs use short
 lowercase names with at most one underscore; GitHub displays those IDs directly.
 The checked-in [ruleset template](../.github/goblin-ruleset.json) requires PRs, an up-to-date passing check, and resolved
 review conversations; it blocks deletion and force pushes. It has no bypass

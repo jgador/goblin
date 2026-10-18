@@ -129,6 +129,8 @@ test("parallel Make invocation preserves the full test lifecycle and shares buil
     const stages = [
         "node scripts/generate-contract-values.mts --check",
         "node --test scripts/generate-contract-values.test.mts",
+        "node --test scripts/ci.test.mts",
+        "node --test scripts/agentic-maintenance.test.mts",
         "cargo xtask dependencies check --locked",
         "cargo build --locked --workspace",
         "npm --prefix frontend run build",

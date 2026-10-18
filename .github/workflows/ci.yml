@@ -2,7 +2,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [master, 'release/**']
+    branches: [master, "release/**"]
   merge_group:
   workflow_dispatch:
 permissions:
@@ -11,7 +11,103 @@ concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
-  tests:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      plan: ${{ steps.select.outputs.plan }}
+      csharp: ${{ steps.select.outputs.csharp }}
+      rust: ${{ steps.select.outputs.rust }}
+      javascript: ${{ steps.select.outputs.javascript }}
+      integration: ${{ steps.select.outputs.integration }}
+      installer: ${{ steps.select.outputs.installer }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+      - name: Select verification from changed files
+        id: select
+        run: node scripts/ci.mts detect
+
+  csharp:
+    needs: changes
+    if: needs.changes.outputs.csharp == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-verification
+        with:
+          dotnet: "true"
+      - name: Verify C#
+        run: node scripts/ci.mts run csharp
+
+  rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-verification
+        with:
+          rust: "true"
+          packages: "false"
+      - name: Verify Rust
+        run: node scripts/ci.mts run rust
+
+  javascript:
+    needs: changes
+    if: needs.changes.outputs.javascript == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-verification
+      - name: Verify JavaScript and TypeScript
+        run: node scripts/ci.mts run javascript
+
+  integration:
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-verification
+        with:
+          dotnet: "true"
+          rust: "true"
+          deployment: "true"
+      - name: Verify shared and deployment contracts
+        run: node scripts/ci.mts run integration
+
+  installer:
+    needs: changes
+    if: needs.changes.outputs.installer == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-verification
+        with:
+          dotnet: "true"
+          rust: "true"
+          deployment: "true"
+      - name: Verify the release installer and browser journeys
+        run: node scripts/ci.mts run installer
+
+  test_results:
+    needs: [changes, csharp, rust, javascript, integration, installer]
+    if: always()
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -19,31 +115,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '24'
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            frontend/package-lock.json
-      - uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
-      - uses: ./.github/actions/setup-rust
-      - uses: ./.github/actions/setup-deployment
-      - name: Install locked development dependencies
-        run: make install
-      - name: Test source and deployment contracts
-        run: |
-          make check
-          make release-build
-          make release-check-installer
-          make browser-install
-          make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
-          git diff --exit-code
-  test_results:
-    needs: tests
-    if: always()
-    runs-on: ubuntu-24.04
-    steps:
-      - env:
-          RESULT: ${{ needs.tests.result }}
-        run: '[[ "$RESULT" == success ]]'
+          node-version: "24"
+      - name: Report selected checks and enforce the merge result
+        env:
+          CI_JOB_RESULTS: ${{ toJSON(needs) }}
+        run: node scripts/ci.mts report

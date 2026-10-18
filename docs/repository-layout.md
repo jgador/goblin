@@ -145,6 +145,8 @@ npm run typecheck
 | `make format-rust` | Format Rust using Codex conventions |
 | `make lint-rust` | Lint the Rust workspace |
 | `make test-rust` | Run Rust tests with nextest and then documentation tests |
+| `make test-ci` | Verify changed-file selection, Git comparisons, Actions reporting, and the required merge-result policy |
+| `make test-maintenance` | Verify owner-only maintenance, candidate routing, context bounds, and scoped validation without API calls |
 | `make check` | Run Rust formatting/lints, the full offline test suite, and type checks |
 | `make format` | Format TypeScript, Rust, and handwritten C# |
 | `make local-start` | Start the full local installation with existing safety checks |
@@ -207,7 +209,10 @@ only repeat the implementation.
 
 `make test` is the broad offline suite with real PostgreSQL checks gated by explicit
 test configuration. `make check` adds Rust formatting/lints and type checks. These
-are useful integration/CI gates, not prerequisites for every local edit. Required
+are useful broad integration gates, not prerequisites for every local edit. CI
+selects verification groups from extensions and recognized filenames using
+[`config/ci-verification.json`](../config/ci-verification.json); documentation-only
+changes still report `test_results` while skipping runtime groups. Required
 CI checks still apply; scoped local results do not imply that CI ran.
 See [GitHub Actions](github-actions.md) for workflow names, required checks, and
 ruleset maintenance.

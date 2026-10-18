@@ -12,7 +12,7 @@ RUST_MIN_STACK ?= 8388608
 
 .PHONY: help clean-artifacts install install-node install-rust setup-rust build build-assets \
 	build-tools build-backend build-native typecheck typecheck-scripts check dev start \
-	test test-backend test-js test-frontend test-rust test-rust-doc test-release \
+	test test-backend test-js test-frontend test-rust test-rust-doc test-release test-ci test-maintenance \
 	test-contracts test-task-runner test-secrets test-codex test-headlamp test-browser browser-install \
 	test-logs-ui test-logging format format-typescript format-rust format-rust-check \
 	format-backend lint-rust fix-rust protocol-generate protocol-check \
@@ -120,7 +120,7 @@ website-load-test:
 	bash website/manage.sh load-test $(ARGS)
 
 # Preserve all pretest checks, builds, generators, and offline application tests.
-test: contracts-check test-contracts test-task-runner dependencies-check build deploy-generate test-rust test-release protocol-check kubernetes-check test-backend test-js
+test: contracts-check test-contracts test-task-runner test-ci test-maintenance dependencies-check build deploy-generate test-rust test-release protocol-check kubernetes-check test-backend test-js
 
 # Run .NET tests after building the backend; real database checks remain opt-in.
 test-backend: build-backend
@@ -154,6 +154,14 @@ test-contracts:
 # Verify Make workflow ordering, failure propagation, and explicit flag forwarding.
 test-task-runner:
 	node --test scripts/make-workflows.test.mts
+
+# Verify CI change selection, Git comparisons, summaries, and required-result policy.
+test-ci:
+	node --test scripts/ci.test.mts
+
+# Verify owner-only agentic maintenance, focused context, and scoped patch validation.
+test-maintenance:
+	node --test scripts/agentic-maintenance.test.mts
 
 # Test secret scanning and Git hooks with the installed Gitleaks CLI.
 test-secrets:
