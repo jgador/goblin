@@ -336,7 +336,8 @@ the head drops onto them. It then blinks, looks around, tilts curiously, and
 thinks while the blocks take turns lifting. Finally it hops with happy eyes and
 leaves, so the clip ends on the same empty stage it starts with. The package has
 its own lockfile. It is excluded from the website image, release workflow paths,
-CI installation, and the development container's dependencies.
+and the development container's dependencies. The selected JavaScript CI group
+installs its locked dependencies and runs its type check.
 
 Run these commands from the repository root:
 

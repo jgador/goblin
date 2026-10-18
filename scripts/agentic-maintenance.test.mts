@@ -21,7 +21,9 @@ import {
     inventory,
     prepare,
     proposedPolicy,
+    snapshotProposal,
     validate,
+    validateProposal,
 } from "./agentic-maintenance.mts";
 const root = resolve(import.meta.dirname, "..");
 const policy = await loadPolicy(root);
@@ -384,6 +386,102 @@ test("deleting obsolete documentation requires repairing encoded, titled and ref
         await validate(directory, "documentation");
     });
 });
+test("proposal snapshots preserve feature history and bundles must contain the committed scoped edits", async () => {
+    await fixture(async (directory) => {
+        const baseline = commit(directory);
+        git(directory, ["switch", "-c", "feature"]);
+        await writeFile(join(directory, "source.cs"), "class Source {}\n");
+        const head = commit(directory);
+        const artifacts = join(directory, ".artifacts/agentic-maintenance");
+        await mkdir(artifacts, { recursive: true });
+        await writeFile(
+            join(artifacts, "packet.json"),
+            JSON.stringify({ mode: "documentation", head }),
+        );
+        await writeFile(join(directory, "README.md"), "# Repaired guide\n");
+        await assert.rejects(
+            snapshotProposal(directory, "documentation", {
+                ...owner,
+                [Env.GITHUB_TRIGGERING_ACTOR.name]: "contributor",
+            }),
+            /owner-initiated/,
+        );
+        const branch = "gh-aw/documentation-" + head.slice(0, 12);
+        await writeFile(
+            join(artifacts, "agent_output.json"),
+            JSON.stringify({
+                items: [{ type: "create_pull_request", branch }],
+            }),
+        );
+        await assert.rejects(
+            validateProposal(directory, "documentation", artifacts),
+            /no committed/,
+        );
+        assert.equal(
+            await snapshotProposal(directory, "documentation", owner),
+            true,
+        );
+        assert.equal(git(directory, ["branch", "--show-current"]), branch);
+        assert.equal(
+            git(directory, ["diff", "--name-only", head]),
+            "README.md",
+        );
+        assert.ok(
+            git(directory, ["diff", "--name-only", baseline]).includes(
+                "source.cs",
+            ),
+        );
+        const snapshot = git(directory, ["rev-parse", "HEAD"]);
+        const bundle = join(artifacts, "aw-proposal.bundle");
+        git(directory, ["bundle", "create", bundle, branch, "^" + head]);
+        await validateProposal(directory, "documentation", artifacts);
+        await writeFile(
+            join(directory, "README.md"),
+            "# Later uncommitted repair\n",
+        );
+        await assert.rejects(
+            validateProposal(directory, "documentation", artifacts),
+            /Uncommitted/,
+        );
+        git(directory, ["restore", "README.md"]);
+        git(directory, ["branch", "old-proposal", head]);
+        await rm(bundle);
+        git(directory, [
+            "bundle",
+            "create",
+            bundle,
+            "old-proposal",
+            "^" + baseline,
+        ]);
+        await assert.rejects(
+            validateProposal(directory, "documentation", artifacts),
+            /bundle omits/,
+        );
+        assert.equal(git(directory, ["rev-parse", "HEAD"]), snapshot);
+    });
+});
+test("snapshots skip unchanged documents and reject unauthorized files before creating a commit", async () => {
+    await fixture(async (directory) => {
+        const head = commit(directory);
+        await mkdir(join(directory, ".artifacts/agentic-maintenance"), {
+            recursive: true,
+        });
+        await writeFile(
+            join(directory, ".artifacts/agentic-maintenance/packet.json"),
+            JSON.stringify({ mode: "documentation", head }),
+        );
+        assert.equal(
+            await snapshotProposal(directory, "documentation", owner),
+            false,
+        );
+        await writeFile(join(directory, "source.cs"), "class Source {}\n");
+        await assert.rejects(
+            snapshotProposal(directory, "documentation", owner),
+            /unauthorized/,
+        );
+        assert.equal(git(directory, ["rev-parse", "HEAD"]), head);
+    });
+});
 test("compiled workflows enforce owner-only inference and publication, cost limits, no broad tools, and successful validation before publication", async () => {
     for (const mode of ["ci-policy", "documentation"]) {
         const source = await readFile(
@@ -405,6 +503,33 @@ test("compiled workflows enforce owner-only inference and publication, cost limi
         assert.ok(source.includes('GH_AW_HARNESS_MAX_RETRIES: "0"'));
         assert.ok(source.includes("github: false"));
         assert.ok(source.includes("queue: max"));
+        assert.ok(source.includes('base-branch: "${{ github.ref_name }}"'));
+        const config = compiled
+            .split("GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: ")[1]!
+            .split("\n")[0]!;
+        const handler = JSON.parse(JSON.parse(config));
+        assert.equal(
+            handler.create_pull_request.base_branch,
+            "${{ github.ref_name }}",
+        );
+        const codexConfigLine = compiled
+            .split("GH_AW_CODEX_CONFIG_JSON: '")[1]!
+            .split("'\n")[0]!;
+        const codexConfig = JSON.parse(codexConfigLine);
+        for (const name of [
+            Env.GITHUB_ACTOR.name,
+            Env.GITHUB_TRIGGERING_ACTOR.name,
+            Env.GITHUB_REPOSITORY.name,
+            Env.GITHUB_EVENT_NAME.name,
+            Env.GITHUB_REF.name,
+        ])
+            assert.ok(
+                codexConfig.defaults.shell_environment_policy.include_only.includes(
+                    name,
+                ),
+                "Snapshot authorization metadata must reach the isolated shell: " +
+                    name,
+            );
         assert.match(compiled, /GH_AW_REPORT_INCOMPLETE_CREATE_ISSUE: "false"/);
         assert.ok(!compiled.includes('create_report_incomplete_issue\\":{}'));
         for (const job of [
@@ -426,7 +551,8 @@ test("compiled workflows enforce owner-only inference and publication, cost limi
         assert.match(compiled, /--exclude-env OPENAI_API_KEY/);
         assert.ok(
             compiled.includes(
-                "node scripts/agentic-maintenance.mts validate " + mode,
+                "node scripts/agentic-maintenance.mts validate-proposal " +
+                    mode,
             ),
         );
         assert.ok(!compiled.includes("github-mcp-server"));

@@ -4,6 +4,7 @@ import {
     access,
     appendFile,
     mkdir,
+    readdir,
     readFile,
     writeFile,
 } from "node:fs/promises";
@@ -622,8 +623,113 @@ export async function validate(root: string, mode: Mode): Promise<void> {
     git(root, ["diff", "--check", packet.head]);
     console.log("Validated the scoped " + mode + " patch.");
 }
+export async function snapshotProposal(
+    root: string,
+    mode: Mode,
+    env = process.env,
+): Promise<boolean> {
+    assert.ok(
+        authorized({}, env),
+        "Proposal snapshots require an owner-initiated run",
+    );
+    await validate(root, mode);
+    const packet = JSON.parse(
+        await readFile(resolve(root, outputDirectory, "packet.json"), "utf8"),
+    ) as Packet;
+    assert.equal(
+        git(root, ["rev-parse", "HEAD"]).trim(),
+        packet.head,
+        "Only the scoped snapshot command may commit maintenance edits",
+    );
+    const files = [
+        ...git(root, ["diff", "--name-only", "-z", packet.head]).split("\0"),
+        ...git(root, [
+            "ls-files",
+            "--others",
+            "--exclude-standard",
+            "-z",
+        ]).split("\0"),
+    ].filter(Boolean);
+    if (!files.length) {
+        console.log(
+            "No maintenance edits to snapshot; finish without a pull request.",
+        );
+        return false;
+    }
+    const branch = "gh-aw/" + mode + "-" + packet.head.slice(0, 12);
+    if (git(root, ["branch", "--show-current"]).trim() !== branch)
+        git(root, ["switch", "-c", branch]);
+    git(root, ["add", "--", ...files]);
+    const message = resolve(root, outputDirectory, "proposal-message.txt");
+    await writeFile(
+        message,
+        (mode === "documentation"
+            ? "docs: repair stale documentation"
+            : "ci: update verification policy") +
+            "\n\nValidation: Scoped maintenance validation passed before packaging.\n\nCo-authored-by: codex <242516109+Codex@users.noreply.github.com>\n",
+    );
+    git(root, ["commit", "-F", message]);
+    console.log(
+        "Prepared local proposal snapshot on " +
+            branch +
+            ". Use this branch in the draft PR safe output.",
+    );
+    return true;
+}
+export async function validateProposal(
+    root: string,
+    mode: Mode,
+    artifacts: string,
+): Promise<void> {
+    await validate(root, mode);
+    const output = JSON.parse(
+        await readFile(resolve(artifacts, "agent_output.json"), "utf8"),
+    );
+    assert.ok(Array.isArray(output.items), "Missing safe-output items");
+    const requests = output.items.filter(
+        (item: { type?: string }) => item.type === "create_pull_request",
+    );
+    assert.ok(requests.length <= 1, "Only one proposal is allowed");
+    if (!requests.length) return;
+    const packet = JSON.parse(
+        await readFile(resolve(root, outputDirectory, "packet.json"), "utf8"),
+    ) as Packet;
+    const head = git(root, ["rev-parse", "HEAD"]).trim();
+    assert.notEqual(
+        head,
+        packet.head,
+        "Draft PR has no committed maintenance snapshot",
+    );
+    assert.equal(
+        requests[0].branch,
+        git(root, ["branch", "--show-current"]).trim(),
+        "Draft PR branch differs from the snapshot",
+    );
+    assert.equal(
+        git(root, ["status", "--porcelain"]).trim(),
+        "",
+        "Uncommitted maintenance edits would be omitted from the draft PR",
+    );
+    git(root, ["merge-base", "--is-ancestor", packet.head, head]);
+    const bundles = (await readdir(artifacts)).filter(
+        (file) => file.startsWith("aw-") && file.endsWith(".bundle"),
+    );
+    assert.equal(
+        bundles.length,
+        1,
+        "Draft PR requires exactly one proposal bundle",
+    );
+    const bundle = resolve(artifacts, bundles[0]!);
+    assert.equal(
+        git(root, ["bundle", "list-heads", bundle]).trim(),
+        head + " refs/heads/" + requests[0].branch,
+        "Proposal bundle omits the validated maintenance snapshot",
+    );
+    git(root, ["bundle", "verify", bundle]);
+    console.log("Validated the committed maintenance proposal bundle.");
+}
 async function main() {
-    const [command, rawMode] = process.argv.slice(2);
+    const [command, rawMode, artifacts] = process.argv.slice(2);
     assert.ok(
         rawMode === "ci-policy" || rawMode === "documentation",
         "Expected ci-policy or documentation mode",
@@ -637,9 +743,14 @@ async function main() {
             JSON.parse(await readFile(path, "utf8")),
         );
     } else if (command === "validate") await validate(process.cwd(), rawMode);
-    else
+    else if (command === "snapshot")
+        await snapshotProposal(process.cwd(), rawMode);
+    else if (command === "validate-proposal") {
+        assert.ok(artifacts, "Expected the gh-aw artifact directory");
+        await validateProposal(process.cwd(), rawMode, artifacts);
+    } else
         throw new Error(
-            "Usage: node scripts/agentic-maintenance.mts prepare|validate ci-policy|documentation",
+            "Usage: node scripts/agentic-maintenance.mts prepare|validate|snapshot|validate-proposal ci-policy|documentation [artifacts]",
         );
 }
 if (

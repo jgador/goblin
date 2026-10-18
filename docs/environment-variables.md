@@ -87,7 +87,9 @@ Owner-only agentic preparation also validates `GITHUB_ACTOR`,
 `GITHUB_TRIGGERING_ACTOR`, `GITHUB_REPOSITORY`, and `GITHUB_REF` before examining
 changes. `OPENAI_API_KEY` is a GitHub Actions secret for gh-aw's isolated API proxy;
 the preparation and patch-validation scripts never read it. It remains excluded
-from Goblin's runtime subprocesses. gh-aw-owned budget/retry variables are defined
+from Goblin's runtime subprocesses. Maintenance forwards only the GitHub identity,
+event, and branch metadata needed by its owner-gated local proposal snapshot;
+the API key stays outside the agent shell. gh-aw-owned budget/retry variables are defined
 in its workflow frontmatter and explained in [agentic maintenance](agentic-maintenance.md).
 
 Codex and GitHub subprocesses keep their explicit allowlists and private homes.

@@ -137,6 +137,14 @@ separate safe-output job creates draft PRs after local scope/coverage/link check
 and gh-aw threat detection succeed. It cannot merge or push to the target branch.
 The output allowlists constrain files and `gh-aw/<mode>-*` branch names.
 
+gh-aw packages committed history, so the agent uses the owner-gated `snapshot`
+command to validate and commit only the allowed edits on a local proposal branch
+before requesting its draft PR. This workflow-specific commit packages the
+automated proposal; developer checkouts still follow the explicit commit/push
+agreement. A post-agent check rejects uncommitted edits, an unchanged proposal
+head, or a bundle that omits the validated snapshot. It blocks publication when
+the packaged content differs from the reviewed files.
+
 The repository must allow GitHub Actions to create pull requests. With only
 `OPENAI_API_KEY`, PR publication uses the normal `GITHUB_TOKEN`; GitHub does not
 start CI automatically for its resulting events. See [triggering CI](https://github.github.com/gh-aw/reference/triggering-ci/).
@@ -144,8 +152,11 @@ Run CI on the proposed branch before merging or add a deliberately scoped CI
 trigger credential separately. An OpenAI API key does not grant GitHub write or
 workflow permissions.
 
-Draft PRs target the branch that triggered maintenance, so proposed coverage
-repairs can be included on a feature branch before its required checks pass.
+Draft PRs explicitly set `create-pull-request.base-branch` to `github.ref_name`,
+the branch that triggered maintenance. This keeps feature-branch history out of
+the maintenance diff and lets coverage repairs be included on that branch before
+its required checks pass. Leaving the base implicit can select the repository's
+default branch and make the file limits count unrelated feature changes.
 The Actions summary records the preparation decision, agent and security-review
 token usage, estimated credits, validation outcome, and draft PR or no-change
 result. Incomplete reviews and failures remain in the run report; automatic
