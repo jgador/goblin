@@ -115,6 +115,10 @@ release.
    even when its source is older or the checked-in pin has not been updated.
    Before reuse, preparation verifies the selected installer's archive,
    authenticates its archive and manifest, and checks its tag's source commit.
+   Automatic selection skips historical manifest formats, including releases
+   without `schemaVersion`; their tags still reserve those versions. An explicit
+   override cannot reuse these releases. Failed downloads and invalid manifests
+   that declare the current schema still stop preparation.
 5. If nothing matches, preparation builds goblinctl from the captured source. It
    uses the source's Cargo version when unused, otherwise suggests the next unused
    patch version. An override can select a matching published installer or an

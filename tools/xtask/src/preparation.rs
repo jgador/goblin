@@ -149,7 +149,7 @@ fn select_installer(
     workspace: &str,
     inventory: &Inventory,
     requested: Option<&str>,
-    mut inspect: impl FnMut(&str) -> Result<release::Release>,
+    mut inspect: impl FnMut(&str) -> Result<Option<release::Release>>,
 ) -> Result<Selection> {
     ensure!(
         required.is_subset(&snapshot.capabilities),
@@ -161,7 +161,9 @@ fn select_installer(
     if let Some(version) = requested {
         release::validate_version(version)?;
         if inventory.published_installers.contains(version) {
-            let published = inspect(version)?;
+            let published = inspect(version)?.with_context(|| {
+                format!("Requested published goblinctl {version} uses an unsupported manifest format; omit the override or choose an unused version")
+            })?;
             ensure!(
                 release::compare(snapshot, &published.installer, required).outcome
                     == release::Outcome::Ready,
@@ -194,7 +196,9 @@ fn select_installer(
         .chain(candidates.iter().map(|(_, v)| v.as_str()))
     {
         if inventory.published_installers.contains(version) && seen.insert(version) {
-            let published = inspect(version)?;
+            let Some(published) = inspect(version)? else {
+                continue;
+            };
             if release::compare(snapshot, &published.installer, required).outcome
                 == release::Outcome::Ready
             {
@@ -317,7 +321,7 @@ fn export_source(root: &Path, revision: &str, destination: &Path) -> Result<()> 
     Ok(())
 }
 
-fn published_manifest(version: &str, directory: &Path) -> Result<release::Release> {
+fn published_manifest(version: &str, directory: &Path) -> Result<Option<release::Release>> {
     fs::create_dir_all(directory)?;
     release::download_files(
         release::GITHUB_REPOSITORY,
@@ -325,14 +329,32 @@ fn published_manifest(version: &str, directory: &Path) -> Result<release::Releas
         directory,
         &["release.json"],
     )?;
+    let metadata = files::json(&directory.join("release.json"))?;
+    parse_published_manifest(version, metadata)
+}
+
+fn parse_published_manifest(version: &str, metadata: Value) -> Result<Option<release::Release>> {
+    // Historical formats cannot qualify for reuse, but their version slots stay reserved.
+    // Malformed current records and lookup failures must still stop preparation.
+    ensure!(
+        metadata.is_object(),
+        "Invalid goblinctl {version} dependency manifest: expected a JSON object"
+    );
+    let Some(schema) = metadata.get("schemaVersion") else {
+        return Ok(None);
+    };
+    if let Some(schema) = schema.as_u64()
+        && schema != 1
+    {
+        return Ok(None);
+    }
     // Metadata can rule out incompatible releases without trusting their claims.
     // Only the selected installer is authenticated, before any executable is used.
-    let metadata = files::json(&directory.join("release.json"))?;
     let record: release::Release = serde_json::from_value(metadata)
         .with_context(|| format!("Invalid goblinctl {version} dependency manifest"))?;
     release::validate(&record)?;
     ensure!(record.version == version, "Installer tag/version mismatch");
-    Ok(record)
+    Ok(Some(record))
 }
 
 fn validate_installer_tag(record: &release::Release, tag: &Value) -> Result<()> {
