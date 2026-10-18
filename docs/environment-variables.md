@@ -75,6 +75,23 @@ Release publication receives `CANDIDATE_SHA256` from the sealing job and checks 
 against the downloaded manifest. `PREPARED_ATTEMPT` retains the original preparation
 attempt when failed jobs are rerun; it is not replaced by the retry attempt.
 
+CI detection consumes GitHub-owned `GITHUB_EVENT_NAME`, `GITHUB_EVENT_PATH`, and
+`GITHUB_SHA`, then writes its verified plan to `GITHUB_OUTPUT`. The required result
+job supplies `CI_JOB_RESULTS` as `toJSON(needs)` and writes its report through
+`GITHUB_STEP_SUMMARY`. These definitions live only in the Node catalog because
+application/native consumers do not use them. Missing or invalid CI inputs fail
+verification; they never default to an empty successful selection. See
+[CI selection](github-actions.md#ci-selection-and-required-result).
+
+Owner-only agentic preparation also validates `GITHUB_ACTOR`,
+`GITHUB_TRIGGERING_ACTOR`, `GITHUB_REPOSITORY`, and `GITHUB_REF` before examining
+changes. `OPENAI_API_KEY` is a GitHub Actions secret for gh-aw's isolated API proxy;
+the preparation and patch-validation scripts never read it. It remains excluded
+from Goblin's runtime subprocesses. Maintenance forwards only the GitHub identity,
+event, and branch metadata needed by its owner-gated local proposal snapshot;
+the API key stays outside the agent shell. gh-aw-owned budget/retry variables are defined
+in its workflow frontmatter and explained in [agentic maintenance](agentic-maintenance.md).
+
 Codex and GitHub subprocesses keep their explicit allowlists and private homes.
 Adding a definition grants no forwarding permission. The catalogs also name
 test-only failure controls and negative credential-inheritance fixtures; those

@@ -1,0 +1,38 @@
+name: Set up selected verification
+description: Prepare only the toolchains needed by a CI verification group.
+inputs:
+  dotnet:
+    description: Install the selected .NET SDK.
+    default: "false"
+  rust:
+    description: Install Rust and its verification tools.
+    default: "false"
+  deployment:
+    description: Install offline deployment tools.
+    default: "false"
+  packages:
+    description: Install the root and frontend locked Node packages.
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v5
+      with:
+        node-version: "24"
+        cache: npm
+        cache-dependency-path: |
+          package-lock.json
+          frontend/package-lock.json
+          website/video/package-lock.json
+    - uses: actions/setup-dotnet@v5
+      if: inputs.dotnet == 'true'
+      with:
+        global-json-file: global.json
+    - uses: ./.github/actions/setup-rust
+      if: inputs.rust == 'true'
+    - uses: ./.github/actions/setup-deployment
+      if: inputs.deployment == 'true'
+    - name: Install locked development packages
+      if: inputs.packages == 'true'
+      shell: bash
+      run: make install-node

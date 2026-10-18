@@ -1,15 +1,14 @@
 # Second-runtime integration experiment
 
 The architecture is prepared for a second runtime; only Codex is implemented.
-Use GitHub Copilot CLI as the first bounded experiment because an installed
-1.0.83 CLI was available for read-only interface inspection on 2026-09-19.
+GitHub Copilot CLI is the proposed first bounded experiment. Validate its current
+supported interface before implementation; the original CLI inspection is historical.
 This choice does not enable it in production or select runtime-switching policy.
 
-`copilot --help` confirms non-interactive `--prompt`, `--output-format json`
-(JSONL), model selection, tool/path/URL permissions, streaming controls, and
-session resume. Help output establishes interface candidates, not behavioral
-parity, cancellation guarantees, or working authentication. No account
-credentials or authenticated Copilot task were used during that inspection.
+The earlier read-only inspection identified non-interactive prompt/JSONL output,
+model selection, tool/path/URL permissions, streaming, and native resume as
+candidates. Recheck them on the chosen pinned version. Help output does not
+establish authentication, cancellation guarantees, or parity with Codex.
 
 Build an experimental adapter behind the existing Goblin execution contract:
 
@@ -18,7 +17,8 @@ Build an experimental adapter behind the existing Goblin execution contract:
    runtime, model, native session reference, and Goblin attempt ID.
 2. Capture JSONL progress and a final result, then kill and restart observation.
    Demonstrate duplicate-delivery fencing, failure attention, confirmed stop,
-   credential removal, and a saved branch through the same hosting contract.
+   credential removal, and continuation from the retained Work PVC/local Git HEAD through the same
+   hosting contract.
 3. Advertise only demonstrated capabilities. Treat a user question as a completed
    interaction if a stable live-input contract cannot be validated. Leave native
    session resume and live approvals disabled until independently tested.

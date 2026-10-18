@@ -1,7 +1,7 @@
 # Rust development
 
-Goblin follows the shared Rust development workflow in `openai/codex`, compared
-against local checkout `f0f38b68f7` on 2026-09-27. Its Cargo workspace lives at the
+Goblin uses a pinned Rust development workflow influenced by `openai/codex`.
+Goblin's own configuration is authoritative. Its Cargo workspace lives at the
 repository root, with the permanent operator CLI in `tools/goblinctl` and build
 tasks in `tools/xtask`. The .NET backend remains responsible for Work lifecycle
 rules and SQL migrations.
@@ -112,8 +112,11 @@ using `cargo insta accept`; the tool is installed for tests that need it.
 
 `make test` builds the full application and runs nextest plus Rust documentation
 tests, generated-protocol checks, .NET tests, HTTP tests, and deployment tests.
-Real PostgreSQL checks remain opt-in. `.github/workflows/ci.yml` runs the
-Rust checks for pull requests and `master`; the release workflow uses the same
+Real PostgreSQL checks remain opt-in. `.github/workflows/ci.yml` selects Rust
+formatting/lints/tests for Rust inputs and retains integration, installer, and
+installation-browser checks for language changes. Documentation-only runs skip
+runtime verification; shared/unclassified inputs select all groups. See
+[CI selection](github-actions.md#ci-selection-and-required-result). Release CI uses the same
 toolchain/helper setup action.
 
 ## Editor and debugging
@@ -157,18 +160,10 @@ All development tools stay on developer machines and CI runners. Production
 receives the compiled `goblinctl` archive described in [the native tooling
 guide](goblinctl.md), without Rust, Cargo, Make, nextest, or Python.
 
-## Verification — 2026-09-27
+## Verification
 
-The setup script installed all listed versions and a second run left them in
-place. The WSL editor extensions were installed, and the debugger configuration
-was checked against CodeLLDB's configuration schema. Formatting, Clippy, all
-seven nextest cases, the documentation-test command, and the complete Stop hook
-passed. The full `make test` suite, four setup browser journeys, and 14 focused
-checks against the refreshed musl archive also passed. Repeated packaging produced
-identical archive bytes, and the archive checksum agrees with the release pin
-and both ARM templates.
-
-Live PostgreSQL coverage remains unconfigured: 39 .NET database-dependent tests
-and one HTTP test were skipped. GitHub workflows were not run, and no release was
-published. See [the migration verification record](goblinctl.md#migration-verification--2026-09-27)
-for the application/deployment checks and their remaining limits.
+Run the formatting, lint, and nextest/documentation-test commands above for the
+affected crate. Installer changes also need offline packaging and deployment
+checks. Report checks actually performed; historical counts and a matching
+archive checksum do not verify today's executable behavior. PostgreSQL and
+authenticated runtime checks remain separate integration coverage.

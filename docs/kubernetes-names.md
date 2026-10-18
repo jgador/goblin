@@ -80,27 +80,18 @@ ServiceAccount binding to `sandbox`, preserving upstream permissions.
 Environment references use `k8s/<namespace>/work-<work-id>`. The recorded namespace
 remains in use even when the configured default changes.
 
-## Existing local storage
+## Storage ownership
 
-PVC names cannot be renamed in place. Inventory the currently bound application
-PVC, its PV, reclaim policy, backing directory, and current data-directory setting
-before applying these templates to an existing installation. Never initialize
-an empty replacement and describe it as preserving the installation.
+Current installations use the names and formats above. There are no compatibility
+aliases or automatic storage migrations. Source edits do not change a running
+installation. Development installations with superseded formats can be recreated
+after confirming ownership and explicitly choosing their deletion scope.
 
-A safe stateless transition can use a task-local overlay referencing the existing
-PVC, while moving the application data directory on that same filesystem after
-stopping its writers. Verify replacement health before retiring superseded
-stateless resources. This leaves the PVC name and backing path to transition
-separately. A full claim transition requires retaining the backing volume and
-controlled claim rebinding or a verified copy; a `Delete` reclaim policy must
-never be allowed to delete application data. Do not delete Work PVCs, credentials,
-or reset k3s to accomplish a naming change.
-
-Goblin is unreleased; new installations use only the current names and formats.
-There are no compatibility aliases or automatic storage migrations. Editing the
-checkout alone does not change a running installation. The website's former
-namespace may be removed only after checking every namespaced resource and
-confirming no unrelated resources remain.
+Before applying storage manifests, inspect bound PVCs, PVs, reclaim policies,
+backing directories, and configured data paths. A new empty claim does not preserve
+an installation. A naming change alone never authorizes deleting Work PVCs,
+credentials, or resetting Kubernetes. Website removal targets only its owned
+resources and never the shared namespace.
 
 Published installer input inventories in `dependencies.lock.json` record the
 original release bytes. They are historical provenance, not current paths;
@@ -108,29 +99,10 @@ regenerate deployment checksums with `cargo xtask dependencies resolve` and
 package a new installer to distribute changed embedded scripts. Never rewrite
 published hashes to describe unpublished source.
 
-## Local verification — 2026-10-12
+## Verification
 
-The local installation runs healthy `platform` and `website` workloads in
-`goblin`. Platform routes through the existing browser port 8788; website Docker
-development and Kubernetes preview retain ports 5173 and 5174. Website redeployment
-left the platform pod identity and restart count unchanged. HPA CPU metrics are
-active. The website-only one-visit smoke loaded all twelve HTTP assets; it does
-not establish new capacity measurements. The existing Headlamp and logging UI
-integration checks exercise local cluster resources with isolated test credentials.
-The disposable k3s logging smoke verified platform-container collection, buffering,
-collector restart, and recovery. The local collector also ingests records tagged
-with container `platform`.
-
-The application directory moved on the same bound filesystem to `/data/platform`,
-retaining its inode and permissions. The original application claim and PV backing
-path remain. The installed overlay intentionally references that existing claim
-and omits the new `platform-data` PVC declaration. Claim replacement/rebinding is
-still pending; applying freshly generated manifests without addressing this local
-exception would create an empty replacement. Database, logging, and Work PVCs and
-credentials were retained. Superseded stateless platform resources and the old
-website namespace were retired after ownership and replacement-health checks.
-
-The full offline suite passed, with PostgreSQL-dependent checks left opt-in.
-Azure assets were generated and tested offline; no Azure installation or
-authenticated model execution was performed. The current installer was rebuilt,
-integrity-checked, and activated locally; the published dependency pin is unchanged.
+Offline naming/deployment tests check labels, selectors, paths, and installer
+contracts. Website and logging runtime checks use explicit local clusters and
+isolated fixtures. Inspect actual PVC bindings, network access, routes, and workload
+health on the intended installation; a dated local inspection cannot establish
+its present storage identity or deployed version. Azure checks remain manual.

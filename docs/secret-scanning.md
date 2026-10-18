@@ -15,7 +15,8 @@ and verify it against the release's checksums file.
 For example, this installs the tested version on Linux x86-64 without root:
 
 ```bash
-task_gitleaks_dir=$(mktemp -d)
+mkdir -p .artifacts/gitleaks-setup
+task_gitleaks_dir=$(mktemp -d .artifacts/gitleaks-setup/download-XXXXXX)
 curl -fL --retry 3 -o "$task_gitleaks_dir/gitleaks.tar.gz" \
   https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
 printf '%s  %s\n' \
@@ -63,12 +64,14 @@ available locally; it does not fetch from GitHub. Local hooks must be set up in
 each clone and do not enforce checks on GitHub or on commits that bypass hooks.
 
 Findings show only the snapshot, path, line, rule, and (for history) commit.
-Secret values and source excerpts are never printed. Temporary snapshots and
-redacted reports are created in a private directory outside the checkout and
-removed when the scan finishes. Exit status is `0` for no findings, `1` for
+Secret values and source excerpts are never printed. The wrapper currently creates
+snapshots and redacted reports in a private OS temporary directory and removes
+them when the scan finishes. This is existing tool behavior; task-authored review
+output belongs under `.artifacts/` per [AGENTS.md](../AGENTS.md#verification-and-artifacts).
+Exit status is `0` for no findings, `1` for
 candidates needing review, and `2` for an incomplete scan or tool error.
 
-Ignored, untracked runtime files such as `.goblin-secrets/owner-password`, `.goblin-platform/`, `.goblin-browser-test/`,
+Ignored, untracked runtime files such as `.goblin-secrets/owner-password`, `.goblin-platform/`, `.artifacts/playwright/`,
 `auth.json`, `owner-password`, and `.env` are not opened. Tracked files are checked
 even when an ignore rule matches them. Symlinks are scanned as their link text,
 without following the target. Unmerged entries and submodules require separate

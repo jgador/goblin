@@ -135,9 +135,9 @@ separate concern.
 
 The unreleased SQL baseline contains metadata-only Git checkpoints and PVC
 inspection sessions. Update `0001_initial.sql` directly and regenerate EF mappings
-from that schema. A local installation upgrading from the archive implementation
-must remove the archive columns and obsolete inspection restore fields before
-running this version; preserve Work records and PVCs. A Git checkpoint alone is
+from that schema. Superseded development database formats require deliberate
+recreation, not in-place column edits; see [database setup](database.md#apply-the-sql-schema).
+Database recreation does not authorize deleting Work PVCs. A Git checkpoint alone is
 never proof that filesystem data can be discarded.
 
 Verification covers core suspension without a file archive, preserved dirty and
@@ -146,11 +146,3 @@ PostgreSQL checkpoints, durable inspection reservations, bounded PVC file reads,
 and the inspection API. Run the opt-in PostgreSQL tests explicitly; default test
 runs skip them when no connection is configured. Kubernetes and runtime checks
 remain necessary for the deployed integration boundary.
-
-A Kubernetes check on 2026-09-26 ran the production worker with pinned Codex
-0.155.1 and local model/GitHub broker fixtures. Codex edited the checkout and wrote
-a 140 MiB tool file outside Git. The turn produced a result, sent 71 bytes of Git
-checkpoint JSON, and suspended with its PVC intact. A separate inspection pod
-read the edited file from that PVC, and no workspace archive was created. This
-check exercised the real runtime, worker, Kubernetes hosting, and file reader;
-GitHub publication and model responses used local fixtures.

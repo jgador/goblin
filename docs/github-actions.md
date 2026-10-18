@@ -11,7 +11,7 @@ operation. Use **platform** for the main product built from `backend/` and
 | --- | --- | --- |
 | Workflow title (`name`) | One or two words in Title Case; uppercase acronyms and official product capitalization | `CI`, `Platform Release`, `Installation Assets`, `Website Release` |
 | Workflow filename | Short lowercase name; kebab-case between words, with `.yml` | `ci.yml`, `platform-release.yml` |
-| Job ID | Short lowercase name with at most one underscore | `tests`, `seal`, `test_results` |
+| Job ID | Short lowercase name with at most one underscore | `changes`, `rust`, `test_results` |
 | Job display name | Omit job-level `name` so GitHub displays the job ID | `validate`, `publish`, `deploy` |
 | Step name | Descriptive phrase explaining the operation | `Verify the website installation assets` |
 
@@ -19,9 +19,8 @@ Keep the repository name out of workflow titles and job IDs when the Actions UI
 already supplies that context. Prefer specific operations such as `verify`, `seal`,
 `publish`, and `deploy` over generic names such as `checks` or `gate`.
 
-Required check names must be distinct across workflows. CI's `tests` job already
-uses that name, so Website Release uses `validate`. Its required check is
-`validate` from GitHub Actions, while CI's required check is `test_results`. Workflow titles do
+Required check names must be distinct across workflows. Website Release's required
+check is `validate` from GitHub Actions, while CI's required check is `test_results`. Workflow titles do
 not qualify required status-check names. Reusing operation IDs such as `publish`
 or `deploy` in independent workflows is fine when those jobs are not required
 branch checks.
@@ -33,7 +32,9 @@ Reusable workflows can appear with caller/called job paths, such as
 
 | Workflow | File | Jobs | Purpose |
 | --- | --- | --- | --- |
-| CI | [ci.yml](../.github/workflows/ci.yml) | `tests`, `test_results` | Verify source, release artifacts, and installation contracts; report the required result |
+| CI | [ci.yml](../.github/workflows/ci.yml) | `changes`, `csharp`, `rust`, `javascript`, `integration`, `installer`, `test_results` | Select affected verification groups and report the required merge result |
+| CI Maintenance | [ci-policy.md](../.github/workflows/ci-policy.md) | `prepare` and generated gh-aw jobs | Owner-only proposed CI policy updates |
+| Docs Maintenance | [documentation.md](../.github/workflows/documentation.md) | `prepare` and generated gh-aw jobs | Owner-only documentation drift review and draft corrections |
 | Platform Release | [platform-release.yml](../.github/workflows/platform-release.yml) | `prepare`, `verify`, `seal`, `publish`, `installation`, `report` | Publish the verified release pair, then prepare installation assets and deploy the website through its production approval |
 | Installation Assets | [installation-assets.yml](../.github/workflows/installation-assets.yml) | `prepare`, `website` | Prepare the catalog from authenticated published assets, then call Website Release with the exact snapshot artifact |
 | Recommend Release | [recommend-release.yml](../.github/workflows/recommend-release.yml) | `installation` | Recommend an existing release or repair its installation hosting through Website Release |
@@ -53,6 +54,79 @@ GitHub's **Review deployments** UI also manages environment approval for the
 release publication job. That UI label does not mean the job installs the platform.
 See [platform releases](releases.md) and [website production](../website/production/README.md)
 for operating procedures.
+
+## CI selection and required result
+
+[`config/ci-verification.json`](../config/ci-verification.json) owns trigger lists,
+verification commands, registered project manifests, and cross-group requirements.
+[`scripts/ci.mts`](../scripts/ci.mts) detects changes, runs a selected group, and
+reports results. Detection uses extensions and recognized filenames anywhere in
+the repository: Rust under `backend/` still selects Rust. Specific Cargo, NuGet,
+Node, toolchain, and compiler configuration names take precedence over generic
+JSON/TOML extensions. Multiple matches select multiple groups.
+Markdown under `.github/workflows/` is executable agentic configuration and selects
+full verification; ordinary documentation Markdown still skips runtime tests.
+The shared Codex Node fixture and root Node manifests (which pin the runtime used
+by C# tests) also select their C# consumers through explicit file dependencies;
+directory names do not determine a language's ownership.
+
+| Changed input | Selected verification |
+| --- | --- |
+| Markdown or reStructuredText only | Detection and `test_results`; no dependency installation, builds, or runtime tests |
+| C# source/project/configuration | C# plus shared integration and installer checks |
+| Rust source/Cargo/toolchain/test configuration | Rust formatting, Clippy, tests, and documentation tests, plus integration and installer checks |
+| JavaScript/TypeScript, Node configuration, HTML, or CSS | Browser/module, release-script, website, and video checks, plus integration and installer checks |
+| Shared build/deployment inputs or unclassified files | Every configured group |
+| Known unsupported language or unregistered project manifest | Existing groups run; the required result fails with registration instructions |
+
+Integration checks retain generated contract values, dependency/schema checks,
+frontend, release-script, HTTP, and offline deployment tests. Installer checks retain the musl release build,
+compiler-input verification, and the existing setup/install browser journeys.
+Their inclusion for each language is conservative: C# HTTP contracts, Rust
+embedded assets, and browser setup code cross those boundaries. Separate runners
+prevent concurrent build/cleanup commands from sharing output. Pure language
+tests for an unchanged language can skip even when its build is required by an
+integration group. The full local `make check` remains available.
+
+PR detection uses the merge base of the payload's base/head commits; pushes compare
+the complete before/after range. Merge queues compare the group's base/head.
+Manual runs and new-branch pushes select full verification from the tracked head
+snapshot. Checkout fetches complete history. Invalid or unavailable comparisons
+fail detection rather than assuming no changes. Additions, deletions, and both
+sides of renames are classified; renaming source to Markdown cannot hide removal.
+Removed unsupported source or project manifests still select full verification,
+but do not require registration of a runner for code absent from the head snapshot.
+
+`test_results` always runs and needs detection plus every verification group
+directly. It accepts only successful detection, a valid/consistent selection plan,
+success for every selected group, and `skipped` for every unselected group.
+Missing jobs, failed/cancelled selected jobs, unexpected skips, unsupported
+languages, and unregistered projects fail it. A documentation-only plan passes
+with explicitly skipped runtime groups. Keep the workflow enabled for all changes;
+workflow-level path filtering would prevent the required result from reporting.
+
+The result step writes an Actions job summary with comparison, changed-file count,
+group selection, representative reasons, outcomes, and the overall merge result.
+GitHub Actions publishes the job's check conclusion automatically. No Commit
+Status API call or additional write permission is used. The required check remains
+`test_results` from GitHub Actions, so the existing ruleset name/source is preserved.
+Workflow cancellation or runner/setup failure still prevents a passing check.
+
+To add a language or independent project, register triggers and manifests, define
+commands that actually include that project, add its toolchain setup/job and
+selection output, and include it in `test_results.needs`. A configured group with
+no reported job cannot pass. Unknown extensions select existing full verification;
+that fallback does not establish coverage for a language with no configured runner.
+Go and other recognized unsupported source types fail until explicitly configured.
+The [owner-only maintenance workflows](agentic-maintenance.md) discover manifest
+drift and propose policy updates in draft PRs using the repository's OpenAI key.
+
+Run `make test-ci`, `make test-task-runner`, `make typecheck-scripts`, and workflow
+lint when changing this policy. Tests exercise real Git ranges/renames, output
+transport, documentation/mixed/configuration changes, registration, command
+failure, summary escaping, and required-result failures. Actual check publication
+and merge-queue behavior require a GitHub Actions run. Website Release is an
+independent workflow and retains its own `validate` check and triggers.
 
 ## Installation commands and artifacts
 
@@ -90,11 +164,10 @@ paths, required-check templates, scripts that select checks or signer workflows,
 and operating documentation together. Preserve triggers, commands, permissions,
 approval environments, and concurrency behavior when changing names.
 
-For the Website Release rename, wait for `validate` to pass on the rename PR.
-Then replace the active website ruleset's `website-checks` requirement with `validate`, selecting
-**GitHub Actions** as the source, before merging. The local
-[website ruleset template](../website/production/github-ruleset.json) does not
-update the live ruleset. Keep CI's existing `test_results` requirement.
+The checked-in website ruleset requires `validate` from GitHub Actions; CI uses
+`test_results`. The [ruleset template](../website/production/github-ruleset.json)
+does not update the live ruleset. When changing check names, review the active
+ruleset and arrange its update before merging.
 
 ## Release signing identity
 
@@ -106,7 +179,6 @@ rejects self-hosted runners.
 
 Installers signed by superseded workflow paths cannot be reused by the current
 release tooling. Publish a new installer version through **Platform Release**
-before reuse; preserve existing tags and published bytes. After this rename is
-merged, start a fresh release run from updated `master`, since reruns retain the
-original workflow revision. Actual signing, publication, and website installation deployment
+before reuse; preserve existing tags and published bytes. After changing the signing workflow, start a fresh release run from updated
+`master`, since reruns retain the original workflow revision. Actual signing, publication, and website installation deployment
 require verification in GitHub Actions; local checks cover their offline contracts.

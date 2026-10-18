@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "documentation": {
+    "extensions": [".md", ".rst"],
+    "filenames": []
+  },
+  "fullVerification": {
+    "extensions": [
+      ".sql",
+      ".bicep",
+      ".sh",
+      ".ps1",
+      ".yaml",
+      ".yml",
+      ".conf",
+      ".service",
+      ".dockerignore"
+    ],
+    "filenames": [
+      "Makefile",
+      "Dockerfile",
+      "dependencies.toml",
+      "dependencies.lock.json",
+      ".editorconfig",
+      ".gitignore",
+      ".dockerignore",
+      ".prettierrc",
+      ".prettierignore"
+    ],
+    "filenamePatterns": ["Dockerfile.*", "*.schema.json"]
+  },
+  "unsupportedLanguages": {
+    "Go": {
+      "extensions": [".go"],
+      "filenames": ["go.mod", "go.sum", "go.work", "go.work.sum"]
+    },
+    "Python": {
+      "extensions": [".py", ".pyi"],
+      "filenames": [
+        "pyproject.toml",
+        "requirements.txt",
+        "uv.lock",
+        "Pipfile",
+        "Pipfile.lock"
+      ]
+    },
+    "Swift": {
+      "extensions": [".swift"],
+      "filenames": ["Package.swift", "Package.resolved"]
+    },
+    "JVM": {
+      "extensions": [".java", ".kt", ".kts", ".scala"],
+      "filenames": ["pom.xml", "build.gradle", "build.gradle.kts"]
+    },
+    "C/C++": {
+      "extensions": [".c", ".h", ".cc", ".cpp", ".cxx", ".hpp"],
+      "filenames": ["CMakeLists.txt", "meson.build"]
+    },
+    "Ruby": {
+      "extensions": [".rb"],
+      "filenames": ["Gemfile", "Gemfile.lock"]
+    },
+    "PHP": {
+      "extensions": [".php"],
+      "filenames": ["composer.json", "composer.lock"]
+    },
+    "Dart": {
+      "extensions": [".dart"],
+      "filenames": ["pubspec.yaml", "pubspec.lock"]
+    },
+    "Zig": {
+      "extensions": [".zig"],
+      "filenames": ["build.zig.zon"]
+    }
+  },
+  "groups": {
+    "csharp": {
+      "label": "C#",
+      "extensions": [
+        ".cs",
+        ".csproj",
+        ".sln",
+        ".slnx",
+        ".props",
+        ".targets",
+        ".resx"
+      ],
+      "filenames": [
+        "global.json",
+        "NuGet.Config",
+        "packages.config",
+        "packages.lock.json",
+        "Directory.Build.rsp"
+      ],
+      "requires": ["integration", "installer"],
+      "commands": [
+        "make build-assets protocol-check kubernetes-check test-backend",
+        "git diff --exit-code"
+      ],
+      "projectManifests": [
+        "backend/src/Goblin.Application/Goblin.Application.csproj",
+        "backend/src/Goblin.Contracts/Goblin.Contracts.csproj",
+        "backend/src/Goblin.Core/Goblin.Core.csproj",
+        "backend/src/Goblin.Execution.Codex/Goblin.Execution.Codex.csproj",
+        "backend/src/Goblin.Execution/Goblin.Execution.csproj",
+        "backend/src/Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj",
+        "backend/src/Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj",
+        "backend/src/Goblin.Integrations.Slack/Goblin.Integrations.Slack.csproj",
+        "backend/src/Goblin.Persistence/Goblin.Persistence.csproj",
+        "backend/src/Goblin.Protocol/Goblin.Protocol.csproj",
+        "backend/src/Goblin.Web/Goblin.Web.csproj",
+        "backend/tests/Goblin.Application.Tests/Goblin.Application.Tests.csproj",
+        "backend/tests/Goblin.Core.Tests/Goblin.Core.Tests.csproj",
+        "backend/tests/Goblin.Database.Tests/Goblin.Database.Tests.csproj",
+        "backend/tests/Goblin.LoggingSmoke/Goblin.LoggingSmoke.csproj",
+        "backend/tests/Goblin.Persistence.Tests/Goblin.Persistence.Tests.csproj",
+        "backend/tests/Goblin.Protocol.Tests/Goblin.Protocol.Tests.csproj",
+        "backend/tests/Goblin.TestHost/Goblin.TestHost.csproj",
+        "backend/tests/Goblin.Tests/Goblin.Tests.csproj",
+        "backend/tools/Goblin.Database.Scaffolding/Goblin.Database.Scaffolding.csproj",
+        "backend/tools/Goblin.Database/Goblin.Database.csproj"
+      ],
+      "manifestExtensions": [".csproj"]
+    },
+    "rust": {
+      "label": "Rust",
+      "extensions": [".rs"],
+      "filenames": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain",
+        "rust-toolchain.toml",
+        "rustfmt.toml",
+        ".rustfmt.toml",
+        "clippy.toml",
+        ".clippy.toml",
+        "nextest.toml"
+      ],
+      "pathSuffixes": [".cargo/config", ".cargo/config.toml"],
+      "requires": ["integration", "installer"],
+      "commands": [
+        "make install-rust format-rust-check lint-rust test-rust",
+        "git diff --exit-code"
+      ],
+      "projectManifests": [
+        "Cargo.toml",
+        "tools/goblinctl/Cargo.toml",
+        "tools/xtask/Cargo.toml"
+      ],
+      "manifestFilenames": ["Cargo.toml"]
+    },
+    "javascript": {
+      "label": "JavaScript / TypeScript",
+      "extensions": [
+        ".js",
+        ".jsx",
+        ".mjs",
+        ".cjs",
+        ".ts",
+        ".tsx",
+        ".mts",
+        ".cts",
+        ".css",
+        ".html"
+      ],
+      "filenames": [
+        "package.json",
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "bun.lock",
+        "bun.lockb",
+        ".npmrc",
+        ".nvmrc",
+        ".node-version"
+      ],
+      "filenamePatterns": ["tsconfig*.json", "jsconfig*.json"],
+      "dependentPaths": [
+        "tests/fixtures/fake-codex.mts",
+        "package.json",
+        "package-lock.json"
+      ],
+      "dependentGroups": ["csharp"],
+      "requires": ["integration", "installer"],
+      "commands": [
+        "make typecheck-scripts build-assets",
+        "node scripts/clean-output.mts",
+        "node_modules/.bin/tsc -p tsconfig.json",
+        "node --test dist/tests/frontend/*.test.js",
+        "make test-release test-ci test-maintenance",
+        "npm --prefix website run check",
+        "npm --prefix website/video ci",
+        "npm --prefix website/video run check",
+        "git diff --exit-code"
+      ],
+      "projectManifests": [
+        "package.json",
+        "frontend/package.json",
+        "website/package.json",
+        "website/video/package.json"
+      ],
+      "manifestFilenames": ["package.json"]
+    },
+    "integration": {
+      "label": "Shared contracts / HTTP / deployment",
+      "extensions": [],
+      "filenames": [],
+      "requires": [],
+      "commands": [
+        "make contracts-check test-contracts test-task-runner test-ci test-maintenance test-release dependencies-check build deploy-generate",
+        "node --test dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
+        "node --test website/release.test.mjs",
+        "git diff --exit-code"
+      ]
+    },
+    "installer": {
+      "label": "Release installer / browser journeys",
+      "extensions": [],
+      "filenames": [],
+      "requires": [],
+      "commands": [
+        "make release-build release-check-installer browser-install",
+        "make test-browser ARGS=\"tests/e2e/setup.spec.ts tests/e2e/install.spec.ts\"",
+        "git diff --exit-code"
+      ]
+    }
+  }
+}

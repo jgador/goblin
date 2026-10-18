@@ -1,24 +1,17 @@
-# Try the authentication preview
+# Authentication and connection checks
 
-This authentication implementation is a preview. It implements ChatGPT device-code
-login, OpenAI API-key login, and an automatic connection check using the saved account
-through Codex, the current primary and only implemented agent integration.
-Review authentication first;
-GitHub uses the official GitHub CLI device flow, configured alongside Codex in
-**Settings → GitHub**. Codex sign-in is under **Settings → AI connections →
-Manage connection** on the Codex card. See [execution hosting](execution-hosting.md) for
-repository permissions and credential isolation.
-
-The [architecture plan](architecture-refactoring-plan.md) prepares for other
-agents, including Claude and GitHub Copilot. Their authentication flows and
-runtime capabilities are not implemented by this preview; OpenAI sign-in only
-configures the Codex connection.
+Goblin has one owner password and a Codex connection supporting ChatGPT device-code
+login or an OpenAI API key. A connection check verifies model access using the saved
+account. Open **Settings → AI connections → Manage connection** on the Codex card.
+GitHub uses the official GitHub CLI device flow under **Settings → GitHub**.
+See [execution hosting](execution-hosting.md) for repository authority and credential
+isolation. Additional runtimes and their sign-in flows remain unimplemented.
 
 ## Run locally
 
 Durable Work is enabled by default and requires a migrated profile from the
-[PostgreSQL workflow](database.md#wsl-and-windows-pgadmin). The authentication
-preview below starts with database access disabled.
+[PostgreSQL workflow](database.md#wsl-and-windows-pgadmin). The connection-only
+launch below disables database access and Work APIs.
 
 Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run from this checkout:
 
@@ -53,13 +46,13 @@ invalidates browser sessions.
 Goblin installs Codex CLI **0.161.0** through the lockfile. Its C# client starts
 the package's official Rust binary with `app-server` and communicates over stdio
 using the checked-in JSON schemas. Its `HOME`, working directory, and `CODEX_HOME` are
-private to the preview. Existing machine-level Codex configuration and provider
+private to Goblin. Existing machine-level Codex configuration and provider
 credentials are not inherited. You can keep using your normal Codex installation.
 
 ### Password setup and storage
 
 `make dev` and the full local installer share `.goblin-secrets/owner-password`.
-They use Azure's hashing helper (PBKDF2-SHA256, 600,000 iterations, random salt).
+They use the shared Rust credentials implementation (PBKDF2-SHA256, 600,000 iterations, random salt).
 Only the verifier is written to disk, with file mode `0600` inside a `0700`
 directory. Git ignores the folder's contents except for `.gitkeep`, which keeps
 the empty folder in the repository. Docker excludes the entire folder.
@@ -83,24 +76,16 @@ provisioning. For a direct .NET launch, set
 Device-code login must be enabled before your first ChatGPT sign-in. Check this
 setting even if you already use Codex through another sign-in method.
 
-For a workspace account:
-
-1. Open ChatGPT and go to **Workspace settings**.
-2. Open **Permissions & roles**.
-3. Select the role that applies to your account, usually the default workspace role.
-4. Under **Codex Local**, enable **Codex Local access**.
-5. Enable **Device Code Authentication**.
-
-If OpenAI shows **“Please contact your workspace admin to enable device code
-authentication”**, ask the workspace admin to enable both permissions for your
-role. Goblin cannot change these ChatGPT workspace permissions.
-
-For a personal account, enable device-code login in ChatGPT under
-**Settings → Security**.
+For a personal account, enable device-code login in ChatGPT **Settings → Security**.
+For a workspace account, an administrator must enable it in workspace permissions
+for the applicable role. The current Goblin UI also describes Codex Local access
+and Device Code Authentication. OpenAI may change the labels; follow its
+[headless login instructions](https://learn.chatgpt.com/docs/auth#login-on-headless-devices).
+Goblin cannot change these workspace permissions.
 
 After enabling the setting, return to OpenAI's sign-in page and try again. If
 the code has expired, cancel sign-in in Goblin and start again for a new code.
-The preview includes these steps before sign-in and beside the device code.
+Goblin includes these steps before sign-in and beside the device code.
 Device-code login is currently beta; see [OpenAI's headless login instructions](https://learn.chatgpt.com/docs/auth#login-on-headless-devices).
 
 ## What to check
@@ -108,14 +93,14 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
 1. Select **Continue with ChatGPT**. Open OpenAI's sign-in page, enter the
    displayed code, and complete sign-in. Goblin should show your account and
    **Verifying connection…**, then **Connected** after a successful background check.
-2. Stop and restart `make dev`, unlock the preview, and confirm the connection
+2. Stop and restart `make dev`, unlock Goblin, and confirm the connection
    remains. No second ChatGPT login should be needed while the credentials remain valid.
 3. Select **Lock workspace** and unlock it again. This locks browser access without
    disconnecting Codex.
 4. Select **Disconnect Codex**. The account should disappear, including after a
    restart. Disconnecting removes this workspace's cached credentials; it does
    not revoke an API key in the OpenAI Platform.
-5. Open **Use an OpenAI API key instead** and connect a key. The preview checks
+5. Open **Use an OpenAI API key instead** and connect a key. Goblin checks
    `GET /v1/models` and then asks Codex to save it. Goblin then automatically checks
    model access with a small request that counts toward API billing.
 6. Try canceling ChatGPT sign-in and starting again. Refreshing the browser
@@ -202,81 +187,19 @@ TypeScript compiler are build dependencies only.
 Open **http://localhost:8787**, enter your password, and follow the same checks.
 Recreate the container with the same named volumes to verify persistence.
 
-## Run in the provisioned Agent Sandbox cluster
+## Installed Kubernetes environments
 
-The Azure template now installs this application automatically and serves it at
-the deployment's `goblinUrl` (`http://<Azure-assigned-hostname>`). Open that URL
-and enter the **Goblin password** chosen during provisioning. See the
-[Azure guide](../deploy/azure/README.md) for installation and upgrades.
+The [local installer](../deploy/local/README.md) and [manual Azure installation](../deploy/azure/README.md)
+provision PostgreSQL, migrate the current schema, configure repository execution,
+and mount the owner password. Open the installation's Goblin address and use the
+password chosen during setup. Follow those guides for installation and recovery;
+a standalone connection-only manifest is not a replacement for their configuration.
 
-The steps below are for a **manual installation using SSH forwarding**. Do not
-apply this local-access manifest over the automatic Azure installation: it
-restores the localhost origin and blocks Traefik. Azure's rendered configuration
-is saved at `/var/lib/goblin/deploy/azure/platform` for subsequent changes.
-
-The Azure bootstrap installs the core Agent Sandbox controller. The
-[preview manifest](../deploy/platform/sandbox.yaml) uses that controller
-directly; extensions, warm pools, ingress, and GitHub access are not required.
-Azure setup asks you to choose and confirm a **Goblin password**. The manifest
-mounts the password verifier created during deployment. Use that password to
-open the preview.
-
-The manifest requires the `goblin-owner-password` Secret in `goblin`; see the
-[password setup reference](../deploy/azure/reference.md#goblin-password). For a VM
-provisioned with an older template, redeploy the updated template to install both
-the password and application automatically instead of following these manual steps.
-
-See [Kubernetes names](kubernetes-names.md) for the pod and namespace layout.
-
-Build the image on a Docker-enabled machine for the VM's Linux architecture
-(the default Azure VM is amd64), then export it:
-
-```bash
-docker build --platform linux/amd64 -t goblin-platform:0.1.0 .
-docker save -o goblin-platform.tar goblin-platform:0.1.0
-```
-
-Copy the image archive and `deploy/platform/sandbox.yaml` to the VM using
-your existing SSH access. On the VM, import and deploy them:
-
-```bash
-sudo k3s ctr images import goblin-platform.tar
-sudo k3s kubectl apply -f sandbox.yaml
-sudo k3s kubectl wait --for=condition=Ready sandbox/platform \
-  -n goblin --timeout=180s
-sudo k3s kubectl port-forward -n goblin svc/platform 8787:8787
-```
-
-Leave the VM's port-forward running. On your own computer, forward the same
-port through SSH, replacing the key path and hostname:
-
-```bash
-ssh -i /path/to/your-key.pem -L 8787:127.0.0.1:8787 goblinadmin@YOUR_VM_HOSTNAME
-```
-
-Open **http://localhost:8787** on your computer and enter your **Goblin password**.
-No public application port needs to be opened. See the [Azure reference](../deploy/azure/reference.md#use-the-saved-key-or-add-ssh-access-later)
-if SSH access was not enabled during deployment.
-
-After connecting an account, replace just the pod to test persistence:
-
-```bash
-sudo k3s kubectl delete pod -n goblin -l app=platform
-```
-
-The Sandbox controller recreates it and reattaches the PVC. Restart the
-port-forward, unlock the preview, and check the saved connection. The PVC is
-declared separately from the Sandbox so replacing the Sandbox can retain it.
-Deleting the PVC, namespace, or full manifest also deletes the preview data
-according to the storage class's reclaim policy.
-
-Goblin supports one owner and one controller per data volume. Do not mount the
-same credential directory into concurrent application replicas. The application
-now receives namespace-scoped Kubernetes control-plane credentials to manage
-repository sandboxes; the execution pods never receive that service-account
-token or the application database certificate. The verification endpoint remains
-restricted. See [execution hosting](execution-hosting.md) for durable Work,
-connection reservations, sandbox isolation, and deployment configuration.
+One owner and one application controller may use each data volume. Replacing its
+pod retains credentials on the application PVC; deleting that PVC loses them
+according to the storage class's reclaim policy. Application control-plane
+credentials manage repository sandboxes, while execution pods receive neither
+the application database certificate nor its service-account token.
 
 ## Configuration and storage
 
@@ -344,5 +267,5 @@ replies, cancellation, timeouts, and overlapping requests. These
 checks do not use personal credentials or run a model task. A real ChatGPT
 sign-in remains a manual acceptance check.
 
-See [App Server migration notes](app-server-migration.md) for the C# project layout,
+See [Codex integration](codex-integration.md) for the C# project layout,
 protocol regeneration, and the boundary between Goblin orchestration and Codex Core.

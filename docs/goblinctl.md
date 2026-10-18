@@ -7,11 +7,11 @@ PostgreSQL provisioning. It does not retry failed Work or modify Work history.
 
 The main application is component `platform`; the independently deployed public
 site is component `website`. Both use namespace `goblin`. Installer manifests are
-in `deploy/platform/` and `deploy/azure/platform/`; embedded setup sources
-`install-platform.sh`. Pod operations select `app=platform` and leave website
+in `deploy/platform/` and `deploy/azure/platform/`; embedded setup includes
+`deploy/azure/install-platform.sh`. Pod operations select `app=platform` and leave website
 pods alone. See [Kubernetes names](kubernetes-names.md) for the full naming and
-persistent-storage transition rules. A newly packaged installer is required to
-ship these embedded input changes; the pinned publication remains historical.
+persistent-storage ownership. Embedded input changes require a new installer
+publication; the pin records the selected publication's immutable provenance.
 
 Production uses `goblinctl-x86_64-unknown-linux-musl.tar.gz`, following Codex's
 native Linux distribution model. This is a statically linked Linux executable;
@@ -199,32 +199,16 @@ and locking precede activation of the new binary. A stable
 `/opt/goblin/bin/goblinctl` points into versioned directories; `/usr/local/bin/goblinctl`
 exposes it on PATH.
 
-Broader production lifecycle and application/cluster upgrade orchestration remain
-future work. The initial CLI implements current operations and live inspection;
-changing Work lifecycle behavior or inventing upgrade semantics is outside this migration.
+Goblin is preproduction and supports current installation formats. Recreate
+verified disposable installations when those formats change; in-place application
+or cluster upgrade tooling is not provided. CLI repair/retry reuses the current
+installation's retained inputs and does not authorize retrying failed Work.
 
-## Migration verification — 2026-09-27
+## Verification
 
-Local verification passed:
-
-- Seven Rust contract tests through nextest, rustfmt, and the shared Codex Clippy
-  rules with warnings denied. The complete Stop hook passed after the Rust tooling migration.
-- `make test`: 246 .NET tests passed and 39 database-dependent tests skipped;
-  84 HTTP/deployment cases passed and one database-dependent HTTP case skipped.
-- All 42 deployment cases also passed against the initial packaged musl executable after
-  moving the worker's database operations to embedded CLI assets. A further
-  retained-source check makes obsolete source provisioning scripts fail if invoked;
-  installation succeeds using the native tooling.
-- After aligning Rust development with Codex, 14 credential, PostgreSQL tooling,
-  and setup-server checks passed against the refreshed musl archive.
-- All four setup browser journeys passed, including desktop/mobile branding,
-  progress/retry, refresh, and handoff.
-- The initial migration archive ran under a real hardened DynamicUser systemd service on
-  Ubuntu/WSL, serving public status and Unix-socket health with no tools on PATH.
-- Repeated packaging produced identical archive bytes. ARM drift checks passed,
-  and secret scanning reported no findings.
-
-No fresh Azure deployment or full k3s installation was performed. Database tests
-were not enabled, so this does not claim live PostgreSQL coverage. GitHub release
-publication remains a rollout step; the current pin identifies the local review
-artifact and must be replaced with the committed release manifest before Azure use.
+Use [Rust checks](rust-development.md#build-format-lint-and-test), offline release
+compiler/input checks, deterministic packaging, and affected deployment/browser
+journeys for tooling changes. A local review archive is not a published installer.
+Only authenticated release metadata establishes the pin used for published Azure
+assets. Real PostgreSQL, systemd/Kubernetes behavior, and manual Azure installation
+require their actual integration checks; report skips and unverified boundaries.

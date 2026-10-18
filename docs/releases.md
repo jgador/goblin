@@ -7,10 +7,8 @@ The main product component is **platform**, following
 coordinates its publication with goblinctl. See [GitHub Actions](github-actions.md)
 for workflow and job naming.
 
-Stabilization and backports from [issue #41](https://github.com/jgador/goblin/issues/41)
-are implemented. Step 3 of the [release workflow plan](release-workflow-plan.md)
-automates coordinated candidate preparation. Steps 4–6 add verification, one
-approval, coordinated publication and recovery. Existing published releases retain
+The workflow prepares and verifies coordinated candidates, requires publication
+approval, and supports recovery from partial publication. Existing releases retain
 their original assets and attestations; current installer authentication requires
 the **Platform Release** signing identity described below.
 
@@ -46,14 +44,18 @@ not require publishing goblinctl, updating its dependency pin, or creating a tag
 Unreleased goblinctl changes may be present in the source being stabilized.
 
 PRs targeting `master` or `release/*`, and pushes to either, run **CI**.
-The `tests` job builds and verifies the source, release artifacts, and installation
-contracts. The required `test_results` job passes only when `tests` succeeds and
-reports failure when `tests` fails, is cancelled, or is skipped. Job IDs use short
+The `changes` job selects verification from extensions and recognized filenames.
+Selected language, integration, and installer jobs verify affected source and
+contracts. The required `test_results` job passes only when detection and every
+selected job succeed; documentation-only changes pass with intentional runtime
+skips. Failed detection, failed/cancelled selected jobs, and unexpected skips fail
+the required result. See [CI selection](github-actions.md#ci-selection-and-required-result).
+Job IDs use short
 lowercase names with at most one underscore; GitHub displays those IDs directly.
-The same active ruleset requires PRs, an up-to-date passing check, and resolved
+The checked-in [ruleset template](../.github/goblin-ruleset.json) requires PRs, an up-to-date passing check, and resolved
 review conversations; it blocks deletion and force pushes. It has no bypass
 actors and requires no second reviewer, so a sole maintainer can merge a passing
-PR. Once a release branch exists, make changes through PRs rather than direct
+PR. Verify that the live repository ruleset matches the template. Once a release branch exists, make changes through PRs rather than direct
 pushes. Branch creation uses an already checked commit from `master`.
 
 ## Backport a fix
@@ -299,9 +301,9 @@ subscription and manages the installation and its resources directly.
 The release record contains the source and installer identities, asset checksums,
 and deployment-check result. It does not claim live Azure installation coverage.
 
-`AGENTS.md` makes the first real deployment the SQL migration immutability
-boundary. Record the first real manual deployment; an announcement is a separate
-event. Local provisioning does not freeze the baseline.
+`AGENTS.md` makes the first production deployment the SQL migration immutability
+boundary. Record that deployment separately from an announcement. Local
+development provisioning does not freeze the unreleased baseline.
 
 ## Local verification and recovery
 

@@ -59,5 +59,6 @@ its serving certificate; monitoring fails safely if that is unavailable.
 Unit tests cover VM versus pod readings, missing values, pressure, stale data,
 bounded history, and recovery. HTTP tests cover login and host checks; browser
 tests cover desktop/mobile views, drafts, staleness, pending pods, and locking.
-Live WSL k3s validation exercises the direct authenticated kubelet path. Azure
-uses the same manifests but requires a separate live deployment check.
+Actual kubelet access requires a runtime check on the intended installation.
+Local fixtures do not establish that network/TLS path. Azure uses the same
+manifests and requires manual verification on its VM.

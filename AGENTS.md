@@ -25,12 +25,12 @@ Use current code and tests to check implementation claims in dated plans and aud
 
 | When changing | Guidance |
 | --- | --- |
-| Work behavior or service boundaries | [Architecture plan](docs/architecture-refactoring-plan.md) and [implemented Work lifecycle](docs/work-lifecycle.md) |
+| Work behavior or service boundaries | [Architecture guide](docs/architecture.md) and [implemented Work lifecycle](docs/work-lifecycle.md) |
 | Execution, recovery, or workspace storage | [Execution hosting](docs/execution-hosting.md) and [workspace lifecycle](docs/workspace-lifecycle.md) |
 | SQL or EF mappings | [Database guide](docs/database.md) |
 | Environment variables | [Named definitions and boundary parsing](docs/environment-variables.md) for reads, sets, removals, and forwarding |
 | Closed behavior or shared values | [Typed ownership, boundary parsing, and browser generation](docs/contract-values.md) |
-| C# types or constructors | [Construction conventions](docs/formatting.md#c-construction-and-contracts) and, when changing record semantics, [record audit](docs/csharp-record-audit.md) |
+| C# types or constructors | [Construction, JSON contracts, and value/copy semantics](docs/formatting.md#c-construction-and-contracts) |
 | Rust under `tools/` | [Pinned toolchain, conventions, and checks](docs/rust-development.md) |
 | Verification or build/test tooling | [Commands and test selection](docs/repository-layout.md#choosing-verification) |
 | GitHub Actions workflows or required checks | [Workflow names and rollout](docs/github-actions.md) |
@@ -57,7 +57,7 @@ Use current code and tests to check implementation claims in dated plans and aud
   Keep credentials and raw upstream errors out of public views and Work history.
 - Follow the four behavioral boundaries and their compatibility/recovery
   contracts. Preserve the existing transport and protocol tests. Repository
-  execution requires the isolation boundary in the plan.
+  execution requires the isolation boundary in the architecture guide.
 - Goblin is preproduction. Support only the current application, configuration,
   and installation formats; remove superseded paths instead of adding backward
   compatibility, migration shims, or in-place upgrade tooling. Development Goblin,

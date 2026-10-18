@@ -15,6 +15,9 @@ the tasks that need it, following dependencies when needed.
 
 Label established constraints, implemented behavior, and deferred proposals in
 plans and audits. Historical checkpoints do not establish today's test results.
+Use the [documentation index](README.md) to find current owners. Consolidate a
+completed plan into its lasting guide instead of leaving it as a second source
+of behavior; repair incoming links when removing or renaming documents.
 
 ## Define the result
 

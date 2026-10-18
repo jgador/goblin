@@ -36,7 +36,7 @@ aggregate snapshot; summary columns cannot substitute for durable state.
 
 ## Attention belongs to Work
 
-The user selected **"Surface every failure for attention"** on 2026-09-19.
+Every observed failure requires core-owned attention, including temporary failures.
 There is no exception for temporary failures or failures before execution starts.
 An execution attempt can fail while the Work item remains open and needs
 attention. Successful runtime execution also does not complete Work by itself.
@@ -44,7 +44,7 @@ attention. Successful runtime execution also does not complete Work by itself.
 | Attention reason | What must happen next |
 | --- | --- |
 | `InputRequired` | Answer the recorded decision; a paused attempt queues its next runtime turn. Older completed interactions become Ready. |
-| `RepositoryRequired` | Select an enabled repository and Git author identity, then explicitly authorize repository access for this Work. No repository execution is dispatched before authorization. |
+| `GitRepositoryRequired` (wire: `RepositoryRequired`) | Select a GitHub repository. Enabled repositories bind standing permission to a fresh attempt grant; disabled repositories require explicit enablement/authorization. |
 | `ResultReview` | Approve the specific result or request changes. Approval completes Work. |
 | `Failure` | Explicitly request a retry, or cancel Work. A retry records a new attempt. |
 | `UncertainExecution` | Reconcile the existing execution before allowing a retry, or request cancellation and await confirmation. |
@@ -141,11 +141,9 @@ file on the Work workspace and replace the saved patch only after Git succeeds.
 Output overflow, cancellation, and timeout retire the process tree; none authorize
 another execution attempt or remove workspace files.
 
-The GitHub connection state record now belongs to
-`Goblin.Contracts.Runtime.GitHubState`; its properties, serialized representation,
-and record semantics are unchanged. C# consumers of the former integration
-namespace must update their imports. Execution coordinator and recovery
-constructors also now require their explicit stores; HTTP contracts are unchanged.
+`Goblin.Contracts.Runtime.GitHubState` owns the shared immutable GitHub connection
+state. Execution coordination receives its stores explicitly; HTTP mapping stays
+at the Web boundary.
 
 Model catalog persistence and selection stay in `ModelCatalogStore`.
 `ModelCatalogRefreshCoordinator` owns background discovery through the host
@@ -175,7 +173,7 @@ independent of these public HTTP contracts. Contract tests pin the existing JSON
 names and verify mapping, account discriminators, request defaults, and bigint IDs.
 `WorkSnapshot` and `AttemptSnapshot` are transfer classes for persistence and worker
 inputs; the live aggregate and its domain history remain distinct. The
-[C# record audit](csharp-record-audit.md) explains the retained value/state records.
+[construction guidance](formatting.md#c-construction-and-contracts) explains the retained value/state records.
 
 `Goblin.Core` has only .NET base-library dependencies. Product types must not
 reference ASP.NET, database entities, Wolverine, or runtime SDKs/protocols. The
@@ -207,21 +205,23 @@ these integration checks or authenticated runtime validation.
 Repository references in objectives, user context, and decision answers resolve
 into durable setup or authorization requests. Users can enable a repository in
 Settings or explicitly enable it when approving a Work request in the conversation.
-The saved preview identifies the GitHub account, repository, base/work branches,
-Git author, and push/PR permissions. Repository metadata lookup precedes the preview;
-checkout and execution wait for approval. See [repository intent](git-repository-intent.md).
+For disabled repositories, the saved preview identifies the connected account,
+repository, branches, author, and publication permissions. Metadata lookup precedes
+the preview, and checkout/dispatch wait for approval. Enabled repositories can
+start directly using verified standing permission and fresh per-attempt grants.
+See [repository intent](git-repository-intent.md) for text and structured selections.
 
-`PrepareRepository` records a preview without creating an attempt. `AuthorizeRepository`
-accepts only its saved request ID and checks current enablement and connection identity.
-If the preview includes enablement, that setting, the authorized attempt, the command
-receipt, and dispatch intent commit atomically. Decline, cancellation, and added context
-prevent reuse of a pending approval. Explicit retries require a fresh preview.
+The public `PrepareRepository` command starts an enabled repository directly or
+saves an enablement preview. `AuthorizeRepository` accepts only its saved request
+ID and rechecks connection identity and permission. Enablement, the attempt, receipt,
+and dispatch intent commit atomically. Decline, cancellation, and added context
+invalidate a pending preview. Retry creates a fresh grant/attempt and requires
+reconciliation and confirmed cleanup where needed; a disabled repository again
+requires explicit approval.
 
-Repository handoff preserves the same Work and earlier attempts' immutable runtime,
-model, session, and decision history. Cleanup must be confirmed before replacement;
-failures and uncertain execution retain their retry and reconciliation requirements.
-Ordinary answers within an authorized repository attempt continue it. A changed Git
-scope requires another preview and authorization before a replacement attempt.
+Ordinary answers within an authorized repository attempt continue that attempt.
+Changed repository/delivery scope requires a replacement attempt with new authority
+while preserving the earlier attempts' runtime, model, session, and decision history.
 
 Repository grants capture connection generation, account identity, repository ID,
 base/work branches, and publication permissions. The broker checks the exact branch
@@ -235,5 +235,5 @@ Work changes with dispatch intent through the same application boundary. Slack
 users need an explicit local owner grant; repository approvals and retries remain
 in Goblin. Teams and management MCP adapters remain unimplemented.
 
-The [Slack integration plan](slack-integration-plan.md) describes customer-owned
+The [Slack integration](slack-integration.md) describes customer-owned
 apps, automated local setup, Socket Mode, and the required actor-mapping boundary.

@@ -12,6 +12,7 @@ backend/
   src/Goblin.Execution.Codex/     Codex worker entry points for those hosts
   src/Goblin.Integrations.Codex/   Codex account, transport, and Work adapter
   src/Goblin.Integrations.GitHub/  GitHub device sign-in and private credentials
+  src/Goblin.Integrations.Slack/   Slack setup, Socket Mode, and thread delivery
   src/Goblin.Web/          ASP.NET Core composition and HTTP adapters
     Access/               Workspace access, passwords, and browser sessions
     Http/                 HTTP contracts and public errors
@@ -35,7 +36,9 @@ Makefile                   Repository task runner for builds, checks, and local 
 frontend/
   src/connection/          Connection screen: HTML, TypeScript, and CSS
   src/work/                Persisted Work UI: HTML, TypeScript, and CSS
-  src/api/contracts.ts     Goblin HTTP types used by the UI and application tests
+  src/api/                 HTTP contracts, generated values, transport, and read scopes
+  src/settings/            Connection, integration, system, and timezone panels
+  src/integrations/        Integration directory and connection presentation
   public/assets/           Static assets copied into the browser build
   scripts/                 Browser build helpers
   package.json             Standalone frontend npm package and TypeScript dependency
@@ -54,6 +57,7 @@ website/
   manage.sh                Website development and local deployment commands
   load-test.mjs            Fresh browser visits and website container resource measurements
 tests/
+  frontend/                Browser module behavior and command/model recovery tests
   integration/             HTTP tests against the C# test host
   e2e/                     Playwright browser journeys
   deployment/              Azure bootstrap and installation tests
@@ -141,6 +145,8 @@ npm run typecheck
 | `make format-rust` | Format Rust using Codex conventions |
 | `make lint-rust` | Lint the Rust workspace |
 | `make test-rust` | Run Rust tests with nextest and then documentation tests |
+| `make test-ci` | Verify changed-file selection, Git comparisons, Actions reporting, and the required merge-result policy |
+| `make test-maintenance` | Verify owner-only maintenance, candidate routing, context bounds, and scoped validation without API calls |
 | `make check` | Run Rust formatting/lints, the full offline test suite, and type checks |
 | `make format` | Format TypeScript, Rust, and handwritten C# |
 | `make local-start` | Start the full local installation with existing safety checks |
@@ -203,10 +209,13 @@ only repeat the implementation.
 
 `make test` is the broad offline suite with real PostgreSQL checks gated by explicit
 test configuration. `make check` adds Rust formatting/lints and type checks. These
-are useful integration/CI gates, not prerequisites for every local edit. Required
+are useful broad integration gates, not prerequisites for every local edit. CI
+selects verification groups from extensions and recognized filenames using
+[`config/ci-verification.json`](../config/ci-verification.json); documentation-only
+changes still report `test_results` while skipping runtime groups. Required
 CI checks still apply; scoped local results do not imply that CI ran.
 See [GitHub Actions](github-actions.md) for workflow names, required checks, and
-rename rollout steps.
+ruleset maintenance.
 **Installation Assets** prepares verified snapshots directly from GitHub Releases
 and calls **Website Release**, which serves the website and installation files at
 `goblinboard.com/install/` after production approval.
@@ -257,7 +266,8 @@ Keep original artwork in `assets/branding/` and copy only the assets used by the
 browser into `frontend/public/assets/`. Codex schemas belong under
 `backend/schemas/codex/`; Goblin account/runtime contracts belong to `Goblin.Contracts`; Work command/view
 contracts belong to `Goblin.Application/Work`. Browser types describe these public
-Goblin APIs, including `frontend/src/api/contracts.ts` for connection setup. They describe different APIs.
+Goblin APIs, including `frontend/src/api/contracts.ts` for connection setup and
+`frontend/src/work/contracts.ts` for Work views.
 
 The [database guide](database.md) covers PostgreSQL connections, Windows pgAdmin,
 daily development, schema rules, and EF mappings.

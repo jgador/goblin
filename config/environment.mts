@@ -10,6 +10,75 @@ export interface EnvironmentVariableDefinition {
 
 /** See docs/environment-variables.md before adding or forwarding a variable. */
 export const environmentVariables = {
+    GITHUB_ACTOR: {
+        name: "GITHUB_ACTOR",
+        purpose:
+            "Authenticate the original actor of owner-only maintenance runs.",
+        format: "GitHub login supplied by Actions.",
+        fallback: "Maintenance refuses missing or non-owner actors.",
+        required: "Required for owner-only agentic maintenance.",
+        sensitive: false,
+    },
+    GITHUB_TRIGGERING_ACTOR: {
+        name: "GITHUB_TRIGGERING_ACTOR",
+        purpose: "Authenticate the actor dispatching or rerunning maintenance.",
+        format: "GitHub login supplied by Actions.",
+        fallback: "Maintenance refuses missing or non-owner rerun actors.",
+        required: "Required for owner-only agentic maintenance.",
+        sensitive: false,
+    },
+    GITHUB_REF: {
+        name: "GITHUB_REF",
+        purpose:
+            "Identify the branch selected for owner-only manual maintenance.",
+        format: "Fully qualified refs/heads/ branch reference.",
+        fallback: "Maintenance refuses missing references.",
+        required: "Supplied by Actions for owner-only maintenance.",
+        sensitive: false,
+    },
+    CI_JOB_RESULTS: {
+        name: "CI_JOB_RESULTS",
+        purpose:
+            "Completed CI dependency results supplied to the required merge check.",
+        format: "GitHub Actions toJSON(needs) object.",
+        fallback: "The CI reporter fails when absent or invalid.",
+        required: "Required for the test_results job only.",
+        sensitive: false,
+    },
+    GITHUB_EVENT_NAME: {
+        name: "GITHUB_EVENT_NAME",
+        purpose: "Select the Git comparison appropriate to the CI trigger.",
+        format: "pull_request, push, merge_group, or workflow_dispatch.",
+        fallback: "CI detection fails for an absent or unsupported event.",
+        required: "Supplied by GitHub Actions to CI detection.",
+        sensitive: false,
+    },
+    GITHUB_EVENT_PATH: {
+        name: "GITHUB_EVENT_PATH",
+        purpose:
+            "GitHub event payload containing exact comparison commit identities.",
+        format: "Path to the GitHub Actions JSON event payload.",
+        fallback: "CI detection fails when absent.",
+        required: "Supplied by GitHub Actions to CI detection.",
+        sensitive: false,
+    },
+    GITHUB_SHA: {
+        name: "GITHUB_SHA",
+        purpose: "Commit identity used for a manually requested full CI run.",
+        format: "Full Git commit SHA.",
+        fallback: "CI detection fails when absent.",
+        required: "Supplied by GitHub Actions to CI detection.",
+        sensitive: false,
+    },
+    GITHUB_OUTPUT: {
+        name: "GITHUB_OUTPUT",
+        purpose:
+            "GitHub Actions output file for the verified CI selection plan.",
+        format: "File path.",
+        fallback: "CI detection fails rather than losing selection outputs.",
+        required: "Supplied by GitHub Actions to CI detection.",
+        sensitive: false,
+    },
     CANDIDATE_SHA256: {
         name: "CANDIDATE_SHA256",
         purpose:
@@ -196,10 +265,11 @@ export const environmentVariables = {
     },
     GITHUB_REPOSITORY: {
         name: "GITHUB_REPOSITORY",
-        purpose: "Repository selected by release publication.",
+        purpose:
+            "Repository selected by release publication and checked for owner-only maintenance.",
         format: "owner/name",
         fallback: "No fallback",
-        required: "Required for release publication",
+        required: "Required for release publication and owner-only maintenance",
         sensitive: false,
     },
     GITHUB_RUN_ID: {
@@ -443,10 +513,11 @@ export const environmentVariables = {
     OPENAI_API_KEY: {
         name: "OPENAI_API_KEY",
         purpose:
-            "External credential used as a negative inheritance fixture; Goblin authenticates through private credential storage.",
+            "OpenAI inference credential supplied only to gh-aw's isolated API proxy; also a negative inheritance fixture in runtime tests.",
         format: "Secret text",
         fallback: "Not forwarded to isolated runtimes or GitHub CLI",
-        required: "Never required by Goblin environment configuration",
+        required:
+            "Required as a repository secret for Codex agentic maintenance; never a Goblin application input.",
         sensitive: true,
     },
     PATH: {

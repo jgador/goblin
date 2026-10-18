@@ -28,7 +28,7 @@ create, edit, or explain the skill do not invoke the workflow.
    when the user explicitly requests it; then preserve excluded edits and staged
    content, keeping them out of the commit.
 4. Write the message using the conventions below. Save it to a temporary file
-   outside the checkout and use `git commit -F` to preserve literal text and
+   under `.artifacts/commit-push/` and use `git commit -F` to preserve literal text and
    newlines. Keep the user's configured Git author and committer identity.
 5. Inspect all outgoing commits, since pushing publishes more than the newest
    commit. The default push includes all pending commits on the current branch,

@@ -1,15 +1,9 @@
-# C# App Server integration
+# Codex integration
 
-Goblin runs the official Rust `codex app-server` as a child process. The C# code
-replaces the former TypeScript backend; it does not implement Codex Core.
-The existing authentication preview, HTTP routes, cookies, browser UI, and prompt
-limits remain in place.
-
-Codex is the current primary coding agent integration and the only runtime
-implemented today. The [architecture and rewrite plan](architecture-refactoring-plan.md)
-prepares Goblin for other agents, including Claude and GitHub Copilot. This
-document describes the current Codex adapter; its protocol and process model
-are not requirements for future integrations.
+Goblin runs the official Rust Codex App Server as a child process. The C# adapter
+owns its transport and account operations, while durable Work uses Goblin-owned
+execution contracts. Codex is the only implemented runtime; its process model and
+protocol are not requirements for future integrations. See [architecture](architecture.md).
 
 ## Responsibilities
 
@@ -43,7 +37,7 @@ The transport initializes once per connection and acknowledges with `initialized
 It serializes writes, correlates out-of-order responses, decodes all known
 notifications into generated types, and ignores unknown future notification methods.
 Notification callbacks enqueue authentication work rather than blocking the reader.
-Server-initiated interactive requests retain the preview's `-32601` rejection.
+Server-initiated interactive requests receive a `-32601` rejection.
 Raw Codex stderr and upstream error bodies are never logged or sent to the browser.
 
 A broken transport or timed-out RPC rejects pending work and retires the process.
@@ -54,13 +48,12 @@ period expires. HTTP prompt cancellation requests `turn/interrupt` and then
 
 ## Protocol regeneration
 
-The 315 checked-in schema files from Codex CLI **0.161.0** are authoritative.
+The checked-in schemas and pinned Codex runtime are maintained together.
 [`selection.json`](../backend/schemas/codex/selection.json) identifies the requests,
 responses, notifications, fields, and variants Goblin uses. The C# file-based
 [`GenerateProtocol.cs`](../backend/scripts/GenerateProtocol.cs) generates only
 that selection and its referenced types. It verifies that the aggregate and
-individual schemas agree and records separate schema and selection hashes. The
-109 generated model files are checked in; an ordinary .NET build does not run
+individual schemas agree and records separate schema and selection hashes. Generated models are checked in; an ordinary .NET build does not run
 the generator or need a Codex installation.
 
 ```bash
@@ -86,7 +79,7 @@ make build                    # browser assets and .NET solution
 dotnet run --no-build --project backend/src/Goblin.Web
 make test                         # schema drift, .NET tests, HTTP tests
 make test-codex                # official pinned Rust binary, synthetic key only
-make test-browser              # unchanged UI against the C# test host
+make test-browser              # browser journeys against the C# test host
 dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 ```
 
@@ -95,12 +88,9 @@ tooling. The production host runs entirely in .NET and can use a separately
 installed official Codex executable through `GOBLIN_CODEX_COMMAND`. The Docker
 image includes the native binary and its adjacent resources, without Node.js.
 
-Migration validation first ran the original 22 TypeScript tests as a baseline.
-The HTTP scenarios were redirected to `backend/tests/Goblin.TestHost`; API-key verifier
-and origin-validation checks moved to .NET. The fake JSONL peer now includes fields
-required by the actual schemas, rather than relying on the old partial TypeScript
-types. Additional .NET tests cover serialization, concurrent initialization,
+Transport and protocol tests cover serialization, concurrent initialization,
 request correlation, UTF-8 framing, malformed/oversized output, server requests,
-timeouts, process crashes, restart ordering, and cleanup. The superseded
-TypeScript backend was removed after the C# HTTP tests and real-runtime storage
-check passed.
+timeouts, crashes, restart ordering, and cleanup. HTTP/browser fixtures exercise
+the connection UI. Real Codex initialization uses a synthetic key and does not
+establish authenticated model coverage. Select checks for the changed boundary
+using [repository verification](repository-layout.md#choosing-verification).

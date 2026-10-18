@@ -58,7 +58,7 @@ Try `service:goblin`, `level:Warning`, or `category:="Microsoft.Hosting.Lifetime
 
 ## Polling and delivery
 
-The official Fluent Bit **5.1.2** image is pinned by digest. `Inotify_Watcher Off`
+The official Fluent Bit **5.1.3** image is pinned by digest. `Inotify_Watcher Off`
 selects its native **250 ms** content polling; no custom build is used.
 `Refresh_Interval 5` discovers new files every five seconds. This is separate from
 content polling. `Rotate_Wait 30` allows time to drain rotated files.
@@ -74,7 +74,7 @@ collection can lose logs.
 
 ## Storage and resources
 
-VictoriaLogs **1.52.0**, also pinned by digest, runs as one non-root Deployment
+VictoriaLogs **1.53.0**, also pinned by digest, runs as one non-root Deployment
 with a separate **10 GiB PVC** named `goblin-victorialogs-data`. It uses its native
 log store; PostgreSQL and Work PVCs are not involved. A Recreate deployment
 strategy ensures one process owns the log store during upgrades.
@@ -102,7 +102,7 @@ The manifests are in `deploy/platform/logging/`, included by the existing local 
 Azure Kustomize installations. ConfigMap content hashes roll Fluent Bit when its
 configuration changes. The installer copies the manifests and waits for both
 logging workloads. Rebuild the native installer for changes to its embedded
-`install-platform.sh`; follow [the release order](goblinctl.md#release-order) before
+`install-platform.sh`; follow [the release order](goblinctl.md#releases) before
 publishing a production installer.
 
 `GOBLIN_VICTORIALOGS_URL` is a trusted private HTTP origin. Kubernetes sets it to
@@ -145,7 +145,7 @@ This requires Docker, kubectl, curl, ripgrep, the repository's .NET/Node tools, 
 installed for Playwright. It creates and deletes a dedicated k3s Docker container,
 uses an explicit temporary kubeconfig, deploys the pinned images, and runs a
 **test-only .NET workload**. It does not use an existing Kubernetes context or
-saved Goblin credentials. Screenshots are saved under `test-results/logs-*.png`.
+saved Goblin credentials. Screenshots are saved under `.artifacts/logs-ui/`.
 
 To check just the real UI against a trusted private service, port-forward the
 VictoriaLogs service to localhost and run:
@@ -157,27 +157,3 @@ GOBLIN_TEST_VICTORIALOGS_URL=http://127.0.0.1:19428 make test-logs-ui
 This checks login, search, refresh, Settings access, CSP, logout, and an Azure-shaped
 hostname resolved locally. Actual Azure DNS, ingress, and TLS require deployment
 verification on that VM.
-
-### Verified on 2026-09-27
-
-- `make test`: seven Rust tests, protocol/Kubernetes generation checks, 246 .NET
-  tests, and 90 HTTP/deployment tests passed. Thirty-nine .NET PostgreSQL tests
-  and one Work HTTP persistence test were skipped because a live database was
-  not configured.
-- The disposable k3s check delivered actual .NET pod logs with structured fields,
-  scopes, integer precision, CRI metadata, multiline messages, and text fallback.
-  Data survived VictoriaLogs replacement on its PVC; queued records survived a
-  collector restart while VictoriaLogs was unavailable and arrived after recovery.
-- The real VMUI passed login, search/display, refresh, Settings link, CSP,
-  ingestion rejection, logout, and return-to-query checks on localhost and a
-  locally resolved Azure-shaped hostname.
-- Typechecking, Clippy, formatting, and Azure template drift checks passed. The
-  rebuilt musl installer review archive passed the hostname/install test.
-- After changing the default to Information, all five focused logging tests
-  passed. The running local installation received the matching
-  `Logging__LogLevel__Default=Information` override and a pod restart; request
-  start/finish events were confirmed in VictoriaLogs with no collector drops.
-
-Test clusters were removed. No release was published. The updated installer
-checksum remains a local review artifact;
-follow the release procedure before production rollout.
