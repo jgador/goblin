@@ -62,7 +62,7 @@ fn unchanged_installer_is_reused_with_its_original_source_revision() {
         "0.1.4",
         &inventory,
         None,
-        |_| Ok(published.clone()),
+        |_| Ok(Some(published.clone())),
     )
     .unwrap();
     assert!(matches!(selected, Selection::Reuse(actual) if actual == published));
@@ -140,7 +140,7 @@ fn bundle_changes_additions_and_deletions_build_without_a_version_bump() {
             "0.1.4",
             &inventory,
             None,
-            |_| Ok(published.clone()),
+            |_| Ok(Some(published.clone())),
         )
         .unwrap();
         assert!(matches!(selected, Selection::Build(version) if version == "0.1.5"));
@@ -167,12 +167,104 @@ fn later_matching_publication_is_reused_without_a_pin_update() {
         &inventory,
         None,
         |version| {
-            Ok(if version == pin.version {
+            Ok(Some(if version == pin.version {
                 pin.clone()
             } else {
                 matching.clone()
+            }))
+        },
+    )
+    .unwrap();
+    assert!(matches!(selected, Selection::Reuse(actual) if actual == matching));
+}
+
+#[test]
+fn historical_manifests_cannot_qualify_and_invalid_current_manifests_fail() {
+    let (_, published, _) = fixture();
+    let current = serde_json::to_value(&published).unwrap();
+    assert_eq!(
+        parse_published_manifest(&published.version, current.clone()).unwrap(),
+        Some(published.clone())
+    );
+
+    for historical in [
+        json!({"version":"0.1.0","target":release::TARGET,"sha256":"a".repeat(64)}),
+        json!({"schemaVersion":0,"version":"0.1.0"}),
+        json!({"schemaVersion":2,"version":"0.1.0"}),
+    ] {
+        assert_eq!(parse_published_manifest("0.1.0", historical).unwrap(), None);
+    }
+
+    let mut missing_inputs = current.clone();
+    missing_inputs.as_object_mut().unwrap().remove("installer");
+    let mut bad_checksum = current.clone();
+    bad_checksum["sha256"] = json!("invalid");
+    for invalid in [
+        json!(null),
+        json!([]),
+        json!({"schemaVersion":"1"}),
+        missing_inputs,
+        bad_checksum,
+    ] {
+        assert!(parse_published_manifest(&published.version, invalid).is_err());
+    }
+    assert!(parse_published_manifest("0.1.5", current).is_err());
+}
+
+#[test]
+fn automatic_selection_skips_historical_formats_but_keeps_their_versions_reserved() {
+    let (snapshot, mut pin, mut inventory) = fixture();
+    inventory.published_installers.insert("0.1.0".into());
+    inventory.reserved.insert("goblinctl-v0.1.0".into());
+    pin.installer
+        .files
+        .insert("older-bundle".into(), "a".repeat(64));
+    let mut inspected = Vec::new();
+    let selected = select_installer(
+        &snapshot,
+        &snapshot.capabilities,
+        &pin,
+        "0.1.4",
+        &inventory,
+        None,
+        |version| {
+            inspected.push(version.to_owned());
+            Ok(if version == "0.1.0" {
+                parse_published_manifest(version, json!({"version":version}))?
+            } else {
+                Some(pin.clone())
             })
         },
+    )
+    .unwrap();
+    assert_eq!(inspected, ["0.1.4", "0.1.0"]);
+    assert!(matches!(selected, Selection::Build(version) if version == "0.1.5"));
+
+    let error = select_installer(
+        &snapshot,
+        &snapshot.capabilities,
+        &pin,
+        "0.1.4",
+        &inventory,
+        Some("0.1.0"),
+        |version| parse_published_manifest(version, json!({"version":version})),
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("unsupported manifest format"));
+
+    let mut matching = pin.clone();
+    matching.version = "0.1.5".into();
+    matching.installer = snapshot.clone();
+    inventory.published_installers.insert("0.1.5".into());
+    inventory.reserved.insert("goblinctl-v0.1.5".into());
+    let selected = select_installer(
+        &snapshot,
+        &snapshot.capabilities,
+        &pin,
+        "0.1.4",
+        &inventory,
+        None,
+        |version| Ok((version == "0.1.5").then(|| matching.clone())),
     )
     .unwrap();
     assert!(matches!(selected, Selection::Reuse(actual) if actual == matching));
@@ -224,7 +316,7 @@ fn explicit_versions_cannot_replace_reserved_or_incompatible_installers() {
                 "0.1.4",
                 &inventory,
                 Some(version),
-                |_| Ok(published.clone())
+                |_| Ok(Some(published.clone()))
             )
             .is_err(),
             "{version}"
