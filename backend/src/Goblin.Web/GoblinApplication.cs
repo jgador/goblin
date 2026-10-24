@@ -42,6 +42,7 @@ public static class GoblinApplication
         new ConnectionEndpoints(options).Map(app);
         new GitHubEndpoints(options).Map(app);
         SlackEndpoints.Map(app, options.EnableWork);
+        ChatGptMcp.Map(app);
         if (options.EnableWork)
         {
             GitRepositoryEndpoints.Map(app);

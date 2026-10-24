@@ -215,7 +215,7 @@ prefix, and library-defined key types:
 The administrator-only migration journal is `public.schema_migration`; its
 identity sequence is also inaccessible to the application role.
 Wolverine and the journal are excluded from Goblin EF scaffolding. The catalog has
-18 singular product tables, the singular journal, and eight native Wolverine
+20 singular product tables, the singular journal, and eight native Wolverine
 tables. Primary keys, foreign keys, identity sequences, and table-specific indexes
 follow their owner's naming conventions. The independent bigint Work history
 sequence is `work_event_id_seq`; it has no table or column owner. Wolverine uses
@@ -287,7 +287,7 @@ To change the schema:
 
 1. Edit the unreleased baseline, or add a migration after production, following
    [the migration rules](#apply-the-sql-schema). New tracked tables need primary keys.
-2. Update the 18 singular `--table` entries and custom candidate names in the
+2. Update the 20 singular `--table` entries and custom candidate names in the
    scaffolding tooling. Apply SQL to a fresh disposable database with
    `make db-migrate DB_PROFILE=<profile>`, then run
    `make db-scaffold DB_PROFILE=<profile>`. Wolverine and the journal remain excluded.

@@ -73,6 +73,7 @@ async function workspace(page: Page) {
                       setup: null,
                       identities: [],
                   },
+            "/api/integrations/chatgpt": { configured: false },
             "/api/system": {
                 status: "unsupported",
                 machine: null,
@@ -103,7 +104,7 @@ test("directory uses verified connections, search, tabs, and real provider asset
     await expect(page.locator('[data-integration="github"]')).toContainText(
         "Signed in as @example-owner",
     );
-    await expect(page.locator(".integration-row")).toHaveCount(3);
+    await expect(page.locator(".integration-row")).toHaveCount(4);
     await expect(page.locator('[data-integration="teams"]')).toContainText(
         "Planned",
     );
@@ -143,7 +144,7 @@ test("directory uses verified connections, search, tabs, and real provider asset
         .getByRole("button", { name: "Clear search", exact: true })
         .click();
     await expect(search).toHaveValue("");
-    await expect(page.locator(".integration-row")).toHaveCount(3);
+    await expect(page.locator(".integration-row")).toHaveCount(4);
     expect(state.commands).toEqual([]);
     expect(errors).toEqual([]);
 });

@@ -43,6 +43,7 @@ COPY backend/Directory.Build.props ./backend/Directory.Build.props
 COPY backend/src ./backend/src
 COPY backend/tools ./backend/tools
 COPY backend/licenses ./backend/licenses
+COPY docs/chatgpt-integration.md ./docs/chatgpt-integration.md
 COPY --from=assets /app/frontend/dist ./frontend/dist
 COPY --from=assets /app/frontend/public/assets/branding/slack.png ./frontend/public/assets/branding/slack.png
 RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --nologo

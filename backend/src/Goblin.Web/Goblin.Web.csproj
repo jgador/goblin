@@ -3,8 +3,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.4.1" />
     <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
     <Content Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <EmbeddedResource Include="../../../docs/chatgpt-integration.md" LogicalName="Goblin.ChatGpt.Guide" />
+    <Content Include="../../licenses/modelcontextprotocol/LICENSE" Link="licenses/modelcontextprotocol/LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../Goblin.Persistence/Goblin.Persistence.csproj" />
     <ProjectReference Include="../Goblin.Application/Goblin.Application.csproj" />
     <ProjectReference Include="../Goblin.Execution/Goblin.Execution.csproj" />
@@ -12,6 +15,7 @@
     <ProjectReference Include="../Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj" />
     <ProjectReference Include="../Goblin.Integrations.Slack/Goblin.Integrations.Slack.csproj" />
     <ProjectReference Include="../Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj" />
+    <ProjectReference Include="../Goblin.Integrations.ChatGpt/Goblin.Integrations.ChatGpt.csproj" />
     <Content Include="../../../frontend/dist/**/*" Link="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

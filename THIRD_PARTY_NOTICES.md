@@ -54,6 +54,13 @@ in [backend/licenses/wolverine/LICENSE](backend/licenses/wolverine/LICENSE),
 included with the published application at `licenses/wolverine/LICENSE` and
 in the application image at `/app/licenses/wolverine/LICENSE`.
 
+The ChatGPT integration uses the official [MCP C# SDK 1.4.1](https://github.com/modelcontextprotocol/csharp-sdk),
+Apache-2.0, and [Microsoft IdentityModel 8.19.1](https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet),
+MIT. Their upstream licenses are preserved in
+[backend/licenses/modelcontextprotocol/LICENSE](backend/licenses/modelcontextprotocol/LICENSE)
+and [backend/licenses/identitymodel/LICENSE](backend/licenses/identitymodel/LICENSE),
+and accompany the published application under the corresponding `licenses/` paths.
+
 The application image also includes independently licensed software such as
 Codex and its native helpers, GitHub CLI, Git, and the .NET runtime. Deployed
 services and operating-system packages retain their own licenses. In particular,

@@ -106,6 +106,23 @@
 .slack-settings input { box-sizing: border-box; width: 100%; padding: 10px; border: 1px solid #d5d9df; border-radius: 8px; background: #fff; color: #10182a; }
 .slack-settings details { border-top: 1px solid #d5d9df; padding-top: 16px; }
 .slack-settings summary { cursor: pointer; }
+
+.chatgpt-settings { display: grid; gap: 24px; font-size: 13px; line-height: 1.7; }
+.chatgpt-settings section, .chatgpt-settings details { min-width: 0; border-top: 1px solid var(--line); padding-top: 16px; }
+.chatgpt-settings h4 { margin: 0 0 10px; font-size: 14px; }
+.chatgpt-settings p, .chatgpt-settings code { overflow-wrap: anywhere; }
+.chatgpt-settings form { display: grid; gap: 12px; margin: 16px 0; }
+.chatgpt-settings label { display: grid; gap: 6px; min-width: 0; }
+.chatgpt-settings input, .chatgpt-settings select { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; border: 1px solid #d5d9df; border-radius: 8px; background: #fff; color: #10182a; font: inherit; }
+.chatgpt-settings .chatgpt-checkbox { display: flex; align-items: center; gap: 10px; }
+.chatgpt-checkbox input { width: 18px; height: 18px; flex: 0 0 auto; }
+.chatgpt-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin: 12px 0; }
+.chatgpt-grants { list-style: none; padding: 0; }
+.chatgpt-grants li { display: flex; align-items: center; gap: 12px; border-top: 1px solid #d5d9df; padding: 14px 0; }
+.chatgpt-grants li > div { display: grid; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.chatgpt-grants small { color: var(--muted); }
+.chatgpt-settings summary { cursor: pointer; }
+@media (max-width: 600px) { .chatgpt-settings input, .chatgpt-settings select { font-size: 16px; } }
 .slack-steps { padding-left: 24px; line-height: 1.7; }
 .slack-branding, .slack-identity { display: flex; align-items: center; gap: 12px; }
 .slack-identity { justify-content: space-between; flex-wrap: wrap; }

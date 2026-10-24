@@ -1,6 +1,7 @@
 import { requestJson } from "../api/client.js";
 import { ReadScope } from "../api/read-scope.js";
 import type { GitHubState, SlackState } from "../api/integration-contracts.js";
+import type { ChatGptState } from "../api/chatgpt-contracts.js";
 import {
     GitHubConnectionStatus,
     SlackConnectionStatus,
@@ -8,7 +9,7 @@ import {
 } from "../api/values.js";
 import { icon, escapeHtml as e } from "../work/presentation.js";
 
-type Provider = "github" | "slack";
+type Provider = "github" | "slack" | "chatgpt";
 type Summary = {
     status: string;
     tone: "neutral" | "connected" | "attention";
@@ -27,6 +28,11 @@ const providers = [
         id: "slack",
         name: "Slack",
         description: "Start and continue Work from DMs and mentions.",
+    },
+    {
+        id: "chatgpt",
+        name: "ChatGPT",
+        description: "Read shared Work through your own ChatGPT plugin.",
     },
     {
         id: "teams",
@@ -152,7 +158,20 @@ function slackSummary(state: SlackState): Summary {
 }
 
 export function providerLogo(provider: (typeof providers)[number]["id"]) {
-    return `<img class="provider-logo" src="/assets/providers/${provider}.svg" width="36" height="36" alt="">`;
+    return `<img class="provider-logo" src="${provider === "chatgpt" ? "/assets/branding/icon.svg" : `/assets/providers/${provider}.svg`}" width="36" height="36" alt="">`;
+}
+
+function chatgptSummary(state: ChatGptState): Summary {
+    return {
+        status: state.configured ? "Configured" : "Not configured",
+        tone: "neutral",
+        detail: state.configured
+            ? "Manage shared Work and verify sign-in in ChatGPT."
+            : "Connect a plugin to your own Goblin instance.",
+        action: "View setup",
+        // Configuration alone cannot attest to installation or OAuth in ChatGPT.
+        connected: false,
+    };
 }
 
 export class IntegrationsDirectory {
@@ -163,6 +182,7 @@ export class IntegrationsDirectory {
     private states: Record<Provider, Summary> = {
         github: loading(),
         slack: loading(),
+        chatgpt: loading(),
     };
     private loading = false;
     private loaded = false;
@@ -182,7 +202,11 @@ export class IntegrationsDirectory {
             const provider = event.target.closest<HTMLElement>(
                 "[data-pick-provider]",
             )?.dataset.pickProvider;
-            if (provider === "github" || provider === "slack") {
+            if (
+                provider === "github" ||
+                provider === "slack" ||
+                provider === "chatgpt"
+            ) {
                 this.picker.close();
                 document.getElementById("add-integration")?.focus();
                 this.manage(provider);
@@ -202,7 +226,11 @@ export class IntegrationsDirectory {
         this.reads.reset();
         this.picker.close();
         this.picker.replaceChildren();
-        this.states = { github: loading(), slack: loading() };
+        this.states = {
+            github: loading(),
+            slack: loading(),
+            chatgpt: loading(),
+        };
         this.loading = this.loaded = false;
         this.search = "";
         this.tab = "all";
@@ -224,13 +252,18 @@ export class IntegrationsDirectory {
             requestJson<SlackState>("/api/integrations/slack", options).then(
                 slackSummary,
             ),
+            requestJson<ChatGptState>(
+                "/api/integrations/chatgpt",
+                options,
+            ).then(chatgptSummary),
         ]);
         if (signal.aborted) return;
         const before = JSON.stringify(this.states);
-        const [github, slack] = results;
+        const [github, slack, chatgpt] = results;
         this.states = {
             github: github.status === "fulfilled" ? github.value : unknown(),
             slack: slack.status === "fulfilled" ? slack.value : unknown(),
+            chatgpt: chatgpt.status === "fulfilled" ? chatgpt.value : unknown(),
         };
         this.loading = false;
         this.loaded = true;
@@ -286,9 +319,9 @@ export class IntegrationsDirectory {
                               return `<li class="integration-row" data-integration="${p.id}">${providerLogo(p.id)}<div class="integration-copy"><h2>${p.name}</h2><p>${p.description}</p><div class="integration-meta"><span class="integration-status ${summary.tone}">${summary.connected ? icon("check") : summary.tone === "attention" ? icon("wait") : ""}${e(summary.status)}</span>${summary.detail ? `<span class="integration-detail">${e(summary.detail)}</span>` : ""}</div></div>${p.id === "teams" ? "" : `<button id="manage-integration-${p.id}" class="secondary" data-action="manage-integration" data-provider="${p.id}" aria-label="${summary.action} ${p.name}">${summary.action}</button>`}</li>`;
                           })
                           .join("")}</ul>`
-                    : `<div class="directory-empty">${icon(query ? "search" : "integrations")}<h2>${query ? "No matching integrations" : !this.loaded ? "Checking your connections…" : failed ? "Connections could not be verified" : "No connected integrations yet"}</h2><p>${query ? "Try another name or clear your search." : failed ? "Refresh the connection statuses or open All to manage a connection." : "Connect GitHub or Slack to bring your tools into Goblin."}</p><button class="secondary" data-action="reset-integrations">${query ? "Clear search" : "Browse integrations"}</button></div>`
+                    : `<div class="directory-empty">${icon(query ? "search" : "integrations")}<h2>${query ? "No matching integrations" : !this.loaded ? "Checking your connections…" : failed ? "Connections could not be verified" : "No connected integrations yet"}</h2><p>${query ? "Try another name or clear your search." : failed ? "Refresh the connection statuses or open All to manage a connection." : "Connect GitHub, Slack, or ChatGPT to bring your tools into Goblin."}</p><button class="secondary" data-action="reset-integrations">${query ? "Clear search" : "Browse integrations"}</button></div>`
             }
-            </div><p class="directory-footnote">You control which repositories and Slack identities Goblin can use. Manage access in each integration’s settings.</p>
+            </div><p class="directory-footnote">You control repository access, Slack identities, and Work shared with ChatGPT. Manage access in each integration’s settings.</p>
         </section>`;
     }
 }

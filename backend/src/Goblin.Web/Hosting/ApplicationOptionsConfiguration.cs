@@ -25,6 +25,7 @@ internal static class ApplicationOptionsConfiguration
             AllowInsecureHttp = string.Equals(value(Env.GoblinAllowInsecureHttp), "true", StringComparison.OrdinalIgnoreCase),
             ListenUrl = $"http://{host}:{port}",
             EnableWork = !string.Equals(value(Env.GoblinWorkEnabled), "false", StringComparison.OrdinalIgnoreCase),
+            ChatGptIssuer = value(Env.GoblinChatGptIssuer),
             HeadlampUrl = value(Env.GoblinHeadlampUrl),
             VictoriaLogsUrl = value(Env.GoblinVictorialogsUrl),
             ConfigureCodex = options => options with { Command = value(Env.GoblinCodexCommand) ?? options.Command }

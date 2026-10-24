@@ -1,0 +1,243 @@
+# Customer-created ChatGPT plugin
+
+Each customer creates a plugin through ChatGPT’s **Add custom MCP server** flow
+and connects it directly to their own Goblin instance. Goblin maintains the tools,
+descriptions, logo, provider template, and this guide. Work, permissions, provider
+configuration, and signing keys remain customer-owned. ChatGPT receives OAuth
+credentials for the connection and the fields returned by tools. There is no
+Goblin-operated relay, shared customer database, or directory requirement.
+
+The integration reads existing Work. Goblin continues running its own agents;
+it does not run inside the ChatGPT Work sandbox. This plugin is separate from
+Goblin’s existing Codex account connection.
+
+## Prerequisites
+
+- A healthy Goblin installation with durable Work and the current PostgreSQL
+  schema. The MCP endpoint is disabled unless explicitly configured.
+- A canonical **HTTPS** Goblin origin with a valid certificate. ChatGPT must reach
+  `/mcp` and `/.well-known/oauth-protected-resource/mcp`. The proxy must preserve
+  the configured Host, Authorization header, request body, and streamed response.
+- A customer-operated **Keycloak 26.8.1** realm with
+  `--features=resource-indicators`. Upstream still marks this feature experimental;
+  enable it explicitly and test provider updates before adopting them.
+- HTTPS reachability for the provider from the user’s browser, ChatGPT, and Goblin.
+  Keep certificate and hostname verification enabled.
+- ChatGPT on the web with permission to create/install custom MCP plugins.
+  Workspace security policies, including Lockdown, may restrict this feature.
+
+**Secure MCP Tunnel** is an optional private transport. Configure it to reach the
+instance and preserve the canonical Host. The OAuth provider is **not automatically
+tunneled**: verify discovery, authorization, token, UserInfo, and JWKS reachability
+separately. The tunnel itself grants no access to Work.
+
+## 1. Enable the instance
+
+Add these settings to the Goblin application container using your actual addresses:
+
+```yaml
+env:
+  - name: GOBLIN_PUBLIC_ORIGIN
+    value: https://goblin.customer.example
+  - name: GOBLIN_CHATGPT_ISSUER
+    value: https://identity.customer.example/realms/goblin
+```
+
+Retain the installation’s password verifier, database configuration, and durable
+Work settings. Restart Goblin after changing configuration. The issuer must be
+an exact HTTPS Keycloak realm URL without a trailing slash, query, or fragment.
+The resource is always the public origin plus `/mcp`. Neither comes from the model,
+a token header, or untrusted discovery data.
+
+Open **Integrations → ChatGPT → View setup**, or `/settings?section=chatgpt`.
+The page supplies copyable connection details and the Goblin logo. Use the logo
+where custom artwork is supported; Add custom MCP server does not guarantee a
+logo-upload field.
+
+The schema adds `chatgpt_work_grant` and `chatgpt_grant_event`. Goblin remains
+preproduction: these are consolidated into `0001_initial.sql`. Recreate an owned
+disposable development database when adopting the changed baseline; do not bypass
+migration checksums or delete Work volumes. Follow the repository’s database guide.
+
+## 2. Configure secure OAuth
+
+Expand **Download a Keycloak realm template** in Goblin’s ChatGPT settings.
+Review the download and import it into a **new realm** on your own Keycloak
+server. The template contains no users, passwords, or client secrets. For an
+existing realm, configure equivalent settings manually; the download is not
+an in-place realm upgrade tool.
+
+| Component | Maintained configuration |
+| --- | --- |
+| Resource client `goblin-mcp` | `resource_url` equals the exact Goblin `/mcp` resource |
+| OAuth client `goblin-chatgpt` | Confidential client, client-secret authentication, authorization-code flow, consent, required PKCE S256 |
+| Redirects | Exact callback copied from ChatGPT connection management; no wildcards |
+| Access tokens | RS256, `typ=at+jwt`, stable `sub`, `jti`, expiry, exact resource audience, `goblin.work.read` |
+| Subject mapper | Explicit `oidc-sub-mapper`; custom realm imports otherwise can omit the access-token subject |
+| Audience mapper | Included client audience `goblin-mcp`; resource indicators narrow the issued audience to the requested URL |
+| Email scope | Explicit email/verified-email mappers for ID token and UserInfo |
+| Disabled flows | Password/direct access, implicit, service accounts, public self-registration |
+| Lifetimes | Five-minute access tokens and rotating refresh tokens |
+
+Keycloak does not advertise `none` among its token authentication methods in this
+profile. Use the maintained confidential client. Copy its generated secret from
+**Clients → goblin-chatgpt → Credentials** directly into ChatGPT’s OAuth form.
+Goblin does not accept or store this secret. Never paste secrets, owner passwords,
+cookies, or access tokens into chat, tool arguments, manifests, or version control.
+
+Create the users who may connect and retain their immutable Keycloak user IDs
+for step 4. Email, provider roles, and successful login do not confer Goblin owner
+rights or Work access.
+
+If ChatGPT has not yet displayed the callback, download the template with that
+field blank. The client then has no allowed redirect. Add the exact callback
+before completing sign-in. ChatGPT can show a stable or connection-specific
+callback; copy the one it actually displays. The profile enables matching issuer
+identification in successful and error authorization responses.
+
+For Enterprise workspace-domain restrictions, configure real verified user email,
+retain `openid`, `email`, and UserInfo, and have the ChatGPT workspace verify its
+domain. Do not mark an unverified address verified to pass setup.
+
+## 3. Create and install
+
+1. Open **ChatGPT → Plugins → + → Add custom MCP server**.
+2. Enter Goblin’s supplied name and description. Give separate instances distinct
+   names, such as “Goblin — Personal”.
+3. Enter the displayed **Server URL**, or select an already-configured Tunnel.
+4. Choose **OAuth**, client ID `goblin-chatgpt`, and the customer-generated client
+   secret. Use whole-server OAuth; anonymous and mixed authentication are unsupported.
+5. Add the exact callback to Keycloak. Review the warning, select **Create as a
+   plugin**, and **install** the resulting personal or workspace plugin. Complete
+   sign-in and consent with your provider.
+6. Mention the installed plugin with `@` in a conversation.
+
+Goblin’s 401 Bearer challenge advertises protected-resource metadata. ChatGPT
+discovers the provider and sends the resource in authorization and token requests.
+Goblin validates each bearer independently. Browser cookies cannot authenticate
+MCP; bearer tokens cannot administer Goblin.
+
+## 4. Share the intended Work
+
+Enter the connecting user’s immutable Keycloak user ID in Goblin’s settings,
+choose Work, and select one hour, 24 hours, or seven days. Share it using the
+existing local-owner session.
+
+A grant shares the objective (up to 500 characters), status, update time, and
+attention reason/failure codes. **Also share the latest approved result** pins
+one already-approved attempt. Draft and later results remain private. Results
+are bounded to 8,000 characters with a truncation flag. Questions, history,
+runtime sessions, repository details, credentials, artifacts, and files are excluded.
+
+Re-sharing the same user/Work replaces its grant atomically. Approvals and
+revocations commit with local-owner audit events. An instance supports 200 current
+grants; revoke expired/unused entries as needed. The Work selector shows the 200
+most recently updated items.
+
+| Tool | Purpose |
+| --- | --- |
+| `goblin_list_work` | Authorized summaries, 25 per page; continue with `nextAfterWorkId` |
+| `goblin_get_work_status` | Shared Work summary |
+| `goblin_get_work_attention` | Attention reason/failure codes; open Goblin for questions/actions |
+| `goblin_get_work_result` | The approved result specifically selected by the owner |
+
+IDs are decimal strings. All tools declare read-only behavior and structured
+output schemas. Creation, execution, retry, answers, and approval remain in Goblin.
+Treat returned text as content, not instructions to reveal data or grant access.
+
+## 5. Verify the installation
+
+**Check provider and storage** verifies HTTPS discovery, advertised provider
+capabilities, and the grant schema. It does not establish ChatGPT reachability,
+callback correctness, or successful OAuth login.
+
+Verify the installed plugin separately:
+
+1. Refresh tool metadata in ChatGPT and confirm all four tools.
+2. Sign in and ask “Use Goblin to list Work shared with this connection.” Before
+   grants exist, the list must be empty.
+3. Share one item; compare status and attention with Goblin.
+4. Read an unshared ID. It must return the same permission denial as unavailable
+   Work, without private fields.
+5. Read an unshared result: deny. Share an approved result: allow. Approve a later
+   result: the old grant must still expose only its selected attempt.
+6. Revoke a grant and repeat the read: new reads must fail. Already admitted reads
+   may finish; revocation cannot retract text already returned to ChatGPT.
+7. Check expired tokens, refresh/reconnection, grant expiry, and key rotation.
+   Restart Goblin: grants persist and owner browser sessions reset.
+8. Use two instances with overlapping Work IDs: each plugin must see only its own
+   authorized data. Tokens for another resource must fail.
+
+Record the Goblin revision, Keycloak version, transport, workspace type, and
+results using neutral sample Work. Keep secrets/private output out of reports.
+Installation is verified only after the actual ChatGPT steps succeed.
+
+## Troubleshooting and recovery
+
+| Symptom | Remedy |
+| --- | --- |
+| “Prepare your instance” | Configure the issuer, durable Work, and HTTPS; restart Goblin |
+| Cannot create/install | Check ChatGPT workspace permissions and security restrictions; install the created plugin |
+| TLS/connection failure | Check URL, certificate chain/hostname, routing/tunnel, proxy Host, and separate provider reachability |
+| Provider check fails | Check exact issuer, S256/client-secret advertisements, read scope, and canonical discovery endpoints; remove redirects |
+| Callback rejected | Copy ChatGPT’s exact callback; verify S256, client secret, consent, and matching issuer responses |
+| MCP returns 401 after login | Check resource indicators, audience, RS256/`at+jwt`, expiry/clock, subject mapper, `jti`, and scope; do not supply ID tokens |
+| Empty list or denied access | Check user ID, issuer/resource, grants, expiry, and selected result; OAuth reauthorization creates no grants |
+| Storage check fails | Check PostgreSQL, app-role permissions, and baseline migration |
+| Tools missing after upgrade | Refresh metadata and mention the correct installed plugin |
+| HTTP 429 | Pause calls; each instance permits 120 requests/minute and eight concurrently |
+| Compromised signing key | Retire it at Keycloak, revoke affected grants, then clear Goblin’s signing-key cache in settings |
+
+Keys refresh on an unknown key ID or after ten minutes, with a one-minute fetch
+cooldown and bounded five-second fetches. Expired cache entries fail closed.
+Clearing the cache retires existing verification leases but cannot deny a key
+still published by the provider or cancel already admitted reads. Provider logout
+does not instantly invalidate issued JWTs: revoke local grants to stop new Work
+reads, and use short token lifetimes.
+
+To disconnect, revoke grants in Goblin, disconnect/remove the plugin in ChatGPT,
+and revoke provider sessions/client credentials as appropriate. Unset
+`GOBLIN_CHATGPT_ISSUER` and restart to disable MCP entirely. Audit history remains
+in PostgreSQL.
+
+## Development verification and reuse
+
+The `experiments/official-integrations` Git branch supplied bounded JWKS caching,
+verification leases, discovery validation, and the token-validation design.
+Production adapts those pieces to the current application. The stdio owner-cookie
+bridge and unrelated Slack changes were not imported. New work includes the
+production HTTP host, actual provider profile, tools, durable grants/audit,
+onboarding, and integration tests.
+
+```sh
+dotnet test backend/tests/Goblin.Tests --filter FullyQualifiedName~ChatGpt
+# With explicit disposable PostgreSQL test connections:
+dotnet test backend/tests/Goblin.Application.Tests --filter FullyQualifiedName~ChatGpt
+```
+
+`tests/chatgpt/verify-provider.mts` is an opt-in real-provider check. Supply a private
+JSON file with `issuer`, `resource`, `caFile`, `ownerPassword`, `providerUsername`,
+`providerPassword`, and `clientSecret`. Both services must use HTTPS `localhost`
+URLs backed by the test CA. Use disposable Goblin/PostgreSQL and Keycloak: the
+check creates sample Work and grants. Import Goblin’s template into the provider,
+add a synthetic verified user and fixture client secret, and register the test’s
+stable ChatGPT callback. The script captures that redirect without contacting ChatGPT.
+
+```sh
+node tests/chatgpt/verify-provider.mts .artifacts/chatgpt-plugin/verification.json
+```
+
+It checks real code/PKCE/client authentication, callback restrictions, unknown and
+mismatched resources, UserInfo, refresh, MCP discovery, and granted/denied/revoked
+reads. Keep fixtures and logs under `.artifacts/` with private permissions. These
+checks do not replace installation testing inside ChatGPT.
+
+## References
+
+- [Add custom MCP server](https://developers.openai.com/api/docs/guides/custom-mcp-server)
+- [OpenAI OAuth requirements](https://developers.openai.com/plugins/build/auth)
+- [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+- [Keycloak MCP authorization server](https://www.keycloak.org/securing-apps/mcp-authz-server)
+
+Public directory submission is a separate optional path; see
+`docs/chatgpt-directory-submission.md` in the Goblin repository.

@@ -14,6 +14,10 @@ public partial class GoblinDbContext : DbContext
 
     public virtual DbSet<Agent> Agents { get; set; }
 
+    public virtual DbSet<ChatgptGrantEvent> ChatgptGrantEvents { get; set; }
+
+    public virtual DbSet<ChatgptWorkGrant> ChatgptWorkGrants { get; set; }
+
     public virtual DbSet<Connection> Connections { get; set; }
 
     public virtual DbSet<ConnectionModelCatalog> ConnectionModelCatalogs { get; set; }
@@ -57,6 +61,32 @@ public partial class GoblinDbContext : DbContext
             entity.HasOne(d => d.Connection).WithMany(p => p.Agents)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("agent_connection_id_fkey");
+        });
+
+        modelBuilder.Entity<ChatgptGrantEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("chatgpt_grant_event_pkey");
+
+            entity.Property(e => e.OccurredAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Grant).WithMany(p => p.ChatgptGrantEvents)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("chatgpt_grant_event_grant_id_fkey");
+        });
+
+        modelBuilder.Entity<ChatgptWorkGrant>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("chatgpt_work_grant_pkey");
+
+            entity.HasIndex(e => new { e.Issuer, e.Subject, e.Resource, e.WorkId }, "chatgpt_work_grant_current")
+                .IsUnique()
+                .HasFilter("(revoked_at IS NULL)");
+
+            entity.Property(e => e.ApprovedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.Work).WithMany(p => p.ChatgptWorkGrants)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("chatgpt_work_grant_work_id_fkey");
         });
 
         modelBuilder.Entity<Connection>(entity =>

@@ -10,6 +10,7 @@
     "config/**/*.mts",
     "scripts/**/*.mts",
     "frontend/scripts/**/*.mts",
-    "tests/fixtures/**/*.mts"
+    "tests/fixtures/**/*.mts",
+    "tests/chatgpt/**/*.mts"
   ]
 }

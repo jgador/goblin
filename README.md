@@ -59,6 +59,8 @@ Work. For Work development, create a migrated PostgreSQL profile using the
 `make dev DB_PROFILE=wsl`. Both paths share the Rust password verifier.
 Use [authentication](docs/authentication.md) for Codex sign-in and connection checks,
 and [execution hosting](docs/execution-hosting.md) for repository configuration.
+Connect a customer-created [ChatGPT plugin](docs/chatgpt-integration.md) to read
+Work explicitly shared from your own instance.
 
 `make help` lists tasks. Common commands are `make build`, `make test`,
 `make check`, and `make format`; choose verification using the

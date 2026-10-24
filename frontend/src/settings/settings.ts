@@ -1,6 +1,7 @@
 import { mountCodex } from "../connection/codex.js";
 import { mountGitHub } from "./github.js";
 import { mountSlack } from "./slack.js";
+import { mountChatGpt } from "./chatgpt.js";
 import { icon, escapeHtml as e } from "../work/presentation.js";
 import { SystemResources } from "./system.js";
 import { mountTimeZonePicker } from "./timezone-picker.js";
@@ -19,6 +20,7 @@ const providers = [
     "timezone",
     "integrations",
     "slack",
+    "chatgpt",
 ] as const;
 type Provider = (typeof providers)[number];
 function providerFrom(value: string): Provider {
@@ -30,6 +32,7 @@ export class Settings {
     private codexMounted = false;
     private githubMounted = false;
     private slackDispose?: () => void;
+    private chatgptDispose?: () => void;
     private generation = 0;
     private codexDispose?: () => void;
     private githubDispose?: () => void;
@@ -100,10 +103,12 @@ export class Settings {
         this.codexDispose?.();
         this.githubDispose?.();
         this.slackDispose?.();
+        this.chatgptDispose?.();
         this.timezoneDispose?.();
         this.codexDispose =
             this.githubDispose =
             this.slackDispose =
+            this.chatgptDispose =
             this.timezoneDispose =
                 undefined;
         this.codexMounted = this.githubMounted = false;
@@ -126,6 +131,10 @@ export class Settings {
             this.slackDispose?.();
             this.slackDispose = undefined;
         }
+        if (provider !== "chatgpt") {
+            this.chatgptDispose?.();
+            this.chatgptDispose = undefined;
+        }
         if (provider !== "timezone") {
             this.timezoneDispose?.();
             this.timezoneDispose = undefined;
@@ -139,7 +148,7 @@ export class Settings {
         const parent =
             provider === "codex"
                 ? "connections"
-                : provider === "slack"
+                : provider === "slack" || provider === "chatgpt"
                   ? "integrations"
                   : provider;
         this.element.querySelector<HTMLSelectElement>(
@@ -163,6 +172,15 @@ export class Settings {
         });
     }
     private async mount(provider: Provider) {
+        if (provider === "chatgpt") {
+            this.chatgptDispose?.();
+            this.chatgptDispose = mountChatGpt(
+                this.element.querySelector<HTMLElement>(
+                    '[data-provider-panel="chatgpt"]',
+                )!,
+            );
+            return;
+        }
         if (provider === "integrations") {
             const panel = this.element.querySelector<HTMLElement>(
                 '[data-provider-panel="integrations"]',

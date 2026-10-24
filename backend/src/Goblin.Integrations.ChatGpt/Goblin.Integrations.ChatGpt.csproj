@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Content Include="../../licenses/identitymodel/LICENSE" Link="licenses/identitymodel/LICENSE" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.1" />
+    <InternalsVisibleTo Include="Goblin.Tests" />
+  </ItemGroup>
+</Project>

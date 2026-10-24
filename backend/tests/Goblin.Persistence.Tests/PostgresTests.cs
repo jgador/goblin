@@ -200,7 +200,7 @@ public sealed class PostgresTests
         await admin.OpenAsync();
         string[] expected =
         [
-            "agent", "connection", "connection_model_catalog", "conversation", "conversation_message",
+            "agent", "chatgpt_grant_event", "chatgpt_work_grant", "connection", "connection_model_catalog", "conversation", "conversation_message",
             "execution_attempt", "external_conversation", "external_identity", "external_link_request",
             "external_message", "github_connection", "github_repository", "repository_operation",
             "repository_setup_memory", "schema_migration", "wolverine_agent_restrictions",

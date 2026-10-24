@@ -24,6 +24,8 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 | [Codex integration](codex-integration.md) | Transport/process ownership and generated protocol maintenance |
 | [Model catalog](model-catalog.md) | Start/Retry options and connection-scoped discovery |
 | [Slack integration](slack-integration.md) | App setup, linked identities, durable ingress, and delivery limits |
+| [ChatGPT plugin](chatgpt-integration.md) | Customer-created MCP plugin, OAuth, Work grants, verification, and troubleshooting |
+| [Optional ChatGPT directory submission](chatgpt-directory-submission.md) | Separate publisher eligibility and public review requirements |
 | [Database](database.md) | SQL baseline, EF generation, TLS access, and local client profiles |
 | [Native tooling](goblinctl.md) | CLI commands, setup, packaging, and releases |
 | [Kubernetes names](kubernetes-names.md) | Platform/website/execution identity and storage ownership |

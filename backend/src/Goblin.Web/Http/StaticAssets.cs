@@ -30,6 +30,7 @@ internal sealed class StaticAssets
             ("/settings/settings.js", "settings/settings.js", "text/javascript; charset=utf-8"),
             ("/settings/github.js", "settings/github.js", "text/javascript; charset=utf-8"),
             ("/settings/slack.js", "settings/slack.js", "text/javascript; charset=utf-8"),
+            ("/settings/chatgpt.js", "settings/chatgpt.js", "text/javascript; charset=utf-8"),
             ("/assets/branding/slack.png", "assets/branding/slack.png", "image/png"),
             ("/settings/system.js", "settings/system.js", "text/javascript; charset=utf-8"),
             ("/settings/timezone.js", "settings/timezone.js", "text/javascript; charset=utf-8"),
