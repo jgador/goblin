@@ -185,6 +185,41 @@ After building frontend assets, publish with:
 dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 ```
 
+### Docker builds
+
+Build and time the complete platform image from the repository root:
+
+```bash
+time docker build --platform linux/amd64 --progress=plain -t goblin-platform:local .
+```
+
+The shell's `real` value includes the entire build and image export. BuildKit's
+individual step durations overlap because frontend and .NET compilation and
+native runtime downloads run in parallel. The .NET SDK then packages the browser
+assets, including its gzip/Brotli copies and endpoint manifest.
+
+The first build downloads the pinned base images, Codex runtime, GitHub CLI,
+and package dependencies. Later builds reuse Docker layers, npm and NuGet
+downloads, APT indexes, and the checksum-verified GitHub CLI archive. Restored
+NuGet packages stay in the SDK restore layer alongside their metadata, so an
+evicted download cache cannot break `--no-restore` compilation. Frontend
+edits rebuild and package browser assets while reusing compiled .NET assemblies
+and native tools. Application files follow the large native layers in the final
+image so those layers stay reusable. C# edits reuse restored packages and the
+database migration tool; migration-tool edits rebuild only that tool. Published
+browser assets have their own final-image layer, while Slack's icon remains
+embedded in its .NET assembly. Ubuntu package indexes are limited to `main`,
+which owns the runtime packages and their dependencies, with security and update
+channels kept.
+
+Keep the same builder and its cache for normal development. `--no-cache` forces
+every build instruction to run again and can also invalidate cache mounts;
+reserve it for diagnostics rather than normal development timing. Removing an
+image with `docker image rm goblin-platform:local` retains the builder cache.
+Add new referenced production C# projects to the metadata
+copies in the Dockerfile's restore stage so package restoration stays independent
+of source changes.
+
 ### Choosing verification
 
 Choose checks for the behavior and boundaries changed. Local edits, fixture tests,
@@ -259,9 +294,9 @@ the website installation page shares those fonts and their license.
 The root `dist/` holds compiled test tooling. It is separate from the frontend
 build and is not included in the application image. Both output directories,
 .NET `bin/` and `obj/`, `.artifacts/`, and local runtime data remain ignored by Git.
-The root Dockerfile builds frontend assets before publishing the backend, using
-the repository root as its build context. The build context includes
-`docs/chatgpt-integration.md`, which the backend embeds for the ChatGPT installation
+The root Dockerfile compiles frontend assets and the backend in parallel, then
+finishes SDK publishing, using the repository root as its build context. The build
+context includes `docs/chatgpt-integration.md`, which the backend embeds for the ChatGPT installation
 download; other documentation remains excluded.
 
 Keep original artwork in `assets/branding/` and copy only the assets used by the

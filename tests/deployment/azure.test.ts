@@ -189,7 +189,7 @@ if (name === 'curl') {
     fs.accessSync(path.join(args.at(-1), 'Dockerfile'));
     if ((fs.statSync(path.join(args.at(-1), 'frontend/src/connection/index.html')).mode & 0o044) !== 0o044)
       throw new Error('Source assets must remain readable in the non-root image');
-    process.stdout.write('#2 [assets 3/8] RUN npm ci --omit=dev\\n#2 1.0 password=do-not-stream\\n#2 DONE 2.0s\\n');
+    process.stdout.write('#2 [codex 2/3] RUN --mount=type=cache,id=goblin-platform-npm-codex,target=/root/.npm npm ci --omit=dev --no-audit --no-fund\\n#2 1.0 password=do-not-stream\\n#2 DONE 2.0s\\n');
     fs.writeFileSync(path.join(root, 'built-image'), 'true');
   } else if (args[0] === 'save') fs.writeFileSync(args[args.indexOf('--output') + 1], 'test image archive');
 } else if (name === 'apt-get') {

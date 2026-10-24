@@ -69,25 +69,53 @@ fn build_message(line: &str) -> Option<String> {
         "loading build inputs".to_owned()
     } else if record.starts_with("[auth] ") {
         "requesting registry access for a build image".to_owned()
-    } else if record.starts_with("[assets ")
-        || record.starts_with("[build ")
-        || record.starts_with("[stage-2 ")
-    {
-        let (_, instruction) = record.split_once("] ")?;
+    } else if record.starts_with('[') {
+        let (stage, instruction) = record.strip_prefix('[')?.split_once("] ")?;
+        if !matches!(
+            stage.split_whitespace().next()?,
+            "node-base"
+                | "assets"
+                | "codex"
+                | "github-cli"
+                | "dotnet-base"
+                | "restore"
+                | "build"
+                | "publish"
+                | "database"
+                | "runtime"
+        ) {
+            return None;
+        }
+        // BuildKit includes cache mounts in RUN records. Recognize the command
+        // without exposing mount options or arbitrary command output publicly.
+        let instruction = if let Some(mut command) = instruction.strip_prefix("RUN ") {
+            while command.starts_with("--mount=") {
+                command = command.split_once(' ')?.1.trim_start();
+            }
+            command
+        } else {
+            instruction
+        };
         match instruction {
-            "RUN npm ci --omit=dev" => "installing runtime dependencies",
-            "RUN npm --prefix frontend ci" => "installing frontend dependencies",
-            "RUN npm --prefix frontend run build" => "compiling frontend assets",
-            "RUN node /tmp/install-gh.mjs" => "downloading GitHub CLI",
-            s if s.starts_with("RUN dotnet publish backend/src/Goblin.Web/") => {
+            "npm ci --omit=dev --no-audit --no-fund" => "installing runtime dependencies",
+            "npm --prefix frontend ci --no-audit --no-fund" => "installing frontend dependencies",
+            "npm --prefix frontend run build" => "compiling frontend assets",
+            "node /tmp/install-gh.mjs" => "downloading GitHub CLI",
+            s if s.starts_with("dotnet restore backend/src/Goblin.Web/") => {
+                "restoring .NET dependencies"
+            }
+            s if s.starts_with("dotnet publish backend/src/Goblin.Web/") => {
                 "publishing the .NET application"
             }
-            s if s.starts_with("RUN dotnet publish backend/tools/Goblin.Database/") => {
+            s if s.starts_with("dotnet build backend/src/Goblin.Web/") => {
+                "compiling the .NET application"
+            }
+            s if s.starts_with("dotnet publish backend/tools/Goblin.Database/") => {
                 "publishing the database migration tool"
             }
             s if s.starts_with("COPY ") => "copying build files",
             s if s.starts_with("FROM ") => "preparing a build image",
-            s if s.starts_with("RUN apt-get update") => "installing runtime packages",
+            s if s.starts_with("apt-get update") => "installing runtime packages",
             _ => return None,
         }
         .to_owned()
@@ -106,6 +134,8 @@ mod tests {
         for input in [
             "#9 1.2 password=private",
             "#9 [assets 3/8] RUN echo private",
+            "#9 [codex 3/8] RUN --mount=type=cache,id=private echo private",
+            "#9 [unknown 3/8] RUN node /tmp/install-gh.mjs",
             "#9 DONE private",
             "#9 DONE NaNs",
             "private",
@@ -123,11 +153,11 @@ mod tests {
             assert!(!message.contains("private") || message.contains("private installation log"));
         }
         assert_eq!(
-            build_message("#2 [assets 3/8] RUN npm ci --omit=dev").unwrap(),
+            build_message("#2 [codex 2/3] RUN --mount=type=cache,id=goblin-platform-npm-codex,target=/root/.npm npm ci --omit=dev --no-audit --no-fund").unwrap(),
             "Build step 2: installing runtime dependencies."
         );
         assert_eq!(
-            build_message("#3 [assets 4/8] RUN npm --prefix frontend ci").unwrap(),
+            build_message("#3 [assets 2/4] RUN --mount=type=cache,id=goblin-platform-npm-frontend,target=/root/.npm npm --prefix frontend ci --no-audit --no-fund").unwrap(),
             "Build step 3: installing frontend dependencies."
         );
         assert_eq!(
@@ -139,5 +169,44 @@ mod tests {
             "Build step 2: completed in 12.5s."
         );
         assert!(build_message("#2 CACHED").unwrap().contains("cache"));
+    }
+
+    #[test]
+    fn independent_build_stages_report_safe_progress_with_cache_mounts() {
+        for (record, expected) in [
+            (
+                "[restore 14/14] RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/NuGet/http-cache,sharing=locked     dotnet restore backend/src/Goblin.Web/Goblin.Web.csproj --nologo &&     dotnet restore backend/tools/Goblin.Database/Goblin.Database.csproj --nologo",
+                "restoring .NET dependencies",
+            ),
+            (
+                "[publish 2/2] RUN --mount=type=cache,id=goblin-platform-nuget,target=/root/.nuget/packages dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --no-restore --nologo",
+                "publishing the .NET application",
+            ),
+            (
+                "[build 5/5] RUN --mount=type=cache,id=goblin-platform-nuget,target=/root/.nuget/packages dotnet build backend/src/Goblin.Web/Goblin.Web.csproj -c Release --no-restore --nologo",
+                "compiling the .NET application",
+            ),
+            (
+                "[database 2/2] RUN --mount=type=cache,id=goblin-platform-nuget,target=/root/.nuget/packages dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --no-restore --nologo",
+                "publishing the database migration tool",
+            ),
+            (
+                "[runtime 2/13] RUN --mount=type=cache,id=goblin-platform-apt-lists,target=/var/lib/apt/lists,sharing=locked     apt-get update -o Acquire::Languages=none &&     apt-get install -y --no-install-recommends git ca-certificates",
+                "installing runtime packages",
+            ),
+            (
+                "[runtime 2/13] RUN --mount=type=cache,target=/var/lib/apt/lists --mount=type=cache,target=/var/cache/apt     apt-get update",
+                "installing runtime packages",
+            ),
+            (
+                "[github-cli 2/2] RUN node /tmp/install-gh.mjs",
+                "downloading GitHub CLI",
+            ),
+        ] {
+            assert_eq!(
+                build_message(&format!("#5 {record}")).unwrap(),
+                format!("Build step 5: {expected}.")
+            );
+        }
     }
 }
