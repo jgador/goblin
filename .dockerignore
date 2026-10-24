@@ -14,6 +14,8 @@ dist
 tests
 backend/tests
 docs
+# The backend embeds this guide for the ChatGPT installation download.
+!docs/chatgpt-integration.md
 website
 deploy/*
 !deploy/install-gh.mjs

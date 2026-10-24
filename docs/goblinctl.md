@@ -68,7 +68,7 @@ The local source snapshot includes Git-visible working-tree changes and untracke
 files, excludes ignored stores/build products, and refuses symlinks. A completed
 installation resumes without rebuilding. Failed installation requires explicit
 retry. Stop is suspension; reset is explicit deletion of the owned test cluster.
-The native CLI remains installed after reset.
+The native CLI and its license documents remain installed after reset.
 
 The installer retains its existing root worker and unprivileged DynamicUser setup
 service as separate processes. Public setup exposes static assets, status,

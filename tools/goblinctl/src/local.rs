@@ -138,16 +138,7 @@ impl Local {
                 "{name} already exists outside this runner. Use a clean WSL distribution for this test."
             );
         }
-        let opt = self.path("opt/goblin");
-        if opt.exists() {
-            for entry in fs::read_dir(&opt)? {
-                let name = entry?.file_name();
-                ensure!(
-                    name == "bin" || name == "releases",
-                    "/opt/goblin contains files outside this runner"
-                );
-            }
-        }
+        check_retained_tooling(&self.path("opt/goblin"))?;
         for name in UNITS {
             ensure!(
                 !self.unit(name).exists(),
@@ -498,6 +489,18 @@ fn remove_tree(path: &Path) -> Result<()> {
     }
     Ok(())
 }
+fn check_retained_tooling(path: &Path) -> Result<()> {
+    if path.exists() {
+        for entry in fs::read_dir(path)? {
+            let name = entry?.file_name();
+            ensure!(
+                name == "bin" || name == "releases" || name == "share",
+                "/opt/goblin contains files outside this runner"
+            );
+        }
+    }
+    Ok(())
+}
 pub fn origin(config: &Value) -> Result<String> {
     Ok(format!(
         "http://localhost:{}",
@@ -608,4 +611,39 @@ pub fn snapshot_source(git_repository: &Path, destination: &Path) -> Result<()> 
         .set_permissions(fs::Permissions::from_mode(0o600))?;
     temporary.persist(destination)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_retained_tooling;
+    use crate::install;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn retained_native_tooling_and_licenses_allow_a_fresh_local_installation() {
+        let artifacts =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/local-start-regression");
+        fs::create_dir_all(&artifacts).unwrap();
+        let fixture = tempfile::tempdir_in(artifacts).unwrap();
+        let binary = fixture.path().join("fixture-goblinctl");
+        fs::write(&binary, b"inert native tooling fixture").unwrap();
+        let system = fixture.path().join("system");
+        install::activate_tooling(&system, &binary).unwrap();
+        let opt = system.join("opt/goblin");
+        assert!(check_retained_tooling(&opt).is_err());
+
+        // Reset removes setup assets while retaining the CLI and its licenses.
+        fs::remove_dir_all(opt.join("setup")).unwrap();
+        assert!(opt.join("share/licenses/goblinctl/LICENSE").is_file());
+        check_retained_tooling(&opt).unwrap();
+
+        fs::create_dir(opt.join("unrelated")).unwrap();
+        assert!(
+            check_retained_tooling(&opt)
+                .unwrap_err()
+                .to_string()
+                .contains("files outside this runner")
+        );
+    }
 }

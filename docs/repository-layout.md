@@ -260,7 +260,9 @@ The root `dist/` holds compiled test tooling. It is separate from the frontend
 build and is not included in the application image. Both output directories,
 .NET `bin/` and `obj/`, `.artifacts/`, and local runtime data remain ignored by Git.
 The root Dockerfile builds frontend assets before publishing the backend, using
-the repository root as its build context.
+the repository root as its build context. The build context includes
+`docs/chatgpt-integration.md`, which the backend embeds for the ChatGPT installation
+download; other documentation remains excluded.
 
 Keep original artwork in `assets/branding/` and copy only the assets used by the
 browser into `frontend/public/assets/`. Codex schemas belong under
