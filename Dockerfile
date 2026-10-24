@@ -1,4 +1,4 @@
-# Frontend and .NET compilation run in parallel with native downloads.
+# Frontend, .NET restore, migration-tool publishing, and native downloads run in parallel.
 # Node/npm stay in build stages.
 FROM node:26.10.0-bookworm-slim AS node-base
 WORKDIR /app
@@ -64,29 +64,31 @@ COPY backend/src/Goblin.Integrations.GitHub/*.csproj ./backend/src/Goblin.Integr
 COPY backend/src/Goblin.Integrations.Slack/*.csproj ./backend/src/Goblin.Integrations.Slack/
 COPY backend/src/Goblin.Integrations.ChatGpt/*.csproj ./backend/src/Goblin.Integrations.ChatGpt/
 COPY backend/src/Goblin.Web/*.csproj ./backend/src/Goblin.Web/
-COPY backend/tools/Goblin.Database/*.csproj ./backend/tools/Goblin.Database/
 RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/NuGet/http-cache,sharing=locked \
-    dotnet restore backend/src/Goblin.Web/Goblin.Web.csproj --nologo && \
-    dotnet restore backend/tools/Goblin.Database/Goblin.Database.csproj --nologo
+    dotnet restore backend/src/Goblin.Web/Goblin.Web.csproj --nologo
 
-FROM restore AS build
+FROM restore AS publish
 COPY backend/src ./backend/src
 COPY backend/licenses ./backend/licenses
 COPY docs/chatgpt-integration.md ./docs/chatgpt-integration.md
 # Slack's icon is embedded in its assembly; browser output is copied at runtime.
 COPY frontend/public/assets/branding/slack.png ./frontend/public/assets/branding/slack.png
-RUN dotnet build backend/src/Goblin.Web/Goblin.Web.csproj -c Release --no-restore --nologo
-
-# Finish SDK packaging after parallel compilation. This retains its gzip/Brotli
-# assets and endpoint manifest without recompiling C# for frontend-only edits.
-FROM build AS publish
+# Compile and package once, including the SDK's gzip/Brotli assets and endpoint
+# manifest. A separate build before publish repeats MSBuild's project traversal.
 COPY --from=assets /app/frontend/dist ./frontend/dist
 RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --no-restore --nologo && \
     mv /publish/wwwroot /browser && \
     mkdir /browser-metadata && \
     mv /publish/Goblin.Web.staticwebassets.endpoints.json /browser-metadata/
 
-FROM restore AS database
+# Restore and publish independently of the web app. A separate download cache
+# lets both restores run concurrently without waiting for the other's lock.
+FROM dotnet-base AS database-restore
+COPY backend/tools/Goblin.Database/*.csproj ./backend/tools/Goblin.Database/
+RUN --mount=type=cache,id=goblin-platform-nuget-database-http,target=/root/.local/share/NuGet/http-cache,sharing=locked \
+    dotnet restore backend/tools/Goblin.Database/Goblin.Database.csproj --nologo
+
+FROM database-restore AS database
 COPY backend/tools/Goblin.Database ./backend/tools/Goblin.Database
 RUN dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --no-restore --nologo
 

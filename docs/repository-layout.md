@@ -194,31 +194,91 @@ time docker build --platform linux/amd64 --progress=plain -t goblin-platform:loc
 ```
 
 The shell's `real` value includes the entire build and image export. BuildKit's
-individual step durations overlap because frontend and .NET compilation and
-native runtime downloads run in parallel. The .NET SDK then packages the browser
-assets, including its gzip/Brotli copies and endpoint manifest.
+individual step durations overlap: frontend compilation, web dependency restore,
+database-tool restore/publish, native runtime downloads, and runtime package
+installation are independent branches. Each .NET restore has its own download
+cache so its lock does not serialize the other branch. After frontend assets and
+web dependencies are ready, one `dotnet publish` compiles the application and
+packages the browser's gzip/Brotli copies and endpoint manifest. MSBuild builds
+independent referenced projects in parallel by default.
 
 The first build downloads the pinned base images, Codex runtime, GitHub CLI,
 and package dependencies. Later builds reuse Docker layers, npm and NuGet
 downloads, APT indexes, and the checksum-verified GitHub CLI archive. Restored
 NuGet packages stay in the SDK restore layer alongside their metadata, so an
 evicted download cache cannot break `--no-restore` compilation. Frontend
-edits rebuild and package browser assets while reusing compiled .NET assemblies
-and native tools. Application files follow the large native layers in the final
-image so those layers stay reusable. C# edits reuse restored packages and the
-database migration tool; migration-tool edits rebuild only that tool. Published
-browser assets have their own final-image layer, while Slack's icon remains
-embedded in its .NET assembly. Ubuntu package indexes are limited to `main`,
+edits rebuild browser assets and rerun the application publish, including C#
+compilation; this trades some frontend-only rebuild speed for one compilation
+and packaging pass on cold builds. Restored packages, native tools, and the
+database tool remain reusable. Application files follow the large native layers
+in the final image so those layers stay reusable. C# edits reuse restored
+packages and the database migration tool; migration-tool edits rebuild only that
+tool. Published browser assets have their own final-image layer, while Slack's
+icon remains embedded in its .NET assembly. Ubuntu package indexes are limited to `main`,
 which owns the runtime packages and their dependencies, with security and update
 channels kept.
 
 Keep the same builder and its cache for normal development. `--no-cache` forces
-every build instruction to run again and can also invalidate cache mounts;
-reserve it for diagnostics rather than normal development timing. Removing an
-image with `docker image rm goblin-platform:local` retains the builder cache.
-Add new referenced production C# projects to the metadata
-copies in the Dockerfile's restore stage so package restoration stays independent
-of source changes.
+build instructions to run again, but does **not** empty persistent cache mounts.
+Removing an image with `docker image rm goblin-platform:local` also retains the
+builder cache. Add new referenced production C# projects to the metadata copies
+in the Dockerfile's restore stage so package restoration stays independent of
+source changes.
+
+For a cold-build benchmark, create a fresh isolated builder **for every sample**.
+This starts with no base-image blobs, cached layers, npm/NuGet downloads, APT
+indexes, or GitHub CLI archives. Export to a new archive so previously loaded
+images in the host daemon cannot affect export timing:
+
+```bash
+(
+    set -euo pipefail
+    benchmark_dir=".artifacts/docker-benchmark/$(date +%Y%m%d-%H%M%S)-$$"
+    benchmark_builder="goblin-cold-$$"
+    mkdir -p "$benchmark_dir"
+    docker buildx create --name "$benchmark_builder" --driver docker-container \
+        --driver-opt image=moby/buildkit:v0.26.2
+    trap 'docker buildx rm --force "$benchmark_builder"' EXIT
+    docker buildx inspect --bootstrap "$benchmark_builder" > "$benchmark_dir/builder.txt"
+    docker buildx du --builder "$benchmark_builder" > "$benchmark_dir/cache-before.txt"
+    /usr/bin/time -f 'elapsed_seconds=%e\nexit_code=%x' -o "$benchmark_dir/time.txt" \
+        docker buildx build --builder "$benchmark_builder" --platform linux/amd64 \
+        --no-cache --pull --progress=plain --provenance=false \
+        --output "type=docker,dest=$benchmark_dir/image.tar" \
+        --tag goblin-platform:benchmark --file Dockerfile . \
+        > "$benchmark_dir/build.log" 2>&1
+    cat "$benchmark_dir/time.txt"
+)
+```
+
+Builder startup is outside the timer; pulling and extracting the application
+base images, dependency installation, compilation, packaging, and archive export
+are inside it. Loading the archive with `docker load --input <image.tar>` is a
+separate verification step. No existing builder cache is pruned. Save the original
+Dockerfile before editing and use `--file` to select each variant. Run at least
+three samples per variant, alternate their order, keep the machine otherwise
+idle, and compare medians and ranges. Check that each `cache-before.txt` reports
+`0B` and that base-image digests match across samples. Registry/CDN and operating
+system caches remain outside this Docker cache isolation, so download and host
+load variation still affect the results.
+
+Cold-build measurements on 2026-10-25 used this archive-export method on
+`linux/amd64`, with 8 logical CPUs (Intel Core i7-1255U), 11.7 GiB available to
+Docker, Docker 29.1.3, Buildx 0.30.1, and BuildKit 0.26.2:
+
+| Version | Samples (seconds) | Median | Range |
+| --- | --- | --- | --- |
+| Before: shared restore, separate web build/publish | 106.43, 104.51, 106.23 | 106.23 s | 104.51–106.43 s |
+| After: independent database restore, one web publish | 108.61, 94.80, 97.84 | 97.84 s | 94.80–108.61 s |
+
+The median improved by **8.39 seconds (7.9%)**. The web compile/publish steps
+fell from a median of 29.8 to 20.2 seconds. Each sample began with `0B` of builder
+cache and the same three base-image digests. The slower optimized sample spent
+38.8 seconds pulling/extracting the SDK image, versus 24.0 seconds in the first
+baseline; these results include that network variation. Image verification found
+399 identical files and an endpoint manifest differing only in `Last-Modified`
+timestamps, with identical paths, permissions, and ownership. The compressed
+browser assets and native tools were retained.
 
 ### Choosing verification
 

@@ -79,8 +79,8 @@ fn build_message(line: &str) -> Option<String> {
                 | "github-cli"
                 | "dotnet-base"
                 | "restore"
-                | "build"
                 | "publish"
+                | "database-restore"
                 | "database"
                 | "runtime"
         ) {
@@ -107,8 +107,8 @@ fn build_message(line: &str) -> Option<String> {
             s if s.starts_with("dotnet publish backend/src/Goblin.Web/") => {
                 "publishing the .NET application"
             }
-            s if s.starts_with("dotnet build backend/src/Goblin.Web/") => {
-                "compiling the .NET application"
+            s if s.starts_with("dotnet restore backend/tools/Goblin.Database/") => {
+                "restoring database migration tool dependencies"
             }
             s if s.starts_with("dotnet publish backend/tools/Goblin.Database/") => {
                 "publishing the database migration tool"
@@ -144,7 +144,8 @@ mod tests {
         }
         for input in [
             "#9 ERROR: password=private",
-            "#9 [build 4/5] RUN dotnet publish backend/src/Goblin.Web/private",
+            "#9 [publish 6/6] RUN dotnet publish backend/src/Goblin.Web/private",
+            "#9 [database-restore 2/2] RUN --mount=type=cache,id=private dotnet restore backend/tools/Goblin.Database/private",
             "#9 [auth] private",
             "#9 [internal] load private",
         ] {
@@ -175,19 +176,19 @@ mod tests {
     fn independent_build_stages_report_safe_progress_with_cache_mounts() {
         for (record, expected) in [
             (
-                "[restore 14/14] RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/NuGet/http-cache,sharing=locked     dotnet restore backend/src/Goblin.Web/Goblin.Web.csproj --nologo &&     dotnet restore backend/tools/Goblin.Database/Goblin.Database.csproj --nologo",
+                "[restore 13/13] RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/NuGet/http-cache,sharing=locked     dotnet restore backend/src/Goblin.Web/Goblin.Web.csproj --nologo",
                 "restoring .NET dependencies",
             ),
             (
-                "[publish 2/2] RUN --mount=type=cache,id=goblin-platform-nuget,target=/root/.nuget/packages dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --no-restore --nologo",
+                "[publish 6/6] RUN dotnet publish backend/src/Goblin.Web/Goblin.Web.csproj -c Release -o /publish --no-restore --nologo",
                 "publishing the .NET application",
             ),
             (
-                "[build 5/5] RUN --mount=type=cache,id=goblin-platform-nuget,target=/root/.nuget/packages dotnet build backend/src/Goblin.Web/Goblin.Web.csproj -c Release --no-restore --nologo",
-                "compiling the .NET application",
+                "[database-restore 2/2] RUN --mount=type=cache,id=goblin-platform-nuget-database-http,target=/root/.local/share/NuGet/http-cache,sharing=locked     dotnet restore backend/tools/Goblin.Database/Goblin.Database.csproj --nologo",
+                "restoring database migration tool dependencies",
             ),
             (
-                "[database 2/2] RUN --mount=type=cache,id=goblin-platform-nuget,target=/root/.nuget/packages dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --no-restore --nologo",
+                "[database 2/2] RUN dotnet publish backend/tools/Goblin.Database/Goblin.Database.csproj -c Release -o /database --no-restore --nologo",
                 "publishing the database migration tool",
             ),
             (
