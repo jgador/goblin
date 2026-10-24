@@ -207,23 +207,24 @@ and package dependencies. Later builds reuse Docker layers, npm and NuGet
 downloads, APT indexes, and the checksum-verified GitHub CLI archive. Restored
 NuGet packages stay in the SDK restore layer alongside their metadata, so an
 evicted download cache cannot break `--no-restore` compilation. Frontend
-edits rebuild browser assets and rerun the application publish, including C#
-compilation; this trades some frontend-only rebuild speed for one compilation
-and packaging pass on cold builds. Restored packages, native tools, and the
-database tool remain reusable. Application files follow the large native layers
-in the final image so those layers stay reusable. C# edits reuse restored
-packages and the database migration tool; migration-tool edits rebuild only that
-tool. Published browser assets have their own final-image layer, while Slack's
-icon remains embedded in its .NET assembly. Ubuntu package indexes are limited to `main`,
-which owns the runtime packages and their dependencies, with security and update
-channels kept.
+edits reuse the web restore, rebuild browser assets, and rerun the application
+publish, including C# compilation; this trades some frontend-only rebuild speed
+for one compilation and packaging pass on cold builds. Restored packages, native
+tools, and the database tool remain reusable. Application files follow the large
+native layers in the final image so those layers stay reusable. C# edits rerun the
+web restore and publish while reusing NuGet downloads and the database migration
+tool; migration-tool edits rebuild only that tool. Published browser assets have
+their own final-image layer, while Slack's icon remains embedded in its .NET assembly.
+Ubuntu package indexes are limited to `main`, which owns the runtime packages and
+their dependencies, with security and update channels kept.
 
 Keep the same builder and its cache for normal development. `--no-cache` forces
 build instructions to run again, but does **not** empty persistent cache mounts.
 Removing an image with `docker image rm goblin-platform:local` also retains the
-builder cache. Add new referenced production C# projects to the metadata copies
-in the Dockerfile's restore stage so package restoration stays independent of
-source changes.
+builder cache. The Dockerfile copies the complete `backend/src` directory before
+the web restore, preserving project paths and including new referenced production
+C# projects without additional per-project copy instructions. Backend source
+changes invalidate the web restore layer.
 
 For a cold-build benchmark, create a fresh isolated builder **for every sample**.
 This starts with no base-image blobs, cached layers, npm/NuGet downloads, APT

@@ -68,21 +68,10 @@ WORKDIR /app
 COPY global.json ./
 COPY backend/Directory.Build.props ./backend/Directory.Build.props
 
-# Restore from project metadata so source and frontend changes reuse packages.
+# Restore the web project and its references from the complete source tree.
 FROM dotnet-base AS restore
 
-COPY backend/src/Goblin.Core/*.csproj ./backend/src/Goblin.Core/
-COPY backend/src/Goblin.Contracts/*.csproj ./backend/src/Goblin.Contracts/
-COPY backend/src/Goblin.Protocol/*.csproj ./backend/src/Goblin.Protocol/
-COPY backend/src/Goblin.Persistence/*.csproj ./backend/src/Goblin.Persistence/
-COPY backend/src/Goblin.Application/*.csproj ./backend/src/Goblin.Application/
-COPY backend/src/Goblin.Execution/*.csproj ./backend/src/Goblin.Execution/
-COPY backend/src/Goblin.Execution.Codex/*.csproj ./backend/src/Goblin.Execution.Codex/
-COPY backend/src/Goblin.Integrations.Codex/*.csproj ./backend/src/Goblin.Integrations.Codex/
-COPY backend/src/Goblin.Integrations.GitHub/*.csproj ./backend/src/Goblin.Integrations.GitHub/
-COPY backend/src/Goblin.Integrations.Slack/*.csproj ./backend/src/Goblin.Integrations.Slack/
-COPY backend/src/Goblin.Integrations.ChatGpt/*.csproj ./backend/src/Goblin.Integrations.ChatGpt/
-COPY backend/src/Goblin.Web/*.csproj ./backend/src/Goblin.Web/
+COPY backend/src ./backend/src
 
 RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/NuGet/http-cache,sharing=locked \
     dotnet restore backend/src/Goblin.Web/Goblin.Web.csproj \
@@ -90,7 +79,6 @@ RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/N
 
 FROM restore AS publish
 
-COPY backend/src ./backend/src
 COPY backend/licenses ./backend/licenses
 COPY docs/chatgpt-integration.md ./docs/chatgpt-integration.md
 
