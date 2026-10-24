@@ -41,6 +41,7 @@ interface Packet {
     mode: Mode;
     base?: string;
     head: string;
+    trigger?: PullRequestTrigger;
     changedFiles: string[];
     omittedFiles: number;
     diff: string;
@@ -49,6 +50,12 @@ interface Packet {
     omittedCandidates: number;
     inventory?: ReturnType<typeof inventory>;
     coverageProblems?: string[];
+}
+interface PullRequestTrigger {
+    action: string;
+    pull_request: {
+        head: { ref: string; repo: { full_name: string } };
+    };
 }
 const outputDirectory = ".artifacts/agentic-maintenance";
 const limits = {
@@ -60,6 +67,7 @@ const limits = {
 export function authorized(
     event: unknown,
     env: Record<string, string | undefined>,
+    mode: Mode,
 ): boolean {
     if (
         env[Env.GITHUB_REPOSITORY.name] !== "jgador/goblin" ||
@@ -68,8 +76,25 @@ export function authorized(
     )
         return false;
     const name = env[Env.GITHUB_EVENT_NAME.name];
-    if (name !== "push" && name !== "workflow_dispatch") return false;
     if (!event || typeof event !== "object") return false;
+    if (name === "pull_request") {
+        const pr = event as Partial<PullRequestTrigger>;
+        const head = pr.pull_request?.head;
+        if (!head) return false;
+        return (
+            mode === "documentation" &&
+            ["opened", "synchronize", "reopened"].includes(pr.action ?? "") &&
+            head?.repo?.full_name === env[Env.GITHUB_REPOSITORY.name] &&
+            typeof head.ref === "string" &&
+            head.ref.length > 0 &&
+            !head.ref.startsWith("gh-aw/")
+        );
+    }
+    if (
+        name !== "workflow_dispatch" &&
+        !(mode === "ci-policy" && name === "push")
+    )
+        return false;
     const ref =
         (event as Record<string, unknown>).ref ?? env[Env.GITHUB_REF.name];
     return (
@@ -342,14 +367,24 @@ export async function prepare(
     env = process.env,
 ): Promise<boolean> {
     assert.ok(
-        authorized(event, env),
-        "Maintenance is restricted to owner-initiated branch pushes and manual runs",
+        authorized(event, env, mode),
+        "Maintenance is restricted to owner-initiated events supported by this workflow",
     );
     const range = comparison(
         env[Env.GITHUB_EVENT_NAME.name]!,
         event,
         env[Env.GITHUB_SHA.name]!,
     );
+    if (range.mergeBase) {
+        range.base = git(root, ["merge-base", range.base!, range.head]).trim();
+        range.mergeBase = false;
+    }
+    // Keep only the PR metadata needed to recheck publication authorization.
+    // Titles, bodies, comments, and other payload fields are not copied into the packet.
+    const pr =
+        env[Env.GITHUB_EVENT_NAME.name] === "pull_request"
+            ? (event as PullRequestTrigger)
+            : undefined;
     const files = tracked(root, range.head);
     const changed = changedFiles(root, range);
     const policy = await loadPolicy(root);
@@ -389,6 +424,22 @@ export async function prepare(
         mode,
         base: range.base,
         head: range.head,
+        ...(pr
+            ? {
+                  trigger: {
+                      action: pr.action,
+                      pull_request: {
+                          head: {
+                              ref: pr.pull_request.head.ref,
+                              repo: {
+                                  full_name:
+                                      pr.pull_request.head.repo.full_name,
+                              },
+                          },
+                      },
+                  },
+              }
+            : {}),
         changedFiles: relevant.slice(0, limits.files),
         omittedFiles: Math.max(0, relevant.length - limits.files),
         ...boundedDiff(
@@ -628,14 +679,14 @@ export async function snapshotProposal(
     mode: Mode,
     env = process.env,
 ): Promise<boolean> {
-    assert.ok(
-        authorized({}, env),
-        "Proposal snapshots require an owner-initiated run",
-    );
-    await validate(root, mode);
     const packet = JSON.parse(
         await readFile(resolve(root, outputDirectory, "packet.json"), "utf8"),
     ) as Packet;
+    assert.ok(
+        authorized(packet.trigger ?? {}, env, mode),
+        "Proposal snapshots require an owner-initiated run",
+    );
+    await validate(root, mode);
     assert.equal(
         git(root, ["rev-parse", "HEAD"]).trim(),
         packet.head,

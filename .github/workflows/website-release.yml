@@ -53,7 +53,7 @@ jobs:
           node-version: "24"
       - name: Install pinned Kubernetes client
         run: bash website/install-kubectl.sh
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         if: inputs.installation-artifact != ''
         with:
           name: ${{ inputs.installation-artifact }}
@@ -63,7 +63,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/installation-assets.mts snapshot .artifacts/installation-assets/output --authenticate
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: website-installation-${{ github.run_attempt }}
           path: .artifacts/installation-assets/output
@@ -103,11 +103,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: node website/release.mjs check-environment
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ${{ needs.validate.outputs.artifact }}
           path: .artifacts/installation-assets/output
-      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -152,7 +152,7 @@ jobs:
           node website/release.mjs check-environment
           current=$(gh api repos/jgador/goblin/branches/master --jq .commit.sha)
           [[ "$current" == "$GITHUB_SHA" ]] || { echo 'master advanced while this candidate awaited approval; deploy the newer run.' >&2; exit 1; }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ${{ needs.validate.outputs.artifact }}
           path: .artifacts/installation-assets/output

@@ -79,7 +79,7 @@ jobs:
           if [[ -n "$VERSION" ]]; then args+=(--version "$VERSION"); fi
           if [[ -n "$INSTALLER_VERSION" ]]; then args+=(--installer-version "$INSTALLER_VERSION"); fi
           cargo xtask release prepare "${args[@]}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         id: upload
         with:
           name: goblin-candidate-${{ github.run_attempt }}
@@ -99,7 +99,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.source }}
           path: .artifacts/source
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           artifact-ids: ${{ needs.prepare.outputs.artifact }}
           path: .artifacts/goblin
@@ -145,7 +145,7 @@ jobs:
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup-rust
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           artifact-ids: ${{ needs.prepare.outputs.artifact }}
           path: .artifacts/goblin
@@ -160,17 +160,17 @@ jobs:
       - id: identity
         run: echo "sha256=$(sha256sum .artifacts/goblin/release.json | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
       - name: Attest the verified release pair
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: .artifacts/goblin/release.json
       - name: Attest newly built installer assets
         if: needs.prepare.outputs.installer-origin == 'built'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             .artifacts/goblin/installer/release.json
             .artifacts/goblin/installer/goblinctl-x86_64-unknown-linux-musl.tar.gz
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         id: upload
         with:
           name: goblin-ready-${{ github.run_attempt }}
@@ -199,7 +199,7 @@ jobs:
         with:
           node-version: "24"
       - uses: ./.github/actions/setup-rust
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           artifact-ids: ${{ needs.seal.outputs.artifact }}
           path: .artifacts/goblin

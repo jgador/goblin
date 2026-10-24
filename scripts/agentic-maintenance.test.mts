@@ -34,6 +34,10 @@ const owner = {
     [Env.GITHUB_EVENT_NAME.name]: "push",
     [Env.GITHUB_REF.name]: "refs/heads/feature",
 };
+const manualOwner = {
+    ...owner,
+    [Env.GITHUB_EVENT_NAME.name]: "workflow_dispatch",
+};
 function git(directory: string, args: string[]) {
     const r = spawnSync("git", args, { cwd: directory, encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
@@ -68,38 +72,193 @@ function commit(directory: string) {
     git(directory, ["commit", "--quiet", "-m", "fixture snapshot"]);
     return git(directory, ["rev-parse", "HEAD"]);
 }
-test("owner identity is exact and gates other actors, reruns, repositories, events, bots, tags and automation branches", () => {
-    assert.equal(authorized({ ref: "refs/heads/feature" }, owner), true);
-    for (const [key, value] of [
-        [Env.GITHUB_ACTOR.name, "contributor"],
-        [Env.GITHUB_TRIGGERING_ACTOR.name, "contributor"],
-        [Env.GITHUB_REPOSITORY.name, "contributor/goblin"],
-        [Env.GITHUB_EVENT_NAME.name, "pull_request"],
-        [Env.GITHUB_ACTOR.name, "github-actions[bot]"],
-    ])
+test("owner identity gates supported events, reruns, repositories, bots, tags and automation branches", () => {
+    const branch = { ref: "refs/heads/feature" };
+    assert.equal(authorized(branch, owner, "ci-policy"), true);
+    assert.equal(authorized(branch, owner, "documentation"), false);
+    for (const mode of ["ci-policy", "documentation"] as const) {
+        assert.equal(authorized({}, manualOwner, mode), true);
+        for (const [key, value] of [
+            [Env.GITHUB_ACTOR.name, "contributor"],
+            [Env.GITHUB_TRIGGERING_ACTOR.name, "contributor"],
+            [Env.GITHUB_REPOSITORY.name, "contributor/goblin"],
+            [Env.GITHUB_EVENT_NAME.name, "issue_comment"],
+            [Env.GITHUB_ACTOR.name, "github-actions[bot]"],
+        ])
+            assert.equal(
+                authorized(branch, { ...manualOwner, [key!]: value }, mode),
+                false,
+            );
+        assert.equal(
+            authorized({ ref: "refs/tags/v1" }, manualOwner, mode),
+            false,
+        );
         assert.equal(
             authorized(
-                { ref: "refs/heads/feature" },
-                { ...owner, [key!]: value },
+                { ref: "refs/heads/gh-aw/documentation-1" },
+                manualOwner,
+                mode,
             ),
             false,
         );
-    assert.equal(authorized({ ref: "refs/tags/v1" }, owner), false);
-    assert.equal(
-        authorized({ ref: "refs/heads/gh-aw/documentation-1" }, owner),
-        false,
-    );
-    assert.equal(
-        authorized({ ref: "refs/heads/feature", deleted: true }, owner),
-        false,
-    );
+        assert.equal(
+            authorized({ ...branch, deleted: true }, manualOwner, mode),
+            false,
+        );
+    }
+});
+test("documentation accepts owner PR updates only from ordinary branches in the same repository", () => {
+    const env = {
+        ...owner,
+        [Env.GITHUB_EVENT_NAME.name]: "pull_request",
+        [Env.GITHUB_REF.name]: "refs/pull/17/merge",
+    };
+    const head = { ref: "feature", repo: { full_name: "jgador/goblin" } };
+    const event = { action: "opened", pull_request: { head } };
+    for (const action of ["opened", "synchronize", "reopened"]) {
+        assert.equal(
+            authorized({ ...event, action }, env, "documentation"),
+            true,
+        );
+        assert.equal(authorized({ ...event, action }, env, "ci-policy"), false);
+    }
+    for (const action of ["closed", "edited", "labeled"])
+        assert.equal(
+            authorized({ ...event, action }, env, "documentation"),
+            false,
+        );
+    for (const badHead of [
+        { ...head, repo: { full_name: "contributor/goblin" } },
+        { ...head, ref: "gh-aw/documentation-1" },
+        { ...head, ref: "" },
+        {},
+    ])
+        assert.equal(
+            authorized(
+                { ...event, pull_request: { head: badHead } },
+                env,
+                "documentation",
+            ),
+            false,
+        );
+    for (const key of [
+        Env.GITHUB_ACTOR.name,
+        Env.GITHUB_TRIGGERING_ACTOR.name,
+        Env.GITHUB_REPOSITORY.name,
+    ])
+        assert.equal(
+            authorized(
+                event,
+                { ...env, [key]: "contributor" },
+                "documentation",
+            ),
+            false,
+        );
     assert.equal(
         authorized(
-            {},
-            { ...owner, [Env.GITHUB_EVENT_NAME.name]: "workflow_dispatch" },
+            event,
+            { ...env, [Env.GITHUB_EVENT_NAME.name]: "pull_request_target" },
+            "documentation",
         ),
-        true,
+        false,
     );
+    assert.equal(authorized({}, env, "documentation"), false);
+});
+test("PR preparation uses the merge base and exact head, then packages documentation against the source branch", async () => {
+    await fixture(async (directory) => {
+        await writeFile(
+            join(directory, "source.cs"),
+            "feature=old\nbase=old\n",
+        );
+        await writeFile(
+            join(directory, "README.md"),
+            "# Fixture\nSee [source](source.cs).\n",
+        );
+        const baseline = commit(directory);
+        const baseBranch = git(directory, ["branch", "--show-current"]);
+        git(directory, ["switch", "-c", "feature"]);
+        await writeFile(
+            join(directory, "source.cs"),
+            "feature=new\nbase=old\n",
+        );
+        const head = commit(directory);
+        git(directory, ["switch", baseBranch]);
+        await writeFile(
+            join(directory, "source.cs"),
+            "feature=old\nbase=new\n",
+        );
+        await writeFile(
+            join(directory, "base-only.md"),
+            "# Base-only change\n",
+        );
+        const base = commit(directory);
+        git(directory, ["checkout", "--detach", head]);
+        const event = {
+            action: "synchronize",
+            pull_request: {
+                head: {
+                    ref: "feature",
+                    sha: head,
+                    repo: { full_name: "jgador/goblin" },
+                },
+                base: { sha: base },
+                body: "Untrusted PR description excluded from the packet",
+            },
+        };
+        const env = {
+            ...owner,
+            [Env.GITHUB_EVENT_NAME.name]: "pull_request",
+            [Env.GITHUB_REF.name]: "refs/pull/17/merge",
+            [Env.GITHUB_SHA.name]: base,
+        };
+        await assert.rejects(
+            prepare(
+                directory,
+                "documentation",
+                {},
+                { ...env, [Env.GITHUB_EVENT_NAME.name]: "push" },
+            ),
+            /supported by this workflow/,
+        );
+        assert.equal(
+            await prepare(directory, "documentation", event, env),
+            true,
+        );
+        const artifacts = join(directory, ".artifacts/agentic-maintenance");
+        const content = await readFile(
+            join(artifacts, "context/packet.json"),
+            "utf8",
+        );
+        const packet = JSON.parse(content);
+        assert.equal(packet.base, baseline);
+        assert.equal(packet.head, head);
+        assert.deepEqual(packet.changedFiles, ["source.cs"]);
+        assert.match(packet.diff, /\+feature=new/);
+        assert.ok(!packet.diff.includes("base=new"));
+        assert.ok(!content.includes(event.pull_request.body));
+        assert.equal(packet.trigger.pull_request.head.ref, "feature");
+        await writeFile(join(artifacts, "packet.json"), content);
+        await writeFile(
+            join(directory, "README.md"),
+            "# Corrected guide\nSee [source](source.cs).\n",
+        );
+        await assert.rejects(
+            snapshotProposal(directory, "documentation", {
+                ...env,
+                [Env.GITHUB_TRIGGERING_ACTOR.name]: "contributor",
+            }),
+            /owner-initiated/,
+        );
+        assert.equal(
+            await snapshotProposal(directory, "documentation", env),
+            true,
+        );
+        assert.equal(git(directory, ["rev-parse", "HEAD^"]), head);
+        assert.equal(
+            git(directory, ["diff", "--name-only", head]),
+            "README.md",
+        );
+    });
 });
 test("inventory proposals discover manifests anywhere and remove obsolete entries without modifying triggers or commands", () => {
     const files = [
@@ -401,7 +560,7 @@ test("proposal snapshots preserve feature history and bundles must contain the c
         await writeFile(join(directory, "README.md"), "# Repaired guide\n");
         await assert.rejects(
             snapshotProposal(directory, "documentation", {
-                ...owner,
+                ...manualOwner,
                 [Env.GITHUB_TRIGGERING_ACTOR.name]: "contributor",
             }),
             /owner-initiated/,
@@ -418,7 +577,7 @@ test("proposal snapshots preserve feature history and bundles must contain the c
             /no committed/,
         );
         assert.equal(
-            await snapshotProposal(directory, "documentation", owner),
+            await snapshotProposal(directory, "documentation", manualOwner),
             true,
         );
         assert.equal(git(directory, ["branch", "--show-current"]), branch);
@@ -471,12 +630,12 @@ test("snapshots skip unchanged documents and reject unauthorized files before cr
             JSON.stringify({ mode: "documentation", head }),
         );
         assert.equal(
-            await snapshotProposal(directory, "documentation", owner),
+            await snapshotProposal(directory, "documentation", manualOwner),
             false,
         );
         await writeFile(join(directory, "source.cs"), "class Source {}\n");
         await assert.rejects(
-            snapshotProposal(directory, "documentation", owner),
+            snapshotProposal(directory, "documentation", manualOwner),
             /unauthorized/,
         );
         assert.equal(git(directory, ["rev-parse", "HEAD"]), head);
@@ -493,7 +652,7 @@ test("compiled workflows enforce owner-only inference and publication, cost limi
             "utf8",
         );
         assert.ok(
-            !/pull_request:|workflow_run:|issue_comment:|schedule:/.test(
+            !/pull_request_target:|workflow_run:|issue_comment:|schedule:/.test(
                 source,
             ),
         );
@@ -503,15 +662,42 @@ test("compiled workflows enforce owner-only inference and publication, cost limi
         assert.ok(source.includes('GH_AW_HARNESS_MAX_RETRIES: "0"'));
         assert.ok(source.includes("github: false"));
         assert.ok(source.includes("queue: max"));
-        assert.ok(source.includes('base-branch: "${{ github.ref_name }}"'));
+        const target =
+            mode === "documentation"
+                ? "${{ github.head_ref || github.ref_name }}"
+                : "${{ github.ref_name }}";
+        assert.ok(source.includes('base-branch: "' + target + '"'));
+        for (const workflow of [source, compiled]) {
+            assert.equal(/^  push:/m.test(workflow), mode === "ci-policy");
+            assert.equal(
+                /^  pull_request:/m.test(workflow),
+                mode === "documentation",
+            );
+            assert.match(workflow, /^  workflow_dispatch:/m);
+        }
+        if (mode === "documentation") {
+            assert.ok(
+                source.includes("types: [opened, synchronize, reopened]"),
+            );
+            assert.ok(
+                compiled.includes(
+                    'ref: "${{ github.event.pull_request.head.sha || github.sha }}"',
+                ),
+            );
+            assert.ok(
+                compiled.includes(
+                    "github.event.pull_request.head.repo.full_name == github.repository",
+                ),
+            );
+            assert.ok(
+                compiled.includes("!startsWith(github.head_ref, 'gh-aw/')"),
+            );
+        }
         const config = compiled
             .split("GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: ")[1]!
             .split("\n")[0]!;
         const handler = JSON.parse(JSON.parse(config));
-        assert.equal(
-            handler.create_pull_request.base_branch,
-            "${{ github.ref_name }}",
-        );
+        assert.equal(handler.create_pull_request.base_branch, target);
         const codexConfigLine = compiled
             .split("GH_AW_CODEX_CONFIG_JSON: '")[1]!
             .split("'\n")[0]!;
