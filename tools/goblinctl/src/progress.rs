@@ -96,7 +96,9 @@ fn build_message(line: &str) -> Option<String> {
         } else {
             instruction
         };
-        match instruction {
+        // BuildKit preserves indentation when joining continued Dockerfile lines.
+        let instruction = instruction.split_whitespace().collect::<Vec<_>>().join(" ");
+        match instruction.as_str() {
             "npm ci --omit=dev --no-audit --no-fund" => "installing runtime dependencies",
             "npm --prefix frontend ci --no-audit --no-fund" => "installing frontend dependencies",
             "npm --prefix frontend run build" => "compiling frontend assets",
@@ -208,6 +210,29 @@ mod tests {
                 build_message(&format!("#5 {record}")).unwrap(),
                 format!("Build step 5: {expected}.")
             );
+        }
+    }
+
+    #[test]
+    fn continued_commands_report_progress_without_exposing_extra_arguments() {
+        for (command, expected) in [
+            (
+                "npm ci         --omit=dev         --no-audit         --no-fund",
+                "installing runtime dependencies",
+            ),
+            (
+                "npm --prefix frontend ci         --no-audit         --no-fund",
+                "installing frontend dependencies",
+            ),
+        ] {
+            let record = format!(
+                "#5 [codex 2/3] RUN --mount=type=cache,id=private,target=/root/.npm     {command}"
+            );
+            assert_eq!(
+                build_message(&record).unwrap(),
+                format!("Build step 5: {expected}.")
+            );
+            assert!(build_message(&format!("{record}         --token=private")).is_none());
         }
     }
 }
