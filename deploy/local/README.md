@@ -47,10 +47,11 @@ Tasks that were already running finish first, so their downloads and builds are
 kept, and no new task starts. Enter your Goblin password on the page and select
 **Retry installation** to continue.
 
-Download speed no longer decides whether installation times out. The k3s binary
-and its system-image archive download in parallel, resume after interruptions,
-and fail only when no data arrives for two minutes. Image pulls resume when
-containerd stops a stalled transfer. Add-on and service images download before
+The k3s binary and its system-image archive download in parallel without a fixed
+total-duration timeout and resume after interruptions. A transfer stops if its
+speed stays below 1 KiB/s for two minutes; downloads allow up to six attempts,
+while permanent HTTP errors stop immediately. Image pulls resume when containerd
+stops a stalled transfer. Add-on and service images download before
 their rollouts start, so those waits measure startup only.
 
 Open **Settings → Cluster → Open cluster**, or
@@ -59,8 +60,9 @@ Goblin login. This is read-only access to workloads, logs, events, and storage.
 The path uses the same chosen browser port. See [the cluster view](../../docs/cluster-view.md).
 
 Azure uses its assigned DNS name instead of localhost. Open the deployment's
-`goblinUrl` output to see the same setup page, progress, and handoff. The local
-forwarder is only for testing and is not included in Azure provisioning.
+`setupUrl` output to follow progress; it opens the HTTPS `goblinUrl` after
+certificate issuance and application verification. The local forwarder is only
+for testing and is not included in Azure provisioning.
 
 ## Requirements
 
