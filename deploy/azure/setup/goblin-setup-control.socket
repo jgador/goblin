@@ -1,0 +1,12 @@
+[Unit]
+Description=Goblin installation retry requests from the setup page
+# Available only while the setup page runs; it starts and stops with that service.
+PartOf=goblin-setup.service
+
+[Socket]
+ListenStream=/run/goblin-setup-control.sock
+# The DynamicUser setup service must connect. Each request still needs the
+# owner password, checked by a separate root process.
+SocketMode=0666
+Accept=yes
+MaxConnections=1

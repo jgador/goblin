@@ -71,6 +71,14 @@ pub const SETUP: &[(&str, &[u8])] = &[
         include_bytes!("../../../deploy/azure/setup/goblin-setup.service"),
     ),
     (
+        "goblin-setup-control.socket",
+        include_bytes!("../../../deploy/azure/setup/goblin-setup-control.socket"),
+    ),
+    (
+        "goblin-setup-control@.service",
+        include_bytes!("../../../deploy/azure/setup/goblin-setup-control@.service"),
+    ),
+    (
         "goblin-installer.service",
         include_bytes!("../../../deploy/azure/setup/goblin-installer.service"),
     ),

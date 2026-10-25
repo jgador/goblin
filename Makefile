@@ -17,7 +17,8 @@ RUST_MIN_STACK ?= 8388608
 	format-backend lint-rust fix-rust protocol-generate protocol-check \
 	kubernetes-generate kubernetes-check contracts-generate contracts-check \
 	deploy-generate dependencies-check dependencies-resolve secrets-setup secrets-scan \
-	secrets-staged secrets-history release-build release-check-installer release-local
+	secrets-staged secrets-history release-build release-check-installer release-local \
+	platform-image-check
 
 include Makefile.dev
 
@@ -245,3 +246,7 @@ release-check-installer:
 # Build and package the Linux musl operator CLI for local review.
 release-local: release-build
 	cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl
+
+# Build the platform image the installer builds, catching missing Docker inputs.
+platform-image-check:
+	docker build --platform linux/amd64 --progress=plain -t goblin-platform:check .

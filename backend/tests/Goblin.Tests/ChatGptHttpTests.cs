@@ -28,6 +28,23 @@ namespace Goblin.Tests;
 public sealed class ChatGptHttpTests
 {
     [Fact]
+    public async Task DisabledSetupSuppliesConfigurationNamesWithoutADocumentDownload()
+    {
+        await using Host host = await Host.CreateAsync(configured: false);
+        using HttpClient http = host.Client();
+        http.DefaultRequestHeaders.Add("Cookie", host.OwnerCookie);
+        using HttpResponseMessage response = await http.GetAsync("/api/integrations/chatgpt");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(document.RootElement.GetProperty("configured").GetBoolean());
+        JsonElement names = document.RootElement.GetProperty("environmentVariables");
+        Assert.Equal("GOBLIN_PUBLIC_ORIGIN", names.GetProperty("publicOrigin").GetString());
+        Assert.Equal("GOBLIN_CHATGPT_ISSUER", names.GetProperty("issuer").GetString());
+        using HttpResponseMessage guide = await http.GetAsync("/api/integrations/chatgpt/guide");
+        Assert.Equal(HttpStatusCode.NotFound, guide.StatusCode);
+    }
+
+    [Fact]
     public async Task MetadataIsPublicButMcpRequiresBearerAndOwnerCookieCannotSubstitute()
     {
         await using Host host = await Host.CreateAsync();
@@ -63,19 +80,21 @@ public sealed class ChatGptHttpTests
         Assert.Equal(0, host.Tokens.Reads);
     }
 
-    [Fact]
-    public async Task BearerTokenCannotAdministerGrantsAndOwnerPostStillRequiresOrigin()
+    [Theory]
+    [InlineData("/api/integrations/chatgpt/grants/revoke")]
+    [InlineData("/api/integrations/chatgpt/package")]
+    public async Task BearerTokenCannotAdministerSetupAndOwnerPostStillRequiresOrigin(string path)
     {
         await using Host host = await Host.CreateAsync();
         using HttpClient http = host.Client();
         http.DefaultRequestHeaders.Authorization = new("Bearer", host.Tokens.Token());
         http.DefaultRequestHeaders.Add("Origin", ChatGptAuthenticationTests.Origin);
-        using HttpResponseMessage bearer = await http.PostAsync("/api/integrations/chatgpt/grants/revoke", Json("{\"id\":\"1\"}"));
+        using HttpResponseMessage bearer = await http.PostAsync(path, Json("{\"id\":\"1\"}"));
         Assert.Equal(HttpStatusCode.Unauthorized, bearer.StatusCode);
         http.DefaultRequestHeaders.Authorization = null;
         http.DefaultRequestHeaders.Add("Cookie", host.OwnerCookie);
         http.DefaultRequestHeaders.Remove("Origin");
-        using HttpResponseMessage cookie = await http.PostAsync("/api/integrations/chatgpt/grants/revoke", Json("{\"id\":\"1\"}"));
+        using HttpResponseMessage cookie = await http.PostAsync(path, Json("{\"id\":\"1\"}"));
         Assert.Equal(HttpStatusCode.Forbidden, cookie.StatusCode);
     }
 
@@ -135,7 +154,7 @@ public sealed class ChatGptHttpTests
         private Host(WebApplication app, string directory, ChatGptAuthenticationTests.Tokens tokens, string cookie)
         { _app = app; _directory = directory; Tokens = tokens; OwnerCookie = cookie; }
 
-        public static async Task<Host> CreateAsync(bool internalPort = false)
+        public static async Task<Host> CreateAsync(bool internalPort = false, bool configured = true)
         {
             string? root = Environment.CurrentDirectory;
             while (root is not null && !File.Exists(Path.Combine(root, "AGENTS.md"))) root = Path.GetDirectoryName(root);
@@ -157,7 +176,7 @@ public sealed class ChatGptHttpTests
             ChatGptMcp.Configure(builder.Services, new ApplicationOptions
             {
                 EnableWork = true,
-                ChatGptIssuer = ChatGptAuthenticationTests.Issuer,
+                ChatGptIssuer = configured ? ChatGptAuthenticationTests.Issuer : null,
                 PublicOrigin = ChatGptAuthenticationTests.Origin
             });
             var tokens = new ChatGptAuthenticationTests.Tokens();

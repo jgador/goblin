@@ -80,10 +80,9 @@ RUN --mount=type=cache,id=goblin-platform-nuget-http,target=/root/.local/share/N
 FROM restore AS publish
 
 COPY backend/licenses ./backend/licenses
-COPY docs/chatgpt-integration.md ./docs/chatgpt-integration.md
 
-# Slack's icon is embedded in its assembly; browser output is copied at runtime.
-COPY frontend/public/assets/branding/slack.png ./frontend/public/assets/branding/slack.png
+# Backend assemblies embed the Slack icon and ChatGPT package logo.
+COPY frontend/public/assets/branding ./frontend/public/assets/branding
 
 # Compile and package once, including the SDK's gzip/Brotli assets and endpoint
 # manifest. A separate build before publish repeats MSBuild's project traversal.

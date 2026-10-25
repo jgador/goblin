@@ -24,8 +24,8 @@ macro_rules! contract_values {
 
 contract_values!(SetupAction {
     Init => "init", Begin => "begin", Start => "start", Detail => "detail",
-    PublicUrl => "public-url", Complete => "complete", FailStep => "fail-step",
-    Handoff => "handoff", Failed => "failed", Ready => "ready"
+    Progress => "progress", PublicUrl => "public-url", Complete => "complete",
+    FailStep => "fail-step", Handoff => "handoff", Failed => "failed", Ready => "ready"
 });
 contract_values!(SetupStatus {
     Waiting => "waiting", Running => "running", Failed => "failed", Ready => "ready"

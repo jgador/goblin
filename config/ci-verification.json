@@ -224,6 +224,7 @@
       "commands": [
         "make release-build release-check-installer browser-install",
         "make test-browser ARGS=\"tests/e2e/setup.spec.ts tests/e2e/install.spec.ts\"",
+        "make platform-image-check",
         "git diff --exit-code"
       ]
     }

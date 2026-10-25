@@ -126,7 +126,11 @@ enum LocalCommand {
         #[arg(long)]
         json: bool,
     },
-    Retry,
+    Retry {
+        /// Reload the current checkout and installer before retrying a failed installation.
+        #[arg(long)]
+        refresh: bool,
+    },
     Logs {
         #[arg(long)]
         follow: bool,
@@ -220,6 +224,21 @@ enum InternalCommand {
         port: u16,
         #[arg(long)]
         health_socket: Option<PathBuf>,
+        /// Root helper socket that checks the owner password before retrying.
+        #[arg(long)]
+        control_socket: Option<PathBuf>,
+    },
+    /// Handle one socket-activated retry request from the setup page.
+    SetupControl {
+        #[arg(long, default_value = setup::STATE)]
+        state: PathBuf,
+        #[arg(long, default_value = "/var/lib/goblin/install/private/owner-password")]
+        verifier: PathBuf,
+        #[arg(
+            long,
+            default_value = "/var/lib/goblin/install/private/retry-throttle.json"
+        )]
+        throttle: PathBuf,
     },
     State {
         action: goblinctl::contract_values::SetupAction,
@@ -330,7 +349,7 @@ fn execute(cli: Cli) -> Result<()> {
             Some(InstallCommand::Status { json }) => operations::install_status(json),
             Some(InstallCommand::Retry) => {
                 if Path::new("/var/lib/goblin/local-test/config.json").exists() {
-                    local_action(&config_root, LocalCommand::Retry)
+                    local_action(&config_root, LocalCommand::Retry { refresh: false })
                 } else {
                     operations::retry()
                 }
@@ -390,7 +409,24 @@ fn execute(cli: Cli) -> Result<()> {
                 host,
                 port,
                 health_socket,
-            } => setup::serve(&state, &host, port, health_socket.as_deref()),
+                control_socket,
+            } => setup::serve(
+                &state,
+                &host,
+                port,
+                health_socket.as_deref(),
+                control_socket.as_deref(),
+            ),
+            InternalCommand::SetupControl {
+                state,
+                verifier,
+                throttle,
+            } => goblinctl::retry::Control {
+                state,
+                verifier,
+                throttle,
+            }
+            .serve(),
             InternalCommand::State {
                 action,
                 value,
@@ -490,7 +526,7 @@ fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
                 ensure!(yes, "Reset requires --yes");
                 local.reset()
             }
-            LocalCommand::Retry => local.retry(),
+            LocalCommand::Retry { refresh } => local.retry(refresh),
             LocalCommand::Database => local.configure_database(&local.owned_config()?),
             _ => unreachable!(),
         }),

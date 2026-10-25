@@ -4,6 +4,7 @@ export const SetupAction = Object.freeze({
   Begin: "begin",
   Start: "start",
   Detail: "detail",
+  Progress: "progress",
   PublicUrl: "public-url",
   Complete: "complete",
   FailStep: "fail-step",

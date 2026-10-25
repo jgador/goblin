@@ -7,6 +7,7 @@ export type ChatGptState = {
     issuer: string | null;
     clientId: string;
     scope: string;
+    environmentVariables: { publicOrigin: string; issuer: string };
     grants: {
         id: string;
         subject: string;
@@ -22,4 +23,10 @@ export type ChatGptVerification = {
     database: boolean;
     issuerResponses: boolean;
     checkedAt: string;
+};
+
+export type ChatGptPackage = {
+    pluginJson: string;
+    mcpJson: string;
+    archiveBase64: string;
 };

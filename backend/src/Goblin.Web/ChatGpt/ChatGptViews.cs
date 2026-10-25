@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 using Goblin.Integrations.ChatGpt;
+using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
 namespace Goblin.Web;
 
@@ -22,8 +23,21 @@ internal sealed class ChatGptSetupView
     public string ClientId => KeycloakProfile.ClientId;
     [JsonPropertyName("scope")]
     public string Scope => ChatGptConfiguration.ReadScope;
+
+    [JsonPropertyName("environmentVariables")]
+    public ChatGptEnvironmentView EnvironmentVariables { get; } = new();
+
     [JsonPropertyName("grants")]
     public ChatGptGrantView[] Grants { get; init; } = [];
+}
+
+internal sealed class ChatGptEnvironmentView
+{
+    [JsonPropertyName("publicOrigin")]
+    public string PublicOrigin => Env.GoblinPublicOrigin;
+
+    [JsonPropertyName("issuer")]
+    public string Issuer => Env.GoblinChatGptIssuer;
 }
 
 internal sealed class ChatGptGrantView

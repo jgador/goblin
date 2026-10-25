@@ -268,6 +268,27 @@ fn retained_password_verifier_is_reused() {
 }
 
 #[test]
+fn password_verification_accepts_only_the_original_password() {
+    let verifier = credentials::hash("retry-test password").unwrap();
+    assert!(credentials::verify(&verifier, "retry-test password"));
+    assert!(credentials::verify(
+        &format!("{verifier}\n"),
+        "retry-test password"
+    ));
+    for wrong in ["retry-test password ", "Retry-test password", ""] {
+        assert!(!credentials::verify(&verifier, wrong));
+    }
+    let fields: Vec<_> = verifier.split('$').collect();
+    for malformed in [
+        format!("pbkdf2-sha256$1${}${}", fields[2], fields[3]),
+        format!("pbkdf2-sha256$600000${}$AAAA", fields[2]),
+        "not a verifier".to_owned(),
+    ] {
+        assert!(!credentials::verify(&malformed, "retry-test password"));
+    }
+}
+
+#[test]
 fn rendered_bootstrap_contains_native_pins_and_no_plaintext_password() {
     let script =
         install::render_bootstrap("goblin.example", "test-source", "0.1.0", &"a".repeat(64))
@@ -509,4 +530,44 @@ fn closed_setup_contracts_reject_unknown_cli_values_without_mutating_state() {
         .unwrap();
     assert!(!output.status.success());
     assert_eq!(fs::read(&path).unwrap(), before);
+}
+
+#[test]
+fn transfer_progress_replaces_step_detail_without_filling_the_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("status.json");
+    setup::update(&path, SetupAction::Init, "").unwrap();
+    setup::update(&path, SetupAction::Begin, "").unwrap();
+    setup::update(&path, SetupAction::Start, "k3s").unwrap();
+    let logged = files::json(&path).unwrap()["logs"]
+        .as_array()
+        .unwrap()
+        .len();
+    for size in 1..=50 {
+        setup::update_scoped(
+            &path,
+            SetupAction::Progress,
+            &format!("Downloading Kubernetes: {size} of 50 MB"),
+            Some(SetupStep::K3s),
+        )
+        .unwrap();
+    }
+    let state = files::json(&path).unwrap();
+    assert_eq!(state["logs"].as_array().unwrap().len(), logged);
+    let k3s = state["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|step| step["id"] == "k3s")
+        .unwrap();
+    assert_eq!(k3s["detail"], "Downloading Kubernetes: 50 of 50 MB");
+    assert!(
+        setup::update_scoped(
+            &path,
+            SetupAction::Progress,
+            "multi\nline",
+            Some(SetupStep::K3s)
+        )
+        .is_err()
+    );
 }

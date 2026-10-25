@@ -1,0 +1,22 @@
+[Unit]
+Description=Goblin installation retry request
+CollectMode=inactive-or-failed
+
+[Service]
+ExecStart=/opt/goblin/bin/goblinctl internal setup-control
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+RuntimeMaxSec=30
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/goblin/install/private
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=64M
+TasksMax=16

@@ -22,8 +22,6 @@ internal static class ChatGptEndpoints
 
     internal static void Map(WebApplication app)
     {
-        app.MapGet(Root + "/guide", () => Results.Stream(typeof(ChatGptEndpoints).Assembly.GetManifestResourceStream("Goblin.ChatGpt.Guide")!,
-            "text/markdown; charset=utf-8", fileDownloadName: "goblin-chatgpt-installation.md"));
         ChatGptConfiguration? configuration = app.Services.GetService<ChatGptConfiguration>();
         app.MapGet(Root, async (HttpContext context) =>
         {
@@ -46,6 +44,8 @@ internal static class ChatGptEndpoints
             });
         });
         if (configuration is null) return;
+        app.MapPost(Root + "/package", (HttpContext context) => Results.Json(ChatGptPackage.Create(configuration,
+            ApiRequest.Body<ChatGptPackageRequest>(context, ContractJson.Options))));
         app.MapGet(Root + "/work", async (IDbContextFactory<GoblinDbContext> factory, CancellationToken token) =>
         {
             await using GoblinDbContext db = await factory.CreateDbContextAsync(token);

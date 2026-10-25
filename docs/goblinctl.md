@@ -58,6 +58,7 @@ Dedicated local installations retain ownership checks and a checkout association
 make local-start                 # builds the current CLI for development
 sudo goblinctl --repo "$PWD" local start      # uses a precompiled binary
 sudo goblinctl local stop                     # retains application data and PVCs
+sudo goblinctl local retry --refresh          # retries a failed install with the current checkout
 sudo goblinctl local reset --yes              # deletes only this owned local cluster
 goblinctl --repo "$PWD" password set --replace
 sudo goblinctl local start                    # loads the changed local verifier
@@ -67,14 +68,29 @@ goblinctl local database
 The local source snapshot includes Git-visible working-tree changes and untracked
 files, excludes ignored stores/build products, and refuses symlinks. A completed
 installation resumes without rebuilding. Failed installation requires explicit
-retry. Stop is suspension; reset is explicit deletion of the owned test cluster.
-The native CLI and its license documents remain installed after reset.
+retry. `retry` reuses the failed attempt's source snapshot; `retry --refresh`
+first replaces that snapshot and the installed setup assets with the current
+checkout and CLI, so a fix can be tested without deleting the cluster. It accepts
+only a stopped, failed installation. Stop is suspension; reset is explicit deletion
+of the owned test cluster. The native CLI, its license documents, and the verified
+download cache in `/var/cache/goblin/downloads` remain after reset.
 
 The installer retains its existing root worker and unprivileged DynamicUser setup
 service as separate processes. Public setup exposes static assets, status,
 health, and the read-only `/setup/events` progress stream. Its local health socket appears only after the public listener binds.
 The server bounds request sizes, connection count and timeouts. The existing
 handoff marker, installer lock, rollback, and retained-source retry rules remain.
+
+`POST /setup/retry` accepts a JSON body with the owner password. The setup service
+relays it, unread, to `goblin-setup-control.socket`. For each connection, systemd starts a root
+`goblinctl internal setup-control` process, one at a time. That process returns
+`not-failed` unless the installation has failed, checks the password against the
+private verifier, and starts `goblin-installer.service` unless it is already
+active. Responses are `202 started`, `400 invalid`, `401 unauthorized`,
+`409 not-failed` or `running`, `429 throttled`, and `503 unavailable`. Five
+consecutive wrong passwords lock page retries for one minute, doubling up to 15
+minutes; the root-only `retry-throttle.json` beside the verifier records this.
+Requiring JSON makes cross-site browser requests fail CORS preflight.
 
 PostgreSQL client profiles are independent of `--repo` and installer state. See
 [the database guide](database.md) for WSL/Azure connections, Windows exports,
@@ -84,22 +100,37 @@ and OpenSSL; Azure access also needs SSH.
 ## Parallel installation and live progress
 
 After retaining and validating the source snapshot, the installer builds Goblin
-alongside k3s setup. It prefetches service images directly into k3s as soon as CRI
-is available. Certificate manager and Sandbox install concurrently after node
-readiness. PostgreSQL waits for both add-ons; image import waits for the build and
-k3s; migration waits for PostgreSQL and image import. Deployment waits for the
+alongside k3s setup. K3s setup downloads the pinned k3s binary and airgap
+system-image archive in parallel, verifies both, and keeps them in
+`/var/cache/goblin/downloads`. Retries and local resets reuse them, and an
+installation removes cached files from other k3s versions. The upstream install
+script then runs with `INSTALL_K3S_SKIP_DOWNLOAD=true`. K3s imports the archive at
+startup, and the installer waits for Traefik to be created and rolled out before
+changing its routing mode.
+
+After k3s is ready, certificate manager, Sandbox, and the service-image prefetch
+run concurrently. Each add-on pulls its own images before applying manifests.
+PostgreSQL waits for both add-ons and the prefetch; image import waits for the build
+and k3s; migration waits for PostgreSQL and image import. Deployment waits for the
 migration and image downloads. Existing readiness and public handoff checks remain.
+Downloads come first, so the fixed rollout timeouts measure startup only.
 The production Dockerfile keeps its original build stages and asset packaging.
 
-Four workers prefetch images by default. Set `GOBLIN_IMAGE_PULL_WORKERS=1` through
-`8` in a `goblin-installer.service` systemd environment override to tune smaller
-hosts. Each explicit pull has a ten-minute timeout. Kubernetes and BuildKit also
-perform their own pulls; this limit applies to Goblin's prefetch workers. Service
-references come from validated application manifests and the embedded PostgreSQL
-manifest; add-on references use the installer's pinned release versions.
+Installer downloads resume from partial files. They fail only when under 1 KiB/s
+arrives for two minutes, with six attempts in total; permanent HTTP errors stop
+immediately. Four workers prefetch service images by default. Set
+`GOBLIN_IMAGE_PULL_WORKERS=1` through `8` in a `goblin-installer.service` systemd
+environment override to tune smaller hosts. Containerd cancels an image pull that
+stops receiving data; the installer resumes it up to three times. A two-hour limit
+per pull only ends a hang that containerd misses. Kubernetes and BuildKit also
+perform their own pulls. Service references come from validated application
+manifests and the embedded PostgreSQL manifest; add-on references use the
+installer's pinned release versions.
 
 The setup page shows concurrent steps and a live installation log, including build
-stages, cache reuse, individual image downloads and database checks. The latest
+stages, cache reuse, individual image downloads and database checks. Each running
+task also shows its latest activity, such as k3s download size and rate. These
+`progress` updates replace the task detail without adding log entries. The latest
 300 structured entries, with timestamps and attempt IDs, are retained in the
 atomic status document. Refreshing the page restores that tail. EventSource
 reconnects with an event ID between bounded SSE batches; status polling continues
@@ -108,10 +139,13 @@ collection. Public messages are authored progress events and reconstructed
 BuildKit records; arbitrary package/compiler output, credentials and upstream
 errors remain in the private host log, available through `sudo goblinctl logs`.
 
-Each worker runs in an owned process group. A failure blocks dependent work and
-stops outstanding workers before recovery releases the attempt lock. State writes
+Each worker runs in an owned process group. A failure starts no new tasks. Workers
+already running finish, so their downloads and builds are kept for the retry, and
+the page reports how many are finishing. A service stop still stops all workers
+before recovery releases the attempt lock. State writes
 use a separate short file lock so concurrent updates cannot overwrite each other.
-Failed installations disable their boot unit and require `goblinctl install retry`;
+Failed installations disable their boot unit and require an explicit retry, either
+from the setup page with the owner password or with `goblinctl install retry`;
 the setup page remains available. The retained source archive, password, completed
 Docker/k3s images, build cache, certificates and PVCs are reused and checked on retry.
 Saved step completion alone never causes infrastructure readiness checks to be skipped.

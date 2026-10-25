@@ -334,9 +334,10 @@ export const environmentVariables = {
     },
     GOBLIN_BOOTSTRAP_SLOW_BUILD: {
         name: "GOBLIN_BOOTSTRAP_SLOW_BUILD",
-        purpose: "Trigger the offline installer fixture build timeout.",
-        format: "true or false",
-        fallback: "Harness uses false",
+        purpose:
+            "Artificial application-build delay in the offline installer fixture.",
+        format: "Milliseconds as numeric text",
+        fallback: "Harness supplies 0",
         required: "Offline deployment tests only",
         sensitive: false,
     },

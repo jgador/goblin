@@ -70,8 +70,9 @@ clean_remove_runtime() {
 clean_installation() {
     local owner=$system/var/lib/goblin/local-test/config.json unit path remaining
     local uninstall=$system/usr/local/bin/k3s-uninstall.sh
-    local -a units=(goblin-installer.service goblin-setup.service goblin-local.socket
-        goblin-local-postgres.socket goblin-local.service goblin-local-postgres.service)
+    local -a units=(goblin-installer.service goblin-setup.service goblin-setup-control.socket
+        goblin-setup-control@.service goblin-local.socket goblin-local-postgres.socket
+        goblin-local.service goblin-local-postgres.service)
     local -a host_directories=(etc/rancher/k3s var/lib/rancher/k3s var/lib/cni opt/goblin/setup var/lib/goblin)
     clean_no_links "$owner"
     for path in "${host_directories[@]}" var/lib/kubelet usr/local/bin/k3s usr/local/bin/k3s-uninstall.sh \
@@ -99,7 +100,9 @@ clean_installation() {
     for unit in "${units[@]}"; do
         [[ -e $system/etc/systemd/system/$unit ]] || continue
         case $unit in
-            goblin-local.service|goblin-local-postgres.service) systemctl stop "$unit" ;;
+            goblin-local.service|goblin-local-postgres.service|goblin-setup-control.socket) systemctl stop "$unit" ;;
+            # Template: its short-lived instances stop with the control socket.
+            goblin-setup-control@.service) ;;
             *) systemctl disable --now "$unit" ;;
         esac
     done

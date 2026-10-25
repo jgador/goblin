@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { startSetup } from "../support/setup.js";
+import { setupRetryPassword, startSetup } from "../support/setup.js";
 
 test("setup summarizes concurrent tasks and preserves disclosures and focus across updates", async ({
     page,
@@ -219,6 +219,69 @@ test("setup shows live progress, failure and a successful retry across refreshes
             "Install certificate manager",
         );
         await expect(page.locator("#recovery")).toBeHidden();
+        expect(
+            await page
+                .locator("body")
+                .evaluate((element) => element.scrollWidth <= innerWidth),
+        ).toBe(true);
+    } finally {
+        await setup.close();
+    }
+});
+
+test("a failed installation can be retried from the page with the Goblin password", async ({
+    page,
+}) => {
+    const setup = await startSetup({ control: true });
+    try {
+        await page.goto(setup.url);
+        setup.transition("begin");
+        setup.transition("start", "k3s");
+        setup.transition(
+            "progress",
+            "Downloading Kubernetes: 12.5 of 263.6 MB",
+            "k3s",
+        );
+        setup.transition("failed");
+        const recovery = page.locator("#recovery");
+        await expect(recovery).toBeVisible();
+        // The task keeps the activity it stopped during.
+        await expect(page.locator('li[data-status="failed"]')).toContainText(
+            "Downloading Kubernetes: 12.5 of 263.6 MB",
+        );
+        const password = recovery.getByLabel("Goblin password");
+        const submit = recovery.getByRole("button", {
+            name: "Retry installation",
+        });
+        await submit.click();
+        await expect(recovery.getByRole("status")).toHaveText(
+            "Enter your Goblin password to retry.",
+        );
+        await expect(password).toBeFocused();
+        await password.fill("wrong password");
+        await password.press("Enter");
+        await expect(recovery.getByRole("status")).toHaveText(
+            "That password didn’t match. Try again.",
+        );
+        await expect(submit).toBeEnabled();
+        expect(await setup.systemctl()).toEqual([]);
+        await password.fill(setupRetryPassword);
+        await submit.click();
+        await expect(recovery.getByRole("status")).toHaveText(
+            "Retry started. Progress will update here.",
+        );
+        await expect(password).toHaveValue("");
+        expect(await setup.systemctl()).toContain(
+            "enable --now goblin-installer.service",
+        );
+        // The installer service starts the next attempt; the form leaves with the failure.
+        setup.transition("begin");
+        setup.transition("start", "k3s");
+        await expect(recovery).toBeHidden();
+        setup.transition("failed");
+        await expect(recovery).toBeVisible();
+        await expect(submit).toBeEnabled();
+        await expect(page.locator("#retry-message")).toBeEmpty();
         expect(
             await page
                 .locator("body")

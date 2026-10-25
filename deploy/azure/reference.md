@@ -121,17 +121,25 @@ extension only. `setup-ready` means the status UI responded and the background
 worker was launched. The status JSON reports `waiting`, `running`, `failed`, or
 `ready` for the full installation, with per-step timestamps and attempt counts.
 Private diagnostics stay on the VM. The public UI exposes safe progress and
-sanitized installation-log output, including live streaming; it has no public
-install/retry controls and does not expose private configuration.
+sanitized installation-log output, including live streaming and the current
+download size and rate for each running task. It does not expose private
+configuration. Its only control is retrying a failed installation, which requires
+the Goblin owner password.
 
 If the Azure extension fails, inspect `/var/log/goblin-bootstrap.log`. If a
 background step fails, the status page identifies it and the Azure deployment
 can still show success. After fixing an external issue such as blocked downloads,
-retry through SSH or Azure Run Command:
+enter the Goblin password on the status page and select **Retry installation**,
+or retry through SSH or Azure Run Command:
 
 ```bash
 sudo goblinctl install retry
 ```
+
+The status page uses HTTP until HTTPS is configured, the same as Goblin's own
+sign-in at that address. Five incorrect passwords lock page retries for one
+minute, doubling with each further failure up to 15 minutes. The command line
+is not affected.
 
 An interrupted incomplete installation can resume after reboot. A failed attempt
 disables its worker and requires explicit retry; reboot alone does not retry it.
@@ -185,6 +193,13 @@ connections; see the [database guide](../../docs/database.md). HTTPS remains
 independent.
 
 Upstream installer/manifests use pinned versions and verified SHA-256 digests.
+The k3s binary and its airgap system-image archive are downloaded together,
+verified, and kept in `/var/cache/goblin/downloads`. K3s imports that archive at
+startup, so Traefik and CoreDNS do not pull images. Downloads resume after an
+interruption and fail only when no data arrives for two minutes. Each add-on and
+service image is pulled before its rollout; containerd cancels a pull that stops
+receiving data, and the installer resumes it up to three times. Rollout timeouts
+therefore measure startup rather than download speed.
 Outbound internet access is required for downloads and image pulls. The Ubuntu
 24.04 LTS image uses Azure's latest revision. Agent Sandbox extensions are not
 installed. Existing K3s services are reused rather than automatically upgraded.
@@ -202,6 +217,17 @@ use the [local reset commands](../local/README.md#stop-resume-or-start-clean) fo
 public status file and bundled assets. `goblin-installer.service` runs as root;
 only this worker can change cluster resources. A file lock serializes attempts,
 and status writes use atomic replacement with fsync.
+
+A page retry is relayed to `goblin-setup-control.socket`, which starts and stops
+with the setup service. Systemd runs a separate root
+`goblin-setup-control@.service` instance for each request, one at a time. That
+process checks the password against the private verifier, confirms the
+installation has failed and its worker is stopped, then starts
+`goblin-installer.service`. The setup service never reads the verifier.
+
+When one task fails, tasks that are already running finish, so completed
+downloads and builds are kept for the retry. No new task starts, and the
+installation stops once the running tasks end.
 
 The setup page initially owns port 80. A HelmChartConfig keeps Traefik's Service
 as `ClusterIP`; the worker checks `/readyz` and the application page through

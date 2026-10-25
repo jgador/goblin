@@ -82,6 +82,8 @@ directory names do not determine a language's ownership.
 Integration checks retain generated contract values, dependency/schema checks,
 frontend, release-script, HTTP, and offline deployment tests. Installer checks retain the musl release build,
 compiler-input verification, and the existing setup/install browser journeys.
+They also build the platform Docker image (`make platform-image-check`), so a
+missing build input fails CI rather than a later installation.
 Their inclusion for each language is conservative: C# HTTP contracts, Rust
 embedded assets, and browser setup code cross those boundaries. Separate runners
 prevent concurrent build/cleanup commands from sharing output. Pure language

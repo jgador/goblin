@@ -41,7 +41,12 @@ pub fn activate_tooling(system_root: &Path, binary: &Path) -> Result<()> {
         &root("opt/goblin/share/licenses/goblinctl"),
         assets::LICENSING,
     )?;
-    for name in ["goblin-setup.service", "goblin-installer.service"] {
+    for name in [
+        "goblin-setup.service",
+        "goblin-setup-control.socket",
+        "goblin-setup-control@.service",
+        "goblin-installer.service",
+    ] {
         files::atomic_write(
             &root("etc/systemd/system").join(name),
             &fs::read(root("opt/goblin/setup").join(name))?,

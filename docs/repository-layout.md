@@ -374,9 +374,10 @@ The root `dist/` holds compiled test tooling. It is separate from the frontend
 build and is not included in the application image. Both output directories,
 .NET `bin/` and `obj/`, `.artifacts/`, and local runtime data remain ignored by Git.
 The root Dockerfile compiles frontend assets and the backend in parallel, then
-finishes SDK publishing, using the repository root as its build context. The build
-context includes `docs/chatgpt-integration.md`, which the backend embeds for the ChatGPT installation
-download; other documentation remains excluded.
+finishes SDK publishing, using the repository root as its build context. The
+publish stage copies `frontend/public/assets/branding/` for the Slack icon and
+ChatGPT plugin-package logo embedded in backend assemblies. Documentation remains
+excluded from the image build context.
 
 Keep original artwork in `assets/branding/` and copy only the assets used by the
 browser into `frontend/public/assets/`. Codex schemas belong under

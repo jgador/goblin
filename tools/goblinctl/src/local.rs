@@ -18,6 +18,7 @@ use std::fs;
 use std::net::Ipv4Addr;
 use std::net::TcpListener;
 use std::net::UdpSocket;
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::Component;
@@ -33,6 +34,8 @@ const UNITS: &[&str] = &[
     "goblin-local.socket",
     "goblin-local.service",
     "goblin-setup.service",
+    "goblin-setup-control.socket",
+    "goblin-setup-control@.service",
     "goblin-installer.service",
     DATABASE_SOCKET,
     DATABASE_SERVICE,
@@ -353,7 +356,7 @@ impl Local {
         }
         Ok(())
     }
-    pub fn retry(&self) -> Result<()> {
+    pub fn retry(&self, refresh: bool) -> Result<()> {
         let config = self.owned_config()?;
         let state = self
             .status()?
@@ -362,6 +365,13 @@ impl Local {
             state["status"] != "ready",
             "Installation is complete. Use local reset --yes, then start for a fresh test."
         );
+        if refresh {
+            ensure!(
+                state["status"] == "failed" && !active("goblin-installer.service"),
+                "Only a stopped, failed installation can be refreshed. Wait for the current attempt to finish."
+            );
+            self.refresh()?;
+        }
         self.configure_forwarder(&config)?;
         if self.unit("k3s.service").exists() {
             systemctl(&["enable", "--now", "k3s"])?;
@@ -372,8 +382,53 @@ impl Local {
             "goblin-setup.service",
             "goblin-installer.service",
         ])?;
-        println!("Installer retry started; retained source and password are reused.");
+        println!(
+            "{}",
+            if refresh {
+                "Installer retry started with the current checkout; the password and data are reused."
+            } else {
+                "Installer retry started; retained source and password are reused."
+            }
+        );
         Ok(())
+    }
+    /// Replaces a failed attempt's source snapshot and installer with the current
+    /// checkout's, so a fix can be tested without deleting the cluster or downloads.
+    fn refresh(&self) -> Result<()> {
+        println!("Refreshing the installer and source snapshot from the current checkout…");
+        let source = self.state().join("source.tar.gz");
+        snapshot_source(&self.git_repository, &source)?;
+        let source_ref = files::output(
+            Command::new("git")
+                .arg("-C")
+                .arg(&self.git_repository)
+                .args(["rev-parse", "HEAD"]),
+        )?;
+        // Bootstrap's rule: stop the UI and hold the installer lock while activating.
+        systemctl(&["stop", "goblin-setup.service"])?;
+        let lock = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .mode(0o600)
+            .open(self.path("var/lib/goblin/install/installer.lock"))?;
+        lock.try_lock_exclusive()
+            .context("Another installer operation is running. Try again when it finishes.")?;
+        files::atomic_write(
+            &self.owner().with_file_name("source.tar.gz"),
+            &fs::read(source)?,
+            0o600,
+            false,
+        )?;
+        files::atomic_write(
+            &self.path("var/lib/goblin/install/private/source-ref"),
+            format!("{}\n", source_ref.trim()).as_bytes(),
+            0o600,
+            false,
+        )?;
+        install::activate_tooling(&self.system, &std::env::current_exe()?)?;
+        drop(lock);
+        systemctl(&["daemon-reload"])
     }
     pub fn stop(&self) -> Result<()> {
         self.owned_config()?;

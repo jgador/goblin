@@ -72,19 +72,27 @@ const stageViews = stageDefinitions.map((definition, index) => {
             const indicator = document.createElement("span");
             indicator.className = "indicator";
             indicator.setAttribute("aria-hidden", "true");
+            const copy = document.createElement("span");
+            copy.className = "label";
             const label = document.createElement("span");
-            label.className = "label";
+            const detail = document.createElement("span");
+            detail.className = "detail";
+            copy.append(label, detail);
             const status = document.createElement("span");
             status.className = "status";
-            row.append(indicator, label, status);
+            row.append(indicator, copy, status);
             tasks.append(row);
-            return [id, { row, indicator, label, status }];
+            return [id, { row, indicator, label, detail, status }];
         }),
     );
     element.append(summary, tasks);
     stages.append(element);
     return { definition, element, number, description, status, rows };
 });
+const retryForm = document.querySelector("#retry-form");
+const retryPassword = document.querySelector("#retry-password");
+const retryButton = document.querySelector("#retry-button");
+const retryMessage = document.querySelector("#retry-message");
 const log = document.querySelector("#install-log");
 const followLog = document.querySelector("#follow-log");
 const logConnection = document.querySelector("#log-connection");
@@ -243,6 +251,16 @@ function render(state) {
                       : "",
             );
             text(elements.label, step.label);
+            // Running tasks show their latest activity, such as download size and
+            // rate; a failed task keeps the activity it stopped during.
+            text(
+                elements.detail,
+                (step.status === SetupStepStatus.Running ||
+                    step.status === SetupStepStatus.Failed) &&
+                    typeof step.detail === "string"
+                    ? step.detail
+                    : "",
+            );
             text(
                 elements.status,
                 {
@@ -254,7 +272,12 @@ function render(state) {
             );
         }
     }
-    if (becameFailed) logPanel.open = true;
+    if (becameFailed) {
+        logPanel.open = true;
+        retryButton.disabled = false;
+        text(retryMessage, "");
+        delete retryMessage.dataset.status;
+    }
     updateElapsed();
     renderLog(state);
 }
@@ -303,6 +326,59 @@ log.addEventListener("scroll", () => {
 });
 followLog.addEventListener("change", () => {
     if (followLog.checked) log.scrollTop = log.scrollHeight;
+});
+
+const retryMessages = {
+    202: "Retry started. Progress will update here.",
+    400: "Enter your Goblin password to retry.",
+    401: "That password didn’t match. Try again.",
+    409: "Installation is already running.",
+    429: "Too many attempts. Wait a few minutes, then try again.",
+};
+function showRetryMessage(message, status) {
+    retryMessage.textContent = message;
+    retryMessage.dataset.status = status;
+}
+retryForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!retryPassword.value) {
+        showRetryMessage(retryMessages[400], "error");
+        retryPassword.focus();
+        return;
+    }
+    retryButton.disabled = true;
+    showRetryMessage("Checking your password…", "pending");
+    try {
+        const response = await fetch("/setup/retry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: retryPassword.value }),
+            cache: "no-store",
+            signal: AbortSignal.timeout(15000),
+        });
+        showRetryMessage(
+            retryMessages[response.status] ??
+                "Retry isn’t available from this page. Run sudo goblinctl install retry on the server.",
+            response.ok ? "success" : "error",
+        );
+        if (response.ok) {
+            retryPassword.value = "";
+            // The page normally leaves the failed state within seconds.
+            setTimeout(() => {
+                if (latest?.status === SetupStatus.Failed)
+                    retryButton.disabled = false;
+            }, 20000);
+        } else {
+            retryButton.disabled = false;
+            if (response.status === 401) retryPassword.select();
+        }
+    } catch {
+        retryButton.disabled = false;
+        showRetryMessage(
+            "Couldn’t reach your server. Check the connection and try again.",
+            "error",
+        );
+    }
 });
 
 const events = new EventSource("/setup/events");

@@ -1,4 +1,5 @@
-//! Read-only public setup UI. Privileged state writers are separate processes.
+//! Public setup UI. It reads status and relays password-checked retry requests;
+//! privileged state writers and the retry helper are separate processes.
 use crate::assets;
 use crate::contract_values::SetupAction;
 use crate::contract_values::SetupPhase;
@@ -6,11 +7,15 @@ use crate::contract_values::SetupStatus;
 use crate::contract_values::SetupStep;
 use crate::contract_values::SetupStepStatus;
 use crate::files;
+use crate::retry;
+use crate::retry::RetryResult;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::ensure;
 use fs2::FileExt;
+use http_body_util::BodyExt;
 use http_body_util::Full;
+use http_body_util::Limited;
 use hyper::Method;
 use hyper::Request;
 use hyper::Response;
@@ -147,7 +152,7 @@ pub fn update_scoped(
             state["currentStep"] = json!(value);
             state["message"] = label;
         }
-        SetupAction::Detail => {
+        SetupAction::Detail | SetupAction::Progress => {
             ensure!(
                 value.len() <= 512 && !value.chars().any(char::is_control),
                 "Invalid public progress message"
@@ -156,7 +161,10 @@ pub fn update_scoped(
                 step(&mut state, scope)?["detail"] = json!(value);
             }
             state["message"] = json!(value);
-            event = value.to_owned();
+            // Frequent transfer updates replace the step detail without filling the bounded log.
+            if action == SetupAction::Detail {
+                event = value.to_owned();
+            }
         }
         SetupAction::PublicUrl => state["publicUrl"] = json!(value),
         SetupAction::Complete => {
@@ -202,8 +210,9 @@ pub fn update_scoped(
             if !state["failedStep"].is_null() {
                 state["currentStep"] = state["failedStep"].clone();
             }
-            state["message"] =
-                json!("Installation stopped. An administrator can retry from the VM.");
+            state["message"] = json!(
+                "Installation stopped. Retry from this page with the Goblin password, or run goblinctl install retry on the server."
+            );
             for step in state["steps"].as_array_mut().context("Invalid steps")? {
                 if step["status"] == SetupStepStatus::Running.as_str() {
                     step["status"] = json!(SetupStepStatus::Failed);
@@ -212,7 +221,8 @@ pub fn update_scoped(
                         json!("Interrupted. Retained resources will be checked on retry.");
                 }
             }
-            event = "Installation stopped. Progress and existing data are retained for an administrator to retry.".into();
+            event =
+                "Installation stopped. Progress and existing data are retained for a retry.".into();
         }
         SetupAction::Ready => {
             state["status"] = json!(SetupStatus::Ready);
@@ -243,7 +253,25 @@ fn step(state: &mut Value, id: SetupStep) -> Result<&mut Value> {
         .context("Unknown installation step")
 }
 
-pub fn serve(state: &Path, host: &str, port: u16, health_socket: Option<&Path>) -> Result<()> {
+struct Server {
+    state: PathBuf,
+    control: Option<PathBuf>,
+    // One relayed retry at a time; the root helper also accepts one connection.
+    retry: Semaphore,
+}
+
+pub fn serve(
+    state: &Path,
+    host: &str,
+    port: u16,
+    health_socket: Option<&Path>,
+    control_socket: Option<&Path>,
+) -> Result<()> {
+    let server = Arc::new(Server {
+        state: state.to_owned(),
+        control: control_socket.map(Path::to_owned),
+        retry: Semaphore::new(1),
+    });
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -268,20 +296,20 @@ pub fn serve(state: &Path, host: &str, port: u16, health_socket: Option<&Path>) 
                 tokio::select! {
                     connection = listener.accept() => {
                         let (stream, _) = connection?;
-                        connection_task(stream, state.to_owned(), capacity.clone());
+                        connection_task(stream, server.clone(), capacity.clone());
                     },
                     connection = async {
                         if let Some(local) = &local { local.accept().await }
                         else { std::future::pending().await }
                     } => {
                         let (stream, _) = connection?;
-                        connection_task(stream, state.to_owned(), capacity.clone());
+                        connection_task(stream, server.clone(), capacity.clone());
                     }
                 }
             }
         })
 }
-fn connection_task<T>(stream: T, state: PathBuf, capacity: Arc<Semaphore>)
+fn connection_task<T>(stream: T, server: Arc<Server>, capacity: Arc<Semaphore>)
 where
     T: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
@@ -290,14 +318,14 @@ where
     };
     tokio::spawn(async move {
         let _permit = permit;
-        let service = service_fn(move |request| respond(request, state.clone()));
+        let service = service_fn(move |request| respond(request, server.clone()));
         let mut builder = hyper::server::conn::http1::Builder::new();
         builder
             .keep_alive(false)
             .max_buf_size(16 * 1024)
             .timer(TokioTimer::new())
             .header_read_timeout(Duration::from_secs(10));
-        // Bound both slow headers and blocked responses; request bodies are never consumed.
+        // Bound slow headers, bodies and blocked responses. Only retry reads a small body.
         let _ = tokio::time::timeout(
             Duration::from_secs(10),
             builder.serve_connection(TokioIo::new(stream), service),
@@ -307,10 +335,17 @@ where
 }
 async fn respond(
     request: Request<Incoming>,
-    state: PathBuf,
+    server: Arc<Server>,
 ) -> std::result::Result<Response<Full<Bytes>>, hyper::http::Error> {
     let path = request.uri().path();
-    let (status, kind, body) = if request.method() != Method::GET {
+    let (status, kind, body) = if request.method() == Method::POST && path == "/setup/retry" {
+        let result = retry(request, &server).await;
+        (
+            result.http_status(),
+            "application/json",
+            json!({ "result": result }).to_string().into_bytes(),
+        )
+    } else if request.method() != Method::GET {
         (405, "text/plain", b"Method not allowed".to_vec())
     } else if path == "/setup/healthz" {
         (200, "application/json", b"{\"setup\":true}".to_vec())
@@ -320,12 +355,12 @@ async fn respond(
             .get("last-event-id")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        match event_batch(&state, cursor).await {
+        match event_batch(&server.state, cursor).await {
             Ok(body) => (200, "text/event-stream", body.into_bytes()),
             Err(_) => (503, "text/plain", b"Progress unavailable".to_vec()),
         }
     } else if path == "/setup/status" {
-        match fs::read(&state) {
+        match fs::read(&server.state) {
             Ok(body) => (200, "application/json", body),
             Err(_) => (503, "text/plain", b"Status unavailable".to_vec()),
         }
@@ -340,6 +375,41 @@ async fn respond(
         .header("X-Content-Type-Options", "nosniff").header("Referrer-Policy", "no-referrer")
         .header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
         .body(Full::new(Bytes::from(body)))
+}
+
+// The password is checked by the root helper, never by this unprivileged server.
+// Requiring a JSON body makes cross-site browser requests fail their CORS preflight.
+async fn retry(request: Request<Incoming>, server: &Server) -> RetryResult {
+    let json = request
+        .headers()
+        .get(hyper::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(';').next())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"));
+    if !json {
+        return RetryResult::Invalid;
+    }
+    let Some(control) = server.control.as_deref() else {
+        return RetryResult::Unavailable;
+    };
+    let Ok(_permit) = server.retry.try_acquire() else {
+        return RetryResult::Throttled;
+    };
+    let limit = usize::try_from(retry::REQUEST_LIMIT).unwrap_or(2048);
+    let Ok(body) = Limited::new(request.into_body(), limit).collect().await else {
+        return RetryResult::Invalid;
+    };
+    let Ok(request) = serde_json::from_slice::<retry::RetryRequest>(&body.to_bytes()) else {
+        return RetryResult::Invalid;
+    };
+    tokio::time::timeout(
+        Duration::from_secs(8),
+        retry::relay(control, &request.password),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .unwrap_or(RetryResult::Unavailable)
 }
 
 // Finite SSE batches keep the existing connection/time/memory limits. EventSource

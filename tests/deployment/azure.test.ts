@@ -54,7 +54,7 @@ async function bootstrap(
         resume?: boolean;
         recovery?: boolean;
         pullDelay?: number;
-        slowBuild?: boolean;
+        slowBuild?: number;
         state?:
             | "ready"
             | "docker-failed"
@@ -68,7 +68,9 @@ async function bootstrap(
             | "sandbox-failed"
             | "cert-failed"
             | "webhook-failed"
-            | "pull-failed";
+            | "pull-failed"
+            | "k3s-download-failed"
+            | "k3s-corrupt";
     } = {},
 ) {
     const bin = join(root, "bin");
@@ -148,6 +150,17 @@ if (name === 'curl') {
     if (process.env["${Env.GOBLIN_BOOTSTRAP_NATIVE_DOWNLOAD.name}"] === 'corrupt') fs.appendFileSync(output, 'corruption');
   } else if (args.includes('http://127.0.0.1/setup/healthz')) {
     fs.writeFileSync(output, JSON.stringify({ setup: true }));
+  } else if (args.some(arg => arg.startsWith('https://raw.githubusercontent.com/k3s-io/k3s/'))) {
+    // The pinned upstream script must install the pre-verified binary and images.
+    fs.writeFileSync(output, '#!/bin/sh\\n' +
+      'test "$INSTALL_K3S_SKIP_DOWNLOAD" = true || exit 98\\n' +
+      'test -x "$${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}/usr/local/bin/k3s" || exit 98\\n' +
+      'test -f "$${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}/var/lib/rancher/k3s/agent/images/k3s-airgap-images-amd64.tar.zst" || exit 98\\n' +
+      'printf "%s\\n" "$INSTALL_K3S_VERSION" > "$${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}/k3s-installed-version"\\n');
+  } else if (args.some(arg => arg.includes('/k3s-io/k3s/releases/download/'))) {
+    fs.appendFileSync(path.join(root, 'k3s-downloads.jsonl'), JSON.stringify(args) + '\\n');
+    if (appState === 'k3s-download-failed') process.exit(28);
+    fs.writeFileSync(output, appState === 'k3s-corrupt' ? 'corrupt download' : 'k3s release asset\\n');
   } else if (args.some(arg => arg.startsWith('http://'))) {
     if (appState === 'ingress-failed' || (appState === 'public-failed' && !args.some(arg => arg.endsWith(':10.43.0.80')))) process.exit(22);
     if (args.some(arg => arg.endsWith('/readyz'))) fs.writeFileSync(output, JSON.stringify({ ready: true }));
@@ -160,6 +173,7 @@ if (name === 'curl') {
     const text = fs.readFileSync(0, 'utf8');
     fs.appendFileSync(path.join(root, 'checksum-checks.jsonl'), JSON.stringify(text) + '\\n');
     const [expected, file] = text.trim().split(/\\s+/, 2);
+    if (appState === 'k3s-corrupt' && file.includes('/var/cache/goblin/downloads/')) process.exit(1);
     if (file.endsWith('/goblinctl.tar.gz')) {
       const actual = require('node:crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex');
       if (actual !== expected) { process.stderr.write('Native archive checksum mismatch'); process.exit(1); }
@@ -184,7 +198,8 @@ if (name === 'curl') {
   if (args[0] === 'image' && args[1] === 'inspect' && !fs.existsSync(path.join(root, 'built-image'))) process.exit(1);
   if (args[0] === 'build') {
     fs.writeFileSync(path.join(root, 'build-pid'), String(process.pid));
-    if (process.env["${Env.GOBLIN_BOOTSTRAP_SLOW_BUILD.name}"] === 'true') Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60000);
+    const buildDelay = Number(process.env["${Env.GOBLIN_BOOTSTRAP_SLOW_BUILD.name}"]);
+    if (buildDelay) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, buildDelay);
     if (appState === 'build-failed') process.exit(1);
     fs.accessSync(path.join(args.at(-1), 'Dockerfile'));
     if ((fs.statSync(path.join(args.at(-1), 'frontend/src/connection/index.html')).mode & 0o044) !== 0o044)
@@ -322,6 +337,7 @@ if (name === 'curl') {
         "/run/goblin-setup",
         "/etc/systemd/system",
         "/var/lib/rancher/k3s",
+        "/var/cache/goblin",
     ];
     const remap = (script: string) =>
         paths
@@ -464,7 +480,7 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
                 application.pullDelay ?? 0,
             ),
             [Env.GOBLIN_BOOTSTRAP_SLOW_BUILD.name]: String(
-                application.slowBuild ?? false,
+                application.slowBuild ?? 0,
             ),
             [Env.GOBLIN_BOOTSTRAP_DOCKER_INSTALLED.name]: String(
                 application.dockerInstalled ?? true,
@@ -548,9 +564,13 @@ test("parallel installation bounds image pulls, overlaps independent steps, and 
     const start = (id: string) => Date.parse(steps[id].startedAt);
     const end = (id: string) => Date.parse(steps[id].finishedAt);
     assert.ok(start("image") < end("k3s") && start("k3s") < end("image"));
+    // Image downloads start once k3s is running; dependent waits then cover startup only.
+    for (const id of ["prefetch", "cert-manager", "sandbox"])
+        assert.ok(start(id) >= end("k3s"));
     assert.ok(
         start("database") >= end("cert-manager") &&
-            start("database") >= end("sandbox"),
+            start("database") >= end("sandbox") &&
+            start("database") >= end("prefetch"),
     );
     assert.ok(
         start("migrate") >= end("import") &&
@@ -560,30 +580,51 @@ test("parallel installation bounds image pulls, overlaps independent steps, and 
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line));
+    const addOn = (image: string) =>
+        image.includes("/jetstack/") || image.includes("/agent-sandbox/");
     let active = 0,
         maximum = 0;
-    for (const event of pulls) {
+    for (const event of pulls.filter((event) => !addOn(event.image))) {
         active += event.event === "start" ? 1 : -1;
         maximum = Math.max(maximum, active);
     }
     assert.equal(active, 0);
     assert.equal(pulls.length, 16);
     assert.ok(maximum > 1 && maximum <= 4);
+    // Add-on images are present before their manifests are applied.
+    const calls: string[][] = (
+        await readFile(join(root, "k3s-requests.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const lastPull = (fragment: string) =>
+        calls.findLastIndex(
+            (args) =>
+                args[0] === "crictl" &&
+                args[1] === "pull" &&
+                args[2].includes(fragment),
+        );
+    const rollout = (name: string) =>
+        calls.findIndex((args) => args[1] === "rollout" && args.includes(name));
+    assert.ok(lastPull("/jetstack/") < rollout("deployment/cert-manager"));
+    assert.ok(lastPull("/agent-sandbox/") < rollout("deployment/sandbox"));
     assert.ok(!JSON.stringify(progress).includes("do-not-stream"));
     assert.match(JSON.stringify(progress), /installing runtime dependencies/);
 });
 
-test("a pull failure stops the owned build process before retry can deploy", async (t) => {
+test("a pull failure lets running tasks finish but starts no dependent task", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-pull-failure-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     await assert.rejects(
         bootstrap(root, fakePassword, "ready", {
             state: "pull-failed",
-            slowBuild: true,
-            pullDelay: 1000,
+            slowBuild: 3000,
         }),
         { status: 1 },
     );
+    // The application build finished instead of being cancelled, so a retry reuses it.
+    await access(join(root, "built-image"));
     const pid = Number(await readFile(join(root, "build-pid"), "utf8"));
     assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
     const progress = JSON.parse(
@@ -592,16 +633,30 @@ test("a pull failure stops the owned build process before retry can deploy", asy
             "utf8",
         ),
     );
+    const status = (id: string) =>
+        progress.steps.find((step: { id: string }) => step.id === id).status;
     assert.equal(progress.status, "failed");
-    assert.equal(
-        progress.steps.find((step: { id: string }) => step.id === "deploy")
-            .status,
-        "waiting",
+    assert.equal(status("image"), "complete");
+    assert.equal(status("prefetch"), "failed");
+    for (const id of ["database", "import", "migrate", "deploy"])
+        assert.equal(status(id), "waiting");
+    assert.ok(
+        progress.logs.some((entry: { message: string }) =>
+            entry.message.startsWith("Finishing "),
+        ),
     );
+    // A failed image is attempted three times before the step fails.
+    const pulls = (await readFile(join(root, "pull-events.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const first = pulls[0].image;
     assert.equal(
-        progress.steps.find((step: { id: string }) => step.id === "prefetch")
-            .status,
-        "failed",
+        pulls.filter(
+            (event: { event: string; image: string }) =>
+                event.event === "start" && event.image === first,
+        ).length,
+        3,
     );
     execFileSync("flock", [
         "-n",
@@ -611,6 +666,117 @@ test("a pull failure stops the owned build process before retry can deploy", asy
     await access(
         join(root, "var/lib/goblin/install/private/work/goblin-source.tar.gz"),
     );
+});
+
+test("k3s and its system images are verified, cached outside the cluster, and installed without another download", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-k3s-cache-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await bootstrap(root, fakePassword);
+    const downloads: string[][] = (
+        await readFile(join(root, "k3s-downloads.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const urls = downloads.map((args) =>
+        args.find((arg) => arg.startsWith("https://")),
+    );
+    assert.deepEqual(urls.sort(), [
+        "https://github.com/k3s-io/k3s/releases/download/v1.37.0%2Bk3s1/k3s",
+        "https://github.com/k3s-io/k3s/releases/download/v1.37.0%2Bk3s1/k3s-airgap-images-amd64.tar.zst",
+    ]);
+    // Transfers resume and fail only on stalls, never on a fixed total duration.
+    for (const args of downloads) {
+        assert.ok(args.includes("--continue-at"));
+        assert.ok(args.includes("--speed-time"));
+        assert.ok(!args.includes("--max-time"));
+    }
+    const cache = join(root, "var/cache/goblin/downloads");
+    assert.deepEqual((await readdir(cache)).sort(), [
+        "k3s-airgap-images-amd64-v1.37.0+k3s1.tar.zst",
+        "k3s-v1.37.0+k3s1",
+    ]);
+    assert.equal(
+        await readFile(join(root, "k3s-installed-version"), "utf8"),
+        "v1.37.0+k3s1\n",
+    );
+    const checks = (await readFile(join(root, "checksum-checks.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as string);
+    for (const [checksum, name] of [
+        [
+            "39eed8f53f277497dfc2542f66eab0ed68a94dfc598946dbebfb50366916c7a2",
+            "k3s-v1.37.0+k3s1",
+        ],
+        [
+            "0b4ff0d6e233de54be4e16cb5aa298fd53ad88f66ad8ae31093b5ef4dcefcdd0",
+            "k3s-airgap-images-amd64-v1.37.0+k3s1.tar.zst",
+        ],
+    ])
+        assert.ok(
+            checks.some(
+                (text) =>
+                    text.startsWith(checksum) && text.trim().endsWith(name),
+            ),
+        );
+
+    // A reset removes k3s and Goblin state but keeps the verified download cache.
+    const second = await mkdtemp(join(tmpdir(), "goblin-k3s-cached-"));
+    t.after(() => rm(second, { recursive: true, force: true }));
+    await mkdir(join(second, "var/cache/goblin"), { recursive: true });
+    await cp(cache, join(second, "var/cache/goblin/downloads"), {
+        recursive: true,
+    });
+    await writeFile(
+        join(second, "var/cache/goblin/downloads/k3s-v1.36.0+k3s1"),
+        "superseded release",
+    );
+    await bootstrap(second, fakePassword);
+    await assert.rejects(access(join(second, "k3s-downloads.jsonl")));
+    await assert.rejects(
+        access(join(second, "var/cache/goblin/downloads/k3s-v1.36.0+k3s1")),
+    );
+    assert.equal(
+        await readFile(join(second, "k3s-installed-version"), "utf8"),
+        "v1.37.0+k3s1\n",
+    );
+});
+
+test("failed or corrupt k3s downloads install nothing and start no dependent task", async (t) => {
+    for (const state of ["k3s-download-failed", "k3s-corrupt"] as const) {
+        const root = await mkdtemp(join(tmpdir(), "goblin-k3s-failed-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        await assert.rejects(bootstrap(root, fakePassword, "ready", { state }));
+        await assert.rejects(access(join(root, "usr/local/bin/k3s")));
+        await assert.rejects(access(join(root, "k3s-installed-version")));
+        const cache = join(root, "var/cache/goblin/downloads");
+        assert.deepEqual(
+            (await readdir(cache)).filter((name) => !name.endsWith(".part")),
+            [],
+        );
+        const progress = JSON.parse(
+            await readFile(
+                join(root, "var/lib/goblin/install/status.json"),
+                "utf8",
+            ),
+        );
+        const status = (id: string) =>
+            progress.steps.find((step: { id: string }) => step.id === id)
+                .status;
+        assert.equal(progress.status, "failed");
+        assert.equal(status("k3s"), "failed");
+        for (const id of ["prefetch", "cert-manager", "sandbox", "import"])
+            assert.equal(status(id), "waiting");
+        if (state === "k3s-download-failed") {
+            const attempts = (
+                await readFile(join(root, "k3s-downloads.jsonl"), "utf8")
+            )
+                .trim()
+                .split("\n");
+            assert.equal(attempts.length, 12, "six attempts for each file");
+        }
+    }
 });
 
 test("installer waits for node registration after API readiness, including transient list failures", async (t) => {

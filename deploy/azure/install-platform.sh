@@ -4,15 +4,17 @@
 prepare_source() {
 stage 'Downloading Goblin'
 goblin_source_dir="$bootstrap_dir/source"
-mkdir -p "$goblin_source_dir"
 # Keep the first complete archive for this attempt across retries, even when
 # the selected branch moves. Explicit reprovisioning starts a new download.
 if [[ ! -f "$bootstrap_dir/goblin-source.tar.gz" ]]; then
-  download "https://codeload.github.com/jgador/goblin/tar.gz/${goblin_source_ref}" "$bootstrap_dir/goblin-source.tar.gz.part"
-  mv "$bootstrap_dir/goblin-source.tar.gz.part" "$bootstrap_dir/goblin-source.tar.gz"
+  download "https://codeload.github.com/jgador/goblin/tar.gz/${goblin_source_ref}" "$bootstrap_dir/goblin-source.tar.gz"
 fi
 goblin_source_sha=$(sha256sum "$bootstrap_dir/goblin-source.tar.gz" | cut -d ' ' -f 1)
 goblin_image="localhost/goblin-platform:${goblin_source_sha}"
+# Extract into an empty directory: a refreshed snapshot must not keep files that
+# the previous snapshot had and this one removed.
+rm -rf "$goblin_source_dir"
+mkdir -p "$goblin_source_dir"
 # Public source files need their normal read/execute permissions when copied into
 # the non-root image. Keep bootstrap's private umask for everything outside this extraction.
 (

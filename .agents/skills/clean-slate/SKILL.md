@@ -209,8 +209,11 @@ databases, browser state, and test servers. Do not restart the app as verificati
 Check all of the following; distinguish “absent” from permission/query failures:
 
 - `goblin-local.socket/service`, `goblin-local-postgres.socket/service`,
-  `goblin-setup.service`, `goblin-installer.service`, and the owned `k3s.service`
-  are inactive and their installation-owned unit files/drop-ins are gone.
+  `goblin-setup.service`, `goblin-setup-control.socket` and its
+  `goblin-setup-control@.service` template, `goblin-installer.service`, and the
+  owned `k3s.service` are inactive and their installation-owned unit files/drop-ins
+  are gone. Keep the shared, checksum-verified download cache
+  `/var/cache/goblin/downloads` unless the user asks to remove it.
 - Owned `/var/lib/goblin`, `/opt/goblin`, `/etc/rancher/k3s`,
   `/var/lib/rancher/k3s`, `/var/lib/kubelet`, `/var/lib/cni`, and any verified
   additional storage are gone. Check `/etc/kubernetes` if present; it is also a

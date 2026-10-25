@@ -41,7 +41,17 @@ The setup UI stops and disables itself after installation; the forwarder remains
 The progress page groups installation into four expandable stages. Its progress
 bar counts completed tasks, rather than estimating remaining time; tasks can run
 concurrently. Open a stage to inspect its tasks or expand **Installation log** for
-live output. If installation fails, the affected stage and log open automatically.
+live output. Running tasks show their latest activity, including download size
+and rate. If installation fails, the affected stage and log open automatically.
+Tasks that were already running finish first, so their downloads and builds are
+kept, and no new task starts. Enter your Goblin password on the page and select
+**Retry installation** to continue.
+
+Download speed no longer decides whether installation times out. The k3s binary
+and its system-image archive download in parallel, resume after interruptions,
+and fail only when no data arrives for two minutes. Image pulls resume when
+containerd stops a stalled transfer. Add-on and service images download before
+their rollouts start, so those waits measure startup only.
 
 Open **Settings → Cluster → Open cluster**, or
 **http://localhost:8788/headlamp/**, to inspect Kubernetes in Headlamp using your
@@ -84,12 +94,17 @@ make local-status
 make local-logs
 make local-logs ARGS=--follow
 make local-retry
+make local-retry ARGS=--refresh
 ```
 
-`retry` restarts an incomplete installation with its retained source snapshot,
-password, and data. If bootstrap failed before launching the installer, run
-`start` again. A completed installation reports `ready`, and both setup services
-are stopped and disabled.
+`retry`, and **Retry installation** on the page, restart a failed installation
+with its retained source snapshot, password, and data. After fixing installer or
+application code, use `make local-retry ARGS=--refresh`. It replaces the failed
+attempt's source snapshot and installer with your current checkout, keeping the
+cluster, completed images, and downloads. A reset is only needed when formats
+change. If bootstrap failed before launching the installer, run `start` again. A
+completed installation reports `ready`, and both setup services are stopped and
+disabled.
 
 Logs are stored directly in WSL:
 
@@ -139,8 +154,9 @@ make local-start
 
 **Reset deletes this runner's Kubernetes cluster, Goblin application data, logs,
 and cluster credentials.** It retains the shared repository password verifier,
-Docker and cached build images, and does not
-remove other host services such as PostgreSQL. `destroy --yes` is an alias for
+Docker and cached build images, and the verified k3s downloads in
+`/var/cache/goblin/downloads`. It does not remove other host services such as
+PostgreSQL. `destroy --yes` is an alias for
 `reset --yes`.
 
 For a fresh local development installation, including password setup, run:
@@ -160,8 +176,11 @@ symlinked cleanup roots are refused.
 
 Running the target confirms full cleanup. Password setup and sign-in are required
 again, and deleted persistent data needs an existing backup to recover. Docker
-images, shared caches, developer tools, other task artifacts, and external database
-profiles remain. Run `make local-start` separately to reinstall.
+images, shared caches (including the verified k3s downloads in
+`/var/cache/goblin/downloads`), developer tools, other task artifacts, and external
+database profiles remain. Every installation checks cached downloads against
+their pinned checksums. To download them again, run
+`sudo rm -rf /var/cache/goblin`. Run `make local-start` separately to reinstall.
 
 The helper requires Bash, Git, standard Ubuntu system tools, and `jq` to check
 the installation ownership record. It does not build or invoke `goblinctl`.
