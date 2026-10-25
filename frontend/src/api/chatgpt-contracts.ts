@@ -7,7 +7,10 @@ export type ChatGptState = {
     issuer: string | null;
     clientId: string;
     scope: string;
-    environmentVariables: { publicOrigin: string; issuer: string };
+    ownerSubject: string | null;
+    clientConfigured: boolean;
+    redirectUri: string | null;
+    environmentVariables: { publicOrigin: string; enabled: string };
     grants: {
         id: string;
         subject: string;

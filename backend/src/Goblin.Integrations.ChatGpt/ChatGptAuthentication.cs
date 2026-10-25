@@ -21,7 +21,7 @@ public sealed class ChatGptAuthentication
     public ChatGptAuthentication(ChatGptConfiguration configuration, IJwksDocumentSource source)
     {
         _configuration = configuration;
-        _keys = new SigningKeyCache(configuration.Provider, source);
+        _keys = new SigningKeyCache(configuration, source);
     }
 
     public async Task<ChatGptIdentity> AuthenticateAsync(string accessToken, CancellationToken token)

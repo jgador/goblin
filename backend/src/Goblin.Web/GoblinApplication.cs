@@ -4,6 +4,7 @@ using Goblin.Integrations.Codex;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Goblin.Web;
@@ -34,7 +35,16 @@ public static class GoblinApplication
         StaticAssets assets = await StaticAssets.LoadAsync(options.AssetDirectory);
 
         app.UseWebSockets();
+        if (options.EnableChatGpt)
+        {
+            var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedProto };
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("10.0.0.0/8"));
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("172.16.0.0/12"));
+            forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse("192.168.0.0/16"));
+            app.UseForwardedHeaders(forwarded);
+        }
         app.UseMiddleware<WorkspaceMiddleware>(assets, gitRepositoryListener);
+        if (options.EnableChatGpt) app.UseAuthentication();
         new HealthEndpoints(options).Map(app);
         assets.Map(app);
         SessionEndpoints.Map(app);

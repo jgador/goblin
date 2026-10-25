@@ -6,10 +6,12 @@ using System.Threading.Tasks;
 using Goblin.Application.ChatGpt;
 using Goblin.Contracts;
 using Goblin.Integrations.ChatGpt;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
+using OpenIddict.Validation.AspNetCore;
 
 namespace Goblin.Web;
 
@@ -19,12 +21,11 @@ internal static class ChatGptMcp
 
     internal static void Configure(IServiceCollection services, ApplicationOptions options)
     {
-        if (options.ChatGptIssuer is null) return;
+        if (!options.EnableChatGpt) return;
         if (!options.EnableWork) throw new InvalidOperationException("ChatGPT integration requires durable Work.");
-        var configuration = new ChatGptConfiguration(options.ChatGptIssuer, options.PublicOrigin);
+        var configuration = new ChatGptConfiguration(options.PublicOrigin);
         services.AddSingleton(configuration);
-        services.AddSingleton<HttpsDocuments>();
-        services.AddSingleton<IJwksDocumentSource>(s => s.GetRequiredService<HttpsDocuments>());
+        ChatGptOAuth.Configure(services, options, configuration);
         services.AddSingleton<ChatGptAuthentication>();
         services.AddSingleton<ChatGptBoundary>();
         services.AddSingleton<ChatGptGrantStore>();
@@ -42,6 +43,24 @@ internal static class ChatGptMcp
         ChatGptEndpoints.Map(app);
         ChatGptConfiguration? configuration = app.Services.GetService<ChatGptConfiguration>();
         if (configuration is null) return;
+        // Runs after UseAuthentication initializes OpenIddict's validation
+        // context, and after WorkspaceMiddleware validates the transport/JWT.
+        app.Use(async (context, next) =>
+        {
+            if (context.Items.ContainsKey(IdentityKey))
+            {
+                AuthenticateResult persisted = await context.AuthenticateAsync(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+                if (!persisted.Succeeded)
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    context.Response.Headers.WWWAuthenticate = configuration.Challenge;
+                    await context.Response.WriteAsJsonAsync(new { error = "Connection authentication is required." });
+                    return;
+                }
+            }
+            await next(context);
+        });
+        ChatGptOAuth.Map(app);
         app.MapGet(ChatGptConfiguration.MetadataPath, () => Results.Json(new
         {
             resource = configuration.Resource,
@@ -70,6 +89,17 @@ internal sealed class ChatGptBoundary
 
     internal static bool IsPath(PathString path) => path.StartsWithSegments("/mcp", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWithSegments(ChatGptConfiguration.MetadataPath, StringComparison.OrdinalIgnoreCase);
+
+    internal async Task InvokeOAuthAsync(HttpContext context, RequestDelegate next)
+    {
+        if (!Admit() || !await _concurrency.WaitAsync(0, context.RequestAborted))
+        {
+            context.Response.Headers.RetryAfter = "60";
+            throw new PublicError("rate_limited", "Too many connection requests. Try again shortly.", 429);
+        }
+        try { await ChatGptOAuth.InvokeAsync(context, _configuration, next); }
+        finally { _concurrency.Release(); }
+    }
 
     internal async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {

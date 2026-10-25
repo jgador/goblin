@@ -1,462 +1,289 @@
-// Opt-in integration check against disposable loopback services. Never targets
-// an installed customer instance. See docs/chatgpt-integration.md for setup.
+// Opt-in HTTPS check against a disposable loopback Goblin instance.
+// Credentials and tokens are consumed locally and never printed.
 import { readFile } from "node:fs/promises";
 import { request as httpsRequest } from "node:https";
 import { createHash, randomBytes } from "node:crypto";
 
 type Configuration = {
-    issuer: string;
     resource: string;
     caFile: string;
     ownerPassword: string;
-    providerUsername: string;
-    providerPassword: string;
-    clientSecret: string;
 };
-
 class VerificationFailure extends Error {}
 
 try {
     const configuration = JSON.parse(
         await readFile(process.argv[2] ?? "", "utf8"),
     ) as Configuration;
-    for (const value of [configuration.issuer, configuration.resource]) {
-        const url = new URL(value);
-        if (
-            url.protocol !== "https:" ||
-            url.hostname !== "localhost" ||
-            url.username ||
-            url.password ||
-            url.search ||
-            url.hash
-        )
-            throw new VerificationFailure(
-                "This check requires disposable HTTPS loopback services.",
-            );
-    }
+    const resource = new URL(configuration.resource);
+    if (
+        resource.protocol !== "https:" ||
+        resource.hostname !== "localhost" ||
+        resource.pathname !== "/mcp" ||
+        resource.username ||
+        resource.password ||
+        resource.search ||
+        resource.hash
+    )
+        throw new VerificationFailure(
+            "Use a disposable HTTPS localhost Goblin instance.",
+        );
+    const origin = resource.origin;
     const ca = await readFile(configuration.caFile);
-    const issuer = configuration.issuer;
-    const origin = new URL(configuration.resource).origin;
     const callback = "https://chatgpt.com/connector_platform_oauth_redirect";
-    const clientId = "goblin-chatgpt";
+    let cookie = "";
     let checks = 0;
-    let ownerCookie = "";
-    let sequence = 0;
-
-    function requireCheck(
-        condition: unknown,
-        message: string,
-    ): asserts condition {
+    function check(condition: unknown, message: string): asserts condition {
         if (!condition) throw new VerificationFailure(message);
         checks++;
     }
-
     async function request(
-        url: string,
+        path: string,
         body?: string,
         headers: Record<string, string> = {},
+        owner = false,
     ) {
-        const address = new URL(url);
-        if (
-            address.origin !== origin &&
-            address.origin !== new URL(issuer).origin
-        )
-            throw new VerificationFailure(
-                "Refusing to follow an external redirect.",
-            );
         return await new Promise<{
             status: number;
-            location?: string;
-            cookies: string[];
+            headers: import("node:http").IncomingHttpHeaders;
             text: string;
         }>((resolve, reject) => {
             const req = httpsRequest(
-                address,
-                { ca, method: body === undefined ? "GET" : "POST", headers },
+                new URL(path, origin),
+                {
+                    ca,
+                    method: body === undefined ? "GET" : "POST",
+                    headers: {
+                        ...(body !== undefined
+                            ? {
+                                  "Content-Type": "application/json",
+                                  "Content-Length": String(
+                                      Buffer.byteLength(body),
+                                  ),
+                                  Origin: origin,
+                              }
+                            : {}),
+                        ...(owner ? { Cookie: cookie } : {}),
+                        ...headers,
+                    },
+                    timeout: 15_000,
+                },
                 (response) => {
-                    const chunks: Buffer[] = [];
-                    let size = 0;
-                    response.on("data", (chunk: Buffer) => {
-                        size += chunk.length;
-                        if (size > 1024 * 1024)
+                    let text = "";
+                    response.setEncoding("utf8");
+                    response.on("data", (chunk) => {
+                        text += chunk;
+                        if (text.length > 65536)
                             req.destroy(
                                 new VerificationFailure(
-                                    "Provider response exceeded the test limit.",
+                                    "Response exceeded its limit.",
                                 ),
                             );
-                        else chunks.push(chunk);
                     });
                     response.on("end", () =>
                         resolve({
-                            status: response.statusCode!,
-                            location: response.headers.location,
-                            cookies: response.headers["set-cookie"] ?? [],
-                            text: Buffer.concat(chunks).toString("utf8"),
+                            status: response.statusCode ?? 0,
+                            headers: response.headers,
+                            text,
                         }),
                     );
                 },
             );
-            req.setTimeout(10000, () =>
+            req.on("timeout", () =>
                 req.destroy(
-                    new VerificationFailure("Provider request timed out."),
+                    new VerificationFailure("HTTPS request timed out."),
                 ),
             );
-            req.on("error", () =>
-                reject(
-                    new VerificationFailure(
-                        "HTTPS request failed; check services and the test CA.",
-                    ),
-                ),
-            );
+            req.on("error", reject);
             req.end(body);
         });
     }
-
-    async function owner(path: string, body?: unknown) {
-        const response = await request(
-            origin + path,
-            body === undefined ? undefined : JSON.stringify(body),
-            {
-                Origin: origin,
-                Cookie: ownerCookie,
-                "Content-Type": "application/json",
-            },
-        );
-        requireCheck(response.status === 200, "Owner request failed: " + path);
-        return JSON.parse(response.text);
-    }
-
-    function authorization(
-        resource = configuration.resource,
-        pkce = true,
-        redirect = callback,
-    ) {
-        const verifier = randomBytes(32).toString("base64url");
-        const state = randomBytes(24).toString("base64url");
-        const query = new URLSearchParams({
-            client_id: clientId,
-            response_type: "code",
-            redirect_uri: redirect,
-            resource,
-            scope: "openid email goblin.work.read",
-            state,
-        });
-        if (pkce) {
-            query.set(
-                "code_challenge",
-                createHash("sha256").update(verifier).digest("base64url"),
-            );
-            query.set("code_challenge_method", "S256");
-        }
-        return {
-            url: issuer + "/protocol/openid-connect/auth?" + query,
-            verifier,
-            state,
-        };
-    }
-
-    async function code(initial = authorization(), expectError = false) {
-        const jar = new Map<string, string>();
-        let response = await request(initial.url);
-        for (let step = 0; step < 10; step++) {
-            if (expectError && response.status >= 400)
-                return { code: "", verifier: initial.verifier };
-            for (const cookie of response.cookies) {
-                const value = cookie.split(";")[0]!;
-                jar.set(value.slice(0, value.indexOf("=")), value);
-            }
-            if (response.location?.startsWith(callback + "?")) {
-                const redirect = new URL(response.location);
-                requireCheck(
-                    redirect.searchParams.get("state") === initial.state,
-                    "OAuth state mismatch.",
-                );
-                requireCheck(
-                    redirect.searchParams.get("iss") === issuer,
-                    "OAuth response issuer mismatch.",
-                );
-                if (expectError && redirect.searchParams.has("error"))
-                    return { code: "", verifier: initial.verifier };
-                const value = redirect.searchParams.get("code");
-                requireCheck(value, "Authorization code was not returned.");
-                return { code: value, verifier: initial.verifier };
-            }
-            const cookies = [...jar.values()].join("; ");
-            if (response.location) {
-                response = await request(
-                    new URL(response.location, issuer).href,
-                    undefined,
-                    { Cookie: cookies },
-                );
-                continue;
-            }
-            const action = response.text
-                .match(/<form\b[^>]*\baction="([^"]+)"/i)?.[1]
-                ?.replaceAll("&amp;", "&");
-            requireCheck(
-                action,
-                "Provider did not present a supported login or consent form.",
-            );
-            const values = new URLSearchParams();
-            for (const input of response.text.matchAll(/<input\b[^>]*>/gi)) {
-                const name = input[0].match(/\bname="([^"]+)"/i)?.[1];
-                const value = input[0].match(/\bvalue="([^"]*)"/i)?.[1];
-                if (name && /type="hidden"/i.test(input[0]))
-                    values.set(name, value ?? "");
-            }
-            if (/name="username"/.test(response.text)) {
-                values.set("username", configuration.providerUsername);
-                values.set("password", configuration.providerPassword);
-            } else values.set("accept", "Yes");
-            response = await request(
-                new URL(action, issuer).href,
-                values.toString(),
-                {
-                    Cookie: cookies,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-            );
-        }
-        throw new VerificationFailure(
-            "Authorization exceeded the redirect limit.",
-        );
-    }
-
-    async function exchange(
-        grant: { code: string; verifier: string },
-        resource = configuration.resource,
-        secret = configuration.clientSecret,
-    ) {
-        return await request(
-            issuer + "/protocol/openid-connect/token",
-            new URLSearchParams({
-                grant_type: "authorization_code",
-                client_id: clientId,
-                redirect_uri: callback,
-                code: grant.code,
-                code_verifier: grant.verifier,
-                resource,
-            }).toString(),
-            {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization:
-                    "Basic " +
-                    Buffer.from(clientId + ":" + secret).toString("base64"),
-            },
-        );
-    }
-
-    async function mcp(accessToken: string, method: string, params: unknown) {
-        const response = await request(
-            configuration.resource,
-            JSON.stringify({ jsonrpc: "2.0", id: ++sequence, method, params }),
-            {
-                Authorization: "Bearer " + accessToken,
-                "Content-Type": "application/json",
-                Accept: "application/json, text/event-stream",
-                "MCP-Protocol-Version": "2025-11-25",
-            },
-        );
-        requireCheck(
-            response.status === 200,
-            "Authenticated MCP " +
-                method +
-                " failed with HTTP " +
-                response.status +
-                ".",
-        );
-        const data = response.text.startsWith("{")
-            ? response.text
-            : response.text
-                  .split("\n")
-                  .find((line) => line.startsWith("data: "))
-                  ?.slice(6);
-        requireCheck(data, "MCP returned no response.");
-        return JSON.parse(data).result;
-    }
-
+    const discovery = await request("/.well-known/openid-configuration");
+    check(discovery.status === 200, "OIDC discovery failed.");
+    const metadata = JSON.parse(discovery.text);
+    check(
+        metadata.issuer === origin + "/",
+        "Issuer differs from Goblin's canonical origin.",
+    );
+    check(
+        metadata.code_challenge_methods_supported.includes("S256") &&
+            !metadata.code_challenge_methods_supported.includes("plain"),
+        "PKCE policy is incorrect.",
+    );
     const login = await request(
-        origin + "/api/session",
+        "/api/session",
         JSON.stringify({ password: configuration.ownerPassword }),
-        {
-            Origin: origin,
-            "Content-Type": "application/json",
-        },
     );
-    requireCheck(login.status === 200, "Fixture owner login failed.");
-    ownerCookie = login.cookies[0]!.split(";")[0]!;
-    const preflight = await owner("/api/integrations/chatgpt/verify", {});
-    requireCheck(
-        preflight.discovery && preflight.database,
-        "Provider/storage preflight failed.",
-    );
-    const valid = await code();
-    const tokens = await exchange(valid);
-    requireCheck(tokens.status === 200, "Authorization-code exchange failed.");
-    const token = JSON.parse(tokens.text);
-    const payload = JSON.parse(
-        Buffer.from(token.access_token.split(".")[1], "base64url").toString(),
-    );
-    const header = JSON.parse(
-        Buffer.from(token.access_token.split(".")[0], "base64url").toString(),
-    );
-    requireCheck(
-        header.typ === "at+jwt" && header.alg === "RS256",
-        "Incorrect access-token header.",
-    );
-    requireCheck(
-        payload.iss === issuer && payload.aud === configuration.resource,
-        "Incorrect access-token resource binding.",
-    );
-    const userinfo = await request(
-        issuer + "/protocol/openid-connect/userinfo",
-        undefined,
-        { Authorization: "Bearer " + token.access_token },
-    );
-    requireCheck(
-        userinfo.status === 200 &&
-            JSON.parse(userinfo.text).email_verified === true,
-        "Verified email is missing from UserInfo.",
-    );
-    requireCheck(
-        (await exchange(valid)).status === 400,
-        "Authorization code was reusable.",
-    );
-    const wrongPkce = await code();
-    requireCheck(
-        (
-            await exchange({
-                ...wrongPkce,
-                verifier: randomBytes(32).toString("base64url"),
-            })
-        ).status === 400,
-        "Incorrect PKCE was accepted.",
-    );
-    requireCheck(
-        (
-            await exchange(
-                await code(),
-                configuration.resource,
-                "invalid-fixture-secret",
-            )
-        ).status === 401,
-        "Incorrect client secret was accepted.",
-    );
-    requireCheck(
-        (await exchange(await code(), configuration.resource + "-other"))
-            .status === 400,
-        "Mismatched token resource was accepted.",
-    );
-    const unknownResource = await code(
-        authorization(configuration.resource + "-other"),
+    check(login.status === 200, "Owner login failed.");
+    cookie = login.headers["set-cookie"]?.[0]?.split(";")[0] ?? "";
+    check(!!cookie, "Owner session cookie was not returned.");
+    const registered = await request(
+        "/api/integrations/chatgpt/client",
+        JSON.stringify({ redirectUri: callback, rotateSecret: true }),
+        {},
         true,
     );
-    requireCheck(
-        !unknownResource.code ||
-            (await exchange(unknownResource, configuration.resource + "-other"))
-                .status === 400,
-        "Provider issued a token for an unknown resource.",
+    check(registered.status === 200, "Disposable client registration failed.");
+    const secret = JSON.parse(registered.text).clientSecret as string;
+    check(!!secret, "Client secret was not returned on creation/rotation.");
+    const verifier = randomBytes(32).toString("base64url");
+    const parameters = new URLSearchParams({
+        client_id: "goblin-chatgpt",
+        response_type: "code",
+        redirect_uri: callback,
+        resource: resource.href,
+        scope: "openid offline_access goblin.work.read",
+        state: "loopback-verification",
+        code_challenge: createHash("sha256")
+            .update(verifier)
+            .digest("base64url"),
+        code_challenge_method: "S256",
+    });
+    const authorize = await request("/oauth/authorize?" + parameters);
+    check(
+        authorize.status === 200 && authorize.text.includes("Unlock Goblin"),
+        "Authorization did not require owner sign-in.",
     );
-    for (const [label, invalid] of [
-        ["missing PKCE", authorization(configuration.resource, false)],
-        [
-            "unregistered callback",
-            authorization(
-                configuration.resource,
-                true,
-                "https://other.example.test/callback",
+    const consent = await request(
+        "/oauth/authorize?" + parameters,
+        undefined,
+        {},
+        true,
+    );
+    check(
+        consent.status === 200 && consent.text.includes("Allow connection"),
+        "Consent page was not shown.",
+    );
+    parameters.set("decision", "allow");
+    const accepted = await request(
+        "/oauth/authorize",
+        parameters.toString(),
+        { "Content-Type": "application/x-www-form-urlencoded" },
+        true,
+    );
+    check(
+        accepted.status === 302 && !!accepted.headers.location,
+        "Authorization was not redirected.",
+    );
+    const redirect = new URL(accepted.headers.location!);
+    check(
+        redirect.origin === "https://chatgpt.com" &&
+            redirect.searchParams.get("iss") === metadata.issuer &&
+            redirect.searchParams.get("state") === "loopback-verification",
+        "Authorization callback or issuer is incorrect.",
+    );
+    const tokenBody = new URLSearchParams({
+        grant_type: "authorization_code",
+        code: redirect.searchParams.get("code")!,
+        code_verifier: verifier,
+        redirect_uri: callback,
+        resource: resource.href,
+    });
+    const credentials = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization:
+            "Basic " +
+            Buffer.from("goblin-chatgpt:" + secret).toString("base64"),
+    };
+    const token = await request(
+        "/oauth/token",
+        tokenBody.toString(),
+        credentials,
+    );
+    check(token.status === 200, "Authorization-code exchange failed.");
+    const issued = JSON.parse(token.text);
+    const header = JSON.parse(
+        Buffer.from(issued.access_token.split(".")[0], "base64url").toString(),
+    );
+    const claims = JSON.parse(
+        Buffer.from(issued.access_token.split(".")[1], "base64url").toString(),
+    );
+    check(
+        header.alg === "RS256" && header.typ === "at+jwt",
+        "Access-token format is incorrect.",
+    );
+    check(
+        claims.iss === metadata.issuer &&
+            (claims.aud === resource.href ||
+                claims.aud.includes(resource.href)) &&
+            !!claims.sub &&
+            claims.scope.includes("goblin.work.read"),
+        "Access-token identity, audience or scope is incorrect.",
+    );
+    const keys = await request("/oauth/keys");
+    check(
+        keys.status === 200 &&
+            JSON.parse(keys.text).keys.some(
+                (key: { kid: string; d?: string }) =>
+                    key.kid === header.kid && !key.d,
             ),
-        ],
-    ] as const) {
-        requireCheck(
-            !(await code(invalid, true)).code,
-            "Authorization accepted " + label + ".",
-        );
-    }
-    // A replayed authorization code intentionally invalidates its client session.
-    // Start a fresh session before verifying ordinary refresh behavior.
-    const fresh = await exchange(await code());
-    requireCheck(fresh.status === 200, "Fresh authorization failed.");
-    const refresh = await request(
-        issuer + "/protocol/openid-connect/token",
+        "Public signing key was not published.",
+    );
+    const mcpHeaders = {
+        Authorization: "Bearer " + issued.access_token,
+        Accept: "application/json, text/event-stream",
+    };
+    const initialize = await request(
+        "/mcp",
+        JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "initialize",
+            params: {
+                protocolVersion: "2025-11-25",
+                capabilities: {},
+                clientInfo: { name: "loopback-verifier", version: "1" },
+            },
+        }),
+        mcpHeaders,
+    );
+    check(initialize.status === 200, "Issued token could not initialize MCP.");
+    const tools = await request(
+        "/mcp",
+        JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" }),
+        mcpHeaders,
+    );
+    check(
+        tools.status === 200 &&
+            [
+                "goblin_list_work",
+                "goblin_get_work_status",
+                "goblin_get_work_attention",
+                "goblin_get_work_result",
+            ].every((name) => tools.text.includes(name)),
+        "MCP tool discovery failed.",
+    );
+    const refreshed = await request(
+        "/oauth/token",
         new URLSearchParams({
             grant_type: "refresh_token",
-            refresh_token: JSON.parse(fresh.text).refresh_token,
-            resource: configuration.resource,
+            refresh_token: issued.refresh_token,
+            resource: resource.href,
         }).toString(),
-        {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Authorization:
-                "Basic " +
-                Buffer.from(
-                    clientId + ":" + configuration.clientSecret,
-                ).toString("base64"),
-        },
+        credentials,
     );
-    requireCheck(refresh.status === 200, "Token refresh failed.");
-    const accessToken = JSON.parse(refresh.text).access_token;
-    await mcp(accessToken, "initialize", {
-        protocolVersion: "2025-11-25",
-        capabilities: {},
-        clientInfo: { name: "goblin-provider-verification", version: "1" },
-    });
-    const tools = await mcp(accessToken, "tools/list", {});
-    requireCheck(
-        tools.tools.length === 4 &&
-            tools.tools.every(
-                (tool: { annotations: { readOnlyHint: boolean } }) =>
-                    tool.annotations.readOnlyHint,
-            ),
-        "Unexpected tool surface.",
+    check(
+        refreshed.status === 200 &&
+            JSON.parse(refreshed.text).refresh_token !== issued.refresh_token,
+        "Refresh-token rotation failed.",
     );
-    const ids = await owner("/api/identities", { kinds: ["Work", "Command"] });
-    const workId = ids.ids[0];
-    await owner("/api/work/commands", {
-        workId,
-        commandId: ids.ids[1],
-        action: "Create",
-        text: "Disposable OAuth verification Work",
-    });
-    const call = async (name: string, args: unknown) =>
-        await mcp(accessToken, "tools/call", { name, arguments: args });
-    requireCheck(
-        (await call("goblin_get_work_status", { workId })).isError,
-        "OAuth login granted Work without owner approval.",
+    const revoked = await request(
+        "/api/integrations/chatgpt/client/revoke",
+        "{}",
+        {},
+        true,
     );
-    await owner("/api/integrations/chatgpt/grants", {
-        workId,
-        subject: payload.sub,
-        hours: 1,
-        shareApprovedResult: false,
-    });
-    const shared = await call("goblin_get_work_status", { workId });
-    requireCheck(
-        !shared.isError && shared.structuredContent.workId === workId,
-        "Shared Work could not be read.",
-    );
-    requireCheck(
-        (await call("goblin_get_work_result", { workId })).isError,
-        "Status grant exposed a result.",
-    );
-    const state = await owner("/api/integrations/chatgpt");
-    const grant = state.grants.find(
-        (item: { workId: string }) => item.workId === workId,
-    );
-    await owner("/api/integrations/chatgpt/grants/revoke", { id: grant.id });
-    const revoked = await call("goblin_get_work_status", { workId });
-    requireCheck(
-        revoked.isError && !revoked._meta?.["mcp/www_authenticate"],
-        "Revocation was not enforced as a local permission denial.",
-    );
+    check(revoked.status === 200, "Connection revocation failed.");
+    const denied = await request("/mcp", "{}", mcpHeaders);
+    check(denied.status === 401, "Revoked access token remained usable.");
     console.log(
-        `PASS: ${checks} checks against real Keycloak, TLS, PostgreSQL, and the Goblin MCP endpoint. ChatGPT UI installation remains a separate manual check.`,
+        `PASS: ${checks} checks against HTTPS, embedded OpenIddict, PostgreSQL, and MCP. ChatGPT UI installation remains a separate manual check.`,
     );
 } catch (error) {
-    // Avoid raw responses, cookies, tokens, credentials, or upstream stack traces.
     console.error(
         error instanceof VerificationFailure
             ? error.message
-            : "Provider verification failed.",
+            : "Loopback integration verification failed; inspect the private local service logs.",
     );
     process.exitCode = 1;
 }

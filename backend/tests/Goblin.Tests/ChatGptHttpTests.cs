@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,6 +14,7 @@ using System.Threading.Tasks;
 using Goblin.Integrations.ChatGpt;
 using Goblin.Persistence;
 using Goblin.Web;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -39,7 +41,7 @@ public sealed class ChatGptHttpTests
         Assert.False(document.RootElement.GetProperty("configured").GetBoolean());
         JsonElement names = document.RootElement.GetProperty("environmentVariables");
         Assert.Equal("GOBLIN_PUBLIC_ORIGIN", names.GetProperty("publicOrigin").GetString());
-        Assert.Equal("GOBLIN_CHATGPT_ISSUER", names.GetProperty("issuer").GetString());
+        Assert.Equal("GOBLIN_CHATGPT_ENABLED", names.GetProperty("enabled").GetString());
         using HttpResponseMessage guide = await http.GetAsync("/api/integrations/chatgpt/guide");
         Assert.Equal(HttpStatusCode.NotFound, guide.StatusCode);
     }
@@ -144,6 +146,15 @@ public sealed class ChatGptHttpTests
 
     private static StringContent Json(string value) => new(value, Encoding.UTF8, "application/json");
 
+    private sealed class FixtureAuthentication : IAuthenticationService
+    {
+        public Task<AuthenticateResult> AuthenticateAsync(HttpContext context, string? scheme) => Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity("fixture")), scheme!)));
+        public Task ChallengeAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => throw new NotSupportedException();
+        public Task ForbidAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => throw new NotSupportedException();
+        public Task SignInAsync(HttpContext context, string? scheme, ClaimsPrincipal principal, AuthenticationProperties? properties) => throw new NotSupportedException();
+        public Task SignOutAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => throw new NotSupportedException();
+    }
+
     private sealed class Host : IAsyncDisposable
     {
         private readonly WebApplication _app;
@@ -176,11 +187,15 @@ public sealed class ChatGptHttpTests
             ChatGptMcp.Configure(builder.Services, new ApplicationOptions
             {
                 EnableWork = true,
-                ChatGptIssuer = configured ? ChatGptAuthenticationTests.Issuer : null,
+                EnableChatGpt = configured,
+                DataDirectory = directory,
                 PublicOrigin = ChatGptAuthenticationTests.Origin
             });
             var tokens = new ChatGptAuthenticationTests.Tokens();
             builder.Services.AddSingleton<IJwksDocumentSource>(tokens);
+            // Transport tests isolate persisted-token validation; the OAuth integration
+            // journey below exercises the actual OpenIddict validator with PostgreSQL.
+            builder.Services.AddSingleton<IAuthenticationService, FixtureAuthentication>();
             WebApplication app = builder.Build();
             if (internalPort) app.Use((context, next) => { context.Connection.LocalPort = 8788; return next(context); });
             StaticAssets assets = await StaticAssets.LoadAsync(Path.Combine(root!, "frontend", "dist"));

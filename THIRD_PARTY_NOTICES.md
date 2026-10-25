@@ -61,6 +61,11 @@ MIT. Their upstream licenses are preserved in
 and [backend/licenses/identitymodel/LICENSE](backend/licenses/identitymodel/LICENSE),
 and accompany the published application under the corresponding `licenses/` paths.
 
+The embedded OAuth server uses [OpenIddict 7.7.2](https://github.com/openiddict/openiddict-core/tree/7.7.2),
+Apache-2.0. Its full license is preserved in
+[backend/licenses/openiddict/LICENSE](backend/licenses/openiddict/LICENSE) and
+included in the published application at `licenses/openiddict/LICENSE`.
+
 The application image also includes independently licensed software such as
 Codex and its native helpers, GitHub CLI, Git, and the .NET runtime. Deployed
 services and operating-system packages retain their own licenses. In particular,

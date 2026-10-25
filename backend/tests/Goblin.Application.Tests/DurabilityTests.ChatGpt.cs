@@ -23,7 +23,7 @@ public sealed partial class DurabilityTests
         await using Fixture first = await Fixture.CreateAsync();
         await using Fixture second = await Fixture.CreateAsync();
         const long id = 9007199254740993;
-        const string issuer = "https://identity.example.test/realms/goblin";
+        const string issuer = "https://goblin.example.test/";
         const string resource = "https://first.example.test/mcp";
         await first.Apply(WorkCommands.Create(NextId(), id, "Shared objective"));
         await first.Apply(WorkCommands.Create(NextId(), id + 1, "Private objective"));
@@ -83,7 +83,7 @@ public sealed partial class DurabilityTests
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         long id = NextId();
-        const string issuer = "https://identity.example.test/realms/goblin";
+        const string issuer = "https://goblin.example.test/";
         const string resource = "https://goblin.example.test/mcp";
         await fixture.Apply(WorkCommands.Create(NextId(), id, "Review a result"));
         IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
@@ -130,7 +130,7 @@ public sealed partial class DurabilityTests
     public async Task ChatGptPaginationAndProjectionAreBoundedAndGrantAuditRollsBackTogether()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
-        const string issuer = "https://identity.example.test/realms/goblin";
+        const string issuer = "https://goblin.example.test/";
         const string resource = "https://goblin.example.test/mcp";
         IDbContextFactory<GoblinDbContext> factory = fixture.Host.Services.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
         var grants = new ChatGptGrantStore(factory);

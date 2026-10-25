@@ -15,7 +15,7 @@ public sealed class ChatGptPackageTests
     [Fact]
     public void PackageCanBeExtractedWithCompleteMetadataOAuthAndReviewCases()
     {
-        var configuration = new ChatGptConfiguration("https://identity.example.test/realms/goblin", "https://goblin.example.test");
+        var configuration = new ChatGptConfiguration("https://goblin.example.test");
         ChatGptPackageView package = ChatGptPackage.Create(configuration, Request());
         using var bytes = new MemoryStream(Convert.FromBase64String(package.ArchiveBase64));
         using var archive = new ZipArchive(bytes);
@@ -37,9 +37,11 @@ public sealed class ChatGptPackageTests
         JsonElement auth = server.GetProperty("extensions").GetProperty("com.openai").GetProperty("auth");
         Assert.Equal("oauth", auth.GetProperty("type").GetString());
         Assert.Equal("provided", auth.GetProperty("client").GetProperty("mode").GetString());
-        Assert.Equal(KeycloakProfile.ClientId, auth.GetProperty("client").GetProperty("clientId").GetString());
+        Assert.Equal(ChatGptConfiguration.ClientId, auth.GetProperty("client").GetProperty("clientId").GetString());
         Assert.Equal("client_secret_basic", auth.GetProperty("client").GetProperty("tokenEndpointAuthMethod").GetString());
         Assert.False(auth.GetProperty("client").TryGetProperty("clientSecret", out _));
+        Assert.Equal(new[] { "openid", "offline_access", "goblin.work.read" },
+            auth.GetProperty("baseScopes").EnumerateArray().Select(scope => scope.GetString()));
         Assert.False(metadata.GetProperty("review").TryGetProperty("test_credentials", out _));
         XDocument logo = XDocument.Parse(Read(archive, "assets/icon.svg"));
         Assert.Equal(logo.Root!.Attribute("width")!.Value, logo.Root.Attribute("height")!.Value);
@@ -55,7 +57,7 @@ public sealed class ChatGptPackageTests
     [InlineData("https://example.test/privacy", "9007199254740993", "../goblin")]
     public void InvalidListingAndDemoInputsCannotProduceAPackage(string privacy, string workId, string packageId)
     {
-        var configuration = new ChatGptConfiguration("https://identity.example.test/realms/goblin", "https://goblin.example.test");
+        var configuration = new ChatGptConfiguration("https://goblin.example.test");
         Assert.Throws<PublicError>(() => ChatGptPackage.Create(configuration, Request(privacy, workId, packageId)));
     }
 

@@ -18,7 +18,7 @@ namespace Goblin.Tests;
 
 public sealed class ChatGptAuthenticationTests
 {
-    internal const string Issuer = "https://identity.example.test/realms/goblin";
+    internal const string Issuer = "https://goblin.example.test/";
     internal const string Origin = "https://goblin.example.test";
 
     [Theory]
@@ -34,7 +34,7 @@ public sealed class ChatGptAuthenticationTests
     public async Task TokenMustProveIdentityResourceLifetimeAndScope(string invalid)
     {
         using var fixture = new Tokens();
-        var auth = new ChatGptAuthentication(new(Issuer, Origin), fixture);
+        var auth = new ChatGptAuthentication(new(Origin), fixture);
         await Assert.ThrowsAsync<ChatGptAuthenticationFailure>(() => auth.AuthenticateAsync(fixture.Token(invalid), default));
     }
 
@@ -42,11 +42,11 @@ public sealed class ChatGptAuthenticationTests
     public async Task ValidIdentityRemainsBoundToItsVerifierAndKeyGeneration()
     {
         using var fixture = new Tokens();
-        var auth = new ChatGptAuthentication(new(Issuer, Origin), fixture);
+        var auth = new ChatGptAuthentication(new(Origin), fixture);
         ChatGptIdentity identity = await auth.AuthenticateAsync(fixture.Token(), default);
         Assert.Equal("subject-one", identity.Subject);
         auth.RequireCurrent(identity, default);
-        var other = new ChatGptAuthentication(new(Issuer, Origin), fixture);
+        var other = new ChatGptAuthentication(new(Origin), fixture);
         Assert.Throws<ChatGptAuthenticationFailure>(() => other.RequireCurrent(identity, default));
         auth.InvalidateKeys(default);
         Assert.Throws<ChatGptAuthenticationFailure>(() => auth.RequireCurrent(identity, default));
@@ -58,28 +58,27 @@ public sealed class ChatGptAuthenticationTests
     public async Task UnknownKeyRefreshIsBoundedAndCannotSelectAnEndpoint()
     {
         using var fixture = new Tokens();
-        var auth = new ChatGptAuthentication(new(Issuer, Origin), fixture);
+        var auth = new ChatGptAuthentication(new(Origin), fixture);
         for (int i = 0; i < 5; i++)
             await Assert.ThrowsAsync<ChatGptAuthenticationFailure>(() => auth.AuthenticateAsync(fixture.Token("signature"), default));
         Assert.Equal(1, fixture.Reads);
-        Assert.Equal(new Uri(Issuer + "/protocol/openid-connect/certs"), fixture.Address);
+        Assert.Equal(new Uri(Origin + ChatGptConfiguration.KeysPath), fixture.Address);
     }
 
     [Theory]
-    [InlineData("http://identity.example.test/realms/goblin", Origin)]
-    [InlineData(Issuer, "http://goblin.example.test")]
-    [InlineData(Issuer + "/", Origin)]
-    [InlineData(Issuer + "?secret=wrong", Origin)]
-    [InlineData("https://identity.example.test/other", Origin)]
-    public void ConfigurationRequiresCanonicalHttpsEndpoints(string issuer, string origin) =>
-        Assert.ThrowsAny<Exception>(() => new ChatGptConfiguration(issuer, origin));
+    [InlineData("http://goblin.example.test")]
+    [InlineData(Origin + "/path")]
+    [InlineData(Origin + "?value=wrong")]
+    [InlineData("https://user:password@goblin.example.test")]
+    public void ConfigurationRequiresCanonicalHttpsEndpoints(string origin) =>
+        Assert.ThrowsAny<Exception>(() => new ChatGptConfiguration(origin));
 
     [Fact]
     public async Task ExpiredSigningKeysFailClosedDuringAnOutageAndRecoveredKeysRetireOldLeases()
     {
         using var fixture = new Tokens();
         var clock = new Clock();
-        var keys = new SigningKeyCache(new ChatGptConfiguration(Issuer, Origin).Provider, fixture, clock);
+        var keys = new SigningKeyCache(new ChatGptConfiguration(Origin), fixture, clock);
         SigningKeyLease first = await keys.GetLeaseAsync("current", default);
         clock.Advance(TimeSpan.FromMinutes(10));
         fixture.Unavailable = true;
@@ -95,54 +94,16 @@ public sealed class ChatGptAuthenticationTests
         Assert.Equal(3, fixture.Reads);
     }
 
-    [Fact]
-    public void ConfigurationBoundsTheDurableGrantIdentity()
-    {
-        Assert.Throws<ArgumentException>(() => new ChatGptConfiguration("https://identity.example.test/realms/" + new string('a', 500), Origin));
-    }
-
-    [Fact]
-    public void ProviderTemplateRequiresExactChatGptCallbacksAndContainsNoSharedSecret()
-    {
-        var configuration = new ChatGptConfiguration(Issuer, Origin);
-        Assert.Throws<ArgumentException>(() => KeycloakProfile.Create(configuration, "https://chatgpt.com/*"));
-        Assert.Throws<ArgumentException>(() => KeycloakProfile.Create(configuration, "https://other.example.test/callback"));
-        using JsonDocument template = JsonDocument.Parse(KeycloakProfile.Create(configuration, "https://chatgpt.com/connector/oauth/test-callback"));
-        JsonElement client = template.RootElement.GetProperty("clients")[1];
-        Assert.False(client.GetProperty("publicClient").GetBoolean());
-        Assert.False(client.TryGetProperty("secret", out _));
-        Assert.False(client.GetProperty("directAccessGrantsEnabled").GetBoolean());
-        Assert.Equal("S256", client.GetProperty("attributes").GetProperty("pkce.code.challenge.method").GetString());
-        Assert.Equal("true", client.GetProperty("attributes").GetProperty("access.token.header.type.rfc9068").GetString());
-        Assert.Contains(client.GetProperty("protocolMappers").EnumerateArray(), mapper =>
-            mapper.GetProperty("protocolMapper").GetString() == "oidc-sub-mapper" &&
-            mapper.GetProperty("config").GetProperty("access.token.claim").GetString() == "true");
-        Assert.Empty(JsonDocument.Parse(KeycloakProfile.Create(configuration, null)).RootElement.GetProperty("clients")[1].GetProperty("redirectUris").EnumerateArray());
-    }
-
     [Theory]
-    [InlineData("redirect")]
-    [InlineData("oversize")]
-    [InlineData("wrong-issuer")]
-    [InlineData("foreign-jwks")]
-    [InlineData("pkce")]
-    [InlineData("duplicate")]
-    public async Task DiscoveryFailsClosedForUnsafeOrIncompatibleMetadata(string invalid)
-    {
-        using var documents = new HttpsDocuments(new(Issuer, Origin), new Handler(invalid));
-        await Assert.ThrowsAnyAsync<Exception>(() => documents.VerifyDiscoveryAsync(default));
-    }
+    [InlineData("https://chatgpt.com/*")]
+    [InlineData("https://other.example.test/callback")]
+    [InlineData("https://chatgpt.com/connector/oauth/callback\n")]
+    public void CallbackRejectsWildcardsForeignHostsAndTrailingCharacters(string value) =>
+        Assert.Throws<ArgumentException>(() => ChatGptCallback.Require(value));
 
     [Fact]
-    public async Task DiscoveryAndKeysUseOnlyConfiguredHttpsAddresses()
-    {
-        using var handler = new Handler("");
-        using var documents = new HttpsDocuments(new(Issuer, Origin), handler);
-        _ = await documents.VerifyDiscoveryAsync(default);
-        Assert.Single(handler.Addresses);
-        await Assert.ThrowsAsync<ChatGptAuthenticationFailure>(() => documents.ReadAsync(new Uri("https://other.example.test/keys"), default));
-        Assert.Single(handler.Addresses);
-    }
+    public void CallbackAllowsExactDisplayedChatGptRedirect() =>
+        ChatGptCallback.Require("https://chatgpt.com/connector/oauth/test-callback");
 
     internal sealed class Tokens : IJwksDocumentSource, IDisposable
     {
@@ -193,36 +154,4 @@ public sealed class ChatGptAuthenticationTests
         public void Advance(TimeSpan duration) => _ticks += duration.Ticks;
     }
 
-    private sealed class Handler : HttpMessageHandler
-    {
-        private readonly string _invalid;
-        public List<Uri> Addresses { get; } = [];
-
-        public Handler(string invalid) => _invalid = invalid;
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            Addresses.Add(request.RequestUri!);
-            Assert.Null(request.Headers.Authorization);
-            string json = JsonSerializer.Serialize(new
-            {
-                issuer = _invalid == "wrong-issuer" ? Issuer + "-other" : Issuer,
-                authorization_endpoint = Issuer + "/protocol/openid-connect/auth",
-                token_endpoint = Issuer + "/protocol/openid-connect/token",
-                jwks_uri = _invalid == "foreign-jwks" ? "https://other.example.test/keys" : Issuer + "/protocol/openid-connect/certs",
-                code_challenge_methods_supported = new[] { _invalid == "pkce" ? "plain" : "S256" },
-                grant_types_supported = new[] { "authorization_code" },
-                response_types_supported = new[] { "code" },
-                token_endpoint_auth_methods_supported = new[] { "client_secret_basic" },
-                scopes_supported = new[] { ChatGptConfiguration.ReadScope }
-            });
-            if (_invalid == "oversize") json = new string(' ', 16385) + json;
-            if (_invalid == "duplicate") json = json.Replace("\"issuer\":", "\"issuer\":\"wrong\",\"issuer\":", StringComparison.Ordinal);
-            return Task.FromResult(new HttpResponseMessage(_invalid == "redirect" ? HttpStatusCode.Redirect : HttpStatusCode.OK)
-            {
-                RequestMessage = request,
-                Content = new StringContent(json, Encoding.UTF8, "application/json")
-            });
-        }
-    }
 }

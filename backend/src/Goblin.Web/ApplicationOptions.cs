@@ -21,7 +21,7 @@ public sealed class ApplicationOptions
     public TimeSpan PromptTimeout { get; init; } = TimeSpan.FromSeconds(90);
     public bool RecoverRuntime { get; init; } = true;
     public bool EnableWork { get; init; }
-    public string? ChatGptIssuer { get; init; }
+    public bool EnableChatGpt { get; init; }
     public IExecutionHost? ExecutionHost { get; init; }
     public string GitHubCommand { get; init; } = "gh";
     public string? HeadlampUrl { get; init; }

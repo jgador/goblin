@@ -32,7 +32,7 @@ export function mountChatGpt(root: HTMLElement) {
     let confirmed = new Set<Confirmation>();
     let scope = "";
     let config = "";
-    let template = "";
+    let clientSecret = "";
     let pluginPackage: ChatGptPackage | undefined;
     let notice = "";
     let storageAvailable = true;
@@ -54,7 +54,7 @@ export function mountChatGpt(root: HTMLElement) {
         path,
         step,
         config,
-        template,
+        clientSecret,
         package: pluginPackage,
     });
     const steps = () => (path === "private" ? privateSteps : publicSteps);
@@ -143,7 +143,7 @@ export function mountChatGpt(root: HTMLElement) {
                 <div class="chatgpt-step-body"><p class="chatgpt-step-caption">${path === "private" ? "PRIVATE SETUP" : "PUBLIC SUBMISSION"} · STEP ${step + 1} OF ${steps().length}</p>${stepContent(model())}</div>
                 <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${steps().length} steps complete</span>${step < steps().length - 1 ? action("next", `Continue to ${steps()[step + 1]}`, true, !done[step]) : ""}</div>
                 <p class="chatgpt-progress-note">${storageAvailable ? "Your place and confirmations are saved in this browser." : "Progress is kept while this page is open; browser storage is unavailable."} ChatGPT installation and publication are confirmed by you.</p>
-                <details><summary>Need help with this step?</summary><p><strong>Cannot connect:</strong> check the HTTPS server URL, certificate, proxy Host forwarding, and ChatGPT workspace permissions. A tunnel carries MCP traffic; it does not make Keycloak reachable.</p><p><strong>Sign-in fails:</strong> check the exact callback in Keycloak, the client secret, required PKCE S256, resource indicators, and read scope. Access tokens need RS256, <code>typ=at+jwt</code>, the exact MCP resource audience, subject, and expiry.</p><p><strong>Empty list or access denied:</strong> check the immutable user ID, grant expiry, and selected Work. Signing in again does not create grants.</p><p><strong>Tools changed:</strong> open the custom connection in ChatGPT Plugins, select Refresh, and start a new conversation.</p>${state.configured ? `<p><strong>Changed signing keys:</strong> retire the affected key at Keycloak, then clear Goblin’s cache. Reads already in progress may finish.</p>${action("keys/refresh", "Clear signing-key cache")}` : ""}<p><a href="https://developers.openai.com/plugins/deploy/connect-chatgpt" target="_blank" rel="noopener noreferrer">Official ChatGPT connection help ↗</a></p></details>
+                <details><summary>Need help with this step?</summary><p><strong>Cannot connect:</strong> check HTTPS, the certificate, proxy Host forwarding, and ChatGPT workspace permissions. A tunnel carries MCP traffic; OAuth endpoints still need HTTPS reachability.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve the connection.</p><p><strong>Empty list or access denied:</strong> check Work grants and their expiry.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</details>
             </div>`
             }`;
         for (const form of root.querySelectorAll<HTMLFormElement>(
@@ -190,16 +190,20 @@ export function mountChatGpt(root: HTMLElement) {
         const next = await api<ChatGptState>();
         const choices = next.configured ? await api<typeof work>("/work") : [];
         if (disposed) return;
-        const nextScope = JSON.stringify([next.issuer, next.serverUrl]);
+        const nextScope = JSON.stringify([
+            next.issuer,
+            next.serverUrl,
+            next.ownerSubject,
+        ]);
         if (nextScope !== scope) {
             scope = nextScope;
             verification = undefined;
             confirmed.clear();
             path = "private";
             step = 0;
-            template = "";
+            clientSecret = "";
             pluginPackage = undefined;
-            drafts.delete("provider");
+            drafts.delete("client");
             drafts.delete("grant");
             discardDrafts = true;
             restoreProgress();
@@ -296,20 +300,6 @@ export function mountChatGpt(root: HTMLElement) {
             );
             return;
         }
-        if (name === "download-template" && template) {
-            const url = URL.createObjectURL(
-                new Blob([template], { type: "application/json" }),
-            );
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "goblin-keycloak-realm.json";
-            link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-            announce(
-                "Realm import file saved. In Keycloak, choose Create realm and select this file.",
-            );
-            return;
-        }
         void run(async () => {
             if (name === "package") {
                 pluginPackage = undefined;
@@ -339,10 +329,12 @@ export function mountChatGpt(root: HTMLElement) {
                     "Access revoked. New reads will be denied; an in-progress read may finish.",
                 );
                 await refresh();
-            } else if (name === "keys/refresh") {
-                await api("/keys/refresh", {});
+            } else if (name === "client/revoke") {
+                await api("/client/revoke", {});
+                confirmed.delete("installed");
+                resetConnectionTests();
                 announce(
-                    "Signing-key cache cleared. The next authenticated request fetches the provider’s current keys.",
+                    "ChatGPT connections revoked. Reconnect and approve access to use the plugin again.",
                 );
             } else if (name === "reload") {
                 await refresh();
@@ -399,30 +391,36 @@ export function mountChatGpt(root: HTMLElement) {
                 );
             } else if (form.dataset.chatgptForm === "instance") {
                 const origin = httpsAddress(String(data.get("origin") ?? ""));
-                const issuer = httpsAddress(String(data.get("issuer") ?? ""));
-                if (
-                    origin.pathname !== "/" ||
-                    !/^\/realms\/[^/.%\s]+$/.test(issuer.pathname)
-                )
-                    throw new Error(
-                        "Use a Goblin origin without a path and an exact Keycloak issuer ending in /realms/your-realm, with no trailing slash.",
-                    );
-                config = `env:\n  - name: ${state!.environmentVariables.publicOrigin}\n    value: ${JSON.stringify(origin.origin)}\n  - name: ${state!.environmentVariables.issuer}\n    value: ${JSON.stringify(issuer.href)}`;
+                if (origin.pathname !== "/")
+                    throw new Error("Use a Goblin origin without a path.");
+                config = `env:\n  - name: ${state!.environmentVariables.publicOrigin}\n    value: ${JSON.stringify(origin.origin)}\n  - name: ${state!.environmentVariables.enabled}\n    value: "true"`;
                 announce(
                     "Settings generated. Apply them to your Goblin application container, then restart it.",
                 );
-            } else if (form.dataset.chatgptForm === "provider") {
-                const profile = await api<unknown>("/provider-template", {
-                    redirectUri: String(data.get("redirectUri") ?? "").trim(),
-                });
+            } else if (form.dataset.chatgptForm === "client") {
+                const result = await api<{ clientSecret: string | null }>(
+                    "/client",
+                    {
+                        redirectUri: String(
+                            data.get("redirectUri") ?? "",
+                        ).trim(),
+                        rotateSecret: data.has("rotateSecret"),
+                    },
+                );
                 if (disposed) return;
-                template = JSON.stringify(profile, null, 2);
+                if (result.clientSecret) {
+                    clientSecret = result.clientSecret;
+                    confirmed.delete("installed");
+                    resetConnectionTests();
+                }
+                drafts.delete("client");
+                discardDrafts = true;
+                await refresh();
                 announce(
-                    "Realm configuration generated. Preview it here, then save the import file for Keycloak.",
+                    "OAuth client saved. Copy a newly generated secret into ChatGPT before leaving this setup session.",
                 );
             } else if (form.dataset.chatgptForm === "grant") {
                 await api("/grants", {
-                    subject: String(data.get("subject") ?? "").trim(),
                     workId: data.get("workId"),
                     hours: Number(data.get("hours")),
                     shareApprovedResult: data.has("shareApprovedResult"),
@@ -457,9 +455,7 @@ function httpsAddress(value: string): URL {
     try {
         url = new URL(value.trim());
     } catch {
-        throw new Error(
-            "Enter complete HTTPS addresses for Goblin and Keycloak.",
-        );
+        throw new Error("Enter a complete HTTPS Goblin address.");
     }
     if (
         url.protocol !== "https:" ||

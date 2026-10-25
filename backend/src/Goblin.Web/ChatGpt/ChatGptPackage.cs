@@ -88,8 +88,8 @@ internal static partial class ChatGptPackage
                             auth = new
                             {
                                 type = "oauth",
-                                client = new { mode = "provided", clientId = KeycloakProfile.ClientId, tokenEndpointAuthMethod = "client_secret_basic" },
-                                baseScopes = new[] { "openid", "email", ChatGptConfiguration.ReadScope }
+                                client = new { mode = "provided", clientId = ChatGptConfiguration.ClientId, tokenEndpointAuthMethod = "client_secret_basic" },
+                                baseScopes = ChatGptConfiguration.AuthorizationScopes.Split(' ')
                             }
                         }
                     }

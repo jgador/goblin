@@ -4,10 +4,10 @@ namespace Goblin.Contracts.Configuration;
 /// <remarks>See docs/environment-variables.md before adding or forwarding a variable.</remarks>
 public static class EnvironmentVariables
 {
-    /// <summary>Customer-owned Keycloak realm issuing ChatGPT MCP access tokens.</summary>
-    /// <remarks>Format: Exact HTTPS realm issuer ending /realms/NAME. Default/fallback: Unset disables the MCP endpoint.
-    /// Required: Required to enable ChatGPT; also requires Work and an HTTPS public origin. Sensitive: no. Never forwarded to runtimes.</remarks>
-    public const string GoblinChatGptIssuer = "GOBLIN_CHATGPT_ISSUER";
+    /// <summary>Enable Goblin's embedded OpenIddict server and ChatGPT MCP endpoint.</summary>
+    /// <remarks>Format: true or false. Default/fallback: false; unset disables OAuth and MCP.
+    /// Required: Enabling requires durable Work and an HTTPS public origin. Sensitive: no. Never forwarded to runtimes.</remarks>
+    public const string GoblinChatGptEnabled = "GOBLIN_CHATGPT_ENABLED";
 
     /// <summary>Slack app-level token passed by the supported CLI deploy hook.</summary>
     /// <remarks>Format: xapp token. Required only inside the temporary setup hook; sensitive, never inherited from the operator.</remarks>

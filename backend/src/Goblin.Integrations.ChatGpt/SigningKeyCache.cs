@@ -11,9 +11,8 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Goblin.Integrations.ChatGpt;
 
-// Customer-owned adapters must honor cancellation, cap bytes while
-// reading, enforce TLS and the pinned address, and never follow redirects.
-// The production HTTPS source enforces these limits independently.
+// Production reads public keys from the embedded server's persistent keys.
+// Sources must honor cancellation and the pinned local-server address.
 public interface IJwksDocumentSource
 {
     Task<string> ReadAsync(Uri pinnedAddress, CancellationToken token);
@@ -21,7 +20,7 @@ public interface IJwksDocumentSource
 
 public sealed class SigningKeyCache
 {
-    private readonly OAuthDiscoverySummary _configuration;
+    private readonly ChatGptConfiguration _configuration;
     private readonly IJwksDocumentSource _source;
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -33,7 +32,7 @@ public sealed class SigningKeyCache
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
     private static readonly JsonSerializerOptions JsonOptions = new() { AllowDuplicateProperties = false, MaxDepth = 8 };
 
-    public SigningKeyCache(OAuthDiscoverySummary configuration, IJwksDocumentSource source,
+    public SigningKeyCache(ChatGptConfiguration configuration, IJwksDocumentSource source,
         TimeProvider? clock = null)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -67,7 +66,7 @@ public sealed class SigningKeyCache
             }
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
             deadline.CancelAfter(TimeSpan.FromSeconds(5));
-            string document = await _source.ReadAsync(_configuration.JwksEndpoint, deadline.Token).WaitAsync(deadline.Token);
+            string document = await _source.ReadAsync(new Uri(_configuration.Origin + ChatGptConfiguration.KeysPath), deadline.Token).WaitAsync(deadline.Token);
             Dictionary<string, RSAParameters> replacement = Parse(document);
             lock (_stateGate)
             {
@@ -98,7 +97,7 @@ public sealed class SigningKeyCache
     }
 
     // Reachable only through trusted owner administration (and friend tests).
-    // Does not wait for the network gate, run cancellation callbacks or fetch.
+    // Does not wait for the refresh gate, run cancellation callbacks or fetch.
     internal void Invalidate(CancellationToken token)
     {
         lock (_stateGate)

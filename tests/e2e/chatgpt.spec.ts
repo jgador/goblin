@@ -12,14 +12,15 @@ async function fixture(page: Page, configured = true) {
         description: "Read shared Work from your instance.",
         logoUrl: "/assets/branding/icon.svg",
         serverUrl: configured ? "https://goblin.example.test/mcp" : null,
-        issuer: configured
-            ? "https://identity.example.test/realms/goblin"
-            : null,
+        issuer: configured ? "https://goblin.example.test/" : null,
         clientId: "goblin-chatgpt",
-        scope: "goblin.work.read",
+        scope: "openid offline_access goblin.work.read",
+        ownerSubject: configured ? "owner-<img src=x>" : null,
+        clientConfigured: configured,
+        redirectUri: null,
         environmentVariables: {
             publicOrigin: "GOBLIN_PUBLIC_ORIGIN",
-            issuer: "GOBLIN_CHATGPT_ISSUER",
+            enabled: "GOBLIN_CHATGPT_ENABLED",
         },
         grants: [],
     };
@@ -72,11 +73,13 @@ async function fixture(page: Page, configured = true) {
                 }),
                 archiveBase64: "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==",
             };
-        if (path === "/api/integrations/chatgpt/provider-template")
-            json = {
-                realm: "goblin",
-                clients: [{ clientId: "goblin-chatgpt", redirectUris: [] }],
-            };
+        if (path === "/api/integrations/chatgpt/client") {
+            const body = route.request().postDataJSON();
+            const generate = !state.clientConfigured || body.rotateSecret;
+            state.clientConfigured = true;
+            state.redirectUri = body.redirectUri || null;
+            json = { clientSecret: generate ? "fixture-oauth-secret" : null };
+        }
         if (path === "/api/integrations/chatgpt/grants") {
             if (reject)
                 return route.fulfill({
@@ -92,7 +95,7 @@ async function fixture(page: Page, configured = true) {
             state.grants = [
                 {
                     id: "42",
-                    subject: body.subject,
+                    subject: state.ownerSubject!,
                     workId: body.workId,
                     resultAttemptId: null,
                     expiresAt: "2099-01-01T00:00:00Z",
@@ -130,9 +133,6 @@ async function goToStep(page: Page, name: string) {
 }
 async function shareWork(page: Page) {
     await page
-        .getByLabel("OAuth user ID", { exact: true })
-        .fill("reader-<img src=x>");
-    await page
         .getByLabel("Work", { exact: true })
         .selectOption("9007199254740993");
     await page.getByRole("button", { name: "Share selected Work" }).click();
@@ -162,7 +162,9 @@ test("private setup guides real actions, distinguishes failed checks, and preser
         .getByRole("button", { name: "Check provider and storage" })
         .click();
     await expect(
-        page.getByText("Needs attention: Provider discovery", { exact: true }),
+        page.getByText("Needs attention: OAuth server configuration", {
+            exact: true,
+        }),
     ).toBeVisible();
     await expect(
         page.getByRole("button", { name: "Continue to Install" }),
@@ -196,9 +198,7 @@ test("private setup guides real actions, distinguishes failed checks, and preser
     ).toBeDisabled();
     await page.getByLabel("I installed the plugin").check();
     await page.getByRole("button", { name: "Continue to Share Work" }).click();
-    await page
-        .getByLabel("OAuth user ID", { exact: true })
-        .fill("reader-<img src=x>");
+
     await page
         .getByLabel("Work", { exact: true })
         .selectOption("9007199254740993");
@@ -207,9 +207,9 @@ test("private setup guides real actions, distinguishes failed checks, and preser
         .getByRole("button", { name: "Check provider and storage" })
         .click();
     await goToStep(page, "Share Work");
-    await expect(page.getByLabel("OAuth user ID", { exact: true })).toHaveValue(
-        "reader-<img src=x>",
-    );
+    await expect(
+        page.getByLabel("Owner OAuth ID", { exact: true }),
+    ).toHaveValue("owner-<img src=x>");
     await expect(page.getByLabel("Work", { exact: true })).toHaveValue(
         "9007199254740993",
     );
@@ -218,13 +218,12 @@ test("private setup guides real actions, distinguishes failed checks, and preser
         page.getByText("Work shared.", { exact: false }),
     ).toBeVisible();
     expect(writes.find((w) => w.path.endsWith("/grants"))?.body).toEqual({
-        subject: "reader-<img src=x>",
         workId: "9007199254740993",
         hours: 24,
         shareApprovedResult: false,
     });
     await expect(page.locator(".chatgpt-grants")).toContainText(
-        "reader-<img src=x>",
+        "owner-<img src=x>",
     );
     await expect(page.locator(".chatgpt-grants img")).toHaveCount(0);
     await page.getByRole("button", { name: "Continue to Test" }).click();
@@ -258,9 +257,7 @@ test("unconfigured setup generates usable settings inline and detects enablement
     await page
         .getByLabel("Public Goblin origin")
         .fill("http://goblin.example.test");
-    await page
-        .getByLabel("Keycloak realm issuer")
-        .fill("https://identity.example.test/realms/goblin");
+
     await page
         .getByRole("button", { name: "Generate settings", exact: true })
         .click();
@@ -276,7 +273,7 @@ test("unconfigured setup generates usable settings inline and detects enablement
     await expect(
         page.getByLabel("Container environment settings", { exact: true }),
     ).toHaveValue(
-        'env:\n  - name: GOBLIN_PUBLIC_ORIGIN\n    value: "https://goblin.example.test"\n  - name: GOBLIN_CHATGPT_ISSUER\n    value: "https://identity.example.test/realms/goblin"',
+        'env:\n  - name: GOBLIN_PUBLIC_ORIGIN\n    value: "https://goblin.example.test"\n  - name: GOBLIN_CHATGPT_ENABLED\n    value: "true"',
     );
     await page
         .getByRole("button", { name: "Check configuration again" })
@@ -285,7 +282,8 @@ test("unconfigured setup generates usable settings inline and detects enablement
         page.getByText("The integration is not enabled yet.", { exact: false }),
     ).toBeVisible();
     state.configured = true;
-    state.issuer = "https://identity.example.test/realms/goblin";
+    state.ownerSubject = "owner-fixture";
+    state.issuer = "https://goblin.example.test/";
     state.serverUrl = "https://goblin.example.test/mcp";
     await page
         .getByRole("button", { name: "Check configuration again" })
@@ -298,31 +296,38 @@ test("unconfigured setup generates usable settings inline and detects enablement
     );
 });
 
-test("realm configuration is previewable and saved only as an import asset", async ({
+test("client callback and secret are managed in Goblin without storing the secret", async ({
     page,
 }) => {
-    const { writes } = await fixture(page);
+    const { state, writes } = await fixture(page);
+    state.clientConfigured = false;
     await page.goto("/settings?section=chatgpt");
     await goToStep(page, "Sign-in");
-    const downloads: string[] = [];
-    page.on("download", (download) =>
-        downloads.push(download.suggestedFilename()),
-    );
+    await page.getByRole("button", { name: "Create OAuth client" }).click();
+    await expect(
+        page.getByLabel("OAuth client secret", { exact: true }),
+    ).toHaveValue("fixture-oauth-secret");
+    expect(writes.at(-1)?.body).toEqual({
+        redirectUri: "",
+        rotateSecret: false,
+    });
     await page
-        .getByRole("button", { name: "Generate realm configuration" })
-        .click();
-    await page
-        .getByText("Preview generated realm configuration", { exact: true })
-        .click();
-    await expect(page.locator(".chatgpt-template")).toContainText(
-        '"realm": "goblin"',
-    );
-    expect(downloads).toEqual([]);
-    expect(writes.at(-1)?.body).toEqual({ redirectUri: "" });
-    const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Save realm import file" }).click();
-    expect((await download).suggestedFilename()).toBe(
-        "goblin-keycloak-realm.json",
+        .getByLabel("ChatGPT OAuth callback")
+        .fill("https://chatgpt.com/connector_platform_oauth_redirect");
+    await page.getByRole("button", { name: "Save OAuth client" }).click();
+    expect(writes.at(-1)?.body).toEqual({
+        redirectUri: "https://chatgpt.com/connector_platform_oauth_redirect",
+        rotateSecret: false,
+    });
+    expect(
+        await page.evaluate(() => localStorage.getItem("goblin.chatgpt.setup")),
+    ).not.toContain("fixture-oauth-secret");
+    await page.reload();
+    await expect(
+        page.getByLabel("OAuth client secret", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
+        state.redirectUri!,
     );
 });
 
@@ -339,24 +344,28 @@ test("progress resumes without storing drafts or treating old provider checks as
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
     await goToStep(page, "Share Work");
+    await goToStep(page, "Sign-in");
     await page
-        .getByLabel("OAuth user ID", { exact: true })
-        .fill("unsaved-user-id");
+        .getByLabel("ChatGPT OAuth callback")
+        .fill("https://chatgpt.com/connector/oauth/unsaved-callback");
+    await goToStep(page, "Share Work");
     await page.reload();
     await expect(
         page.getByRole("heading", { name: "Choose what ChatGPT can read" }),
     ).toBeVisible();
-    await expect(page.getByLabel("OAuth user ID", { exact: true })).toBeEmpty();
+    await expect(
+        page.getByLabel("Owner OAuth ID", { exact: true }),
+    ).toHaveValue(state.ownerSubject!);
     expect(
         await page.evaluate(() => localStorage.getItem("goblin.chatgpt.setup")),
-    ).not.toContain("unsaved-user-id");
+    ).not.toContain("unsaved-callback");
     await goToStep(page, "Install");
     await expect(page.getByLabel("I installed the plugin")).toBeChecked();
     await goToStep(page, "Sign-in");
     await expect(
         page.getByRole("button", { name: "Continue to Install" }),
     ).toBeDisabled();
-    state.issuer = "https://identity.example.test/realms/another";
+    state.issuer = "https://other.example.test/";
     await page.reload();
     await expect(
         page.getByRole("heading", { name: "Prepare your instance" }),
@@ -477,9 +486,9 @@ test("grant failures preserve the form and cannot claim success", async ({
     await expect(
         page.getByText("No approved result is available."),
     ).toBeVisible();
-    await expect(page.getByLabel("OAuth user ID", { exact: true })).toHaveValue(
-        "reader-<img src=x>",
-    );
+    await expect(
+        page.getByLabel("Owner OAuth ID", { exact: true }),
+    ).toHaveValue("owner-<img src=x>");
     await expect(
         page.getByLabel("Also share the latest approved result"),
     ).toBeChecked();

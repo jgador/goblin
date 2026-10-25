@@ -21,8 +21,10 @@ Prepare these separately from customer installation:
    descriptions, artwork, and release ownership.
 2. A stable review endpoint and demonstration environment matching the submitted
    contract. An approved template route needs a demo matching its real URL pattern.
-3. A dedicated sample account usable without private networks, MFA, email/SMS
-   challenges, or magic links. Keep neutral sample data isolated from customers.
+3. A dedicated Goblin review instance usable without private networks, MFA,
+   email/SMS challenges, or magic links. Goblin has one owner password, which also
+   controls administration. Use a disposable password and neutral sample data on
+   this isolated instance; never give reviewers a live installation's owner password.
 4. Complete OAuth discovery, resource binding, callbacks, consent, revocation,
    permission annotations, minimal outputs, and safe errors.
 5. Exactly five positive and three negative cases for initial MCP review,
@@ -45,7 +47,7 @@ are kept only while this settings page is open.
 
 In the submission portal, select **Upload new or existing plugin**, choose the
 verified publisher, and upload the ZIP. Open **MCPs → Connect**, provide the
-client secret, allow the portal's exact callback in Keycloak, and complete the
+client secret, allow the portal's exact callback in Goblin settings, and complete the
 domain-verification challenge. The host administrator must serve that exact
 challenge token at the public URL shown by the portal. Wait for the tool scan,
 resolve findings, and complete **Review information → Review details**, including

@@ -21,6 +21,21 @@ internal static class ApiRequest
     {
         if (request.ContentType?.Split(';')[0].Trim() != "application/json")
             throw new PublicError("invalid_content_type", "Send JSON content.", 415);
+        byte[] body = await ReadBytesAsync(request);
+        try { ValidateObject(body); }
+        catch (JsonException) { throw new PublicError("invalid_json", "The request could not be read."); }
+        return body;
+    }
+
+    public static Task<byte[]> ReadOAuthFormBodyAsync(HttpRequest request)
+    {
+        if (!string.Equals(request.ContentType?.Split(';')[0].Trim(), "application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase))
+            throw new PublicError("invalid_content_type", "Send URL-encoded OAuth form content.", 415);
+        return ReadBytesAsync(request);
+    }
+
+    private static async Task<byte[]> ReadBytesAsync(HttpRequest request)
+    {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(request.HttpContext.RequestAborted);
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         byte[] buffer = new byte[8193];
@@ -33,10 +48,8 @@ internal static class ApiRequest
                 size += read;
                 if (size > 8192) throw new PublicError("request_too_large", "The request is too large.", 413);
             }
-            ValidateObject(buffer.AsSpan(0, size));
             return buffer.AsSpan(0, size).ToArray();
         }
-        catch (JsonException) { throw new PublicError("invalid_json", "The request could not be read."); }
         catch (OperationCanceledException) { throw new PublicError("invalid_request", "The request was interrupted."); }
         catch (IOException) { throw new PublicError("invalid_request", "The request was interrupted."); }
     }

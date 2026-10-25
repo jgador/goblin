@@ -7,6 +7,12 @@ GitHub uses the official GitHub CLI device flow under **Settings → GitHub**.
 See [execution hosting](execution-hosting.md) for repository authority and credential
 isolation. Additional runtimes and their sign-in flows remain unimplemented.
 
+The private ChatGPT MCP integration uses Goblin's owner password for browser
+sign-in and consent through embedded OpenIddict. It has one persistent owner
+subject and no separate account-management system. Its OAuth tokens authorize
+only explicitly shared Work; they do not authorize Codex execution or Goblin
+administration. See [ChatGPT setup](chatgpt-integration.md).
+
 ## Run locally
 
 Durable Work is enabled by default and requires a migrated profile from the

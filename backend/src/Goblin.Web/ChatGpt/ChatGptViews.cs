@@ -20,9 +20,18 @@ internal sealed class ChatGptSetupView
     [JsonPropertyName("issuer")]
     public string? Issuer { get; init; }
     [JsonPropertyName("clientId")]
-    public string ClientId => KeycloakProfile.ClientId;
+    public string ClientId => ChatGptConfiguration.ClientId;
     [JsonPropertyName("scope")]
-    public string Scope => ChatGptConfiguration.ReadScope;
+    public string Scope => ChatGptConfiguration.AuthorizationScopes;
+
+    [JsonPropertyName("ownerSubject")]
+    public string? OwnerSubject { get; init; }
+
+    [JsonPropertyName("clientConfigured")]
+    public bool ClientConfigured { get; init; }
+
+    [JsonPropertyName("redirectUri")]
+    public string? RedirectUri { get; init; }
 
     [JsonPropertyName("environmentVariables")]
     public ChatGptEnvironmentView EnvironmentVariables { get; } = new();
@@ -36,8 +45,8 @@ internal sealed class ChatGptEnvironmentView
     [JsonPropertyName("publicOrigin")]
     public string PublicOrigin => Env.GoblinPublicOrigin;
 
-    [JsonPropertyName("issuer")]
-    public string Issuer => Env.GoblinChatGptIssuer;
+    [JsonPropertyName("enabled")]
+    public string Enabled => Env.GoblinChatGptEnabled;
 }
 
 internal sealed class ChatGptGrantView

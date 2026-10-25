@@ -25,10 +25,13 @@ internal static class ApplicationOptionsConfiguration
             AllowInsecureHttp = string.Equals(value(Env.GoblinAllowInsecureHttp), "true", StringComparison.OrdinalIgnoreCase),
             ListenUrl = $"http://{host}:{port}",
             EnableWork = !string.Equals(value(Env.GoblinWorkEnabled), "false", StringComparison.OrdinalIgnoreCase),
-            ChatGptIssuer = value(Env.GoblinChatGptIssuer),
+            EnableChatGpt = Enabled(value(Env.GoblinChatGptEnabled)),
             HeadlampUrl = value(Env.GoblinHeadlampUrl),
             VictoriaLogsUrl = value(Env.GoblinVictorialogsUrl),
             ConfigureCodex = options => options with { Command = value(Env.GoblinCodexCommand) ?? options.Command }
         };
     }
+
+    private static bool Enabled(string? value) => value is not null && (bool.TryParse(value, out bool enabled)
+        ? enabled : throw new ArgumentException("GOBLIN_CHATGPT_ENABLED must be true or false."));
 }

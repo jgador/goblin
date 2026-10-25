@@ -7,6 +7,7 @@
     <EmbeddedResource Include="Contracts/public-api.json" />
     <EmbeddedResource Include="Contracts/serialization-contracts.json" />
     <ProjectReference Include="../../src/Goblin.Web/Goblin.Web.csproj" />
+    <ProjectReference Include="../../tools/Goblin.Database/Goblin.Database.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageReference Include="xunit" Version="2.9.3" />

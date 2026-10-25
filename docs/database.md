@@ -216,7 +216,14 @@ The administrator-only migration journal is `public.schema_migration`; its
 identity sequence is also inaccessible to the application role.
 Wolverine and the journal are excluded from Goblin EF scaffolding. The catalog has
 20 singular product tables, the singular journal, and eight native Wolverine
-tables. Primary keys, foreign keys, identity sequences, and table-specific indexes
+tables, plus four native OpenIddict tables: `OpenIddictApplications`,
+`OpenIddictAuthorizations`, `OpenIddictScopes`, and `OpenIddictTokens`.
+OpenIddict owns these quoted names and mappings in `ChatGptOAuthDbContext`,
+using bigint keys. Their SQL is part of the administrator-applied baseline and
+they remain excluded from product scaffolding. OAuth grants/tokens persist in
+PostgreSQL; the owner subject and private signing/encryption keys stay in the
+platform data volume. See [ChatGPT authentication](chatgpt-integration.md).
+Primary keys, foreign keys, identity sequences, and table-specific indexes
 follow their owner's naming conventions. The independent bigint Work history
 sequence is `work_event_id_seq`; it has no table or column owner. Wolverine uses
 `wolverine_node_records_id_seq` and
