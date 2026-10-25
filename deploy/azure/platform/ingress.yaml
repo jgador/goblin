@@ -7,7 +7,7 @@ metadata:
     nginx.org/ssl-redirect: "true"
     nginx.org/proxy-buffering: "false"
     nginx.org/proxy-http-version: "1.1"
-    nginx.org/websocket-services: "platform,goblin-dev-relay"
+    nginx.org/websocket-services: "platform"
     nginx.org/proxy-read-timeout: "3600s"
     nginx.org/proxy-send-timeout: "3600s"
     cert-manager.io/cluster-issuer: goblin-letsencrypt

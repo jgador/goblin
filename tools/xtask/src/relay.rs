@@ -490,6 +490,9 @@ fn route_patch(ingress: &Value, owner: &str, target: Upstream) -> Result<Value> 
     } else {
         json!({"op":"remove","path":"/metadata/annotations/goblin.dev~1relay-owner"})
     });
+    // F5 validates WebSocket services against the current Ingress backends.
+    // Keep the annotation and route in the same resourceVersion-guarded patch.
+    patch.push(json!({"op":"add","path":"/metadata/annotations/nginx.org~1websocket-services","value":if target == Upstream::Development { NAME } else { "platform" }}));
     Ok(json!(patch))
 }
 
@@ -547,7 +550,8 @@ mod tests {
     }
 
     fn ingress(service: &str, owner: Option<&str>) -> Value {
-        let mut annotations = json!({"nginx.org/ssl-redirect":"true"});
+        let mut annotations =
+            json!({"nginx.org/ssl-redirect":"true","nginx.org/websocket-services":service});
         if let Some(owner) = owner {
             annotations[OWNER] = json!(owner);
         }
@@ -570,10 +574,18 @@ mod tests {
             "/spec/rules/0/http/paths/1/backend/service"
         );
         assert_eq!(patch[1]["value"]["name"], NAME);
+        assert_eq!(
+            patch[3],
+            json!({"op":"add","path":"/metadata/annotations/nginx.org~1websocket-services","value":NAME})
+        );
         assert!(route_patch(&ingress(NAME, Some("another")), "owned", Upstream::Azure).is_err());
         assert!(route_patch(&ingress("other", None), "owned", Upstream::Development).is_err());
         let restore = route_patch(&ingress(NAME, Some("owned")), "owned", Upstream::Azure).unwrap();
         assert_eq!(restore[1]["value"]["name"], "platform");
         assert_eq!(restore[2]["op"], "remove");
+        assert_eq!(
+            restore[3],
+            json!({"op":"add","path":"/metadata/annotations/nginx.org~1websocket-services","value":"platform"})
+        );
     }
 }

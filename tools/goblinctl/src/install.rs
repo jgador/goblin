@@ -216,10 +216,22 @@ pub fn ingress_backend_patch(ingress: &Value, service: &str, port: u16) -> Resul
         .map(|(index, _)| index)
         .collect();
     ensure!(indexes.len() == 1, "Expected one default Goblin path");
-    Ok(serde_json::json!([
-        {"op":"test","path":"/metadata/resourceVersion","value":ingress["metadata"]["resourceVersion"].as_str().context("Missing ingress version")?},
-        {"op":"replace","path":format!("/spec/rules/0/http/paths/{}/backend/service", indexes[0]),"value":{"name":service,"port":{"number":port}}}
-    ]))
+    let annotations = ingress["metadata"]["annotations"]
+        .as_object()
+        .context("Missing ingress annotations")?;
+    let mut patch = vec![
+        serde_json::json!({"op":"test","path":"/metadata/resourceVersion","value":ingress["metadata"]["resourceVersion"].as_str().context("Missing ingress version")?}),
+        serde_json::json!({"op":"replace","path":format!("/spec/rules/0/http/paths/{}/backend/service", indexes[0]),"value":{"name":service,"port":{"number":port}}}),
+    ];
+    // F5 rejects the whole Ingress when a WebSocket service is not one of its
+    // backends. Change this annotation atomically with the default route, while
+    // cert-manager retains its challenge paths and other annotations.
+    if service == "platform" {
+        patch.push(serde_json::json!({"op":"add","path":"/metadata/annotations/nginx.org~1websocket-services","value":service}));
+    } else if annotations.contains_key("nginx.org/websocket-services") {
+        patch.push(serde_json::json!({"op":"remove","path":"/metadata/annotations/nginx.org~1websocket-services"}));
+    }
+    Ok(serde_json::json!(patch))
 }
 pub fn docker_config(path: &Path) -> Result<()> {
     let mut config = if path.exists() {
