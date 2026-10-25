@@ -79,6 +79,30 @@ export const environmentVariables = {
         required: "Supplied by GitHub Actions to CI detection.",
         sensitive: false,
     },
+    GITHUB_PATH: {
+        name: "GITHUB_PATH",
+        purpose: "Register the verified .NET SDK for subsequent Actions steps.",
+        format: "Path to the GitHub Actions PATH command file.",
+        fallback: "SDK setup fails when the command file is unavailable.",
+        required: "Supplied by GitHub Actions to .NET verification setup.",
+        sensitive: false,
+    },
+    GITHUB_ENV: {
+        name: "GITHUB_ENV",
+        purpose: "Register the .NET SDK root for subsequent Actions steps.",
+        format: "Path to the GitHub Actions environment command file.",
+        fallback: "SDK setup fails when the command file is unavailable.",
+        required: "Supplied by GitHub Actions to .NET verification setup.",
+        sensitive: false,
+    },
+    DOTNET_ROOT: {
+        name: "DOTNET_ROOT",
+        purpose: "Locate the verified .NET SDK and bundled runtimes in CI.",
+        format: "Absolute directory path.",
+        fallback: ".NET otherwise uses its normal host discovery.",
+        required: "Set by the shared .NET verification setup action.",
+        sensitive: false,
+    },
     CANDIDATE_SHA256: {
         name: "CANDIDATE_SHA256",
         purpose:

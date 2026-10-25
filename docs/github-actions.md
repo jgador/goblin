@@ -141,6 +141,16 @@ Markdown sources before [regenerating their lock files](agentic-maintenance.md).
 These actions require Actions Runner v2.327.1 or newer; the workflows use
 GitHub-hosted Ubuntu 24.04 runners.
 
+The shared [.NET setup action](../.github/actions/setup-dotnet/action.yml) installs
+Linux x64 SDK **10.0.403**, including its ASP.NET Core and .NET runtimes, from
+Microsoft's public `dotnetcli.blob.core.windows.net` feed. Its SHA-512 is pinned
+from Microsoft's release metadata and checked before extraction. Both CI and
+Platform Release use this action. Update its version and checksum together when
+changing the CI SDK; `global.json` retains the application's SDK compatibility
+policy, which the selected SDK must satisfy. This avoids the `aka.ms` redirect to
+the unavailable origin feed and an additional floating LTS runtime download.
+Downloads and extracted SDK files stay under `.artifacts/dotnet/`.
+
 ## Installation commands and artifacts
 
 The reusable workflow runs `node scripts/release-github.mts installation-assets VERSION MODE`

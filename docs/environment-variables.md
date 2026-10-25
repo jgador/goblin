@@ -83,6 +83,11 @@ application/native consumers do not use them. Missing or invalid CI inputs fail
 verification; they never default to an empty successful selection. See
 [CI selection](github-actions.md#ci-selection-and-required-result).
 
+The shared .NET Actions setup appends its verified SDK directory to `GITHUB_PATH`
+and writes `DOTNET_ROOT` through `GITHUB_ENV` for subsequent steps. These
+GitHub-owned command files and the SDK root are defined in the Node catalog;
+they do not change Goblin's production configuration.
+
 Owner-only agentic preparation also validates `GITHUB_ACTOR`,
 `GITHUB_TRIGGERING_ACTOR`, `GITHUB_REPOSITORY`, and `GITHUB_REF` before examining
 changes. `OPENAI_API_KEY` is a GitHub Actions secret for gh-aw's isolated API proxy;

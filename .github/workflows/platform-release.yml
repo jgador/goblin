@@ -109,9 +109,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "24"
-      - uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: .artifacts/source/global.json
+      - uses: ./.github/actions/setup-dotnet
       - name: Verify installer inputs and reproduce candidate Azure assets
         run: |
           cargo xtask release check-candidate --directory .artifacts/goblin --source-root .artifacts/source
