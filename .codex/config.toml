@@ -19,7 +19,7 @@ has_changes() {
 
 if has_changes '*.ts' '*.tsx' '*.mts' '*.cts'; then
     if [ -x node_modules/.bin/prettier ]; then
-        make format-typescript >&2
+        make typescript-format >&2
     else
         printf '%s\n' 'Skipping TypeScript formatting: run make install to install Prettier.' >&2
     fi
@@ -30,13 +30,13 @@ if has_changes '*.rs'; then
     if ! command -v cargo >/dev/null 2>&1; then
         export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
     fi
-    make format-rust >&2
+    make rust-format >&2
 fi
 
 if has_changes '*.cs' \
     ':(exclude)backend/src/Goblin.Protocol/Generated/**' \
     ':(exclude)backend/src/Goblin.Persistence/Generated/**'; then
-    make format-backend >&2
+    make backend-format >&2
 fi
 printf '{}\n'
 '''

@@ -71,14 +71,14 @@ These commands refresh the profile and prepare access automatically:
 
 | Command | Purpose / role |
 | --- | --- |
-| `make dev` | Start Goblin with `goblin_app` |
-| `make db-migrate` | [Apply SQL](#apply-the-sql-schema) with `goblin_admin` |
-| `make db-scaffold` | [Regenerate EF mappings](#reverse-engineer-the-database) with `goblin_app` |
-| `make test-postgres` | [Run database integration tests](#application-configuration-and-verification) with both roles |
+| `make dev-start` | Start Goblin with `goblin_app` |
+| `make database-migrate` | [Apply SQL](#apply-the-sql-schema) with `goblin_admin` |
+| `make database-scaffold` | [Regenerate EF mappings](#reverse-engineer-the-database) with `goblin_app` |
+| `make database-test` | [Run database integration tests](#application-configuration-and-verification) with both roles |
 
 `DB_PROFILE` defaults to `wsl`. Append `DB_PROFILE=azure-dev` to use another
 development database; there is no global active profile. For connection-only
-development, `make dev ARGS=--without-database` disables Work APIs.
+development, `make dev-start ARGS=--without-database` disables Work APIs.
 
 Wrap other developer commands with `goblinctl db run wsl -- COMMAND`;
 add `--role admin` or `--role both` before `--` only when needed.
@@ -238,7 +238,7 @@ not enabled.
 
 ### Apply the SQL schema
 
-Use `make db-migrate` from [daily development](#daily-development).
+Use `make database-migrate` from [daily development](#daily-development).
 [Goblin.Database](../backend/tools/Goblin.Database/) applies
 [SQL files](../backend/database/migrations/) in ordinal filename order, once each.
 Each file and its journal entry commit in one transaction; failures roll back.
@@ -266,7 +266,7 @@ before applying it. Web startup never runs migrations; EF migrations and
 
 ### Reverse engineer the database
 
-Use `make db-scaffold` from [daily development](#daily-development).
+Use `make database-scaffold` from [daily development](#daily-development).
 [scaffold-database.sh](../backend/scripts/scaffold-database.sh) owns the table
 selection and EF flags, restores the pinned local tool, and regenerates
 [Generated/](../backend/src/Goblin.Persistence/Generated/) with repository
@@ -289,8 +289,8 @@ To change the schema:
    [the migration rules](#apply-the-sql-schema). New tracked tables need primary keys.
 2. Update the 20 singular `--table` entries and custom candidate names in the
    scaffolding tooling. Apply SQL to a fresh disposable database with
-   `make db-migrate DB_PROFILE=<profile>`, then run
-   `make db-scaffold DB_PROFILE=<profile>`. Wolverine and the journal remain excluded.
+   `make database-migrate DB_PROFILE=<profile>`, then run
+   `make database-scaffold DB_PROFILE=<profile>`. Wolverine and the journal remain excluded.
 3. Remove obsolete generated entities after table drops/renames, then run
    `dotnet build backend/Goblin.slnx` and the [database tests](#application-configuration-and-verification).
 4. Review SQL, table selection, and generated C# together. A second
@@ -327,7 +327,7 @@ on failure before deploying Goblin. `/readyz` checks the database independently
 of Codex. Custom EF configuration for the filtered active-attempt relationship
 lives outside generated classes.
 
-Run `make test-postgres` against a development profile. Tests create/drop uniquely
+Run `make database-test` against a development profile. Tests create/drop uniquely
 named databases and cover EF CRUD across contexts, role permissions, schema
 application/checksums/rollback, messaging storage, sequences, foreign keys, and
 attempt cleanup reservations. Certificate checks verify the authenticated role
@@ -338,8 +338,8 @@ database tests skip and ordinary solution tests need no server.
 To run HTTP/browser journeys against a migrated, disposable development database:
 
 ```bash
-goblinctl db run wsl --usage tests -- make test-js
-goblinctl db run wsl --usage tests -- make test-browser ARGS=tests/e2e/work.spec.ts
+goblinctl db run wsl --usage tests -- make node-test
+goblinctl db run wsl --usage tests -- make browser-test ARGS=tests/e2e/work.spec.ts
 ```
 
 These journeys write Work records to the selected database.

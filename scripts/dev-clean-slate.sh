@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Report a cleanup error and stop the script.
 clean_fail() {
-    printf 'dev-clean-slate: %s\n' "$1" >&2
+    printf 'dev-reset: %s\n' "$1" >&2
     exit 1
 }
 
@@ -167,7 +167,7 @@ dev_clean_slate() {
 
 # Resolve the checkout and request sudo for host cleanup.
 clean_main() {
-    (($# == 0)) || clean_fail 'Usage: make dev-clean-slate'
+    (($# == 0)) || clean_fail 'Usage: make dev-reset'
     local script repo
     script=$(realpath -- "${BASH_SOURCE[0]}")
     repo=$(git -C "$(dirname -- "$script")" rev-parse --show-toplevel)

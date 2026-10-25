@@ -82,7 +82,7 @@ directory names do not determine a language's ownership.
 Integration checks retain generated contract values, dependency/schema checks,
 frontend, release-script, HTTP, and offline deployment tests. Installer checks retain the musl release build,
 compiler-input verification, and the existing setup/install browser journeys.
-They also build the platform Docker image (`make platform-image-check`), so a
+They also build the platform Docker image (`make platform-check-image`), so a
 missing build input fails CI rather than a later installation.
 Their inclusion for each language is conservative: C# HTTP contracts, Rust
 embedded assets, and browser setup code cross those boundaries. Separate runners
@@ -123,7 +123,7 @@ Go and other recognized unsupported source types fail until explicitly configure
 The [owner-only maintenance workflows](agentic-maintenance.md) discover manifest
 drift and propose policy updates in draft PRs using the repository's OpenAI key.
 
-Run `make test-ci`, `make test-task-runner`, `make typecheck-scripts`, and workflow
+Run `make ci-test`, `make make-test`, `make scripts-typecheck`, and workflow
 lint when changing this policy. Tests exercise real Git ranges/renames, output
 transport, documentation/mixed/configuration changes, registration, command
 failure, summary escaping, and required-result failures. Actual check publication

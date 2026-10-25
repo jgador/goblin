@@ -178,7 +178,7 @@ export async function coverageProblems(
         const commands = rule.commands.join("\n");
         const covered = new Set<string>();
         if (id === "csharp") {
-            const solution = commands.includes("test-backend")
+            const solution = commands.includes("backend-test")
                 ? makefile.match(/dotnet test ([^\s]+\.slnx)/)?.[1]
                 : commands.match(/dotnet test ([^\s]+\.slnx)/)?.[1];
             if (solution && files.includes(solution)) {
@@ -199,7 +199,7 @@ export async function coverageProblems(
         } else if (
             id === "rust" &&
             files.includes("Cargo.toml") &&
-            commands.includes("test-rust") &&
+            commands.includes("rust-test") &&
             makefile.includes("CARGO_ARGS ?= --workspace")
         ) {
             const text = await readFile(resolve(root, "Cargo.toml"), "utf8");
@@ -217,9 +217,9 @@ export async function coverageProblems(
                             covered.add(file);
             }
         } else if (id === "javascript") {
-            if (commands.includes("typecheck-scripts"))
+            if (commands.includes("scripts-typecheck"))
                 covered.add("package.json");
-            if (commands.includes("build-assets"))
+            if (commands.includes("frontend-build"))
                 covered.add("frontend/package.json");
             for (const prefix of commands.matchAll(
                 /npm --prefix ([^\s]+) run (?:check|test|build|typecheck)/g,

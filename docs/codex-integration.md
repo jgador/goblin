@@ -78,8 +78,8 @@ make install
 make build                    # browser assets and .NET solution
 dotnet run --no-build --project backend/src/Goblin.Web
 make test                         # schema drift, .NET tests, HTTP tests
-make test-codex                # official pinned Rust binary, synthetic key only
-make test-browser              # browser journeys against the C# test host
+make codex-test                # official pinned Rust binary, synthetic key only
+make browser-test              # browser journeys against the C# test host
 dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 ```
 

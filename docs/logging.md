@@ -138,7 +138,7 @@ Database tests are separate and remain opt-in.
 For actual collection, buffering, restarts, and the real VMUI browser check:
 
 ```bash
-make test-logging
+make logging-test
 ```
 
 This requires Docker, kubectl, curl, ripgrep, the repository's .NET/Node tools, and Chromium
@@ -151,7 +151,7 @@ To check just the real UI against a trusted private service, port-forward the
 VictoriaLogs service to localhost and run:
 
 ```bash
-GOBLIN_TEST_VICTORIALOGS_URL=http://127.0.0.1:19428 make test-logs-ui
+GOBLIN_TEST_VICTORIALOGS_URL=http://127.0.0.1:19428 make logging-test-ui
 ```
 
 This checks login, search, refresh, Settings access, CSP, logout, and an Azure-shaped

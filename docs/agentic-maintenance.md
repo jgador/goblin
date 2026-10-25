@@ -177,7 +177,7 @@ and regenerate its lock file:
 
 ```bash
 gh aw compile ci-policy documentation --no-check-update
-make test-ci test-maintenance test-task-runner typecheck-scripts
+make ci-test maintenance-test make-test scripts-typecheck
 ```
 
 The compiler may require approval for new restricted secret/action references.

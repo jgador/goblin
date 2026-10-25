@@ -39,7 +39,7 @@ When adopting a new protocol version, update the runtime pin and lockfile, then
 refresh the schemas with the local npm binary before regenerating:
 
 ```sh
-make codex ARGS="app-server generate-json-schema --out backend/schemas/codex"
+make codex-run ARGS="app-server generate-json-schema --out backend/schemas/codex"
 dotnet run --file backend/scripts/GenerateProtocol.cs
 ```
 

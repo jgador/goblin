@@ -60,7 +60,7 @@ before declaring the installation complete.
 
 ## Development and checks
 
-A standalone `make dev` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
+A standalone `make dev-start` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
 optionally points the backend at a trusted private Headlamp origin configured
 with `-base-url=/headlamp`. Kubernetes manifests set it automatically. Do not
 point it at an arbitrary third-party service.
@@ -77,7 +77,7 @@ kubectl port-forward -n goblin service/goblin-headlamp 14466:4466 --address 127.
 Then run:
 
 ```bash
-GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make test-headlamp
+GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make headlamp-test
 ```
 
 This uses isolated Goblin authentication and real Kubernetes reads, without saved

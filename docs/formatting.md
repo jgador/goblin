@@ -9,7 +9,7 @@ changes from earlier turns.
 | Changed files | Formatter |
 | --- | --- |
 | `.ts`, `.tsx`, `.mts`, `.cts` | Prettier for all repository TypeScript |
-| `.rs` | `make format-rust` for both Rust crates |
+| `.rs` | `make rust-format` for both Rust crates |
 | `.cs`, excluding generated protocol types and EF mappings | .NET whitespace and style passes for the backend solution |
 
 Changes confined to other files skip all formatters. Each selected formatter still
@@ -21,7 +21,7 @@ definition. The project must also be trusted. Formatter output goes to stderr;
 stdout remains JSON as required by the [OpenAI Docs for Stop hooks](https://learn.chatgpt.com/docs/hooks#stop).
 
 Install Node.js 24+, the .NET SDK from `global.json`, and the tools in the
-[Rust development guide](rust-development.md) using `make setup-rust`.
+[Rust development guide](rust-development.md) using `make rust-setup`.
 `rust-toolchain.toml` pins Rust, rustfmt, Clippy, and rust-src; `Cargo.lock` pins dependencies.
 Run `make install` to install the pinned Prettier and TypeScript dependencies.
 If Prettier is unavailable, the hook reports a skip when TypeScript files change.
@@ -33,15 +33,15 @@ processes started before Rust was installed.
 ```bash
 make format
 # Or select a language:
-make format-typescript
-make format-rust
-make format-backend
+make typescript-format
+make rust-format
+make backend-format
 ```
 
 Prettier formats TypeScript and respects `.gitignore`. Embedded-language formatting
 is disabled to preserve HTML/CSS/JavaScript strings in UI and test fixtures.
-`make format-rust` formats both Rust crates with Codex's
-`imports_granularity=Item` setting. `make format-rust-check` verifies
+`make rust-format` formats both Rust crates with Codex's
+`imports_granularity=Item` setting. `make rust-format-check` verifies
 the same rules without writing files.
 
 When C# files change, the hook runs `dotnet format whitespace` and `dotnet format

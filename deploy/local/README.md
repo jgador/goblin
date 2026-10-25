@@ -125,7 +125,7 @@ additional listener inside WSL, for example port 55432; see
 To enable or repair local access for an already configured database:
 
 ```bash
-make local-database
+make local-configure-database
 ```
 
 The endpoint runs as `goblin-local-postgres.socket`/`.service` under systemd and
@@ -162,7 +162,7 @@ PostgreSQL. `destroy --yes` is an alias for
 For a fresh local development installation, including password setup, run:
 
 ```bash
-time make dev-clean-slate
+time make dev-reset
 ```
 
 Stop direct development servers and browser tests first. This `Makefile.dev`
@@ -203,26 +203,26 @@ saved to `.goblin-secrets/owner-password` in this checkout (file mode `0600`,
 directory mode `0700`). Git ignores everything in that folder except the empty
 `.gitkeep`; Docker excludes the entire folder. The password is never prefilled.
 
-Both this installer and `make dev` reuse that verifier. The full installer passes
+Both this installer and `make dev-start` reuse that verifier. The full installer passes
 its path to the shared Azure bootstrap, which copies the verifier to its private
 installation directory and creates the same Kubernetes Secret and read-only
 container mount as Azure. Local bootstrap scripts contain no original password.
 Azure obtains its password from the deployment form instead of the local prompt.
 
-You can prepare the verifier separately with `make setup-password`.
+You can prepare the verifier separately with `make password-set`.
 For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD` through the process
 environment. It does not override an existing verifier. The installer can reuse
 its retained password verifier if the checkout's copy is missing.
-`make local-password` reports the verifier's location; the
+`make local-locate-password` reports the verifier's location; the
 original password cannot be displayed.
 
 To change the shared local password, run:
 
 ```bash
-make setup-password ARGS=--replace
+make password-set ARGS=--replace
 ```
 
-Restart `make dev` to load it. For a completed full installation, run
+Restart `make dev-start` to load it. For a completed full installation, run
 `make local-start` to update the Secret and restart its application
 pod. Finish an in-progress installation before changing its password.
 

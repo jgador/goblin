@@ -169,19 +169,19 @@ The root Rust workspace has two crates:
   and optional PostgreSQL tests. It reuses the CLI library.
 
 ```bash
-make build-native
-make test-rust
-make test-rust-doc
-make lint-rust
-make format-rust-check
+make rust-build
+make rust-test
+make rust-test-doc
+make rust-lint
+make rust-format-check
 make test
-make test-browser ARGS=tests/e2e/setup.spec.ts
+make browser-test ARGS=tests/e2e/setup.spec.ts
 ```
 
 Install the pinned helpers and configure your editor using the
 [Rust development guide](rust-development.md).
 
-`make dev DB_PROFILE=wsl` prepares the selected database profile and owner credentials,
+`make dev-start DB_PROFILE=wsl` prepares the selected database profile and owner credentials,
 then launches .NET through `cargo xtask dev --profile wsl`.
 Protocol/Kubernetes generators, EF scaffolding, and the .NET SQL migration engine
 remain authoritative. Production shell helpers find the installed CLI via
@@ -221,7 +221,7 @@ the same isolated build for its frozen release source;
 `package` alone does not prove an arbitrary supplied binary came from this checkout.
 
 Local packages are written to `.artifacts/goblinctl/`, outside the test-output
-directory that `make build-tools` cleans.
+directory that `make tools-build` cleans.
 
 The archive contains `goblinctl` and its license documents; setup assets are compiled into that binary.
 Archive order, timestamps, ownership, modes and compression are deterministic for

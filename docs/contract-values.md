@@ -32,7 +32,7 @@ Edit the owning C# enum or Rust `contract_values!` declaration, then run:
 ```bash
 make contracts-generate
 make contracts-check
-make test-contracts
+make contracts-test
 ```
 
 The small generator extracts explicit declarations into `frontend/src/api/values.ts`

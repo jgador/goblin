@@ -251,7 +251,7 @@ make local-start
 
 The default Windows browser address is `http://localhost:8788`. A new password is
 chosen in the terminal after the verifier is removed, unless the user deliberately
-supplies `GOBLIN_LOCAL_PASSWORD`. `make dev` launches only the direct application
+supplies `GOBLIN_LOCAL_PASSWORD`. `make dev-start` launches only the direct application
 on port 8787 and does **not** show installation progress. Windows browser site data
 is not cleared by WSL cleanup; suggest a private window or clearing only this
 localhost site's data if the user also wants a fresh browser session.

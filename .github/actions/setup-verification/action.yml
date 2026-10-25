@@ -35,4 +35,4 @@ runs:
     - name: Install locked development packages
       if: inputs.packages == 'true'
       shell: bash
-      run: make install-node
+      run: make node-install

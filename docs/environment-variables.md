@@ -138,7 +138,7 @@ current embedded asset changes require a newly built installer before release.
    into application and core APIs. Do not add environment access to Work rules.
 4. Update affected deployment templates and operator documentation together.
    Recheck explicit subprocess allowlists before forwarding any new value.
-5. Run `make test`, `make format-rust-check`, and Clippy. Review real PostgreSQL skips;
+5. Run `make test`, `make rust-format-check`, and Clippy. Review real PostgreSQL skips;
    configure the opt-in connections when persistence behavior needs verification.
 
 `tests/deployment/environment.test.ts` checks catalog metadata, matching shared

@@ -81,6 +81,13 @@ It includes `Makefile.dev` for local application, database, website, and Docker
 commands. Continue using `make <target>` from the repository root; included targets
 share the shell settings, workflow ordering, and argument forwarding. Each target's
 commands are defined in one file, and `make help` lists targets from both files.
+Targets use `<scope>-<action>[-<qualifier>]`, such as `backend-build`, `rust-test-doc`,
+and `secrets-scan-staged`. Repository-wide workflows keep bare names: `install`,
+`build`, `typecheck`, `check`, `test`, and `format`; `help` lists the commands.
+Both Makefiles group targets by scope using multiline comment banners. Use `reset`
+to return an environment to a fresh state, `clean` to remove outputs or caches,
+and `stop` to halt services.
+
 The root `package.json` has no task scripts or npm workspaces; it only pins
 non-frontend Node tooling (Playwright, Prettier, TypeScript, Node types) and the
 Codex runtime distribution. Its `package-lock.json` preserves the runtime and
@@ -88,13 +95,13 @@ tool pins. `frontend/package.json` and `frontend/package-lock.json` independentl
 own frontend dependencies and npm scripts. No backend or test tooling is added
 to the frontend package. `make install` installs both locked Node packages and
 fetches locked Rust dependencies; first install the Rust helpers with
-`make setup-rust` and load the Cargo environment as described below. The root
+`make rust-setup` and load the Cargo environment as described below. The root
 `tsconfig.json` compiles Node.js test tooling, while `frontend/tsconfig.json`
 compiles browser source independently. `global.json` stays at the root so the
 pinned .NET SDK applies to commands run from either the root or `backend/`.
 
 `website/` is an independent static site, with its own package manifest and
-lockfile. `make website-dev` installs its development tooling inside Docker;
+lockfile. `make website-start` installs its development tooling inside Docker;
 application install/build/test commands do not include it. The website's HTML,
 CSS, JavaScript, and assets are copied directly into a separate static image.
 See the [website guide](../website/README.md) for detached development and local
@@ -107,7 +114,7 @@ semantics, including when a test copies a script outside the repository. These
 scripts do not depend on compiled output or an installed TypeScript runner.
 `tsconfig.scripts.json` checks them without emitting files and permits only
 erasable TypeScript syntax. Native Node execution strips types without checking
-them; `make typecheck-scripts` performs that check as part of the full build
+them; `make scripts-typecheck` performs that check as part of the full build
 and `make typecheck`.
 
 The installer page in `deploy/azure/setup/app.js` remains JavaScript because the
@@ -120,7 +127,7 @@ Install GNU Make, Node.js 24+, and the .NET SDK selected by `global.json`. On
 Ubuntu/WSL, `build-essential` includes Make. Then run:
 
 ```bash
-make setup-rust
+make rust-setup
 source "$HOME/.cargo/env"
 make install
 ```
@@ -128,9 +135,9 @@ make install
 Use `make help` to list targets. Workflows are serialized even with `make -j`
 because cleaning compiled tools and copying frontend assets share build outputs.
 Pass tool options through `ARGS`, for example
-`make test-browser ARGS="tests/e2e/setup.spec.ts --headed"` or
+`make browser-test ARGS="tests/e2e/setup.spec.ts --headed"` or
 `make local-start ARGS="--http-port 8888"`. Rust selectors use `CARGO_ARGS`, for
-example `make test-rust CARGO_ARGS="-p goblinctl"`.
+example `make rust-test CARGO_ARGS="-p goblinctl"`.
 
 Frontend-only work continues inside its own package:
 
@@ -144,45 +151,45 @@ npm run typecheck
 
 | Command | Purpose |
 | --- | --- |
-| `make clean-artifacts` | Recursively delete everything in `.artifacts/` except its root `.gitkeep`, then print confirmation |
+| `make artifacts-clean` | Recursively delete everything in `.artifacts/` except its root `.gitkeep`, then print confirmation |
 | `make install` | Install both locked Node packages and fetch locked Rust dependencies |
-| `make setup-rust` | Install the pinned Rust development tools |
-| `make format-rust` | Format Rust using Codex conventions |
-| `make lint-rust` | Lint the Rust workspace |
-| `make test-rust` | Run Rust tests with nextest and then documentation tests |
-| `make test-ci` | Verify changed-file selection, Git comparisons, Actions reporting, and the required merge-result policy |
-| `make test-maintenance` | Verify owner-only maintenance, candidate routing, context bounds, and scoped validation without API calls |
+| `make rust-setup` | Install the pinned Rust development tools |
+| `make rust-format` | Format Rust using Codex conventions |
+| `make rust-lint` | Lint the Rust workspace |
+| `make rust-test` | Run Rust tests with nextest and then documentation tests |
+| `make ci-test` | Verify changed-file selection, Git comparisons, Actions reporting, and the required merge-result policy |
+| `make maintenance-test` | Verify owner-only maintenance, candidate routing, context bounds, and scoped validation without API calls |
 | `make check` | Run Rust formatting/lints, the full offline test suite, and type checks |
 | `make format` | Format TypeScript, Rust, and handwritten C# |
 | `make local-start` | Start the full local installation with existing safety checks |
 | `make local-status` | Report installation status without changing it |
 | `make local-reset ARGS=--yes` | Explicitly reset only the owned local installation |
-| `make dev-clean-slate` | Reset the owned WSL installation and known checkout runtime/test state, including the saved password |
+| `make dev-reset` | Reset the owned WSL installation and known checkout runtime/test state, including the saved password |
 | `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
-| `make dev DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
+| `make dev-start DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
 | `make docker-build` | Time the complete Goblin image build; pass extra Docker options through `ARGS` |
-| `make docker-images-clean` | Remove image tags whose repository name starts with `goblin`, including registry-qualified names |
-| `make docker-cache-clean` | Clear unused cache for the default Docker builder across all projects |
-| `make db-migrate DB_PROFILE=wsl` | Apply SQL migrations with the profile’s admin role |
-| `make db-scaffold DB_PROFILE=wsl` | Regenerate EF mappings with the profile’s app role |
-| `make test-postgres DB_PROFILE=wsl` | Explicitly run the .NET database integration tests |
-| `make setup-password` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
-| `make build-assets` | Build only the frontend |
-| `make website-dev` | Start the website in Docker detached, with live reload at localhost:5173 |
+| `make docker-clean-images` | Remove image tags whose repository name starts with `goblin`, including registry-qualified names |
+| `make docker-clean-cache` | Clear unused cache for the default Docker builder across all projects |
+| `make database-migrate DB_PROFILE=wsl` | Apply SQL migrations with the profile’s admin role |
+| `make database-scaffold DB_PROFILE=wsl` | Regenerate EF mappings with the profile’s app role |
+| `make database-test DB_PROFILE=wsl` | Explicitly run the .NET database integration tests |
+| `make password-set` | Choose and confirm a password; save only its verifier in `.goblin-secrets/` |
+| `make frontend-build` | Build only the frontend |
+| `make website-start` | Start the website in Docker detached, with live reload at localhost:5173 |
 | `make website-stop` | Stop the website development container |
 | `make website-status` / `make website-logs` | Inspect the website development container; logs accepts `ARGS=--follow` |
 | `make website-deploy` | Build the static website, import into existing local k3s, and await rollout |
 | `make website-preview` | Forward the k3s website to localhost:5174 while the terminal stays open |
-| `make website-load-test` | Measure the website container with one fresh browser visit/minute; defaults to ten visits plus a minute idle |
+| `make website-test-load` | Measure the website container with one fresh browser visit/minute; defaults to ten visits plus a minute idle |
 | `npm --prefix website/video run render` | Render the website promo video to `website/video/renders/` after `npm --prefix website/video ci` |
 | `npm --prefix website/video run render:logo` | Render the looping Goblin logo animation to `website/video/renders/` after `npm --prefix website/video ci` |
 | `npm --prefix frontend run build` | Run the frontend package build directly |
-| `make build-backend` | Build the .NET solution using any existing frontend output |
+| `make backend-build` | Build the .NET solution using any existing frontend output |
 | `make typecheck` | Check browser source, test tooling, and direct Node scripts; build .NET |
-| `make typecheck-scripts` | Check directly executed TypeScript scripts without building |
+| `make scripts-typecheck` | Check directly executed TypeScript scripts without building |
 | `make test` | Build, check generated contracts/protocols, and run Rust, .NET, frontend, HTTP, release, and offline deployment tests |
-| `make test-browser` | Build and run Playwright journeys |
-| `make test-codex` | Build and check the pinned Codex binary's local storage/transport with synthetic credentials; no authenticated model task |
+| `make browser-test` | Build and run Playwright journeys |
+| `make codex-test` | Build and check the pinned Codex binary's local storage/transport with synthetic credentials; no authenticated model task |
 | `make protocol-generate` | Regenerate C# models from the checked-in schemas |
 | `make protocol-check` | Verify that generated models match the schemas |
 | `make kubernetes-generate` | Regenerate selected Kubernetes and Agent Sandbox models |
@@ -233,9 +240,9 @@ their dependencies, with security and update channels kept.
 Keep the same builder and its cache for normal development. `--no-cache` forces
 build instructions to run again, but does **not** empty persistent cache mounts.
 Removing an image with `docker image rm goblin-platform:local` also retains the
-builder cache. `make docker-images-clean` removes tagged Goblin images with normal
+builder cache. `make docker-clean-images` removes tagged Goblin images with normal
 `docker image rm` behavior; references from containers can prevent removal.
-`make docker-cache-clean` prunes unused cache for the default builder across all
+`make docker-clean-cache` prunes unused cache for the default builder across all
 projects. Run it before the timed build to clear existing build cache; base images
 already loaded into Docker remain available.
 
@@ -314,11 +321,11 @@ only repeat the implementation.
 | Work core | `dotnet test backend/tests/Goblin.Core.Tests`; add boundary checks below when callers or integrations change. |
 | Other C# behavior | The affected project under `backend/tests/`; use `make test` when changes span application, transport, HTTP, or deployment contracts. Preserve existing protocol and transport coverage. |
 | Shared C#/Rust contract values | Generate and validate using [the contract guide](contract-values.md#cross-language-changes), including `make contracts-check`. |
-| Rust tooling | `make format-rust`, `make lint-rust CARGO_ARGS="-p <crate>"`, and `make test-rust CARGO_ARGS="-p <crate>"`. The last command includes documentation tests; review snapshots before accepting them. |
-| Browser code or UI behavior | `npm --prefix frontend run typecheck`, affected frontend tests, and relevant `make test-browser ARGS="tests/e2e/<journey>.spec.ts"` journeys when integrating the browser boundary. Inspect the changed interaction and visual result. |
-| Standalone website | `npm --prefix website run check`, then inspect the affected interactions and layouts with `make website-dev`. Check local container/deployment changes against the actual Docker or k3s runtime when available; these commands do not invoke the application or Azure installer. |
+| Rust tooling | `make rust-format`, `make rust-lint CARGO_ARGS="-p <crate>"`, and `make rust-test CARGO_ARGS="-p <crate>"`. The last command includes documentation tests; review snapshots before accepting them. |
+| Browser code or UI behavior | `npm --prefix frontend run typecheck`, affected frontend tests, and relevant `make browser-test ARGS="tests/e2e/<journey>.spec.ts"` journeys when integrating the browser boundary. Inspect the changed interaction and visual result. |
+| Standalone website | `npm --prefix website run check`, then inspect the affected interactions and layouts with `make website-start`. Check local container/deployment changes against the actual Docker or k3s runtime when available; these commands do not invoke the application or Azure installer. |
 | Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus real PostgreSQL checks with the explicit setup in [the database guide](database.md#application-configuration-and-verification). |
-| Codex transport or execution hosting | Existing transport/protocol tests and `make test-codex` where relevant; authenticated execution/isolation needs the real-runtime checks described in [execution hosting](execution-hosting.md#verification-limits). |
+| Codex transport or execution hosting | Existing transport/protocol tests and `make codex-test` where relevant; authenticated execution/isolation needs the real-runtime checks described in [execution hosting](execution-hosting.md#verification-limits). |
 | Installer or deployment contracts | Offline generation and deployment checks in `make test`; consult [formatting deployment assets](formatting.md#deployment-assets) for generated inputs. Azure installation stays manual. |
 
 `make test` is the broad offline suite with real PostgreSQL checks gated by explicit
@@ -334,7 +341,7 @@ ruleset maintenance.
 and calls **Website Release**, which serves the website and installation files at
 `goblinboard.com/install/` after production approval.
 
-Offline installer tests run as an ordinary user. `make build-tools` builds the
+Offline installer tests run as an ordinary user. `make tools-build` builds the
 test-only `host_fixture` Rust example, which calls host configuration with a
 private filesystem, mocked infrastructure commands, and a supplied port probe.
 It is excluded from the shipped CLI archive and application image. The production
@@ -342,7 +349,7 @@ It is excluded from the shipped CLI archive and application image. The productio
 PostgreSQL profile tests include a long configuration path to cover CI checkout
 layouts and SSH tunnel reuse, disconnect, and recovery.
 
-The ordinary HTTP/browser harness uses runtime fixtures. `make test-codex` uses the
+The ordinary HTTP/browser harness uses runtime fixtures. `make codex-test` uses the
 real pinned executable with an isolated home and synthetic credentials, without
 submitting a model task. Neither establishes authenticated execution coverage.
 PostgreSQL and database-backed browser journeys can skip without their test setup;

@@ -17,10 +17,10 @@ Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, the
 
 ```bash
 make install
-make dev ARGS=--without-database
+make dev-start ARGS=--without-database
 ```
 
-`make dev` builds the C# backend and TypeScript browser assets, provisions the
+`make dev-start` builds the C# backend and TypeScript browser assets, provisions the
 local password if needed, then starts the ASP.NET Core Minimal API host. After
 editing sources, restart it to rebuild. To build separately, run `make build`,
 then launch with `cargo xtask dev --without-database`.
@@ -51,7 +51,7 @@ credentials are not inherited. You can keep using your normal Codex installation
 
 ### Password setup and storage
 
-`make dev` and the full local installer share `.goblin-secrets/owner-password`.
+`make dev-start` and the full local installer share `.goblin-secrets/owner-password`.
 They use the shared Rust credentials implementation (PBKDF2-SHA256, 600,000 iterations, random salt).
 Only the verifier is written to disk, with file mode `0600` inside a `0700`
 directory. Git ignores the folder's contents except for `.gitkeep`, which keeps
@@ -60,11 +60,11 @@ the empty folder in the repository. Docker excludes the entire folder.
 To prepare the password before starting the application:
 
 ```bash
-make setup-password
-make dev ARGS=--without-database
+make password-set
+make dev-start ARGS=--without-database
 ```
 
-Use `make setup-password ARGS=--replace` to choose a new password, then restart
+Use `make password-set ARGS=--replace` to choose a new password, then restart
 Goblin to load it. For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD`
 through the process environment; it never replaces an existing verifier.
 The same verifier can be mounted into Docker. Azure creates its verifier during
@@ -93,7 +93,7 @@ Device-code login is currently beta; see [OpenAI's headless login instructions](
 1. Select **Continue with ChatGPT**. Open OpenAI's sign-in page, enter the
    displayed code, and complete sign-in. Goblin should show your account and
    **Verifying connection…**, then **Connected** after a successful background check.
-2. Stop and restart `make dev`, unlock Goblin, and confirm the connection
+2. Stop and restart `make dev-start`, unlock Goblin, and confirm the connection
    remains. No second ChatGPT login should be needed while the credentials remain valid.
 3. Select **Lock workspace** and unlock it again. This locks browser access without
    disconnecting Codex.
@@ -242,9 +242,9 @@ contain authentication details. Error messages give safe retry guidance.
 ```bash
 make typecheck
 make test
-make test-codex
+make codex-test
 make browser-install
-make test-browser
+make browser-test
 ```
 
 The test commands build first. `make test` uses the .NET generators for deterministic
