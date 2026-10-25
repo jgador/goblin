@@ -18,6 +18,7 @@
     ],
     "filenames": [
       "Makefile",
+      "Makefile.dev",
       "Dockerfile",
       "dependencies.toml",
       "dependencies.lock.json",

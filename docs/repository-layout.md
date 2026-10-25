@@ -31,6 +31,7 @@ tools/goblinctl/            Native operator CLI and shared installation code
 tools/xtask/               Developer and release tooling
 Cargo.toml                 Rust workspace; toolchain and dependencies are pinned
 Makefile                   Repository task runner for builds, checks, and local operations
+Makefile.dev               Included local development, database, website, and Docker commands
 .config/nextest.toml        Rust test-runner profiles
 .vscode/                   Rust/TOML editing and native debugging configuration
 frontend/
@@ -75,7 +76,11 @@ TypeScript catalogs, shared semantics, and contributor guidance.
 The [TypeScript refactoring review](typescript-refactoring.md) records the current
 browser boundaries, file inventory, and next implementation steps.
 
-The root `Makefile` coordinates builds, checks, tests, and local operations.
+The root `Makefile` coordinates shared builds, checks, tests, and release tooling.
+It includes `Makefile.dev` for local application, database, website, and Docker
+commands. Continue using `make <target>` from the repository root; included targets
+share the shell settings, workflow ordering, and argument forwarding. Each target's
+commands are defined in one file, and `make help` lists targets from both files.
 The root `package.json` has no task scripts or npm workspaces; it only pins
 non-frontend Node tooling (Playwright, Prettier, TypeScript, Node types) and the
 Codex runtime distribution. Its `package-lock.json` preserves the runtime and
@@ -154,6 +159,9 @@ npm run typecheck
 | `make local-reset ARGS=--yes` | Explicitly reset only the owned local installation |
 | `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
 | `make dev DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
+| `make docker-build` | Time the complete Goblin image build; pass extra Docker options through `ARGS` |
+| `make docker-images-clean` | Remove image tags whose repository name starts with `goblin`, including registry-qualified names |
+| `make docker-cache-clean` | Clear unused cache for the default Docker builder across all projects |
 | `make db-migrate DB_PROFILE=wsl` | Apply SQL migrations with the profile’s admin role |
 | `make db-scaffold DB_PROFILE=wsl` | Regenerate EF mappings with the profile’s app role |
 | `make test-postgres DB_PROFILE=wsl` | Explicitly run the .NET database integration tests |
@@ -190,11 +198,14 @@ dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
 Build and time the complete platform image from the repository root:
 
 ```bash
-time docker build --platform linux/amd64 --progress=plain -t goblin-platform:local .
+make docker-build
 ```
 
-The shell's `real` value includes the entire build and image export. BuildKit's
-individual step durations overlap: frontend compilation, web dependency restore,
+The target uses Bash's `time` for a `linux/amd64` build tagged
+`goblin-platform:local` and prints Docker's plain progress. Pass additional build
+options through `ARGS`, such as `make docker-build ARGS=--no-cache`. The shell's
+`real` value includes the entire build and image export. BuildKit's individual
+step durations overlap: frontend compilation, web dependency restore,
 database-tool restore/publish, native runtime downloads, and runtime package
 installation are independent branches. Each .NET restore has its own download
 cache so its lock does not serialize the other branch. After frontend assets and
@@ -221,8 +232,14 @@ their dependencies, with security and update channels kept.
 Keep the same builder and its cache for normal development. `--no-cache` forces
 build instructions to run again, but does **not** empty persistent cache mounts.
 Removing an image with `docker image rm goblin-platform:local` also retains the
-builder cache. The Dockerfile copies the complete `backend/src` directory before
-the web restore, preserving project paths and including new referenced production
+builder cache. `make docker-images-clean` removes tagged Goblin images with normal
+`docker image rm` behavior; references from containers can prevent removal.
+`make docker-cache-clean` prunes unused cache for the default builder across all
+projects. Run it before the timed build to clear existing build cache; base images
+already loaded into Docker remain available.
+
+The Dockerfile copies the complete `backend/src` directory before the web restore,
+preserving project paths and including new referenced production
 C# projects without additional per-project copy instructions. Backend source
 changes invalidate the web restore layer.
 

@@ -49,6 +49,7 @@ Cargo.lock
 rust-toolchain.toml
 clippy.toml
 Makefile
+Makefile.dev
 .config
 .vscode
 .venv

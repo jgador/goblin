@@ -15,6 +15,7 @@ import { loadPolicy } from "./ci.mts";
 import {
     authorized,
     boundedDiff,
+    ciRelevant,
     coverageProblems,
     documentCandidates,
     documentationTarget,
@@ -305,6 +306,12 @@ test("candidate routing finds direct references, subtree guides and affected com
             (c) => c.path === "docs/repository-layout.md",
         ),
     );
+    assert.ok(ciRelevant("Makefile.dev"));
+    assert.ok(
+        documentCandidates(["Makefile.dev"], docs).some(
+            (c) => c.path === "docs/repository-layout.md",
+        ),
+    );
     assert.deepEqual(
         documentCandidates(["unreferenced/Thing.cs"], docs).map((c) => c.path),
         ["docs/README.md"],
@@ -338,7 +345,8 @@ test("current runners cover registered projects, while adding an uncovered manif
 });
 test("preparation consumes complete push ranges, skips unrelated doc-only CI maintenance, and writes owner-approved context without API credentials", async () => {
     await fixture(async (directory) => {
-        await copyFile(join(root, "Makefile"), join(directory, "Makefile"));
+        for (const filename of ["Makefile", "Makefile.dev"])
+            await copyFile(join(root, filename), join(directory, filename));
         await mkdir(join(directory, "docs"));
         await writeFile(join(directory, "docs/README.md"), "# Documentation\n");
         const before = commit(directory);
@@ -472,7 +480,8 @@ test("documentation validation accepts scoped repairs and rejects source edits a
 });
 test("CI validation rejects weakened trigger and dependency coverage even when inventory matches", async () => {
     await fixture(async (directory) => {
-        await copyFile(join(root, "Makefile"), join(directory, "Makefile"));
+        for (const filename of ["Makefile", "Makefile.dev"])
+            await copyFile(join(root, filename), join(directory, filename));
         const baseline = await loadPolicy(directory);
         for (const rule of Object.values(baseline.groups))
             if (rule.projectManifests) rule.projectManifests = [];

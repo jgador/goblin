@@ -240,7 +240,7 @@ export function ciRelevant(file: string): boolean {
     const name = basename(file).toLowerCase();
     return (
         /\.(csproj|sln|slnx|props|targets|toml|lock|yaml|yml)$/.test(name) ||
-        /^(makefile|package\.json|package-lock\.json|global\.json|nuget\.config|rust-toolchain(?:\.toml)?|dependencies\.(?:toml|lock\.json)|tsconfig.*\.json|jsconfig.*\.json|go\.(?:mod|sum)|pyproject\.toml)$/.test(
+        /^(makefile(?:\.dev)?|package\.json|package-lock\.json|global\.json|nuget\.config|rust-toolchain(?:\.toml)?|dependencies\.(?:toml|lock\.json)|tsconfig.*\.json|jsconfig.*\.json|go\.(?:mod|sum)|pyproject\.toml)$/.test(
             name,
         ) ||
         [
@@ -313,7 +313,7 @@ export function documentCandidates(
                     "docs/github-actions.md",
                 ],
                 [
-                    /^(?:Makefile$|.*(?:package\.json|tsconfig.*\.json|\.csproj|\.slnx|Cargo\.toml)$)/,
+                    /^(?:Makefile(?:\.dev)?$|.*(?:package\.json|tsconfig.*\.json|\.csproj|\.slnx|Cargo\.toml)$)/,
                     "docs/repository-layout.md",
                 ],
                 [/^backend\/database\/|\.sql$/, "docs/database.md"],

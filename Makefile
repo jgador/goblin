@@ -6,22 +6,20 @@ SHELL := /bin/bash
 .NOTPARALLEL:
 export PATH := $(CURDIR)/node_modules/.bin:$(PATH)
 CARGO_ARGS ?= --workspace
-DB_PROFILE ?= wsl
 ARGS ?=
 RUST_MIN_STACK ?= 8388608
 
 .PHONY: help clean-artifacts install install-node install-rust setup-rust build build-assets \
-	build-tools build-backend build-native typecheck typecheck-scripts check dev start \
+	build-tools build-backend build-native typecheck typecheck-scripts check \
 	test test-backend test-js test-frontend test-rust test-rust-doc test-release test-ci test-maintenance \
 	test-contracts test-task-runner test-secrets test-codex test-headlamp test-browser browser-install \
 	test-logs-ui test-logging format format-typescript format-rust format-rust-check \
 	format-backend lint-rust fix-rust protocol-generate protocol-check \
 	kubernetes-generate kubernetes-check contracts-generate contracts-check \
 	deploy-generate dependencies-check dependencies-resolve secrets-setup secrets-scan \
-	secrets-staged secrets-history goblinctl local local-start local-status local-stop \
-	local-reset local-logs local-retry local-database local-password setup-password \
-	release-build release-check-installer release-local codex db-migrate db-scaffold test-postgres \
-	website-dev website-stop website-status website-logs website-deploy website-preview website-load-test
+	secrets-staged secrets-history release-build release-check-installer release-local
+
+include Makefile.dev
 
 # List targets and their purpose; pass tool flags with ARGS or CARGO_ARGS.
 help:
@@ -83,41 +81,6 @@ typecheck-scripts:
 
 # Run formatting checks, Rust lints, the full offline suite, and type checks.
 check: format-rust-check lint-rust test typecheck
-
-# Build the application, provision local credentials, and launch the .NET host.
-dev: build
-	cargo xtask dev --profile "$(DB_PROFILE)" $(ARGS)
-
-# Start the development host with the same build and credential setup as dev.
-start: dev
-
-# Start the standalone website in Docker, detached, with browser live reload.
-website-dev:
-	bash website/manage.sh dev $(ARGS)
-
-# Stop the website development container without affecting the application.
-website-stop:
-	bash website/manage.sh stop $(ARGS)
-
-# Show the website development container's status.
-website-status:
-	bash website/manage.sh status $(ARGS)
-
-# Read website development logs; use ARGS=--follow to stream them.
-website-logs:
-	bash website/manage.sh logs $(ARGS)
-
-# Build the static website, import it into local k3s, and wait for its rollout.
-website-deploy:
-	bash website/manage.sh deploy
-
-# Forward the k3s website to localhost:5174; keep this terminal open.
-website-preview:
-	bash website/manage.sh preview
-
-# Measure the k3s website container at one fresh browser visit per minute.
-website-load-test:
-	bash website/manage.sh load-test $(ARGS)
 
 # Preserve all pretest checks, builds, generators, and offline application tests.
 test: contracts-check test-contracts test-task-runner test-ci test-maintenance dependencies-check build deploy-generate test-rust test-release protocol-check kubernetes-check test-backend test-js
@@ -271,50 +234,6 @@ secrets-staged:
 secrets-history:
 	node scripts/check-secrets.mts history
 
-# Run the operator CLI from source with arguments supplied through ARGS.
-goblinctl:
-	cargo run --locked --package goblinctl -- $(ARGS)
-
-# Run a local installer command from source with arguments supplied through ARGS.
-local:
-	cargo run --locked -q -p goblinctl -- local $(ARGS)
-
-# Start or update the full local installation, preserving installer safety checks.
-local-start:
-	cargo run --locked -q -p goblinctl -- local start $(ARGS)
-
-# Report local installation status without starting or resetting it.
-local-status:
-	cargo run --locked -q -p goblinctl -- local status $(ARGS)
-
-# Stop the owned local installation using the existing operator CLI.
-local-stop:
-	cargo run --locked -q -p goblinctl -- local stop $(ARGS)
-
-# Reset the owned local installation; explicit ARGS=--yes remains required.
-local-reset:
-	cargo run --locked -q -p goblinctl -- local reset $(ARGS)
-
-# Read local installation logs; use ARGS=--follow to stream them.
-local-logs:
-	cargo run --locked -q -p goblinctl -- local logs $(ARGS)
-
-# Explicitly retry a failed local installation using the operator CLI.
-local-retry:
-	cargo run --locked -q -p goblinctl -- local retry $(ARGS)
-
-# Configure the local installation’s PostgreSQL host endpoint on port 5432.
-local-database:
-	cargo run --locked -q -p goblinctl -- local database $(ARGS)
-
-# Report the local password verifier location through the operator CLI.
-local-password:
-	cargo run --locked -q -p goblinctl -- local password $(ARGS)
-
-# Choose and confirm a local password; use ARGS=--replace to replace its verifier.
-setup-password:
-	cargo run --locked -q -p goblinctl -- password set $(ARGS)
-
 # Build the release CLI through the shared fingerprinted build recipe.
 release-build:
 	bash scripts/build-goblinctl-release.sh target
@@ -326,19 +245,3 @@ release-check-installer:
 # Build and package the Linux musl operator CLI for local review.
 release-local: release-build
 	cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl
-
-# Invoke the locked Codex npm runtime directly without downloading another version.
-codex:
-	node node_modules/@openai/codex/bin/codex.js $(ARGS)
-
-# Apply SQL migrations using the selected PostgreSQL profile.
-db-migrate:
-	cargo xtask database-migrate --profile "$(DB_PROFILE)"
-
-# Regenerate EF mappings using the selected PostgreSQL profile.
-db-scaffold:
-	cargo xtask database-scaffold --profile "$(DB_PROFILE)"
-
-# Run opt-in database integration tests on a development installation.
-test-postgres:
-	cargo xtask test-postgres --profile "$(DB_PROFILE)"

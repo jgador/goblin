@@ -1,0 +1,117 @@
+# Included by Makefile; shared shell and tool settings live there.
+DB_PROFILE ?= wsl
+
+.PHONY: dev start docker-build docker-images-clean docker-cache-clean \
+	website-dev website-stop website-status website-logs website-deploy website-preview website-load-test \
+	goblinctl local local-start local-status local-stop local-reset local-logs local-retry \
+	local-database local-password setup-password codex db-migrate db-scaffold test-postgres
+
+# Build the application, provision local credentials, and launch the .NET host.
+dev: build
+	cargo xtask dev --profile "$(DB_PROFILE)" $(ARGS)
+
+# Start the development host with the same build and credential setup as dev.
+start: dev
+
+# Time the complete Goblin image build; pass extra Docker flags with ARGS.
+docker-build:
+	time docker build --platform linux/amd64 --progress=plain \
+		-t goblin-platform:local $(ARGS) .
+
+# Remove Goblin image tags, including registry-qualified names.
+docker-images-clean:
+	docker image ls --format '{{.Repository}}:{{.Tag}}' \
+		| awk -F/ '$$NF ~ /^goblin[^:]*:/ { print }' \
+		| xargs -r docker image rm
+
+# Clear unused cache for the default Docker builder across all projects.
+docker-cache-clean:
+	docker builder prune --all --force
+
+# Start the standalone website in Docker, detached, with browser live reload.
+website-dev:
+	bash website/manage.sh dev $(ARGS)
+
+# Stop the website development container without affecting the application.
+website-stop:
+	bash website/manage.sh stop $(ARGS)
+
+# Show the website development container's status.
+website-status:
+	bash website/manage.sh status $(ARGS)
+
+# Read website development logs; use ARGS=--follow to stream them.
+website-logs:
+	bash website/manage.sh logs $(ARGS)
+
+# Build the static website, import it into local k3s, and wait for its rollout.
+website-deploy:
+	bash website/manage.sh deploy
+
+# Forward the k3s website to localhost:5174; keep this terminal open.
+website-preview:
+	bash website/manage.sh preview
+
+# Measure the k3s website container at one fresh browser visit per minute.
+website-load-test:
+	bash website/manage.sh load-test $(ARGS)
+
+# Run the operator CLI from source with arguments supplied through ARGS.
+goblinctl:
+	cargo run --locked --package goblinctl -- $(ARGS)
+
+# Run a local installer command from source with arguments supplied through ARGS.
+local:
+	cargo run --locked -q -p goblinctl -- local $(ARGS)
+
+# Start or update the full local installation, preserving installer safety checks.
+local-start:
+	cargo run --locked -q -p goblinctl -- local start $(ARGS)
+
+# Report local installation status without starting or resetting it.
+local-status:
+	cargo run --locked -q -p goblinctl -- local status $(ARGS)
+
+# Stop the owned local installation using the existing operator CLI.
+local-stop:
+	cargo run --locked -q -p goblinctl -- local stop $(ARGS)
+
+# Reset the owned local installation; explicit ARGS=--yes remains required.
+local-reset:
+	cargo run --locked -q -p goblinctl -- local reset $(ARGS)
+
+# Read local installation logs; use ARGS=--follow to stream them.
+local-logs:
+	cargo run --locked -q -p goblinctl -- local logs $(ARGS)
+
+# Explicitly retry a failed local installation using the operator CLI.
+local-retry:
+	cargo run --locked -q -p goblinctl -- local retry $(ARGS)
+
+# Configure the local installation’s PostgreSQL host endpoint on port 5432.
+local-database:
+	cargo run --locked -q -p goblinctl -- local database $(ARGS)
+
+# Report the local password verifier location through the operator CLI.
+local-password:
+	cargo run --locked -q -p goblinctl -- local password $(ARGS)
+
+# Choose and confirm a local password; use ARGS=--replace to replace its verifier.
+setup-password:
+	cargo run --locked -q -p goblinctl -- password set $(ARGS)
+
+# Invoke the locked Codex npm runtime directly without downloading another version.
+codex:
+	node node_modules/@openai/codex/bin/codex.js $(ARGS)
+
+# Apply SQL migrations using the selected PostgreSQL profile.
+db-migrate:
+	cargo xtask database-migrate --profile "$(DB_PROFILE)"
+
+# Regenerate EF mappings using the selected PostgreSQL profile.
+db-scaffold:
+	cargo xtask database-scaffold --profile "$(DB_PROFILE)"
+
+# Run opt-in database integration tests on a development installation.
+test-postgres:
+	cargo xtask test-postgres --profile "$(DB_PROFILE)"

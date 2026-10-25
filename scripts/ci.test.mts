@@ -153,6 +153,7 @@ test("registered manifests select their language and a new project cannot silent
 test("shared and unclassified files conservatively select every existing check", () => {
     for (const file of [
         "Makefile",
+        "Makefile.dev",
         ".github/workflows/ci.yml",
         "data/config.json",
         "data/config.toml",
