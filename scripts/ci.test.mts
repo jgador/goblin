@@ -153,6 +153,7 @@ test("registered manifests select their language and a new project cannot silent
 test("shared and unclassified files conservatively select every existing check", () => {
     for (const file of [
         "Makefile",
+        "Makefile.dev",
         ".github/workflows/ci.yml",
         "data/config.json",
         "data/config.toml",
@@ -571,4 +572,55 @@ test("workflow contains every configured job, condition, direct reporting depend
     assert.ok(
         source.includes("CI_JOB_RESULTS: " + "$" + "{{ toJSON(needs) }}"),
     );
+});
+
+test("CI and release use the shared SDK setup, which rejects corrupt downloads before extraction", async () => {
+    for (const file of [
+        ".github/actions/setup-verification/action.yml",
+        ".github/workflows/platform-release.yml",
+    ]) {
+        const source = await readFile(join(root, file), "utf8");
+        assert.ok(source.includes("uses: ./.github/actions/setup-dotnet"));
+        assert.ok(!source.includes("uses: actions/setup-dotnet@"));
+    }
+    const action = await readFile(
+        join(root, ".github/actions/setup-dotnet/action.yml"),
+        "utf8",
+    );
+    const script = action
+        .split("      run: |\n")[1]!
+        .split("\n")
+        .map((line) => line.replace(/^ {8}/, ""))
+        .join("\n");
+    await fixture(async (directory) => {
+        const bin = join(directory, "bin");
+        await mkdir(bin);
+        await writeFile(
+            join(bin, "curl"),
+            '#!/bin/sh\nfor output; do :; done\nprintf "corrupt SDK archive" > "$output"\n',
+            { mode: 0o755 },
+        );
+        await writeFile(join(bin, "tar"), "#!/bin/sh\ntouch extracted\n", {
+            mode: 0o755,
+        });
+        const pathFile = join(directory, "path"),
+            envFile = join(directory, "env");
+        await writeFile(pathFile, "");
+        await writeFile(envFile, "");
+        const result = spawnSync("/bin/bash", ["-c", script], {
+            cwd: directory,
+            encoding: "utf8",
+            env: {
+                [Env.PATH.name]: `${bin}:/usr/bin:/bin`,
+                [Env.GITHUB_PATH.name]: pathFile,
+                [Env.GITHUB_ENV.name]: envFile,
+            },
+        });
+        assert.ifError(result.error);
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /checksum did NOT match/);
+        await assert.rejects(readFile(join(directory, "extracted")));
+        assert.equal(await readFile(pathFile, "utf8"), "");
+        assert.equal(await readFile(envFile, "utf8"), "");
+    });
 });

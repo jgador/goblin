@@ -93,12 +93,40 @@
                     </div>
                 </div>
                 <p id="connection" class="connection" role="status"></p>
-                <div id="recovery" class="recovery" role="alert" hidden>
-                    <strong>Your progress is saved.</strong>
-                    <p>
-                        Review the installation log for details. Your
-                        administrator can retry from the server terminal or
-                        Azure Run Command.
+                <div id="recovery" class="recovery" hidden>
+                    <div role="alert">
+                        <strong>Your progress is saved.</strong>
+                        <p id="recovery-guidance">
+                            Review the installation log for details, then retry
+                            with your Goblin password. Completed downloads and
+                            finished tasks are reused.
+                        </p>
+                    </div>
+                    <form id="retry-form" class="retry-form" novalidate hidden>
+                        <label for="retry-password">Goblin password</label>
+                        <div class="retry-controls">
+                            <input
+                                id="retry-password"
+                                name="password"
+                                type="password"
+                                autocomplete="current-password"
+                                maxlength="128"
+                                required
+                            />
+                            <button id="retry-button" type="submit">
+                                Retry installation
+                            </button>
+                        </div>
+                        <p
+                            id="retry-message"
+                            class="retry-message"
+                            role="status"
+                            aria-live="polite"
+                        ></p>
+                    </form>
+                    <p class="recovery-alternative">
+                        You can also run
+                        <code>sudo goblinctl install retry</code> on the server.
                     </p>
                 </div>
                 <noscript

@@ -41,6 +41,7 @@ internal static class WebServices
             ? new GitHubConnectionService(services.GetRequiredService<IGitHubConnection>(), services.GetRequiredService<GitHubStore>())
             : new GitHubConnectionService(services.GetRequiredService<IGitHubConnection>()));
         if (options.EnableWork) ConfigureWork(builder, workspace, options, runtimeOptions, configuration);
+        ChatGptMcp.Configure(builder.Services, options);
         if (options.EnableWork)
         {
             builder.Services.AddSingleton<SlackApi>();

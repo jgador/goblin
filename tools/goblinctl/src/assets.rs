@@ -55,6 +55,14 @@ pub const LICENSING: &[(&str, &[u8])] = &[
 ];
 pub const SETUP: &[(&str, &[u8])] = &[
     (
+        "nginx.sh",
+        include_bytes!("../../../deploy/azure/setup/nginx.sh"),
+    ),
+    (
+        "https.sh",
+        include_bytes!("../../../deploy/azure/setup/https.sh"),
+    ),
+    (
         "installer.sh",
         include_bytes!("../../../deploy/azure/setup/installer.sh"),
     ),
@@ -69,6 +77,14 @@ pub const SETUP: &[(&str, &[u8])] = &[
     (
         "goblin-setup.service",
         include_bytes!("../../../deploy/azure/setup/goblin-setup.service"),
+    ),
+    (
+        "goblin-setup-control.socket",
+        include_bytes!("../../../deploy/azure/setup/goblin-setup-control.socket"),
+    ),
+    (
+        "goblin-setup-control@.service",
+        include_bytes!("../../../deploy/azure/setup/goblin-setup-control@.service"),
     ),
     (
         "goblin-installer.service",

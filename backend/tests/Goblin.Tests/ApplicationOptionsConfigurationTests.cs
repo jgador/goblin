@@ -20,6 +20,7 @@ public sealed class ApplicationOptionsConfigurationTests
         Assert.False(options.AllowInsecureHttp);
         Assert.Equal("http://127.0.0.1:8787", options.ListenUrl);
         Assert.True(options.EnableWork);
+        Assert.False(options.EnableChatGpt);
         Assert.Null(options.HeadlampUrl);
         Assert.Null(options.VictoriaLogsUrl);
         Assert.Equal("codex", options.ConfigureCodex!(Codex("codex")).Command);
@@ -37,6 +38,7 @@ public sealed class ApplicationOptionsConfigurationTests
             [EnvironmentVariables.GoblinPasswordHashFile] = "/password",
             [EnvironmentVariables.GoblinAllowInsecureHttp] = "TRUE",
             [EnvironmentVariables.GoblinWorkEnabled] = "FALSE",
+            [EnvironmentVariables.GoblinChatGptEnabled] = "TRUE",
             [EnvironmentVariables.GoblinHeadlampUrl] = "https://headlamp.example",
             [EnvironmentVariables.GoblinVictorialogsUrl] = "https://logs.example",
             [EnvironmentVariables.GoblinCodexCommand] = "/usr/local/bin/codex"
@@ -50,6 +52,7 @@ public sealed class ApplicationOptionsConfigurationTests
         Assert.True(options.AllowInsecureHttp);
         Assert.Equal("http://0.0.0.0:9000", options.ListenUrl);
         Assert.False(options.EnableWork);
+        Assert.True(options.EnableChatGpt);
         Assert.Equal("https://headlamp.example", options.HeadlampUrl);
         Assert.Equal("https://logs.example", options.VictoriaLogsUrl);
         Assert.Equal("/usr/local/bin/codex", options.ConfigureCodex!(Codex("codex")).Command);
@@ -66,6 +69,17 @@ public sealed class ApplicationOptionsConfigurationTests
                 name == EnvironmentVariables.GoblinPort ? port : null));
 
         Assert.Equal("GOBLIN_PORT must be a valid port.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1")]
+    [InlineData("invalid")]
+    public void InvalidChatGptFlagIsRejected(string value)
+    {
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            ApplicationOptionsConfiguration.Read(name => name == EnvironmentVariables.GoblinChatGptEnabled ? value : null));
+        Assert.Equal("GOBLIN_CHATGPT_ENABLED must be true or false.", exception.Message);
     }
 
     private static CodexOptions Codex(string command) => new()

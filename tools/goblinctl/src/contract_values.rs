@@ -24,8 +24,8 @@ macro_rules! contract_values {
 
 contract_values!(SetupAction {
     Init => "init", Begin => "begin", Start => "start", Detail => "detail",
-    PublicUrl => "public-url", Complete => "complete", FailStep => "fail-step",
-    Handoff => "handoff", Failed => "failed", Ready => "ready"
+    Progress => "progress", PublicUrl => "public-url", Complete => "complete",
+    FailStep => "fail-step", Handoff => "handoff", Failed => "failed", Ready => "ready"
 });
 contract_values!(SetupStatus {
     Waiting => "waiting", Running => "running", Failed => "failed", Ready => "ready"
@@ -37,9 +37,9 @@ contract_values!(SetupStepStatus {
     Waiting => "waiting", Running => "running", Complete => "complete", Failed => "failed"
 });
 contract_values!(SetupStep {
-    Prepare => "prepare", K3s => "k3s", CertManager => "cert-manager", Sandbox => "sandbox",
+    Prepare => "prepare", K3s => "k3s", Nginx => "nginx", CertManager => "cert-manager", Sandbox => "sandbox",
     Image => "image", Prefetch => "prefetch", Database => "database", Import => "import",
-    Migrate => "migrate", Deploy => "deploy", Verify => "verify", Activate => "activate"
+    Migrate => "migrate", Deploy => "deploy", Verify => "verify", Https => "https", Activate => "activate"
 });
 
 impl SetupStep {
@@ -47,6 +47,7 @@ impl SetupStep {
         match self {
             Self::Prepare => "Prepare installation",
             Self::K3s => "Install Kubernetes",
+            Self::Nginx => "Install NGINX ingress",
             Self::CertManager => "Install certificate manager",
             Self::Sandbox => "Install Agent Sandbox",
             Self::Image => "Build Goblin",
@@ -56,6 +57,7 @@ impl SetupStep {
             Self::Migrate => "Apply database migrations",
             Self::Deploy => "Deploy Goblin",
             Self::Verify => "Check application readiness",
+            Self::Https => "Configure HTTPS",
             Self::Activate => "Open Goblin",
         }
     }

@@ -16,15 +16,24 @@ import { test } from "node:test";
 const root = new URL("../", import.meta.url);
 const artifacts = new URL(".artifacts/make-workflows/", root);
 
-async function workflow(goals: string[], fail = "") {
+async function copyMakefiles(directory: string) {
+    await Promise.all(
+        ["Makefile", "Makefile.dev"].map((filename) =>
+            copyFile(new URL(filename, root), join(directory, filename)),
+        ),
+    );
+}
+
+async function workflow(goals: string[], fail = "", imageTags: string[] = []) {
     await mkdir(artifacts, { recursive: true });
     const directory = await mkdtemp(join(artifacts.pathname, "fixture-"));
     try {
-        await copyFile(new URL("Makefile", root), join(directory, "Makefile"));
+        await copyMakefiles(directory);
         const bin = join(directory, "node_modules/.bin");
         await mkdir(bin, { recursive: true });
         const script = join(bin, "tool.mjs");
         const log = join(directory, "commands.jsonl");
+        await writeFile(log, "");
         await writeFile(
             script,
             `#!${process.execPath}
@@ -33,6 +42,8 @@ import { basename } from "node:path";
 const command = [basename(process.argv[1]), ...process.argv.slice(2)];
 appendFileSync(${JSON.stringify(log)}, JSON.stringify({ command, stack: process.env.RUST_MIN_STACK, profile: process.env.NEXTEST_PROFILE }) + "\\n");
 if (command.join(" ") === ${JSON.stringify(fail)}) process.exit(17);
+if (command.slice(0, 3).join(" ") === "docker image ls")
+    for (const tag of ${JSON.stringify(imageTags)}) console.log(tag);
 `,
             { mode: 0o755 },
         );
@@ -44,6 +55,8 @@ if (command.join(" ") === ${JSON.stringify(fail)}) process.exit(17);
             "dotnet",
             "rustup",
             "playwright",
+            "docker",
+            "bash",
         ])
             await symlink(basename(script), join(bin, name));
         const result = spawnSync(
@@ -59,17 +72,15 @@ if (command.join(" ") === ${JSON.stringify(fail)}) process.exit(17);
             },
         );
         assert.ifError(result.error);
-        const entries = (await readFile(log, "utf8"))
-            .trim()
-            .split("\n")
-            .map(
-                (line) =>
-                    JSON.parse(line) as {
-                        command: string[];
-                        stack?: string;
-                        profile?: string;
-                    },
-            );
+        const contents = (await readFile(log, "utf8")).trim();
+        const entries = (contents ? contents.split("\n") : []).map(
+            (line) =>
+                JSON.parse(line) as {
+                    command: string[];
+                    stack?: string;
+                    profile?: string;
+                },
+        );
         return {
             result,
             entries,
@@ -80,11 +91,11 @@ if (command.join(" ") === ${JSON.stringify(fail)}) process.exit(17);
     }
 }
 
-test("clean-artifacts recursively removes output while preserving the root marker and symlink targets", async () => {
+test("artifacts-clean recursively removes output while preserving the root marker and symlink targets", async () => {
     await mkdir(artifacts, { recursive: true });
     const directory = await mkdtemp(join(artifacts.pathname, "cleanup-"));
     try {
-        await copyFile(new URL("Makefile", root), join(directory, "Makefile"));
+        await copyMakefiles(directory);
         const output = join(directory, ".artifacts");
         const nested = join(output, "nested directory", "child");
         await mkdir(nested, { recursive: true });
@@ -96,11 +107,11 @@ test("clean-artifacts recursively removes output while preserving the root marke
         await mkdir(unrelated);
         await writeFile(join(unrelated, "keep.txt"), "keep unrelated file\n");
         await symlink(unrelated, join(output, "linked-directory"));
-        await writeFile(join(directory, "clean-artifacts"), "target name\n");
+        await writeFile(join(directory, "artifacts-clean"), "target name\n");
 
         const result = spawnSync(
             "make",
-            ["--no-print-directory", "clean-artifacts"],
+            ["--no-print-directory", "artifacts-clean"],
             {
                 cwd: directory,
                 encoding: "utf8",
@@ -170,6 +181,34 @@ test("frontend build failure stops later build and test stages", async () => {
     assert.ok(!commands.includes("cargo xtask azure"));
 });
 
+test("CI verification Make commands resolve their targets and prerequisites", async () => {
+    const policy = JSON.parse(
+        await readFile(new URL("config/ci-verification.json", root), "utf8"),
+    ) as { groups: Record<string, { commands: string[] }> };
+    for (const [group, rule] of Object.entries(policy.groups)) {
+        for (const command of rule.commands.filter((value) =>
+            value.startsWith("make "),
+        )) {
+            const invocation = command.match(
+                /^make ([a-z-]+(?: [a-z-]+)*)(?: ARGS="([^"]*)")?$/,
+            );
+            assert.ok(invocation, `${group}: cannot parse ${command}`);
+            const goals = invocation[1]!.split(" ");
+            if (invocation[2]) goals.push(`ARGS=${invocation[2]}`);
+            const { result, commands } = await workflow(goals);
+            assert.equal(
+                result.status,
+                0,
+                `${group}: ${command}\n${result.stderr}`,
+            );
+            assert.ok(
+                commands.length > 0,
+                `${group}: ${command} must execute tools`,
+            );
+        }
+    }
+});
+
 test("install keeps packages separate and local reset requires explicit consent flags", async () => {
     const installed = await workflow(["install"]);
     assert.equal(installed.result.status, 0, installed.result.stderr);
@@ -189,7 +228,7 @@ test("install keeps packages separate and local reset requires explicit consent 
         "cargo run --locked -q -p goblinctl -- local reset --yes",
     ]);
     const selected = await workflow([
-        "test-rust",
+        "rust-test",
         "CARGO_ARGS=-p goblinctl",
         "ARGS=--filter-expr 'test(password)'",
     ]);
@@ -206,10 +245,10 @@ test("install keeps packages separate and local reset requires explicit consent 
 
 test("database workflows forward the chosen profile without changing Cargo selectors", async () => {
     for (const [target, task] of [
-        ["dev", "dev"],
-        ["db-migrate", "database-migrate"],
-        ["db-scaffold", "database-scaffold"],
-        ["test-postgres", "test-postgres"],
+        ["dev-start", "dev"],
+        ["database-migrate", "database-migrate"],
+        ["database-scaffold", "database-scaffold"],
+        ["database-test", "test-postgres"],
     ]) {
         const { result, commands } = await workflow([
             target!,
@@ -220,7 +259,79 @@ test("database workflows forward the chosen profile without changing Cargo selec
             commands.at(-1),
             `cargo xtask ${task} --profile azure-dev`,
         );
-        if (target === "dev")
+        if (target === "dev-start")
             assert.ok(commands.includes("cargo build --locked --workspace"));
     }
+});
+
+test("the default goal lists shared and included development targets without running tools", async () => {
+    const { result, commands } = await workflow([]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(commands, []);
+    const targets = result.stdout
+        .trim()
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/)[0]);
+    for (const target of [
+        "build:",
+        "dev-start:",
+        "local-start:",
+        "docker-build:",
+        "docker-clean-images:",
+        "docker-clean-cache:",
+    ])
+        assert.ok(targets.includes(target));
+    assert.equal(new Set(targets).size, targets.length);
+    assert.doesNotMatch(result.stderr, /overriding recipe/);
+});
+
+test("Docker builds report elapsed time, forward flags, and propagate failures", async () => {
+    const built = await workflow(["docker-build", "ARGS=--no-cache"]);
+    assert.equal(built.result.status, 0, built.result.stderr);
+    assert.deepEqual(built.commands, [
+        "docker build --platform linux/amd64 --progress=plain -t goblin-platform:local --no-cache .",
+    ]);
+    assert.match(built.result.stderr, /real\s+\d+m[\d.]+s/);
+    const failed = await workflow(
+        ["docker-build"],
+        "docker build --platform linux/amd64 --progress=plain -t goblin-platform:local .",
+    );
+    assert.notEqual(failed.result.status, 0);
+});
+
+test("Docker image cleanup removes only Goblin repository tags across registries", async () => {
+    const goblinTags = [
+        "goblin-platform:local",
+        "goblin-platform:benchmark",
+        "localhost/goblin-platform:abc123",
+        "registry.example.invalid/team/goblin-website:local",
+    ];
+    const { result, commands } = await workflow(["docker-clean-images"], "", [
+        ...goblinTags,
+        "redis:latest",
+        "goblin-team/other-app:local",
+        "other-goblin-app:local",
+        "<none>:<none>",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(commands, [
+        "docker image ls --format {{.Repository}}:{{.Tag}}",
+        `docker image rm ${goblinTags.join(" ")}`,
+    ]);
+});
+
+test("Docker image cleanup handles no matches and rejects image-list failures", async () => {
+    const listed = "docker image ls --format {{.Repository}}:{{.Tag}}";
+    const empty = await workflow(["docker-clean-images"], "", ["redis:latest"]);
+    assert.equal(empty.result.status, 0, empty.result.stderr);
+    assert.deepEqual(empty.commands, [listed]);
+    const failed = await workflow(["docker-clean-images"], listed);
+    assert.notEqual(failed.result.status, 0);
+    assert.deepEqual(failed.commands, [listed]);
+});
+
+test("Docker cache cleanup explicitly prunes all unused default-builder cache", async () => {
+    const { result, commands } = await workflow(["docker-clean-cache"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(commands, ["docker builder prune --all --force"]);
 });

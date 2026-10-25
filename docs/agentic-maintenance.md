@@ -4,10 +4,10 @@ Two [GitHub Agentic Workflows](https://github.github.com/gh-aw/) use Codex with 
 repository's `OPENAI_API_KEY` secret to propose maintenance changes. They do not
 replace ordinary CI or its required `test_results` check.
 
-| Workflow | Source | Allowed changes |
-| --- | --- | --- |
-| CI Maintenance | [ci-policy.md](../.github/workflows/ci-policy.md) | `config/ci-verification.json` only |
-| Docs Maintenance | [documentation.md](../.github/workflows/documentation.md) | Markdown guides under `docs/` and project `README.md` files |
+| Workflow | Source | Triggers | Allowed changes |
+| --- | --- | --- | --- |
+| CI Maintenance | [ci-policy.md](../.github/workflows/ci-policy.md) | Branch pushes and manual dispatch | `config/ci-verification.json` only |
+| Docs Maintenance | [documentation.md](../.github/workflows/documentation.md) | Pull requests opened, updated with commits, or reopened; manual dispatch | Markdown guides under `docs/` and project `README.md` files |
 
 The corresponding `.lock.yml` files are generated executable workflows. Keep the
 sources and generated files together. Compilation uses gh-aw `v0.92.0`; its
@@ -16,25 +16,32 @@ reviewed setup-action pin lives in [actions-lock.json](../.github/aw/actions-loc
 ## Owner-only execution
 
 Only `jgador` can start inference or publish maintenance outputs in `jgador/goblin`.
-The workflows accept branch pushes and manual dispatches. The original
+Docs Maintenance has no push trigger. Start it manually from **Actions → Docs
+Maintenance → Run workflow**, or open, update, or reopen a pull request. PR runs
+require a source branch in this repository; fork PRs are excluded. CI Maintenance
+continues to accept branch pushes and manual dispatches. The original
 `github.actor` and `github.triggering_actor` must both be `jgador`; another user's
 rerun of an owner-created run cannot start the agent, detector, or publication
-jobs. Contributors, bots, forks, PR events, comments, schedules, and CI completion
+jobs. Contributors, bots, forks, comments, schedules, and CI completion
 events do not invoke these agents. A contributor's push may produce a skipped
 Actions entry, but it does not use the OpenAI key. A change merged or pushed by the
 owner can be reviewed even when its commits were originally authored by someone
 else: authorization applies to the GitHub event actor.
 
-Branches beginning `gh-aw/` are excluded to prevent maintenance PRs from invoking
-maintenance again. Ordinary CI still applies to their changes. Runs for the same
-workflow and branch are serialized with GitHub's maximum pending queue, so a new
-push does not replace the prior pending change review. Budget guardrails can
+Branches beginning `gh-aw/` are excluded, including PR source branches and manual
+selections, to prevent maintenance from invoking itself. Ordinary CI still applies
+to their changes. Runs for the same workflow and ref are serialized with GitHub's
+maximum pending queue, so a new run does not replace the prior pending review. Budget guardrails can
 still skip runs; use a manual snapshot review when catching up.
 
 The preparation job checks authorization again in code and has no OpenAI secret.
-It reads the complete push range, discovers projects, selects candidate docs, and
-prepares a bounded context packet. Manual runs inspect the selected tracked
-snapshot; they can be more expensive because they do not have a push delta.
+CI preparation reads the complete push range. PR preparation checks out the exact
+source commit and compares it with the merge base of the PR's base and head.
+This excludes unrelated changes made only on the base branch. The packet retains
+only the PR action, source repository, and branch needed to recheck snapshot
+authorization; it does not include PR titles or bodies. Preparation discovers
+projects, selects candidate docs, and builds bounded context. Manual runs inspect
+the selected tracked snapshot; they can be more expensive without a change delta.
 
 ## CI policy upkeep
 
@@ -79,7 +86,7 @@ The main agent uses `openai/gpt-6.1-sol` with medium reasoning effort, a maximum
 12 turns, an eight-minute agent-step timeout, and 40 AI Credits. gh-aw's separate
 output security review is retained with 10 AI Credits and blocks publication on
 failure. Together these budgets target the chosen **US$0.50 per workflow run**;
-both workflows running after the same push can target US$1.00 combined. Each
+both workflows reviewing the same change can target US$1.00 combined. Each
 workflow also has a 100-credit rolling daily guardrail. Manual dispatches can
 bypass gh-aw's daily guardrail; their per-run budgets still apply. Medium reasoning
 can consume more tokens, so the existing budget may end a review earlier.
@@ -152,8 +159,9 @@ Run CI on the proposed branch before merging or add a deliberately scoped CI
 trigger credential separately. An OpenAI API key does not grant GitHub write or
 workflow permissions.
 
-Draft PRs explicitly set `create-pull-request.base-branch` to `github.ref_name`,
-the branch that triggered maintenance. This keeps feature-branch history out of
+Draft PRs explicitly set `create-pull-request.base-branch` to the branch being
+reviewed: `github.head_ref` for documentation PR runs, otherwise `github.ref_name`.
+Documentation repairs target the source branch of the original PR. This keeps feature-branch history out of
 the maintenance diff and lets coverage repairs be included on that branch before
 its required checks pass. Leaving the base implicit can select the repository's
 default branch and make the file limits count unrelated feature changes.
@@ -169,7 +177,7 @@ and regenerate its lock file:
 
 ```bash
 gh aw compile ci-policy documentation --no-check-update
-make test-ci test-maintenance test-task-runner typecheck-scripts
+make ci-test maintenance-test make-test scripts-typecheck
 ```
 
 The compiler may require approval for new restricted secret/action references.

@@ -18,6 +18,7 @@
     ],
     "filenames": [
       "Makefile",
+      "Makefile.dev",
       "Dockerfile",
       "dependencies.toml",
       "dependencies.lock.json",
@@ -94,7 +95,7 @@
       ],
       "requires": ["integration", "installer"],
       "commands": [
-        "make build-assets protocol-check kubernetes-check test-backend",
+        "make frontend-build protocol-check kubernetes-check backend-test",
         "git diff --exit-code"
       ],
       "projectManifests": [
@@ -104,6 +105,7 @@
         "backend/src/Goblin.Execution.Codex/Goblin.Execution.Codex.csproj",
         "backend/src/Goblin.Execution/Goblin.Execution.csproj",
         "backend/src/Goblin.Integrations.Codex/Goblin.Integrations.Codex.csproj",
+        "backend/src/Goblin.Integrations.ChatGpt/Goblin.Integrations.ChatGpt.csproj",
         "backend/src/Goblin.Integrations.GitHub/Goblin.Integrations.GitHub.csproj",
         "backend/src/Goblin.Integrations.Slack/Goblin.Integrations.Slack.csproj",
         "backend/src/Goblin.Persistence/Goblin.Persistence.csproj",
@@ -139,7 +141,7 @@
       "pathSuffixes": [".cargo/config", ".cargo/config.toml"],
       "requires": ["integration", "installer"],
       "commands": [
-        "make install-rust format-rust-check lint-rust test-rust",
+        "make rust-install rust-format-check rust-lint rust-test",
         "git diff --exit-code"
       ],
       "projectManifests": [
@@ -184,11 +186,11 @@
       "dependentGroups": ["csharp"],
       "requires": ["integration", "installer"],
       "commands": [
-        "make typecheck-scripts build-assets",
+        "make scripts-typecheck frontend-build",
         "node scripts/clean-output.mts",
         "node_modules/.bin/tsc -p tsconfig.json",
         "node --test dist/tests/frontend/*.test.js",
-        "make test-release test-ci test-maintenance",
+        "make release-test ci-test maintenance-test",
         "npm --prefix website run check",
         "npm --prefix website/video ci",
         "npm --prefix website/video run check",
@@ -208,7 +210,7 @@
       "filenames": [],
       "requires": [],
       "commands": [
-        "make contracts-check test-contracts test-task-runner test-ci test-maintenance test-release dependencies-check build deploy-generate",
+        "make contracts-check contracts-test make-test ci-test maintenance-test release-test dependencies-check build deploy-generate",
         "node --test dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
         "node --test website/release.test.mjs",
         "git diff --exit-code"
@@ -221,7 +223,8 @@
       "requires": [],
       "commands": [
         "make release-build release-check-installer browser-install",
-        "make test-browser ARGS=\"tests/e2e/setup.spec.ts tests/e2e/install.spec.ts\"",
+        "make browser-test ARGS=\"tests/e2e/setup.spec.ts tests/e2e/install.spec.ts\"",
+        "make platform-check-image",
         "git diff --exit-code"
       ]
     }

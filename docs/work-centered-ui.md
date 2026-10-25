@@ -131,7 +131,7 @@ cleanup, and explicit retries retain their existing recovery contracts.
 
 ## Verification
 
-Run `make test` and `make test-browser`. Browser fixtures cover layout, responsive
+Run `make test` and `make browser-test`. Browser fixtures cover layout, responsive
 drawers, progressive disclosure, search, context isolation, and refresh behavior.
 They do not establish persistence coverage. The durable Work browser journeys and
 real PostgreSQL suites remain opt-in with `GOBLIN_TEST_POSTGRES_APP` and the

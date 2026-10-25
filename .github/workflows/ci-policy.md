@@ -100,14 +100,14 @@ jobs:
       - name: Prepare focused context without inference
         id: packet
         run: node scripts/agentic-maintenance.mts prepare ci-policy
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: steps.packet.outputs.has_work == 'true'
         with:
           name: ci-policy-context
           path: .artifacts/agentic-maintenance/context/
           retention-days: 7
 pre-agent-steps:
-  - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+  - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
     with:
       name: ci-policy-context
       path: .artifacts/agentic-maintenance/

@@ -4,6 +4,11 @@ namespace Goblin.Contracts.Configuration;
 /// <remarks>See docs/environment-variables.md before adding or forwarding a variable.</remarks>
 public static class EnvironmentVariables
 {
+    /// <summary>Enable Goblin's embedded OpenIddict server and ChatGPT MCP endpoint.</summary>
+    /// <remarks>Format: true or false. Default/fallback: false; unset disables OAuth and MCP.
+    /// Required: Enabling requires durable Work and an HTTPS public origin. Sensitive: no. Never forwarded to runtimes.</remarks>
+    public const string GoblinChatGptEnabled = "GOBLIN_CHATGPT_ENABLED";
+
     /// <summary>Slack app-level token passed by the supported CLI deploy hook.</summary>
     /// <remarks>Format: xapp token. Required only inside the temporary setup hook; sensitive, never inherited from the operator.</remarks>
     public const string SlackAppToken = "SLACK_APP_TOKEN";
@@ -162,7 +167,7 @@ public static class EnvironmentVariables
     public const string GoblinPort = "GOBLIN_PORT";
 
     /// <summary>Browser-facing origin used for origin validation and deployment.</summary>
-    /// <remarks>Format: Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in. Default/fallback: Web: http://localhost:&lt;GOBLIN_PORT&gt;; installer: http://&lt;hostname&gt;; local test sets its configured origin.
+    /// <remarks>Format: Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in. Default/fallback: Web: http://localhost:&lt;GOBLIN_PORT&gt;; public installer: https://&lt;hostname&gt;; local installation uses its loopback HTTP origin.
     /// Required: Optional. Sensitive: no.</remarks>
     public const string GoblinPublicOrigin = "GOBLIN_PUBLIC_ORIGIN";
 

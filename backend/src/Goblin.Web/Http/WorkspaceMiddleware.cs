@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using Goblin.Application.GitRepositories;
+using Goblin.Integrations.ChatGpt;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -49,6 +50,16 @@ internal sealed class WorkspaceMiddleware
                 await _next(context); return;
             }
             if (_gitRepositoryListener && context.Connection.LocalPort == 8788) throw new PublicError("not_found", "This endpoint does not exist.", 404);
+            if (ChatGptOAuth.IsPath(request.Path) && context.RequestServices.GetService<ChatGptBoundary>() is { } oauth)
+            {
+                await oauth.InvokeOAuthAsync(context, _next);
+                return;
+            }
+            if (ChatGptBoundary.IsPath(request.Path) && context.RequestServices.GetService<ChatGptBoundary>() is { } chatgpt)
+            {
+                await chatgpt.InvokeAsync(context, _next);
+                return;
+            }
             // Endpoint routing treats page routes with trailing slashes as the same route.
             if (path is "/work/" or "/integrations/" or "/knowledge/" or "/settings/") path = path.TrimEnd('/');
             bool get = HttpMethods.IsGet(request.Method);

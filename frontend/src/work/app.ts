@@ -1222,7 +1222,11 @@ document.addEventListener("click", async (event) => {
     }
     if (action === "manage-integration") {
         const provider = target.dataset.provider;
-        if (provider === "github" || provider === "slack")
+        if (
+            provider === "github" ||
+            provider === "slack" ||
+            provider === "chatgpt"
+        )
             await settings.open(provider);
         return;
     }

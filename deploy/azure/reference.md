@@ -53,7 +53,7 @@ The platform manifest mounts the Secret read-only and configures
 its verifier is invalid, Goblin refuses to start. Workspace login uses only the
 configured password.
 
-For an existing Azure installation, redeploy the updated template with the same
+For an existing installation using the current format, redeploy the template with the same
 resource names and Goblin password. The background worker builds/imports the application,
 configures its public route, and replaces the pod to load the image, origin, and
 password verifier. For a password change, redeploy with the new password.
@@ -65,8 +65,7 @@ sudo k3s kubectl delete pod -n goblin -l app=platform
 
 The Sandbox controller recreates the pod with the same persistent data. The
 saved provider connection is preserved. Reuse your current Goblin password on
-ordinary redeployments. Provisioning configures public HTTP; HTTPS is a separate
-setup step.
+ordinary redeployments. Provisioning configures trusted public HTTPS and automatic certificate renewal.
 
 ## Naming
 
@@ -121,8 +120,10 @@ extension only. `setup-ready` means the status UI responded and the background
 worker was launched. The status JSON reports `waiting`, `running`, `failed`, or
 `ready` for the full installation, with per-step timestamps and attempt counts.
 Private diagnostics stay on the VM. The public UI exposes safe progress and
-sanitized installation-log output, including live streaming; it has no public
-install/retry controls and does not expose private configuration.
+sanitized installation-log output, including live streaming and the current
+download size and rate for each running task. It does not expose private
+configuration. Public setup is read-only. Retry a failed Azure installation through SSH or Azure
+Run Command; owner-password page retries are available only in local loopback setup.
 
 If the Azure extension fails, inspect `/var/log/goblin-bootstrap.log`. If a
 background step fails, the status page identifies it and the Azure deployment
@@ -132,6 +133,9 @@ retry through SSH or Azure Run Command:
 ```bash
 sudo goblinctl install retry
 ```
+
+Public progress initially uses HTTP and requests no password. Local loopback
+page retries retain their owner-password throttling. Azure Goblin opens over HTTPS.
 
 An interrupted incomplete installation can resume after reboot. A failed attempt
 disables its worker and requires explicit retry; reboot alone does not retry it.
@@ -162,32 +166,47 @@ Cargo, cluster, Docker, or application build is needed to serve setup.
 
 The independent systemd worker installs and checks:
 
-1. K3s `v1.37.0+k3s1`: ready API, registered node, and ready node.
-2. Cert-manager `v1.21.2`: all CRDs, controllers, and admission webhook.
+1. K3s `v1.36.5+k3s1`: ready API, registered node, and ready node.
+2. Cert-manager `v1.21.3`: all CRDs, controllers, and admission webhook.
 3. The Goblin owner password Secret and Agent Sandbox `v1.0.4`.
 4. The Goblin image, built with Docker and imported into K3s.
 5. Certificate-authenticated PostgreSQL and schema migrations.
-6. The Goblin workload, execution namespace, and internal Traefik route.
-7. Public ingress and application readiness at the assigned hostname.
+6. F5 NGINX Ingress Controller 5.7.0 (verified Helm chart 2.8.0), the Goblin
+   workload, execution namespace, and internal NGINX route.
+7. Public progress/challenge routing, Let’s Encrypt certificate issuance, and
+   browser-trusted HTTPS at Azure’s assigned hostname.
+8. Public application readiness and embedded OAuth/MCP discovery.
 
-The installer selects Kubernetes 1.37 through K3s and cert-manager 1.21.2.
-The [cert-manager support table](https://cert-manager.io/docs/releases/), checked
-on 2026-10-19, lists 1.33–1.36 for cert-manager 1.21. The selected Kubernetes
-version is outside that published range; resolving the deployment pins requires
-a separate compatibility change. Admission readiness alone does not establish
-full compatibility. The cert-manager readiness probe submits a
+The installer selects Kubernetes 1.36.5 and cert-manager 1.21.3, within the
+[published cert-manager 1.21 support range](https://cert-manager.io/docs/releases/)
+of Kubernetes 1.33–1.36. F5’s chart accepts Kubernetes 1.25 and later. These pins
+replace the previous unsupported Kubernetes/cert-manager pairing. Offline checks
+do not establish live Azure behavior. The cert-manager readiness probe submits a
 Certificate with `--dry-run=server`, so no Certificate, Issuer, CA, or Secret is
 created. After cert-manager is ready, the application installer provisions PostgreSQL
 and runs schema migrations before application startup. For repair and local
 tooling credentials, run `bash deploy/postgres/setup.sh` from the
 checkout to issue database certificates and configure password-free Npgsql
-connections; see the [database guide](../../docs/database.md). HTTPS remains
-independent.
+connections; see the [database guide](../../docs/database.md). Public HTTPS is
+part of the final installation checks.
 
 Upstream installer/manifests use pinned versions and verified SHA-256 digests.
+The k3s binary and its airgap system-image archive are downloaded together,
+verified, and kept in `/var/cache/goblin/downloads`. K3s imports that archive at
+startup. Bundled Traefik is disabled entirely; CoreDNS uses the bundled images.
+The separately pinned F5 NGINX chart and image are verified/prefetched by the installer.
+Its checksum-pinned official ingress template preserves the complete upstream Host,
+including a local forwarded port, without trusting incoming forwarded headers.
+The desired public Service type is saved in the watched chart so Helm reconciliation
+and VM restarts retain HTTPS access. Downloads resume after an
+interruption and fail only when no data arrives for two minutes. Each add-on and
+service image is pulled before its rollout; containerd cancels a pull that stops
+receiving data, and the installer resumes it up to three times. Rollout timeouts
+therefore measure startup rather than download speed.
 Outbound internet access is required for downloads and image pulls. The Ubuntu
 24.04 LTS image uses Azure's latest revision. Agent Sandbox extensions are not
-installed. Existing K3s services are reused rather than automatically upgraded.
+installed. Existing K3s services are reused only when the pinned version and
+Traefik-disabled configuration match; superseded installations require recreation.
 
 ### Development installation changes
 
@@ -203,11 +222,26 @@ public status file and bundled assets. `goblin-installer.service` runs as root;
 only this worker can change cluster resources. A file lock serializes attempts,
 and status writes use atomic replacement with fsync.
 
-The setup page initially owns port 80. A HelmChartConfig keeps Traefik's Service
-as `ClusterIP`; the worker checks `/readyz` and the application page through
-that internal route. It then records the handoff, stops the setup listener,
-switches Traefik to `LoadBalancer`, and verifies both the node ingress path and
-the public hostname. The browser reconnects and opens Goblin at the same URL.
+A page retry is relayed to `goblin-setup-control.socket`, which starts and stops
+with the setup service. Systemd runs a separate root
+`goblin-setup-control@.service` instance for each request, one at a time. That
+process checks the password against the private verifier, confirms the
+installation has failed and its worker is stopped, then starts
+`goblin-installer.service`. The setup service never reads the verifier.
+
+When one task fails, tasks that are already running finish, so completed
+downloads and builds are kept for the retry. No new task starts, and the
+installation stops once the running tasks end.
+
+The setup page initially owns port 80. NGINX starts with a `ClusterIP` Service
+while the worker verifies internal application routing. For public HTTPS, the
+worker moves the read-only progress listener to the VM’s private address on port
+18080 and routes NGINX to it. NGINX then becomes `LoadBalancer`, serving progress
+and cert-manager’s HTTP-01 challenge on port 80. The `goblin` Ingress is edited in
+place for validation, avoiding F5’s same-host solver conflict. After the certificate
+is Ready and normal curl verifies public TLS, the worker routes `/` to Goblin and
+enables HTTP-to-HTTPS redirection. The browser waits for trusted HTTPS before
+navigating, including when it misses the final progress update.
 Provisioning checks setup over a local Unix socket so existing ServiceLB rules
 cannot send its health check to an older Goblin deployment.
 
@@ -215,7 +249,7 @@ If activation fails, the worker restores `ClusterIP`, waits for ServiceLB pods
 to release the host ports, and restarts the status UI. A persistent marker also
 allows recovery after a killed worker or reboot during activation. If Kubernetes
 itself cannot respond, automatic network rollback may also fail; use SSH or Azure
-Run Command to inspect Traefik/ServiceLB. The next attempt retries recovery.
+Run Command to inspect NGINX/ServiceLB. The next attempt retries recovery.
 
 After success both setup units are disabled. The UI stays stopped across reboot,
 and the worker exits. Temporary downloads are removed; the native CLI, status,
@@ -228,10 +262,10 @@ sudo flock /var/lib/goblin/install/installer.lock goblinctl internal state init
 sudo systemctl enable --now goblin-installer.service
 ```
 
-The installer manages the `traefik` HelmChartConfig and HTTP application overlay.
-Preserve any later custom ingress/TLS configuration in the installation source
-before re-running it. Reprovisioning an older deployment switches public routing
-to the setup page once the background worker has made Traefik internal.
+The installer owns the `goblin-nginx` HelmChart, its Service routing mode, and
+the HTTPS application overlay. Current development installations can be recreated;
+there is no Traefik upgrade or compatibility shim. Certificate Secrets and Goblin
+PVCs remain durable across ordinary application restarts.
 
 ## Application source and public access
 
@@ -272,19 +306,21 @@ a new claim is not a preserved copy of existing files. See [Kubernetes names](..
 
 The overlay configures:
 
-- `GOBLIN_PUBLIC_ORIGIN=http://<assigned-hostname>` and the explicit
-  `GOBLIN_ALLOW_INSECURE_HTTP=true` setting.
-- A Traefik Ingress for the same hostname, routing `/` to `platform:8787`.
-- A network policy allowing only Traefik pods in `kube-system` to reach port 8787.
+- `GOBLIN_PUBLIC_ORIGIN=https://<assigned-hostname>` and `GOBLIN_CHATGPT_ENABLED=true`.
+- An F5 NGINX `nginx` Ingress, routing `/` to `platform:8787`, with the
+  `goblin-public-tls` Secret and in-place HTTP-01 renewal.
+- A network policy permitting the installation’s NGINX pods in `kube-system` to
+  reach port 8787.
 
-The rendered files remain under `/var/lib/goblin/deploy/azure/platform`. The deployment
-returns `goblinUrl`, and `/var/lib/goblin/public-url` stores the same address.
-The UI uses the password selected during provisioning. HTTP traffic is
-unencrypted until HTTPS is configured. To add HTTPS later, configure Traefik's
-TLS entry point and certificate, update the app's public origin to `https://...`,
-remove the HTTP opt-in, apply the overlay, and recreate the pod. Redeploying this
-HTTP template reapplies its HTTP configuration, so preserve later TLS changes
-in the deployment source before redeploying.
+The rendered files remain under `/var/lib/goblin/deploy/azure/platform`. `goblinUrl`
+and `/var/lib/goblin/public-url` contain the HTTPS address. `setupUrl` is initial
+read-only HTTP progress. Local loopback installs remove public TLS and disable
+ChatGPT until a reachable HTTPS origin is configured.
+
+A dedicated test VM can select a [WSL development relay](../../docs/chatgpt-local-testing.md).
+It forwards the whole application through a private SSH socket, keeps ACME validation
+on Azure, and never falls back automatically if WSL is unavailable. Production’s
+default upstream is the installed Azure platform.
 
 ## Runtime and networking
 
@@ -294,13 +330,13 @@ Configuring gVisor or another suitable runtime, workload permissions, network
 policies, and task lifecycles remains necessary before running untrusted agent
 workloads. The upstream project explains [the runtime boundary](https://github.com/kubernetes-sigs/agent-sandbox#readme).
 
-The network permits public HTTP and HTTPS. Goblin uses HTTP ingress by default. It
+The network permits public HTTP for certificate validation and HTTPS for Goblin. It
 does not expose the Kubernetes API to the internet. Public SSH is disabled unless
 you supply both a public key and a source address; password authentication is
 disabled. The portal flow installs the supplied public key; retain its matching
 private key for SSH access.
-K3s includes Traefik, and the background worker configures the Goblin ingress. A trusted HTTPS
-certificate is not configured. If the hostname returns 404, inspect the Goblin
+Bundled Traefik is disabled. The worker installs F5 NGINX and configures a trusted
+Let’s Encrypt HTTPS certificate using Azure’s generated DNS name without manual DNS records. If the hostname returns 404, inspect the Goblin
 Ingress host rule; if it returns 503, inspect the Sandbox pod and service endpoints.
 
 Kubernetes data uses the VM's managed OS disk. This is a single-node installation

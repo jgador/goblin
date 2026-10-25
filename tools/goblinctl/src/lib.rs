@@ -11,6 +11,7 @@ pub mod local;
 pub mod operations;
 pub mod postgres;
 pub mod progress;
+pub mod retry;
 pub mod setup;
 
 /// The release operation supplies a build version without editing Cargo manifests.

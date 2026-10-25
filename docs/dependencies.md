@@ -81,14 +81,19 @@ generated during release preparation. It does not refresh Docker image tags.
 ## Checked-in image selections
 
 The current manifests select PostgreSQL 18.6, Headlamp 0.45.0,
-VictoriaLogs 1.53.0, Fluent Bit 5.1.3, K3s 1.37.0, Agent Sandbox 1.0.4, and
-cert-manager 1.21.2. The build uses Node 26.10.0, .NET SDK 10.0.401, and ASP.NET
+VictoriaLogs 1.53.0, Fluent Bit 5.1.3, K3s 1.36.5, Agent Sandbox 1.0.4, and
+cert-manager 1.21.3. The build uses Node 26.10.0, .NET SDK 10.0.401, and ASP.NET
 Core 10.0.12. K3s, cert-manager, and Agent Sandbox retain ownership of their
 bundled component images. Prereleases are excluded; explicit version tags keep
 future upstream releases from silently changing the selected version.
 
-The selected Kubernetes 1.37/cert-manager 1.21 pair has a published support-range
-gap; see the [installation reference](../deploy/azure/reference.md#what-deployment-success-means).
+The installer also pins F5 NGINX Ingress Controller 5.7.0 and Helm chart 2.8.0.
+It verifies the corresponding official ingress template and changes only its
+upstream Host directives to preserve the browser authority, including a local
+forwarded port. Controller upgrades must refresh and verify both template and
+chart checksums; forwarded-header trust stays disabled.
+Kubernetes 1.36/cert-manager 1.21 uses a published supported pairing; see the
+[installation reference](../deploy/azure/reference.md#what-deployment-success-means).
 
 PostgreSQL 18 mounts its PVC at `/var/lib/postgresql` and stores the database in
 `/var/lib/postgresql/18/docker`. Superseded PostgreSQL data formats are unsupported.

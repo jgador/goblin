@@ -42,7 +42,7 @@ Headlamp, and logging access policies select `app=platform`; website labels must
 never match these grants. Website pods disable service-account token mounting
 and receive no platform credentials. The platform ingress policy continues to
 allow execution's repository traffic; the Azure overlay additionally allows
-Traefik UI traffic. Execution RBAC and namespace isolation remain unchanged.
+F5 NGINX UI traffic. Execution RBAC and namespace isolation remain unchanged.
 
 Website deployment applies only its Namespace, Deployment, Service, and HPA;
 it never restarts the platform. Website removal must target only its Deployment,

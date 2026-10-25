@@ -35,6 +35,31 @@ pub fn hash(password: &str) -> Result<String> {
         STANDARD.encode(digest)
     ))
 }
+/// Checks a password against a verifier from `read`, comparing digests in constant time.
+pub fn verify(verifier: &str, password: &str) -> bool {
+    let fields: Vec<_> = verifier.trim().split('$').collect();
+    let (Some(salt), Some(expected)) = (
+        fields.get(2).and_then(|v| STANDARD.decode(v).ok()),
+        fields.get(3).and_then(|v| STANDARD.decode(v).ok()),
+    ) else {
+        return false;
+    };
+    if fields.len() != 4
+        || fields[0] != "pbkdf2-sha256"
+        || fields[1] != "600000"
+        || expected.len() != 32
+        || password.len() > 512
+    {
+        return false;
+    }
+    let mut digest = [0; 32];
+    pbkdf2::pbkdf2_hmac::<Sha256>(password.as_bytes(), &salt, 600_000, &mut digest);
+    digest
+        .iter()
+        .zip(&expected)
+        .fold(0, |difference, (a, b)| difference | (a ^ b))
+        == 0
+}
 pub fn hash_stdin() -> Result<String> {
     let mut bytes = Vec::new();
     std::io::stdin().take(513).read_to_end(&mut bytes)?;
@@ -84,7 +109,7 @@ pub fn ensure(path: &Path, replace: bool) -> Result<PathBuf> {
         Err(_) => {
             ensure!(
                 std::io::stdin().is_terminal(),
-                "No local password is configured. Run make setup-password in a terminal, or supply GOBLIN_LOCAL_PASSWORD for unattended setup."
+                "No local password is configured. Run make password-set in a terminal, or supply GOBLIN_LOCAL_PASSWORD for unattended setup."
             );
             let password = rpassword::prompt_password("Goblin password: ")?;
             let confirmation = rpassword::prompt_password("Confirm Goblin password: ")?;

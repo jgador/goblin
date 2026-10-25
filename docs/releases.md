@@ -310,11 +310,11 @@ development provisioning does not freeze the unreleased baseline.
 ```bash
 make dependencies-check
 make deploy-generate                      # writes .artifacts/azure/
-make format-rust
-make lint-rust CARGO_ARGS="-p xtask"
-make test-rust CARGO_ARGS="-p xtask"
+make rust-format
+make rust-lint CARGO_ARGS="-p xtask"
+make rust-test CARGO_ARGS="-p xtask"
 make test
-make test-browser ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
+make browser-test ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
 ```
 
 `make deploy-generate` generates review assets bound to the current SHA and a
@@ -330,7 +330,7 @@ cargo xtask release verify-installer
 
 The public archive is downloaded and verified; this command does not deploy Azure.
 `cargo xtask release check-installer` validates local compiler input coverage and
-contracts without requiring a published binary. `make release-local` creates a local
+contracts without requiring a published binary. `make release-package-local` creates a local
 review archive. Current provenance verification requires the **Platform Release**
 signing identity; installers signed by superseded workflows require a fresh
 publication under a new version before reuse.

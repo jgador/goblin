@@ -79,6 +79,30 @@ export const environmentVariables = {
         required: "Supplied by GitHub Actions to CI detection.",
         sensitive: false,
     },
+    GITHUB_PATH: {
+        name: "GITHUB_PATH",
+        purpose: "Register the verified .NET SDK for subsequent Actions steps.",
+        format: "Path to the GitHub Actions PATH command file.",
+        fallback: "SDK setup fails when the command file is unavailable.",
+        required: "Supplied by GitHub Actions to .NET verification setup.",
+        sensitive: false,
+    },
+    GITHUB_ENV: {
+        name: "GITHUB_ENV",
+        purpose: "Register the .NET SDK root for subsequent Actions steps.",
+        format: "Path to the GitHub Actions environment command file.",
+        fallback: "SDK setup fails when the command file is unavailable.",
+        required: "Supplied by GitHub Actions to .NET verification setup.",
+        sensitive: false,
+    },
+    DOTNET_ROOT: {
+        name: "DOTNET_ROOT",
+        purpose: "Locate the verified .NET SDK and bundled runtimes in CI.",
+        format: "Absolute directory path.",
+        fallback: ".NET otherwise uses its normal host discovery.",
+        required: "Set by the shared .NET verification setup action.",
+        sensitive: false,
+    },
     CANDIDATE_SHA256: {
         name: "CANDIDATE_SHA256",
         purpose:
@@ -334,9 +358,10 @@ export const environmentVariables = {
     },
     GOBLIN_BOOTSTRAP_SLOW_BUILD: {
         name: "GOBLIN_BOOTSTRAP_SLOW_BUILD",
-        purpose: "Trigger the offline installer fixture build timeout.",
-        format: "true or false",
-        fallback: "Harness uses false",
+        purpose:
+            "Artificial application-build delay in the offline installer fixture.",
+        format: "Milliseconds as numeric text",
+        fallback: "Harness supplies 0",
         required: "Offline deployment tests only",
         sensitive: false,
     },
@@ -435,8 +460,17 @@ export const environmentVariables = {
             "Browser-facing origin used for origin validation and deployment.",
         format: "Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in",
         fallback:
-            "Web: http://localhost:<GOBLIN_PORT>; installer: http://<hostname>; local test sets its configured origin",
+            "Web: http://localhost:<GOBLIN_PORT>; public installer: https://<hostname>; local installation uses its loopback HTTP origin",
         required: "Optional",
+        sensitive: false,
+    },
+    GOBLIN_RELAY_TEST_ROOT: {
+        name: "GOBLIN_RELAY_TEST_ROOT",
+        purpose:
+            "Root of the offline SSH, Kubernetes, and HTTP relay fixtures.",
+        format: "Directory path",
+        fallback: "Fixture subprocess does nothing when unset",
+        required: "Offline development relay tests only",
         sensitive: false,
     },
     GOBLIN_SECRET: {

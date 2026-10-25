@@ -18,6 +18,8 @@ dotnet ef dbcontext scaffold Name=ConnectionStrings:Goblin Npgsql.EntityFramewor
   --context-namespace Goblin.Persistence \
   --namespace Goblin.Persistence.Entities \
   --table public.agent \
+  --table public.chatgpt_work_grant \
+  --table public.chatgpt_grant_event \
   --table public.connection \
   --table public.connection_model_catalog \
   --table public.conversation_message \

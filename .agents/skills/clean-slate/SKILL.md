@@ -209,8 +209,11 @@ databases, browser state, and test servers. Do not restart the app as verificati
 Check all of the following; distinguish “absent” from permission/query failures:
 
 - `goblin-local.socket/service`, `goblin-local-postgres.socket/service`,
-  `goblin-setup.service`, `goblin-installer.service`, and the owned `k3s.service`
-  are inactive and their installation-owned unit files/drop-ins are gone.
+  `goblin-setup.service`, `goblin-setup-control.socket` and its
+  `goblin-setup-control@.service` template, `goblin-installer.service`, and the
+  owned `k3s.service` are inactive and their installation-owned unit files/drop-ins
+  are gone. Keep the shared, checksum-verified download cache
+  `/var/cache/goblin/downloads` unless the user asks to remove it.
 - Owned `/var/lib/goblin`, `/opt/goblin`, `/etc/rancher/k3s`,
   `/var/lib/rancher/k3s`, `/var/lib/kubelet`, `/var/lib/cni`, and any verified
   additional storage are gone. Check `/etc/kubernetes` if present; it is also a
@@ -248,7 +251,7 @@ make local-start
 
 The default Windows browser address is `http://localhost:8788`. A new password is
 chosen in the terminal after the verifier is removed, unless the user deliberately
-supplies `GOBLIN_LOCAL_PASSWORD`. `make dev` launches only the direct application
+supplies `GOBLIN_LOCAL_PASSWORD`. `make dev-start` launches only the direct application
 on port 8787 and does **not** show installation progress. Windows browser site data
 is not cleared by WSL cleanup; suggest a private window or clearing only this
 localhost site's data if the user also wants a fresh browser session.

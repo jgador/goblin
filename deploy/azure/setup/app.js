@@ -18,6 +18,7 @@ const stageDefinitions = [
         steps: [
             SetupStep.Prepare,
             SetupStep.K3s,
+            SetupStep.Nginx,
             SetupStep.CertManager,
             SetupStep.Sandbox,
         ],
@@ -38,7 +39,7 @@ const stageDefinitions = [
         title: "Open your workspace",
         description: "A final check, then you’re ready to go.",
         complete: "Your workspace is ready to open.",
-        steps: [SetupStep.Verify, SetupStep.Activate],
+        steps: [SetupStep.Verify, SetupStep.Https, SetupStep.Activate],
     },
 ];
 function text(element, value) {
@@ -72,24 +73,33 @@ const stageViews = stageDefinitions.map((definition, index) => {
             const indicator = document.createElement("span");
             indicator.className = "indicator";
             indicator.setAttribute("aria-hidden", "true");
+            const copy = document.createElement("span");
+            copy.className = "label";
             const label = document.createElement("span");
-            label.className = "label";
+            const detail = document.createElement("span");
+            detail.className = "detail";
+            copy.append(label, detail);
             const status = document.createElement("span");
             status.className = "status";
-            row.append(indicator, label, status);
+            row.append(indicator, copy, status);
             tasks.append(row);
-            return [id, { row, indicator, label, status }];
+            return [id, { row, indicator, label, detail, status }];
         }),
     );
     element.append(summary, tasks);
     stages.append(element);
     return { definition, element, number, description, status, rows };
 });
+const retryForm = document.querySelector("#retry-form");
+const retryPassword = document.querySelector("#retry-password");
+const retryButton = document.querySelector("#retry-button");
+const retryMessage = document.querySelector("#retry-message");
 const log = document.querySelector("#install-log");
 const followLog = document.querySelector("#follow-log");
 const logConnection = document.querySelector("#log-connection");
 let latest;
 let failures = 0;
+let retryAvailable = false;
 
 function render(state) {
     if (
@@ -132,6 +142,10 @@ function render(state) {
                 : "Live",
     );
     document.querySelector("#recovery").hidden = !failed;
+    retryForm.hidden = !retryAvailable;
+    document.querySelector("#recovery-guidance").textContent = retryAvailable
+        ? "Review the installation log, then retry with your Goblin password. Completed downloads and finished tasks are reused."
+        : "Review the installation log, then retry from the VM using the command below. Your password is requested only when a secure connection is available.";
     text(
         document.querySelector("h1"),
         failed
@@ -243,6 +257,16 @@ function render(state) {
                       : "",
             );
             text(elements.label, step.label);
+            // Running tasks show their latest activity, such as download size and
+            // rate; a failed task keeps the activity it stopped during.
+            text(
+                elements.detail,
+                (step.status === SetupStepStatus.Running ||
+                    step.status === SetupStepStatus.Failed) &&
+                    typeof step.detail === "string"
+                    ? step.detail
+                    : "",
+            );
             text(
                 elements.status,
                 {
@@ -254,7 +278,12 @@ function render(state) {
             );
         }
     }
-    if (becameFailed) logPanel.open = true;
+    if (becameFailed) {
+        logPanel.open = true;
+        retryButton.disabled = false;
+        text(retryMessage, "");
+        delete retryMessage.dataset.status;
+    }
     updateElapsed();
     renderLog(state);
 }
@@ -305,6 +334,59 @@ followLog.addEventListener("change", () => {
     if (followLog.checked) log.scrollTop = log.scrollHeight;
 });
 
+const retryMessages = {
+    202: "Retry started. Progress will update here.",
+    400: "Enter your Goblin password to retry.",
+    401: "That password didn’t match. Try again.",
+    409: "Installation is already running.",
+    429: "Too many attempts. Wait a few minutes, then try again.",
+};
+function showRetryMessage(message, status) {
+    retryMessage.textContent = message;
+    retryMessage.dataset.status = status;
+}
+retryForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!retryPassword.value) {
+        showRetryMessage(retryMessages[400], "error");
+        retryPassword.focus();
+        return;
+    }
+    retryButton.disabled = true;
+    showRetryMessage("Checking your password…", "pending");
+    try {
+        const response = await fetch("/setup/retry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password: retryPassword.value }),
+            cache: "no-store",
+            signal: AbortSignal.timeout(15000),
+        });
+        showRetryMessage(
+            retryMessages[response.status] ??
+                "Retry isn’t available from this page. Run sudo goblinctl install retry on the server.",
+            response.ok ? "success" : "error",
+        );
+        if (response.ok) {
+            retryPassword.value = "";
+            // The page normally leaves the failed state within seconds.
+            setTimeout(() => {
+                if (latest?.status === SetupStatus.Failed)
+                    retryButton.disabled = false;
+            }, 20000);
+        } else {
+            retryButton.disabled = false;
+            if (response.status === 401) retryPassword.select();
+        }
+    } catch {
+        retryButton.disabled = false;
+        showRetryMessage(
+            "Couldn’t reach your server. Check the connection and try again.",
+            "error",
+        );
+    }
+});
+
 const events = new EventSource("/setup/events");
 events.addEventListener("progress", (event) => {
     try {
@@ -348,6 +430,8 @@ async function poll() {
             signal: AbortSignal.timeout(5000),
         });
         if (!response.ok) throw new Error("Status unavailable");
+        retryAvailable =
+            response.headers.get("X-Goblin-Setup-Retry") === "available";
         const state = await response.json();
         if (!isSetupState(state)) throw new Error("Unexpected status");
         if (state.publicUrl) {
@@ -361,7 +445,12 @@ async function poll() {
             // Move an IP/localhost visit to the configured origin while setup is still
             // serving it. Progress and readiness checks then use the final ingress host,
             // even if the browser misses the last status update before the handoff.
-            if (target.origin !== location.origin) {
+            if (
+                target.origin !== location.origin &&
+                (target.protocol !== "https:" ||
+                    location.protocol !== "http:" ||
+                    (await httpsAvailable(target)))
+            ) {
                 location.replace(target.origin + "/");
                 return;
             }
@@ -380,6 +469,17 @@ async function poll() {
         // The Kubernetes application exposes this endpoint; the setup UI never does.
         // Check across two polls so a transient route change does not trigger a reload loop.
         try {
+            if (latest?.publicUrl) {
+                const target = new URL(latest.publicUrl);
+                if (
+                    target.protocol === "https:" &&
+                    location.protocol === "http:" &&
+                    (await httpsAvailable(target))
+                ) {
+                    location.replace(target.origin + "/");
+                    return;
+                }
+            }
             const response = await fetch("/readyz", {
                 cache: "no-store",
                 signal: AbortSignal.timeout(5000),
@@ -395,6 +495,22 @@ async function poll() {
         }
     } finally {
         setTimeout(poll, 3000);
+    }
+}
+// An opaque response establishes browser-trusted TLS without reading cross-origin
+// data or sending credentials. This also handles a missed final progress update
+// when NGINX starts redirecting HTTP to HTTPS after activation.
+async function httpsAvailable(target) {
+    try {
+        const response = await fetch(target.origin + "/readyz", {
+            mode: "no-cors",
+            credentials: "omit",
+            cache: "no-store",
+            signal: AbortSignal.timeout(3000),
+        });
+        return response.type === "opaque" || response.ok;
+    } catch {
+        return false;
     }
 }
 setInterval(updateElapsed, 1000);

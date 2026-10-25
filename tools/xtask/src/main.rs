@@ -19,6 +19,7 @@ mod dependencies;
 mod goblin_release;
 mod package;
 mod preparation;
+mod relay;
 mod release;
 
 #[derive(Parser)]
@@ -28,6 +29,14 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Task {
+    /// Connect a dedicated Azure HTTPS test installation to a local Goblin build.
+    Relay {
+        /// Independent relay session stored under .artifacts/ in this checkout.
+        #[arg(long, default_value = "chatgpt-relay")]
+        session: String,
+        #[command(subcommand)]
+        command: relay::Task,
+    },
     /// Resolve Docker images and verify Goblin's installer dependency.
     Dependencies {
         #[command(subcommand)]
@@ -91,6 +100,7 @@ fn execute() -> Result<()> {
         .context("Missing repository directory")?;
     std::env::set_current_dir(root)?;
     match Cli::parse().command {
+        Task::Relay { command, session } => relay::execute(root, &session, command),
         Task::Dependencies { command } => dependencies::execute(root, command),
         Task::Dev {
             profile,

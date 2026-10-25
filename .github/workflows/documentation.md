@@ -2,17 +2,22 @@
 name: Docs Maintenance
 description: Owner-only documentation upkeep from bounded, deterministic change context.
 on:
-  push:
-    branches: ["**", "!gh-aw/**"]
+  pull_request:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
   roles: [admin]
   needs: [prepare]
 if: >-
   github.repository == 'jgador/goblin' &&
-  github.actor == 'jgador' && github.triggering_actor == 'jgador' &&
+  github.actor == 'jgador' &&
+  github.triggering_actor == 'jgador' &&
+  !startsWith(github.ref, 'refs/heads/gh-aw/') &&
+  (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository &&
+  !startsWith(github.head_ref, 'gh-aw/'))) &&
   needs.prepare.outputs.has_work == 'true'
 checkout:
   fetch-depth: 0
+  ref: "${{ github.event.pull_request.head.sha || github.sha }}"
   pull-request: false
 permissions:
   contents: read
@@ -54,7 +59,7 @@ safe-outputs:
     create-issue: false
   create-pull-request:
     title-prefix: "[documentation] "
-    base-branch: "${{ github.ref_name }}"
+    base-branch: "${{ github.head_ref || github.ref_name }}"
     draft: true
     max: 1
     fallback-as-issue: false
@@ -80,18 +85,48 @@ concurrency:
   queue: max
 jobs:
   agent:
-    if: github.repository == 'jgador/goblin' && github.actor == 'jgador' && github.triggering_actor == 'jgador'
+    if: >-
+      github.repository == 'jgador/goblin' &&
+      github.actor == 'jgador' &&
+      github.triggering_actor == 'jgador' &&
+      !startsWith(github.ref, 'refs/heads/gh-aw/') &&
+      (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.head_ref, 'gh-aw/')))
   detection:
-    if: needs.agent.result == 'success' && github.repository == 'jgador/goblin' && github.actor == 'jgador' && github.triggering_actor == 'jgador'
+    if: >-
+      needs.agent.result == 'success' &&
+      github.repository == 'jgador/goblin' &&
+      github.actor == 'jgador' &&
+      github.triggering_actor == 'jgador' &&
+      !startsWith(github.ref, 'refs/heads/gh-aw/') &&
+      (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.head_ref, 'gh-aw/')))
   safe_outputs:
-    if: needs.agent.result == 'success' && github.repository == 'jgador/goblin' && github.actor == 'jgador' && github.triggering_actor == 'jgador'
+    if: >-
+      needs.agent.result == 'success' &&
+      github.repository == 'jgador/goblin' &&
+      github.actor == 'jgador' &&
+      github.triggering_actor == 'jgador' &&
+      !startsWith(github.ref, 'refs/heads/gh-aw/') &&
+      (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.head_ref, 'gh-aw/')))
   conclusion:
-    if: github.repository == 'jgador/goblin' && github.actor == 'jgador' && github.triggering_actor == 'jgador'
+    if: >-
+      github.repository == 'jgador/goblin' &&
+      github.actor == 'jgador' &&
+      github.triggering_actor == 'jgador' &&
+      !startsWith(github.ref, 'refs/heads/gh-aw/') &&
+      (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.head_ref, 'gh-aw/')))
   prepare:
     if: >-
       github.repository == 'jgador/goblin' &&
-      github.actor == 'jgador' && github.triggering_actor == 'jgador' &&
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      github.actor == 'jgador' &&
+      github.triggering_actor == 'jgador' &&
+      !startsWith(github.ref, 'refs/heads/gh-aw/') &&
+      (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository &&
+      !startsWith(github.head_ref, 'gh-aw/'))) &&
+      (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -101,6 +136,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
+          ref: "${{ github.event.pull_request.head.sha || github.sha }}"
           persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
@@ -108,14 +144,14 @@ jobs:
       - name: Prepare focused context without inference
         id: packet
         run: node scripts/agentic-maintenance.mts prepare documentation
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: steps.packet.outputs.has_work == 'true'
         with:
           name: documentation-context
           path: .artifacts/agentic-maintenance/context/
           retention-days: 7
 pre-agent-steps:
-  - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+  - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
     with:
       name: documentation-context
       path: .artifacts/agentic-maintenance/

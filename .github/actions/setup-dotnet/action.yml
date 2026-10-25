@@ -1,0 +1,22 @@
+name: Set up .NET verification
+description: Install the verified Linux x64 SDK from Microsoft's public download feed.
+runs:
+  using: composite
+  steps:
+    - name: Install the pinned .NET SDK
+      shell: bash
+      run: |
+        set -euo pipefail
+        sdk_directory="$PWD/.artifacts/dotnet/sdk"
+        sdk_archive="$PWD/.artifacts/dotnet/dotnet-sdk-10.0.403-linux-x64.tar.gz"
+        mkdir -p "$sdk_directory"
+        curl --fail --location --proto '=https' --proto-redir '=https' \
+          https://dotnetcli.blob.core.windows.net/dotnet/Sdk/10.0.403/dotnet-sdk-10.0.403-linux-x64.tar.gz \
+          --output "$sdk_archive"
+        printf '%s  %s\n' \
+          b7b3d8461cf98b07d2552ce9199702fa3ad010ac2671a5f8cd5136f7534e50f6855ba7bbb02b11494563f1d04156276a31cda1103b900e5eecd0d9473dc7b9c5 \
+          "$sdk_archive" | sha512sum --check
+        tar -xzf "$sdk_archive" -C "$sdk_directory"
+        "$sdk_directory/dotnet" --version
+        printf '%s\n' "$sdk_directory" >> "$GITHUB_PATH"
+        printf 'DOTNET_ROOT=%s\n' "$sdk_directory" >> "$GITHUB_ENV"

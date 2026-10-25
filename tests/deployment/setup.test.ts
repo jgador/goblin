@@ -1,10 +1,10 @@
 import { goblinctl } from "../support/goblinctl.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { access, readFile, stat, writeFile } from "node:fs/promises";
+import { access, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
-import { startSetup } from "../support/setup.js";
+import { setupRetryPassword, startSetup } from "../support/setup.js";
 
 test("setup serves the official Goblin icon from its standalone bundle", async (t) => {
     const setup = await startSetup();
@@ -76,6 +76,14 @@ test("the standalone UI serves only status and assets, with no mutation or file 
         (await fetch(setup.url + "/setup/status", { method: "POST" })).status,
         405,
     );
+    // Without the root helper, the page cannot start a retry.
+    const unavailable = await fetch(setup.url + "/setup/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: "private-test-verifier" }),
+    });
+    assert.equal(unavailable.status, 503);
+    assert.deepEqual(await unavailable.json(), { result: "unavailable" });
     let response = await fetch(setup.url + "/setup/status");
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.equal((await response.json()).status, "waiting");
@@ -166,4 +174,70 @@ test("setup streams retained progress and resumes by event ID without serving pr
         (await fetch(setup.url + "/setup/events", { method: "POST" })).status,
         405,
     );
+});
+
+function retry(url: string, body: unknown, type = "application/json") {
+    return fetch(url + "/setup/retry", {
+        method: "POST",
+        headers: { "Content-Type": type },
+        body: typeof body === "string" ? body : JSON.stringify(body),
+    });
+}
+
+test("the setup page retries only a failed installation, and only with the owner password", async (t) => {
+    const setup = await startSetup({ control: true });
+    t.after(() => setup.close());
+    let response = await retry(setup.url, { password: setupRetryPassword });
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { result: "not-failed" });
+    setup.transition("begin");
+    setup.transition("start", "k3s");
+    setup.transition("failed");
+    // A JSON body forces a CORS preflight, which the server never grants.
+    for (const [body, type] of [
+        [{ password: setupRetryPassword }, "text/plain"],
+        ["not json", "application/json"],
+        [{ password: setupRetryPassword, extra: true }, "application/json"],
+    ] as const) {
+        response = await retry(setup.url, body, type);
+        assert.equal(response.status, 400);
+    }
+    response = await retry(setup.url, { password: "wrong password" });
+    assert.equal(response.status, 401);
+    assert.deepEqual(await response.json(), { result: "unauthorized" });
+    assert.deepEqual(await setup.systemctl(), []);
+    await writeFile(join(setup.root, "installer-active"), "");
+    response = await retry(setup.url, { password: setupRetryPassword });
+    assert.equal(response.status, 409);
+    assert.deepEqual(await response.json(), { result: "running" });
+    await rm(join(setup.root, "installer-active"));
+    response = await retry(setup.url, { password: setupRetryPassword });
+    assert.equal(response.status, 202);
+    assert.deepEqual(await response.json(), { result: "started" });
+    assert.deepEqual((await setup.systemctl()).slice(-2), [
+        "is-active --quiet goblin-installer.service",
+        "enable --now goblin-installer.service",
+    ]);
+    // A correct password clears earlier failures.
+    await assert.rejects(access(join(setup.root, "retry-throttle.json")));
+    const state = JSON.parse(await readFile(setup.path, "utf8"));
+    assert.ok(!JSON.stringify(state).includes(setupRetryPassword));
+});
+
+test("repeated wrong passwords lock retries from the setup page", async (t) => {
+    const setup = await startSetup({ control: true });
+    t.after(() => setup.close());
+    setup.transition("begin");
+    setup.transition("failed");
+    for (let attempt = 0; attempt < 5; attempt++)
+        assert.equal(
+            (await retry(setup.url, { password: `wrong ${attempt}` })).status,
+            401,
+        );
+    const throttle = join(setup.root, "retry-throttle.json");
+    assert.equal((await stat(throttle)).mode & 0o777, 0o600);
+    const response = await retry(setup.url, { password: setupRetryPassword });
+    assert.equal(response.status, 429);
+    assert.deepEqual(await response.json(), { result: "throttled" });
+    assert.deepEqual(await setup.systemctl(), []);
 });

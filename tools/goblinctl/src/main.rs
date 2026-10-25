@@ -96,6 +96,9 @@ struct InstallArgs {
     /// Public DNS hostname. Omit for a dedicated local installation.
     #[arg(long)]
     hostname: Option<String>,
+    /// Let's Encrypt contact email; required for a public HTTPS installation.
+    #[arg(long, requires = "hostname")]
+    certificate_email: Option<String>,
     #[arg(long, default_value = "master")]
     source_ref: String,
     #[arg(long, value_parser = clap::value_parser!(u16).range(1024..))]
@@ -126,7 +129,11 @@ enum LocalCommand {
         #[arg(long)]
         json: bool,
     },
-    Retry,
+    Retry {
+        /// Reload the current checkout and installer before retrying a failed installation.
+        #[arg(long)]
+        refresh: bool,
+    },
     Logs {
         #[arg(long)]
         follow: bool,
@@ -220,6 +227,21 @@ enum InternalCommand {
         port: u16,
         #[arg(long)]
         health_socket: Option<PathBuf>,
+        /// Root helper socket that checks the owner password before retrying.
+        #[arg(long)]
+        control_socket: Option<PathBuf>,
+    },
+    /// Handle one socket-activated retry request from the setup page.
+    SetupControl {
+        #[arg(long, default_value = setup::STATE)]
+        state: PathBuf,
+        #[arg(long, default_value = "/var/lib/goblin/install/private/owner-password")]
+        verifier: PathBuf,
+        #[arg(
+            long,
+            default_value = "/var/lib/goblin/install/private/retry-throttle.json"
+        )]
+        throttle: PathBuf,
     },
     State {
         action: goblinctl::contract_values::SetupAction,
@@ -251,6 +273,10 @@ enum InternalCommand {
         hostname: String,
     },
     NodeAddress,
+    IngressBackend {
+        service: String,
+        port: u16,
+    },
     DockerConfig {
         #[arg(default_value = "/etc/docker/daemon.json")]
         path: PathBuf,
@@ -330,14 +356,20 @@ fn execute(cli: Cli) -> Result<()> {
             Some(InstallCommand::Status { json }) => operations::install_status(json),
             Some(InstallCommand::Retry) => {
                 if Path::new("/var/lib/goblin/local-test/config.json").exists() {
-                    local_action(&config_root, LocalCommand::Retry)
+                    local_action(&config_root, LocalCommand::Retry { refresh: false })
                 } else {
                     operations::retry()
                 }
             }
             None => {
                 if let Some(hostname) = args.hostname {
-                    install::bootstrap(&hostname, &args.source_ref)
+                    install::bootstrap(
+                        &hostname,
+                        &args.source_ref,
+                        args.certificate_email
+                            .as_deref()
+                            .context("Supply --certificate-email for HTTPS installation")?,
+                    )
                 } else {
                     local_action(
                         &config_root,
@@ -390,7 +422,24 @@ fn execute(cli: Cli) -> Result<()> {
                 host,
                 port,
                 health_socket,
-            } => setup::serve(&state, &host, port, health_socket.as_deref()),
+                control_socket,
+            } => setup::serve(
+                &state,
+                &host,
+                port,
+                health_socket.as_deref(),
+                control_socket.as_deref(),
+            ),
+            InternalCommand::SetupControl {
+                state,
+                verifier,
+                throttle,
+            } => goblinctl::retry::Control {
+                state,
+                verifier,
+                throttle,
+            }
+            .serve(),
             InternalCommand::State {
                 action,
                 value,
@@ -416,6 +465,13 @@ fn execute(cli: Cli) -> Result<()> {
             }
             InternalCommand::NodeAddress => {
                 println!("{}", install::node_address(&stdin_json()?)?);
+                Ok(())
+            }
+            InternalCommand::IngressBackend { service, port } => {
+                println!(
+                    "{}",
+                    install::ingress_backend_patch(&stdin_json()?, &service, port)?
+                );
                 Ok(())
             }
             InternalCommand::DockerConfig { path } => install::docker_config(&path),
@@ -490,7 +546,7 @@ fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
                 ensure!(yes, "Reset requires --yes");
                 local.reset()
             }
-            LocalCommand::Retry => local.retry(),
+            LocalCommand::Retry { refresh } => local.retry(refresh),
             LocalCommand::Database => local.configure_database(&local.owned_config()?),
             _ => unreachable!(),
         }),

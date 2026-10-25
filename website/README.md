@@ -293,7 +293,7 @@ to `install/azure/versions/<version>/`; Download template serves the matching CL
 template. Azure collects server choices, the Goblin password, and SSH key.
 The page explains subscription billing before the visitor opens the Portal.
 
-`make website-dev` downloads a snapshot directly from the GitHub Releases API
+`make website-start` downloads a snapshot directly from the GitHub Releases API
 when one is missing. It reads only published `goblin-v*` releases with the current
 manifest format, verifies GitHub asset digests and manifest checksums, and serves
 the snapshot locally. Opening tracked HTML directly uses an empty Azure catalog.
@@ -384,7 +384,7 @@ up to three employees; larger for-profit organizations need a company license.
 Run these commands from the repository root inside WSL:
 
 ```bash
-make website-dev
+make website-start
 ```
 
 Open **http://localhost:5173** in your Windows browser. The command builds the
@@ -400,11 +400,11 @@ It also mounts the validated installation catalog and versioned templates read-o
 Vite serves those files under `/install/`, so `http://localhost:5173/install/`
 shows published releases. The same routing works when running Vite directly.
 The snapshot is reused across starts; to refresh it, stop the website, remove
-`.artifacts/installation-assets/output/`, and run `make website-dev` again.
+`.artifacts/installation-assets/output/`, and run `make website-start` again.
 Vite watches the same files you edit in WSL and updates or reloads the browser
 when you save. Keep the checkout on WSL's Linux filesystem for reliable file
 watching. Node and the locked Vite dependency live at `/opt/website-dev` in the
-image, outside the source mount. Re-running `make website-dev` uses Docker's
+image, outside the source mount. Re-running `make website-start` uses Docker's
 build cache and rebuilds dependencies when the lockfile changes; there is no
 dependency volume that can retain an older installation.
 
@@ -456,7 +456,7 @@ Temporary manifests and tool state stay under `.artifacts/website/`.
 With the static website deployed to local k3s, run:
 
 ```bash
-make website-load-test
+make website-test-load
 ```
 
 The default run takes eleven minutes: one minute idle, followed by ten fresh
@@ -491,7 +491,7 @@ the website during measurement.
 For a shorter verification at the same arrival rate:
 
 ```bash
-make website-load-test ARGS='--visits 3 --idle-seconds 15'
+make website-test-load ARGS='--visits 3 --idle-seconds 15'
 ```
 
 These measurements size the static Nginx container, not Goblin's application

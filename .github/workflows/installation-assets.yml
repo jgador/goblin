@@ -39,7 +39,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           RECOMMENDATION: ${{ inputs.recommend && 'recommend' || 'preserve' }}
         run: node scripts/release-github.mts installation-assets "$VERSION" "$RECOMMENDATION"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: installation-source-${{ github.run_attempt }}
           path: .artifacts/installation-assets/output

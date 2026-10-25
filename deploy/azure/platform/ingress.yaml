@@ -4,9 +4,16 @@ metadata:
   name: goblin
   namespace: goblin
   annotations:
-    traefik.ingress.kubernetes.io/router.entrypoints: web
+    nginx.org/ssl-redirect: "true"
+    nginx.org/proxy-buffering: "false"
+    nginx.org/proxy-http-version: "1.1"
+    nginx.org/websocket-services: "platform,goblin-dev-relay"
+    nginx.org/proxy-read-timeout: "3600s"
+    nginx.org/proxy-send-timeout: "3600s"
+    cert-manager.io/cluster-issuer: goblin-letsencrypt
+    acme.cert-manager.io/http01-edit-in-place: "true"
 spec:
-  ingressClassName: traefik
+  ingressClassName: nginx
   rules:
     - host: __GOBLIN_PUBLIC_HOSTNAME__
       http:
@@ -18,3 +25,6 @@ spec:
                 name: platform
                 port:
                   number: 8787
+  tls:
+    - hosts: [__GOBLIN_PUBLIC_HOSTNAME__]
+      secretName: goblin-public-tls

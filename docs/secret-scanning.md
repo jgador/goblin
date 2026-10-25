@@ -53,9 +53,9 @@ type stripping; they do not require `make install` or compiled build output.
 | Command | Coverage |
 | --- | --- |
 | `make secrets-scan` | Full contents of the current index, plus tracked working-tree files and non-ignored untracked files, including hidden files. |
-| `make secrets-staged` | Full index contents of staged additions and modifications, including renames and type changes. Runs automatically before each commit after setup. |
-| `make secrets-history` | All commits reachable from local refs, including secrets added and removed in intermediate commits. Run before pushing existing commits. |
-| `make test-secrets` | Isolated integration tests against the installed Gitleaks CLI and Git hook. |
+| `make secrets-scan-staged` | Full index contents of staged additions and modifications, including renames and type changes. Runs automatically before each commit after setup. |
+| `make secrets-scan-history` | All commits reachable from local refs, including secrets added and removed in intermediate commits. Run before pushing existing commits. |
+| `make secrets-test` | Isolated integration tests against the installed Gitleaks CLI and Git hook. |
 
 The scanner reads exact index blobs, so fixing a working-tree file without
 restaging it does not hide a staged secret. A staged deletion can remove a secret

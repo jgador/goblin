@@ -24,10 +24,8 @@ runs:
           package-lock.json
           frontend/package-lock.json
           website/video/package-lock.json
-    - uses: actions/setup-dotnet@v5
+    - uses: ./.github/actions/setup-dotnet
       if: inputs.dotnet == 'true'
-      with:
-        global-json-file: global.json
     - uses: ./.github/actions/setup-rust
       if: inputs.rust == 'true'
     - uses: ./.github/actions/setup-deployment
@@ -35,4 +33,4 @@ runs:
     - name: Install locked development packages
       if: inputs.packages == 'true'
       shell: bash
-      run: make install-node
+      run: make node-install

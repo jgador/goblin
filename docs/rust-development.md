@@ -40,9 +40,9 @@ user. The setup script is safe to rerun and uses the version in
 `rust-toolchain.toml`; do not run it through `sudo`:
 
 ```bash
-make setup-rust
+make rust-setup
 source "$HOME/.cargo/env"
-make install-rust
+make rust-install
 ```
 
 The script also installs `x86_64-unknown-linux-musl`, which matches Codex's Linux
@@ -62,17 +62,17 @@ dotslash --version
 
 | Command | Behavior |
 | --- | --- |
-| `make build-native` | Build both Rust crates using the lockfile |
-| `make goblinctl ARGS=--help` | Run the operator CLI from source |
-| `make format-rust` | Format Rust, with one imported item per `use` |
-| `make format-rust-check` | Check the same formatting without modifying files |
-| `make lint-rust CARGO_ARGS="-p goblinctl"` | Lint a crate and its tests |
-| `make lint-rust` | Run the CI lint checks |
-| `make fix-rust CARGO_ARGS="-p goblinctl"` | Apply Clippy's automatic fixes; inspect the resulting diff |
-| `make test-rust CARGO_ARGS="-p goblinctl"` | Run selected tests with nextest and then documentation tests |
-| `make test-rust` | Run all Rust tests with nextest and then documentation tests |
-| `make test-rust-doc` | Run Rust documentation tests, which nextest excludes |
-| `make release-local` | Build the musl CLI and create the deterministic review archive |
+| `make rust-build` | Build both Rust crates using the lockfile |
+| `make goblinctl-run ARGS=--help` | Run the operator CLI from source |
+| `make rust-format` | Format Rust, with one imported item per `use` |
+| `make rust-format-check` | Check the same formatting without modifying files |
+| `make rust-lint CARGO_ARGS="-p goblinctl"` | Lint a crate and its tests |
+| `make rust-lint` | Run the CI lint checks |
+| `make rust-fix CARGO_ARGS="-p goblinctl"` | Apply Clippy's automatic fixes; inspect the resulting diff |
+| `make rust-test CARGO_ARGS="-p goblinctl"` | Run selected tests with nextest and then documentation tests |
+| `make rust-test` | Run all Rust tests with nextest and then documentation tests |
+| `make rust-test-doc` | Run Rust documentation tests, which nextest excludes |
+| `make release-package-local` | Build the musl CLI and create the deterministic review archive |
 | `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
 | `cargo xtask release prepare --source-branch release/0.1` | In Actions, prepare an unpublished Goblin/goblinctl candidate from checked release-branch source |
 | `cargo xtask release check-candidate --directory PATH --source-root SOURCE` | Check the candidate executable, source inputs and reproduced Azure assets |
@@ -86,7 +86,7 @@ version, original source SHA, shipping inputs, and archive checksum. It reads
 license documents from the selected source, including when tooling runs from a
 newer master commit. See [the release guide](releases.md).
 
-`make format-rust` passes `--config imports_granularity=Item` directly to rustfmt, exactly
+`make rust-format` passes `--config imports_granularity=Item` directly to rustfmt, exactly
 as Codex does. Keeping this option on the command line avoids the pinned stable
 formatter ignoring it as an unstable TOML configuration setting. The hook,
 Make targets, editor, and CI use the same formatting rule.

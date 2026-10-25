@@ -25,8 +25,9 @@ and [Work interface](docs/work-centered-ui.md) for current behavior and limits.
 Choose a version on the [installation page](https://goblinboard.com/install/), then
 deploy manually through Azure Portal. The installer provisions the application,
 PostgreSQL, Kubernetes execution, Headlamp, and saved logs. Open the deployment's
-`goblinUrl` to follow progress and use the password chosen during setup.
-The default Azure origin uses HTTP until an operator configures HTTPS.
+`setupUrl` for read-only progress. The installer configures Let’s Encrypt HTTPS
+for Azure's generated hostname; supply a certificate contact email, then open
+`goblinUrl` and use the password chosen during setup. No custom DNS record is needed.
 See the [Azure guide](deploy/azure/README.md) and [reference](deploy/azure/reference.md).
 
 To test the full installation in a dedicated WSL/Ubuntu environment with systemd:
@@ -47,18 +48,20 @@ Install GNU Make, .NET 10, Node.js 24+, and the Ubuntu build prerequisites descr
 in [Rust development](docs/rust-development.md), then run:
 
 ```bash
-make setup-rust
+make rust-setup
 source "$HOME/.cargo/env"
 make install
-make dev ARGS=--without-database
+make dev-start ARGS=--without-database
 ```
 
 This starts connection management at **http://localhost:8787** without durable
 Work. For Work development, create a migrated PostgreSQL profile using the
 [database workflow](docs/database.md#wsl-and-windows-pgadmin), then run
-`make dev DB_PROFILE=wsl`. Both paths share the Rust password verifier.
+`make dev-start DB_PROFILE=wsl`. Both paths share the Rust password verifier.
 Use [authentication](docs/authentication.md) for Codex sign-in and connection checks,
 and [execution hosting](docs/execution-hosting.md) for repository configuration.
+Connect a customer-created [ChatGPT plugin](docs/chatgpt-integration.md) to read
+Work explicitly shared from your own instance.
 
 `make help` lists tasks. Common commands are `make build`, `make test`,
 `make check`, and `make format`; choose verification using the
@@ -70,7 +73,7 @@ contributor tooling. The native [goblinctl CLI](docs/goblinctl.md) ships separat
 and needs no Rust compiler or Python on installed hosts.
 
 The public [website](website/README.md) is independent of the application. Run
-`make website-dev` for Docker development at **http://localhost:5173**,
+`make website-start` for Docker development at **http://localhost:5173**,
 and `make website-stop` to stop it. Delivery procedures live in
 [releases](docs/releases.md), [GitHub Actions](docs/github-actions.md), and
 [website production](website/production/README.md).

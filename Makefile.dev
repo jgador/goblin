@@ -1,0 +1,171 @@
+# Included by Makefile; shared shell and tool settings live there.
+# Targets use <scope>-<action>[-<qualifier>] and are grouped by scope.
+DB_PROFILE ?= wsl
+
+# =============================================================================
+# Codex: direct invocation of the pinned runtime.
+# =============================================================================
+.PHONY: codex-run
+
+# Invoke the locked Codex npm runtime directly without downloading another version.
+codex-run:
+	node node_modules/@openai/codex/bin/codex.js $(ARGS)
+
+# =============================================================================
+# Database: selected-profile migration, EF scaffolding, and opt-in tests.
+# =============================================================================
+.PHONY: database-migrate database-scaffold database-test
+
+# Apply SQL migrations using the selected PostgreSQL profile.
+database-migrate:
+	cargo xtask database-migrate --profile "$(DB_PROFILE)"
+
+# Regenerate EF mappings using the selected PostgreSQL profile.
+database-scaffold:
+	cargo xtask database-scaffold --profile "$(DB_PROFILE)"
+
+# Run opt-in database integration tests on a development installation.
+database-test:
+	cargo xtask test-postgres --profile "$(DB_PROFILE)"
+
+# =============================================================================
+# Relay: an existing Azure HTTPS test gateway for local Goblin development.
+# =============================================================================
+.PHONY: relay-start relay-status relay-stop
+
+# Connect a dedicated Azure HTTPS test installation to the local Goblin build.
+relay-start:
+	cargo xtask relay start $(ARGS)
+
+# Inspect the selected development upstream and tunnel.
+relay-status:
+	cargo xtask relay status
+
+# Restore the test VM's installed Goblin upstream and stop the owned relay.
+relay-stop:
+	cargo xtask relay stop
+
+# =============================================================================
+# Dev: direct application startup and owned WSL environment reset.
+# =============================================================================
+.PHONY: dev-start dev-reset
+
+# Build the application, provision local credentials, and launch the .NET host.
+dev-start: build
+	cargo xtask dev --profile "$(DB_PROFILE)" $(ARGS)
+
+# Reset the owned WSL installation and runtime/test state, including the saved password.
+dev-reset:
+	bash scripts/dev-clean-slate.sh
+
+# =============================================================================
+# Docker: timed platform builds and image/cache cleanup.
+# =============================================================================
+.PHONY: docker-build docker-clean-images docker-clean-cache
+
+# Time the complete Goblin image build; pass extra Docker flags with ARGS.
+docker-build:
+	time docker build --platform linux/amd64 --progress=plain \
+		-t goblin-platform:local $(ARGS) .
+
+# Remove Goblin image tags, including registry-qualified names.
+docker-clean-images:
+	docker image ls --format '{{.Repository}}:{{.Tag}}' \
+		| awk -F/ '$$NF ~ /^goblin[^:]*:/ { print }' \
+		| xargs -r docker image rm
+
+# Clear unused cache for the default Docker builder across all projects.
+docker-clean-cache:
+	docker builder prune --all --force
+
+# =============================================================================
+# Goblinctl: operator CLI invocation from source.
+# =============================================================================
+.PHONY: goblinctl-run
+
+# Run the operator CLI from source with arguments supplied through ARGS.
+goblinctl-run:
+	cargo run --locked --package goblinctl -- $(ARGS)
+
+# =============================================================================
+# Local: full installation lifecycle, database access, and inspection.
+# =============================================================================
+.PHONY: local-run local-start local-status local-stop local-reset local-logs local-retry local-configure-database local-locate-password
+
+# Run a local installer command from source with arguments supplied through ARGS.
+local-run:
+	cargo run --locked -q -p goblinctl -- local $(ARGS)
+
+# Start or update the full local installation, preserving installer safety checks.
+local-start:
+	cargo run --locked -q -p goblinctl -- local start $(ARGS)
+
+# Report local installation status without starting or resetting it.
+local-status:
+	cargo run --locked -q -p goblinctl -- local status $(ARGS)
+
+# Stop the owned local installation using the existing operator CLI.
+local-stop:
+	cargo run --locked -q -p goblinctl -- local stop $(ARGS)
+
+# Reset the owned local installation; explicit ARGS=--yes remains required.
+local-reset:
+	cargo run --locked -q -p goblinctl -- local reset $(ARGS)
+
+# Read local installation logs; use ARGS=--follow to stream them.
+local-logs:
+	cargo run --locked -q -p goblinctl -- local logs $(ARGS)
+
+# Explicitly retry a failed local installation using the operator CLI.
+local-retry:
+	cargo run --locked -q -p goblinctl -- local retry $(ARGS)
+
+# Configure the local installation’s PostgreSQL host endpoint on port 5432.
+local-configure-database:
+	cargo run --locked -q -p goblinctl -- local database $(ARGS)
+
+# Report the local password verifier location through the operator CLI.
+local-locate-password:
+	cargo run --locked -q -p goblinctl -- local password $(ARGS)
+
+# =============================================================================
+# Password: local owner password selection.
+# =============================================================================
+.PHONY: password-set
+
+# Choose and confirm a local password; use ARGS=--replace to replace its verifier.
+password-set:
+	cargo run --locked -q -p goblinctl -- password set $(ARGS)
+
+# =============================================================================
+# Website: Docker development, local k3s deployment, and load testing.
+# =============================================================================
+.PHONY: website-start website-stop website-status website-logs website-deploy website-preview website-test-load
+
+# Start the standalone website in Docker, detached, with browser live reload.
+website-start:
+	bash website/manage.sh dev $(ARGS)
+
+# Stop the website development container without affecting the application.
+website-stop:
+	bash website/manage.sh stop $(ARGS)
+
+# Show the website development container's status.
+website-status:
+	bash website/manage.sh status $(ARGS)
+
+# Read website development logs; use ARGS=--follow to stream them.
+website-logs:
+	bash website/manage.sh logs $(ARGS)
+
+# Build the static website, import it into local k3s, and wait for its rollout.
+website-deploy:
+	bash website/manage.sh deploy
+
+# Forward the k3s website to localhost:5174; keep this terminal open.
+website-preview:
+	bash website/manage.sh preview
+
+# Measure the k3s website container at one fresh browser visit per minute.
+website-test-load:
+	bash website/manage.sh load-test $(ARGS)

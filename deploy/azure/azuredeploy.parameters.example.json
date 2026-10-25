@@ -3,6 +3,7 @@
   "contentVersion": "1.0.0.0",
   "parameters": {
     "companyName": { "value": "Goblin" },
+    "certificateEmail": { "value": "owner@example.com" },
     "location": { "value": "southeastasia" },
     "environment": { "value": "prod" }
   }

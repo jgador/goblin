@@ -4,6 +4,7 @@ export const SetupAction = Object.freeze({
   Begin: "begin",
   Start: "start",
   Detail: "detail",
+  Progress: "progress",
   PublicUrl: "public-url",
   Complete: "complete",
   FailStep: "fail-step",
@@ -35,6 +36,7 @@ export const SetupStepStatus = Object.freeze({
 export const SetupStep = Object.freeze({
   Prepare: "prepare",
   K3s: "k3s",
+  Nginx: "nginx",
   CertManager: "cert-manager",
   Sandbox: "sandbox",
   Image: "image",
@@ -44,6 +46,7 @@ export const SetupStep = Object.freeze({
   Migrate: "migrate",
   Deploy: "deploy",
   Verify: "verify",
+  Https: "https",
   Activate: "activate",
 });
 

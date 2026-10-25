@@ -25,7 +25,7 @@ Git, k3s, and the application's existing build/runtime dependencies remain.
 The PostgreSQL commands on this page assume a root shell.
 
 ```bash
-goblinctl install --hostname goblin.example --source-ref COMMIT
+goblinctl install --hostname goblin.example --certificate-email owner@example.com --source-ref COMMIT
 sudo goblinctl install status --json
 sudo goblinctl install retry
 sudo goblinctl status --json
@@ -58,6 +58,7 @@ Dedicated local installations retain ownership checks and a checkout association
 make local-start                 # builds the current CLI for development
 sudo goblinctl --repo "$PWD" local start      # uses a precompiled binary
 sudo goblinctl local stop                     # retains application data and PVCs
+sudo goblinctl local retry --refresh          # retries a failed install with the current checkout
 sudo goblinctl local reset --yes              # deletes only this owned local cluster
 goblinctl --repo "$PWD" password set --replace
 sudo goblinctl local start                    # loads the changed local verifier
@@ -67,8 +68,12 @@ goblinctl local database
 The local source snapshot includes Git-visible working-tree changes and untracked
 files, excludes ignored stores/build products, and refuses symlinks. A completed
 installation resumes without rebuilding. Failed installation requires explicit
-retry. Stop is suspension; reset is explicit deletion of the owned test cluster.
-The native CLI remains installed after reset.
+retry. `retry` reuses the failed attempt's source snapshot; `retry --refresh`
+first replaces that snapshot and the installed setup assets with the current
+checkout and CLI, so a fix can be tested without deleting the cluster. It accepts
+only a stopped, failed installation. Stop is suspension; reset is explicit deletion
+of the owned test cluster. The native CLI, its license documents, and the verified
+download cache in `/var/cache/goblin/downloads` remain after reset.
 
 The installer retains its existing root worker and unprivileged DynamicUser setup
 service as separate processes. Public setup exposes static assets, status,
@@ -76,30 +81,63 @@ health, and the read-only `/setup/events` progress stream. Its local health sock
 The server bounds request sizes, connection count and timeouts. The existing
 handoff marker, installer lock, rollback, and retained-source retry rules remain.
 
+Public Azure setup is read-only and has no retry helper connection. Use the root
+CLI to retry. Local loopback setup exposes `POST /setup/retry`, accepting a JSON body
+with the owner password. The setup service
+relays it, unread, to `goblin-setup-control.socket`. For each connection, systemd starts a root
+`goblinctl internal setup-control` process, one at a time. That process returns
+`not-failed` unless the installation has failed, checks the password against the
+private verifier, and starts `goblin-installer.service` unless it is already
+active. Responses are `202 started`, `400 invalid`, `401 unauthorized`,
+`409 not-failed` or `running`, `429 throttled`, and `503 unavailable`. Five
+consecutive wrong passwords lock page retries for one minute, doubling up to 15
+minutes; the root-only `retry-throttle.json` beside the verifier records this.
+Requiring JSON makes cross-site browser requests fail CORS preflight.
+
 PostgreSQL client profiles are independent of `--repo` and installer state. See
 [the database guide](database.md) for WSL/Azure connections, Windows exports,
 refresh, cleanup and per-command profile selection. Client commands need `psql`
 and OpenSSL; Azure access also needs SSH.
 
+Developer-only `make relay-start`, `make relay-status`, and `make relay-stop`
+commands live in xtask. See [ChatGPT local testing](chatgpt-local-testing.md).
+The production CLI contains no WSL relay commands.
+
 ## Parallel installation and live progress
 
 After retaining and validating the source snapshot, the installer builds Goblin
-alongside k3s setup. It prefetches service images directly into k3s as soon as CRI
-is available. Certificate manager and Sandbox install concurrently after node
-readiness. PostgreSQL waits for both add-ons; image import waits for the build and
-k3s; migration waits for PostgreSQL and image import. Deployment waits for the
-migration and image downloads. Existing readiness and public handoff checks remain.
+alongside k3s setup. K3s setup downloads the pinned k3s binary and airgap
+system-image archive in parallel, verifies both, and keeps them in
+`/var/cache/goblin/downloads`. Retries and local resets reuse them, and an
+installation removes cached files from other k3s versions. The upstream install
+script then runs with `INSTALL_K3S_SKIP_DOWNLOAD=true`. K3s imports the archive at
+startup. Traefik is disabled. A separate worker installs pinned F5 NGINX from a
+checksum-verified inline Helm chart and starts its Service as `ClusterIP`.
+
+After k3s is ready, NGINX, certificate manager, Sandbox, and the service-image prefetch
+run concurrently. Each add-on pulls its own images before applying manifests.
+PostgreSQL waits for both add-ons and the prefetch; image import waits for the build
+and k3s; migration waits for PostgreSQL and image import. Deployment waits for the
+migration and image downloads. Verification waits for NGINX and application readiness. Azure then serves progress
+and ACME validation publicly before enabling the final HTTPS Goblin route.
+Downloads come first, so the fixed rollout timeouts measure startup only.
 The production Dockerfile keeps its original build stages and asset packaging.
 
-Four workers prefetch images by default. Set `GOBLIN_IMAGE_PULL_WORKERS=1` through
-`8` in a `goblin-installer.service` systemd environment override to tune smaller
-hosts. Each explicit pull has a ten-minute timeout. Kubernetes and BuildKit also
-perform their own pulls; this limit applies to Goblin's prefetch workers. Service
-references come from validated application manifests and the embedded PostgreSQL
-manifest; add-on references use the installer's pinned release versions.
+Installer downloads resume from partial files. They fail only when under 1 KiB/s
+arrives for two minutes, with six attempts in total; permanent HTTP errors stop
+immediately. Four workers prefetch service images by default. Set
+`GOBLIN_IMAGE_PULL_WORKERS=1` through `8` in a `goblin-installer.service` systemd
+environment override to tune smaller hosts. Containerd cancels an image pull that
+stops receiving data; the installer resumes it up to three times. A two-hour limit
+per pull only ends a hang that containerd misses. Kubernetes and BuildKit also
+perform their own pulls. Service references come from validated application
+manifests and the embedded PostgreSQL manifest; add-on references use the
+installer's pinned release versions.
 
 The setup page shows concurrent steps and a live installation log, including build
-stages, cache reuse, individual image downloads and database checks. The latest
+stages, cache reuse, individual image downloads and database checks. Each running
+task also shows its latest activity, such as k3s download size and rate. These
+`progress` updates replace the task detail without adding log entries. The latest
 300 structured entries, with timestamps and attempt IDs, are retained in the
 atomic status document. Refreshing the page restores that tail. EventSource
 reconnects with an event ID between bounded SSE batches; status polling continues
@@ -108,10 +146,13 @@ collection. Public messages are authored progress events and reconstructed
 BuildKit records; arbitrary package/compiler output, credentials and upstream
 errors remain in the private host log, available through `sudo goblinctl logs`.
 
-Each worker runs in an owned process group. A failure blocks dependent work and
-stops outstanding workers before recovery releases the attempt lock. State writes
+Each worker runs in an owned process group. A failure starts no new tasks. Workers
+already running finish, so their downloads and builds are kept for the retry, and
+the page reports how many are finishing. A service stop still stops all workers
+before recovery releases the attempt lock. State writes
 use a separate short file lock so concurrent updates cannot overwrite each other.
-Failed installations disable their boot unit and require `goblinctl install retry`;
+Failed installations disable their boot unit and require an explicit retry, either
+from the setup page with the owner password or with `goblinctl install retry`;
 the setup page remains available. The retained source archive, password, completed
 Docker/k3s images, build cache, certificates and PVCs are reused and checked on retry.
 Saved step completion alone never causes infrastructure readiness checks to be skipped.
@@ -135,19 +176,19 @@ The root Rust workspace has two crates:
   and optional PostgreSQL tests. It reuses the CLI library.
 
 ```bash
-make build-native
-make test-rust
-make test-rust-doc
-make lint-rust
-make format-rust-check
+make rust-build
+make rust-test
+make rust-test-doc
+make rust-lint
+make rust-format-check
 make test
-make test-browser ARGS=tests/e2e/setup.spec.ts
+make browser-test ARGS=tests/e2e/setup.spec.ts
 ```
 
 Install the pinned helpers and configure your editor using the
 [Rust development guide](rust-development.md).
 
-`make dev DB_PROFILE=wsl` prepares the selected database profile and owner credentials,
+`make dev-start DB_PROFILE=wsl` prepares the selected database profile and owner credentials,
 then launches .NET through `cargo xtask dev --profile wsl`.
 Protocol/Kubernetes generators, EF scaffolding, and the .NET SQL migration engine
 remain authoritative. Production shell helpers find the installed CLI via
@@ -187,7 +228,7 @@ the same isolated build for its frozen release source;
 `package` alone does not prove an arbitrary supplied binary came from this checkout.
 
 Local packages are written to `.artifacts/goblinctl/`, outside the test-output
-directory that `make build-tools` cleans.
+directory that `make tools-build` cleans.
 
 The archive contains `goblinctl` and its license documents; setup assets are compiled into that binary.
 Archive order, timestamps, ownership, modes and compression are deterministic for

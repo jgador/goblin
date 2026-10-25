@@ -83,6 +83,11 @@ application/native consumers do not use them. Missing or invalid CI inputs fail
 verification; they never default to an empty successful selection. See
 [CI selection](github-actions.md#ci-selection-and-required-result).
 
+The shared .NET Actions setup appends its verified SDK directory to `GITHUB_PATH`
+and writes `DOTNET_ROOT` through `GITHUB_ENV` for subsequent steps. These
+GitHub-owned command files and the SDK root are defined in the Node catalog;
+they do not change Goblin's production configuration.
+
 Owner-only agentic preparation also validates `GITHUB_ACTOR`,
 `GITHUB_TRIGGERING_ACTOR`, `GITHUB_REPOSITORY`, and `GITHUB_REF` before examining
 changes. `OPENAI_API_KEY` is a GitHub Actions secret for gh-aw's isolated API proxy;
@@ -103,7 +108,8 @@ entries are not supported production configuration.
 | --- | --- |
 | `GOBLIN_PASSWORD_HASH_FILE` | Private verifier file path. Web startup requires it. Tooling validates an explicit override without silently replacing it; otherwise dev/local installation uses `.goblin-secrets/owner-password`. |
 | `GOBLIN_LOCAL_PASSWORD` | Unattended password input for creation/replacement. An existing verifier wins unless replacement is explicit. Native tooling removes plaintext before launching children. |
-| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Web defaults to `http://localhost:<port>`; installation defaults to `http://<hostname>`. Remote HTTP requires `GOBLIN_ALLOW_INSECURE_HTTP=true`. |
+| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Web defaults to `http://localhost:<port>`; public installation defaults to `https://<hostname>`; local installation uses loopback HTTP. Remote HTTP requires `GOBLIN_ALLOW_INSECURE_HTTP=true`. |
+| `GOBLIN_CHATGPT_ENABLED` | Optional true/false flag enabling embedded OpenIddict and MCP. Unset or false disables both; the Azure HTTPS installer sets true. Requires durable Work and an HTTPS public origin; issuer is derived from that origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
 | `ConnectionStrings__Goblin` | Application PostgreSQL connection mapped by .NET to `ConnectionStrings:Goblin`. Rust provisioning writes the same environment name and the HTTP test harness forwards its opt-in test connection to it. |
 | `ConnectionStrings__GoblinAdmin` | Schema administrator connection mapped to `ConnectionStrings:GoblinAdmin`; Rust migration Jobs use the same name. |
 | `GOBLIN_TEST_POSTGRES_APP` / `GOBLIN_TEST_POSTGRES_ADMIN` | Opt-in real-database test connection strings. These are sensitive and never application defaults. |
@@ -137,7 +143,7 @@ current embedded asset changes require a newly built installer before release.
    into application and core APIs. Do not add environment access to Work rules.
 4. Update affected deployment templates and operator documentation together.
    Recheck explicit subprocess allowlists before forwarding any new value.
-5. Run `make test`, `make format-rust-check`, and Clippy. Review real PostgreSQL skips;
+5. Run `make test`, `make rust-format-check`, and Clippy. Review real PostgreSQL skips;
    configure the opt-in connections when persistence behavior needs verification.
 
 `tests/deployment/environment.test.ts` checks catalog metadata, matching shared

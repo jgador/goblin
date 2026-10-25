@@ -1,6 +1,7 @@
 [Unit]
 Description=Goblin installation status
-After=network.target
+After=network.target goblin-setup-control.socket
+Wants=goblin-setup-control.socket
 
 [Service]
 Type=exec

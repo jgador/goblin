@@ -4,7 +4,7 @@ The Kubernetes installation includes Headlamp at **`/headlamp/`** on the same
 address as Goblin. Open **Settings → Cluster → Open cluster**, or visit:
 
 - Local WSL installation: `http://localhost:8788/headlamp/` (or your chosen port).
-- Azure VM: `http://<Azure-assigned-hostname>/headlamp/`.
+- Azure VM: `https://<Azure-assigned-hostname>/headlamp/`.
 - A Goblin installation configured for HTTPS: `https://<hostname>/headlamp/`.
 
 Use the normal Goblin password. Opening Headlamp while locked takes you to
@@ -20,7 +20,7 @@ The image is pinned to version 0.45.0 and its multi-architecture digest in
 [`deploy/platform/headlamp.yaml`](../deploy/platform/headlamp.yaml). It runs without root
 or a writable root filesystem and has its own temporary volume and service account.
 
-The existing Traefik route sends `/headlamp` to Goblin. The C# backend checks the
+The existing NGINX route sends `/headlamp` to Goblin. The C# backend checks the
 Goblin session and forwards permitted requests to the private Headlamp Service.
 Local forwarding and Azure's assigned hostname therefore use the same route.
 Headlamp has no public Ingress, NodePort, or LoadBalancer. Its NetworkPolicy allows
@@ -50,7 +50,7 @@ installation. Its own route permits the inline styles required by its UI and
 only the hashes of its two pinned inline bootstrap scripts. Goblin's existing
 pages retain their stricter Content Security Policy. When upgrading the image,
 verify those hashes and run the real browser check below. The current Azure
-installer uses HTTP; Headlamp follows the installation's existing HTTP/HTTPS
+installer uses HTTPS; Headlamp follows the installation's existing HTTP/HTTPS
 configuration.
 
 Headlamp failure does not make Work unavailable: `/readyz` still checks Goblin's
@@ -60,7 +60,7 @@ before declaring the installation complete.
 
 ## Development and checks
 
-A standalone `make dev` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
+A standalone `make dev-start` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
 optionally points the backend at a trusted private Headlamp origin configured
 with `-base-url=/headlamp`. Kubernetes manifests set it automatically. Do not
 point it at an arbitrary third-party service.
@@ -77,7 +77,7 @@ kubectl port-forward -n goblin service/goblin-headlamp 14466:4466 --address 127.
 Then run:
 
 ```bash
-GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make test-headlamp
+GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make headlamp-test
 ```
 
 This uses isolated Goblin authentication and real Kubernetes reads, without saved

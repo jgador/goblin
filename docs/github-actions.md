@@ -34,7 +34,7 @@ Reusable workflows can appear with caller/called job paths, such as
 | --- | --- | --- | --- |
 | CI | [ci.yml](../.github/workflows/ci.yml) | `changes`, `csharp`, `rust`, `javascript`, `integration`, `installer`, `test_results` | Select affected verification groups and report the required merge result |
 | CI Maintenance | [ci-policy.md](../.github/workflows/ci-policy.md) | `prepare` and generated gh-aw jobs | Owner-only proposed CI policy updates |
-| Docs Maintenance | [documentation.md](../.github/workflows/documentation.md) | `prepare` and generated gh-aw jobs | Owner-only documentation drift review and draft corrections |
+| Docs Maintenance | [documentation.md](../.github/workflows/documentation.md) | `prepare` and generated gh-aw jobs | Owner-only documentation drift review on pull requests or manual dispatch |
 | Platform Release | [platform-release.yml](../.github/workflows/platform-release.yml) | `prepare`, `verify`, `seal`, `publish`, `installation`, `report` | Publish the verified release pair, then prepare installation assets and deploy the website through its production approval |
 | Installation Assets | [installation-assets.yml](../.github/workflows/installation-assets.yml) | `prepare`, `website` | Prepare the catalog from authenticated published assets, then call Website Release with the exact snapshot artifact |
 | Recommend Release | [recommend-release.yml](../.github/workflows/recommend-release.yml) | `installation` | Recommend an existing release or repair its installation hosting through Website Release |
@@ -82,6 +82,8 @@ directory names do not determine a language's ownership.
 Integration checks retain generated contract values, dependency/schema checks,
 frontend, release-script, HTTP, and offline deployment tests. Installer checks retain the musl release build,
 compiler-input verification, and the existing setup/install browser journeys.
+They also build the platform Docker image (`make platform-check-image`), so a
+missing build input fails CI rather than a later installation.
 Their inclusion for each language is conservative: C# HTTP contracts, Rust
 embedded assets, and browser setup code cross those boundaries. Separate runners
 prevent concurrent build/cleanup commands from sharing output. Pure language
@@ -121,12 +123,33 @@ Go and other recognized unsupported source types fail until explicitly configure
 The [owner-only maintenance workflows](agentic-maintenance.md) discover manifest
 drift and propose policy updates in draft PRs using the repository's OpenAI key.
 
-Run `make test-ci`, `make test-task-runner`, `make typecheck-scripts`, and workflow
+Run `make ci-test`, `make make-test`, `make scripts-typecheck`, and workflow
 lint when changing this policy. Tests exercise real Git ranges/renames, output
 transport, documentation/mixed/configuration changes, registration, command
 failure, summary escaping, and required-result failures. Actual check publication
 and merge-queue behavior require a GitHub Actions run. Website Release is an
 independent workflow and retains its own `validate` check and triggers.
+
+## Action runtimes
+
+Use JavaScript actions whose `action.yml` declares `runs.using: node24`, including
+actions called by composite actions. Setting `setup-node` to Node.js 24 only
+selects the runtime for repository commands; each action declares its own runtime.
+For artifact actions, upload v6 and download v7 are the first releases that
+default to Node.js 24. Preserve SHA pins where used, and update agentic workflow
+Markdown sources before [regenerating their lock files](agentic-maintenance.md).
+These actions require Actions Runner v2.327.1 or newer; the workflows use
+GitHub-hosted Ubuntu 24.04 runners.
+
+The shared [.NET setup action](../.github/actions/setup-dotnet/action.yml) installs
+Linux x64 SDK **10.0.403**, including its ASP.NET Core and .NET runtimes, from
+Microsoft's public `dotnetcli.blob.core.windows.net` feed. Its SHA-512 is pinned
+from Microsoft's release metadata and checked before extraction. Both CI and
+Platform Release use this action. Update its version and checksum together when
+changing the CI SDK; `global.json` retains the application's SDK compatibility
+policy, which the selected SDK must satisfy. This avoids the `aka.ms` redirect to
+the unavailable origin feed and an additional floating LTS runtime download.
+Downloads and extracted SDK files stay under `.artifacts/dotnet/`.
 
 ## Installation commands and artifacts
 
