@@ -1,4 +1,7 @@
 {
+  "files.associations": {
+    "Makefile.dev": "makefile"
+  },
   "rust-analyzer.checkOnSave": true,
   "rust-analyzer.check.command": "clippy",
   "rust-analyzer.check.extraArgs": ["--tests"],
