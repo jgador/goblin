@@ -2,7 +2,14 @@ import { environmentVariables as Env } from "../../config/environment.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+    mkdir,
+    mkdtemp,
+    readFile,
+    rm,
+    stat,
+    writeFile,
+} from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 
 // Real xtask commands and remote shell scripts, with SSH/Kubernetes/curl replaced
@@ -73,6 +80,7 @@ async function fixture() {
 const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
+const assert = require('node:assert/strict');
 const root = process.env[${JSON.stringify(Env.GOBLIN_RELAY_TEST_ROOT.name)}];
 const name = path.basename(process.argv[1]);
 const args = process.argv.slice(2);
@@ -94,8 +102,18 @@ if (name === 'ssh') {
   }
 } else if (name === 'id') process.stdout.write('1000\\n');
 else if (name === 'sudo') {
-  const result = cp.spawnSync(args[1], args.slice(2), {stdio:'inherit'});
-  process.exit(result.status ?? 1);
+  if (args[1] === 'install') {
+    // Simulate remote ownership; the local test runner cannot chown to the VM's UID.
+    assert.deepEqual(args.slice(2, -1), ['-d', '-m', '0700', '-o', '1000', '-g', '1000']);
+    const directory = path.resolve(args.at(-1));
+    assert.equal(path.dirname(directory), path.join(root, 'remote/var/lib/goblin/dev-relay'));
+    assert.match(path.basename(directory), /^[a-f0-9]{32}$/);
+    fs.mkdirSync(directory, {recursive:true, mode:0o700});
+    fs.chmodSync(directory, 0o700);
+  } else {
+    const result = cp.spawnSync(args[1], args.slice(2), {stdio:'inherit'});
+    process.exit(result.status ?? 1);
+  }
 } else if (name === 'curl') {
   const local = args.some(arg => arg.startsWith('http://127.0.0.1:'));
   if (!local && upstream() === 'goblin-dev-relay' && !fs.existsSync(path.join(root, 'connected'))) process.exit(22);
@@ -204,6 +222,11 @@ test("relay CLI preserves ACME routing, forwards through a private socket, fails
         pod.volumes[0].hostPath.path,
         /^\/var\/lib\/goblin\/dev-relay\/[a-f0-9]{32}$/,
     );
+    assert.equal(
+        (await stat(join(f.root, "remote", pod.volumes[0].hostPath.path)))
+            .mode & 0o777,
+        0o700,
+    );
     const config = resources["configmap/goblin-dev-relay"].data["nginx.conf"];
     assert.match(config, /proxy_pass http:\/\/unix:\/relay\/upstream.sock:/);
     assert.match(config, /proxy_set_header X-Forwarded-Proto https/);
@@ -250,7 +273,8 @@ test("relay CLI preserves ACME routing, forwards through a private socket, fails
 test("relay cleanup rejects another session owner without changing routing or deleting resources", async (t) => {
     const f = await fixture();
     t.after(f.close);
-    assert.equal(f.start().status, 0);
+    const started = f.start();
+    assert.equal(started.status, 0, started.stderr);
     const ingress = await f.ingress();
     ingress.metadata.annotations["goblin.dev/relay-owner"] = "another-session";
     await writeFile(join(f.root, "ingress.json"), JSON.stringify(ingress));
@@ -266,7 +290,8 @@ test("relay cleanup rejects another session owner without changing routing or de
 test("relay cleanup preserves routing and resources if a proxy resource loses its owner", async (t) => {
     const f = await fixture();
     t.after(f.close);
-    assert.equal(f.start().status, 0);
+    const started = f.start();
+    assert.equal(started.status, 0, started.stderr);
     const ingress = await f.ingress();
     const resources = JSON.parse(
         await readFile(join(f.root, "resources.json"), "utf8"),
