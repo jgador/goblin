@@ -18,11 +18,11 @@ patches:
         value: Never
       - op: replace
         path: /spec/podTemplate/spec/containers/0/env/0/value
-        value: http://__GOBLIN_PUBLIC_HOSTNAME__
+        value: __GOBLIN_PUBLIC_ORIGIN__
       - op: add
         path: /spec/podTemplate/spec/containers/0/env/-
         value:
-          name: GOBLIN_ALLOW_INSECURE_HTTP
+          name: GOBLIN_CHATGPT_ENABLED
           value: "true"
   - target:
       group: networking.k8s.io
@@ -39,7 +39,8 @@ patches:
                     kubernetes.io/metadata.name: kube-system
                 podSelector:
                   matchLabels:
-                    app.kubernetes.io/name: traefik
+                    app.kubernetes.io/name: nginx-ingress
+                    app.kubernetes.io/instance: goblin-nginx
             ports:
               - protocol: TCP
                 port: 8787

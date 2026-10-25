@@ -25,8 +25,9 @@ and [Work interface](docs/work-centered-ui.md) for current behavior and limits.
 Choose a version on the [installation page](https://goblinboard.com/install/), then
 deploy manually through Azure Portal. The installer provisions the application,
 PostgreSQL, Kubernetes execution, Headlamp, and saved logs. Open the deployment's
-`goblinUrl` to follow progress and use the password chosen during setup.
-The default Azure origin uses HTTP until an operator configures HTTPS.
+`setupUrl` for read-only progress. The installer configures Let’s Encrypt HTTPS
+for Azure's generated hostname; supply a certificate contact email, then open
+`goblinUrl` and use the password chosen during setup. No custom DNS record is needed.
 See the [Azure guide](deploy/azure/README.md) and [reference](deploy/azure/reference.md).
 
 To test the full installation in a dedicated WSL/Ubuntu environment with systemd:

@@ -1,6 +1,65 @@
 import { test, expect } from "@playwright/test";
 import { setupRetryPassword, startSetup } from "../support/setup.js";
 
+test("public setup stays readable without requesting a password before HTTPS is available", async ({
+    page,
+}) => {
+    const setup = await startSetup();
+    try {
+        setup.transition("public-url", "https://test.example.com");
+        setup.transition("begin");
+        setup.transition("start", "https");
+        await page.route("https://test.example.com/**", (route) =>
+            route.abort("connectionfailed"),
+        );
+        await page.goto(setup.url);
+        await expect(
+            page.getByRole("heading", { name: "Getting things ready." }),
+        ).toBeVisible();
+        expect(page.url()).toBe(setup.url + "/");
+        setup.transition("failed");
+        await expect(page.getByRole("alert")).toContainText(
+            "Your progress is saved.",
+        );
+        await expect(page.getByLabel("Goblin password")).toBeHidden();
+        await expect(page.locator("#recovery-guidance")).toContainText(
+            "retry from the VM",
+        );
+        expect(page.url()).toBe(setup.url + "/");
+    } finally {
+        await setup.close();
+    }
+});
+
+test("public progress navigates only once its HTTPS readiness probe succeeds", async ({
+    page,
+}) => {
+    const setup = await startSetup();
+    try {
+        setup.transition("public-url", "https://test.example.com");
+        let ready = false;
+        await page.route("https://test.example.com/**", async (route) => {
+            if (!ready) return route.abort("connectionfailed");
+            await route.fulfill({
+                status: 200,
+                contentType: "text/html",
+                body: "<title>Goblin HTTPS</title><h1>Secure workspace</h1>",
+            });
+        });
+        await page.goto(setup.url);
+        await expect(
+            page.getByRole("heading", { name: "Getting things ready." }),
+        ).toBeVisible();
+        ready = true;
+        await expect(page).toHaveURL("https://test.example.com/");
+        await expect(
+            page.getByRole("heading", { name: "Secure workspace" }),
+        ).toBeVisible();
+    } finally {
+        await setup.close();
+    }
+});
+
 test("setup summarizes concurrent tasks and preserves disclosures and focus across updates", async ({
     page,
 }) => {
@@ -39,7 +98,7 @@ test("setup summarizes concurrent tasks and preserves disclosures and focus acro
         setup.transition("complete", "k3s");
         await expect(progress).toHaveAttribute(
             "aria-valuetext",
-            "2 of 12 tasks complete",
+            "2 of 14 tasks complete",
         );
         await expect(page.locator("#completed-count")).toHaveText("2");
         await expect(serverSummary).toBeFocused();
@@ -193,7 +252,7 @@ test("setup shows live progress, failure and a successful retry across refreshes
         await expect(
             page.getByRole("heading", { name: "Getting things ready." }),
         ).toBeVisible();
-        await expect(page.locator(".stage-tasks li")).toHaveCount(12);
+        await expect(page.locator(".stage-tasks li")).toHaveCount(14);
         setup.transition("begin");
         setup.transition("start", "k3s");
         await expect(page.locator('li[data-status="running"]')).toContainText(
@@ -341,7 +400,7 @@ test("a localhost visit moves to the configured origin and opens Goblin even if 
     try {
         const alias = setup.url.replace("127.0.0.1", "localhost");
         await page.goto(alias);
-        await expect(page.locator(".stage-tasks li")).toHaveCount(12);
+        await expect(page.locator(".stage-tasks li")).toHaveCount(14);
         setup.transition("begin");
         setup.transition("public-url", setup.url);
         await expect(page).toHaveURL(setup.url + "/");

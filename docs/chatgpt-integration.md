@@ -3,7 +3,8 @@
 Each customer connects ChatGPT directly to their own Goblin instance using
 **Add custom MCP server**. Goblin hosts both the read-only MCP tools and an
 embedded OpenIddict OAuth/OpenID Connect server. There is no separate identity
-server, relay, or user-account system. Private connections need no directory review.
+server or user-account system. Private connections need no directory review.
+An optional development relay forwards Azure HTTPS to a locally running build.
 
 Goblin's owner password authenticates the browser sign-in and consent. The saved
 Codex connection authorizes agent execution independently; its credentials are
@@ -182,3 +183,11 @@ not submit applications or publish automatically.
 - [Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt)
 - [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
 - [OpenIddict](https://documentation.openiddict.com/introduction)
+
+## Local iterations through Azure HTTPS
+
+Use a dedicated Azure test installation as the HTTPS gateway for your WSL build.
+Open the wizard through that HTTPS origin so the browser, OAuth endpoints, and MCP
+all reach the local instance. See [ChatGPT local testing](chatgpt-local-testing.md)
+for start/status/stop commands, fresh onboarding resets, and manual acceptance.
+Production uses the Goblin instance installed on Azure directly.

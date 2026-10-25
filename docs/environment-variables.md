@@ -103,8 +103,8 @@ entries are not supported production configuration.
 | --- | --- |
 | `GOBLIN_PASSWORD_HASH_FILE` | Private verifier file path. Web startup requires it. Tooling validates an explicit override without silently replacing it; otherwise dev/local installation uses `.goblin-secrets/owner-password`. |
 | `GOBLIN_LOCAL_PASSWORD` | Unattended password input for creation/replacement. An existing verifier wins unless replacement is explicit. Native tooling removes plaintext before launching children. |
-| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Web defaults to `http://localhost:<port>`; installation defaults to `http://<hostname>`. Remote HTTP requires `GOBLIN_ALLOW_INSECURE_HTTP=true`. |
-| `GOBLIN_CHATGPT_ENABLED` | Optional true/false flag enabling embedded OpenIddict and MCP. Unset or false disables both. Requires durable Work and an HTTPS public origin; issuer is derived from that origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
+| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Web defaults to `http://localhost:<port>`; public installation defaults to `https://<hostname>`; local installation uses loopback HTTP. Remote HTTP requires `GOBLIN_ALLOW_INSECURE_HTTP=true`. |
+| `GOBLIN_CHATGPT_ENABLED` | Optional true/false flag enabling embedded OpenIddict and MCP. Unset or false disables both; the Azure HTTPS installer sets true. Requires durable Work and an HTTPS public origin; issuer is derived from that origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
 | `ConnectionStrings__Goblin` | Application PostgreSQL connection mapped by .NET to `ConnectionStrings:Goblin`. Rust provisioning writes the same environment name and the HTTP test harness forwards its opt-in test connection to it. |
 | `ConnectionStrings__GoblinAdmin` | Schema administrator connection mapped to `ConnectionStrings:GoblinAdmin`; Rust migration Jobs use the same name. |
 | `GOBLIN_TEST_POSTGRES_APP` / `GOBLIN_TEST_POSTGRES_ADMIN` | Opt-in real-database test connection strings. These are sensitive and never application defaults. |

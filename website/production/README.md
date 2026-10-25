@@ -12,7 +12,8 @@ manifests. Their measurements were taken in WSL, not on Hetzner.
 
 `../k8s/` remains the local deployment base. This directory overlays registry
 pulls, a rolling update with zero unavailable replicas, and the public ingress.
-AK3S continues owning ingress-nginx, cert-manager, and metrics-server. The
+AK3S continues owning F5 NGINX Ingress Controller (`nginx.org/ingress-controller`),
+cert-manager, and metrics-server. This is distinct from community `ingress-nginx`. The
 website neither installs nor modifies those components or the platform app.
 
 ## Protected release

@@ -96,13 +96,13 @@
                 <div id="recovery" class="recovery" hidden>
                     <div role="alert">
                         <strong>Your progress is saved.</strong>
-                        <p>
+                        <p id="recovery-guidance">
                             Review the installation log for details, then retry
                             with your Goblin password. Completed downloads and
                             finished tasks are reused.
                         </p>
                     </div>
-                    <form id="retry-form" class="retry-form" novalidate>
+                    <form id="retry-form" class="retry-form" novalidate hidden>
                         <label for="retry-password">Goblin password</label>
                         <div class="retry-controls">
                             <input

@@ -41,6 +41,7 @@ pub const STATE: &str = "/var/lib/goblin/install/status.json";
 const STEPS: &[SetupStep] = &[
     SetupStep::Prepare,
     SetupStep::K3s,
+    SetupStep::Nginx,
     SetupStep::CertManager,
     SetupStep::Sandbox,
     SetupStep::Image,
@@ -50,6 +51,7 @@ const STEPS: &[SetupStep] = &[
     SetupStep::Migrate,
     SetupStep::Deploy,
     SetupStep::Verify,
+    SetupStep::Https,
     SetupStep::Activate,
 ];
 
@@ -369,11 +371,26 @@ async fn respond(
     } else {
         (404, "text/plain", b"Not found".to_vec())
     };
+    // Permit a credential-free HTTPS readiness probe only to the configured
+    // origin while the initial progress document is still served over HTTP.
+    let https_origin = files::json(&server.state)
+        .ok()
+        .and_then(|state| state["publicUrl"].as_str().map(str::to_owned))
+        .filter(|origin| {
+            origin.strip_prefix("https://").is_some_and(|host| {
+                !host.is_empty()
+                    && host
+                        .bytes()
+                        .all(|b| b.is_ascii_alphanumeric() || b".:-".contains(&b))
+            })
+        });
+    let connect = https_origin.as_deref().unwrap_or("");
     // Never log public paths, headers, or arbitrary request input.
     Response::builder().status(status)
         .header("Content-Type", kind).header("Cache-Control", "no-store")
+        .header("X-Goblin-Setup-Retry", if server.control.is_some() { "available" } else { "unavailable" })
         .header("X-Content-Type-Options", "nosniff").header("Referrer-Policy", "no-referrer")
-        .header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+        .header("Content-Security-Policy", format!("default-src 'self'; connect-src 'self' {connect}; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"))
         .body(Full::new(Bytes::from(body)))
 }
 

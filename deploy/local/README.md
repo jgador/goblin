@@ -230,3 +230,11 @@ The local source snapshot excludes Git-ignored files and rejects symlinks.
 Kubernetes readiness, cert-manager admission, image building, application readiness,
 and the browser handoff are real. Azure resource creation, DNS propagation,
 and Azure networking require manual verification on the intended Azure VM.
+
+## ChatGPT plugin development
+
+Local installation uses F5 NGINX with loopback HTTP; bundled Traefik is disabled.
+For fast iterations with a public HTTPS address, use the
+[Azure-to-WSL development relay](../../docs/chatgpt-local-testing.md). The relay
+keeps Azure’s certificate/DNS while routing the whole application to local code.
+Production routes directly to Azure’s installed Goblin.

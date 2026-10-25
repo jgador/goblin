@@ -167,7 +167,7 @@ public static class EnvironmentVariables
     public const string GoblinPort = "GOBLIN_PORT";
 
     /// <summary>Browser-facing origin used for origin validation and deployment.</summary>
-    /// <remarks>Format: Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in. Default/fallback: Web: http://localhost:&lt;GOBLIN_PORT&gt;; installer: http://&lt;hostname&gt;; local test sets its configured origin.
+    /// <remarks>Format: Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in. Default/fallback: Web: http://localhost:&lt;GOBLIN_PORT&gt;; public installer: https://&lt;hostname&gt;; local installation uses its loopback HTTP origin.
     /// Required: Optional. Sensitive: no.</remarks>
     public const string GoblinPublicOrigin = "GOBLIN_PUBLIC_ORIGIN";
 

@@ -41,9 +41,14 @@ bootstrap_dir=$(mktemp -d /var/lib/goblin/bootstrap.XXXXXX)
 # ARM encodes all user-supplied values before embedding them in shell source.
 goblin_hostname=$(printf '%s' '__GOBLIN_HOSTNAME_BASE64__' | base64 --decode)
 goblin_source_ref=$(printf '%s' '__GOBLIN_SOURCE_REF_BASE64__' | base64 --decode)
+certificate_email=$(printf '%s' '__GOBLIN_CERTIFICATE_EMAIL_BASE64__' | base64 --decode)
 if [[ "$goblin_hostname" != localhost && ! "$goblin_hostname" =~ ^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$ ]] || \
    [[ ! "$goblin_source_ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]]; then
   printf 'Invalid public hostname or Goblin source ref.\n' >&2
+  exit 1
+fi
+if [[ "$goblin_hostname" != localhost && ! "$certificate_email" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+  printf 'A valid certificate contact email is required for HTTPS.\n' >&2
   exit 1
 fi
 stage 'Preparing native Goblin administration tooling'
@@ -93,9 +98,24 @@ export GOBLINCTL=/opt/goblin/bin/goblinctl
 install -m 0600 "$bootstrap_dir/owner-password" /var/lib/goblin/install/private/owner-password
 printf '%s\n' "$goblin_hostname" > /var/lib/goblin/install/private/hostname
 printf '%s\n' "$goblin_source_ref" > /var/lib/goblin/install/private/source-ref
-printf 'http://%s\n' "$goblin_hostname" > /var/lib/goblin/public-url
+printf '%s\n' "$certificate_email" > /var/lib/goblin/install/private/certificate-email
+if [[ "$goblin_hostname" == localhost ]]; then
+  printf 'http://%s\n' "$goblin_hostname" > /var/lib/goblin/public-url
+else
+  printf 'https://%s\n' "$goblin_hostname" > /var/lib/goblin/public-url
+fi
+rm -f /etc/systemd/system/goblin-setup.service.d/listener.conf
+if [[ "$goblin_hostname" == localhost ]]; then
+  install -d -m 0755 /etc/systemd/system/goblin-setup.service.d
+  cat > /etc/systemd/system/goblin-setup.service.d/listener.conf <<'UNIT'
+[Service]
+ExecStart=
+ExecStart=/opt/goblin/bin/goblinctl internal serve --health-socket /run/goblin-setup/health.sock --control-socket /run/goblin-setup-control.sock
+UNIT
+fi
 rm -rf /var/lib/goblin/install/private/work
 "$GOBLINCTL" internal state init
+"$GOBLINCTL" internal state public-url "$(cat /var/lib/goblin/public-url)"
 exec 9>&-
 
 stage 'Starting the installation status page'

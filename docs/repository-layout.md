@@ -167,6 +167,8 @@ npm run typecheck
 | `make dev-reset` | Reset the owned WSL installation and known checkout runtime/test state, including the saved password |
 | `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
 | `make dev-start DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
+| `make relay-start ARGS="--origin https://HOST --ssh USER@HOST --identity /path/to/key"` | Connect an existing dedicated Azure HTTPS test VM to the local Goblin build |
+| `make relay-status` / `make relay-stop` | Inspect the development tunnel or explicitly restore the test VM's installed Goblin upstream |
 | `make docker-build` | Time the complete Goblin image build; pass extra Docker options through `ARGS` |
 | `make docker-clean-images` | Remove image tags whose repository name starts with `goblin`, including registry-qualified names |
 | `make docker-clean-cache` | Clear unused cache for the default Docker builder across all projects |

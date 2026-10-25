@@ -25,7 +25,7 @@ Git, k3s, and the application's existing build/runtime dependencies remain.
 The PostgreSQL commands on this page assume a root shell.
 
 ```bash
-goblinctl install --hostname goblin.example --source-ref COMMIT
+goblinctl install --hostname goblin.example --certificate-email owner@example.com --source-ref COMMIT
 sudo goblinctl install status --json
 sudo goblinctl install retry
 sudo goblinctl status --json
@@ -81,7 +81,9 @@ health, and the read-only `/setup/events` progress stream. Its local health sock
 The server bounds request sizes, connection count and timeouts. The existing
 handoff marker, installer lock, rollback, and retained-source retry rules remain.
 
-`POST /setup/retry` accepts a JSON body with the owner password. The setup service
+Public Azure setup is read-only and has no retry helper connection. Use the root
+CLI to retry. Local loopback setup exposes `POST /setup/retry`, accepting a JSON body
+with the owner password. The setup service
 relays it, unread, to `goblin-setup-control.socket`. For each connection, systemd starts a root
 `goblinctl internal setup-control` process, one at a time. That process returns
 `not-failed` unless the installation has failed, checks the password against the
@@ -97,6 +99,10 @@ PostgreSQL client profiles are independent of `--repo` and installer state. See
 refresh, cleanup and per-command profile selection. Client commands need `psql`
 and OpenSSL; Azure access also needs SSH.
 
+Developer-only `make relay-start`, `make relay-status`, and `make relay-stop`
+commands live in xtask. See [ChatGPT local testing](chatgpt-local-testing.md).
+The production CLI contains no WSL relay commands.
+
 ## Parallel installation and live progress
 
 After retaining and validating the source snapshot, the installer builds Goblin
@@ -105,14 +111,15 @@ system-image archive in parallel, verifies both, and keeps them in
 `/var/cache/goblin/downloads`. Retries and local resets reuse them, and an
 installation removes cached files from other k3s versions. The upstream install
 script then runs with `INSTALL_K3S_SKIP_DOWNLOAD=true`. K3s imports the archive at
-startup, and the installer waits for Traefik to be created and rolled out before
-changing its routing mode.
+startup. Traefik is disabled. A separate worker installs pinned F5 NGINX from a
+checksum-verified inline Helm chart and starts its Service as `ClusterIP`.
 
-After k3s is ready, certificate manager, Sandbox, and the service-image prefetch
+After k3s is ready, NGINX, certificate manager, Sandbox, and the service-image prefetch
 run concurrently. Each add-on pulls its own images before applying manifests.
 PostgreSQL waits for both add-ons and the prefetch; image import waits for the build
 and k3s; migration waits for PostgreSQL and image import. Deployment waits for the
-migration and image downloads. Existing readiness and public handoff checks remain.
+migration and image downloads. Verification waits for NGINX and application readiness. Azure then serves progress
+and ACME validation publicly before enabling the final HTTPS Goblin route.
 Downloads come first, so the fixed rollout timeouts measure startup only.
 The production Dockerfile keeps its original build stages and asset packaging.
 

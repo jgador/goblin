@@ -55,6 +55,14 @@ pub const LICENSING: &[(&str, &[u8])] = &[
 ];
 pub const SETUP: &[(&str, &[u8])] = &[
     (
+        "nginx.sh",
+        include_bytes!("../../../deploy/azure/setup/nginx.sh"),
+    ),
+    (
+        "https.sh",
+        include_bytes!("../../../deploy/azure/setup/https.sh"),
+    ),
+    (
         "installer.sh",
         include_bytes!("../../../deploy/azure/setup/installer.sh"),
     ),

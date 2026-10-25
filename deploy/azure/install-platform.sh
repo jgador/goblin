@@ -91,10 +91,16 @@ stage 'Checking and applying database migrations'
 
 deploy_task() {
 stage 'Configuring the Goblin hostname'
-# Keep a rendered overlay on the VM for inspection and later HTTPS setup.
+# Keep a rendered overlay on the VM for inspection and relay administration.
 "$GOBLINCTL" internal prepare-install --request "$goblin_source_dir/deploy/install-request.json" --source "$goblin_source_dir" --destination /var/lib/goblin/deploy
 "$GOBLINCTL" internal render-overlay /var/lib/goblin/deploy/azure/platform "$goblin_hostname" "$goblin_image" "$goblin_origin"
 k3s kubectl apply -k /var/lib/goblin/deploy/azure/platform
+if [[ "$goblin_origin" == https://* ]]; then
+  # Verify internal routing before opening public ports. TLS is added during
+  # the progress/certificate handoff; no owner login is exposed publicly here.
+  k3s kubectl patch ingress goblin -n goblin --type=json -p \
+    '[{"op":"remove","path":"/spec/tls"},{"op":"replace","path":"/metadata/annotations/nginx.org~1ssl-redirect","value":"false"}]'
+fi
 # Sandbox recreates the pod from its template; replace it to load image/origin
 # changes and a new password verifier on reprovisioning. The PVC is retained.
 k3s kubectl delete pod -n goblin -l app=platform --ignore-not-found=true --wait=true
@@ -106,9 +112,9 @@ k3s kubectl wait --for=condition=Ready sandbox/platform -n goblin --timeout=300s
 k3s kubectl rollout status deployment/goblin-headlamp -n goblin --timeout=300s
 k3s kubectl rollout status deployment/goblin-victorialogs -n goblin --timeout=300s
 k3s kubectl rollout status daemonset/goblin-fluent-bit -n goblin --timeout=300s
-k3s kubectl rollout status deployment/traefik -n kube-system --timeout=300s
-# Verify through the internal Traefik service while setup still owns port 80.
-goblin_ingress_ip=$(k3s kubectl get service traefik -n kube-system -o jsonpath='{.spec.clusterIP}')
+k3s kubectl rollout status deployment/goblin-nginx-controller -n kube-system --timeout=300s
+# Verify through the internal NGINX service while setup still owns port 80.
+goblin_ingress_ip=$(k3s kubectl get service goblin-nginx -n kube-system -o jsonpath='{.spec.clusterIP}')
 check_app "$goblin_ingress_ip"
 printf '%s\n' "$goblin_source_sha" > /var/lib/goblin/application-source-sha256
 }
@@ -117,8 +123,13 @@ check_app() {
   local address=$1 attempt url="$goblin_origin"
   local -a route=(--header "Host: ${goblin_authority}")
   if [[ -n "$address" ]]; then
-    route+=(--resolve "${goblin_hostname}:80:${address}")
-    url="http://${goblin_hostname}"
+    if [[ "$current_step" == activate && "$goblin_origin" == https://* ]]; then
+      route+=(--resolve "${goblin_hostname}:443:${address}")
+      url="https://${goblin_hostname}"
+    else
+      route+=(--resolve "${goblin_hostname}:80:${address}")
+      url="http://${goblin_hostname}"
+    fi
   fi
   for ((attempt=0; attempt<60; attempt++)); do
     if curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 10 \
@@ -131,6 +142,6 @@ check_app() {
     fi
     sleep 5
   done
-  printf 'Goblin did not become available through Traefik. Inspect the pod, ingress, DNS and Traefik service.\n' >&2
+  printf 'Goblin did not become available through NGINX. Inspect the pod, ingress, DNS and NGINX service.\n' >&2
   return 1
 }

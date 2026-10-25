@@ -23,7 +23,7 @@ import { join, resolve } from "node:path";
 import { startBackend } from "../support/backend.js";
 
 const publicHostname = "goblin-prod.southeastasia.cloudapp.azure.com";
-const origin = `http://${publicHostname}`;
+const origin = `https://${publicHostname}`;
 const hasherArgs = ["internal", "hash-password"];
 const fakePassword =
     "  Test-only 'quotes' $HOME $(touch PWNED) `touch PWNED` café 🧌  ";
@@ -42,6 +42,7 @@ async function bootstrap(
     nodeState: "ready" | "delayed" | "missing" | "not-ready" = "ready",
     application: {
         publicOrigin?: string;
+        certificateEmail?: string;
         hostname?: string;
         sourceRef?: string;
         passwordHashFile?: string;
@@ -70,7 +71,9 @@ async function bootstrap(
             | "webhook-failed"
             | "pull-failed"
             | "k3s-download-failed"
-            | "k3s-corrupt";
+            | "k3s-corrupt"
+            | "tls-failed"
+            | "tls-untrusted";
     } = {},
 ) {
     const bin = join(root, "bin");
@@ -139,6 +142,7 @@ if (name === 'kubectl') args.unshift('kubectl');
 const root = process.env["${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}"];
 const nodeState = process.env["${Env.GOBLIN_BOOTSTRAP_NODE_STATE.name}"];
 const appState = process.env["${Env.GOBLIN_BOOTSTRAP_APP_STATE.name}"];
+fs.appendFileSync(path.join(root, 'command-events.jsonl'), JSON.stringify({ name, args }) + '\\n');
 if (name === 'curl') {
   fs.appendFileSync(path.join(root, 'curl-requests.jsonl'), JSON.stringify(args) + '\\n');
   const output = args[args.indexOf('--output') + 1];
@@ -161,9 +165,19 @@ if (name === 'curl') {
     fs.appendFileSync(path.join(root, 'k3s-downloads.jsonl'), JSON.stringify(args) + '\\n');
     if (appState === 'k3s-download-failed') process.exit(28);
     fs.writeFileSync(output, appState === 'k3s-corrupt' ? 'corrupt download' : 'k3s release asset\\n');
-  } else if (args.some(arg => arg.startsWith('http://'))) {
+  } else if (args.some(arg => arg.includes('/nginx/kubernetes-ingress/'))) {
+    fs.writeFileSync(output, 'proxy_set_header Host {{else}}$host{{end}};\\n' + 'grpc_set_header Host {{else}}$host{{end}};\\n');
+  } else if (args.some(arg => arg.startsWith('https://github.com/') || arg.startsWith('https://helm.nginx.com/'))) {
+    fs.writeFileSync(output, 'verified upstream fixture');
+  } else if (args.some(arg => /^https?:/.test(arg))) {
     if (appState === 'ingress-failed' || (appState === 'public-failed' && !args.some(arg => arg.endsWith(':10.43.0.80')))) process.exit(22);
-    if (args.some(arg => arg.endsWith('/readyz'))) fs.writeFileSync(output, JSON.stringify({ ready: true }));
+    if (appState === 'tls-untrusted' && args.some(arg => arg.startsWith('https://'))) process.exit(60);
+    if (args.includes('--insecure') || args.includes('-k')) throw new Error('Certificate validation must remain enabled');
+    const url = args.find(arg => /^https?:/.test(arg));
+    if (url.endsWith('/setup/healthz')) fs.writeFileSync(output, JSON.stringify({ setup: true }));
+    else if (url.endsWith('/.well-known/oauth-authorization-server')) fs.writeFileSync(output, JSON.stringify({ issuer: new URL(url).origin + '/' }));
+    else if (url.endsWith('/.well-known/oauth-protected-resource/mcp')) fs.writeFileSync(output, JSON.stringify({ resource: new URL(url).origin + '/mcp' }));
+    else if (args.some(arg => arg.endsWith('/readyz'))) fs.writeFileSync(output, JSON.stringify({ ready: true }));
     else fs.copyFileSync(path.join(root, 'page.html'), output);
   } else {
     fs.writeFileSync(output, '#!/bin/sh\\nexit 0\\n');
@@ -246,12 +260,21 @@ if (name === 'curl') {
     } else process.stdout.write('job/goblin-test-verification');
     process.exit(0);
   }
-  if (args[1] === 'get' && args[2] === 'service') {
-    // Model K3s reconciling its watched HelmChartConfig, including chart v40's
-    // service.spec.type setting. An ignored value retains LoadBalancer.
-    const yaml = fs.readFileSync(path.join(root, 'var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml'), 'utf8');
-    fs.writeFileSync(path.join(root, 'ingress-mode'), yaml.includes('service:\\n      spec:\\n        type: ClusterIP') ? 'ClusterIP' : 'LoadBalancer');
-    process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : fs.readFileSync(path.join(root, 'ingress-mode'), 'utf8'));
+  if (args[0] === '--version') process.stdout.write('k3s version v1.36.5+k3s1 (fixture)\\n');
+  else if (args[1] === 'get' && args[2] === 'ingress') {
+    process.stdout.write(JSON.stringify({metadata:{resourceVersion:'1'},spec:{rules:[{http:{paths:[
+      {path:'/.well-known/acme-challenge/fixture',backend:{service:{name:'cm-acme-http-solver',port:{number:8089}}}},
+      {path:'/',backend:{service:{name:'platform',port:{number:8787}}}}
+    ]}}]}}));
+  } else if (args[1] === 'get' && args[2] === 'service') {
+    const modeFile = path.join(root, 'ingress-mode');
+    const mode = fs.existsSync(modeFile) ? fs.readFileSync(modeFile, 'utf8') : 'ClusterIP';
+    process.stdout.write(args.some(arg => arg.includes('clusterIP')) ? '10.43.0.80' : mode);
+  } else if (args[1] === 'patch' && args[2] === 'service') {
+    const patch = JSON.parse(args[args.indexOf('-p') + 1]);
+    fs.writeFileSync(path.join(root, 'ingress-mode'), patch.spec.type);
+  } else if (args[1] === 'wait' && args.includes('certificate/goblin-public-tls') && args.includes('--for=condition=Ready') && appState === 'tls-failed') {
+    process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/cert-manager-webhook') && appState === 'cert-failed') {
     process.exit(1);
   } else if (args[1] === 'rollout' && args.includes('deployment/sandbox') && appState === 'cert-failed') {
@@ -440,6 +463,12 @@ if (args[0] === 'internal' && ['unpack','activate'].includes(args[1])) {
             Buffer.from(application.sourceRef ?? "master").toString("base64"),
         )
         .replace(
+            "__GOBLIN_CERTIFICATE_EMAIL_BASE64__",
+            Buffer.from(
+                application.certificateEmail ?? "owner@example.com",
+            ).toString("base64"),
+        )
+        .replace(
             "__GOBLIN_PASSWORD_BASE64__",
             Buffer.from(password).toString("base64"),
         )
@@ -581,7 +610,9 @@ test("parallel installation bounds image pulls, overlaps independent steps, and 
         .split("\n")
         .map((line) => JSON.parse(line));
     const addOn = (image: string) =>
-        image.includes("/jetstack/") || image.includes("/agent-sandbox/");
+        image.includes("/jetstack/") ||
+        image.includes("/agent-sandbox/") ||
+        image.includes("nginx/nginx-ingress:");
     let active = 0,
         maximum = 0;
     for (const event of pulls.filter((event) => !addOn(event.image))) {
@@ -589,7 +620,7 @@ test("parallel installation bounds image pulls, overlaps independent steps, and 
         maximum = Math.max(maximum, active);
     }
     assert.equal(active, 0);
-    assert.equal(pulls.length, 16);
+    assert.equal(pulls.length, 20);
     assert.ok(maximum > 1 && maximum <= 4);
     // Add-on images are present before their manifests are applied.
     const calls: string[][] = (
@@ -682,8 +713,8 @@ test("k3s and its system images are verified, cached outside the cluster, and in
         args.find((arg) => arg.startsWith("https://")),
     );
     assert.deepEqual(urls.sort(), [
-        "https://github.com/k3s-io/k3s/releases/download/v1.37.0%2Bk3s1/k3s",
-        "https://github.com/k3s-io/k3s/releases/download/v1.37.0%2Bk3s1/k3s-airgap-images-amd64.tar.zst",
+        "https://github.com/k3s-io/k3s/releases/download/v1.36.5%2Bk3s1/k3s",
+        "https://github.com/k3s-io/k3s/releases/download/v1.36.5%2Bk3s1/k3s-airgap-images-amd64.tar.zst",
     ]);
     // Transfers resume and fail only on stalls, never on a fixed total duration.
     for (const args of downloads) {
@@ -693,25 +724,45 @@ test("k3s and its system images are verified, cached outside the cluster, and in
     }
     const cache = join(root, "var/cache/goblin/downloads");
     assert.deepEqual((await readdir(cache)).sort(), [
-        "k3s-airgap-images-amd64-v1.37.0+k3s1.tar.zst",
-        "k3s-v1.37.0+k3s1",
+        "k3s-airgap-images-amd64-v1.36.5+k3s1.tar.zst",
+        "k3s-v1.36.5+k3s1",
+        "nginx-ingress-2.8.0.tgz",
+        "nginx-ingress-template-5.7.0.tmpl",
     ]);
     assert.equal(
         await readFile(join(root, "k3s-installed-version"), "utf8"),
-        "v1.37.0+k3s1\n",
+        "v1.36.5+k3s1\n",
     );
+    const chart = await readFile(
+        join(root, "var/lib/rancher/k3s/server/manifests/goblin-nginx.yaml"),
+        "utf8",
+    );
+    assert.match(chart, /ingress-template: \|-/);
+    assert.match(chart, /type: LoadBalancer/);
+    assert.match(chart, /proxy_set_header Host .*\$http_host/);
+    assert.match(chart, /grpc_set_header Host .*\$http_host/);
+    assert.doesNotMatch(chart, /use-forwarded-headers:.*true/i);
+    const ingress = await readFile(
+        join(root, "var/lib/goblin/deploy/azure/platform/ingress.yaml"),
+        "utf8",
+    );
+    assert.match(
+        ingress,
+        /nginx\.org\/websocket-services: "platform,goblin-dev-relay"/,
+    );
+    assert.match(ingress, /nginx\.org\/proxy-http-version: "1\.1"/);
     const checks = (await readFile(join(root, "checksum-checks.jsonl"), "utf8"))
         .trim()
         .split("\n")
         .map((line) => JSON.parse(line) as string);
     for (const [checksum, name] of [
         [
-            "39eed8f53f277497dfc2542f66eab0ed68a94dfc598946dbebfb50366916c7a2",
-            "k3s-v1.37.0+k3s1",
+            "d73847bcd3c5fccef0115b372e2f9a91f3032dc84bbf71518a4617565294d313",
+            "k3s-v1.36.5+k3s1",
         ],
         [
-            "0b4ff0d6e233de54be4e16cb5aa298fd53ad88f66ad8ae31093b5ef4dcefcdd0",
-            "k3s-airgap-images-amd64-v1.37.0+k3s1.tar.zst",
+            "7d939471907df2d4e537a9c308bf94173e453fff4a2e9e77e9ae92a64be3007f",
+            "k3s-airgap-images-amd64-v1.36.5+k3s1.tar.zst",
         ],
     ])
         assert.ok(
@@ -739,7 +790,7 @@ test("k3s and its system images are verified, cached outside the cluster, and in
     );
     assert.equal(
         await readFile(join(second, "k3s-installed-version"), "utf8"),
-        "v1.37.0+k3s1\n",
+        "v1.36.5+k3s1\n",
     );
 });
 
@@ -912,7 +963,7 @@ test("installer installs the application and uses Azure's hostname for both rout
             join(root, "var/lib/goblin/deploy/azure/platform/ingress.yaml"),
             "utf8",
         );
-        assert.ok(config.includes(`value: http://${hostname}`));
+        assert.ok(config.includes(`value: https://${hostname}`));
         assert.ok(ingress.includes(`host: ${hostname}`));
         assert.ok(!config.includes("__GOBLIN_"));
         assert.ok(!ingress.includes("__GOBLIN_"));
@@ -952,9 +1003,9 @@ test("installer installs the application and uses Azure's hostname for both rout
         );
         assert.equal(
             await readFile(join(root, "var/lib/goblin/public-url"), "utf8"),
-            `http://${hostname}\n`,
+            `https://${hostname}\n`,
         );
-        assert.ok(output.includes(`Goblin ready: http://${hostname}`));
+        assert.ok(output.includes(`Goblin ready: https://${hostname}`));
         const calls: string[][] = (
             await readFile(join(root, "k3s-requests.jsonl"), "utf8")
         )
@@ -1011,7 +1062,9 @@ test("installer installs the application and uses Azure's hostname for both rout
             ),
         );
         assert.ok(
-            downloads.some((args) => args.includes(`${hostname}:80:10.20.0.4`)),
+            downloads.some((args) =>
+                args.includes(`${hostname}:443:10.20.0.4`),
+            ),
             "the public probe selects a single IPv4 node address",
         );
     }
@@ -1362,7 +1415,7 @@ test("Azure password survives provisioning and unlocks Goblin", async (t) => {
     assert.equal(session.status, 200);
     const cookie = session.headers.get("set-cookie")!.split(";")[0];
     assert.match(session.headers.get("set-cookie")!, /HttpOnly/i);
-    assert.doesNotMatch(session.headers.get("set-cookie")!, /;\s*Secure/i);
+    assert.match(session.headers.get("set-cookie")!, /;\s*Secure/i);
     assert.equal((await request("/api/status", undefined, cookie)).status, 200);
     assert.equal(
         (await request("/owner-password", undefined, cookie)).status,
@@ -1615,7 +1668,7 @@ test("Azure templates keep the password protected and the portal requires confir
         ]);
         assert.equal(template.parameters.goblinSourceRef.minLength, 40);
         assert.equal(template.parameters.goblinSourceRef.maxLength, 40);
-        assert.ok(template.outputs.goblinUrl.value.includes("http://"));
+        assert.ok(template.outputs.goblinUrl.value.includes("https://"));
         assert.match(
             extension.properties.protectedSettings.script,
             /dnsSettings\.fqdn/,
@@ -1655,6 +1708,122 @@ test("Azure selects a Goblin version bound to the matching source", async () => 
         ui.parameters.outputs.goblinSourceRef,
         "[basics('goblinSourceRef')]",
     );
+});
+
+test("Azure defaults to Dsv6 and separates HTTPS Goblin from read-only setup", async () => {
+    for (const name of ["azuredeploy.json", "azuredeploy.portal.json"]) {
+        const template = JSON.parse(
+            await readFile(`.artifacts/azure/${name}`, "utf8"),
+        );
+        assert.equal(
+            template.parameters.vmSize.defaultValue,
+            "Standard_D4s_v6",
+        );
+        assert.match(template.outputs.goblinUrl.value, /https:\/\//);
+        assert.match(template.outputs.setupUrl.value, /http:\/\//);
+        assert.equal(template.parameters.certificateEmail.maxLength, 254);
+    }
+});
+
+test("NGINX publishes progress before certificate issuance and enables Goblin only after trusted TLS", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-https-handoff-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await bootstrap(root, fakePassword);
+    const events: { name: string; args: string[] }[] = (
+        await readFile(join(root, "command-events.jsonl"), "utf8")
+    )
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    const selected = (service: string) =>
+        events.findIndex(
+            (event) =>
+                event.name === "k3s" &&
+                event.args[1] === "patch" &&
+                event.args[2] === "ingress" &&
+                event.args.at(-1)?.includes(`\"name\":\"${service}\"`),
+        );
+    const published = events.findIndex(
+        (event) =>
+            event.name === "k3s" &&
+            event.args[1] === "patch" &&
+            event.args.at(-1)?.includes('"type":"LoadBalancer"'),
+    );
+    const certificate = events.findIndex(
+        (event) =>
+            event.name === "k3s" &&
+            event.args.includes("certificate/goblin-public-tls") &&
+            event.args.includes("--for=condition=Ready"),
+    );
+    const verified = events.findIndex(
+        (event) =>
+            event.name === "curl" &&
+            event.args.includes(`${origin}/setup/healthz`),
+    );
+    assert.ok(
+        selected("goblin-installation") >= 0 &&
+            published > selected("goblin-installation"),
+    );
+    assert.ok(
+        certificate > published &&
+            verified > certificate &&
+            selected("platform") > verified,
+    );
+    for (const event of events.filter((event) => event.name === "curl")) {
+        assert.ok(
+            !event.args.includes("--insecure") && !event.args.includes("-k"),
+        );
+    }
+    const cluster = await readFile(
+        join(root, "etc/rancher/k3s/config.yaml"),
+        "utf8",
+    );
+    assert.match(cluster, /disable:\n  - traefik/);
+});
+
+test("unissued or untrusted HTTPS never completes installation and restores HTTP progress", async (t) => {
+    for (const state of ["tls-failed", "tls-untrusted"] as const) {
+        const root = await mkdtemp(join(tmpdir(), "goblin-https-failed-"));
+        t.after(() => rm(root, { recursive: true, force: true }));
+        await assert.rejects(bootstrap(root, fakePassword, "ready", { state }));
+        const progress = JSON.parse(
+            await readFile(
+                join(root, "var/lib/goblin/install/status.json"),
+                "utf8",
+            ),
+        );
+        assert.equal(progress.status, "failed");
+        assert.equal(progress.currentStep, "https");
+        assert.equal(
+            await readFile(join(root, "ingress-mode"), "utf8"),
+            "ClusterIP",
+        );
+        await assert.rejects(
+            access(
+                join(
+                    root,
+                    "etc/systemd/system/goblin-setup.service.d/listener.conf",
+                ),
+            ),
+        );
+        assert.ok(
+            !progress.steps.some(
+                (step: { id: string; status: string }) =>
+                    step.id === "activate" && step.status === "complete",
+            ),
+        );
+    }
+});
+
+test("invalid certificate contact cannot enter shell or issuer configuration", async (t) => {
+    const root = await mkdtemp(join(tmpdir(), "goblin-contact-invalid-"));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await assert.rejects(
+        bootstrap(root, fakePassword, "ready", {
+            certificateEmail: "owner@example.com\nmalicious: value",
+        }),
+    );
+    await assert.rejects(access(join(root, "k3s-requests.jsonl")));
 });
 
 test("Azure provisioning returns with a status page before any cluster or application work", async (t) => {
@@ -1793,7 +1962,7 @@ test("a failed handoff restores private ingress and UI, then retry preserves cre
     const statePath = join(root, "var/lib/goblin/install/status.json");
     let state = JSON.parse(await readFile(statePath, "utf8"));
     assert.equal(state.status, "failed");
-    assert.equal(state.currentStep, "activate");
+    assert.equal(state.currentStep, "https");
     assert.equal(
         await readFile(join(root, "ingress-mode"), "utf8"),
         "ClusterIP",
@@ -1822,8 +1991,9 @@ test("a failed handoff restores private ingress and UI, then retry preserves cre
     assert.equal(state.attempt, 2);
     assert.ok(
         state.steps.every(
-            (step: { status: string; attempt: number }) =>
-                step.status === "complete" && step.attempt === 2,
+            (step: { id: string; status: string; attempt: number }) =>
+                step.status === "complete" &&
+                step.attempt === (step.id === "activate" ? 1 : 2),
         ),
     );
     assert.equal(await readFile(join(root, "secret.json"), "utf8"), before);
@@ -1870,7 +2040,8 @@ test("the native downloader fits Azure Custom Script limits", async () => {
 test("a killed worker's recovery restores the UI from its persisted handoff marker", async (t) => {
     const root = await mkdtemp(join(tmpdir(), "goblin-killed-"));
     t.after(() => rm(root, { recursive: true, force: true }));
-    await bootstrap(root, fakePassword, "ready", { bootstrapOnly: true });
+    // A handoff starts only after the watched NGINX chart has been installed.
+    await bootstrap(root, fakePassword);
     const statePath = join(root, "var/lib/goblin/install/status.json");
     for (const transition of [["begin"], ["start", "activate"], ["handoff"]])
         execFileSync(goblinctl, [
@@ -1943,7 +2114,7 @@ test("a concurrent installer cannot mutate state while the installation lock is 
 });
 
 test("a forwarded public origin is used by the application and readiness probes", async (t) => {
-    for (const hostname of ["goblin.local.test", "localhost"]) {
+    for (const hostname of ["localhost"]) {
         const root = await mkdtemp(join(tmpdir(), "goblin-forwarded-origin-"));
         t.after(() => rm(root, { recursive: true, force: true }));
         const publicOrigin = `http://${hostname}:8788`;

@@ -205,7 +205,7 @@ impl Local {
                 .args(["rev-parse", "HEAD"]),
         )?;
         let script =
-            install::render_bootstrap("localhost", source_ref.trim(), crate::VERSION, "local")?;
+            install::render_bootstrap("localhost", source_ref.trim(), "", crate::VERSION, "local")?;
         files::directory(&self.path("var/lib/goblin"), 0o751)?;
         files::directory(
             self.owner()
@@ -461,6 +461,7 @@ impl Local {
         Ok(())
     }
     pub fn reset(&self) -> Result<()> {
+        files::reject_symlinks(&self.unit("goblin-setup.service.d/listener.conf"))?;
         self.stop()?;
         let uninstall = self.path("usr/local/bin/k3s-uninstall.sh");
         if uninstall.exists() {
@@ -504,10 +505,15 @@ impl Local {
                 .status();
             files::remove_file(&self.unit(name))?;
         }
-        let override_dir = self.unit("goblin-installer.service.d");
-        files::remove_file(&override_dir.join("local-test.conf"))?;
-        if override_dir.exists() && fs::read_dir(&override_dir)?.next().is_none() {
-            fs::remove_dir(override_dir)?;
+        for (unit, file) in [
+            ("goblin-installer.service.d", "local-test.conf"),
+            ("goblin-setup.service.d", "listener.conf"),
+        ] {
+            let override_dir = self.unit(unit);
+            files::remove_file(&override_dir.join(file))?;
+            if override_dir.exists() && fs::read_dir(&override_dir)?.next().is_none() {
+                fs::remove_dir(override_dir)?;
+            }
         }
         for p in ["var/lib/goblin", "opt/goblin/setup"] {
             remove_tree(&self.path(p))?;

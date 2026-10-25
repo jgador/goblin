@@ -474,6 +474,34 @@ test("public submission is a separate workflow with explicit external confirmati
     ).toBeChecked();
 });
 
+test("starting setup again clears browser confirmations and drafts without revoking server settings", async ({
+    page,
+}) => {
+    const { writes, state } = await fixture(page);
+    await page.goto("/settings?section=chatgpt");
+    await goToStep(page, "Install");
+    await page.getByLabel("I installed the plugin").check();
+    await goToStep(page, "Sign-in");
+    await page
+        .getByLabel("ChatGPT OAuth callback")
+        .fill("https://chatgpt.com/connector/oauth/draft");
+    const before = writes.length;
+    await page.getByRole("button", { name: "Start setup again" }).click();
+    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
+        "Setup progress cleared. Saved OAuth settings and shared Work",
+    );
+    await expect(
+        page.getByRole("heading", { name: "Prepare your instance" }),
+    ).toBeVisible();
+    await goToStep(page, "Install");
+    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
+    await goToStep(page, "Sign-in");
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
+        state.redirectUri ?? "",
+    );
+    expect(writes).toHaveLength(before);
+});
+
 test("grant failures preserve the form and cannot claim success", async ({
     page,
 }) => {

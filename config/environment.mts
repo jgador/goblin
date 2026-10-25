@@ -436,8 +436,17 @@ export const environmentVariables = {
             "Browser-facing origin used for origin validation and deployment.",
         format: "Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in",
         fallback:
-            "Web: http://localhost:<GOBLIN_PORT>; installer: http://<hostname>; local test sets its configured origin",
+            "Web: http://localhost:<GOBLIN_PORT>; public installer: https://<hostname>; local installation uses its loopback HTTP origin",
         required: "Optional",
+        sensitive: false,
+    },
+    GOBLIN_RELAY_TEST_ROOT: {
+        name: "GOBLIN_RELAY_TEST_ROOT",
+        purpose:
+            "Root of the offline SSH, Kubernetes, and HTTP relay fixtures.",
+        format: "Directory path",
+        fallback: "Fixture subprocess does nothing when unset",
+        required: "Offline development relay tests only",
         sensitive: false,
     },
     GOBLIN_SECRET: {

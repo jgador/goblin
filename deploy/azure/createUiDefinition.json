@@ -7,9 +7,7 @@
       "basics": {
         "description": "Deploy Goblin in your Azure account and open it at the assigned public hostname after setup. Choose a dedicated resource group; rg-goblin-prod is the suggested default. Save the access-key file when Azure prompts you during creation.",
         "location": {
-          "resourceTypes": [
-            "Microsoft.Compute/virtualMachines"
-          ]
+          "resourceTypes": ["Microsoft.Compute/virtualMachines"]
         }
       }
     },
@@ -87,10 +85,22 @@
         }
       },
       {
+        "name": "certificateEmail",
+        "type": "Microsoft.Common.TextBox",
+        "label": "HTTPS certificate contact email",
+        "defaultValue": "",
+        "toolTip": "Used for automatic Let’s Encrypt HTTPS issuance and renewal. Azure’s generated hostname needs no manual DNS record.",
+        "constraints": {
+          "required": true,
+          "regex": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$",
+          "validationMessage": "Enter a valid contact email address."
+        }
+      },
+      {
         "name": "installationInfo",
         "type": "Microsoft.Common.InfoBox",
         "options": {
-          "text": "Open goblinUrl in the deployment outputs to follow installation progress. The page opens Goblin when ready; enter your Goblin password then. Installation continues after Azure provisioning succeeds. Goblin uses HTTP; HTTPS is configured separately.",
+          "text": "Open setupUrl in the deployment outputs to follow installation progress. It opens the HTTPS goblinUrl when the certificate and application are ready. Enter your Goblin password over HTTPS. Installation continues after Azure provisioning succeeds.",
           "icon": "Info"
         }
       },
@@ -171,7 +181,7 @@
             "name": "vmSize",
             "type": "Microsoft.Common.TextBox",
             "label": "Virtual machine size",
-            "defaultValue": "Standard_D4s_v5",
+            "defaultValue": "Standard_D4s_v6",
             "toolTip": "Default: 4 vCPUs and 16 GiB RAM. Choose an x64 VM size that supports Trusted Launch and is available in your region.",
             "constraints": {
               "required": true,
@@ -360,7 +370,8 @@
       "networkInterfaceName": "[steps('advanced').nameOverrides.networkInterfaceName]",
       "networkSecurityGroupName": "[steps('advanced').nameOverrides.networkSecurityGroupName]",
       "osDiskName": "[steps('advanced').nameOverrides.osDiskName]",
-      "dnsLabel": "[steps('advanced').nameOverrides.dnsLabel]"
+      "dnsLabel": "[steps('advanced').nameOverrides.dnsLabel]",
+      "certificateEmail": "[basics('certificateEmail')]"
     },
     "resourceTypes": [
       "Microsoft.Compute/virtualMachines",

@@ -29,6 +29,23 @@ database-test:
 	cargo xtask test-postgres --profile "$(DB_PROFILE)"
 
 # =============================================================================
+# Relay: an existing Azure HTTPS test gateway for local Goblin development.
+# =============================================================================
+.PHONY: relay-start relay-status relay-stop
+
+# Connect a dedicated Azure HTTPS test installation to the local Goblin build.
+relay-start:
+	cargo xtask relay start $(ARGS)
+
+# Inspect the selected development upstream and tunnel.
+relay-status:
+	cargo xtask relay status
+
+# Restore the test VM's installed Goblin upstream and stop the owned relay.
+relay-stop:
+	cargo xtask relay stop
+
+# =============================================================================
 # Dev: direct application startup and owned WSL environment reset.
 # =============================================================================
 .PHONY: dev-start dev-reset

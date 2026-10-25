@@ -71,6 +71,7 @@ use std::process::Command;
 pub fn render_bootstrap(
     hostname: &str,
     source_ref: &str,
+    certificate_email: &str,
     version: &str,
     checksum: &str,
 ) -> Result<String> {
@@ -78,6 +79,10 @@ pub fn render_bootstrap(
     for (key, value) in [
         ("__GOBLIN_HOSTNAME_BASE64__", STANDARD.encode(hostname)),
         ("__GOBLIN_SOURCE_REF_BASE64__", STANDARD.encode(source_ref)),
+        (
+            "__GOBLIN_CERTIFICATE_EMAIL_BASE64__",
+            STANDARD.encode(certificate_email),
+        ),
         ("__GOBLIN_PASSWORD_BASE64__", String::new()),
         ("__GOBLINCTL_VERSION__", version.to_owned()),
         ("__GOBLINCTL_SHA256__", checksum.to_owned()),
@@ -90,8 +95,9 @@ pub fn render_bootstrap(
     }
     Ok(script)
 }
-pub fn bootstrap(hostname: &str, source_ref: &str) -> Result<()> {
+pub fn bootstrap(hostname: &str, source_ref: &str, certificate_email: &str) -> Result<()> {
     files::require_root()?;
+    validate_certificate_email(certificate_email)?;
     let binary = std::env::current_exe()?;
     let temporary_credentials = tempfile::tempdir()?;
     let password_path = match std::env::var_os(environment::GOBLIN_PASSWORD_HASH_FILE) {
@@ -104,7 +110,13 @@ pub fn bootstrap(hostname: &str, source_ref: &str) -> Result<()> {
             crate::credentials::ensure(&temporary_credentials.path().join("owner-password"), false)?
         }
     };
-    let script = render_bootstrap(hostname, source_ref, crate::VERSION, "local")?;
+    let script = render_bootstrap(
+        hostname,
+        source_ref,
+        certificate_email,
+        crate::VERSION,
+        "local",
+    )?;
     files::input(
         Command::new("bash")
             .env(environment::GOBLIN_PASSWORD_HASH_FILE, password_path)
@@ -118,9 +130,20 @@ pub fn checksum(path: &Path) -> Result<String> {
     Ok(format!("{:x}", Sha256::digest(fs::read(path)?)))
 }
 pub fn origin_authority(origin: &str, hostname: &str) -> Result<String> {
-    let invalid = "Invalid public origin. Use the configured HTTP hostname and an optional port.";
-    let authority = origin.strip_prefix("http://").context(invalid)?;
+    let invalid = "Invalid public origin. Use HTTPS with the configured hostname, or HTTP with localhost, and an optional port.";
+    let authority = origin
+        .strip_prefix("https://")
+        .or_else(|| {
+            (hostname == "localhost")
+                .then(|| origin.strip_prefix("http://"))
+                .flatten()
+        })
+        .context(invalid)?;
     let suffix = authority.strip_prefix(hostname).context(invalid)?;
+    ensure!(
+        hostname == "localhost" || suffix.is_empty(),
+        "Public installation HTTPS uses the assigned hostname on port 443"
+    );
     if !suffix.is_empty() {
         let port_text = suffix.strip_prefix(':').context(invalid)?;
         let port: u16 = port_text.parse().context(invalid)?;
@@ -134,6 +157,27 @@ pub fn origin_authority(origin: &str, hostname: &str) -> Result<String> {
         invalid
     );
     Ok(authority.to_owned())
+}
+
+pub fn validate_certificate_email(email: &str) -> Result<()> {
+    let invalid = "Supply a certificate contact email for the public HTTPS installation.";
+    let (local, domain) = email.split_once('@').context(invalid)?;
+    ensure!(
+        email.len() <= 254
+            && !local.is_empty()
+            && domain.contains('.')
+            && local
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._%+-".contains(&b))
+            && domain
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b".-".contains(&b))
+            && domain
+                .split('.')
+                .all(|label| !label.is_empty() && !label.starts_with('-') && !label.ends_with('-')),
+        invalid
+    );
+    Ok(())
 }
 pub fn node_address(nodes: &Value) -> Result<String> {
     for item in nodes
@@ -150,6 +194,33 @@ pub fn node_address(nodes: &Value) -> Result<String> {
     }
     anyhow::bail!("The Kubernetes node has no IPv4 InternalIP for the Azure public route.")
 }
+pub fn ingress_backend_patch(ingress: &Value, service: &str, port: u16) -> Result<Value> {
+    ensure!(
+        matches!(service, "platform" | "goblin-installation") && port == 8787,
+        "Invalid installation upstream"
+    );
+    let rules = ingress["spec"]["rules"]
+        .as_array()
+        .context("Missing ingress rules")?;
+    ensure!(
+        rules.len() == 1,
+        "Expected the installation's single-host ingress"
+    );
+    let paths = rules[0]["http"]["paths"]
+        .as_array()
+        .context("Missing ingress paths")?;
+    let indexes: Vec<_> = paths
+        .iter()
+        .enumerate()
+        .filter(|(_, path)| path["path"] == "/")
+        .map(|(index, _)| index)
+        .collect();
+    ensure!(indexes.len() == 1, "Expected one default Goblin path");
+    Ok(serde_json::json!([
+        {"op":"test","path":"/metadata/resourceVersion","value":ingress["metadata"]["resourceVersion"].as_str().context("Missing ingress version")?},
+        {"op":"replace","path":format!("/spec/rules/0/http/paths/{}/backend/service", indexes[0]),"value":{"name":service,"port":{"number":port}}}
+    ]))
+}
 pub fn docker_config(path: &Path) -> Result<()> {
     let mut config = if path.exists() {
         files::json(path)?
@@ -165,10 +236,34 @@ pub fn render_overlay(path: &Path, hostname: &str, image: &str, origin: &str) ->
     for entry in fs::read_dir(path)? {
         let path = entry?.path();
         if path.extension().is_some_and(|s| s == "yaml") {
-            let text = fs::read_to_string(&path)?
+            let mut text = fs::read_to_string(&path)?
                 .replace("__GOBLIN_PUBLIC_HOSTNAME__", hostname)
                 .replace("__GOBLIN_IMAGE__", image)
-                .replace(&format!("http://{hostname}"), origin);
+                .replace("__GOBLIN_PUBLIC_ORIGIN__", origin);
+            if origin.starts_with("http://") {
+                text = text.replace(
+                    "name: GOBLIN_CHATGPT_ENABLED\n          value: \"true\"",
+                    "name: GOBLIN_CHATGPT_ENABLED\n          value: \"false\"",
+                );
+                if path.file_name().is_some_and(|name| name == "ingress.yaml") {
+                    text = text
+                        .lines()
+                        .take_while(|line| *line != "  tls:")
+                        .filter(|line| {
+                            !line.contains("cert-manager.io/")
+                                && !line.contains("acme.cert-manager.io/")
+                        })
+                        .map(|line| {
+                            line.replace(
+                                "nginx.org/ssl-redirect: \"true\"",
+                                "nginx.org/ssl-redirect: \"false\"",
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                        + "\n";
+                }
+            }
             files::atomic_write(&path, text.as_bytes(), 0o640, false)?;
         }
     }

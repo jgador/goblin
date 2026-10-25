@@ -9,6 +9,7 @@ param adminSshPublicKey string
 @secure()
 @maxLength(128)
 param goblinPassword string
+param certificateEmail string
 param goblinSourceRef string
 @description('Fail bootstrap if the portal did not supply the expected SSH public key. CLI deployments may omit a key.')
 param requireSshPublicKey bool = false
@@ -23,8 +24,9 @@ var bootstrapScript = replace(
   replace(loadTextContent('../bootstrap.sh'), '__GOBLINCTL_VERSION__', goblinctlRelease.version),
   '__GOBLINCTL_SHA256__', goblinctlRelease.sha256
 )
+var emailBootstrap = replace(bootstrapScript, '__GOBLIN_CERTIFICATE_EMAIL_BASE64__', base64(certificateEmail))
 var configuredBootstrap = replace(
-  replace(bootstrapScript, '__GOBLIN_HOSTNAME_BASE64__', base64(publicIp.properties.dnsSettings.fqdn)),
+  replace(emailBootstrap, '__GOBLIN_HOSTNAME_BASE64__', base64(publicIp.properties.dnsSettings.fqdn)),
   '__GOBLIN_SOURCE_REF_BASE64__',
   base64(goblinSourceRef)
 )

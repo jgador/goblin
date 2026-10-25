@@ -122,67 +122,25 @@ pull_images() {
   return "$failure"
 }
 
-K3S_VERSION='v1.37.0+k3s1'
-K3S_INSTALL_SHA256='ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b'
+K3S_VERSION='v1.36.5+k3s1'
+K3S_INSTALL_SHA256='46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad'
 # Release assets for linux/amd64. The airgap archive holds k3s's own system images
-# (Traefik, CoreDNS, Helm jobs, pause), so the cluster starts without pulling them.
-K3S_SHA256='39eed8f53f277497dfc2542f66eab0ed68a94dfc598946dbebfb50366916c7a2'
-K3S_SIZE=81522850
-K3S_IMAGES_SHA256='0b4ff0d6e233de54be4e16cb5aa298fd53ad88f66ad8ae31093b5ef4dcefcdd0'
-K3S_IMAGES_SIZE=194444184
+# (CoreDNS, Helm jobs, pause; bundled Traefik is disabled), so the cluster starts without pulling them.
+K3S_SHA256='d73847bcd3c5fccef0115b372e2f9a91f3032dc84bbf71518a4617565294d313'
+K3S_SIZE=79077538
+K3S_IMAGES_SHA256='7d939471907df2d4e537a9c308bf94173e453fff4a2e9e77e9ae92a64be3007f'
+K3S_IMAGES_SIZE=194444189
 # Core only: Goblin uses Sandbox directly, without the optional extensions.
 SANDBOX_VERSION='v1.0.4'
 SANDBOX_MANIFEST_SHA256='c4f6344b6f04e450b61c433ce6275f2a45bc30f746b55ce47ade454ffa2a1aa7'
-CERT_MANAGER_VERSION='v1.21.2'
-CERT_MANAGER_SHA256='e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f'
-traefik_config=/var/lib/rancher/k3s/server/manifests/goblin-traefik-config.yaml
-
-
+CERT_MANAGER_VERSION='v1.21.3'
+CERT_MANAGER_SHA256='c04a51295adda2b1a775146751f973e787190778c7f35180861d9678876e5c74'
 bootstrap_dir="$private_dir/work"
 goblin_source_dir="$bootstrap_dir/source"
-write_ingress_mode() {
-  install -d -m 0755 "$(dirname "$traefik_config")"
-  # K3s owns traefik.yaml; a HelmChartConfig is the supported customization point.
-  # Rename atomically so the K3s manifest watcher never sees partial YAML.
-  cat > "$private_dir/traefik-config.yaml" <<YAML
-apiVersion: helm.cattle.io/v1
-kind: HelmChartConfig
-metadata:
-  name: traefik
-  namespace: kube-system
-spec:
-  valuesContent: |-
-    service:
-      spec:
-        type: $1
-YAML
-  install -m 0600 "$private_dir/traefik-config.yaml" "${traefik_config}.tmp"
-  mv "${traefik_config}.tmp" "$traefik_config"
-}
-
-wait_ingress_mode() {
-  local actual pods attempt
-  for ((attempt=0; attempt<60; attempt++)); do
-    actual=$(k3s kubectl get service traefik -n kube-system -o jsonpath='{.spec.type}' --request-timeout=5s 2>/dev/null) || actual=''
-    if [[ "$actual" == "$1" ]]; then
-      if [[ "$1" == LoadBalancer ]]; then return 0; fi
-      # ServiceLB uses host ports/iptables. Wait for its pods to disappear
-      # before restoring the status UI on the same public port.
-      if pods=$(k3s kubectl get pods -n kube-system -o name --request-timeout=5s 2>/dev/null) && \
-          ! printf '%s\n' "$pods" | grep -q '^pod/svclb-traefik-'; then return 0; fi
-    fi
-    sleep 3
-  done
-  printf 'Traefik did not switch to %s.\n' "$1" >&2
-  return 1
-}
-
-set_ingress_mode() {
-  # Let K3s's manifest watcher be the only writer of this resource. Mixing its
-  # updates with server-side apply creates an ownership race during handoff.
-  write_ingress_mode "$1" || return 1
-  wait_ingress_mode "$1"
-}
+# shellcheck source=deploy/azure/setup/nginx.sh
+source "$setup_dir/nginx.sh"
+# shellcheck source=deploy/azure/setup/https.sh
+source "$setup_dir/https.sh"
 
 recover_handoff() {
   # The marker survives power loss and a killed worker. Keep it if rollback
@@ -190,9 +148,14 @@ recover_handoff() {
   if [[ -e "$private_dir/handoff" ]]; then
     printf '[Goblin] Restoring installation status access.\n'
     if set_ingress_mode ClusterIP; then
+      if [[ "$(cat "$private_dir/hostname")" != localhost ]]; then
+        rm -f /etc/systemd/system/goblin-setup.service.d/listener.conf
+      fi
+      systemctl daemon-reload || return 1
+      systemctl restart goblin-setup.service || return 1
       rm -f "$private_dir/handoff"
     else
-      printf '[Goblin] Ingress recovery needs attention. Inspect Traefik and ServiceLB from the VM.\n' >&2
+      printf '[Goblin] Ingress recovery needs attention. Inspect NGINX and ServiceLB from the VM.\n' >&2
     fi
   fi
   systemctl enable --now goblin-setup.service
@@ -233,10 +196,17 @@ if [[ ! -f /etc/systemd/system/k3s.service ]]; then
     cat > /etc/rancher/k3s/config.yaml <<'CONFIG'
 write-kubeconfig-mode: "0600"
 secrets-encryption: true
+disable:
+  - traefik
 CONFIG
   fi
   INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION="$K3S_VERSION" INSTALL_K3S_EXEC=server sh "$bootstrap_dir/install-k3s.sh"
 else
+  if [[ "$(k3s --version)" != "k3s version ${K3S_VERSION} "* ]] || \
+     ! grep -qx '  - traefik' /etc/rancher/k3s/config.yaml; then
+    printf 'This k3s installation uses a superseded configuration. Recreate the disposable installation with the current installer.\n' >&2
+    return 1
+  fi
   systemctl start k3s
 fi
 stage 'Checking Kubernetes API readiness'
@@ -255,25 +225,17 @@ done
 if [[ "$node_registered" != true ]]; then printf 'Kubernetes node did not register. Inspect journalctl -u k3s.\n' >&2; exit 1; fi
 stage 'Checking Kubernetes node readiness'
 k3s kubectl wait --for=condition=Ready node --all --timeout=300s
-# K3s installs Traefik with a Helm job after the node is ready. Its images come
-# from the bundled archive, so these waits cover startup rather than downloads.
-stage 'Waiting for the Kubernetes ingress controller'
-k3s kubectl wait --for=create deployment/traefik -n kube-system --timeout=600s
-k3s kubectl rollout status deployment/traefik -n kube-system --timeout=600s
-stage 'Preparing internal application routing'
-touch "$private_dir/handoff"
-set_ingress_mode ClusterIP
-rm -f "$private_dir/handoff"
-systemctl enable --now goblin-setup.service
+
 }
 
 cert_manager_task() {
 # Pull before applying manifests, so the rollout waits below cover startup only.
 stage 'Downloading certificate manager images'
-pull_images 3 \
+pull_images 4 \
   "quay.io/jetstack/cert-manager-cainjector:${CERT_MANAGER_VERSION}" \
   "quay.io/jetstack/cert-manager-controller:${CERT_MANAGER_VERSION}" \
-  "quay.io/jetstack/cert-manager-webhook:${CERT_MANAGER_VERSION}"
+  "quay.io/jetstack/cert-manager-webhook:${CERT_MANAGER_VERSION}" \
+  "quay.io/jetstack/cert-manager-acmesolver:${CERT_MANAGER_VERSION}"
 stage 'Installing certificate manager'
 download "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml" "$bootstrap_dir/cert-manager.yaml"
 printf '%s  %s\n' "$CERT_MANAGER_SHA256" "$bootstrap_dir/cert-manager.yaml" | sha256sum --check
@@ -365,7 +327,7 @@ prefetch_task() {
 if [[ "${1:-}" == worker ]]; then
   current_step=${2:?Missing worker step}
   case "$current_step" in
-    k3s|cert-manager|sandbox|image|prefetch|database|import|migrate|deploy|verify) ;;
+    k3s|nginx|cert-manager|sandbox|image|prefetch|database|import|migrate|deploy|verify) ;;
     *) exit 2 ;;
   esac
   # Called by EXIT/signal traps, including errors inside a pipeline.
@@ -442,12 +404,12 @@ trap 'exit 130' INT
 
 run_pipeline() {
   local task dependency ready pid finished result failure=0
-  local -a tasks=(k3s image prefetch cert-manager sandbox database import migrate deploy verify)
+  local -a tasks=(k3s nginx image prefetch cert-manager sandbox database import migrate deploy verify)
   local -A started=() dependencies=(
-    [prefetch]='k3s' [cert-manager]='k3s' [sandbox]='k3s'
+    [nginx]='k3s' [prefetch]='k3s' [cert-manager]='k3s' [sandbox]='k3s'
     [database]='cert-manager sandbox prefetch' [import]='k3s image'
     [migrate]='database import' [deploy]='migrate prefetch'
-    [verify]='deploy'
+    [verify]='deploy nginx'
   )
   while :; do
     # A failed worker marks the pipeline before the supervisor reaps it.
@@ -501,7 +463,8 @@ fi
 # Local tests forward a browser port to the installation's HTTP port 80.
 # Azure keeps its default origin; a root-owned systemd override supplies the
 # browser origin when testing behind such a forwarder.
-goblin_origin="${GOBLIN_PUBLIC_ORIGIN:-http://${goblin_hostname}}"
+if [[ "$goblin_hostname" == localhost ]]; then default_origin="http://${goblin_hostname}"; else default_origin="https://${goblin_hostname}"; fi
+goblin_origin="${GOBLIN_PUBLIC_ORIGIN:-$default_origin}"
 goblin_authority=$("$GOBLINCTL" internal origin "$goblin_origin" "$goblin_hostname"
 )
 printf '%s\n' "$goblin_origin" > /var/lib/goblin/public-url
@@ -512,7 +475,6 @@ if [[ ! "${GOBLIN_IMAGE_PULL_WORKERS:-4}" =~ ^[1-8]$ ]]; then
   exit 1
 fi
 rm -f "$bootstrap_dir/pipeline.failed" "$bootstrap_dir/pipeline.draining"
-write_ingress_mode ClusterIP
 prepare_source
 configure_docker
 export goblin_hostname goblin_origin goblin_authority goblin_source_sha goblin_image
@@ -520,17 +482,37 @@ export goblin_hostname goblin_origin goblin_authority goblin_source_sha goblin_i
 done_step
 run_pipeline
 
+step https
+https_task
+done_step
+
 step activate
 stage 'Activating public access'
 touch "$private_dir/handoff"
 state handoff
-systemctl stop goblin-setup.service
-set_ingress_mode LoadBalancer
+if [[ "$goblin_origin" == https://* ]]; then
+  ingress_backend platform 8787
+  k3s kubectl annotate ingress goblin -n goblin nginx.org/ssl-redirect=true --overwrite
+else
+  systemctl stop goblin-setup.service
+  set_ingress_mode LoadBalancer
+fi
 goblin_node_ip=$(k3s kubectl get nodes -o json | "$GOBLINCTL" internal node-address)
 check_app "$goblin_node_ip"
 # Also require the assigned public hostname to resolve and serve the application.
 check_app ''
+if [[ "$goblin_origin" == https://* ]]; then
+  stage 'Checking the embedded sign-in server and MCP discovery'
+  curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 15 \
+    "$goblin_origin/.well-known/oauth-authorization-server" --output "$bootstrap_dir/oauth-discovery.json"
+  "$GOBLINCTL" internal json-test "$bootstrap_dir/oauth-discovery.json" issuer "$goblin_origin/"
+  curl --fail --silent --show-error --noproxy '*' --connect-timeout 5 --max-time 15 \
+    "$goblin_origin/.well-known/oauth-protected-resource/mcp" --output "$bootstrap_dir/mcp-discovery.json"
+  "$GOBLINCTL" internal json-test "$bootstrap_dir/mcp-discovery.json" resource "$goblin_origin/mcp"
+  k3s kubectl delete service/goblin-installation endpointslice/goblin-installation -n goblin --ignore-not-found=true
+fi
 done_step
+systemctl stop goblin-setup.service
 # Clean only transient downloads; retain the native CLI, verifier, state and log.
 rm -rf "$bootstrap_dir"
 rm -f "$private_dir/handoff"

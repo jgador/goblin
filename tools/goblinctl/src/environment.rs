@@ -82,7 +82,7 @@ pub const GOBLIN_PASSWORD_HASH_FILE: &str = "GOBLIN_PASSWORD_HASH_FILE";
 
 /// Browser-facing origin used for origin validation and deployment.
 /// Format: Absolute HTTPS origin, or loopback HTTP; remote HTTP requires explicit opt-in.
-/// Default/fallback: Web: http://localhost:<GOBLIN_PORT>; installer: http://<hostname>; local test sets its configured origin.
+/// Default/fallback: Web: http://localhost:<GOBLIN_PORT>; public installer: https://<hostname>; local installation uses its loopback HTTP origin.
 /// Required: Optional. Sensitive: no.
 pub const GOBLIN_PUBLIC_ORIGIN: &str = "GOBLIN_PUBLIC_ORIGIN";
 

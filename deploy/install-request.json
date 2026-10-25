@@ -31,11 +31,11 @@
     },
     {
       "path": "deploy/azure/platform/ingress.yaml",
-      "sha256": "30fae1b90ebd6a19c753aaf599a200cbca90dc8f8b0bd63fe45325eda19444ef"
+      "sha256": "0ba126983e4acaa650ce6431355aebae0abe77d57fa290445d00fc73fa966b9d"
     },
     {
       "path": "deploy/azure/platform/kustomization.yaml",
-      "sha256": "8bc166bacf7074c7b141d3de2dde07de6195c0c471eabe8b173bc444c5b7e154"
+      "sha256": "76df619dbbc59aa96572af9149aecc15f1fc6ebeb42ffb4906c9336705dee636"
     }
   ]
 }

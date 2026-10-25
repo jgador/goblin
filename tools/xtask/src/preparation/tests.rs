@@ -11,6 +11,7 @@ fn fixture() -> (release::Inputs, release::Release, Inventory) {
     let mut published = dependencies::installer(root).unwrap();
     published.version = "0.1.4".into();
     published.installer = snapshot.clone();
+    published.cargo_lock_sha256 = snapshot.files["Cargo.lock"].clone();
     let inventory = Inventory {
         reserved: BTreeSet::from(["goblinctl-v0.1.4".into()]),
         published_installers: BTreeSet::from(["0.1.4".into()]),

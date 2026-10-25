@@ -77,7 +77,8 @@ clean_installation() {
     clean_no_links "$owner"
     for path in "${host_directories[@]}" var/lib/kubelet usr/local/bin/k3s usr/local/bin/k3s-uninstall.sh \
         usr/local/bin/k3s-killall.sh var/log/goblin-bootstrap.log var/log/goblin-installer.log \
-        etc/systemd/system/goblin-installer.service.d/local-test.conf; do
+        etc/systemd/system/goblin-installer.service.d/local-test.conf \
+        etc/systemd/system/goblin-setup.service.d/listener.conf; do
         clean_no_links "$system/$path"
     done
     for unit in "${units[@]}" k3s.service; do clean_no_links "$system/etc/systemd/system/$unit"; done
@@ -130,6 +131,10 @@ clean_installation() {
     rm -f -- "$system/etc/systemd/system/goblin-installer.service.d/local-test.conf"
     if [[ -d $system/etc/systemd/system/goblin-installer.service.d ]]; then
         rmdir --ignore-fail-on-non-empty -- "$system/etc/systemd/system/goblin-installer.service.d"
+    fi
+    rm -f -- "$system/etc/systemd/system/goblin-setup.service.d/listener.conf"
+    if [[ -d $system/etc/systemd/system/goblin-setup.service.d ]]; then
+        rmdir --ignore-fail-on-non-empty -- "$system/etc/systemd/system/goblin-setup.service.d"
     fi
     for path in "${host_directories[@]}"; do rm -rf --one-file-system -- "$system/${path:?}"; done
     rm -f -- "$system/var/log/goblin-bootstrap.log" "$system/var/log/goblin-installer.log"

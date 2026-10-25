@@ -2,8 +2,9 @@
 
 Deploy an Ubuntu VM, a static public IP with an Azure-managed hostname,
 and a small installation status page. A background service installs single-node
-K3s, cert-manager, Agent Sandbox, and Goblin. Open **`goblinUrl`** in the deployment
-outputs to follow progress; the same page opens Goblin when ready.
+K3s, F5 NGINX Ingress Controller, cert-manager, Agent Sandbox, and Goblin. Open
+**`setupUrl`** in the deployment outputs to follow read-only progress. The page opens
+the HTTPS **`goblinUrl`** after certificate issuance and application verification.
 
 ## Deploy
 
@@ -20,8 +21,10 @@ Start with the **Deploy to Azure** button in the [root README](../../README.md).
 2. Enter and confirm a **Goblin password**. There is no minimum length or
    character-mix requirement. Save it in your password manager; use it to open
    Goblin.
-3. Under VM credentials, generate a new SSH key pair or select an existing public key.
-4. Select **Review + create → Create**. For a new key, select **Download private
+3. Supply the **HTTPS certificate contact email** for Let’s Encrypt. Azure’s
+   generated hostname needs no manual DNS record.
+4. Under VM credentials, generate a new SSH key pair or select an existing public key.
+5. Select **Review + create → Create**. For a new key, select **Download private
    key and create resource** and save the file; it can only be downloaded once.
 
 For SSH from Windows, see [Windows SSH private-key permissions](reference.md#windows-ssh-private-key-permissions)
@@ -39,7 +42,8 @@ configured Goblin hostname so its progress checks and automatic handoff keep
 working when Kubernetes takes over.
 
 The installer builds the application from this repository, imports it into K3s,
-and checks its internal route before transferring the public URL to Traefik.
+and checks its internal NGINX route. NGINX then serves progress and HTTP-01
+certificate validation publicly; Goblin opens only after trusted HTTPS is verified.
 After a successful handoff, the setup UI and installer are disabled. A brief
 reconnection during the switch is normal. The permanent native CLI, status, and
 logs remain on the VM for repair.
@@ -66,9 +70,11 @@ Saved application logs are available at **`<goblinUrl>/logs/`** through
 output into VictoriaLogs on a separate PVC. See [logging](../../docs/logging.md)
 for scope, retention, resource budgets, and verification.
 
-For example, open `http://goblin-prod.southeastasia.cloudapp.azure.com`.
-Enter your Goblin password to open the workspace. HTTPS and certificates remain
-a separate setup step; HTTP traffic, including passwords and sessions, is unencrypted.
+For example, open `https://goblin-prod.southeastasia.cloudapp.azure.com`.
+Enter your Goblin password over HTTPS. The installer persists the certificate and
+ACME account in Kubernetes Secrets and cert-manager renews it automatically. Keep
+public ports 80 and 443 reachable; port 80 serves validation and redirects to HTTPS
+after completion. Initial public setup never requests your password.
 
 ## Verify
 
@@ -87,7 +93,8 @@ not that Goblin has finished installing. Inspect background progress with:
 cat /var/lib/goblin/install/status.json
 ```
 
-Its overall status becomes `ready` when Goblin is available. The URL is saved in
+Its overall status becomes `ready` after trusted HTTPS, Goblin readiness, and the
+embedded OAuth/MCP discovery endpoints have been verified. The URL is saved in
 `/var/lib/goblin/public-url`. Bootstrap failures appear in Azure and in
 `/var/log/goblin-bootstrap.log`; background failures appear on the status page and
 in `/var/log/goblin-installer.log`. To retry after correcting a failure:
@@ -110,9 +117,14 @@ The [local WSL/Ubuntu installer](../local/README.md) installs the same bundle fr
 checkout and keeps the live setup page and resulting Goblin installation available
 for manual testing, including from a Windows host through WSL.
 
+For fast ChatGPT plugin feedback, keep a dedicated Azure test VM as the HTTPS
+gateway and route it to your WSL build with the explicit
+[development relay](../../docs/chatgpt-local-testing.md). Production routes directly
+to the Goblin instance installed on Azure.
+
 ## Cost and removal
 
-The default VM is `Standard_D4s_v5` (4 vCPUs, 16 GiB RAM) with a 128 GiB Standard
+The default VM is `Standard_D4s_v6` (4 vCPUs, 16 GiB RAM) with a 128 GiB Standard
 SSD OS disk. Azure charges apply, including for resources left after a failed deployment.
 To remove the deployment, delete its dedicated resource group. **This deletes
 all resources and data in that group.**

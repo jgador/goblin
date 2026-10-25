@@ -96,6 +96,9 @@ struct InstallArgs {
     /// Public DNS hostname. Omit for a dedicated local installation.
     #[arg(long)]
     hostname: Option<String>,
+    /// Let's Encrypt contact email; required for a public HTTPS installation.
+    #[arg(long, requires = "hostname")]
+    certificate_email: Option<String>,
     #[arg(long, default_value = "master")]
     source_ref: String,
     #[arg(long, value_parser = clap::value_parser!(u16).range(1024..))]
@@ -270,6 +273,10 @@ enum InternalCommand {
         hostname: String,
     },
     NodeAddress,
+    IngressBackend {
+        service: String,
+        port: u16,
+    },
     DockerConfig {
         #[arg(default_value = "/etc/docker/daemon.json")]
         path: PathBuf,
@@ -356,7 +363,13 @@ fn execute(cli: Cli) -> Result<()> {
             }
             None => {
                 if let Some(hostname) = args.hostname {
-                    install::bootstrap(&hostname, &args.source_ref)
+                    install::bootstrap(
+                        &hostname,
+                        &args.source_ref,
+                        args.certificate_email
+                            .as_deref()
+                            .context("Supply --certificate-email for HTTPS installation")?,
+                    )
                 } else {
                     local_action(
                         &config_root,
@@ -452,6 +465,13 @@ fn execute(cli: Cli) -> Result<()> {
             }
             InternalCommand::NodeAddress => {
                 println!("{}", install::node_address(&stdin_json()?)?);
+                Ok(())
+            }
+            InternalCommand::IngressBackend { service, port } => {
+                println!(
+                    "{}",
+                    install::ingress_backend_patch(&stdin_json()?, &service, port)?
+                );
                 Ok(())
             }
             InternalCommand::DockerConfig { path } => install::docker_config(&path),

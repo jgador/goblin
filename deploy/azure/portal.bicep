@@ -12,6 +12,11 @@ param companyName string = 'Goblin'
 @maxLength(128)
 param goblinPassword string
 
+@description('Contact email for automatic Let’s Encrypt HTTPS issuance and renewal. The assigned Azure hostname needs no manual DNS record.')
+@minLength(3)
+@maxLength(254)
+param certificateEmail string
+
 @description('Public part of the VM access key. The portal credentials control supplies the public key. The empty default permits review before Azure generates a new key; use main.bicep for CLI installation without SSH. Never supply a private key. Set sshSourceAddressPrefix only when direct SSH access is needed.')
 param adminSshPublicKey string = ''
 
@@ -31,7 +36,7 @@ param goblinSourceRef string
 param adminUsername string = 'goblinadmin'
 
 @description('VM size. The default provides 4 vCPUs and 16 GiB RAM; verify regional availability and pricing before deploying. Use an x64 size.')
-param vmSize string = 'Standard_D4s_v5'
+param vmSize string = 'Standard_D4s_v6'
 
 @description('OS disk capacity in GiB. Kubernetes data is stored on this managed disk.')
 @minValue(64)
@@ -110,6 +115,7 @@ module infrastructure './modules/vm.bicep' = {
     adminUsername: adminUsername
     adminSshPublicKey: adminSshPublicKey
     goblinPassword: goblinPassword
+    certificateEmail: certificateEmail
     goblinSourceRef: goblinSourceRef
     requireSshPublicKey: true
     vmSize: vmSize
@@ -126,11 +132,14 @@ output resourceNames object = names
 @description('Public IPv4 address of the VM.')
 output publicIpAddress string = infrastructure.outputs.publicIpAddress
 
-@description('Azure-managed public hostname serving the Goblin UI over HTTP.')
+@description('Azure-managed public hostname serving the Goblin UI over HTTPS.')
 output publicHostname string = infrastructure.outputs.publicHostname
 
-@description('Open this URL to follow installation progress. It opens Goblin when ready. HTTPS is configured separately.')
-output goblinUrl string = 'http://${infrastructure.outputs.publicHostname}'
+@description('Goblin HTTPS URL, available after installation and certificate issuance complete.')
+output goblinUrl string = 'https://${infrastructure.outputs.publicHostname}'
+
+@description('Initial read-only installation progress. This page opens the HTTPS Goblin URL when ready.')
+output setupUrl string = 'http://${infrastructure.outputs.publicHostname}'
 
 @description('VM resource ID for administration through the Azure portal or CLI.')
 output virtualMachineResourceId string = infrastructure.outputs.virtualMachineResourceId

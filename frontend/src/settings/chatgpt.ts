@@ -106,19 +106,20 @@ export function mountChatGpt(root: HTMLElement) {
     }
     function render(focusId?: string) {
         if (disposed) return;
-        if (!discardDrafts)
+        if (!discardDrafts) {
             for (const form of root.querySelectorAll<HTMLFormElement>(
                 "form[data-chatgpt-form]",
             ))
                 drafts.set(form.dataset.chatgptForm!, new FormData(form));
-        discardDrafts = false;
-        for (const details of root.querySelectorAll<HTMLDetailsElement>(
-            "details",
-        )) {
-            const key = details.querySelector("summary")?.textContent ?? "";
-            if (details.open) openDetails.add(key);
-            else openDetails.delete(key);
+            for (const details of root.querySelectorAll<HTMLDetailsElement>(
+                "details",
+            )) {
+                const key = details.querySelector("summary")?.textContent ?? "";
+                if (details.open) openDetails.add(key);
+                else openDetails.delete(key);
+            }
         }
+        discardDrafts = false;
         const done = state ? completed(model()) : [];
         root.innerHTML = `<h3>ChatGPT plugin</h3><p class="settings-description">Bring shared Work into ChatGPT. Set up your private plugin, then publish it publicly if you choose.</p>
             <p class="settings-notice" role="status" data-chatgpt-notice ${notice ? "" : "hidden"}>${e(notice)}</p>
@@ -142,7 +143,7 @@ export function mountChatGpt(root: HTMLElement) {
                     .join("")}</select></label></nav>
                 <div class="chatgpt-step-body"><p class="chatgpt-step-caption">${path === "private" ? "PRIVATE SETUP" : "PUBLIC SUBMISSION"} · STEP ${step + 1} OF ${steps().length}</p>${stepContent(model())}</div>
                 <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${steps().length} steps complete</span>${step < steps().length - 1 ? action("next", `Continue to ${steps()[step + 1]}`, true, !done[step]) : ""}</div>
-                <p class="chatgpt-progress-note">${storageAvailable ? "Your place and confirmations are saved in this browser." : "Progress is kept while this page is open; browser storage is unavailable."} ChatGPT installation and publication are confirmed by you.</p>
+                <p class="chatgpt-progress-note">${storageAvailable ? "Your place and confirmations are saved in this browser." : "Progress is kept while this page is open; browser storage is unavailable."} ChatGPT installation and publication are confirmed by you.</p>${action("restart-setup", "Start setup again")}
                 <details><summary>Need help with this step?</summary><p><strong>Cannot connect:</strong> check HTTPS, the certificate, proxy Host forwarding, and ChatGPT workspace permissions. A tunnel carries MCP traffic; OAuth endpoints still need HTTPS reachability.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve the connection.</p><p><strong>Empty list or access denied:</strong> check Work grants and their expiry.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</details>
             </div>`
             }`;
@@ -250,6 +251,21 @@ export function mountChatGpt(root: HTMLElement) {
         );
         if (!button || button.disabled) return;
         const name = button.dataset.chatgpt;
+        if (name === "restart-setup") {
+            confirmed.clear();
+            drafts.clear();
+            openDetails.clear();
+            discardDrafts = true;
+            config = "";
+            clientSecret = "";
+            verification = undefined;
+            pluginPackage = undefined;
+            navigate(0, "private");
+            announce(
+                "Setup progress cleared. Saved OAuth settings and shared Work can be managed in their setup steps.",
+            );
+            return;
+        }
         if (name === "step") return navigate(Number(button.dataset.step));
         if (name === "private" || name === "public") return navigate(0, name);
         if (name === "prepare") return navigate(0, "private");

@@ -135,14 +135,17 @@ fn interrupted_migration_is_reconciled_before_replacement() {
 
 #[test]
 fn origin_validation_preserves_the_configured_authority() {
-    for origin in ["http://localhost", "http://localhost:8788"] {
+    for origin in [
+        "http://localhost",
+        "http://localhost:8788",
+        "https://localhost",
+    ] {
         assert_eq!(
             install::origin_authority(origin, "localhost").unwrap(),
-            origin.strip_prefix("http://").unwrap()
+            origin.split_once("://").unwrap().1
         );
     }
     for origin in [
-        "https://localhost",
         "http://localhost/",
         "http://localhost:0",
         "http://localhost:65536",
@@ -159,6 +162,39 @@ fn origin_validation_preserves_the_configured_authority() {
             "{origin:?}"
         );
     }
+    assert_eq!(
+        install::origin_authority("https://test.example.com", "test.example.com").unwrap(),
+        "test.example.com"
+    );
+    for origin in [
+        "http://test.example.com",
+        "https://test.example.com:443",
+        "https://test.example.com/path",
+        "https://test.example.com.evil",
+    ] {
+        assert!(install::origin_authority(origin, "test.example.com").is_err());
+    }
+}
+
+#[test]
+fn installation_handoff_preserves_active_certificate_challenge_paths() {
+    let ingress = json!({"metadata":{"resourceVersion":"7"},"spec":{"rules":[{"http":{"paths":[
+        {"path":"/.well-known/acme-challenge/token","backend":{"service":{"name":"cm-acme-http-solver","port":{"number":8089}}}},
+        {"path":"/","backend":{"service":{"name":"platform","port":{"number":8787}}}}
+    ]}}]}});
+    let patch = install::ingress_backend_patch(&ingress, "goblin-installation", 8787).unwrap();
+    assert_eq!(
+        patch[0],
+        json!({"op":"test","path":"/metadata/resourceVersion","value":"7"})
+    );
+    assert_eq!(
+        patch[1]["path"],
+        "/spec/rules/0/http/paths/1/backend/service"
+    );
+    assert_eq!(patch[1]["value"]["name"], "goblin-installation");
+    let mut ambiguous = ingress;
+    ambiguous["spec"]["rules"][0]["http"]["paths"][0]["path"] = json!("/");
+    assert!(install::ingress_backend_patch(&ambiguous, "platform", 8787).is_err());
 }
 
 #[test]
@@ -193,7 +229,13 @@ fn failed_setup_and_restarts_keep_attempt_history_without_claiming_readiness() {
     }
     setup::update(&path, SetupAction::Start, "image").unwrap();
     let state = files::json(&path).unwrap();
-    assert_eq!(state["steps"][4]["attempt"], 2);
+    let image = state["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|step| step["id"] == "image")
+        .unwrap();
+    assert_eq!(image["attempt"], 2);
     assert_eq!(
         fs::metadata(path).unwrap().permissions().mode() & 0o777,
         0o644
@@ -290,9 +332,14 @@ fn password_verification_accepts_only_the_original_password() {
 
 #[test]
 fn rendered_bootstrap_contains_native_pins_and_no_plaintext_password() {
-    let script =
-        install::render_bootstrap("goblin.example", "test-source", "0.1.0", &"a".repeat(64))
-            .unwrap();
+    let script = install::render_bootstrap(
+        "goblin.example",
+        "test-source",
+        "owner@example.com",
+        "0.1.0",
+        &"a".repeat(64),
+    )
+    .unwrap();
     assert!(!script.contains("__GOBLIN"));
     assert!(!script.contains("python3"));
     assert!(script.contains(environment::GOBLIN_PASSWORD_HASH_FILE));
@@ -481,6 +528,20 @@ esac
     assert!(retained.exists());
     let calls = fs::read_to_string(root.join("calls")).unwrap();
     assert!(calls.contains("disable --now goblin-local-postgres.socket"));
+    let listener = local.path("etc/systemd/system/goblin-setup.service.d/listener.conf");
+    let custom = listener.with_file_name("custom.conf");
+    files::atomic_write(&listener, b"owned setup listener", 0o644, false).unwrap();
+    files::atomic_write(&custom, b"operator setting", 0o644, false).unwrap();
+    files::atomic_write(
+        &local.path("usr/local/bin/k3s-uninstall.sh"),
+        b"#!/bin/sh\nexit 0\n",
+        0o755,
+        false,
+    )
+    .unwrap();
+    local.reset().unwrap();
+    assert!(!listener.exists());
+    assert!(custom.exists());
 }
 
 #[test]
