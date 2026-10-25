@@ -1,7 +1,7 @@
 # Included by Makefile; shared shell and tool settings live there.
 DB_PROFILE ?= wsl
 
-.PHONY: dev start docker-build docker-images-clean docker-cache-clean \
+.PHONY: dev start dev-clean-slate docker-build docker-images-clean docker-cache-clean \
 	website-dev website-stop website-status website-logs website-deploy website-preview website-load-test \
 	goblinctl local local-start local-status local-stop local-reset local-logs local-retry \
 	local-database local-password setup-password codex db-migrate db-scaffold test-postgres
@@ -12,6 +12,10 @@ dev: build
 
 # Start the development host with the same build and credential setup as dev.
 start: dev
+
+# Reset the owned WSL installation and runtime/test state, including the saved password.
+dev-clean-slate:
+	bash scripts/dev-clean-slate.sh
 
 # Time the complete Goblin image build; pass extra Docker flags with ARGS.
 docker-build:

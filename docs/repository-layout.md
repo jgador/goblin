@@ -157,6 +157,7 @@ npm run typecheck
 | `make local-start` | Start the full local installation with existing safety checks |
 | `make local-status` | Report installation status without changing it |
 | `make local-reset ARGS=--yes` | Explicitly reset only the owned local installation |
+| `make dev-clean-slate` | Reset the owned WSL installation and known checkout runtime/test state, including the saved password |
 | `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
 | `make dev DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
 | `make docker-build` | Time the complete Goblin image build; pass extra Docker options through `ARGS` |

@@ -143,6 +143,33 @@ Docker and cached build images, and does not
 remove other host services such as PostgreSQL. `destroy --yes` is an alias for
 `reset --yes`.
 
+For a fresh local development installation, including password setup, run:
+
+```bash
+time make dev-clean-slate
+```
+
+Stop direct development servers and browser tests first. This `Makefile.dev`
+target runs the Bash helper and requests sudo. It checks that the installation
+belongs to this checkout, stops its systemd services, and runs
+`/usr/local/bin/k3s-uninstall.sh` to remove the whole local cluster. It then removes
+Goblin installation files and clears `.goblin-platform/`, `.goblin-local/`,
+`.goblin-secrets/` (including the saved password), `.goblin-browser-test/` leftovers, and
+`.artifacts/playwright/`. Tracked files and placeholders remain; mounted or
+symlinked cleanup roots are refused.
+
+Running the target confirms full cleanup. Password setup and sign-in are required
+again, and deleted persistent data needs an existing backup to recover. Docker
+images, shared caches, developer tools, other task artifacts, and external database
+profiles remain. Run `make local-start` separately to reinstall.
+
+The helper requires Bash, Git, standard Ubuntu system tools, and `jq` to check
+the installation ownership record. It does not build or invoke `goblinctl`.
+It runs no kubectl commands and does not access `~/.kube/` or its production
+contexts. The local k3s uninstaller runs with inherited environment variables
+cleared. Another checkout's installation or installation leftovers without
+ownership block cleanup.
+
 Choose a different browser port on the first start if necessary:
 
 ```bash
