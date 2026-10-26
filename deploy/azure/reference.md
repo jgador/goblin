@@ -156,6 +156,21 @@ k3s kubectl get sandbox,pods,svc,ingress -n goblin
 journalctl -u k3s --no-pager -n 100
 ```
 
+If readiness repeatedly returns HTTP 404, inspect the Ingress events and NGINX
+controller logs. A ready controller can still reject an individual Ingress:
+
+```bash
+sudo k3s kubectl -n goblin describe ingress goblin
+sudo k3s kubectl -n kube-system logs deployment/goblin-nginx-controller --tail=100
+```
+
+F5 requires every service in `nginx.org/websocket-services` to appear in that
+Ingress's backend routes. Goblin starts with `platform`, removes the annotation
+while routing installation progress, and restores `platform` during activation.
+The development relay switches it to `goblin-dev-relay` and restores it on stop.
+Each switch updates routing and the annotation atomically, preserving ACME paths.
+An internal readiness failure prevents public certificate setup from starting.
+
 ## What deployment success means
 
 The VM extension downloads a versioned, checksum-pinned native goblinctl archive.

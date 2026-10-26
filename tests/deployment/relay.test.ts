@@ -35,7 +35,10 @@ async function fixture() {
     const initial = {
         metadata: {
             resourceVersion: "1",
-            annotations: { "nginx.org/ssl-redirect": "true" },
+            annotations: {
+                "nginx.org/ssl-redirect": "true",
+                "nginx.org/websocket-services": "platform",
+            },
         },
         spec: {
             ingressClassName: "nginx",
@@ -116,6 +119,13 @@ else if (name === 'sudo') {
   }
 } else if (name === 'curl') {
   const local = args.some(arg => arg.startsWith('http://127.0.0.1:'));
+  if (!local) {
+    // F5 serves no route when its WebSocket annotation names a non-backend service.
+    const current = ingress();
+    const services = current.spec.rules.flatMap(rule => rule.http.paths.map(p => p.backend.service.name));
+    const websocket = current.metadata.annotations['nginx.org/websocket-services'];
+    if (websocket && websocket.split(',').some(service => !services.includes(service))) process.exit(22);
+  }
   if (!local && upstream() === 'goblin-dev-relay' && !fs.existsSync(path.join(root, 'connected'))) process.exit(22);
   process.stdout.write(JSON.stringify({keys:[{kid:local || upstream() === 'goblin-dev-relay' ? 'local-key' : 'azure-key'}]}));
 } else if (name === 'k3s') {
@@ -194,6 +204,10 @@ test("relay CLI preserves ACME routing, forwards through a private socket, fails
     const started = f.start();
     assert.equal(started.status, 0, started.stderr);
     const active = await f.ingress();
+    assert.equal(
+        active.metadata.annotations["nginx.org/websocket-services"],
+        "goblin-dev-relay",
+    );
     assert.deepEqual(
         active.spec.rules[0].http.paths[0],
         f.initial.spec.rules[0].http.paths[0],
@@ -244,6 +258,10 @@ test("relay CLI preserves ACME routing, forwards through a private socket, fails
     const stopped = f.run("stop");
     assert.equal(stopped.status, 0, stopped.stderr);
     assert.deepEqual((await f.ingress()).spec, f.initial.spec);
+    assert.deepEqual(
+        (await f.ingress()).metadata.annotations,
+        f.initial.metadata.annotations,
+    );
     assert.deepEqual(
         JSON.parse(await readFile(join(f.root, "resources.json"), "utf8")),
         {},

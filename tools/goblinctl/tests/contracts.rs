@@ -178,7 +178,7 @@ fn origin_validation_preserves_the_configured_authority() {
 
 #[test]
 fn installation_handoff_preserves_active_certificate_challenge_paths() {
-    let ingress = json!({"metadata":{"resourceVersion":"7"},"spec":{"rules":[{"http":{"paths":[
+    let ingress = json!({"metadata":{"resourceVersion":"7","annotations":{"nginx.org/websocket-services":"platform","acme.cert-manager.io/http01-edit-in-place":"true"}},"spec":{"rules":[{"http":{"paths":[
         {"path":"/.well-known/acme-challenge/token","backend":{"service":{"name":"cm-acme-http-solver","port":{"number":8089}}}},
         {"path":"/","backend":{"service":{"name":"platform","port":{"number":8787}}}}
     ]}}]}});
@@ -192,6 +192,30 @@ fn installation_handoff_preserves_active_certificate_challenge_paths() {
         "/spec/rules/0/http/paths/1/backend/service"
     );
     assert_eq!(patch[1]["value"]["name"], "goblin-installation");
+    assert_eq!(
+        patch[2],
+        json!({"op":"remove","path":"/metadata/annotations/nginx.org~1websocket-services"})
+    );
+    let mut progress = ingress.clone();
+    progress["metadata"]["annotations"]
+        .as_object_mut()
+        .unwrap()
+        .remove("nginx.org/websocket-services");
+    progress["spec"]["rules"][0]["http"]["paths"][1]["backend"]["service"]["name"] =
+        json!("goblin-installation");
+    let restore = install::ingress_backend_patch(&progress, "platform", 8787).unwrap();
+    assert_eq!(
+        restore[2],
+        json!({"op":"add","path":"/metadata/annotations/nginx.org~1websocket-services","value":"platform"})
+    );
+    assert_eq!(
+        install::ingress_backend_patch(&progress, "goblin-installation", 8787)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
     let mut ambiguous = ingress;
     ambiguous["spec"]["rules"][0]["http"]["paths"][0]["path"] = json!("/");
     assert!(install::ingress_backend_patch(&ambiguous, "platform", 8787).is_err());

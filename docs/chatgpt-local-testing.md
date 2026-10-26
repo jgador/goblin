@@ -92,6 +92,8 @@ on the test VM, opens the SSH reverse socket, and changes the default `/` route.
 It then verifies that public HTTPS returns the local signing keys. Certificate
 challenge paths stay on Azure. Resources are marked with a session owner so another
 relay cannot silently replace or remove them.
+The ingress's WebSocket service changes atomically with the default route, so
+F5 accepts the selected backend during both relay start and restoration.
 
 Open `https://<test-hostname>/settings?section=chatgpt`. Follow the private plugin
 flow there, save ChatGPT's exact callback, unlock with the **local Goblin password**,
