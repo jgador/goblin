@@ -142,6 +142,18 @@ if (name === 'kubectl') args.unshift('kubectl');
 const root = process.env["${Env.GOBLIN_BOOTSTRAP_TEST_DIR.name}"];
 const nodeState = process.env["${Env.GOBLIN_BOOTSTRAP_NODE_STATE.name}"];
 const appState = process.env["${Env.GOBLIN_BOOTSTRAP_APP_STATE.name}"];
+const ingressFile = path.join(root, 'ingress.json');
+function ingress() {
+  if (fs.existsSync(ingressFile)) return JSON.parse(fs.readFileSync(ingressFile, 'utf8'));
+  const yaml = fs.readFileSync(path.join(root, 'var/lib/goblin/deploy/azure/platform/ingress.yaml'), 'utf8');
+  const line = yaml.split('\\n').find(line => line.trim().startsWith('nginx.org/websocket-services:'));
+  const annotations = {'acme.cert-manager.io/http01-edit-in-place': 'true'};
+  if (line) annotations['nginx.org/websocket-services'] = JSON.parse(line.split(': ')[1]);
+  return {metadata:{resourceVersion:'1',annotations},spec:{tls:[],rules:[{http:{paths:[
+    {path:'/.well-known/acme-challenge/fixture',backend:{service:{name:'cm-acme-http-solver',port:{number:8089}}}},
+    {path:'/',backend:{service:{name:'platform',port:{number:8787}}}}
+  ]}}]}};
+}
 fs.appendFileSync(path.join(root, 'command-events.jsonl'), JSON.stringify({ name, args }) + '\\n');
 if (name === 'curl') {
   fs.appendFileSync(path.join(root, 'curl-requests.jsonl'), JSON.stringify(args) + '\\n');
@@ -170,6 +182,11 @@ if (name === 'curl') {
   } else if (args.some(arg => arg.startsWith('https://github.com/') || arg.startsWith('https://helm.nginx.com/'))) {
     fs.writeFileSync(output, 'verified upstream fixture');
   } else if (args.some(arg => /^https?:/.test(arg))) {
+    // F5 rejects the whole Ingress if a WebSocket service is absent from its routes.
+    const current = ingress();
+    const services = current.spec.rules.flatMap(rule => rule.http.paths.map(p => p.backend.service.name));
+    const websocket = current.metadata.annotations['nginx.org/websocket-services'];
+    if (websocket && websocket.split(',').some(service => !services.includes(service))) process.exit(22);
     if (appState === 'ingress-failed' || (appState === 'public-failed' && !args.some(arg => arg.endsWith(':10.43.0.80')))) process.exit(22);
     if (appState === 'tls-untrusted' && args.some(arg => arg.startsWith('https://'))) process.exit(60);
     if (args.includes('--insecure') || args.includes('-k')) throw new Error('Certificate validation must remain enabled');
@@ -262,10 +279,21 @@ if (name === 'curl') {
   }
   if (args[0] === '--version') process.stdout.write('k3s version v1.36.5+k3s1 (fixture)\\n');
   else if (args[1] === 'get' && args[2] === 'ingress') {
-    process.stdout.write(JSON.stringify({metadata:{resourceVersion:'1'},spec:{rules:[{http:{paths:[
-      {path:'/.well-known/acme-challenge/fixture',backend:{service:{name:'cm-acme-http-solver',port:{number:8089}}}},
-      {path:'/',backend:{service:{name:'platform',port:{number:8787}}}}
-    ]}}]}}));
+    process.stdout.write(JSON.stringify(ingress()));
+  } else if (args[1] === 'patch' && args[2] === 'ingress' && args.includes('--type=json')) {
+    const current = ingress();
+    for (const operation of JSON.parse(args[args.indexOf('-p') + 1])) {
+      const parts = operation.path.slice(1).split('/').map(p => p.replaceAll('~1','/').replaceAll('~0','~'));
+      const parent = parts.slice(0,-1).reduce((o,p) => o[p], current);
+      const key = parts.at(-1);
+      if (operation.op === 'test') {
+        if (JSON.stringify(parent[key]) !== JSON.stringify(operation.value)) process.exit(1);
+      } else if (operation.op === 'remove') delete parent[key];
+      else parent[key] = operation.value;
+    }
+    current.metadata.resourceVersion = String(Number(current.metadata.resourceVersion) + 1);
+    fs.writeFileSync(ingressFile, JSON.stringify(current));
+    fs.appendFileSync(path.join(root, 'ingress-routes.jsonl'), JSON.stringify(current) + '\\n');
   } else if (args[1] === 'get' && args[2] === 'service') {
     const modeFile = path.join(root, 'ingress-mode');
     const mode = fs.existsSync(modeFile) ? fs.readFileSync(modeFile, 'utf8') : 'ClusterIP';
@@ -746,10 +774,7 @@ test("k3s and its system images are verified, cached outside the cluster, and in
         join(root, "var/lib/goblin/deploy/azure/platform/ingress.yaml"),
         "utf8",
     );
-    assert.match(
-        ingress,
-        /nginx\.org\/websocket-services: "platform,goblin-dev-relay"/,
-    );
+    assert.match(ingress, /nginx\.org\/websocket-services: "platform"/);
     assert.match(ingress, /nginx\.org\/proxy-http-version: "1\.1"/);
     const checks = (await readFile(join(root, "checksum-checks.jsonl"), "utf8"))
         .trim()
@@ -1729,6 +1754,29 @@ test("NGINX publishes progress before certificate issuance and enables Goblin on
     const root = await mkdtemp(join(tmpdir(), "goblin-https-handoff-"));
     t.after(() => rm(root, { recursive: true, force: true }));
     await bootstrap(root, fakePassword);
+    const routes = (await readFile(join(root, "ingress-routes.jsonl"), "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    assert.deepEqual(
+        routes.map(
+            (route) =>
+                route.metadata.annotations["nginx.org/websocket-services"],
+        ),
+        ["platform", undefined, "platform"],
+    );
+    for (const route of routes) {
+        assert.equal(
+            route.spec.rules[0].http.paths[0].backend.service.name,
+            "cm-acme-http-solver",
+        );
+        assert.equal(
+            route.metadata.annotations[
+                "acme.cert-manager.io/http01-edit-in-place"
+            ],
+            "true",
+        );
+    }
     const events: { name: string; args: string[] }[] = (
         await readFile(join(root, "command-events.jsonl"), "utf8")
     )
