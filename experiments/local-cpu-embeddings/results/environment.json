@@ -1,0 +1,23 @@
+{
+  "Timestamp": "2026-10-01T18:18:04.7261909+00:00",
+  "OS": "Ubuntu 24.04.3 LTS",
+  "OSRelease": "PRETTY_NAME=\u0022Ubuntu 24.04.3 LTS\u0022\nNAME=\u0022Ubuntu\u0022\nVERSION_ID=\u002224.04\u0022\nVERSION=\u002224.04.3 LTS (Noble Numbat)\u0022\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\u0022https://www.ubuntu.com/\u0022\nSUPPORT_URL=\u0022https://help.ubuntu.com/\u0022\nBUG_REPORT_URL=\u0022https://bugs.launchpad.net/ubuntu/\u0022\nPRIVACY_POLICY_URL=\u0022https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\u0022\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+  "LogicalCpus": 8,
+  "CpuCapacity": 8,
+  "HostTotalRamBytes": 10451464192,
+  "HostAvailableRamBytes": 9661841408,
+  "CgroupMemoryLimitBytes": 8589934592,
+  "CgroupMemoryCurrentBytes": 6552829952,
+  "CgroupInactiveFileBytes": 5151420416,
+  "EffectiveAvailableRamBytes": 7188262912,
+  "DiskTotalBytes": 33770192896,
+  "DiskAvailableBytes": 25918156800,
+  "Runtime": ".NET 10.0.12",
+  "Sdk": "10.0.401",
+  "CpuModel": "model name\t: AMD EPYC 9V74 80-Core Processor",
+  "CpuMax": "800000 100000",
+  "CpuPsi": null,
+  "MemoryPsi": null,
+  "PsiAvailable": false,
+  "AffinityCpuList": "Cpus_allowed_list:\t0-8"
+}
