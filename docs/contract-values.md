@@ -46,39 +46,28 @@ TypeScript uses both the generated named constants and their literal unions.
 UI-only labels, filters, and actions can keep their own local types; they do not
 belong in product contracts merely because they are strings.
 
-Goblin currently supports GitHub repositories only. Use `GitRepository` for shared
-core and contract type and member names across languages, matching C#
-(`gitRepository` in TypeScript and `git_repository` in Rust/Bash). These names do
-not imply support for other Git hosts or arbitrary Git remotes. Keep `GitHub` for
-GitHub-specific connections, API calls, repository selection and authorization
-controls, worker commands, and release operations. Local Git checkouts and
-container image repositories are separate concepts. Generated TypeScript names
-match their owning declarations, including `AttentionReason.GitRepositoryRequired`
-and `WorkAction.PrepareGitRepository`, while their adapter JSON values remain
-`RepositoryRequired` and `PrepareRepository`. HTTP properties, routes, environment
-names, and persisted JSON keys retain their existing spellings. Name configuration
-directories by their purpose rather than treating them as Git checkouts.
+Use `GitRepository` for shared types and members (`gitRepository` in TypeScript,
+`git_repository` in Rust/Bash). Use `GitHub` for provider-specific connections,
+APIs, selection, authorization, worker commands, and releases. Only GitHub
+repositories are supported; local checkouts and container registries are distinct.
+Generated TypeScript names follow their owners, while adapter JSON retains existing
+wire values such as `RepositoryRequired` and `PrepareRepository`. Preserve HTTP,
+route, environment, and persisted JSON spellings. Name configuration directories
+for their purpose.
 
 ## Parsing and compatibility
 
-HTTP and CLI adapters parse external strings before calling typed internal APIs.
-Repository operations preserve `publish`, `pull-request`, `fetch`, and `checkpoint`
-exactly; neither enum numeric values nor unsupported operations grant authority.
-Authentication enum metadata preserves `apiKey`, `chatgpt`, `accepted`, `unverified`,
-`error`, and `info`. Public JSON fields and other named enum values are unchanged.
-Integer enum input is rejected by HTTP and execution JSON serializers.
+HTTP and CLI adapters parse strings at the boundary. Repository operations use
+exactly `publish`, `pull-request`, `fetch`, and `checkpoint`; numeric or unknown
+values grant no authority. Preserve existing public JSON and authentication wire
+names, and reject integer enum inputs in HTTP and execution serializers.
 
-Reverse-engineered EF entities retain existing text columns and generated files.
-Use `nameof` for stored named enum values in EF queries and `ContractValue.Parse<T>`
-when materializing typed views. Parsing requires an exact defined name, rejecting
-numeric strings and unknown values. Repository operation storage uses its explicit
-wire-name mapping. Do not use a permissive fallback that fabricates a valid state.
-These parsing rules do not require changing stored text columns.
+EF entities retain their text columns and generated mappings. Use `nameof` for
+stored named enum values in queries and `ContractValue.Parse<T>` for typed views;
+reject numeric strings and unknown values instead of fabricating a valid state.
+Repository operations use their explicit wire mapping.
 
-Setup CLI actions and optional progress scopes use Rust enums; unknown actions and
-step IDs are rejected before changing state. The setup browser validates incoming
-state against generated values before rendering either polling or SSE updates.
-The setup module is embedded in goblinctl and covered by the existing installer
-release-input directory allowlist. Changes to embedded setup modules require a
-new installer release to reach
-installed hosts; the checked-in source and published installer have separate identities.
+Rust setup actions and optional progress scopes use enums; reject unknown actions
+and step IDs before changing state. The setup browser validates polling and SSE
+state against generated values. Setup modules are embedded in goblinctl: changes
+require a new installer release to reach hosts, even when source is already merged.
