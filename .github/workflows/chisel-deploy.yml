@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: "24"
       - name: Install the cluster's pinned Kubernetes client
-        run: bash website/install-kubectl.sh
+        run: bash scripts/install-kubectl.sh production
       - name: Verify deployment and credential handling offline
         run: make chisel-check
 
@@ -39,7 +39,7 @@ jobs:
         with:
           node-version: "24"
       - name: Install the cluster's pinned Kubernetes client
-        run: bash website/install-kubectl.sh
+        run: bash scripts/install-kubectl.sh production
       - name: Deploy Chisel and wait for its server rollout
         env:
           AK3S_KUBECONFIG: ${{ secrets.AK3S_KUBECONFIG }}

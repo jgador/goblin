@@ -23,6 +23,7 @@ on:
       - website/install/**
       - website/package-installation.mts
       - scripts/installation-assets.mts
+      - scripts/install-kubectl.sh
       - scripts/release-github.mts
       - website/assets/**
       - website/Dockerfile
@@ -52,7 +53,7 @@ jobs:
         with:
           node-version: "24"
       - name: Install pinned Kubernetes client
-        run: bash website/install-kubectl.sh
+        run: bash scripts/install-kubectl.sh production
       - uses: actions/download-artifact@v7
         if: inputs.installation-artifact != ''
         with:
@@ -76,7 +77,7 @@ jobs:
           npm --prefix website run check
           node --test website/release.test.mjs
           node --test scripts/installation-assets.test.mts scripts/release-github.test.mts
-          bash -n website/check-container.sh website/install-kubectl.sh
+          bash -n website/check-container.sh scripts/install-kubectl.sh
       - name: Build and inspect the production container
         run: |
           docker build --platform linux/amd64 --target production --file website/Dockerfile --tag goblin-website:verify .
@@ -159,7 +160,7 @@ jobs:
       - name: Reject a superseded installation recommendation
         run: node scripts/installation-assets.mts check-baseline .artifacts/installation-assets/output
       - name: Install pinned Kubernetes client
-        run: bash website/install-kubectl.sh
+        run: bash scripts/install-kubectl.sh production
       - name: Apply approved image and verify rollout
         env:
           WEBSITE_KUBECONFIG: ${{ secrets.WEBSITE_KUBECONFIG }}

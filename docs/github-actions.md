@@ -159,6 +159,12 @@ policy, which the selected SDK must satisfy. This avoids the `aka.ms` redirect t
 the unavailable origin feed and an additional floating LTS runtime download.
 Downloads and extracted SDK files stay under `.artifacts/dotnet/`.
 
+The shared [kubectl installer](../scripts/install-kubectl.sh) pins the client and
+checksum for two uses: `production` for the AK3S website and Chisel workflows,
+and `verification` for offline deployment checks. Update each version and its
+checksum together; the production client must remain within the cluster’s
+supported version skew.
+
 ## Installation commands and artifacts
 
 The reusable workflow runs `node scripts/release-github.mts installation-assets VERSION MODE`

@@ -624,3 +624,74 @@ test("CI and release use the shared SDK setup, which rejects corrupt downloads b
         assert.equal(await readFile(envFile, "utf8"), "");
     });
 });
+
+test("shared kubectl installer preserves both pins and rejects corrupt downloads", async () => {
+    await fixture(async (directory) => {
+        const bin = join(directory, "bin");
+        const scripts = join(directory, "scripts");
+        await mkdir(bin);
+        await mkdir(scripts);
+        await copyFile(
+            join(root, "scripts/install-kubectl.sh"),
+            join(scripts, "install-kubectl.sh"),
+        );
+        const log = join(directory, "calls");
+        await writeFile(
+            join(bin, "curl"),
+            `#!/bin/bash\nprintf '%s\\n' "$*" >> '${log}'\nfor output; do :; done\nprintf corrupt > "$output"\n`,
+            { mode: 0o755 },
+        );
+        await writeFile(
+            join(bin, "sudo"),
+            `#!/bin/bash\nprintf 'install %s\\n' "$*" >> '${log}'\n`,
+            { mode: 0o755 },
+        );
+        const run = (...args: string[]) =>
+            spawnSync("/bin/bash", [join(scripts, "install-kubectl.sh"), ...args], {
+                cwd: directory,
+                encoding: "utf8",
+                env: { [Env.PATH.name]: `${bin}:/usr/bin:/bin` },
+            });
+        for (const [profile, version, checksum] of [
+            [
+                "production",
+                "v1.37.1",
+                "65691ff77eb6fa44c908b77a1082c9f092c3b9733b5cefabec0d1104890e21a8",
+            ],
+            [
+                "verification",
+                "v1.36.4",
+                "8b8f088da2dab964f853b38464033b1be15ede2839eca751482357c45abdd05a",
+            ],
+        ] as const) {
+            // Use the real checksum tool to ensure a failed verification never installs.
+            await rm(join(bin, "sha256sum"), { force: true });
+            await writeFile(log, "");
+            const corrupt = run(profile);
+            assert.notEqual(corrupt.status, 0);
+            assert.match(corrupt.stdout, /FAILED/);
+            assert.doesNotMatch(await readFile(log, "utf8"), /install /);
+            // Capture the checksum and install arguments without downloading a binary.
+            await writeFile(
+                join(bin, "sha256sum"),
+                `#!/bin/bash\nread -r checksum file\nprintf 'checksum %s\\n' "$checksum" >> '${log}'\n`,
+                { mode: 0o755 },
+            );
+            await writeFile(log, "");
+            const success = run(profile);
+            assert.equal(success.status, 0, success.stderr);
+            const calls = await readFile(log, "utf8");
+            assert.match(
+                calls,
+                new RegExp(`https://dl\\.k8s\\.io/release/${version}/bin/linux/amd64/kubectl`),
+            );
+            assert.ok(calls.includes(`checksum ${checksum}`));
+            assert.match(calls, /install install -m 0755 .*\/kubectl \/usr\/local\/bin\/kubectl/);
+        }
+        for (const args of [[], ["unknown"], ["production", "extra"]]) {
+            const result = run(...args);
+            assert.equal(result.status, 2);
+            assert.match(result.stderr, /Usage:/);
+        }
+    });
+});
