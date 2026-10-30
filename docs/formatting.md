@@ -79,7 +79,18 @@ Construction changes must preserve required properties, omitted/null defaults,
 polymorphism, enum wire names, and serialization order where relied upon. Command
 replay fingerprints hash serialized content, so an apparently equivalent JSON
 refactor can change replay behavior. Test raw wire shape and relevant equality or
-copy behavior when changing these contracts; see [typed JSON boundaries](typed-json-contracts.md).
+copy behavior when changing these contracts.
+
+### Typed JSON boundaries
+
+Read known production payloads into purpose-specific DTOs with explicit
+`JsonPropertyName` properties; ignore upstream fields Goblin does not consume.
+Preserve bounded HTTP buffering and object/syntax validation, unknown Kubernetes
+readings, Slack event field-presence semantics, and existing response shapes.
+Repository workers, Codex results, and workspace inspection use typed contracts.
+Dynamic JSON remains appropriate for JSON-RPC envelopes, arbitrary generated
+schema values, converters, schema generators, and wire-format tests. Core
+lifecycle types must not depend on JSON or runtime protocols.
 
 Separate C# type declarations, methods, constructors, and attributed members with
 at least one blank line. Keep attributes on their own lines directly above the
