@@ -80,7 +80,7 @@ generated during release preparation. It does not refresh Docker image tags.
 
 ## Checked-in image selections
 
-The current manifests select PostgreSQL 18.6, Headlamp 0.45.0,
+The current manifests select Chisel 1.12.0, PostgreSQL 18.6, Headlamp 0.45.0,
 VictoriaLogs 1.53.0, Fluent Bit 5.1.3, K3s 1.36.5, Agent Sandbox 1.0.4, and
 cert-manager 1.21.3. The build uses Node 26.10.0, .NET SDK 10.0.401, and ASP.NET
 Core 10.0.12. K3s, cert-manager, and Agent Sandbox retain ownership of their

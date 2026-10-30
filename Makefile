@@ -37,7 +37,7 @@ typecheck: contracts-check scripts-typecheck
 check: rust-format-check rust-lint test typecheck
 
 # Preserve all pretest checks, builds, generators, and offline application tests.
-test: contracts-check contracts-test make-test ci-test maintenance-test dependencies-check build deploy-generate rust-test release-test protocol-check kubernetes-check backend-test node-test
+test: contracts-check contracts-test make-test ci-test maintenance-test chisel-check dependencies-check build deploy-generate rust-test release-test protocol-check kubernetes-check backend-test node-test
 
 # Format TypeScript, Rust, and handwritten C# using the existing conventions.
 format: typescript-format rust-format backend-format
@@ -196,6 +196,15 @@ logging-test-ui: build
 # Verify owner-only agentic maintenance, focused context, and scoped patch validation.
 maintenance-test:
 	node --test scripts/agentic-maintenance.test.mts
+
+# =============================================================================
+# Chisel: offline manifest and deployment credential verification.
+# =============================================================================
+.PHONY: chisel-check
+
+# Verify the self-hosted WSL tunnel deployment without contacting Kubernetes.
+chisel-check:
+	node --test scripts/chisel.test.mts
 
 # =============================================================================
 # Make: task runner workflow tests.

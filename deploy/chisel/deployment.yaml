@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chisel
+spec:
+  # Both ingress ports must reach the same server holding the WSL connection.
+  replicas: 1
+  strategy:
+    type: Recreate
+  progressDeadlineSeconds: 180
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: chisel
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chisel
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: chisel
+          # Official Chisel 1.12.0 multi-architecture image.
+          image: ghcr.io/jpillora/chisel:1.12.0@sha256:e5538d0a8432f53788bf63089d918a4b9979e6df408a2f1aa36575917eacd314
+          imagePullPolicy: IfNotPresent
+          args:
+            - server
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - --reverse
+            - --authfile
+            - /credentials/users.json
+            - --keyfile
+            - /credentials/key.pem
+            - --keepalive
+            - 25s
+          ports:
+            - name: tunnel
+              containerPort: 8080
+            - name: goblin
+              containerPort: 8787
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          # A disconnected WSL client must not make Kubernetes restart the server.
+          readinessProbe:
+            tcpSocket:
+              port: tunnel
+          livenessProbe:
+            tcpSocket:
+              port: tunnel
+            initialDelaySeconds: 10
+          volumeMounts:
+            - name: credentials
+              mountPath: /credentials
+              readOnly: true
+      volumes:
+        - name: credentials
+          secret:
+            secretName: chisel
+            defaultMode: 0440
+            items:
+              - key: users.json
+                path: users.json
+              - key: key.pem
+                path: key.pem

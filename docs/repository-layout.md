@@ -169,6 +169,7 @@ npm run typecheck
 | `make dev-start DB_PROFILE=wsl` | Build, refresh the selected PostgreSQL profile, prepare the owner password, and start the application |
 | `make relay-start ARGS="--origin https://HOST --ssh USER@HOST --identity /path/to/key"` | Connect an existing dedicated Azure HTTPS test VM to the local Goblin build |
 | `make relay-status` / `make relay-stop` | Inspect the development tunnel or explicitly restore the test VM's installed Goblin upstream |
+| `make chisel-check` | Render the AK3S Chisel manifests and verify deployment credential handling without contacting Kubernetes |
 | `make docker-build` | Time the complete Goblin image build; pass extra Docker options through `ARGS` |
 | `make docker-clean-images` | Remove image tags whose repository name starts with `goblin`, including registry-qualified names |
 | `make docker-clean-cache` | Clear unused cache for the default Docker builder across all projects |

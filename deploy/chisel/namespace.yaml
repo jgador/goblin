@@ -1,0 +1,5 @@
+# Administrator bootstrap; reuse the shared namespace without changing its policy.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goblin
