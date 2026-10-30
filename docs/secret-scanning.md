@@ -12,25 +12,7 @@ Install **Gitleaks 8.30.1 or a newer 8.x release** on your `PATH`. On macOS,
 archive from the [official releases](https://github.com/gitleaks/gitleaks/releases)
 and verify it against the release's checksums file.
 
-For example, this installs the tested version on Linux x86-64 without root:
-
-```bash
-mkdir -p .artifacts/gitleaks-setup
-task_gitleaks_dir=$(mktemp -d .artifacts/gitleaks-setup/download-XXXXXX)
-curl -fL --retry 3 -o "$task_gitleaks_dir/gitleaks.tar.gz" \
-  https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
-printf '%s  %s\n' \
-  '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb' \
-  "$task_gitleaks_dir/gitleaks.tar.gz" | sha256sum --check - && \
-  tar -xzf "$task_gitleaks_dir/gitleaks.tar.gz" -C "$task_gitleaks_dir" gitleaks && \
-  mkdir -p "$HOME/.local/bin" && \
-  install -m 755 "$task_gitleaks_dir/gitleaks" "$HOME/.local/bin/gitleaks"
-rm -rf "$task_gitleaks_dir"
-export PATH="$HOME/.local/bin:$PATH"
-```
-
-Keep `~/.local/bin` on your shell's `PATH` for later sessions. Then, from this
-repository, using Node.js 24 or newer:
+With Gitleaks on your `PATH` and Node.js 24 or newer, run from the repository:
 
 ```bash
 gitleaks version
@@ -86,19 +68,12 @@ review, including these gaps and credentials with unfamiliar formats.
 
 ## Handling a finding
 
-Release metadata contains a SHA-256 checksum for
-`tools/goblinctl/src/credentials.rs`. The filename can trigger Gitleaks'
-`generic-api-key` rule. A scoped exception accepts that exact field with a
-64-character lowercase hexadecimal value, alone on its JSON line, in
-`dependencies.lock.json`. The older release-pin and generated-template paths
-retain their scoped exception for history scans. Other fields and credential rules remain active in those files.
-
-The PostgreSQL connection in `backend/src/Goblin.Web/appsettings.json` contains
-certificate paths, with private keys supplied at runtime. Database passwords no
-longer have a scanner exception. Client certificates live in
-[user profile stores](database.md#profile-management-and-storage) outside the
-checkout; keep all private keys out of Git and Docker. Older commits may still contain the
-previously tracked password, so history scans can report those versions.
+A narrowly scoped exception permits the `credentials.rs` SHA-256 checksum in
+`dependencies.lock.json` and historical release metadata. Other fields and
+credential rules remain active. PostgreSQL certificate paths in
+`backend/src/Goblin.Web/appsettings.json` are not private keys. Client certificates
+use [profile stores](database.md#profile-management-and-storage); keep private
+keys out of Git and Docker. Older commits may contain a previously tracked password.
 
 Review the reported location locally. Replace real credentials with runtime
 configuration, remove private files from the index, and restage corrected files
