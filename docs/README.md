@@ -42,7 +42,7 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 | [Repository layout and verification](repository-layout.md) | Source owners and check selection |
 | [Formatting](formatting.md), [Rust development](rust-development.md) | Construction/style conventions and native tools |
 | [Typed JSON](formatting.md#typed-json-boundaries), [Contract values](contract-values.md), [Environment variables](environment-variables.md) | Boundary parsing, generated values, and named configuration |
-| [Dependencies](dependencies.md), [Dependency inventory](dependency-inventory.md) | Selected deployment pins and authoritative dependency inputs |
+| [Dependencies and inventory](dependencies.md) | Selected deployment pins and authoritative dependency inputs |
 | [Releases](releases.md), [GitHub Actions](github-actions.md) | Immutable release candidates, approvals, and required checks |
 | [Secret scanning](secret-scanning.md), [Agent workflow](agent-workflow.md) | Contributor security and instruction maintenance |
 | [Agentic maintenance](agentic-maintenance.md) | Owner-only CI policy and documentation upkeep, API budgets, and draft PR publication |

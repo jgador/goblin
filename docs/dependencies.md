@@ -80,12 +80,8 @@ generated during release preparation. It does not refresh Docker image tags.
 
 ## Checked-in image selections
 
-The current manifests select PostgreSQL 18.6, Headlamp 0.45.0,
-VictoriaLogs 1.53.0, Fluent Bit 5.1.3, K3s 1.36.5, Agent Sandbox 1.0.4, and
-cert-manager 1.21.3. The build uses Node 26.10.0, .NET SDK 10.0.401, and ASP.NET
-Core 10.0.12. K3s, cert-manager, and Agent Sandbox retain ownership of their
-bundled component images. Prereleases are excluded; explicit version tags keep
-future upstream releases from silently changing the selected version.
+Read the selected versions from the catalog, deployment manifests, installer, and
+Dockerfiles; upstream bundles own their component images.
 
 The installer also pins F5 NGINX Ingress Controller 5.7.0 and Helm chart 2.8.0.
 It verifies the corresponding official ingress template and changes only its
@@ -141,3 +137,30 @@ The **Installation Assets** workflow prepares the authenticated installation cat
 after publication and calls **Website Release** to publish the website image and
 deploy it after production approval. The website serves the catalog and Azure
 templates directly; see [GitHub Actions](github-actions.md) for their boundaries.
+
+## Dependency inventory and updates
+
+Read versions and resolved inputs from their owners, not a copied inventory:
+
+- .NET: `global.json`, `backend/Directory.Build.props`, project files, and
+  `.config/dotnet-tools.json`. Restore resolves packages; regenerate EF mappings
+  with `backend/scripts/scaffold-database.sh`.
+- Node and Codex: root, frontend, website, and website/video `package.json`
+  files and their corresponding lockfiles. Website video tools are development-only.
+- Rust: `rust-toolchain.toml`, workspace and crate manifests, and `Cargo.lock`;
+  setup scripts and shared actions own native tool pins. See [Rust development](rust-development.md).
+- Deployment: the catalog and lock above, Dockerfiles, installer and manifests.
+  Slack setup pins its private on-demand helper; Codex and Kubernetes schema
+  selections own their checksums and generators.
+- GitHub Actions references and `skills-lock.json` own workflow and imported-skill
+  pins; see [workflow contracts](github-actions.md) and [third-party notices](../THIRD_PARTY_NOTICES.md).
+
+Version-update monitoring is not configured. Any future automation should discover
+all package roots, images, downloads, and schema pins; update checksums, regenerate
+assets, and review major upgrades. Dependency changes need affected integration
+checks: PostgreSQL tests are opt-in, authenticated runtime checks require service
+access, and Azure installation remains manual. See [CI selection](github-actions.md#ci-selection-and-required-result).
+
+A complete SBOM must use actual restored packages, lockfiles, built images, OS
+packages, and bundled components. Host inventories may differ from declarations;
+store generated inventories under `.artifacts/`.
