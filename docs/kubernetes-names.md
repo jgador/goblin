@@ -29,34 +29,23 @@ removal must target its owned resources and never the shared namespace.
 | Persistent application PVC | `platform-data` | None |
 | Default application data directory | `.goblin-platform`; image `/data/platform` | None |
 
-The installer uses `localhost/goblin-platform:<source-sha256>` for its locally
-built image and execution-image setting. Installed manifests live under
-`/var/lib/goblin/deploy/platform/` and `/var/lib/goblin/deploy/azure/platform/`.
-Docker image names keep product scoping because Kubernetes namespaces do not
-scope Docker repositories.
+The installer uses `localhost/goblin-platform:<source-sha256>` and installs
+manifests under `/var/lib/goblin/deploy/platform/` and
+`/var/lib/goblin/deploy/azure/platform/`. The Codex handshake identifies the
+platform as `goblin-platform`. Website pod names retain Kubernetes-generated
+suffixes; do not rename upstream controllers, CRDs, APIs, or security identities.
 
-The Codex client handshake identifies the platform as `goblin-platform`, retaining
-the Goblin display title and the upstream protocol's existing fields.
+The repository Service and PostgreSQL, execution, Headlamp, and logging access
+policies select `app=platform`. Website pods must not match these grants, mount a
+service-account token, or receive platform credentials. The platform ingress
+allows execution repository traffic; the Azure overlay also allows F5 NGINX UI
+traffic. Execution RBAC and namespace isolation remain unchanged.
 
-Kubernetes retains its normal generated identities. Website pods are
-`website-<replicaset-hash>-<suffix>`; the current Sandbox controller names the
-platform pod `platform`. Do not shorten generated suffixes or rewrite upstream
-controller images, CRD/API names, or security identities.
-
-PostgreSQL, Headlamp, logging, and the repository endpoint retain their functional
-names. The repository Service selects platform pods. PostgreSQL, execution,
-Headlamp, and logging access policies select `app=platform`; website labels must
-never match these grants. Website pods disable service-account token mounting
-and receive no platform credentials. The platform ingress policy continues to
-allow execution's repository traffic; the Azure overlay additionally allows
-F5 NGINX UI traffic. Execution RBAC and namespace isolation remain unchanged.
-
-Website deployment applies only its Namespace, Deployment, Service, and HPA;
-it never restarts the platform. Website removal must target only its Deployment,
-Service, and HPA, never namespace `goblin`. `make website-stop` stops only its
-Docker development workflow. Redeployment leaves `spec.replicas` unset so the
-HPA owns scaling (1–3 replicas, CPU utilization target 60%). Website resource
-requests remain `25m`/`16Mi`, with limits `100m`/`32Mi`.
+Website deployment manages its Namespace, Deployment, Service, and HPA without
+restarting the platform. Removal targets only its Deployment, Service, and HPA,
+never the shared namespace. `make website-stop` only stops Docker development.
+The HPA owns replicas (1–3, 60% CPU target); deployment leaves `spec.replicas`
+unset. Requests are `25m`/`16Mi`, limits `100m`/`32Mi`.
 
 ```bash
 sudo k3s kubectl wait --for=condition=Ready sandbox/platform -n goblin --timeout=300s
@@ -89,22 +78,16 @@ remains in use even when the configured default changes.
 
 ## Storage ownership
 
-Current installations use the names and formats above. There are no compatibility
-aliases or automatic storage migrations. Source edits do not change a running
-installation. Development installations with superseded formats can be recreated
-after confirming ownership and explicitly choosing their deletion scope.
+Current installations have no compatibility aliases or automatic storage
+migrations. Before applying storage manifests or recreating a development install,
+inspect PVCs, PVs, reclaim policies, backing directories, and data paths. A new
+empty claim does not preserve data; naming changes do not authorize deleting Work
+PVCs, credentials, or resetting Kubernetes. Choose deletion scope explicitly.
 
-Before applying storage manifests, inspect bound PVCs, PVs, reclaim policies,
-backing directories, and configured data paths. A new empty claim does not preserve
-an installation. A naming change alone never authorizes deleting Work PVCs,
-credentials, or resetting Kubernetes. Website removal targets only its owned
-resources and never the shared namespace.
-
-Published installer input inventories in `dependencies.lock.json` record the
-original release bytes. They are historical provenance, not current paths;
-regenerate deployment checksums with `cargo xtask dependencies resolve` and
-package a new installer to distribute changed embedded scripts. Never rewrite
-published hashes to describe unpublished source.
+Published installer inventories in `dependencies.lock.json` describe original
+release bytes. Use `cargo xtask dependencies resolve` and package a new installer
+to distribute changed embedded scripts; do not rewrite published hashes. Source
+edits do not change a running installation.
 
 ## Verification
 
