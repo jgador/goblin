@@ -46,6 +46,30 @@ SIGTERM on Unix (closes stdin on Windows), then kills the process tree if the gr
 period expires. HTTP prompt cancellation requests `turn/interrupt` and then
 `thread/unsubscribe`; interruption failure retires the connection.
 
+## Model selection and discovery
+
+**Options** in a Work's Start/Retry panel selects model and reasoning effort;
+conversation composers have no model controls. Unsupported effort stops are
+disabled. The picker initially shows the default and three visible models;
+**Show more** loads up to ten. Before execution, selections are per-Work browser
+tab drafts; an incompatible connection change invalidates them. Start/Retry stores
+the requested model and effort on the attempt, and execution details show both the
+requested and reported model. Later catalog changes do not rewrite history.
+
+The controller paginates App Server `model/list`, excludes hidden models, and
+atomically stores the visible catalog in `connection_model_catalog`, scoped to the
+connection's authentication generation and Codex executable stamp. Agent sandboxes
+cannot access it. Refresh follows account or executable changes, opening a picker
+with a catalog older than 24 hours, or **Refresh models**. Concurrent refreshes
+coalesce. Failure retains the last catalog as stale with a one-minute automatic
+retry cooldown; manual refresh can retry sooner. A changed account cannot use the
+previous catalog, and without a catalog Work can use the Codex default.
+
+Replacing the CLI while Goblin is running leaves the existing App Server running
+and the catalog stale; restart Goblin to complete refresh. Discovery failure does
+not create or retry Work. A model rejection follows the normal failure and
+attention policy, without automatic fallback.
+
 ## Protocol regeneration
 
 The checked-in schemas and pinned Codex runtime are maintained together.

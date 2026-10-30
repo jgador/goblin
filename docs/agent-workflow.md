@@ -4,7 +4,7 @@ This guide applies OpenAI's [Rethinking skills and prompts for GPT-6 Astra](http
 and [GPT-6 Astra prompting guidance](https://developers.openai.com/api/docs/guides/latest-model/gpt-6-astra.md#prompting-best-practices)
 to contributing to Goblin: relevant context, clear outcomes, and precise boundaries.
 These are contributor instructions; model selection for
-Goblin's own execution attempts is documented in [the model catalog](model-catalog.md).
+Goblin's own execution attempts is documented in [the model catalog](codex-integration.md#model-selection-and-discovery).
 
 ## Give each instruction a home
 

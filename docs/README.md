@@ -22,7 +22,7 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 | --- | --- |
 | [Authentication](authentication.md) | Owner password, Codex account setup, isolated credentials, and checks |
 | [Codex integration](codex-integration.md) | Transport/process ownership and generated protocol maintenance |
-| [Model catalog](model-catalog.md) | Start/Retry options and connection-scoped discovery |
+| [Model catalog](codex-integration.md#model-selection-and-discovery) | Start/Retry options and connection-scoped discovery |
 | [Slack integration](slack-integration.md) | App setup, linked identities, durable ingress, and delivery limits |
 | [ChatGPT plugin](chatgpt-integration.md) | Customer-created MCP plugin, OAuth, Work grants, verification, and troubleshooting |
 | [ChatGPT local testing](chatgpt-local-testing.md) | Azure HTTPS gateway, WSL relay, repeatable onboarding tests, and explicit restoration |

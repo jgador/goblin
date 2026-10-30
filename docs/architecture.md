@@ -67,7 +67,7 @@ resume or live approvals without testing them. An explicitly authorized handoff
 may compare a completed Codex branch and Goblin context with a new attempt.
 Never automatically retry uncertain work or introduce fallback.
 See [Codex integration](codex-integration.md), [authentication](authentication.md),
-and [model discovery](model-catalog.md) for current behavior.
+and [model discovery](codex-integration.md#model-selection-and-discovery) for current behavior.
 
 ## Execution, isolation, and recovery
 
