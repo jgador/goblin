@@ -111,17 +111,22 @@ These are follow-up requirements, not local browser state or fabricated data.
 Follow [the architecture guide](architecture.md) and
 [Work lifecycle contracts](work-lifecycle.md) when implementing them.
 
-| Capability | Current boundary | Follow-up |
-| --- | --- | --- |
-| Separate title, normalized goal, and short context | `Objective` supplies both title and Goal; no goal-edit command exists. | Add core-owned goal revision commands, revision history, expected-version checks, and approval rules where needed. Store a distinct title/context only if they have clear semantics. Context text must not silently overwrite the objective. |
-| Meaningful, evidence-backed milestones | The UI can prove lifecycle state, but has no milestone records or evidence associations. Runtime `ProgressReported` text is a report, not proof. | Model milestone identity, state, evidence references, source, and validation. Define how confirmed PRs, tests, deployments, and telemetry update milestones. Retain the distinction between proposed plans and verified completion. |
-| Rich decisions and provenance | Decisions are runtime questions and recorded answers. They do not identify a proposer, approver, policy, or arbitrary rationale. | Add core commands for proposals, decisions, and approvals; persist actor/source identity, rationale, evidence, and supersession. Do not infer named human approval from conversational wording. |
-| Multiple conversation sources per Work | Web conversations can attach to Work. Slack now stores approved actors, thread associations, deduplicated message/event references, and source provenance. | General cross-channel attachment and other external adapters remain future work. Preserve one Work across sources and accurate provenance before labeling other integrations. |
-| Unified external Activity | Activity projects Work history, including Slack ingress. Arbitrary external activity, pagination, and a general visibility policy are not implemented. | Add a Goblin-owned activity projection with durable sequence, source, actor, original reference, Work/attempt/evidence correlation, deduplication, and access checks. Keep low-level runtime events in execution details. |
-| Global discovery | Search is an in-browser search over loaded views; it does not search an independent file/project/people index. | Add permission-aware, paginated cross-entity search and contextual deep links. Do not download all histories as the dataset grows. |
-| Artifact previews and execution logs | Results render as text; GitHub references can be opened. Other references are inspectable but have no content endpoint. | Add authenticated artifact retrieval, safe content types/previews, authorization, retention, and redacted execution-log pagination. Never expose credentials or raw upstream errors. |
-| Natural-language steering | The composer saves context, answers a pending question, or requests changes. Arbitrary chat does not edit status, stop execution, or dispatch work. | Interpret proposed changes into explicit core commands with validation and any required approval. Commit state and Wolverine dispatch intent together; do not turn prose into an authoritative transition. |
-| Follow-up Work and optional metadata | No parent/follow-up relationship, due date, tags, project hierarchy, or standalone agent health aggregation is modeled here. | Introduce only product-justified fields and relationships with core commands and persisted projections; avoid a generic workflow engine. |
+- **Goal and milestones:** The objective supplies the title and Goal; there is no
+  goal-edit command or evidence-backed milestone model. Future revisions need
+  core commands, versioning, history, and explicit evidence; runtime progress text
+  is not proof of completion.
+- **Decisions and activity:** Recorded questions and answers are not general
+  proposals or approvals. Future rich decisions and cross-channel activity need
+  durable identity, provenance, evidence, deduplication, and access checks. Web
+  and Slack have existing associations; other adapters remain future work.
+- **Discovery and artifacts:** Search covers loaded views, not a global index.
+  Future search needs permissions and pagination. Artifact content and execution
+  logs need authorized, redacted retrieval, safe previews, and retention rules.
+- **Steering and metadata:** Conversation saves context, answers, or requests
+  changes; it does not implicitly change Work or dispatch execution. Any future
+  steering needs explicit validated core commands and atomic dispatch intent.
+  Parent/follow-up relations, due dates, tags, project hierarchy, and standalone
+  agent health need product-justified models rather than a generic workflow engine.
 
 Until the first production deployment, consolidate future schema changes in
 `backend/database/migrations/0001_initial.sql`, regenerate EF mappings, and keep
