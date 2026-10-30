@@ -21,32 +21,10 @@ of behavior; repair incoming links when removing or renaming documents.
 
 ## Define the result
 
-A useful request identifies the outcome, relevant context, constraints, and what
-would demonstrate completion. Provide those details when they matter; this is an
-optional prompt shape, not a form that must be filled out before work can start:
-
-```text
-Goal: <observable behavior or artifact to change>
-Context: <reproduction, files, or relevant documentation>
-Constraints: <compatibility, scope, and external-action limits>
-Done when: <result and evidence needed to review it>
-```
-
-For example:
-
-```text
-Fix the Work sidebar losing the selected item after a browser refresh.
-Preserve the current design and HTTP contracts. Done when selection survives
-refresh and navigation, the affected browser journey passes, and the interaction
-has been inspected. Fix regressions caused by the change and report any check
-that could not run.
-```
-
-For a documentation task, completion can be much smaller: correct the explanation,
-check links and command references, and review the final diff. For exploration,
-state the stopping point, such as comparing two options and recommending one.
-For implementation, include the behavior and evidence needed to review the result.
-See [test selection](repository-layout.md#choosing-verification) for verification scope.
+When useful, specify the intended outcome, relevant context, constraints, and
+evidence of completion; no fixed prompt form is required. Match verification to the work: a documentation edit may need a
+link and diff review, while implementation needs behavior checks. Exploration
+should have a clear stopping point. See [test selection](repository-layout.md#choosing-verification).
 
 ## Continue within the authorized scope
 
@@ -101,21 +79,11 @@ fixing contradictory or outdated guidance over appending another warning. Keep t
 root instructions usable by other coding models; evaluate model-specific advice on
 the models and tasks that actually use it.
 
-Review the proposed instructions against representative situations:
-
-- A README typo reaches a checked diff without unrelated setup or runtime tests.
-- A Work lifecycle fix runs the core tests and preserves explicit failure recovery.
-- A database change reports missing real PostgreSQL coverage rather than treating
-  skipped tests as proof of durability.
-- A request to edit a cleanup or publication skill changes its documentation
-  without performing its destructive or external actions.
-- An implementation request continues through relevant verification without a new
-  approval request at each reversible step.
-
-These are review scenarios, not a required benchmark suite for every edit. Distinguish
-reviewing the wording from observing actual agent behavior. When evaluating a prompt
-change, compare completion, unnecessary pauses, verification scope, and boundary
-adherence on representative tasks; do not claim improvement from wording alone.
+Review instructions against representative tasks: a README typo, a Work
+lifecycle fix, a database change without live PostgreSQL, an edit to a cleanup or
+publication skill, and an implementation with reversible checks. Check completion,
+unnecessary pauses, verification scope, and boundaries. These are review scenarios,
+not a mandatory benchmark suite; wording alone does not prove behavior improved.
 
 Close a task with the result, checks actually performed, and any material gaps or
 remaining decisions. Keep temporary evaluation outputs under `.artifacts/`.
