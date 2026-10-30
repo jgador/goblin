@@ -26,7 +26,7 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 | [Slack integration](slack-integration.md) | App setup, linked identities, durable ingress, and delivery limits |
 | [ChatGPT plugin](chatgpt-integration.md) | Customer-created MCP plugin, OAuth, Work grants, verification, and troubleshooting |
 | [ChatGPT local testing](chatgpt-local-testing.md) | Azure HTTPS gateway, WSL relay, repeatable onboarding tests, and explicit restoration |
-| [Optional ChatGPT directory submission](chatgpt-directory-submission.md) | Separate publisher eligibility and public review requirements |
+| [Optional ChatGPT directory submission](chatgpt-integration.md#optional-directory-submission) | Separate publisher eligibility and public review requirements |
 | [Database](database.md) | SQL baseline, EF generation, TLS access, and local client profiles |
 | [Native tooling](goblinctl.md) | CLI commands, setup, packaging, and releases |
 | [Kubernetes names](kubernetes-names.md) | Platform/website/execution identity and storage ownership |

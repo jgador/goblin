@@ -171,11 +171,44 @@ Record the Goblin revision, OpenIddict version, transport, workspace type, and
 results without recording credentials. Fixtures and local integration runs cannot
 establish a successful ChatGPT UI installation.
 
-**Publish publicly** is a separate workflow. Goblin generates reviewable plugin
-JSON, MCP JSON, and a ZIP with branding and review cases. Secrets and reviewer
-credentials are excluded. Follow [directory submission](chatgpt-directory-submission.md)
-for publisher verification, public HTTPS, package upload, and review. Goblin does
-not submit applications or publish automatically.
+### Optional directory submission
+
+Private customer-created plugins need no public listing. **Publish publicly** in
+`/settings?section=chatgpt` prepares a separate submission; Goblin does not
+submit or publish it automatically. The workflow records operator confirmations,
+not proof of submission or approval. Goblin has no approved listing.
+
+Public review generally requires a stable public HTTPS endpoint. Customer-specific
+URL templates are restricted to eligible trusted developers; verify eligibility
+before assuming arbitrary customer domains or OAuth providers are supported.
+Secure MCP Tunnels do not meet the public endpoint requirement. Check the current
+[review requirements](https://developers.openai.com/plugins/deploy/app-review),
+[submission requirements](https://developers.openai.com/plugins/deploy/submission),
+and [plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines).
+
+Prepare publisher identity, domain ownership, support contact, privacy policy,
+metadata, artwork, and release ownership. Use a dedicated public demo matching
+the submitted contract, without private-network, MFA, email/SMS, or magic-link
+barriers. Since the owner password also controls administration, use a disposable
+password and neutral sample data, never a live installation's password. Verify
+OAuth discovery, resource binding, callbacks, consent, revocation, permissions,
+minimal outputs, and safe errors. Do not package customer secrets or substitute
+API-key/basic-auth header shortcuts.
+
+In **Prepare listing**, enter metadata; in **Review tests**, supply a video and
+three distinct sample Work IDs. **Submit → Generate plugin package** produces a
+version 1.0.0 ZIP and two JSON files with a logo, OAuth configuration, five
+positive and three negative cases. Review them against actual tests. The generator
+does not verify public reachability, ownership, or live demo permissions; draft
+fields last only while the settings page remains open.
+
+In the submission portal, upload the ZIP under the verified publisher, connect the
+MCP with its client secret, allow the portal's exact callback, and serve the exact
+domain challenge at the public URL. Resolve scan findings and complete review
+information, including private reviewer access and availability. Submit for review,
+track the result, and explicitly publish after approval. Install and test the
+published listing in a conversation; Goblin Work still requires grants. Monitor
+the endpoint, compatibility, and subsequent review requirements.
 
 ## References
 
