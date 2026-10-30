@@ -72,12 +72,9 @@ dotslash --version
 | `make rust-test CARGO_ARGS="-p goblinctl"` | Run selected tests with nextest and then documentation tests |
 | `make rust-test` | Run all Rust tests with nextest and then documentation tests |
 | `make rust-test-doc` | Run Rust documentation tests, which nextest excludes |
-| `make release-package-local` | Build the musl CLI and create the deterministic review archive |
-| `cargo xtask release check-installer` | Check installer contracts and compiler input coverage after a native build |
-| `cargo xtask release prepare --source-branch release/0.1` | In Actions, prepare an unpublished Goblin/goblinctl candidate from checked release-branch source |
-| `cargo xtask release check-candidate --directory PATH --source-root SOURCE` | Check the candidate executable, source inputs and reproduced Azure assets |
-| `cargo xtask release verify --directory PATH` | Verify a sealed coordinated release candidate |
-| `cargo xtask release authenticate-installer --directory PATH` | Verify installer bytes and coordinated release provenance |
+| `make release-package-local` | Build the musl CLI and deterministic review archive |
+
+See [the release guide](releases.md) for installer checks and coordinated candidate preparation, verification, and authentication.
 
 Coordinated preparation supplies `GOBLINCTL_BUILD_VERSION` only to the isolated
 native build. All installer version reporting uses that compiled value, defaulting
@@ -121,40 +118,22 @@ toolchain/helper setup action.
 
 ## Editor and debugging
 
-Open the repository in a VS Code WSL window. Install its recommended extensions:
+Open the repository in VS Code through WSL and use the recommended Rust,
+TOML, and LLDB extensions. Workspace settings enable Rust format-on-save and
+Clippy checks, with a separate rust-analyzer target directory. **Debug goblinctl**
+starts with `--help`; edit arguments for other commands. Administrative commands
+still require their usual privileges. The attach configuration targets a process
+you own.
 
-```bash
-code --install-extension rust-lang.rust-analyzer
-code --install-extension tamasfe.even-better-toml
-code --install-extension vadimcn.vscode-lldb
-```
-
-These are Codex's Rust, TOML, and debugging recommendations. Their extension
-versions are not pinned by Codex. Workspace settings enable Rust format-on-save,
-Clippy checks including tests, and a separate `target/rust-analyzer` build
-directory. TOML formatting preserves array order.
-
-The **Debug goblinctl** launch configuration builds with full debug information
-and starts with the harmless `--help` argument. Edit its arguments to debug a
-specific command; administrative commands retain their existing privilege
-requirements. **Attach to running goblinctl** supports inspecting a process you
-own.
-
-Development builds use Codex's line-table debug information. Set
+Development builds use line-table debug information. Set
 `CARGO_PROFILE_DEV_DEBUG=full` or `CARGO_PROFILE_TEST_DEBUG=full` to inspect local
-variables. The `dev-small`, `profiling`, and `ci-test` profiles follow Codex's
-profile structure. Goblin retains its existing development optimization for the
-600,000-iteration password KDF and its stripped, deterministic release binaries.
+variables. Release binaries remain stripped and deterministic.
 
 ## Boundaries
 
-The shared workflow uses Bash for Make recipes and Rust for `xtask`, preserving
-Goblin's Python-free tooling. Codex's Python formatter wrapper, Bazel build graph,
-custom nightly argument-comment compiler plugin, voice/V8 build dependencies,
-and platform-specific test overrides belong to Codex's application. They are not
-required by Goblin's Cargo workspace. In particular, Codex's Zig 0.14.0,
-musl-tools, libcap, audio headers, and C++ tooling support native dependencies
-that Goblin does not compile; Goblin's musl build is checked directly in CI.
+Make recipes use Bash and `xtask` uses Rust; operational tooling remains
+Python-free. Codex-specific tools and native dependencies are not requirements
+for Goblin's Cargo workspace. The musl build is checked directly in CI.
 
 All development tools stay on developer machines and CI runners. Production
 receives the compiled `goblinctl` archive described in [the native tooling
