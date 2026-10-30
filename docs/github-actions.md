@@ -56,10 +56,10 @@ release publication job. That UI label does not mean the job installs the platfo
 See [platform releases](releases.md) and [website production](../website/production/README.md)
 for operating procedures.
 
-Chisel Deploy targets the website's existing AK3S cluster through a separate
-namespace and credential. It runs only on manual dispatch; deployment requires
-`master` and the `ak3s-production` environment. Its `verify` job is not a new
-required branch check. See [Chisel setup](../deploy/chisel/README.md) for bootstrap,
+Chisel Deploy targets the website's existing AK3S cluster in the shared `goblin`
+namespace using a dedicated credential. It runs only on manual dispatch;
+deployment requires `master` and the `ak3s-production` environment. Its `verify`
+job is not a new required branch check. See [Chisel setup](../deploy/chisel/README.md) for bootstrap,
 DNS, Secrets, and manual public acceptance.
 
 ## CI selection and required result

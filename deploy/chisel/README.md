@@ -1,7 +1,8 @@
 # Chisel on AK3S
 
 Run one Chisel server in the existing HTTPS cluster and connect its client from
-WSL. The server uses namespace `goblin-chisel`. Its two HTTPS ingress routes are:
+WSL. The server shares namespace `goblin` with the website. Its two HTTPS ingress
+routes are:
 
 | Host | Service port | Purpose |
 | --- | --- | --- |
@@ -29,20 +30,27 @@ listener and its tunnel connection must belong to the same server.
 
 ## Administrator bootstrap
 
-Use the intended AK3S kubeconfig explicitly. Install the dedicated namespace and
-deployer identity once, outside GitHub Actions:
+Use the intended AK3S kubeconfig explicitly. Ensure the shared `goblin` namespace
+exists and install Chisel's dedicated deployer identity once, outside GitHub
+Actions:
 
 ```bash
-kubectl --kubeconfig /path/to/ak3s-admin.yaml apply -f deploy/chisel/namespace.yaml
+kubectl --kubeconfig /path/to/ak3s-admin.yaml apply \
+  --server-side --field-manager=chisel-bootstrap -f deploy/chisel/namespace.yaml
 kubectl --kubeconfig /path/to/ak3s-admin.yaml apply -f deploy/chisel/deployer.yaml
 ```
 
-Create a kubeconfig for ServiceAccount `goblin-chisel/chisel-deployer` using this
+The namespace apply uses its own field manager to preserve existing namespace
+labels and admission policy.
+Chisel's pod security settings belong to its Deployment.
+
+Create a kubeconfig for ServiceAccount `goblin/chisel-deployer` using this
 cluster's API address, embedded CA, and a dedicated credential. The Role permits
 initial creation and named updates of Chisel's Deployment, Service, credential
-Secret, and two Ingresses. It cannot edit RBAC, namespaces, or the website.
-Kubernetes cannot limit `create` by object name; creation is confined to this
-dedicated namespace. Keep the deployer credential out of application pods.
+Secret, and two Ingresses, without RBAC or namespace administration.
+Kubernetes cannot limit `create` by object name, so the Role's creation permissions
+apply across the shared namespace. Named read and patch permissions target Chisel's
+resources. Keep the deployer credential out of application pods.
 
 The runner must reach the cluster's Kubernetes API with valid TLS. Use a
 credential with an intentional renewal/rotation policy; a one-hour TokenRequest
@@ -57,7 +65,7 @@ Add these environment secrets:
 
 | Secret | Value |
 | --- | --- |
-| `AK3S_KUBECONFIG` | Full dedicated kubeconfig YAML, not its filename or base64 encoding |
+| `AK3S_KUBECONFIG` | Full kubeconfig YAML for `goblin/chisel-deployer`, not its filename or base64 encoding |
 | `CHISEL_AUTH` | A tunnel username and strong password in `username:password` form; no control characters |
 | `CHISEL_SERVER_KEY` | An unencrypted P-256 PEM private key, reused across deployments |
 
@@ -98,7 +106,7 @@ Install the matching [Chisel release](https://github.com/jpillora/chisel/release
 in WSL. Read the server's public fingerprint with an administrator kubeconfig:
 
 ```bash
-kubectl --kubeconfig /path/to/ak3s-admin.yaml -n goblin-chisel logs deployment/chisel
+kubectl --kubeconfig /path/to/ak3s-admin.yaml -n goblin logs deployment/chisel
 ```
 
 Copy the full SHA-256 `Fingerprint` value. Persisting `CHISEL_SERVER_KEY` keeps

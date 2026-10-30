@@ -1,7 +1,5 @@
-# Administrator bootstrap; excluded from the deployment workflow.
+# Administrator bootstrap; reuse the shared namespace without changing its policy.
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: goblin-chisel
-  labels:
-    pod-security.kubernetes.io/enforce: restricted
+  name: goblin

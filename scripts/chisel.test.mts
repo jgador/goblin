@@ -88,10 +88,7 @@ test("offline Kustomize output deploys only Chisel app resources, excluding boot
         { encoding: "utf8" },
     );
     assert.equal((manifest.match(/^kind: /gm) ?? []).length, 4);
-    assert.equal(
-        (manifest.match(/^  namespace: goblin-chisel$/gm) ?? []).length,
-        4,
-    );
+    assert.equal((manifest.match(/^  namespace: goblin$/gm) ?? []).length, 4);
     assert.doesNotMatch(
         manifest,
         /^kind: (?:Namespace|Role|RoleBinding|ServiceAccount|Secret)$/m,
@@ -148,7 +145,7 @@ test("deployment keeps secrets out of arguments, uses an explicit namespace, and
                 );
                 assert.equal(statSync(args[1]!).mode & 0o777, 0o600);
                 assert.equal(args[2], "--namespace");
-                assert.equal(args[3], "goblin-chisel");
+                assert.equal(args[3], "goblin");
                 for (const name of ["key.pem", "users.json"])
                     assert.equal(
                         statSync(resolve(directory, name)).mode & 0o777,

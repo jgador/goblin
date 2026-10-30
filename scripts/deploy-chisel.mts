@@ -82,7 +82,7 @@ export function deployChisel(
                 "--kubeconfig",
                 kubeconfig,
                 "--namespace",
-                "goblin-chisel",
+                "goblin",
                 "--cache-dir",
                 resolve(directory, "cache"),
                 "--request-timeout=240s",
