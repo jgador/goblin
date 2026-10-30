@@ -30,7 +30,7 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 | [Database](database.md) | SQL baseline, EF generation, TLS access, and local client profiles |
 | [Native tooling](goblinctl.md) | CLI commands, setup, packaging, and releases |
 | [Kubernetes names](kubernetes-names.md) | Platform/website/execution identity and storage ownership |
-| [System readings](system-overview.md), [Cluster](cluster-view.md), [Logs](logging.md), [Timezones](timezones.md) | Monitoring views and their operating contracts |
+| [System and cluster](cluster-view.md), [Logs](logging.md), [Timezones](timezones.md) | Monitoring views and their operating contracts |
 | [Local installation](../deploy/local/README.md) | WSL installation testing and lifecycle commands |
 | [Manual Azure installation](../deploy/azure/README.md), [reference](../deploy/azure/reference.md) | Portal deployment and operator setup/recovery |
 | [Website](../website/README.md), [website production](../website/production/README.md) | Independent public site and deployment assets |

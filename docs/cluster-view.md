@@ -1,88 +1,72 @@
-# Cluster view
+# System and cluster views
 
-The Kubernetes installation includes Headlamp at **`/headlamp/`** on the same
-address as Goblin. Open **Settings → Cluster → Open cluster**, or visit:
+## System overview
 
-- Local WSL installation: `http://localhost:8788/headlamp/` (or your chosen port).
-- Azure VM: `https://<Azure-assigned-hostname>/headlamp/`.
-- A Goblin installation configured for HTTPS: `https://<hostname>/headlamp/`.
+The **System** shortcut or **Settings → System** shows whole-VM CPU, logical
+cores, memory, root disk, uptime, OS, conditions, and Goblin service and agent
+sandbox readiness, usage, and restart counts. It excludes completed pods and
+shows pending and failed pods. CPU and memory history covers five minutes at
+15-second intervals. On WSL this is the Linux VM, not Windows; separate data
+mounts are not included in root disk usage.
 
-Use the normal Goblin password. Opening Headlamp while locked takes you to
-Goblin's login and returns you to the cluster view afterward. No Kubernetes token,
-extra password, DNS record, or public port is required. The Settings link opens a
-new tab to preserve unfinished Work drafts. Existing deep links and refreshes keep
-the `/headlamp` prefix.
+Memory uses kubelet working set; CPU is recent cores consumed divided by logical
+capacity. Reserved space can make disk used plus available less than total.
+Readings are observations, not scheduling guarantees. CPU or memory at 85%, disk
+availability below 10%, node pressure or readiness, disabled scheduling, and
+unready Goblin pods are highlighted. Missing values are unavailable and old
+observations are marked stale. History is cleared on restart and is not stored
+in PostgreSQL. Monitoring does not affect readiness, Work, retries, or admission.
 
-## Access and deployment
+The controller uses `GOBLIN_NODE_NAME` and `GOBLIN_NAMESPACE` from the pod
+manifest to read its node via Kubernetes and that node's kubelet summary over
+TLS on port 10250, validating the cluster CA and server name. The
+`goblin-system-reader` role gets nodes and nodes/stats and lists namespace pods;
+existing execution permissions supply agent pods. The authenticated `/api/system`
+returns selected measurements with normal host/origin checks and no caching,
+not raw kubelet data, credentials, pod specs, or upstream errors. Browsers cannot
+choose the upstream. This covers Goblin's node, not a multi-node aggregate.
+Standalone development without `GOBLIN_NODE_NAME` reports unavailable; custom
+clusters must allow kubelet access and trust its serving certificate. Tests cover
+reading semantics and UI; actual network/TLS access requires verification on the
+installation, including Azure.
 
-Headlamp is a separate Deployment, `goblin-headlamp`, in the `goblin` namespace.
-The image is pinned to version 0.45.0 and its multi-architecture digest in
-[`deploy/platform/headlamp.yaml`](../deploy/platform/headlamp.yaml). It runs without root
-or a writable root filesystem and has its own temporary volume and service account.
+## Cluster view
 
-The existing NGINX route sends `/headlamp` to Goblin. The C# backend checks the
-Goblin session and forwards permitted requests to the private Headlamp Service.
-Local forwarding and Azure's assigned hostname therefore use the same route.
-Headlamp has no public Ingress, NodePort, or LoadBalancer. Its NetworkPolicy allows
-only the main Goblin pods to reach it; agent sandbox pods cannot access it.
+Headlamp is available via **Settings → Cluster → Open cluster** or `/headlamp/`
+on the Goblin address: for example `http://localhost:8788/headlamp/` on local
+WSL, or `https://<hostname>/headlamp/` for HTTPS. Use the Goblin password; locked
+sessions are redirected to login and back. No separate token, password, DNS
+record, or public port is needed. The Settings link opens a new tab; deep links
+and refreshes retain the prefix.
 
-The `goblin-cluster-viewer` account can read workloads, pod logs, events, namespaces,
-nodes, networking, storage, metrics, RBAC metadata, and Goblin Sandbox resources.
-It cannot read Secrets, start a shell, forward ports, or change cluster resources.
-Authorization review requests are allowed so Headlamp can display the correct
-available actions. These permissions are enforced by Kubernetes, separately from
-Goblin's HTTP route restrictions. Other custom resource types need explicit RBAC
-additions before their instances can be inspected.
+Headlamp runs as the private `goblin-headlamp` Deployment in the `goblin`
+namespace. NGINX routes through Goblin's authenticated proxy; its NetworkPolicy
+allows Goblin pods, not agent sandboxes, to reach it. Its read-only
+`goblin-cluster-viewer` account can inspect workloads, pod logs, events, nodes,
+networking, storage, metrics, RBAC metadata, and Goblin Sandbox resources, but
+cannot read Secrets, exec, forward ports, or mutate resources. Other custom
+resources require explicit RBAC. Kubernetes enforces these permissions separately
+from proxy restrictions.
 
-Headlamp's service-account authentication mode is enabled **behind Goblin's
-authenticated proxy**. The service-account token stays in the Headlamp pod and
-rotates through Kubernetes' projected volume. Goblin strips browser cookies,
-authorization, impersonation, and proxy headers before forwarding. The browser
-cannot supply an alternate account. Headlamp cannot set Goblin cookies. The
-proxy excludes Headlamp's external proxy, cluster import, plugin installation,
-and administrative operations. It allows read-only Kubernetes health checks at
-`/healthz`, `/livez`, and `/readyz` so Headlamp can show cluster connectivity.
-It supports Kubernetes watches and log streams;
-connections are bounded to five minutes before they need fresh authorization.
+The proxy strips browser credentials, impersonation and proxy headers, blocks
+Headlamp administration, plugins, cluster import and external proxy, and permits
+read-only health checks. Watches and log streams require reauthorization after
+five minutes. Headlamp is trusted on Goblin's origin; when upgrading, verify its
+pinned inline script CSP hashes and run the browser check below. Headlamp failure
+does not fail Goblin readiness, but the installer waits for both services.
 
-Headlamp shares Goblin's browser origin, so it is a trusted part of this
-installation. Its own route permits the inline styles required by its UI and
-only the hashes of its two pinned inline bootstrap scripts. Goblin's existing
-pages retain their stricter Content Security Policy. When upgrading the image,
-verify those hashes and run the real browser check below. The current Azure
-installer uses HTTPS; Headlamp follows the installation's existing HTTP/HTTPS
-configuration.
-
-Headlamp failure does not make Work unavailable: `/readyz` still checks Goblin's
-own dependencies, and the cluster route returns an unavailable response if its
-upstream cannot be reached. The installer waits for both Goblin and Headlamp
-before declaring the installation complete.
-
-## Development and checks
-
-A standalone `make dev-start` has no cluster viewer by default. `GOBLIN_HEADLAMP_URL`
-optionally points the backend at a trusted private Headlamp origin configured
-with `-base-url=/headlamp`. Kubernetes manifests set it automatically. Do not
-point it at an arbitrary third-party service.
-
-`make test` includes authenticated proxy, local/Azure Host and Origin, streaming,
-credential filtering, route restrictions, and installer tests. For the real
-Headlamp/browser check against an existing cluster, temporarily forward its
-private Service in one terminal:
+For standalone development, `GOBLIN_HEADLAMP_URL` may point to a trusted private
+Headlamp configured with `-base-url=/headlamp`; Kubernetes sets it automatically.
+Do not use an arbitrary third-party origin. `make test` covers the proxy and
+installer. To test a real cluster, forward the private service, then run the
+browser check and stop the forward afterward:
 
 ```bash
 kubectl port-forward -n goblin service/goblin-headlamp 14466:4466 --address 127.0.0.1
-```
-
-Then run:
-
-```bash
+# In another terminal:
 GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make headlamp-test
 ```
 
-This uses isolated Goblin authentication and real Kubernetes reads, without saved
-GitHub or Codex credentials. It tests localhost and an Azure-shaped hostname
-resolved locally in Chromium, checks forbidden Secret access and denied mutation
-permissions, streams pod logs, refreshes a deep link, and verifies CSP and logout. Actual Azure DNS,
-network rules, and TLS still require deployment verification on that VM. Stop the
-temporary port-forward afterward; ordinary users always access the Goblin URL.
+The browser check exercises authentication, Kubernetes reads, denied Secret and
+mutation access, logs, deep links, CSP, and logout. Azure DNS, network rules,
+and TLS require separate verification on that VM.
