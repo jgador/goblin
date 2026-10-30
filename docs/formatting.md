@@ -1,34 +1,25 @@
 # Formatting
 
-The repository-local Codex Stop hook in `.codex/config.toml` checks Git changes
-after each completed turn and runs only the relevant language formatters. It
-includes staged, unstaged, and untracked files, excluding ignored untracked files
-and deletions. This covers all pending changes in the working tree, including
-changes from earlier turns.
+The Codex Stop hook in `.codex/config.toml` selects formatters from staged,
+unstaged, and non-ignored untracked changes, including earlier turns; deletions
+are excluded. Each selected formatter runs on its full language scope:
 
-| Changed files | Formatter |
+| Files | Formatter |
 | --- | --- |
-| `.ts`, `.tsx`, `.mts`, `.cts` | Prettier for all repository TypeScript |
+| `.ts`, `.tsx`, `.mts`, `.cts` | Prettier for repository TypeScript |
 | `.rs` | `make rust-format` for both Rust crates |
-| `.cs`, excluding generated protocol types and EF mappings | .NET whitespace and style passes for the backend solution |
+| `.cs` | .NET whitespace and style passes for the backend solution, excluding generated protocol and EF types |
 
-Changes confined to other files skip all formatters. Each selected formatter still
-formats its existing full scope; Git changes select languages, not individual files.
-Run the manual commands below when changing formatting configuration alone.
+Other files trigger no formatter. Run the manual commands when changing formatting
+configuration alone. After changing the hook, restart Codex and review and trust it
+with `/hooks`; the project must also be trusted. Formatter output goes to stderr,
+while stdout remains JSON for the [Stop hook contract](https://learn.chatgpt.com/docs/hooks#stop).
 
-Restart Codex and use `/hooks` to review and trust the hook after changing its
-definition. The project must also be trusted. Formatter output goes to stderr;
-stdout remains JSON as required by the [OpenAI Docs for Stop hooks](https://learn.chatgpt.com/docs/hooks#stop).
-
-Install Node.js 24+, the .NET SDK from `global.json`, and the tools in the
-[Rust development guide](rust-development.md) using `make rust-setup`.
-`rust-toolchain.toml` pins Rust, rustfmt, Clippy, and rust-src; `Cargo.lock` pins dependencies.
-Run `make install` to install the pinned Prettier and TypeScript dependencies.
-If Prettier is unavailable, the hook reports a skip when TypeScript files change.
-When Rust formatting is needed and Cargo is absent from its inherited
-`PATH`, the hook adds rustup's tool directory
-(`$CARGO_HOME/bin`, or `$HOME/.cargo/bin` by default). This also covers Codex
-processes started before Rust was installed.
+Install Node.js 24+, the SDK from `global.json`, and Rust tools via `make rust-setup`
+(see [Rust development](rust-development.md)); run `make install` for pinned
+Prettier and TypeScript dependencies. Missing Prettier is reported as a skip. If
+Cargo is absent from PATH, the Rust hook adds `$CARGO_HOME/bin`, or
+`$HOME/.cargo/bin` by default.
 
 ```bash
 make format
@@ -38,18 +29,11 @@ make rust-format
 make backend-format
 ```
 
-Prettier formats TypeScript and respects `.gitignore`. Embedded-language formatting
-is disabled to preserve HTML/CSS/JavaScript strings in UI and test fixtures.
-`make rust-format` formats both Rust crates with Codex's
-`imports_granularity=Item` setting. `make rust-format-check` verifies
-the same rules without writing files.
-
-When C# files change, the hook runs `dotnet format whitespace` and `dotnet format
-style --severity info` on `backend/Goblin.slnx`, excluding generated protocol types
-and EF mappings. Wolverine integrations are ordinary NuGet dependencies and
-have no source in the formatting scope.
-The style pass excludes `IDE0130` and `IDE1006`; see the formatter arguments in
-[Makefile](../Makefile).
+Prettier respects `.gitignore` and skips embedded-language formatting. Rust uses
+`imports_granularity=Item`; `make rust-format-check` checks without writing. C#
+uses `dotnet format whitespace` and `dotnet format style --severity info` on
+`backend/Goblin.slnx`; the style pass excludes `IDE0130` and `IDE1006` (see
+[Makefile](../Makefile)). The hook does not run tests.
 
 ## C# construction and contracts
 
