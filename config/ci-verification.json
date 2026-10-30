@@ -210,7 +210,7 @@
       "filenames": [],
       "requires": [],
       "commands": [
-        "make contracts-check contracts-test make-test ci-test maintenance-test release-test dependencies-check build deploy-generate",
+        "make contracts-check contracts-test make-test ci-test maintenance-test chisel-check release-test dependencies-check build deploy-generate",
         "node --test dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
         "node --test website/release.test.mjs",
         "git diff --exit-code"

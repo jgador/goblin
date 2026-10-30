@@ -1,0 +1,59 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chisel-tunnel
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    nginx.org/ssl-redirect: "true"
+    nginx.org/websocket-services: chisel
+    nginx.org/proxy-read-timeout: "3600s"
+    nginx.org/proxy-send-timeout: "3600s"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [dev-tunnel.goblinboard.com]
+      secretName: chisel-tunnel-tls
+  rules:
+    - host: dev-tunnel.goblinboard.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: chisel
+                port:
+                  number: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: chisel-dev
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    acme.cert-manager.io/http01-edit-in-place: "true"
+    nginx.org/ssl-redirect: "true"
+    nginx.org/websocket-services: chisel
+    nginx.org/proxy-buffering: "false"
+    nginx.org/proxy-http-version: "1.1"
+    nginx.org/proxy-set-headers: "X-Forwarded-Proto: https"
+    nginx.org/proxy-read-timeout: "3600s"
+    nginx.org/proxy-send-timeout: "3600s"
+    nginx.org/client-max-body-size: "64m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [dev.goblinboard.com]
+      secretName: chisel-dev-tls
+  rules:
+    - host: dev.goblinboard.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: chisel
+                port:
+                  number: 8787

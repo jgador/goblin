@@ -80,8 +80,9 @@ generated during release preparation. It does not refresh Docker image tags.
 
 ## Checked-in image selections
 
-Read the selected versions from the catalog, deployment manifests, installer, and
-Dockerfiles; upstream bundles own their component images.
+Read selected versions from the catalog, deployment manifests, installer, and
+Dockerfiles; upstream bundles own their component images. Chisel's development
+gateway and its deployment are described in [the Chisel guide](../deploy/chisel/README.md).
 
 The installer also pins F5 NGINX Ingress Controller 5.7.0 and Helm chart 2.8.0.
 It verifies the corresponding official ingress template and changes only its

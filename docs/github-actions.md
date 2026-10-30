@@ -39,6 +39,7 @@ Reusable workflows can appear with caller/called job paths, such as
 | Installation Assets | [installation-assets.yml](../.github/workflows/installation-assets.yml) | `prepare`, `website` | Prepare the catalog from authenticated published assets, then call Website Release with the exact snapshot artifact |
 | Recommend Release | [recommend-release.yml](../.github/workflows/recommend-release.yml) | `installation` | Recommend an existing release or repair its installation hosting through Website Release |
 | Website Release | [website-release.yml](../.github/workflows/website-release.yml) | `validate`, `publish`, `deploy` | Verify the public website, publish its tested image to GHCR, and deploy the approved image to Kubernetes |
+| Chisel Deploy | [chisel-deploy.yml](../.github/workflows/chisel-deploy.yml) | `verify`, `deploy` | Manually deploy the self-hosted WSL development tunnel using `ak3s-production` environment secrets |
 
 A release makes a tested version and its artifacts available. A deployment puts
 selected content or an image into a running environment. The platform and
@@ -54,6 +55,13 @@ GitHub's **Review deployments** UI also manages environment approval for the
 release publication job. That UI label does not mean the job installs the platform.
 See [platform releases](releases.md) and [website production](../website/production/README.md)
 for operating procedures.
+
+Chisel Deploy targets the website's existing AK3S cluster in the shared `goblin`
+namespace using a dedicated credential. It runs only on manual dispatch;
+deployment requires a `release/*` branch and the `ak3s-production` environment.
+Its `verify` job is not a new required branch check. See
+[Chisel setup](../deploy/chisel/README.md) for bootstrap,
+DNS, Secrets, and manual public acceptance.
 
 ## CI selection and required result
 

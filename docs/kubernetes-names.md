@@ -5,6 +5,13 @@ Goblin has two components: **platform**, the main application built from
 site in `website/`. Both run in Kubernetes namespace **goblin**. Their builds,
 deployments, and operational commands remain independent.
 
+The [Chisel development gateway](../deploy/chisel/README.md) also uses namespace
+`goblin`. Its Deployment, Service, and credential Secret are named `chisel`, its
+Ingresses are `chisel-tunnel` and `chisel-dev`, and its deployer ServiceAccount is
+`chisel-deployer`. Its selector uses `app.kubernetes.io/name=chisel`, separate from
+the platform and website selectors. Chisel bootstrap preserves namespace policy;
+removal must target its owned resources and never the shared namespace.
+
 | Identity | Platform | Website |
 | --- | --- | --- |
 | Namespace | `goblin` | `goblin` |

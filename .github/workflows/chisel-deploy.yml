@@ -1,0 +1,48 @@
+name: Chisel Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24"
+      - name: Install the cluster's pinned Kubernetes client
+        run: bash website/install-kubectl.sh
+      - name: Verify deployment and credential handling offline
+        run: make chisel-check
+
+  deploy:
+    needs: verify
+    if: github.repository == 'jgador/goblin' && startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-24.04
+    environment:
+      name: ak3s-production
+      url: https://dev.goblinboard.com
+    concurrency:
+      group: ak3s-production-chisel
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: "24"
+      - name: Install the cluster's pinned Kubernetes client
+        run: bash website/install-kubectl.sh
+      - name: Deploy Chisel and wait for its server rollout
+        env:
+          AK3S_KUBECONFIG: ${{ secrets.AK3S_KUBECONFIG }}
+          CHISEL_AUTH: ${{ secrets.CHISEL_AUTH }}
+          CHISEL_SERVER_KEY: ${{ secrets.CHISEL_SERVER_KEY }}
+        run: node scripts/deploy-chisel.mts

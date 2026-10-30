@@ -1,0 +1,52 @@
+# Administrator bootstrap; never applied by the GitHub deployment credential.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chisel-deployer
+  namespace: goblin
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: chisel-deployer
+  namespace: goblin
+rules:
+  # Kubernetes cannot restrict create by resourceNames. Creation applies across
+  # the shared namespace; subsequent reads and patches use explicit names.
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [create]
+  - apiGroups: [apps]
+    resources: [deployments]
+    resourceNames: [chisel]
+    # rollout status lists/watches with metadata.name=chisel.
+    verbs: [get, list, watch, patch]
+  - apiGroups: [""]
+    resources: [services, secrets]
+    verbs: [create]
+  - apiGroups: [""]
+    resources: [services, secrets]
+    resourceNames: [chisel]
+    verbs: [get, patch]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [create]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    resourceNames: [chisel-tunnel, chisel-dev]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chisel-deployer
+  namespace: goblin
+subjects:
+  - kind: ServiceAccount
+    name: chisel-deployer
+    namespace: goblin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: chisel-deployer
