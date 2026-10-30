@@ -1,5 +1,9 @@
 # goblinboard.com on AK3S
 
+The same cluster can host the [Chisel development gateway](../../deploy/chisel/README.md)
+for local ChatGPT testing. It uses its own namespace, subdomains, and
+`ak3s-production` GitHub deployment environment.
+
 The production configuration deploys the public website as `Deployment/website` in namespace `goblin` on the
 Hetzner AK3S cluster. The `nginx` ingress class routes `goblinboard.com` to
 `Service/website`. TLS is stored in `Secret/website-tls`; the existing

@@ -131,6 +131,13 @@ default. See [Kubernetes names](kubernetes-names.md) for component identity and
 storage defaults. Published installer provenance stays in the dependency lock;
 current embedded asset changes require a newly built installer before release.
 
+The Node-only Chisel deployment adapter defines `AK3S_KUBECONFIG`, `CHISEL_AUTH`,
+and `CHISEL_SERVER_KEY` in `config/environment.mts`. All are sensitive GitHub
+environment secrets; they are written to private temporary files and never
+forwarded to kubectl's environment or Goblin runtimes. The adapter derives the
+restricted authfile from `CHISEL_AUTH`. Chisel's local client reads its upstream
+`AUTH` variable as described in [the deployment guide](../deploy/chisel/README.md).
+
 ## Adding a variable
 
 1. Add a named entry to each language catalog that consumes the variable. Document

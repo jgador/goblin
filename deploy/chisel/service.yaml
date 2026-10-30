@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: chisel
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: chisel
+  ports:
+    - name: tunnel
+      port: 8080
+      targetPort: tunnel
+    - name: goblin
+      port: 8787
+      targetPort: goblin

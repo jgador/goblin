@@ -1,5 +1,10 @@
 # Test the ChatGPT plugin with a local build
 
+For a stable development hostname on the existing public k3s website cluster,
+use [Chisel on AK3S](../deploy/chisel/README.md). It forwards the complete local
+application through `dev.goblinboard.com` without switching an Azure instance's
+upstream. The Azure test VM relay workflow below remains a separate option.
+
 Use a dedicated Azure test VM as the HTTPS gateway while Goblin runs in WSL.
 Production installations route directly to their own Goblin instance. Development
 relay mode explicitly changes the test VM's default ingress upstream to a private

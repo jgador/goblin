@@ -1,0 +1,7 @@
+# Administrator bootstrap; excluded from the deployment workflow.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: goblin-chisel
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

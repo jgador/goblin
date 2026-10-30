@@ -10,6 +10,38 @@ export interface EnvironmentVariableDefinition {
 
 /** See docs/environment-variables.md before adding or forwarding a variable. */
 export const environmentVariables = {
+    AK3S_KUBECONFIG: {
+        name: "AK3S_KUBECONFIG",
+        purpose:
+            "Explicit cluster credential for the Chisel deployment workflow.",
+        format: "Kubeconfig YAML with embedded CA and a dedicated ServiceAccount credential.",
+        fallback:
+            "Deployment fails when missing; never uses the ambient kubeconfig.",
+        required:
+            "ak3s-production GitHub environment secret for Chisel deployment.",
+        sensitive: true,
+    },
+    CHISEL_AUTH: {
+        name: "CHISEL_AUTH",
+        purpose:
+            "Authenticate the WSL tunnel client, restricted to the Goblin reverse port.",
+        format: "username:password without control characters; username contains no whitespace or colon.",
+        fallback: "Deployment fails when missing or invalid.",
+        required:
+            "ak3s-production GitHub environment secret; also used locally by the operator.",
+        sensitive: true,
+    },
+    CHISEL_SERVER_KEY: {
+        name: "CHISEL_SERVER_KEY",
+        purpose:
+            "Stable Chisel server identity across restarts and deployments.",
+        format: "Unencrypted P-256 PEM private key.",
+        fallback:
+            "Deployment fails when missing or invalid; never generates a replacement.",
+        required:
+            "ak3s-production GitHub environment secret for Chisel deployment.",
+        sensitive: true,
+    },
     GITHUB_ACTOR: {
         name: "GITHUB_ACTOR",
         purpose:
