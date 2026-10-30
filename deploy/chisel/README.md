@@ -59,9 +59,10 @@ plugin is unsuitable for the hosted runner.
 
 ## GitHub environment and deployment
 
-Create GitHub environment **`ak3s-production`**, allow deployment from `master`,
-and configure its review protection as appropriate for this production cluster.
-Add these environment secrets:
+Create GitHub environment **`ak3s-production`**. Under **Deployment branches and
+tags**, choose **Selected branches and tags** and add a **Branch** rule with
+pattern **`release/*`**, such as `release/0.1`. Configure its review protection
+as appropriate for this production cluster. Add these environment secrets:
 
 | Secret | Value |
 | --- | --- |
@@ -85,9 +86,15 @@ gh secret set AK3S_KUBECONFIG --env ak3s-production < /path/to/chisel-deployer.y
 The interactive `gh secret set CHISEL_AUTH` prompt keeps the value out of shell
 history. Keep real credentials out of repository files and uploaded artifacts.
 
-Run **Chisel Deploy** manually from `master`. The workflow first runs offline
-checks, then uses `ak3s-production` secrets to apply Chisel's resources and wait
-for the server rollout. Deployment is serialized. It writes temporary credentials
+Merge the workflow into `master` so GitHub exposes its manual dispatch action,
+then create a release branch containing that workflow version. Run **Chisel
+Deploy** manually and select the release branch, such as `release/0.1`.
+The deploy job accepts only `release/` branches in `jgador/goblin`;
+`master` remains the development branch.
+
+The workflow first runs offline checks, then uses `ak3s-production` secrets to
+apply Chisel's resources and wait for the server rollout. Deployment is
+serialized. It writes temporary credentials
 under `.artifacts/chisel/` with private permissions, removes them on completion or
 failure, and sends Secret manifests directly to kubectl without printing them.
 It never applies the administrator bootstrap or modifies website resources.

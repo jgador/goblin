@@ -58,8 +58,9 @@ for operating procedures.
 
 Chisel Deploy targets the website's existing AK3S cluster in the shared `goblin`
 namespace using a dedicated credential. It runs only on manual dispatch;
-deployment requires `master` and the `ak3s-production` environment. Its `verify`
-job is not a new required branch check. See [Chisel setup](../deploy/chisel/README.md) for bootstrap,
+deployment requires a `release/*` branch and the `ak3s-production` environment.
+Its `verify` job is not a new required branch check. See
+[Chisel setup](../deploy/chisel/README.md) for bootstrap,
 DNS, Secrets, and manual public acceptance.
 
 ## CI selection and required result

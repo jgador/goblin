@@ -23,7 +23,7 @@ jobs:
 
   deploy:
     needs: verify
-    if: github.repository == 'jgador/goblin' && github.ref == 'refs/heads/master'
+    if: github.repository == 'jgador/goblin' && startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-24.04
     environment:
       name: ak3s-production
