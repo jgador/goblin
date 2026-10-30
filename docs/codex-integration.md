@@ -97,15 +97,9 @@ operations and notifications use the generated typed models. See the
 
 ## Build and verification
 
-```bash
-make install
-make build                    # browser assets and .NET solution
-dotnet run --no-build --project backend/src/Goblin.Web
-make test                         # schema drift, .NET tests, HTTP tests
-make codex-test                # official pinned Rust binary, synthetic key only
-make browser-test              # browser journeys against the C# test host
-dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
-```
+See [repository commands](repository-layout.md) and [test selection](repository-layout.md#choosing-verification)
+for build and test scope. `make codex-test` uses the pinned official binary with
+synthetic credentials; it does not establish authenticated model coverage.
 
 Node.js is used for browser compilation, npm's pinned Codex distribution, and test
 tooling. The production host runs entirely in .NET and can use a separately
@@ -115,6 +109,4 @@ image includes the native binary and its adjacent resources, without Node.js.
 Transport and protocol tests cover serialization, concurrent initialization,
 request correlation, UTF-8 framing, malformed/oversized output, server requests,
 timeouts, crashes, restart ordering, and cleanup. HTTP/browser fixtures exercise
-the connection UI. Real Codex initialization uses a synthetic key and does not
-establish authenticated model coverage. Select checks for the changed boundary
-using [repository verification](repository-layout.md#choosing-verification).
+the connection UI. Fixtures do not establish authenticated model coverage.
