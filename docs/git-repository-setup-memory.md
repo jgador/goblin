@@ -1,84 +1,61 @@
 # Git repository setup memory
 
-Goblin remembers successful preparation of GitHub repositories across Work items
-without requiring setup files to be added to the repository. Codex decides what the
-current task needs, inspects the checkout and installed tools, and can learn new
-requirements during work (for example, adding Python to a .NET repository).
-Existing repository instructions take precedence over learned observations.
+Goblin remembers verified repository preparation across Work items without adding
+files to the repository. Existing repository instructions take precedence. Codex
+still inspects the checkout, installed tools, and the current task; remembered
+commands are suggestions, never automatically replayed.
 
-## Remembering and recalling
+## Recall
 
-The worker obtains repository-scoped observations through its existing broker
-capability. PostgreSQL access stays in the controller. Memory is scoped to the
-connected GitHub account and repository ID; a disabled repository, changed
-account, or revoked grant cannot retrieve it. Observations record a topic,
-reason, exact tool versions, preparation commands, verification checks, relevant
-file hashes, environment identity, verification time, and Work/attempt/turn and
-checkpoint provenance. Raw process output is not retained. Credentials and
-private URLs must never be included; validation rejects common credential
-formats and credential paths.
+The worker uses its broker capability; PostgreSQL access stays in the controller.
+Memory is scoped to the connected GitHub account and repository ID. A disabled
+repository, changed account, or revoked grant cannot retrieve it. Observations
+record topics, reasons, versions, commands, checks, file hashes, environment,
+verification time, and Work/attempt/turn and checkpoint provenance. Raw process
+output is not retained. Credentials and private URLs are prohibited; validation
+rejects common credential formats and credential paths.
 
-Before starting each repository turn, the worker selects observations whose
-environment and input hashes still match. It fingerprints common manifests,
-lockfiles, tool-version files, Dockerfiles, and AGENTS.md files, including added
-or removed files. Codex supplies additional relevant paths such as custom setup
-scripts. Ordinary source edits can reuse memory; changed requirements cause
-reassessment. Hash equality is only a relevance filter: Codex must still inspect
-current instructions, task needs, and installed tools. Unrecognized requirements
-and task-specific changes remain the agent's responsibility.
-
-Environment identity includes the configured image reference, OS, architecture,
-and worker assembly version. Use immutable image references for reproducible
-environments; a mutable tag is not a content digest. Matching identity never
-proves that a tool remains installed on a replacement container.
+Before each repository turn, recall filters observations by environment identity
+(image reference, OS, architecture, and worker assembly version) and input hashes.
+Inputs include common manifests, lockfiles, tool-version files, Dockerfiles and
+AGENTS.md files, including added or removed files; Codex can add relevant paths.
+Matching hashes indicate relevance, not proof that tools are installed or a recipe
+still works. Mutable image tags are not content digests. Changed requirements need
+reassessment; ordinary source edits can reuse memory.
 
 Recall selects the latest observation per topic/environment/input variant before
-bounding the database result to 64 candidates. The worker supplies at most eight
-matching topics and 24 KB of context. This is bounded recall, not a guarantee
-that every historical variant will be offered. Old observations are not deleted
-on a timer or globally marked obsolete: a three-month-old configuration may
-still apply on an older branch. Later successful verification refreshes a
-variant; changed inputs retain a separate variant.
+limiting the query to 64 candidates and supplying at most eight topics and 24 KB.
+Old variants are not expired: they may apply to older branches. Successful
+verification refreshes a variant; changed inputs create another variant.
 
-## Verification and durability
+## Verification and persistence
 
-Codex's structured result can propose setup observations. A proposal alone is
-not persisted. After retiring Codex, the worker runs each supplied check inside
-the sandbox using `/bin/sh`, the original environment, and the repository root.
-Checks should inspect versions and dependency availability, must exit with zero,
-and must match the expected trimmed standard output. Output is bounded and the
-verification batch has a two-minute deadline. Verification rejects changed
-requirements, escaping paths, and symbolic-link inputs. Checks are execution
-evidence from the worker, not a security attestation or proof that the recipe
-will reproduce the environment indefinitely.
+A structured Codex proposal is not persisted by itself. After retiring Codex,
+the worker runs each check in the sandbox using `/bin/sh`, the original
+environment and repository root. Checks should inspect versions and dependencies,
+exit zero, and match expected trimmed stdout. Output is bounded and the batch has
+a two-minute deadline; changed requirements, escaping paths, and symlink inputs
+are rejected. These checks are evidence, not a security attestation or guarantee
+of future reproducibility.
 
-Only after all checks pass and a Git checkpoint record is saved does the worker
-submit the observations. The controller rechecks the current attempt, turn,
-repository grant, and checkpoint under the same database concurrency lock used
-by Work. A batch is atomic; identical duplicate delivery does not change its
-verification time, and conflicting or stale writes are rejected. Failure follows
-the existing Work attention policy, with no automatic retry. Repository setup
-commands and candidates are excluded from public runtime progress/results.
+After all checks pass and a Git checkpoint is saved, the controller rechecks the
+attempt, turn, repository grant, and checkpoint under the Work concurrency lock.
+The batch is atomic; identical duplicate delivery does not change verification
+time, and stale or conflicting writes fail under the normal attention policy,
+without automatic retry. Setup commands and candidates are excluded from public
+progress and results. Repository scripts run only in the isolated sandbox.
 
-Preparation commands are remembered for the agent to assess, never automatically
-replayed by the controller or worker. Repository scripts execute only within
-the isolated sandbox. No new repository files, memory dashboard, or confirmation
-step are required. Codex may make an occasional nonblocking suggestion to add
-portable setup instructions when useful.
+## Workspace and storage
 
-## Storage and scope
+PostgreSQL stores observations and Git provenance, not filesystem archives.
+`/workspace`, `/runtime`, and `/tmp` share the Work PVC and persist across pod
+replacement; tools outside those mounts do not gain that durability. Codex
+credentials and sessions in `/run/codex` have pod lifetime. See [workspace mounts](workspace-lifecycle.md#one-workspace-per-work).
+Large dependencies consume PVC storage. Shared prepared environments and
+cross-Work caches are separate work; memory does not guarantee installation can be
+skipped. Codex may suggest portable setup instructions without blocking work.
 
-PostgreSQL remembers preparation knowledge and Git provenance. Workspace files
-and installed tools remain on the Work PVC; no filesystem archive is stored in
-PostgreSQL. `/workspace`, `/runtime`, and `/tmp` share the Work PVC and persist
-across pod replacement. Tools installed outside those persistent mounts do not
-gain that durability; Codex credentials and sessions in `/run/codex` remain
-pod-lifetime data. See [workspace mounts](workspace-lifecycle.md#one-workspace-per-work). Large dependency trees
-consume PVC storage. Shared prepared environments and
-cross-Work dependency caches are separate work; this feature reduces repeated
-discovery and does not guarantee that installation can be skipped.
-
-The schema is part of the unreleased `0001_initial.sql`, with EF mappings
-regenerated from a fresh database. Existing development databases with a changed
-baseline require deliberate recreation, as described in [database setup](database.md#apply-the-sql-schema).
-No compatibility migration or automatic reset is provided.
+The schema belongs to the unreleased `0001_initial.sql`; regenerate EF mappings
+from a fresh database. Recreate development databases with changed baselines only
+deliberately, as described in [database setup](database.md#apply-the-sql-schema).
+There is no compatibility migration or automatic reset.
