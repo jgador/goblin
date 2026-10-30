@@ -51,7 +51,7 @@ formats change. Follow [AGENTS.md](../AGENTS.md) for contribution boundaries.
 ## Remaining proposals
 
 [Frontend maintenance](typescript-refactoring.md) describes unfinished ownership
-extractions. The [second-runtime experiment](second-runtime-experiment.md) is a
+extractions. The [second-runtime experiment](architecture.md#connections-and-runtime-adapters) is a
 bounded proposal, not implemented support. Follow-up tables in current guides
 likewise describe gaps, not available features.
 

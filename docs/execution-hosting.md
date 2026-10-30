@@ -170,4 +170,4 @@ which a direct app-server `command/exec` check does not detect.
 
 Authenticated execution and GitHub branch/PR delivery require configured
 service credentials and explicit live verification. Cross-runtime continuation
-is still a [planned experiment](second-runtime-experiment.md).
+is still a [planned experiment](architecture.md#connections-and-runtime-adapters).

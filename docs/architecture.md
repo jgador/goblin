@@ -58,7 +58,14 @@ Future runtimes must map to Goblin inputs, events, results, and safe failures
 without changing core rules or assuming a Codex App Server protocol. Their
 supported interface and capabilities require validation against a real integration.
 Runtime switching, context handoff, fallback, and collaboration between agents
-remain proposals in the [second-runtime experiment](second-runtime-experiment.md).
+remain proposals. A possible first experiment is a GitHub Copilot CLI adapter,
+using a separately authenticated, isolated test repository and a persisted Work
+snapshot. Validate its pinned interface, progress and result handling, fencing,
+failure attention, cancellation, credential cleanup, and recovery from the
+retained workspace. Advertise only verified capabilities; do not enable native
+resume or live approvals without testing them. An explicitly authorized handoff
+may compare a completed Codex branch and Goblin context with a new attempt.
+Never automatically retry uncertain work or introduce fallback.
 See [Codex integration](codex-integration.md), [authentication](authentication.md),
 and [model discovery](model-catalog.md) for current behavior.
 
