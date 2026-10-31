@@ -112,16 +112,10 @@ The implementation avoids token use before inference:
   stop further requests. These guards can stop legitimate work too; inspect the
   incomplete report before increasing them.
 
-A new workflow run starts fresh. Within a run, tool results and conversation
-history are still part of later model requests. Repeated large file reads,
-verbose logs, high reasoning effort, and repeated approaches increase usage.
-[OpenAI prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
-reduces processing for matching prefixes; it does not make a growing conversation
-free or guarantee that separate workflow runs share a cache. The maintained
-prompts keep instructions stable and put changing evidence in the context packet.
-[GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) supports
-medium reasoning effort. The output security review inherits the model; its
-separate 10-credit budget still applies.
+Each run starts fresh, but later requests within a run include prior context.
+[Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+can reduce processing for matching prefixes; it does not make growing context
+free or guarantee reuse across runs. Review actual usage before changing budgets.
 
 Inspect actual usage after representative runs:
 
