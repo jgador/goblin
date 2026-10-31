@@ -38,21 +38,12 @@ maintains a small TCP forwarder from loopback port 8788 to Linux port 80, so
 Windows access continues when Kubernetes takes over from the setup server.
 The setup UI stops and disables itself after installation; the forwarder remains.
 
-The progress page groups installation into four expandable stages. Its progress
-bar counts completed tasks, rather than estimating remaining time; tasks can run
-concurrently. Open a stage to inspect its tasks or expand **Installation log** for
-live output. Running tasks show their latest activity, including download size
-and rate. If installation fails, the affected stage and log open automatically.
-Tasks that were already running finish first, so their downloads and builds are
-kept, and no new task starts. Enter your Goblin password on the page and select
-**Retry installation** to continue.
-
-The k3s binary and its system-image archive download in parallel without a fixed
-total-duration timeout and resume after interruptions. A transfer stops if its
-speed stays below 1 KiB/s for two minutes; downloads allow up to six attempts,
-while permanent HTTP errors stop immediately. Image pulls resume when containerd
-stops a stalled transfer. Add-on and service images download before
-their rollouts start, so those waits measure startup only.
+The progress page shows expandable stages, tasks, and live logs. Progress counts
+completed tasks, not time remaining. On failure, running tasks finish and no new
+tasks start; enter the Goblin password and select **Retry installation** to resume.
+The k3s binary and image archive resume after interruption; transfers below
+1 KiB/s for two minutes retry up to six times, while permanent HTTP errors stop
+immediately. Service images are downloaded before rollout waits begin.
 
 Open **Settings → Cluster → Open cluster**, or
 **http://localhost:8788/headlamp/**, to inspect Kubernetes in Headlamp using your
