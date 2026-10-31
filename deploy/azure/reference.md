@@ -409,25 +409,11 @@ Start with the error immediately before `Permission denied (publickey)`:
 | `UNPROTECTED PRIVATE KEY FILE`, `bad permissions`, or `Permissions ... are too open` | OpenSSH rejected the key's permissions. Keep your own read access and remove access for unrelated accounts. |
 | Only `Permission denied (publickey)` remains after the key loads | Check the VM address, administrator username, and whether the VM has the public key matching this private key. |
 
-For example, this sequence indicates a local key-loading failure before SSH
-could authenticate with that key:
-
-```text
-Load key "goblin-pem.pem": Permission denied
-goblinadmin@YOUR_VM_HOSTNAME: Permission denied (publickey).
-```
-
-Owning the file does not by itself grant permission to read its contents. If you
-disabled inheritance and removed all permission entries, Windows denies read
-access even to the owner. Restore an explicit **Allow → Read** entry for the
-account running SSH.
-
-The downloaded `.pem` file contains your private SSH key. Someone who can read
-it could use it to authenticate as you wherever its matching public key is
-authorized. OpenSSH checks the file's permissions and rejects keys readable by
-unrelated accounts. An `UNKNOWN\UNKNOWN` entry is an account identifier (SID)
-that Windows cannot resolve to a name. Removing its permission entry removes
-its access to the file; it does not delete an account.
+Ownership alone does not grant read access. If inheritance was disabled and all
+entries removed, add an explicit **Allow → Read** entry for the SSH account.
+The `.pem` contains a private key; unrelated accounts must not be able to read it.
+An `UNKNOWN\UNKNOWN` entry is an unresolved SID; removing its permission does not
+delete an account.
 
 #### Inspect the key and restore read access
 
