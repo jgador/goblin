@@ -42,8 +42,9 @@ The progress page shows expandable stages, tasks, and live logs. Progress counts
 completed tasks, not time remaining. On failure, running tasks finish and no new
 tasks start; enter the Goblin password and select **Retry installation** to resume.
 The k3s binary and image archive resume after interruption; transfers below
-1 KiB/s for two minutes retry up to six times, while permanent HTTP errors stop
-immediately. Service images are downloaded before rollout waits begin.
+1 KiB/s for two minutes stop and resume within a limit of six total attempts,
+while permanent HTTP errors stop immediately. Service images are downloaded
+before rollout waits begin.
 
 Open **Settings → Cluster → Open cluster**, or
 **http://localhost:8788/headlamp/**, to inspect Kubernetes in Headlamp using your
