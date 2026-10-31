@@ -146,8 +146,8 @@ calls Website Release with that artifact. It does not commit or push.
 When Website Release runs on its own, `validate` runs
 `node scripts/installation-assets.mts snapshot OUTPUT --authenticate`. For a local
 preview, omit `--authenticate`; GitHub asset digests and manifest checksums are
-still checked. [Website production](../website/production/README.md) describes
-which releases the snapshot includes and how signatures are checked.
+still checked. [Platform releases](releases.md#installation-defaults-and-recommendation)
+describes which releases the snapshot includes and how signatures are checked.
 
 `validate` uploads the snapshot as `website-installation-<attempt>`; `publish` and
 `deploy` use that artifact instead of fetching releases again, and reruns use the
@@ -173,12 +173,8 @@ the active ruleset and plan its update before merging.
 
 ## Release signing identity
 
-The workflow filename is part of the attestation identity. Release, installer, and
-website checks accept only `jgador/goblin/.github/workflows/platform-release.yml`
-on `refs/heads/master` from GitHub-hosted runners; candidate and website checks
-also require the release's recorded workflow revision. Renaming `platform-release.yml` therefore stops
-existing installers from being reused; see [platform releases](releases.md) for
-publishing a new installer version. After changing the signing workflow, start a
-new release run from the updated `master`, because reruns keep the original
-workflow revision. Signing, publication, and website deployment need a real GitHub
-Actions run; local checks cover only their offline contracts.
+The workflow filename `platform-release.yml` and the `master` ref are part of the
+release signing identity. Renaming the workflow stops existing installers from
+being reused. See [platform releases](releases.md#verify-and-publish-the-candidate)
+for the signer rules. Signing, publication, and website deployment need a real
+GitHub Actions run; local checks cover only their offline contracts.

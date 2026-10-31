@@ -192,6 +192,6 @@ Azure networking need manual checks on an Azure VM.
 ## ChatGPT plugin development
 
 Local installation uses F5 NGINX over loopback HTTP, and ChatGPT stays disabled.
-For a public HTTPS address, use the
-[Azure-to-WSL development relay](../../docs/chatgpt-local-testing.md). It keeps
-Azure’s certificate and DNS while routing the whole application to local code.
+For a public HTTPS address, use one of the
+[local testing gateways](../../docs/chatgpt-local-testing.md): Chisel or the Azure
+test VM relay.

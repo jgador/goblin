@@ -1,139 +1,111 @@
 # Workspaces, conversation turns, and Git checkpoints
 
-Each repository Work owns one persistent Sandbox and PVC. PostgreSQL stores Work
-conversations, lifecycle history, execution records, inspection sessions, and
-small Git checkpoint records. **Workspace files and filesystem archives are never
-stored in PostgreSQL.** Goblin does not archive the workspace after a turn.
+Each repository Work owns one Sandbox and one PVC. PostgreSQL stores
+conversations, history, execution records, inspection sessions, and small Git
+checkpoint records. **Workspace files and filesystem archives are never stored in
+PostgreSQL.** Goblin does not archive the workspace after a turn.
 
 ## One workspace per Work
 
 The first repository execution creates a Sandbox and private PVC named
 `work-<work-id>`. Both persist across turns, explicit retries, and requested
-revisions. The Work snapshot records their opaque address and the last attempt,
-allocation, and turn that could have changed files. Attempts keep separate
-claims, runtime sessions, and repository grants. A workspace is bound to one
-repository; a different repository needs separate Work.
+revisions. The Work snapshot records the environment reference and the last
+attempt, workspace allocation, and turn that could have changed files. Attempts
+keep separate claims, runtime sessions, and repository grants. A workspace is
+bound to one repository; a different repository needs separate Work.
 
-Suspension stops the pod and releases CPU and memory but keeps the Sandbox object
-and PVC. It does not need a filesystem backup. A runtime failure requires
-attention and confirmed cleanup before an explicit retry. A proposed result leaves
-Work waiting for review with its files kept.
+Suspension stops the pod and keeps the Sandbox object and PVC. **The PVC is the
+workspace: never delete it to suspend or release compute.** New compute gets fresh
+attempt credentials and inputs; see
+[execution hosting](execution-hosting.md#durable-ownership) for fencing.
 
-New compute receives fresh attempt-specific credentials and inputs. Kubernetes
-resource versions fence ownership changes, so delayed starts and cleanup cannot
-take over newer allocations. Each attempt and turn has a create-only claim file.
-A duplicate start cannot reactivate a suspended allocation.
+A new attempt branch starts from the local Git HEAD on the PVC, with
+unpublished commits, staged and untracked files, installed tools, and ignored
+outputs. A new Codex thread gets the saved Work context and checks `git status`
+and `git diff`. If retained storage is missing, Work requires attention; Goblin
+never replaces lost files with a fresh checkout or an older checkpoint.
 
-The next authorized branch starts at the surviving local Git HEAD, keeping
-unpublished commits, staged changes, dirty and untracked files, installed tools,
-and ignored outputs. A new Codex thread receives the saved Work context and
-checks `git status` and `git diff`. Native sessions live only in pod storage.
-Missing retained storage requires attention; Goblin never replaces lost files
-with a fresh checkout or an older checkpoint.
+Repository pods mount the Work PVC at `/workspace`, and its `.goblin/runtime` and
+`.goblin/tmp` subdirectories at `/runtime` and `/tmp`. Files in all three persist
+across suspension and retries. A non-root init container creates the
+subdirectories. Add writable top-level mounts only in
+`SandboxManifestBuilder.PersistentDirectories`, which sets both the init step and
+the mounts. There is no automatic cache cleanup or per-directory quota.
 
-Repository executions mount the same Work PVC at `/workspace`, `/runtime`, and
-`/tmp`; the last two use the `.goblin/runtime` and `.goblin/tmp` subdirectories.
-Tool homes, dependency caches, and scratch files persist across suspension and
-retries. Private worker directories are excluded from previews and Git
-checkpoints. A non-root init container creates the directories without changing
-the checkout. Add more writable top-level mounts only in
-`SandboxManifestBuilder.PersistentDirectories`, which configures both
-initialization and PVC subpaths. There is no automatic cache cleanup, separate
-PVC, or per-directory quota.
+The PVC requests 2 GiB from the default storage class. The k3s default,
+`local-path`, does not enforce this size.
 
-The PVC requests 2 GiB in total. Whether that is enforced depends on the storage
-driver: local-path provisioning reports the request but sets no filesystem quota.
-
-Codex's writable authentication and native sessions live at `/run/codex`, on a
-pod-lifetime `emptyDir` with no size limit. They are discarded with the pod and
-never copied to the Work PVC. Each new pod receives current credentials through a
-read-only Secret mount, so credentials are never kept in an inspectable Work
-volume.
+Codex authentication and native sessions live at `/run/codex`, a pod-lifetime
+`emptyDir` with no size limit. They are discarded with the pod and never copied to
+the PVC. Each new pod gets current credentials through a read-only Secret mount.
 
 ## Conversation and execution
 
-An agent question pauses the attempt. Answering saves the decision and
-atomically queues the next runtime turn of the same attempt. The runtime chooses
-to keep compute running for interactive work or to suspend it while waiting.
-There is no idle timer or background inference. After suspension, the next turn
-first runs with tools disabled, using saved Work context. If it needs file access,
-the same Work workspace resumes for a repository turn. This is not a retry.
+An agent question pauses the attempt. The answer queues the next turn of the same
+attempt; this is not a retry. The runtime either keeps compute running or
+releases it while waiting. There is no idle timer. After release, the next turn
+first runs with tools disabled, using saved Work context. If it needs files, the
+same workspace resumes for a repository turn.
 
-Runtime failure, cleanup failure, uncertain execution, cancellation, and explicit
-retry follow the core attention and ownership rules in
+Failures, uncertain execution, cancellation, and retry follow
 [Work lifecycle](work-lifecycle.md). Failed Work is never retried automatically.
 
 ## Files and Git checkpoints
 
 At the end of a turn the worker stops the runtime, checks that no other processes
-are running, and commits all repository changes. When push is approved it
-publishes through Goblin's GitHub broker; otherwise it sends a Git object bundle
-and the controller verifies the commit without publishing. `workspace_checkpoint`
-records the Work, attempt, turn, allocation, repository, branch, commit SHA, and
-time. It holds Git metadata only, with no archive data. The internal checkpoint
-endpoint accepts a bounded JSON body with the turn number and commit SHA.
+run, and commits all repository changes. When push is approved it publishes
+through the GitHub broker; otherwise the controller verifies the commit from a Git
+bundle without publishing. `workspace_checkpoint` stores Work, attempt, turn,
+workspace number, repository, branch, commit SHA, and time; it holds no file data.
+The checkpoint also anchors verified repository setup memory.
 
-Files stay on the PVC. `.goblin/changes.patch` holds the latest turn's Git diff
-for inspection. The Git checkpoint also anchors verified repository setup memory.
-It does not back up untracked or ignored files, tools, or build outputs, and never
-authorizes deleting a volume. Published commits can be fetched from GitHub; files
-outside Git depend on the retained volume and any backups the operator manages.
+`.goblin/changes.patch` holds the latest turn's Git diff. A checkpoint does not
+back up untracked or ignored files, tools, or build outputs, and never authorizes
+deleting a volume. Files outside published commits depend on the retained PVC and
+any backups the operator manages.
 
 ## Inspection
 
-The Work page has no inspection UI. The inspection API lists verified Git commits
-and recorded sessions. Starting an inspection session creates a separate pod that
-mounts the Work PVC read-only, with its own 128 MiB temporary directory. Execution
-must have stopped, compute must be released, and cleanup must be confirmed.
-Inspection and repository execution both reserve capacity and never use the same
-Work volume at the same time. The inspection pod gets no agent credentials,
-database credentials, Kubernetes token, or archive download.
+The Work page has no inspection UI. The inspection API, available when
+`GOBLIN_EXECUTION_NAMESPACE` is set, lists verified Git checkpoints and inspection
+sessions. A session starts a separate `inspect-<session-id>` pod that mounts the
+Work PVC read-only, with a 128 MiB `/tmp`. The inspected attempt must be the last
+one that used the workspace, execution must have stopped, compute must be
+released, and cleanup must be confirmed. A Work has at most one active session,
+and execution waits until it stops. The pod gets no agent, database, or Kubernetes
+credentials.
 
-File, diff, and terminal requests use the recorded inspection pod. File previews
-reject path traversal, symbolic links, and private Git or worker files. The file
-list stops at 1,000 entries and a preview at 1 MiB; use the terminal for larger
-trees. File content is returned as text. Git checkpoints are metadata, not
-filesystem snapshots, and there is no archive download or restore.
+File and terminal requests need an available session that belongs to the Work;
+browsers cannot choose Kubernetes targets. File reads reject path traversal,
+symbolic links, non-regular files, and private Git and `.goblin` files (except
+`.goblin/changes.patch`). The file list stops at 1,000 entries and a preview at
+1 MiB; use the terminal for more. There is no archive download or restore.
 
-Disconnecting a terminal does not stop inspection; an explicit stop request
-releases the pod. Recorded sessions survive disconnection and count against
-capacity. Terminal connections require authentication and same-origin checks,
-and availability is rechecked while connected. File requests also need an
-available inspection session that belongs to the Work. Browsers cannot choose
-Kubernetes targets. The terminal is a streaming command shell, not a full-screen
-terminal emulator.
+The terminal is a streaming command shell, not a full-screen terminal emulator. It needs
+authentication and a same-origin request, and the session and sign-in are
+rechecked every 5 seconds while connected. Disconnecting does not stop the
+session; an explicit stop request releases the pod.
 
 ## Capacity and retention
 
-The database serializes admission of execution claims and inspection
-reservations. Extra sessions wait for capacity. A failed inspection allocation
-keeps its reservation until explicitly stopped. Execution deadlines and resource
-failures require attention.
+The database serializes admission of execution claims and inspection sessions.
+Repository attempts that are running, uncertain, cleanup-pending, or holding
+compute, and inspection sessions that are starting, available, stopping, or need
+attention, count toward
+`GOBLIN_MAX_SANDBOXES`; extra work waits. A failed inspection session keeps its
+place until explicitly stopped.
 
 | Configuration | Default |
 | --- | --- |
 | `GOBLIN_MAX_SANDBOXES` | 2 |
 | `GOBLIN_SANDBOX_CPU_LIMIT` | 2 |
 | `GOBLIN_SANDBOX_MEMORY_LIMIT` | 2Gi |
-| `GOBLIN_MAX_CACHED_WORKSPACES` | 4 retained repository volumes |
+| `GOBLIN_MAX_CACHED_WORKSPACES` | 4 Work PVCs |
 
-Existing volumes can resume at the volume limit. Work that needs a new volume
-beyond the limit fails for attention instead of deleting files. Goblin never
-reclaims completed, cancelled, or unfinished Work volumes automatically. Expiry,
-export, and deletion need a separate retention policy.
+Existing PVCs can resume at the PVC limit. Work that needs a new PVC beyond the
+limit fails for attention instead of deleting files. Goblin never deletes Work
+PVCs automatically, including for completed or cancelled Work.
 
-## Schema and verification
-
-The SQL baseline contains metadata-only Git checkpoints and inspection sessions.
-Change `0001_initial.sql` directly and regenerate EF mappings from it; recreate
-development databases when the format changes, as described in
+The SQL baseline holds Git checkpoints and inspection sessions; see
 [database setup](database.md#apply-the-sql-schema). Recreating the database does
-not authorize deleting Work PVCs. A Git checkpoint alone never proves filesystem
-data can be discarded.
-
-Tests cover suspension without a file archive, dirty and ignored files kept across
-attempts, storage loss and capacity protection, metadata-only checkpoints,
-durable inspection reservations, bounded PVC file reads, and the inspection API.
-Run the opt-in PostgreSQL tests explicitly; default runs skip them without a
-connection. Kubernetes and runtime checks are still needed for the deployed
-boundary.
+not authorize deleting Work PVCs.

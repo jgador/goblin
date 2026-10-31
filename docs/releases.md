@@ -5,7 +5,7 @@ Develop on `master`; stabilize and service each release line on
 main product component is **platform** ([component names](kubernetes-names.md)).
 The **Platform Release** workflow prepares, verifies, and publishes one Goblin and
 goblinctl pair after a single approval. See [GitHub Actions](github-actions.md)
-for workflow and job names, installation asset commands, and the signing identity.
+for workflow and job names and installation asset commands.
 
 ## Development and stabilization
 
@@ -69,7 +69,7 @@ installer or merge an unrelated dependency-pin update to make a backport work.
 1. Merge the source changes or backports into the release line. Wait for
    `test_results` to pass for the exact commit.
 2. Open **Actions → Platform Release → Run workflow** and run it on `master`.
-   Preparation refuses other refs. Set **Source branch** to the line, for example
+   Preparation refuses other refs. Set **Stabilization branch** to the line, for example
    `release/0.1`.
 3. Choose **preview** or **stable**. Leave the Goblin version blank to use the
    next version in that line. A version must belong to the line, match the
@@ -132,9 +132,14 @@ The `installation` job then updates the website installation assets.
 explicit selection changes the recommendation. The `report` job shows release
 publication and website installation results separately.
 
-Signing and authentication accept only `platform-release.yml` on `master`. A
-published installer signed by another workflow cannot be reused; publish a new
-installer version through **Platform Release** and keep existing tags and assets.
+Signing and authentication accept only
+`jgador/goblin/.github/workflows/platform-release.yml` on `refs/heads/master`
+from GitHub-hosted runners. Candidate and website checks also require the
+release's recorded workflow revision. A published installer signed by another
+workflow, including a renamed one, cannot be reused; publish a new installer
+version through **Platform Release** and keep existing tags and assets. After
+changing the signing workflow, start a new run from updated `master`, because
+reruns keep the original workflow revision.
 
 To update the development installer pin after a publication (the release must
 match the checkout's installer inputs and capabilities):
@@ -157,11 +162,11 @@ To recommend an existing release, roll back, or repair installation hosting, run
 option is checked by default; uncheck it to redeploy the assets and keep the
 current default.
 
-The first catalog recommends the newest stable release, otherwise the newest
-preview. After that, the deployed recommendation is kept, including no
-recommendation, until a run explicitly recommends a version. An empty catalog
-needs a published version before installation is available. A recommendation
-affects new installations only. GitHub's "latest release" never sets Goblin's
+If no catalog is deployed yet, the snapshot recommends the newest stable release,
+otherwise the newest preview. Otherwise the deployed recommendation is kept,
+including no recommendation, until a run explicitly recommends a version. A
+deployed empty catalog has no recommendation, so recommend the first release
+explicitly. A recommendation affects new installations only. GitHub's "latest release" never sets Goblin's
 default.
 
 The installation snapshot passes as an Actions artifact into **Website Release**,

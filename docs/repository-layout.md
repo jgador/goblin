@@ -116,14 +116,18 @@ npm run typecheck
 | `make dev-start DB_PROFILE=wsl` | Build and start the application with the selected PostgreSQL profile and local owner password |
 | `make artifacts-clean` | Delete everything in `.artifacts/` except its `.gitkeep` |
 
-Owners of other targets: [Rust development](rust-development.md),
+Owners of other targets: [Rust development](rust-development.md) (`rust-*`,
+`goblinctl-run`), [formatting](formatting.md) (`*-format`),
+[contract values](contract-values.md) (`contracts-*`),
 [database guide](database.md) (`database-*`),
+[dependencies](dependencies.md) (`dependencies-*`),
+[releases](releases.md) (`release-*`),
 [local installation](../deploy/local/README.md) (`local-*`, `dev-reset`,
 `password-set`), [ChatGPT local testing](chatgpt-local-testing.md) (`relay-*`),
 [Chisel](../deploy/chisel/README.md) (`chisel-check`),
-[website guide](../website/README.md) (`website-*`),
-[secret scanning](secret-scanning.md) (`secrets-*`), and
-[agentic maintenance](agentic-maintenance.md) (`maintenance-test`).
+[logging](logging.md) (`logging-test*`), [cluster view](cluster-view.md)
+(`headlamp-test`), [website guide](../website/README.md) (`website-*`), and
+[secret scanning](secret-scanning.md) (`secrets-*`).
 
 After building frontend assets, publish with:
 
@@ -190,21 +194,32 @@ behavior, not tests that only repeat the implementation.
 | Prose or agent instructions only | Review the diff, relative links/anchors, and commands against their owners; run `git diff --check`. |
 | Work core | `dotnet test backend/tests/Goblin.Core.Tests`; add the boundary checks below when callers or integrations change. |
 | Other C# behavior | The affected project under `backend/tests/`; use `make test` when changes span application, transport, HTTP, or deployment contracts. Keep existing protocol and transport coverage. |
+| HTTP routes or API contracts | `make backend-test` and `make node-test` (frontend, HTTP integration, and deployment tests). |
 | Shared C#/Rust contract values | Follow [the contract guide](contract-values.md#cross-language-changes), including `make contracts-check`. |
-| Rust tooling | `make rust-format`, `make rust-lint CARGO_ARGS="-p <crate>"`, and `make rust-test CARGO_ARGS="-p <crate>"`. |
+| Generated Codex or Kubernetes models | `make protocol-check` or `make kubernetes-check`. |
+| Rust tooling under `tools/` | `make rust-format`, `make rust-lint CARGO_ARGS="-p <crate>"`, and `make rust-test CARGO_ARGS="-p <crate>"`; see [Rust development](rust-development.md#build-format-lint-and-test). |
 | Browser code or UI behavior | `npm --prefix frontend run typecheck`, `make frontend-test`, and the relevant `make browser-test ARGS="tests/e2e/<journey>.spec.ts"` journeys. Inspect the changed interaction and visual result. |
-| Standalone website | `npm --prefix website run check`, then inspect the affected pages with `make website-start`. |
-| Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus real PostgreSQL checks set up as in [the database guide](database.md#application-configuration-and-verification). |
+| Directly run `.mts` scripts | `make scripts-typecheck` and the script's `node --test scripts/<name>.test.mts` (`make ci-test`, `make maintenance-test`, `make release-test`, `make make-test`, `make chisel-check`, `make secrets-test`). |
+| Standalone website | `npm --prefix website run check` (and `npm --prefix website/video run check` for the video), then inspect the affected pages with `make website-start`. |
+| Schema, persistence, dispatch, or database concurrency | Affected .NET tests plus `make database-test DB_PROFILE=wsl` against real PostgreSQL, set up as in [the database guide](database.md#application-configuration-and-verification). |
 | Codex transport or execution hosting | Existing transport/protocol tests and `make codex-test` where relevant; authenticated execution and isolation need the real-runtime checks in [execution hosting](execution-hosting.md#verification-limits). |
-| Installer or deployment contracts | Offline generation and deployment checks in `make test`; see [deployment assets](formatting.md#deployment-assets). Azure installation stays manual. |
+| Kubernetes manifests, installer, or deployment contracts | `make test` (deployment tests, `make chisel-check`, `make dependencies-check`, `make deploy-generate`); see [deployment assets](formatting.md#deployment-assets). Installer changes also need `make release-build release-check-installer`, `make browser-test ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"`, and `make platform-check-image`. Azure installation stays manual. |
+| Environment variables | Follow [adding a variable](environment-variables.md#adding-a-variable). |
+| CI policy or workflows | `make ci-test make-test scripts-typecheck`; see [GitHub Actions](github-actions.md#ci-selection-and-required-result). Check publication and merge-queue behavior need a real Actions run. |
 
 `make test` is the broad offline suite; real PostgreSQL checks run only with
-explicit test configuration. `make check` adds Rust formatting and lint checks
-and type checks. Neither is required for every local edit. CI selects
-verification groups from changed files using
-[`config/ci-verification.json`](../config/ci-verification.json); see
-[GitHub Actions](github-actions.md#ci-selection-and-required-result). Local
-results do not mean CI ran.
+explicit test configuration. It does not run Rust lints, browser journeys,
+`make codex-test`, or website checks. `make check` adds Rust formatting and lint
+checks and type checks. Neither is required for every local edit.
+
+CI selects groups from changed files using
+[`config/ci-verification.json`](../config/ci-verification.json): C#, Rust, and
+JavaScript/TypeScript changes run their language group plus the integration and
+installer groups. Shared build and deployment inputs (such as SQL, shell, YAML,
+Dockerfiles, and Makefiles) and unclassified files run every group. Markdown
+outside `.github/workflows/` skips runtime groups. See
+[GitHub Actions](github-actions.md#ci-selection-and-required-result) for the full
+rules. Local results do not mean CI ran.
 
 Offline installer tests run as an ordinary user. `make tools-build` builds the
 test-only `host_fixture` Rust example, which runs host configuration against a
@@ -227,8 +242,8 @@ published `wwwroot/`. Browser URLs are mapped explicitly in
 `backend/src/Goblin.Web/Http/StaticAssets.cs`; add new browser modules there.
 `/`, `/work`, `/integrations`, `/knowledge`, and `/settings` serve the workspace
 shell, also with a trailing slash, behind the workspace access screen. Settings
-selects its section with `?section=connections` (or `agents`, `codex`, `github`,
-`system`, `cluster`, `logs`, `timezone`, `integrations`, `slack`, or `chatgpt`).
+selects its section with `?section=<name>`; the names are listed in
+`frontend/src/settings/settings.ts`.
 The connection panel is shared with Settings through `/connection/panel.html`.
 Runtime assets keep their `/assets/*` URLs, including the bundled Inter fonts.
 Shared platform controls and font declarations live in `frontend/src/controls.css`.

@@ -50,7 +50,7 @@ forwarding port, export again and update the saved server's port.
 - **Windows access violation:** set **Properties → Parameters → GSS encmode →
   disable** (add it with **+** if absent). This works around a
   [pgAdmin Windows bug](https://github.com/pgadmin-org/pgadmin4/issues/10445).
-  Exports include this setting.
+  New exports include this setting; edit existing saved servers.
 - **Missing root certificate:** use the exported absolute certificate paths and
   keep SSL mode **verify-full**.
 
@@ -249,8 +249,9 @@ To change the schema:
 
 1. Edit the baseline (or, after production, add a migration) following
    [the migration rules](#apply-the-sql-schema). New tables need primary keys.
-2. Update the `--table` list in `scaffold-database.sh` and, if needed, the custom
-   names in `backend/tools/Goblin.Database.Scaffolding/GitRepositoryDesignTimeServices.cs`.
+2. Update the `--table` list in `scaffold-database.sh`, the expected table list in
+   `backend/tests/Goblin.Persistence.Tests/PostgresTests.cs`, and, if needed, the
+   custom names in `backend/tools/Goblin.Database.Scaffolding/GitRepositoryDesignTimeServices.cs`.
    Apply SQL to a fresh disposable database with
    `make database-migrate DB_PROFILE=<profile>`, then run
    `make database-scaffold DB_PROFILE=<profile>`.
@@ -283,9 +284,8 @@ runs `goblinctl db migrate IMAGE` with only the admin certificate and stops on
 failure before deploying Goblin. When Work is enabled, `/readyz` checks the database.
 
 Run `make database-test` against a development profile. The tests create and drop
-uniquely named databases and cover EF access, role permissions, migrations and
-checksums, messaging storage, and TLS certificate rules. Without the test
-connections, database tests skip and ordinary tests need no server.
+uniquely named databases. Without the test connections, database tests skip and
+ordinary tests need no server.
 
 To run HTTP and browser journeys against a migrated, disposable development database:
 

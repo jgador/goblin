@@ -175,7 +175,7 @@ application database certificate nor its service-account token.
 | Setting | Default | Purpose |
 | --- | --- | --- |
 | `GOBLIN_DATA_DIR` | `.goblin-platform`; `/data/platform` in the image | Private application data |
-| `GOBLIN_PASSWORD_HASH_FILE` | None; the local launcher uses `.goblin-secrets/owner-password` and the Sandbox manifest `/etc/goblin/owner-password` | Required password verifier |
+| `GOBLIN_PASSWORD_HASH_FILE` | None; required | Password verifier; `/etc/goblin/owner-password` in the Sandbox manifest |
 | `GOBLIN_HOST` | `127.0.0.1`; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |
 | `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:<port>` | Exact browser origin for Host and Origin checks |
@@ -184,8 +184,8 @@ application database certificate nor its service-account token.
 
 Non-loopback origins must use HTTPS unless `GOBLIN_ALLOW_INSECURE_HTTP=true`. Loopback
 HTTP works for local access and SSH or kubectl port forwarding. HTTPS origins use
-Secure session cookies. See [environment variables](environment-variables.md) for
-naming and parsing rules.
+Secure session cookies. This table owns the web host defaults; see
+[environment variables](environment-variables.md) for naming and parsing rules.
 
 The password is compared exactly, including spaces. Restart Goblin after changing
 the verifier to load the new password and end current sessions.
@@ -209,12 +209,10 @@ make browser-install
 make browser-test
 ```
 
-`make test` includes the protocol generator check, .NET serialization and transport
-tests, and HTTP integration tests that use a fake Codex process. `make codex-test`
-runs the real pinned Codex binary with a temporary home and a synthetic, unusable key
-to check storage, restart, and logout. Browser tests use simulated sign-in and model
-replies. None of these use personal credentials or run a model task; a real ChatGPT
-sign-in remains a manual check.
+`make test` uses a fake Codex process. `make codex-test` runs the real pinned Codex
+binary with a temporary home and a synthetic, unusable key. Browser tests simulate
+sign-in and model replies. None of these use personal credentials or run a model
+task; a real ChatGPT sign-in remains a manual check.
 
 See [Codex integration](codex-integration.md) for the C# project layout, protocol
 regeneration, and the boundary between Goblin and Codex.

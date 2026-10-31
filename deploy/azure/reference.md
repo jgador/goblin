@@ -130,11 +130,9 @@ retry through SSH or Run Command. The Azure status page has no retry button.
 sudo goblinctl install retry
 ```
 
-An interrupted installation resumes after reboot. A failed attempt disables its
-installer and needs an explicit retry; reboot alone does not retry it. A retry
-checks cluster readiness again and reapplies manifests. It does not trust old
-completed-step markers, recreate PVCs, or regenerate passwords. A completed source
-download is reused across retries.
+Reboot resumes an interrupted installation but does not retry a failed one. For
+what a retry reuses and checks, see
+[parallel installation](../../docs/goblinctl.md#parallel-installation-and-live-progress).
 
 Once Kubernetes exists, more diagnostics are available:
 
@@ -191,11 +189,11 @@ check uses a server-side dry run and creates no resources. For PostgreSQL repair
 see the [database guide](../../docs/database.md#installation-and-certificates).
 
 Upstream installers, manifests, the K3s binary and airgap image archive, and the
-NGINX chart use pinned versions and verified SHA-256 digests. Verified downloads
-stay in `/var/cache/goblin/downloads`. Bundled Traefik is disabled. Outbound
-internet access is required for downloads and image pulls. The VM uses the latest
-Ubuntu 24.04 LTS image. An existing K3s is reused only when its version and
-Traefik-disabled configuration match the pins; otherwise recreate the installation.
+NGINX chart use pinned versions and verified SHA-256 digests. Bundled Traefik is
+disabled. Outbound internet access is required for downloads and image pulls. The
+VM uses the latest Ubuntu 24.04 LTS image. An existing K3s is reused only when its
+version and Traefik-disabled configuration match the pins; otherwise recreate the
+installation.
 
 ## Status UI and public URL handoff
 
@@ -434,6 +432,7 @@ offline checks. Keep the shared parameter defaults and naming rules in `main.bic
 
 ```bash
 make deploy-generate   # cargo xtask azure; writes .artifacts/azure/
+bash -n deploy/azure/bootstrap.sh deploy/azure/install-platform.sh deploy/azure/setup/installer.sh
 sh -n deploy/azure/missing-ssh-key.sh
 make test
 ```
@@ -441,7 +440,7 @@ make test
 Generated ARM JSON is not committed; release preparation generates and publishes
 its own assets. Changes to embedded setup assets need a new goblinctl release and
 a dependency pin update; see [releases](../../docs/releases.md). `make test` also
-checks the Custom Script size limit, shell syntax, and that
+checks the Custom Script size limit and that
 `createUiDefinition.json` outputs match `azuredeploy.portal.json` parameters.
 
 These checks stay manual:

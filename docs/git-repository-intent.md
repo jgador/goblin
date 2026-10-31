@@ -29,7 +29,8 @@ The preview shows the repository, GitHub account, base branch, Work branch, Git
 author, and Git actions. For a repository that is not enabled, **Enable repository &
 authorize this Work** records both decisions. Enabled repositories use their saved
 permission directly. **Decline** saves the decision without enabling the repository
-or dispatching an attempt.
+or dispatching an attempt. A push or PR request fails with `repository_unavailable`
+when the connected GitHub account cannot push to the repository.
 
 Examples of supported delivery wording:
 
@@ -76,6 +77,9 @@ Command receipts keep the returned previews, and attempts keep their immutable
 grants. `github_repository.enabled` is the durable repository setting. The
 enablement write and dispatch intent share the Work transaction. GitHub discovery
 runs before that transaction; the connection identity is checked again inside it.
+Enabling or disabling a repository fails with `github_connection_in_use` while a
+GitHub-backed attempt is queued, starting, running, uncertain, being canceled, pending
+cleanup, or keeps a retained workspace.
 
 [Slack](slack-integration.md) users with a linked owner identity can name an enabled
 repository in their first request or a reply in the same thread. Slack uses the
@@ -109,6 +113,3 @@ the Git bundle and records a receipt without calling GitHub. PostgreSQL stores o
 checkpoint metadata. Files, including unpublished commits and ignored outputs, stay
 on the Work PVC. A new attempt uses that checkout, so its previous commit does not
 need to exist on GitHub.
-
-Live GitHub publication and authenticated model execution need separate integration
-checks; the automated tests use local Git bundles.

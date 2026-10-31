@@ -13,82 +13,59 @@ The four behavioral boundaries are the first four sections below.
 attempts, and result approval. Core types have no HTTP, persistence, messaging,
 process-configuration, runtime SDK, or generated-protocol dependencies.
 `Goblin.Application` turns commands into transactional changes and coordinates
-connections, execution, recovery, and conversations. `Goblin.Persistence` stores
-those changes through SQL-first PostgreSQL mappings.
+connections, execution, recovery, and conversations. `Goblin.Persistence` holds
+the SQL-first PostgreSQL mappings.
 
-Work, agent, attempt, and runtime-session identities are separate. Agents outlive
-attempts, and accepted attempts outlive HTTP requests. Each attempt records its
-agent, runtime, connection, requested and reported model, and execution source.
-Runtime sessions are references, not Goblin's transcript. Saved objectives,
-context, decisions, outputs, and earlier results supply continuity.
+Rules:
 
-Work state, command receipts, and dispatch intent commit atomically. A repeated
-command returns its saved receipt. Dispatch claims need database concurrency
-enforcement in addition to core checks. A claim and a durable message do not
-guarantee exactly-once external execution.
+- Work, agent, attempt, and runtime-session identities are separate. Agents
+  outlive attempts, and accepted attempts outlive HTTP requests. Runtime sessions
+  are references, not Goblin's history.
+- Work state, command receipts, and dispatch intent commit atomically. Claims need
+  database concurrency enforcement; a claim does not guarantee exactly-once
+  external execution.
+- Every observed failure requires core-owned attention, including temporary
+  failures. Message redelivery never authorizes another execution. Only an
+  explicit retry creates a new attempt, after uncertain execution is reconciled.
+- A storage failure must not produce a fake saved transition.
 
-Every observed dispatch or execution failure requires core-owned attention,
-including temporary failures. Message redelivery never authorizes another
-execution. Only an explicit retry creates a new attempt, and uncertain execution
-must be reconciled first. Confirming that execution stopped resolves uncertainty
-but does not retry. Cancellation stays an intent until stopping is confirmed.
-A late confirmed result goes to review. A successful runtime turn never approves
-or completes Work.
-
-A storage failure must not produce a fake saved transition. Commands report
-failure or uncertainty, and durable recovery evidence allows reconciliation when
-storage returns. See [Work lifecycle](work-lifecycle.md) and [database ownership](database.md).
+States, commands, and recovery rules are in [Work lifecycle](work-lifecycle.md).
+Storage is in [PostgreSQL](database.md).
 
 ## Connections and runtime adapters
 
 `Goblin.Contracts` holds Goblin-owned integration contracts.
-`Goblin.Integrations.Codex` owns Codex authentication, transport, generated
-protocol translation, model discovery, and session handling. Connection
-verification is a restricted operation separate from durable Work. GitHub
-repository access, Slack messaging, and read-only ChatGPT sharing have their own
-adapters.
+`Goblin.Integrations.Codex` owns Codex authentication, transport, protocol
+translation (generated types are in `Goblin.Protocol`), model discovery, and
+sessions. GitHub, Slack, and ChatGPT have their own `Goblin.Integrations.*`
+projects. Raw upstream errors and credentials stay out of public views and Work
+history. A connection rejects overlapping verification prompts, and rejects
+account changes while an attempt holds it.
 
-Runtime capabilities and connection availability are explicit. Overlapping
-verification prompts are rejected. Account changes are rejected while an attempt
-holds the connection. Cancellation and timeouts clean up runtime operations. Raw
-upstream errors and credentials stay out of public views and Work history.
-
-A second runtime must map to Goblin inputs, events, results, and safe failures
-without changing core rules or assuming the Codex App Server protocol. Runtime
-switching, context handoff, fallback, and agent collaboration are proposals only.
-A possible first experiment is a GitHub Copilot CLI adapter on an isolated test
-repository. It must prove its pinned interface, results, fencing, failure
-attention, cancellation, credential cleanup, and recovery from the retained
-workspace before any capability is advertised. Never add automatic retry or
-fallback. See [Codex integration](codex-integration.md), [authentication](authentication.md),
-and [model discovery](codex-integration.md#model-selection-and-discovery) for current behavior.
+A second runtime is a proposal, not supported. It must map to Goblin inputs,
+events, results, and safe failures without changing core rules or assuming the
+Codex App Server protocol. A possible first experiment is a GitHub Copilot CLI
+adapter on a test repository; it must prove fencing, failure attention,
+cancellation, credential cleanup, and recovery before any capability is
+advertised. Never add automatic retry or fallback. See
+[Codex integration](codex-integration.md) and [authentication](authentication.md).
 
 ## Execution, isolation, and recovery
 
-`Goblin.Execution` owns workers, process and pod observation, cancellation,
-cleanup, and workspace hosting. A text question does not allocate a repository
-sandbox. Repository execution requires a GitHub selection, an immutable
-Goblin-owned grant, and the configured Kubernetes isolation boundary. It cannot
-fall back to the text-only host.
+`Goblin.Execution` and `Goblin.Execution.Codex` own workers, process and pod
+observation, cancellation, cleanup, and workspace hosting. A text question does
+not use a repository sandbox.
 
-Repository Work has one persistent Sandbox and PVC. Attempts can contain several
-runtime turns and survive compute suspension. Files, ignored outputs, and local
-Git commits stay on that PVC; PostgreSQL stores checkpoint metadata only.
-Suspension does not archive files or authorize volume deletion. There is no
-automatic volume reclamation.
+The isolation boundary: repository execution requires a GitHub selection, a
+Goblin-owned grant, and the configured Kubernetes sandbox. It never falls back
+to the text-only host. Repository pods have no application database credentials
+or Kubernetes service token, run under the `restricted` pod security standard,
+and have public-only egress. Goblin brokers Git operations and rechecks the
+grant.
 
-Workers receive scoped inputs and credentials. Repository pods have no application
-database credentials or Kubernetes service token, run under the restricted pod
-security policy, and have public-only egress. Goblin brokers Git operations and
-rechecks account generation, repository enablement, branch, and publication
-permissions.
-
-Claims commit before external execution starts. Host identity fences, observation,
-operation receipts, and explicit reconciliation protect crash recovery and
-duplicate delivery. Cleanup failures require attention before continuation.
-Closing a browser does not cancel accepted Work. `/readyz` checks only the
-application database (when Work is enabled), not Codex, so users can still inspect
-Work and repair a failed connection.
+Repository Work keeps its files on one PVC; PostgreSQL stores checkpoint
+metadata only. Closing a browser does not cancel accepted Work. `/readyz` checks
+only the application database (when Work is enabled), not Codex.
 
 See [execution hosting](execution-hosting.md), [workspace lifecycle](workspace-lifecycle.md),
 and [repository authorization](git-repository-intent.md).
@@ -97,27 +74,18 @@ and [repository authorization](git-repository-intent.md).
 
 `Goblin.Web` owns HTTP translation, owner access, request validation, same-origin
 security, cookies, and static assets. Endpoints submit application commands and
-map saved views and failures into HTTP contracts; they do not own durable
-execution. Public requests and responses are classes with explicit
-`JsonPropertyName` attributes in `Http/Contracts/`, so C# renames cannot silently
-rename JSON fields.
+map saved views and failures to HTTP; they do not own durable execution. Public
+request and response classes are in `Goblin.Web/Http/Contracts/` with explicit
+`JsonPropertyName` attributes.
 
-The TypeScript browser displays server-owned Work state. Creation, context,
-decisions, approvals, and execution controls use versioned commands. An
-unconfirmed submission keeps its original command ID for safe resubmission.
-Polling and reconnect read the saved state. Selection, filters, disclosures, and
-unsent drafts are presentation state. Sample fixtures never drive the live
-application.
-
-Keep the current frontend technology, visual design, branding, accessibility,
-escaping, and HTTP security when changing state ownership. See the
-[Work interface](work-centered-ui.md) and [frontend maintenance plan](typescript-refactoring.md).
+The browser shows server-owned Work state and sends versioned commands. An
+unconfirmed submission keeps its command ID for resubmission. Selection, filters,
+disclosures, and drafts are browser-only state. See the
+[Work interface](work-centered-ui.md) and [frontend plan](typescript-refactoring.md).
 
 ## Verification boundaries
 
-Existing transport, protocol, HTTP, and browser tests protect their boundaries;
-use [test selection](repository-layout.md#choosing-verification) to choose checks.
-Fixtures and protocol initialization cannot prove PostgreSQL transaction behavior,
-authenticated model execution, GitHub publication, or support for a second
-runtime. Those claims need actual integration runs. Report opt-in test skips and
-live-service gaps.
+Use [test selection](repository-layout.md#choosing-verification) to choose checks.
+Fixtures and protocol tests cannot prove PostgreSQL transactions, authenticated
+model execution, GitHub publication, or a second runtime; those need actual
+integration runs. Report opt-in test skips.

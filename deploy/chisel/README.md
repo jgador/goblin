@@ -1,34 +1,29 @@
 # Chisel on AK3S
 
-Run one Chisel server in the existing HTTPS website cluster and connect its client
-from WSL. The server shares namespace `goblin` with the website. Its two HTTPS
-ingress routes are:
+One Chisel server in the [website cluster](../../website/production/README.md)
+forwards a public HTTPS address to Goblin in WSL for
+[ChatGPT local testing](../../docs/chatgpt-local-testing.md). It runs in the shared
+`goblin` namespace with two ingress routes:
 
 | Host | Service port | Purpose |
 | --- | --- | --- |
-| `dev-tunnel.goblinboard.com` | `chisel:8080` | Authenticated WebSocket tunnel connection from WSL |
-| `dev.goblinboard.com` | `chisel:8787` | Entire local Goblin application, including browser UI, OAuth, and MCP |
+| `dev-tunnel.goblinboard.com` | `chisel:8080` | Authenticated tunnel connection from WSL |
+| `dev.goblinboard.com` | `chisel:8787` | The whole local Goblin application |
 
-Both routes use the F5 NGINX `nginx` ingress class and the `letsencrypt-production`
-ClusterIssuer of the [website cluster](../../website/production/README.md). Add DNS
-A records for both subdomains pointing to that cluster's public ingress IP.
-Cert-manager issues a certificate for each host and keeps HTTP-01 challenge paths
-on the cluster. The website keeps its own ingress and release workflow.
-
-The `chisel` Service is ClusterIP; only the HTTPS ingress exposes its ports. The
+Both use the `nginx` ingress class and the `letsencrypt-production` ClusterIssuer.
+Add DNS A records for both hosts pointing to the cluster's public ingress IP. The
+`chisel` Service is ClusterIP; only the HTTPS ingress exposes it. The
 `dev.goblinboard.com` route sends `X-Forwarded-Proto: https`, disables response
 buffering, and supports WebSockets.
 
-The image is the official Chisel **1.12.0**, pinned by digest. The server runs
-without root, a writable root filesystem, Linux capabilities, or a Kubernetes API
-token. Credentials come from the `chisel` Secret. Probes check the tunnel port, not
-whether WSL is connected. Keep one replica and the Recreate strategy: the
-application listener and its tunnel connection must be on the same server.
+The image is Chisel 1.12.0, pinned by digest. The server runs without root, a
+writable root filesystem, capabilities, or a Kubernetes API token. Probes check the
+tunnel port, not whether WSL is connected. Keep one replica and the Recreate
+strategy: the application listener and its tunnel must be on the same server.
 
 ## Administrator bootstrap
 
-Use the intended AK3S kubeconfig explicitly. Ensure the shared `goblin` namespace
-exists and install Chisel's deployer identity once, outside GitHub Actions:
+Run once, outside GitHub Actions, with the intended AK3S kubeconfig:
 
 ```bash
 kubectl --kubeconfig /path/to/ak3s-admin.yaml apply \
@@ -38,31 +33,29 @@ kubectl --kubeconfig /path/to/ak3s-admin.yaml apply -f deploy/chisel/deployer.ya
 
 The separate field manager keeps existing namespace labels and admission policy.
 
-Create a kubeconfig for ServiceAccount `goblin/chisel-deployer` with this cluster's
-API address, embedded CA, and a dedicated credential. Its Role allows creating and
-updating Chisel's Deployment, Service, Secret, and two Ingresses, without RBAC or
-namespace administration. Kubernetes cannot limit `create` by object name, so
-creation is allowed across the shared namespace; reads and patches are limited to
-Chisel's resource names. Keep the deployer credential out of application pods.
+Create a kubeconfig for ServiceAccount `goblin/chisel-deployer` with the cluster's
+API address, embedded CA, and a dedicated credential. Its Role can create resources
+in the shared namespace (Kubernetes cannot limit `create` by name), but reads and
+patches only Chisel's Deployment, Service, Secret, and Ingresses. It has no RBAC or
+namespace rights. Keep the deployer credential out of application pods.
 
-The runner must reach the cluster's Kubernetes API with valid TLS. Use a credential
-with a planned rotation; a one-hour TokenRequest token expires. A kubeconfig that
-needs local files or an interactive exec plugin does not work on the hosted runner.
+The hosted runner must reach the Kubernetes API with valid TLS. The kubeconfig must
+not need local files or an interactive exec plugin. A one-hour TokenRequest token
+expires; use a credential with a planned rotation.
 
 ## GitHub environment and deployment
 
-Create GitHub environment **`ak3s-production`**. Under **Deployment branches and
-tags**, choose **Selected branches and tags** and add a **Branch** rule with
-pattern **`release/*`**, such as `release/0.1`. Set review protection as needed for
-this production cluster. Add these environment secrets:
+Create GitHub environment `ak3s-production`. Under **Deployment branches and tags**,
+choose **Selected branches and tags** and add a **Branch** rule `release/*`. Set
+review protection as needed. Add these environment secrets:
 
 | Secret | Value |
 | --- | --- |
-| `AK3S_KUBECONFIG` | Full kubeconfig YAML for `goblin/chisel-deployer`, not its filename or base64 encoding |
-| `CHISEL_AUTH` | A tunnel username and strong password in `username:password` form; no control characters |
+| `AK3S_KUBECONFIG` | Full kubeconfig YAML for `goblin/chisel-deployer`, not a filename or base64 |
+| `CHISEL_AUTH` | `username:password` with a strong password and no control characters |
 | `CHISEL_SERVER_KEY` | An unencrypted P-256 PEM private key, reused across deployments |
 
-Generate the server key once and save it privately instead of printing it:
+Generate the key once and save it privately:
 
 ```bash
 umask 077
@@ -75,44 +68,33 @@ gh secret set CHISEL_AUTH --env ak3s-production
 gh secret set AK3S_KUBECONFIG --env ak3s-production < /path/to/chisel-deployer.yaml
 ```
 
-The interactive `gh secret set CHISEL_AUTH` prompt keeps the value out of shell
-history. Keep real credentials out of repository files and uploaded artifacts.
+The interactive `CHISEL_AUTH` prompt keeps the value out of shell history. Keep
+real credentials out of repository files and uploaded artifacts.
 
-GitHub shows the manual dispatch action only after the workflow is on `master`.
-Create a release branch that contains it, then run **Chisel Deploy** manually on
-that branch, such as `release/0.1`. The deploy job runs only for `release/`
-branches in `jgador/goblin`.
+The **Chisel Deploy** workflow is manual and appears only after it is on `master`.
+Run it on a `release/` branch, such as `release/0.1`; deployment runs only in
+`jgador/goblin`. It runs `make chisel-check`, then `scripts/deploy-chisel.mts`
+applies the resources and waits for the rollout. It never applies the
+administrator bootstrap or changes website resources.
 
-The workflow runs `make chisel-check`, then uses the `ak3s-production` secrets to
-apply Chisel's resources and wait for the rollout. Deployments run one at a time.
-Temporary credentials are written under `.artifacts/chisel/` with private
-permissions and removed on success or failure; Secret manifests go to kubectl on
-standard input and are never printed. The workflow never applies the administrator
-bootstrap or changes website resources.
+The authfile allows only the reverse tunnel `R:0.0.0.0:8787`. Each deployment
+restarts the server, so changed credentials and keys close open connections and
+briefly interrupt local testing.
 
-The generated authfile allows only `^R:0\.0\.0\.0:8787$`. SOCKS, forward tunnels,
-other interfaces, and other reverse ports are denied. Each deployment restarts the
-server after updating the Secret, so revoked credentials and key changes also close
-open connections. This briefly interrupts an active local testing session.
-
-The **Website Release** workflow uses the separate `website-production` environment
-and deployment identity for the same cluster.
-
-## Connect WSL and test Goblin
+## Connect WSL
 
 Install the matching [Chisel release](https://github.com/jpillora/chisel/releases/tag/v1.12.0)
-in WSL. Read the server's public fingerprint with an administrator kubeconfig:
+in WSL. Read the server's fingerprint with an administrator kubeconfig:
 
 ```bash
 kubectl --kubeconfig /path/to/ak3s-admin.yaml -n goblin logs deployment/chisel
 ```
 
-Copy the full SHA-256 `Fingerprint` value. Keeping the same `CHISEL_SERVER_KEY`
-keeps this fingerprint stable. Start the local build with origin
-`https://dev.goblinboard.com` as described in
+Copy the full SHA-256 `Fingerprint` value; it stays the same while
+`CHISEL_SERVER_KEY` stays the same. Start the local build with origin
+`https://dev.goblinboard.com` as in
 [ChatGPT local testing](../../docs/chatgpt-local-testing.md#start-the-local-build).
-In another WSL terminal, enter the tunnel credential privately, then start the
-reverse tunnel:
+In another WSL terminal, enter the credential privately and start the tunnel:
 
 ```bash
 read -r -s -p 'Chisel username:password: ' CHISEL_AUTH
@@ -124,16 +106,12 @@ chisel client --fingerprint 'COPY_FULL_SERVER_FINGERPRINT' \
 unset AUTH
 ```
 
-Chisel's client reads its credential from `AUTH`. The client opens an outbound
-HTTPS WebSocket connection, so WSL needs no public IP, router port, or VPN. The
-`0.0.0.0` reverse listener lets the cluster Service reach it; public access still
-goes only through the HTTPS ingress.
+The client reads its credential from `AUTH` and opens an outbound HTTPS connection,
+so WSL needs no public IP, router port, or VPN. The `0.0.0.0` listener is inside
+the server pod; public access still goes only through the HTTPS ingress.
 
-Then test at `https://dev.goblinboard.com/settings?section=chatgpt` and follow
-[ChatGPT local testing](../../docs/chatgpt-local-testing.md) for repeat and reset
-steps. DNS, the tunnel server, and public certificates survive local resets. Stop
-the client with Ctrl+C when finished; the development hostname then returns an
-unavailable response.
+Then open `https://dev.goblinboard.com/settings?section=chatgpt`. Stop the client
+with Ctrl+C when finished; the hostname then returns an unavailable response.
 
 ## Verification
 
@@ -141,20 +119,17 @@ unavailable response.
 make chisel-check
 ```
 
-This renders the resources offline and checks credential validation, the
-single-port ACL, explicit cluster selection, and cleanup on deployment failure.
-It deploys nothing. After bootstrap, an administrator can check admission and API
-support with a server-side dry run against the intended cluster:
+This checks the manifests and deployment script offline and deploys nothing. After
+bootstrap, an administrator can run a server-side dry run against the cluster:
 
 ```bash
 kubectl --kubeconfig /path/to/ak3s-admin.yaml apply \
   --server-side --dry-run=server -k deploy/chisel
 ```
 
-After deployment, check the rollout, both certificates, and HTTPS without bypassing
-certificate verification. Connect WSL and confirm the public OAuth signing keys
-belong to the local instance. Complete a real ChatGPT connection, then check that
-shared Work is readable, unshared Work is denied, and streamed responses and
-terminal WebSockets work. Stop the client and confirm the development endpoint
-becomes unavailable. A server rollout alone does not prove certificate issuance,
-WebSocket reachability, or ChatGPT integration.
+After deployment, check the rollout, both certificates, and HTTPS without
+bypassing certificate verification. Connect WSL and check that the public OAuth
+signing keys belong to the local instance. Complete a ChatGPT connection, then check
+that shared Work is readable, unshared Work is denied, and streamed responses and
+terminal WebSockets work. Stop the client and check that the endpoint becomes
+unavailable.

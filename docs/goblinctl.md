@@ -128,9 +128,9 @@ private host log (`sudo goblinctl logs`).
 After a failure, no new tasks start; running workers finish so their downloads and
 builds can be reused. A failed installation disables its boot unit and needs an
 explicit retry, from the setup page with the owner password or with
-`goblinctl install retry`. A retry reuses and checks the retained source archive,
-password, images, build cache, certificates, and PVCs. Installation failure never
-resets the database.
+`goblinctl install retry`. A retry runs every step again and reapplies manifests.
+It reuses and checks the retained source archive, password, images, build cache,
+certificates, and PVCs. Installation failure never resets the database.
 
 `goblinctl db migrate` checks its owned `goblin-schema` Job first. It waits for an
 active Job, collects a completed one, and replaces a failed one. A Job with a

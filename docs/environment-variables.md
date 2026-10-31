@@ -77,10 +77,10 @@ failure controls and credential-inheritance fixtures are not supported configura
 
 | Variable | Shared contract |
 | --- | --- |
-| `GOBLIN_PASSWORD_HASH_FILE` | Private verifier file path. Web startup requires it. Tooling validates an explicit value without replacing it; otherwise dev and local installation use `.goblin-secrets/owner-password`. |
+| `GOBLIN_PASSWORD_HASH_FILE` | Private verifier file path, required by the web host. Tooling validates an explicit value without replacing it; otherwise dev and local installation use `.goblin-secrets/owner-password`. |
 | `GOBLIN_LOCAL_PASSWORD` | Unattended password input for creation or replacement. An existing verifier wins unless replacement is explicit. Native tooling removes it before starting child processes. |
-| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Web defaults to `http://localhost:<port>`; public installation defaults to `https://<hostname>`; local installation uses loopback HTTP. Remote HTTP requires `GOBLIN_ALLOW_INSECURE_HTTP=true`. |
-| `GOBLIN_CHATGPT_ENABLED` | Optional `true`/`false` flag for embedded OpenIddict and MCP. Unset or false disables both; the Azure HTTPS installer sets true. Requires durable Work and an HTTPS public origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
+| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Public installation defaults to `https://<hostname>`; local installation uses loopback HTTP. |
+| `GOBLIN_CHATGPT_ENABLED` | Optional `true`/`false` flag for embedded OpenIddict and MCP. Unset or false disables both; the Azure overlay sets true. Requires durable Work and an HTTPS public origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
 | `ConnectionStrings__Goblin` | Application PostgreSQL connection (`ConnectionStrings:Goblin`). Rust profiles set it, and the HTTP test harness forwards its opt-in test connection to it. |
 | `ConnectionStrings__GoblinAdmin` | Schema administrator connection (`ConnectionStrings:GoblinAdmin`); the Rust migration Job uses the same name. |
 | `GOBLIN_TEST_POSTGRES_APP` / `GOBLIN_TEST_POSTGRES_ADMIN` | Opt-in real-database test connection strings. Sensitive; never application defaults. |
@@ -94,10 +94,10 @@ catalog: `GOBLIN_IMAGE_PULL_WORKERS`, `GOBLIN_INSTALL_PROGRESS`, and
 `GOBLIN_INSTALL_STATE`. Embedded installer scripts read them, so changing their
 names or meaning requires a new installer build.
 
-A catalog fallback is the consumer's default. Deployments may set explicit values,
-for example the Docker image sets `GOBLIN_HOST=0.0.0.0` instead of the web host's
-loopback default. See [Kubernetes names](kubernetes-names.md) for component and
-storage defaults.
+A catalog fallback is the consumer's default; deployments may set explicit values.
+[Authentication](authentication.md#configuration-and-storage) lists the web host
+settings and their defaults, and [Kubernetes names](kubernetes-names.md) lists
+component and storage defaults.
 
 The Node-only Chisel deployment adapter defines `AK3S_KUBECONFIG`, `CHISEL_AUTH`,
 and `CHISEL_SERVER_KEY`. All three are sensitive GitHub environment secrets; the

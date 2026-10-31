@@ -22,10 +22,12 @@ zoom, and safe areas.
 
 The Goblin mark is official artwork from `../assets/branding/svg/`, outside the
 repository's Apache license grant. Inter keeps its SIL Open Font License in
-`assets/OFL.txt`. Provider artwork keeps its notice in `assets/PROVIDER-LICENSE.txt`;
-the Gmail mark is from the [gilbarbara/logos collection](https://github.com/gilbarbara/logos).
-Channel names and marks belong to their owners. Files under `references/` are
-old designs, not the current layout.
+`assets/OFL.txt`. Slack, Teams, and GitHub artwork are copies of the frontend
+provider assets. The Gmail mark in `assets/email.svg` is from the
+[gilbarbara/logos collection](https://github.com/gilbarbara/logos). This provider
+artwork keeps its notice in `assets/PROVIDER-LICENSE.txt`. Channel names and marks
+belong to their owners. Files under `references/` are old designs, not the current
+layout.
 
 Run `npm --prefix website run check`, and check changed interactions in a browser,
 including narrow layouts, keyboard controls, and reduced motion.

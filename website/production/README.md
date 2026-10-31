@@ -30,9 +30,8 @@ deployed reference is the tested image digest, never a mutable tag.
 The image packages the installation page, `install/azure/releases.json`, and
 `install/azure/versions/` from the validated snapshot. See
 [release operations](../../docs/releases.md#installation-defaults-and-recommendation)
-for snapshot verification, signer policy, and recommendation rules. Before applying
-an approved image, deployment rejects it if the deployed catalog changed since the
-snapshot was made.
+for snapshot verification, signer policy, recommendation rules, and the deployed
+catalog check.
 
 Changes to documentation or infrastructure only do not publish an image. Apply
 infrastructure changes through the administrator bootstrap below, and use a manual

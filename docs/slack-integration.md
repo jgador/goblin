@@ -13,9 +13,10 @@ shared Goblin app, central account, cloud relay, OAuth callback, public inbound
 endpoint, or Slack-specific DNS or TLS. Goblin stays the authority for users,
 permissions, Work, agents, repositories, identity mappings, history, and execution.
 
-Slack requires durable Work (PostgreSQL). Open **Integrations**, then select
-**Connect** on Slack; this opens the Slack page in Settings. The app is named
-**Goblin** and its bot user is **goblin**.
+Slack requires durable Work (PostgreSQL). Open **Integrations** (`/integrations`;
+**Settings → Integrations** links there), then select **Connect** or **Manage** on
+Slack. This opens the Slack page in Settings (`/settings?section=slack`). The app is
+named **Goblin** and its bot user is **goblin**.
 
 ## Automatic setup
 
@@ -120,7 +121,9 @@ A new DM or mention thread creates a conversation and Work and starts it. A repl
 the thread answers the pending input question if there is one; otherwise it adds
 context. Naming an enabled repository can start isolated repository execution. Slack
 cannot enable repositories, approve results, or retry failed Work; ordinary text such
-as `yes` never approves repository access.
+as `yes` never approves repository access. Messages longer than 4,000 characters,
+after removing the `@goblin` mention, are acknowledged to Slack and ignored: Goblin
+saves nothing and sends no reply.
 
 PostgreSQL stores external identities, link requests, thread associations, and event
 receipts. Receipts are unique by event ID and by workspace, channel, and message.
@@ -170,15 +173,9 @@ never reach execution workspaces, Work history, or settings responses.
 
 ## Validation and remaining checks
 
-Automated tests cover the manifest and event filters, actor checks, encrypted storage
-and tamper detection, setup recovery, linking, question and outcome delivery, and
-access revocation. Opt-in PostgreSQL tests cover link confirmation, concurrent
-duplicate delivery, one durable dispatch, thread continuity, revocation, and outcome
-markers. Run `make test` and the relevant browser checks; report PostgreSQL results
-separately.
-
-These tests do not show current Slack service behavior or authenticated model
-execution. Live acceptance should cover app authorization and installation, tokens
+Run `make test` and the relevant browser checks; PostgreSQL tests are opt-in, so
+report their results separately. These tests do not show current Slack service
+behavior or authenticated model execution. Live acceptance should cover app authorization and installation, tokens
 working after setup logout and restart, identity linking, DM and channel-mention
 execution, question and outcome delivery, and administrator-approval recovery.
 
