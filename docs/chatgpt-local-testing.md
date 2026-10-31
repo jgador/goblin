@@ -42,14 +42,37 @@ sharing Work, approving a result, or signing into GitHub:
 2. Refresh the plugin's tools in ChatGPT after rebuilding Goblin, then open a new
    conversation.
 3. Type **@** and select your installed Goblin plugin.
-4. Ask: **Call goblin_ping to test the connection.**
-5. Check that ChatGPT invokes `goblin_ping` and receives
-   **Goblin MCP connection is working.**
+4. Ask: **Call goblin_ping now and show every field from the tool response unchanged.**
+5. Check the tool result for a fresh `responseId`, `respondedAtUtc`, and the
+   server's `operatingSystem`, `runtime`, and `processArchitecture`.
+6. In the terminal running Goblin, find the JSON console event whose `Message`
+   starts with `goblin_ping response`. Its `State.ResponseId` must match the
+   returned `responseId`. This matches the response to an actual authenticated
+   invocation on your local Goblin process.
+7. Call again. The response ID changes and the UTC timestamp advances.
 
 The tool is on the existing `https://dev.goblinboard.com/mcp` endpoint and takes
-no arguments. It uses the same OAuth authentication as the Work tools and returns
-`{"message":"Goblin MCP connection is working."}`. A successful reply confirms
-an authenticated tool call through the gateway.
+no arguments. It uses the same OAuth authentication as the Work tools. For example
+(IDs, timestamps, and runtime details vary):
+
+```json
+{
+  "message": "Goblin MCP connection is working.",
+  "responseId": "9c664e391b524f8eaa5fe3c2d892ba9d",
+  "respondedAtUtc": "2026-11-01T06:00:00+00:00",
+  "operatingSystem": "Linux",
+  "runtime": ".NET 10.0.12",
+  "processArchitecture": "X64"
+}
+```
+
+The fixed message or plausible environment details alone do not prove that
+ChatGPT called the tool. Match the fresh response ID to Goblin's log. The log
+records generation of the reply; displaying the same ID in ChatGPT confirms the
+reply reached ChatGPT. Default Information logging includes this event; see
+[saved logs](logging.md) if logging levels or destinations have been changed.
+Only these public diagnostic fields are returned: no hostname, username, paths,
+environment variables, or credentials.
 
 ## Repeat tests
 

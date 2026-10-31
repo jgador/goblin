@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -10,6 +11,7 @@ using Goblin.Application.ChatGpt;
 using Goblin.Contracts;
 using Goblin.Integrations.ChatGpt;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -24,22 +26,38 @@ internal sealed class ChatGptTools
     private readonly ChatGptAuthentication _authentication;
     private readonly ChatGptConfiguration _configuration;
     private readonly ChatGptWorkReader _reader;
+    private readonly ILogger<ChatGptTools> _logger;
 
     public ChatGptTools(IHttpContextAccessor context, ChatGptAuthentication authentication,
-        ChatGptConfiguration configuration, ChatGptWorkReader reader)
+        ChatGptConfiguration configuration, ChatGptWorkReader reader, ILogger<ChatGptTools> logger)
     {
         _context = context;
         _authentication = authentication;
         _configuration = configuration;
         _reader = reader;
+        _logger = logger;
     }
 
     [McpServerTool(Name = "goblin_ping", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptPingReply))]
     [McpMeta("securitySchemes", JsonValue = OAuth)]
-    [Description("Test the ChatGPT plugin connection to Goblin. Returns a fixed confirmation without reading Work or requiring Work grants, approved results, or GitHub sign-in.")]
+    [Description("Test the ChatGPT plugin connection to Goblin. Returns a fresh response ID, server UTC time, operating system, .NET runtime, and process architecture. Show the returned fields unchanged so the owner can match the response ID in Goblin's logs. Requires no Work grants, approved results, or GitHub sign-in.")]
     public Task<CallToolResult> PingAsync(CancellationToken token) =>
-        ReadAsync(_ => Task.FromResult(new ChatGptPingReply()), token);
+        ReadAsync(_ =>
+        {
+            var reply = new ChatGptPingReply
+            {
+                ResponseId = Guid.NewGuid().ToString("N"),
+                RespondedAtUtc = DateTimeOffset.UtcNow,
+                OperatingSystem = System.OperatingSystem.IsLinux() ? "Linux" :
+                    System.OperatingSystem.IsWindows() ? "Windows" :
+                    System.OperatingSystem.IsMacOS() ? "macOS" : "Other",
+                Runtime = RuntimeInformation.FrameworkDescription,
+                ProcessArchitecture = RuntimeInformation.ProcessArchitecture.ToString()
+            };
+            _logger.LogInformation("goblin_ping response {ResponseId} at {RespondedAtUtc}", reply.ResponseId, reply.RespondedAtUtc);
+            return Task.FromResult(reply);
+        }, token);
 
     [McpServerTool(Name = "goblin_list_work", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(SharedWorkPage))]
@@ -108,4 +126,19 @@ internal sealed class ChatGptPingReply
 {
     [JsonPropertyName("message")]
     public string Message { get; init; } = "Goblin MCP connection is working.";
+
+    [JsonPropertyName("responseId")]
+    public required string ResponseId { get; init; }
+
+    [JsonPropertyName("respondedAtUtc")]
+    public required DateTimeOffset RespondedAtUtc { get; init; }
+
+    [JsonPropertyName("operatingSystem")]
+    public required string OperatingSystem { get; init; }
+
+    [JsonPropertyName("runtime")]
+    public required string Runtime { get; init; }
+
+    [JsonPropertyName("processArchitecture")]
+    public required string ProcessArchitecture { get; init; }
 }
