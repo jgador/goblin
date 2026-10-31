@@ -1,159 +1,142 @@
 # Saved logs
 
-Goblin's Kubernetes installation wires `ILogger` to Microsoft's JSON console
-formatter, Fluent Bit, and VictoriaLogs. Open **Settings → Logs → Open logs** or
-visit **`/logs/`** on the Goblin address. VictoriaLogs' built-in VMUI uses the Goblin
-login and opens in a new tab. No CLI, separate UI pod, or second password is needed.
+Goblin's Kubernetes installation sends `ILogger` output through Microsoft's JSON
+console formatter to Fluent Bit and VictoriaLogs. Open **Settings → Logs → Open logs**
+or visit **`/logs/`** on the Goblin address. VictoriaLogs' built-in VMUI opens in a
+new tab and uses the Goblin login; there is no separate password or UI pod.
 
-Displayed log times use the shared [workspace timezone](timezones.md), confirmed
-on first access and editable under **Settings → Time & date**. IP location
-suggests the initial timezone, with browser detection and UTC as fallbacks. Reopen
-or refresh log views after changing the preference. Stored logs and raw timestamps
-remain UTC.
+Displayed times use the shared [workspace timezone](timezones.md); Goblin asks for
+it first if it is not set. Stored logs and raw timestamps stay UTC. Refresh an open
+log view after changing the timezone.
 
-This change configures providers and delivery only. Application log statements
-and Work/Attempt instrumentation are deferred. Existing `Console.WriteLine` and
-`Console.Error.WriteLine` messages remain plain text.
+Goblin code does not yet write its own log statements. Existing
+`Console.WriteLine` and `Console.Error.WriteLine` output stays plain text.
 
 ## What is collected
 
-The main Goblin container writes to stdout/stderr. k3s/containerd wraps each line
-in CRI format in `/var/log/pods`; `/var/log/containers` provides symlinks. One
-Fluent Bit DaemonSet pod per node tails `*_goblin_platform-*.log`, reconstructs CRI
-partial lines, parses JSON messages, and adds pod/container/namespace/node metadata.
-Plain messages use the container timestamp and retain their text.
+The main Goblin container writes to stdout/stderr, which k3s stores under
+`/var/log/pods` with symlinks in `/var/log/containers`. One Fluent Bit pod per node
+tails `*_goblin_platform-*.log`, joins CRI partial lines, parses JSON messages, and
+adds pod, container, namespace, and node metadata. Plain-text lines keep their text
+and the container timestamp.
 
-Agent worker output is excluded: its progress/result protocols can contain Work
-content. PostgreSQL, Headlamp, system services, and the logging services themselves
-are also outside the initial collection scope. The collector never reads Work
-PVCs, database files, or credential mounts. No lifecycle or worker protocol changes
-are needed to add application log statements later.
+Agent worker output is not collected because its progress and result messages can
+contain Work content. PostgreSQL, Headlamp, system services, and the logging
+services are not collected either. The collector never reads Work PVCs, database
+files, or credential mounts.
 
 `Goblin.Web` uses `AddJsonConsole` with UTC timestamps, scopes, and one event per
-line. The console queue holds up to 1,024 events and drops incoming events when
-full instead of blocking application work. The default log level in
-`backend/src/Goblin.Web/appsettings.json` is Information, including `Goblin`,
-hosting lifecycle events, and framework diagnostics. ASP.NET Core emits request
-and response logs without adding log statements to API handlers. Debug and Trace
-events are filtered out by default.
-Environment overrides use the usual .NET `Logging__LogLevel__...` convention.
-Future log statements and scopes must omit credentials and private payloads;
-JSON formatting does not redact them.
+line. The console queue holds up to 1,024 events and drops new events when full
+instead of blocking. `backend/src/Goblin.Web/appsettings.json` sets the default level
+to Information, so Debug and Trace are filtered out; ASP.NET Core request logs are
+included. Override levels with the standard `Logging__LogLevel__...` variables.
+Log statements and scopes must not include credentials or private payloads; JSON
+formatting does not redact them.
 
-The collector uses native filters to preserve large integer values. In VictoriaLogs:
+Fluent Bit uses native filters so large integers keep their exact values. In VictoriaLogs:
 
 | Field                                        | Source                                              |
 | -------------------------------------------- | --------------------------------------------------- |
 | `_time`                                      | .NET `Timestamp`, falling back to the CRI timestamp |
 | `_msg`                                       | .NET `Message`, falling back to the original text   |
-| `level`, `category`, `event_id`, `exception` | Corresponding .NET fields                           |
+| `level`, `category`, `event_id`, `exception` | Matching .NET fields                                |
 | `state.*`, `scopes`                          | Structured message properties and scope data        |
 | `kubernetes.*`                               | Pod, container, namespace, and node metadata        |
 | `service`, `stream`                          | `goblin` and `stdout`/`stderr`                      |
 
-VictoriaLogs flattens objects into dotted field names and retains arrays such as
-scopes as JSON. Stream fields are service, namespace, container name, and stdout/
-stderr. Pod, Work, Attempt, and trace identifiers remain ordinary searchable fields.
-Try `service:goblin`, `level:Warning`, or `category:="Microsoft.Hosting.Lifetime"`.
+Objects become dotted field names; arrays such as scopes stay JSON. Stream fields
+are service, namespace, container name, and stream. Try `service:goblin`,
+`level:Warning`, or `category:="Microsoft.Hosting.Lifetime"`.
 
 ## Polling and delivery
 
 The official Fluent Bit **5.1.3** image is pinned by digest. `Inotify_Watcher Off`
-selects its native **250 ms** content polling; no custom build is used.
-`Refresh_Interval 5` discovers new files every five seconds. This is separate from
-content polling. `Rotate_Wait 30` allows time to drain rotated files.
+uses its built-in **250 ms** content polling. `Refresh_Interval 5` finds new files
+every five seconds, and `Rotate_Wait 30` gives time to finish reading rotated files.
 
-Offsets and filesystem chunks live in the node's dedicated
-`/var/lib/goblin/fluent-bit` directory, mounted at `/buffers`. A collector restart
-retains both. The HTTP output retries delivery and limits its queued chunks to
-256 MiB; oldest queued chunks can be dropped when that limit is exceeded. These
-are telemetry retries, independent of Work execution. Log delivery can duplicate
-records after interrupted acknowledgments; it is not exactly once. Lines over
-256 KiB are skipped. Long outages, node loss, or container log rotation before
+Offsets and buffered chunks are kept in the node directory
+`/var/lib/goblin/fluent-bit` (mounted at `/buffers`) and survive collector restarts.
+The HTTP output retries without limit and keeps at most 256 MiB of queued chunks,
+dropping the oldest when the limit is reached. These retries are for logs only,
+not Work. Delivery can duplicate records after an interrupted acknowledgment.
+Lines over 256 KiB are skipped. Long outages, node loss, or log rotation before
 collection can lose logs.
 
 ## Storage and resources
 
-VictoriaLogs **1.53.0**, also pinned by digest, runs as one non-root Deployment
-with a separate **10 GiB PVC** named `goblin-victorialogs-data`. It uses its native
-log store; PostgreSQL and Work PVCs are not involved. A Recreate deployment
-strategy ensures one process owns the log store during upgrades.
+VictoriaLogs **1.53.0**, pinned by digest, runs as one non-root Deployment with the
+**10 GiB PVC** `goblin-victorialogs-data`. It does not use PostgreSQL or Work PVCs.
+The Recreate strategy keeps a single process on the log store during upgrades.
 
-Retention is **seven days**, with an **8 GiB** stored-data retention threshold.
-VictoriaLogs deletes old daily partitions, retaining at least the most recent two
-days for size-based retention. The threshold can therefore be exceeded; it is not
-a hard disk quota. k3s local-path PVC requests also do not impose filesystem quotas.
-Leave VM disk headroom and adjust retention/volume sizing for observed volume.
-This local PVC survives pod replacement, but is not a backup against VM/disk loss.
+Retention is **seven days**, with an **8 GiB** size threshold. VictoriaLogs deletes
+whole daily partitions and keeps at least the two most recent days, so the
+threshold can be exceeded; it is not a disk quota, and k3s local-path PVCs do not
+enforce quotas either. Leave free VM disk space and adjust retention or volume size
+for the observed volume. The PVC survives pod replacement but is not a backup.
 
 | Component    | CPU request / limit | Memory request / limit |
 | ------------ | ------------------- | ---------------------- |
 | Fluent Bit   | 25m / 250m          | 64 MiB / 256 MiB       |
 | VictoriaLogs | 100m / 1 CPU        | 256 MiB / 1 GiB        |
 
-VictoriaLogs has a 256 MiB cache budget, a 768 MiB Go soft memory limit, two
-concurrent search requests, and a 30-second query limit. These are initial budgets
-for the single-VM installation, not measured capacity guarantees. VMUI is served
-by VictoriaLogs itself, so the stack adds **two pods** on one node.
+VictoriaLogs also uses a 256 MiB cache limit, a 768 MiB Go soft memory limit, two
+concurrent searches, and a 30-second query limit.
 
 ## Authentication and deployment
 
-The manifests are in `deploy/platform/logging/`, included by the existing local and
-Azure Kustomize installations. ConfigMap content hashes roll Fluent Bit when its
-configuration changes. The installer copies the manifests and waits for both
-logging workloads. Rebuild the native installer for changes to its embedded
-`install-platform.sh`; follow [the release order](goblinctl.md#releases) before
-publishing a production installer.
+The manifests are in `deploy/platform/logging/` and are included by the local and
+Azure Kustomize installations. A ConfigMap content hash restarts Fluent Bit when
+its configuration changes. The installer waits for both logging workloads. Changes
+to the embedded `install-platform.sh` need a new installer build; follow
+[the release order](goblinctl.md#releases) before publishing one.
 
-`GOBLIN_VICTORIALOGS_URL` is a trusted private HTTP origin. Kubernetes sets it to
-`http://goblin-victorialogs.goblin.svc:9428`. VictoriaLogs runs with
+`GOBLIN_VICTORIALOGS_URL` must be a trusted private HTTP origin. Kubernetes sets it
+to `http://goblin-victorialogs.goblin.svc:9428`. VictoriaLogs runs with
 `-http.pathPrefix=/logs`; `/logs/` redirects to `/logs/select/vmui/`.
 
-Goblin checks the session for every UI, asset, and query request. Its explicit
-allowlist includes POST-based read APIs and live tail, and excludes ingestion,
-administration, debug, and metrics endpoints. Browser cookies, credentials,
-tenant selectors, and proxy headers are stripped. Live connections are limited
-to five minutes before reconnecting and checking authorization again. VMUI has a
-route-specific CSP allowing its layout styles; Goblin's pages keep their existing
-policy. VMUI shares Goblin's origin and is trusted code, like Headlamp.
+Goblin checks the session for every UI, asset, and query request. Its allowlist
+includes the read APIs (some use POST) and live tail, and blocks ingestion,
+administration, debug, and metrics endpoints. Goblin strips browser cookies,
+credentials, tenant selectors, and proxy headers. Live connections end after five
+minutes, so reconnects check authorization again. VMUI has its own CSP that allows
+its inline styles; other Goblin pages keep their policy. VMUI runs on Goblin's
+origin and is trusted code, like Headlamp.
 
-The ClusterIP service has no public ingress. NetworkPolicy permits connections
-from Goblin and Fluent Bit only; agent pods cannot access it. Fluent Bit runs as
-root to read node-owned logs, with a read-only root filesystem/log mount, no Linux
-capabilities, and a namespace Role that only gets pod metadata. Its own metrics
-port is not exposed to other pods. Goblin readiness does not depend on either
-logging service; the UI reports unavailable when storage is down.
+The ClusterIP service has no public ingress. NetworkPolicy allows connections only
+from Goblin and Fluent Bit; agent pods cannot reach it. Fluent Bit runs as root to
+read node log files, with a read-only root filesystem and log mount, no Linux
+capabilities, and a Role that can only get pods. Its metrics port is closed to
+other pods. Goblin readiness does not depend on either logging service; the UI
+reports when storage is unavailable.
 
-Standalone development does not start a collector or storage service. JSON
-console logs are still emitted locally; configure a trusted VictoriaLogs origin
-with the same path prefix to enable the UI.
+Standalone development starts no collector or storage. Goblin still writes JSON
+console logs; to use the UI, set a trusted VictoriaLogs origin that uses the same
+path prefix.
 
 ## Verification
 
-`make test` covers JSON formatting, scopes and integer serialization, category
-filters, authenticated proxy reads/streams, credential stripping, rejected
-mutations, backend failure, existing Headlamp behavior, and installer failures.
-Database tests are separate and remain opt-in.
+`make test` covers the JSON console setup, authenticated proxy reads and streams,
+credential stripping, blocked writes, logging failures, and installer failures.
 
-For actual collection, buffering, restarts, and the real VMUI browser check:
+To check real collection, buffering, restarts, and the VMUI in a browser:
 
 ```bash
 make logging-test
 ```
 
-This requires Docker, kubectl, curl, ripgrep, the repository's .NET/Node tools, and Chromium
-installed for Playwright. It creates and deletes a dedicated k3s Docker container,
-uses an explicit temporary kubeconfig, deploys the pinned images, and runs a
+This needs Docker, kubectl, curl, ripgrep, the repository's .NET and Node tools, and
+Chromium installed for Playwright. It creates and removes a dedicated k3s Docker
+container with its own temporary kubeconfig, deploys the pinned images, and runs a
 **test-only .NET workload**. It does not use an existing Kubernetes context or
 saved Goblin credentials. Screenshots are saved under `.artifacts/logs-ui/`.
 
-To check just the real UI against a trusted private service, port-forward the
+To check only the UI against a trusted private service, port-forward the
 VictoriaLogs service to localhost and run:
 
 ```bash
 GOBLIN_TEST_VICTORIALOGS_URL=http://127.0.0.1:19428 make logging-test-ui
 ```
 
-This checks login, search, refresh, Settings access, CSP, logout, and an Azure-shaped
-hostname resolved locally. Actual Azure DNS, ingress, and TLS require deployment
-verification on that VM.
+This checks timezone setup, login, search, refresh, the Settings link, CSP, blocked
+ingestion, logout, and an Azure-style hostname resolved locally. Real Azure DNS,
+ingress, and TLS must be checked on the deployed VM.

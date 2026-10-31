@@ -1,96 +1,102 @@
 # Codex integration
 
 Goblin runs the official Rust Codex App Server as a child process. The C# adapter
-owns its transport and account operations, while durable Work uses Goblin-owned
-execution contracts. Codex is the only implemented runtime; its process model and
-protocol are not requirements for future integrations. See [architecture](architecture.md).
+owns the transport and account operations; durable Work uses Goblin-owned execution
+contracts. Codex is the only implemented runtime, and its process model and protocol
+are not requirements for other runtimes. See [architecture](architecture.md).
 
 ## Responsibilities
 
-| Layer | Owns |
+| Location | Owns |
 | --- | --- |
-| `backend/src/Goblin.Protocol` | Generated POCO classes, typed unions/enums, request IDs, and explicit `System.Text.Json` attributes/converters |
-| `backend/src/Goblin.Integrations.Codex/CodexClient.cs` | Child process, isolated environment, JSONL framing, initialization, request correlation, typed notifications, timeouts, restart and shutdown |
-| `backend/src/Goblin.Integrations.Codex/Authentication.cs` | Serialized login/logout operations, API-key verification, safe account summaries, and prompt admission |
-| `backend/src/Goblin.Integrations.Codex/PromptRunner.cs` | Maps each active Goblin prompt operation to its Codex thread/turn IDs, selects final assistant text, and interrupts/unsubscribes on cleanup |
-| `backend/src/Goblin.Web/Access/Workspace.cs` and `GoblinApplication.cs` | Private workspace paths, owner access, browser sessions, HTTP validation, static assets, and Minimal API routes |
-| Rust Codex App Server/Core | Codex credential storage/refresh, runtime conversation context, turns, context windows, tokens, auto-compaction, model metadata, and runtime behavior |
+| `backend/src/Goblin.Protocol` | Generated protocol models and JSON converters ([README](../backend/src/Goblin.Protocol/README.md)) |
+| `backend/src/Goblin.Integrations.Codex/CodexClient.cs` | Child process, private environment, JSONL framing, initialization, request correlation, notifications, timeouts, restart, and shutdown |
+| `backend/src/Goblin.Integrations.Codex/Authentication.cs` | Serialized login and logout, API-key verification, safe account summaries, and connection checks |
+| `backend/src/Goblin.Integrations.Codex/PromptRunner.cs` | Connection-check thread and turn, final reply text, interrupt and unsubscribe on cleanup |
+| `backend/src/Goblin.Integrations.Codex/CodexWorkRunner.cs` | Durable Work turns: runtime input, progress, session reference, result or question, and safe failures |
+| `backend/src/Goblin.Web` | Workspace paths, owner sessions, Host and Origin checks, static assets, and HTTP routes (`Access/`, `Http/Endpoints/`) |
+| Rust Codex App Server and Core | Credential storage and refresh, conversation context, turns, tokens, compaction, model metadata, and runtime behavior |
 
-Goblin has one owner and one application controller per data directory.
-Connection verification uses a restricted ephemeral Codex thread. Durable Work
-uses independent execution workers and non-ephemeral native sessions, with
-Goblin's persisted objective, messages, decisions, artifacts, and prior results
-as context. The connection-verification prompt does not define durable execution.
+Each data directory has one owner and one application controller. Connection checks
+use a restricted ephemeral Codex thread. Durable Work uses separate execution workers
+and non-ephemeral native sessions, with Goblin's saved objective, messages, decisions,
+artifacts, and results as context. The connection check does not define durable
+execution.
 
-`CodexWorkRunner` translates Work into runtime inputs and maps progress, session
-provenance, a final result or input request, and safe failures back to shared
-contracts. It treats every reported runtime error as a failure, including errors
-that Codex says it could retry. Live approvals and native session resume are not
-advertised. Questions have tools disabled; repository tools run only in the
-[execution sandbox](execution-hosting.md).
+`CodexWorkRunner` treats every runtime error notification as a failure, including
+errors that Codex says it could retry. Live approvals and native session resume are
+not advertised. Turns without repository access run read-only with tools disabled;
+repository tools run only in the [execution sandbox](execution-hosting.md).
+PostgreSQL owns Work history and decisions. Native session references help
+inspection but are not the product transcript.
 
-PostgreSQL owns Work history and decisions. Native session references aid
-inspection, but are not the product transcript. Future adapters can receive
-Goblin context without reading a Codex thread; handoff policy remains deferred.
+The transport sends `initialize` once per process and then `initialized`. It
+serializes writes, matches out-of-order responses, decodes known notifications into
+generated types, and ignores unknown notification methods. Notification handlers
+queue authentication work instead of blocking the reader. Server-initiated requests
+receive a `-32601` error. Raw Codex stderr and upstream
+error bodies are never logged or sent to the browser.
 
-The transport initializes once per connection and acknowledges with `initialized`.
-It serializes writes, correlates out-of-order responses, decodes all known
-notifications into generated types, and ignores unknown future notification methods.
-Notification callbacks enqueue authentication work rather than blocking the reader.
-Server-initiated interactive requests receive a `-32601` rejection.
-Raw Codex stderr and upstream error bodies are never logged or sent to the browser.
+A broken transport or an RPC that exceeds its 20-second timeout fails pending
+requests and retires the process. A new process starts only after the old one exits.
+Shutdown sends SIGTERM on Unix (closes stdin on Windows) and kills the process tree
+after a 2-second grace period. Cancelling a connection check sends `turn/interrupt`
+and then `thread/unsubscribe`; if the interrupt fails, the connection is retired.
 
-A broken transport or timed-out RPC rejects pending work and retires the process.
-Restart waits for exit before reusing the credential directory. Shutdown sends
-SIGTERM on Unix (closes stdin on Windows), then kills the process tree if the grace
-period expires. HTTP prompt cancellation requests `turn/interrupt` and then
-`thread/unsubscribe`; interruption failure retires the connection.
+## Model selection and discovery
+
+**Options** in a Work's Start or Retry panel selects the model and reasoning effort;
+conversation composers have no model controls. Unsupported effort levels are
+disabled. The picker first shows three models, starting with the selected or default
+model; **Show more models** shows up to ten. Before execution, the selection is a
+per-Work draft in the browser tab, and a connection change resets it. Start and Retry
+store the requested model and effort on the attempt. Execution details show the
+requested and the reported model. Later catalog changes do not rewrite history.
+
+The controller pages through App Server `model/list`, skips hidden models, and stores
+the visible catalog in `connection_model_catalog`. Each catalog belongs to one
+connection authentication generation and one Codex executable stamp. Agent sandboxes
+cannot read it. A refresh runs after an account or executable change, when a picker
+opens a catalog older than 24 hours, or on **Refresh models**. Concurrent refreshes
+for one connection run once. A failed refresh keeps the last catalog, marks it stale,
+and waits one minute before an automatic retry; **Refresh models** can retry sooner.
+A changed account cannot use the previous catalog. Without a catalog, Work uses the
+Codex default model.
+
+If you replace the Codex CLI while Goblin runs, the existing App Server keeps running
+and the catalog stays stale; restart Goblin to finish the refresh. Discovery failure
+does not create or retry Work. A model rejection follows the normal failure and
+attention rules, with no automatic fallback.
 
 ## Protocol regeneration
 
-The checked-in schemas and pinned Codex runtime are maintained together.
-[`selection.json`](../backend/schemas/codex/selection.json) identifies the requests,
-responses, notifications, fields, and variants Goblin uses. The C# file-based
-[`GenerateProtocol.cs`](../backend/scripts/GenerateProtocol.cs) generates only
-that selection and its referenced types. It verifies that the aggregate and
-individual schemas agree and records separate schema and selection hashes. Generated models are checked in; an ordinary .NET build does not run
-the generator or need a Codex installation.
+The checked-in schemas in `backend/schemas/codex` and the pinned Codex runtime change
+together. [`selection.json`](../backend/schemas/codex/selection.json) lists the parts
+of the protocol Goblin uses, and
+[`GenerateProtocol.cs`](../backend/scripts/GenerateProtocol.cs) generates only those
+types. Generated models are checked in, so a normal .NET build does not need Codex.
 
 ```bash
-dotnet run --file backend/scripts/GenerateProtocol.cs -- --self-test --check
-dotnet run --file backend/scripts/GenerateProtocol.cs
+make protocol-check
+make protocol-generate
 dotnet test backend/tests/Goblin.Protocol.Tests
 ```
 
-When upgrading Codex, update the runtime pin and lockfile, regenerate the schemas
-with that local npm binary, regenerate C#, review the schema diff, and rerun the
-tests. Keep the runtime and schema changes together. Models use explicit JSON
-property names, required fields, enum wire names, and converters for
-discriminated/mixed unions. `JsonElement` is confined
-to fields the schema leaves unconstrained, including envelope payloads; protocol
-operations and notifications use the generated typed models. See the
-[model project documentation](../backend/src/Goblin.Protocol/README.md).
+To upgrade Codex, update the runtime pin and lockfile, refresh the schemas with the
+local npm binary, regenerate C#, review the schema diff, and rerun the tests in one
+change. The [protocol model README](../backend/src/Goblin.Protocol/README.md) gives
+the exact steps and the selection and serialization rules.
 
 ## Build and verification
 
-```bash
-make install
-make build                    # browser assets and .NET solution
-dotnet run --no-build --project backend/src/Goblin.Web
-make test                         # schema drift, .NET tests, HTTP tests
-make codex-test                # official pinned Rust binary, synthetic key only
-make browser-test              # browser journeys against the C# test host
-dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
-```
+See [test selection](repository-layout.md#choosing-verification) for build and test
+scope. Transport and protocol tests use fixtures for serialization, concurrent
+initialization, request matching, UTF-8 framing, malformed or oversized output,
+server requests, timeouts, crashes, restart order, and cleanup. `make codex-test`
+uses the pinned official binary with synthetic credentials. Neither establishes
+authenticated model coverage.
 
-Node.js is used for browser compilation, npm's pinned Codex distribution, and test
-tooling. The production host runs entirely in .NET and can use a separately
-installed official Codex executable through `GOBLIN_CODEX_COMMAND`. The Docker
-image includes the native binary and its adjacent resources, without Node.js.
-
-Transport and protocol tests cover serialization, concurrent initialization,
-request correlation, UTF-8 framing, malformed/oversized output, server requests,
-timeouts, crashes, restart ordering, and cleanup. HTTP/browser fixtures exercise
-the connection UI. Real Codex initialization uses a synthetic key and does not
-establish authenticated model coverage. Select checks for the changed boundary
-using [repository verification](repository-layout.md#choosing-verification).
+Node.js builds the browser assets, provides npm's pinned Codex package, and runs test
+tooling. The production host is .NET only and can use a separately installed Codex
+executable through `GOBLIN_CODEX_COMMAND`. The Docker image includes the native Codex
+binary and its resources, without Node.js.

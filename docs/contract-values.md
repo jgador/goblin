@@ -1,29 +1,28 @@
 # Shared contract values
 
-A fixed set of behavior or state values must have an owning type. Do not accept
-an unrestricted string in an internal API when only named values are meaningful.
-Keep opaque identifiers such as runtime IDs, model names, Git refs, external plan
-names, and resource references extensible. Upstream protocol fields belong to
-that adapter's generated models, not a Goblin-wide list of third-party strings.
+A fixed set of behavior or state values must have an owning type. Do not accept an
+unrestricted string in an internal API when only named values are meaningful. Keep
+opaque identifiers open-ended: runtime IDs, model names, Git refs, external plan
+names, and resource references. Upstream protocol fields belong to that adapter's
+generated models.
 
 ## Owners
 
 | Contract | Source of truth | Browser consumer |
 | --- | --- | --- |
-| Work and attempt statuses, attention, failures, history kinds | `Goblin.Core/Work/WorkTypes.cs` | Work views and rendering |
+| Work and attempt statuses, attention, failures, history kinds | `Goblin.Core/Work/WorkTypes.cs` | Work views |
 | Git repository authorization status | `Goblin.Core/Work/GitRepositoryAuthorization.cs` | Repository approval |
-| Git repository operations and wire names | `Goblin.Core/Work/GitRepositoryOperationKind.cs` | Internal worker HTTP/CLI boundary |
 | Inspection states and observations | `Goblin.Core/Work/WorkspaceSessionRules.cs` | Workspace inspection |
 | Work commands and identity reservation kinds | `Goblin.Application/Work/WorkContracts.cs`, `IdentityStore.cs` | Work commands |
-| Account, verification, notice, connection, and publication states | `Goblin.Contracts/ContractValues.cs` | Connection and Work settings |
+| Notices, verification, authentication methods, GitHub connection, connection availability, repository operation states | `Goblin.Contracts/ContractValues.cs` | Connection and Work settings |
+| Slack connection and setup statuses | `Goblin.Contracts/Conversations/ExternalConversations.cs` | Slack settings |
 | Installer actions, phases, states, and step IDs | `tools/goblinctl/src/contract_values.rs` | Standalone setup UI |
+| Git repository operations | `Goblin.Core/Work/GitRepositoryOperationKind.cs` | None (internal worker boundary, not generated) |
 
-Paths in the C# rows are relative to `backend/src/`. Core lifecycle types remain
-independent of HTTP, persistence, configuration, and runtime protocols.
+C# paths are relative to `backend/src/`. Core lifecycle types stay independent of
+HTTP, persistence, configuration, and runtime protocols.
 
-`RuntimeIds.Codex` names the current integration without restricting the runtime
-contract to a permanent vendor list. Executable names and directories that happen
-to be called `codex` are separate adapter details.
+`RuntimeIds.Codex` names the current integration; runtimes are not a closed list.
 
 ## Cross-language changes
 
@@ -35,50 +34,35 @@ make contracts-check
 make contracts-test
 ```
 
-The small generator extracts explicit declarations into `frontend/src/api/values.ts`
-and `deploy/azure/setup/contract-values.js`. It rejects aliases, assigned numeric
-values, duplicate values, or syntax it cannot interpret. Add a source/type entry
-to the generator when a new enum crosses a browser boundary. Never edit generated
-values directly. `make test` and `make typecheck` reject stale generated files;
-compile-time regression checks prevent HTTP types widening back to `string`.
+`scripts/generate-contract-values.mts` writes `frontend/src/api/values.ts` and
+`deploy/azure/setup/contract-values.js`. It accepts only simple string enums and
+rejects assigned numeric values and duplicates. When a new enum crosses a browser
+boundary, add it to the generator's `sources` list. Never edit generated files.
+`make test` and `make typecheck` reject stale output, and
+`tests/contracts/values.typecheck.ts` stops HTTP types from widening to `string`.
 
-TypeScript uses both the generated named constants and their literal unions.
-UI-only labels, filters, and actions can keep their own local types; they do not
-belong in product contracts merely because they are strings.
+TypeScript uses the generated constants and their literal unions. UI-only labels,
+filters, and actions can keep local types.
 
-Goblin currently supports GitHub repositories only. Use `GitRepository` for shared
-core and contract type and member names across languages, matching C#
-(`gitRepository` in TypeScript and `git_repository` in Rust/Bash). These names do
-not imply support for other Git hosts or arbitrary Git remotes. Keep `GitHub` for
-GitHub-specific connections, API calls, repository selection and authorization
-controls, worker commands, and release operations. Local Git checkouts and
-container image repositories are separate concepts. Generated TypeScript names
-match their owning declarations, including `AttentionReason.GitRepositoryRequired`
-and `WorkAction.PrepareGitRepository`, while their adapter JSON values remain
-`RepositoryRequired` and `PrepareRepository`. HTTP properties, routes, environment
-names, and persisted JSON keys retain their existing spellings. Name configuration
-directories by their purpose rather than treating them as Git checkouts.
+Use `GitRepository` for shared types and members (`gitRepository` in TypeScript,
+`git_repository` in Rust and Bash). Use `GitHub` for provider-specific connections,
+APIs, authorization, worker commands, and releases. Only GitHub repositories are
+supported. Generated names follow their owners, but wire values keep their existing
+spellings, such as `RepositoryRequired` and `PrepareRepository`. Keep existing
+HTTP, route, environment, and persisted JSON spellings.
 
 ## Parsing and compatibility
 
-HTTP and CLI adapters parse external strings before calling typed internal APIs.
-Repository operations preserve `publish`, `pull-request`, `fetch`, and `checkpoint`
-exactly; neither enum numeric values nor unsupported operations grant authority.
-Authentication enum metadata preserves `apiKey`, `chatgpt`, `accepted`, `unverified`,
-`error`, and `info`. Public JSON fields and other named enum values are unchanged.
-Integer enum input is rejected by HTTP and execution JSON serializers.
+HTTP and CLI adapters parse strings at the boundary. Repository operations accept
+exactly `publish`, `pull-request`, `fetch`, and `checkpoint`; numeric or unknown
+values grant no authority. Reject integer enum inputs in HTTP and execution
+serializers.
 
-Reverse-engineered EF entities retain existing text columns and generated files.
-Use `nameof` for stored named enum values in EF queries and `ContractValue.Parse<T>`
-when materializing typed views. Parsing requires an exact defined name, rejecting
-numeric strings and unknown values. Repository operation storage uses its explicit
-wire-name mapping. Do not use a permissive fallback that fabricates a valid state.
-These parsing rules do not require changing stored text columns.
+EF entities keep text columns and generated mappings. Use `nameof` for stored enum
+values in queries and `ContractValue.Parse<T>` for typed views; reject numeric and
+unknown values instead of choosing a valid state.
 
-Setup CLI actions and optional progress scopes use Rust enums; unknown actions and
-step IDs are rejected before changing state. The setup browser validates incoming
-state against generated values before rendering either polling or SSE updates.
-The setup module is embedded in goblinctl and covered by the existing installer
-release-input directory allowlist. Changes to embedded setup modules require a
-new installer release to reach
-installed hosts; the checked-in source and published installer have separate identities.
+Rust setup code uses enums and rejects unknown actions and step IDs before changing
+state. The setup page validates polling and SSE state against the generated values.
+Setup files are embedded in goblinctl, so changes reach hosts only through a new
+installer release.

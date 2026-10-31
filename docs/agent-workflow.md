@@ -1,121 +1,66 @@
 # Working with coding agents
 
-This guide applies OpenAI's [Rethinking skills and prompts for GPT-6 Astra](https://developers.openai.com/blog/rethinking-skills-and-prompts-for-gpt-6-astra)
-and [GPT-6 Astra prompting guidance](https://developers.openai.com/api/docs/guides/latest-model/gpt-6-astra.md#prompting-best-practices)
-to contributing to Goblin: relevant context, clear outcomes, and precise boundaries.
-These are contributor instructions; model selection for
-Goblin's own execution attempts is documented in [the model catalog](model-catalog.md).
+These are rules for contributing to Goblin with coding agents. Model selection for
+Goblin's own execution attempts is in
+[the model catalog](codex-integration.md#model-selection-and-discovery).
 
 ## Give each instruction a home
 
 [AGENTS.md](../AGENTS.md) holds rules that apply across the repository and links
-to task-specific guidance. Architecture, language conventions, commands, and
-integration limits belong in their owning documents. Link specialized guidance to
-the tasks that need it, following dependencies when needed.
-
-Label established constraints, implemented behavior, and deferred proposals in
-plans and audits. Historical checkpoints do not establish today's test results.
-Use the [documentation index](README.md) to find current owners. Consolidate a
-completed plan into its lasting guide instead of leaving it as a second source
-of behavior; repair incoming links when removing or renaming documents.
-
-## Define the result
-
-A useful request identifies the outcome, relevant context, constraints, and what
-would demonstrate completion. Provide those details when they matter; this is an
-optional prompt shape, not a form that must be filled out before work can start:
-
-```text
-Goal: <observable behavior or artifact to change>
-Context: <reproduction, files, or relevant documentation>
-Constraints: <compatibility, scope, and external-action limits>
-Done when: <result and evidence needed to review it>
-```
-
-For example:
-
-```text
-Fix the Work sidebar losing the selected item after a browser refresh.
-Preserve the current design and HTTP contracts. Done when selection survives
-refresh and navigation, the affected browser journey passes, and the interaction
-has been inspected. Fix regressions caused by the change and report any check
-that could not run.
-```
-
-For a documentation task, completion can be much smaller: correct the explanation,
-check links and command references, and review the final diff. For exploration,
-state the stopping point, such as comparing two options and recommending one.
-For implementation, include the behavior and evidence needed to review the result.
-See [test selection](repository-layout.md#choosing-verification) for verification scope.
+to task guidance. Put architecture, language conventions, commands, and
+integration limits in their owning documents; use the
+[documentation index](README.md) to find them. In plans and audits, label
+established constraints, implemented behavior, and proposals; old checkpoints do
+not prove current test results. When a plan is complete, merge it into its lasting
+guide and repair incoming links.
 
 ## Continue within the authorized scope
 
 The [working agreement](../AGENTS.md#working-agreement) authorizes routine local
-implementation and verification. Use authorization already given in the conversation.
-When an external or destructive step still needs permission, prepare the reviewable
-changes and complete independent checks first. Explain the exact remaining action
-and why authorization is missing.
+implementation and verification; match verification to the change using
+[test selection](repository-layout.md#choosing-verification). When an external or
+destructive step still needs permission, finish the reviewable changes and
+independent checks first, then name the exact remaining action and the missing
+authorization. Do not turn general caution into an invented approval gate.
 
-The repository's confidentiality, credential, storage, and manual Azure installation
-rules remain binding. Permission to rerun local tests does not change the product's
-explicit retry and reconciliation rules for failed Work. Separate the contributor's
-development loop from the Work lifecycle being implemented.
-
-When explaining a blocker, distinguish a stated requirement from an interpretation;
-general caution should not become an invented approval gate.
+Rerunning local tests is not a retry of failed Work. The product's explicit retry
+and reconciliation rules still apply to the Work lifecycle being implemented.
 
 ## Keep skills narrowly scoped
 
-The repository's skills live under `.agents/skills/`. Their descriptions select a
-workflow; keep them concise and specific about when that workflow is useful. Avoid
-keyword triggers that load a whole workflow for a tangential mention. A skill with
-several independent workflows should link to the relevant details as needed.
+Repository skills live under `.agents/skills/`. A skill's description decides when
+it loads: keep it short and specific, and avoid keyword triggers that load a whole
+workflow for a passing mention.
 
-The design and animation skills identified in `skills-lock.json` come from
-[Emil Kowalski's skills](https://github.com/emilkowalski/skills). Their imported
-instructions, recipes, and reference files retain the upstream MIT license,
-including `Copyright (c) 2026 Emil Kowalski`. Keep the full
+The skills listed in `skills-lock.json` are imported from
+[Emil Kowalski's skills](https://github.com/emilkowalski/skills) under the MIT
+license, `Copyright (c) 2026 Emil Kowalski`. Keep the full
 [license](../.agents/skills/licenses/emilkowalski-skills/LICENSE) with any copies
-or substantial portions. See [third-party notices](../THIRD_PARTY_NOTICES.md)
-for the checked revision and license scope.
+or substantial portions. [Third-party notices](../THIRD_PARTY_NOTICES.md) record
+the revision and license scope.
 
-Respect the existing selection boundaries:
+The repository-authored skills have these selection boundaries:
 
 | Skill | Intended use |
 | --- | --- |
-| `brainstorm` | Exploratory product/design discussion; a clear implementation request can proceed directly. |
-| `check-secrets` | Explicit secrets review of pending changes or the requested outgoing scope. |
-| `commit-push` | Explicit invocation to commit and push with the skill's stated scope. |
-| `clean-slate` | Explicit invocation to remove the verified local test installation and data. |
+| `brainstorm` | Exploratory product or design discussion; a clear implementation request proceeds directly. |
+| `check-secrets` | Explicit `$check-secrets` review of pending changes for credentials. |
+| `commit-push` | Explicit `$commit-push` invocation to commit and push all pending changes. |
+| `clean-slate` | Explicit `$clean-slate` invocation to remove this checkout's Goblin installation and test data from WSL. |
 
 Read a selected skill for its full contract. Discussing or editing `commit-push` or
-`clean-slate` does not activate publication or deletion. Keep checks that establish
-ownership or protect data even when simplifying the surrounding prose.
+`clean-slate` does not start publication or deletion. When simplifying a skill,
+keep the checks that confirm ownership or protect data.
 
 ## Maintain instructions with evidence
 
-When changing instructions, keep a rule where it changes a real decision: a product
-invariant, a repository convention, a workflow boundary, or a verification obligation.
-Move specialized detail to its owner and link it from the applicable task. Prefer
-fixing contradictory or outdated guidance over appending another warning. Keep the
-root instructions usable by other coding models; evaluate model-specific advice on
-the models and tasks that actually use it.
+Keep a rule only where it changes a real decision: a product invariant, a
+repository convention, a workflow boundary, or a verification obligation. Fix
+contradictory or outdated guidance instead of adding another warning. Keep root
+instructions usable by other coding models.
 
-Review the proposed instructions against representative situations:
-
-- A README typo reaches a checked diff without unrelated setup or runtime tests.
-- A Work lifecycle fix runs the core tests and preserves explicit failure recovery.
-- A database change reports missing real PostgreSQL coverage rather than treating
-  skipped tests as proof of durability.
-- A request to edit a cleanup or publication skill changes its documentation
-  without performing its destructive or external actions.
-- An implementation request continues through relevant verification without a new
-  approval request at each reversible step.
-
-These are review scenarios, not a required benchmark suite for every edit. Distinguish
-reviewing the wording from observing actual agent behavior. When evaluating a prompt
-change, compare completion, unnecessary pauses, verification scope, and boundary
-adherence on representative tasks; do not claim improvement from wording alone.
-
-Close a task with the result, checks actually performed, and any material gaps or
-remaining decisions. Keep temporary evaluation outputs under `.artifacts/`.
+Review instruction changes against representative tasks: a README typo, a Work
+lifecycle fix, a database change without live PostgreSQL, an edit to a cleanup or
+publication skill, and an implementation with reversible checks. Check completion,
+unnecessary pauses, verification scope, and boundaries. Keep evaluation outputs
+under `.artifacts/`.
