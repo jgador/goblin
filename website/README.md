@@ -45,23 +45,11 @@ its asset map and security policy are independent from the application. See
 
 ## Installation page
 
-`install/` shares the website's header, typography, colors, radii, and button
-feedback. The provider overview identifies Microsoft Azure as available now and
-Amazon Web Services, Google Cloud Platform, and Other hosting providers as planned.
-The latter names DigitalOcean and Hetzner as examples. Planned providers have no
-deployment action. On desktop the provider overview sits beside the Azure
-version-selection card, with setup steps below; phones show providers, the card,
-and steps in that order. Azure's assets and catalog live under `install/azure/`;
-a future provider gets its own catalog and installation assets rather than
-sharing Azure's template contract.
-
-The release picker separates the version from its recommendation badge and shows
-each release's channel and a selection checkmark. The accessible combobox keeps
-focus on the trigger: arrows, Home/End, and version typeahead move through releases;
-Enter/Space selects; Escape, Tab, and outside clicks dismiss without changing the
-selection. Keyboard actions are immediate. Pointer openings use a 160ms transition
-from the trigger, and reduced motion removes movement. The menu opens above the
-trigger when space below is limited and scrolls for longer catalogs.
+`install/` offers Azure deployment; AWS, Google Cloud, and other providers are
+planned and have no deployment action. Azure owns its catalog and templates under
+`install/azure/`; future providers need their own contracts. The release picker
+supports keyboard selection, dismissal without changing the selection, reduced
+motion, and responsive placement.
 
 The card fetches `install/azure/releases.json` from the same origin, selects the
 recommended version, and respects `?version=X.Y.Z`. Unavailable versions require
