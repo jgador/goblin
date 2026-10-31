@@ -5,23 +5,15 @@ use [Chisel on AK3S](../deploy/chisel/README.md). It forwards the complete local
 application through `dev.goblinboard.com` without switching an Azure instance's
 upstream. The Azure test VM relay workflow below remains a separate option.
 
-Use a dedicated Azure test VM as the HTTPS gateway while Goblin runs in WSL.
-Production installations route directly to their own Goblin instance. Development
-relay mode explicitly changes the test VM's default ingress upstream to a private
-SSH tunnel. Its hostname, HTTPS certificate, and certificate renewal remain on Azure.
+Alternatively, use a dedicated Azure test VM as the HTTPS gateway while Goblin
+runs in WSL. Relay mode switches its default ingress upstream through a private
+SSH tunnel; its hostname, TLS certificate, and renewal remain on Azure. Normal
+production routes to the installed Azure instance.
 
-| Mode | Request flow |
-| --- | --- |
-| Production | Browser/ChatGPT → Azure HTTPS → F5 NGINX → Azure Goblin |
-| Development relay | Browser/ChatGPT → Azure HTTPS → F5 NGINX → relay proxy → SSH → WSL Goblin |
-
-The development relay forwards the entire application: settings, owner login,
-OAuth discovery, authorization, consent, tokens, signing keys, and MCP.
-Terminal connections use WebSocket forwarding, and MCP/events remain streamed.
-Open the
-Azure HTTPS address in your browser to see the locally built UI. Entering that
-address into settings opened at `http://localhost:8788` does not connect the two
-instances; registrations and Work sharing belong to the instance handling the request.
+The relay forwards the whole application, including login, OAuth, MCP, streaming,
+and terminal WebSockets. Open the Azure HTTPS address to use the local build;
+entering that address into settings on `localhost:8788` does not connect the
+instances. Registrations and Work sharing belong to the instance serving requests.
 
 ## Prepare the test VM once
 
