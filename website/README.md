@@ -279,34 +279,11 @@ does not establish maximum capacity or prove behavior during traffic spikes.
 
 ### Historical sizing evidence
 
-The 2026-10-11 WSL run used Nginx 1.30.5, a sixty-second idle baseline, and ten
-new browser visits over ten minutes. These measurements explain the initial
-resource settings; they do not verify the current website or production host.
-
-| Measurement | Idle | One visitor/minute | Higher follow-up observation |
-| --- | ---: | ---: | ---: |
-| Average CPU, vCPU | 0.0000339 | 0.0000925 | — |
-| Peak CPU, roughly one-second window | 0.000269 | 0.004353 | 0.007494 |
-| Peak CPU, roughly 250 ms sample | 0.001073 | 0.012454 | 0.024859 |
-| Peak working-set memory | 2.594 MiB | 3.539 MiB | 6.262 MiB |
-| Container-lifetime memory peak, including startup | 5.211 MiB | 5.211 MiB | 6.566 MiB |
-
-The baseline recorded 120 successful HTTP responses across ten visits, 811.2 KiB
-per visit, and local page-load median/p95 of 91.6/107.2 ms. No restarts, OOM kills,
-or throttling occurred during its measurement window. Follow-up runs informed
-the higher CPU/memory observations above. Startup throttling was recorded before
-some measurement windows; window-only results do not imply zero lifetime throttling.
-
-| Resource | Request per pod | Limit per pod |
-| --- | ---: | ---: |
-| CPU | 25m | 100m |
-| Memory | 16Mi | 32Mi |
-
-These are the checked-in starting budgets, not a capacity guarantee. At three
-replicas, requests total 75m/48Mi and limits total 300m/96Mi, excluding cluster and
-ingress overhead. Remeasure after asset, runtime, traffic, or host changes using
-the command above. New summaries/samples stay under `.artifacts/website/load-test/`;
-those local outputs are not checkout dependencies or permanent evidence links.
+A 2026-10-11 WSL baseline and follow-up informed the initial per-pod requests
+of 25m CPU and 16 MiB memory, with limits of 100m and 32 MiB. These are starting
+budgets, not capacity guarantees or evidence of current production performance.
+Remeasure after asset, runtime, traffic, or host changes using the command above;
+local summaries and samples live under `.artifacts/website/load-test/`.
 
 ## Website autoscaling
 
