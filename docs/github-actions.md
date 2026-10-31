@@ -41,20 +41,12 @@ Reusable workflows can appear with caller/called job paths, such as
 | Website Release | [website-release.yml](../.github/workflows/website-release.yml) | `validate`, `publish`, `deploy` | Verify the public website, publish its tested image to GHCR, and deploy the approved image to Kubernetes |
 | Chisel Deploy | [chisel-deploy.yml](../.github/workflows/chisel-deploy.yml) | `verify`, `deploy` | Manually deploy the self-hosted WSL development tunnel using `ak3s-production` environment secrets |
 
-A release makes a tested version and its artifacts available. A deployment puts
-selected content or an image into a running environment. The platform and
-goblinctl keep independent versions and GitHub Releases; the coordinated workflow
-can reuse an authenticated installer instead of publishing another version.
-Platform installation in Azure remains manual. Website Release separates image
-publication from approved Kubernetes deployment. Use **Website** for the public
-website at `goblinboard.com`, including the installation page, catalog, and Azure
-templates at `goblinboard.com/install/`. **Installation Assets** prepares release
-data; **Website Release** serves it through the existing website container.
-
-GitHub's **Review deployments** UI also manages environment approval for the
-release publication job. That UI label does not mean the job installs the platform.
-See [platform releases](releases.md) and [website production](../website/production/README.md)
-for operating procedures.
+Platform and goblinctl have independent releases; Azure installation is manual.
+**Installation Assets** prepares authenticated release data. **Website Release**
+publishes the website image and deploys it after production approval. GitHub's
+**Review deployments** label also covers release publication approval; it does
+not mean the platform is installed. See [platform releases](releases.md) and
+[website production](../website/production/README.md) for operating procedures.
 
 Chisel Deploy targets the website's existing AK3S cluster in the shared `goblin`
 namespace using a dedicated credential. It runs only on manual dispatch;
