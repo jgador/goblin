@@ -1,23 +1,23 @@
 # Goblin brand assets
 
-Official artwork supplied in the `GoblinBoard_Logo_Final` package. Filenames use
-short, lowercase names; original file contents are preserved.
+Official Goblin artwork from the designer's package. Files use short, lowercase
+names; their contents are unchanged.
 
-The supplied brand artwork and its copies are outside Goblin's Apache license
-grant; this repository grants no additional copyright permission for that
-artwork. The Inter fonts remain under the [SIL Open Font License 1.1](fonts/OFL.txt).
-See the repository's [license scope and third-party notices](../../THIRD_PARTY_NOTICES.md).
+The brand artwork and its copies are outside Goblin's Apache license grant; this
+repository grants no additional copyright permission for it. The Inter fonts stay
+under the [SIL Open Font License 1.1](fonts/OFL.txt). See the
+[license scope and third-party notices](../../THIRD_PARTY_NOTICES.md).
 
 | Directory | Contents |
 | --- | --- |
-| `svg/` | Scalable icon-only and icon-with-text artwork, in light and dark variants |
+| `svg/` | Icon-only and icon-with-text artwork, in light and dark variants |
 | `png/` | Original PNG exports |
 | `jpeg/` | Original JPEG exports |
-| `slack/` | Derived app icon prepared for Slack upload |
-| `fonts/` | Inter font files supplied with the design; not currently loaded by the UI |
-| `source/` | Editable Illustrator document (`logo.ai`) and packaging report (`report.txt`) |
+| `slack/` | Derived app icon for Slack |
+| `fonts/` | Inter Medium, SemiBold, and ExtraBold from the design package |
+| `source/` | Editable Illustrator document (`logo.ai`) and package report (`report.txt`) |
 
-The same base names are used across SVG, PNG, and JPEG exports:
+SVG, PNG, and JPEG exports use the same base names:
 
 | Base name | Artwork |
 | --- | --- |
@@ -26,42 +26,33 @@ The same base names are used across SVG, PNG, and JPEG exports:
 | `logo-light` | Icon with the GOBLIN text, for light backgrounds |
 | `logo-dark` | Icon with the GOBLIN text, for dark backgrounds |
 
-`light` and `dark` describe the intended background. SVG and PNG exports are
-transparent; JPEG exports include a white or black background. The packaged fonts
-are `inter-18pt-medium.ttf`, `inter-18pt-semibold.ttf`, and
-`inter-18pt-extrabold.ttf`. The source document and report retain their original
-designer metadata.
+SVG and PNG exports are transparent; JPEG exports have a white or black
+background. The source document and report keep the designer's metadata.
 
-The application UI asset is `../../frontend/public/assets/branding/icon.svg`, an unchanged copy
-of `svg/icon-light.svg`. It supplies both the header and favicon.
-The header uses CSS sizing with automatic height to preserve the SVG's proportions
-and sharpness. The UI currently uses the light-background artwork only.
+Keep original design files here; this directory is excluded from the application
+Docker build context. Runtime copies are unchanged unless noted:
 
-The website installation page uses the same official `svg/icon-light.svg`
-artwork for its header and favicon. `goblinctl` embeds the original file
-directly in the standalone setup bundle, served at `/setup/icon.svg`, so branding
-is available before the application is built. Regenerate the setup bundle and
-Azure templates after changing its sources (see `deploy/azure/reference.md`).
+- Application: `frontend/public/assets/branding/icon.svg` is `svg/icon-light.svg`,
+  used for the header, favicon, and other in-app marks. `frontend/public/assets/fonts/`
+  holds the Medium and SemiBold fonts. Register browser URLs for files under
+  `frontend/public/assets/` in `backend/src/Goblin.Web/Http/StaticAssets.cs`; the
+  frontend build copies them into `frontend/dist/assets/`.
+- Website: `website/assets/goblin.svg` is `svg/icon-light.svg`, `goblin-dark.svg`
+  is `svg/icon-dark.svg`, and the Medium and SemiBold fonts are copied there too.
+- Installer: `goblinctl` embeds `svg/icon-light.svg`, the Medium and SemiBold
+  fonts, and `fonts/OFL.txt` directly from this directory
+  (`tools/goblinctl/src/assets.rs`), so the setup page has branding before the
+  application is built. These files are goblinctl shipping inputs; changing them
+  requires a new goblinctl build at release time (see
+  [releases](../../docs/releases.md#prepare-a-coordinated-candidate)).
 
-The [Slack integration](../../docs/slack-integration.md) selects
-[`slack/icon-light.png`](slack/icon-light.png), a 1024 × 1024 PNG derived from
-`svg/icon-light.svg`. It uses the text-free artwork for light backgrounds, centered
-at 896 pixels wide on an opaque white square, preserving the original colors and
-proportions. The surrounding padding is at least 64 pixels. This export fits
-Slack's documented 512–2000 pixel icon dimensions; the original PNGs are 4167 pixels
-square. Upload this derived PNG for Slack rather than an original PNG or wordmark.
-The runtime copy is `frontend/public/assets/branding/slack.png`, served at
+The [Slack integration](../../docs/slack-integration.md) uses
+[`slack/icon-light.png`](slack/icon-light.png), a 1024 × 1024 PNG made from
+`svg/icon-light.svg`: the artwork is 896 pixels wide, centered on an opaque white
+square, with at least 64 pixels of padding. It fits Slack's documented 512–2000
+pixel icon size; the original PNGs are 4167 pixels square. Use this file for
+Slack, not an original PNG or wordmark.
+Its runtime copy is `frontend/public/assets/branding/slack.png`, served at
 `/assets/branding/slack.png` and embedded by the Slack setup adapter for upload.
-To regenerate, render the source SVG at 896 pixels wide, preserve its
-aspect ratio, center it on a 1024-pixel white square, and export as PNG.
-
-Keep original design resources here. Put assets used by the application under
-`frontend/public/assets/`, and register their browser URLs in the static-file
-map in `backend/src/Goblin.Web/Http/StaticAssets.cs`. The frontend build copies
-those runtime files into `frontend/dist/assets/` automatically.
-The standalone website owns its deployed copies under `website/assets/`.
-This design library is excluded from the application Docker build context.
-
-Original designer metadata stays in the supplied source report. Any optional
-local import metadata is task output under `.artifacts/`, not part of the tracked
-asset library. Preserve original relative paths when retaining import metadata.
+To regenerate it, render the SVG at 896 pixels wide keeping its aspect ratio,
+center it on a 1024-pixel white square, and export as PNG.

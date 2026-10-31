@@ -1,167 +1,137 @@
 # Authentication and connection checks
 
-Goblin has one owner password and a Codex connection supporting ChatGPT device-code
-login or an OpenAI API key. A connection check verifies model access using the saved
-account. Open **Settings → AI connections → Manage connection** on the Codex card.
-GitHub uses the official GitHub CLI device flow under **Settings → GitHub**.
-See [execution hosting](execution-hosting.md) for repository authority and credential
-isolation. Additional runtimes and their sign-in flows remain unimplemented.
+Goblin has one owner password and one Codex connection. Codex signs in with
+ChatGPT device-code login or an OpenAI API key. Open **Settings → AI connections →
+Manage connection** to connect, and a connection check confirms model access for the
+saved account. GitHub uses the official GitHub CLI device flow under **Settings →
+GitHub**. See [execution hosting](execution-hosting.md) for repository authority and
+credential isolation.
 
-The private ChatGPT MCP integration uses Goblin's owner password for browser
-sign-in and consent through embedded OpenIddict. It has one persistent owner
-subject and no separate account-management system. Its OAuth tokens authorize
-only explicitly shared Work; they do not authorize Codex execution or Goblin
-administration. See [ChatGPT setup](chatgpt-integration.md).
+The private ChatGPT MCP integration uses the owner password for browser sign-in and
+consent through embedded OpenIddict. It has one owner subject. Its OAuth tokens
+authorize only explicitly shared Work, not Codex execution or Goblin administration.
+See [ChatGPT setup](chatgpt-integration.md).
 
 ## Run locally
 
-Durable Work is enabled by default and requires a migrated profile from the
-[PostgreSQL workflow](database.md#wsl-and-windows-pgadmin). The connection-only
-launch below disables database access and Work APIs.
+Durable Work is enabled by default and needs a migrated profile from the
+[PostgreSQL workflow](database.md#wsl-and-windows-pgadmin). The connection-only launch
+below disables database access and Work APIs.
 
-Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run from this checkout:
+Install the .NET 10 SDK, Node.js 24 or newer, and the pinned Rust toolchain, then run:
 
 ```bash
 make install
 make dev-start ARGS=--without-database
 ```
 
-`make dev-start` builds the C# backend and TypeScript browser assets, provisions the
-local password if needed, then starts the ASP.NET Core Minimal API host. After
-editing sources, restart it to rebuild. To build separately, run `make build`,
-then launch with `cargo xtask dev --without-database`.
-Browser assets in `frontend/dist/`, test tooling in `dist/`, and .NET `bin/` and
-`obj/` output are ignored by Git.
+`make dev-start` builds the backend and browser assets, creates the local password
+verifier if needed, and starts the ASP.NET Core host. Restart it after editing sources.
+To build separately, run `make build`, then `cargo xtask dev --without-database`.
 
-On first start, choose and confirm your password in the terminal; input is hidden.
-Open **http://localhost:8787**, enter that password, and click **Open workspace**.
-The homepage opens your Work workspace. Settings is a full workspace page with
-section navigation; `/settings?section=codex` opens the Codex connection after
-unlocking. Section links support refresh and browser Back/Forward. Use **Back to
-workspace** to return to the page you came from; unfinished Work drafts remain
-available during navigation. First-time timezone setup remains a focused dialog.
-Subsequent starts reuse its saved verifier. After locking the workspace or
-restarting Goblin, enter the password again. There is no default password or prefill.
+On first start, choose and confirm the password in the terminal. Open
+**http://localhost:8787**, enter the password, and select **Open workspace**.
+`/settings?section=codex` opens the Codex connection directly. There is no default
+password.
 
-Every environment requires `GOBLIN_PASSWORD_HASH_FILE`. The local launcher sets
-it to this checkout's `.goblin-secrets/owner-password` unless you explicitly supply
-another verifier path. A missing or invalid configured file prevents startup.
-Password login creates a private session cookie; restarting the application
-invalidates browser sessions.
+Every environment requires `GOBLIN_PASSWORD_HASH_FILE`. The local launcher sets it
+to `.goblin-secrets/owner-password` unless you set another verifier path. A missing
+or invalid file stops startup. Login creates a private session cookie that lasts up
+to 12 hours. **Lock workspace** ends the current session; restarting Goblin ends all
+sessions. After five failed attempts within one minute, login is refused for up to
+one minute.
 
-Goblin installs Codex CLI **0.161.0** through the lockfile. Its C# client starts
-the package's official Rust binary with `app-server` and communicates over stdio
-using the checked-in JSON schemas. Its `HOME`, working directory, and `CODEX_HOME` are
-private to Goblin. Existing machine-level Codex configuration and provider
-credentials are not inherited. You can keep using your normal Codex installation.
+Goblin installs Codex CLI **0.161.0** through the lockfile. The C# client starts its
+official Rust binary as `codex app-server` over stdio. Its `HOME`, working directory,
+and `CODEX_HOME` are private to Goblin, so your machine's Codex configuration and
+credentials are not used or changed.
 
 ### Password setup and storage
 
 `make dev-start` and the full local installer share `.goblin-secrets/owner-password`.
-They use the shared Rust credentials implementation (PBKDF2-SHA256, 600,000 iterations, random salt).
-Only the verifier is written to disk, with file mode `0600` inside a `0700`
-directory. Git ignores the folder's contents except for `.gitkeep`, which keeps
-the empty folder in the repository. Docker excludes the entire folder.
+The Rust credentials code stores only a PBKDF2-SHA256 verifier (600,000 iterations,
+random salt) with mode `0600` in a `0700` directory. Git ignores the folder except
+`.gitkeep`; Docker excludes the whole folder.
 
-To prepare the password before starting the application:
+To set the password before starting:
 
 ```bash
 make password-set
 make dev-start ARGS=--without-database
 ```
 
-Use `make password-set ARGS=--replace` to choose a new password, then restart
-Goblin to load it. For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD`
-through the process environment; it never replaces an existing verifier.
-The same verifier can be mounted into Docker. Azure creates its verifier during
-provisioning. For a direct .NET launch, set
-`GOBLIN_PASSWORD_HASH_FILE=.goblin-secrets/owner-password` explicitly.
+Use `make password-set ARGS=--replace` to choose a new password, then restart Goblin.
+For unattended setup, set `GOBLIN_LOCAL_PASSWORD` in the process environment; it does
+not replace an existing verifier unless you also pass `--replace`. Azure creates its
+verifier during provisioning. For a direct .NET launch, set
+`GOBLIN_PASSWORD_HASH_FILE=.goblin-secrets/owner-password`.
 
 ## Enable ChatGPT device authentication
 
-Device-code login must be enabled before your first ChatGPT sign-in. Check this
-setting even if you already use Codex through another sign-in method.
+Enable device-code login before your first ChatGPT sign-in, even if you already use
+Codex another way. Goblin cannot change this setting.
 
-For a personal account, enable device-code login in ChatGPT **Settings → Security**.
-For a workspace account, an administrator must enable it in workspace permissions
-for the applicable role. The current Goblin UI also describes Codex Local access
-and Device Code Authentication. OpenAI may change the labels; follow its
+- Personal account: enable device-code login in ChatGPT **Settings → Security**.
+- Workspace account: in **Workspace settings → Permissions & roles**, select the
+  role for your account, then enable **Codex Local access** and **Device Code
+  Authentication**. This may need a workspace administrator.
+
+Goblin shows these steps before sign-in and beside the device code. OpenAI may change
+the labels; see its
 [headless login instructions](https://learn.chatgpt.com/docs/auth#login-on-headless-devices).
-Goblin cannot change these workspace permissions.
-
-After enabling the setting, return to OpenAI's sign-in page and try again. If
-the code has expired, cancel sign-in in Goblin and start again for a new code.
-Goblin includes these steps before sign-in and beside the device code.
-Device-code login is currently beta; see [OpenAI's headless login instructions](https://learn.chatgpt.com/docs/auth#login-on-headless-devices).
+After enabling the setting, try again on OpenAI's sign-in page. If the code has
+expired, select **Cancel sign-in** in Goblin and start again.
 
 ## What to check
 
-1. Select **Continue with ChatGPT**. Open OpenAI's sign-in page, enter the
-   displayed code, and complete sign-in. Goblin should show your account and
-   **Verifying connection…**, then **Connected** after a successful background check.
-2. Stop and restart `make dev-start`, unlock Goblin, and confirm the connection
-   remains. No second ChatGPT login should be needed while the credentials remain valid.
-3. Select **Lock workspace** and unlock it again. This locks browser access without
-   disconnecting Codex.
-4. Select **Disconnect Codex**. The account should disappear, including after a
-   restart. Disconnecting removes this workspace's cached credentials; it does
-   not revoke an API key in the OpenAI Platform.
-5. Open **Use an OpenAI API key instead** and connect a key. Goblin checks
-   `GET /v1/models` and then asks Codex to save it. Goblin then automatically checks
-   model access with a small request that counts toward API billing.
-6. Try canceling ChatGPT sign-in and starting again. Refreshing the browser
-   during a pending login should restore its current code.
-7. Select **Check again** to verify model access again. While the check runs,
-   Goblin shows **Verifying connection…** and disables duplicate checks. A failed
-   check replaces any previous success with an explanation and **Retry check**.
-   Expired sign-ins, usage limits, access denial, and timeouts have distinct messages.
-   The account email and plan remain visible; the background prompt and reply are hidden.
+1. Select **Continue with ChatGPT**, open OpenAI's sign-in page, and enter the code.
+   Goblin shows your account and **Verifying connection…**, then **Connected**.
+2. Restart `make dev-start` and unlock Goblin. The connection remains without a
+   second sign-in while the credentials are valid.
+3. Select **Lock workspace** and unlock again. Codex stays connected.
+4. Select **Disconnect Codex**. The account disappears, including after restart.
+   This removes the cached credentials; it does not revoke an API key in the OpenAI
+   Platform.
+5. Open **Use an OpenAI API key instead** and select **Connect API key**. Goblin
+   checks the key with `GET /v1/models`, saves it through Codex, and then runs a
+   connection check that counts toward API billing.
+6. Cancel a ChatGPT sign-in and start again. Refreshing the page during a pending
+   sign-in shows the same code.
+7. Select **Check again**. A failed check shows an explanation and **Retry check**.
+   Expired sign-ins, usage limits, access denial, and timeouts have separate messages.
 
-ChatGPT access follows the connected plan/workspace. API-key usage is billed
-separately through the OpenAI Platform. Switching methods requires disconnecting
-the current account first. Keys rejected with HTTP 401 are not saved. Restricted
-keys without permission to list models, or rate-limited requests, are explicitly
-marked as unverified when saved. A successful connection check clears that notice.
+ChatGPT access follows the connected plan or workspace; API-key usage is billed in the
+OpenAI Platform. Disconnect before switching methods. Keys rejected with HTTP 401 are
+not saved. Keys that return 403 or 429 are saved with a notice that they are not
+verified; a successful connection check clears the notice.
 
 ## Verify the connected account
 
-The connection check uses the existing `/api/prompt` endpoint with a fixed short
-prompt, “Reply with only OK.” It uses the same Codex app-server process and stored
-login as the authentication UI. It sends `thread/start` with `ephemeral: true`,
-followed by `turn/start`, and waits for a completed turn with a nonempty assistant
-reply from Codex's default model. Only then does the UI report **Connected**.
-Neither the prompt nor the response is displayed.
-See the [app-server protocol](https://learn.chatgpt.com/docs/app-server#turns).
+The connection check calls `/api/prompt` with the fixed prompt "Reply with only OK."
+It uses the same Codex App Server process and login, starts an ephemeral thread with
+`thread/start`, sends `turn/start`, and reports **Connected** only after a completed
+turn with a nonempty reply from Codex's default model. The prompt and reply are not
+shown.
 
-Goblin checks once when a signed-in account is loaded after sign-in, opening or
-reloading the page, or unlocking the workspace. It also checks when switching
-accounts or selecting **Check again** or **Retry check**. Routine status polling
-never repeats a successful or failed check. Results are held only in page memory;
-locking or losing the account clears them. A status refresh failure replaces any
-previous success with **Connection unavailable** until a new check succeeds.
+The page runs one check when it loads a signed-in account: after sign-in, page load,
+unlock, or an account change. **Check again** and **Retry check** run another.
+Status polling never repeats a check. Results live only in page memory. If a status
+refresh fails, the page shows **Connection unavailable** until a check succeeds.
 
-Each check makes a real model request and counts toward the connected ChatGPT
-plan's usage limits or OpenAI API billing. The initial API-key validation against
-`/v1/models` remains a separate check that does not generate a response.
+Each check is a real model request and counts toward the ChatGPT plan's limits or
+API billing. Limits: prompts up to 500 characters, replies up to 8,000 characters,
+one check at a time, and a 90-second timeout. Closing or reloading the page requests
+cancellation. Each check uses a new temporary thread.
 
-Prompts are limited to 500 characters, replies to 8,000 characters, and one
-check can run at a time. The response wait times out after 90 seconds;
-closing or reloading the page also requests cancellation. Each test uses a
-fresh temporary conversation; previous test prompts are not conversation
-history. Checks never add a visible conversation to the UI.
-
-The runtime disables shell tools, browsing, apps, plugins, image tools,
-multi-agent tools, hooks, and memory. The test also uses a read-only sandbox
-and rejects approval requests. It does not enable repository operations.
-Account changes are serialized with generation so a prompt cannot switch
-accounts halfway through. Model failures show safe messages without raw
-upstream errors, credentials, or reasoning output.
+The check runs with shell tools, web search, apps, plugins, image tools, multi-agent
+tools, hooks, and memories disabled, a read-only sandbox, and no approvals. Account
+changes and checks run one at a time, so a check cannot switch accounts partway
+through. Failures show safe messages without raw upstream errors or credentials.
 
 ## Run in Docker
 
-Create a verifier using [Password setup and storage](#password-setup-and-storage), then build
-the image and copy the verifier into a private Docker volume. The setup command
-sets file ownership for the application's UID 1000:
+Create a verifier as in [Password setup and storage](#password-setup-and-storage),
+build the image, and copy the verifier into a private volume owned by UID 1000:
 
 ```bash
 docker build -t goblin-platform:0.1.0 .
@@ -171,9 +141,9 @@ docker run --rm -i --user 0:0 --entrypoint sh \
   < .goblin-secrets/owner-password
 ```
 
-For a connection-only check without PostgreSQL, start with persistent application
-storage and the password volume mounted read-only. Durable Work additionally
-requires the database and execution configuration in [execution hosting](execution-hosting.md):
+For a connection-only check without PostgreSQL, mount persistent storage and the
+password volume read-only. Durable Work also needs the database and execution
+configuration in [execution hosting](execution-hosting.md).
 
 ```bash
 docker run --rm --name goblin-platform \
@@ -185,63 +155,49 @@ docker run --rm --name goblin-platform \
   goblin-platform:0.1.0
 ```
 
-The image builds browser assets and publishes .NET in separate stages. The final
-image contains the ASP.NET Core runtime, published C# host, browser assets, and
-the official Rust Codex binary with its runtime resources. Node.js and the
-TypeScript compiler are build dependencies only.
-
-Open **http://localhost:8787**, enter your password, and follow the same checks.
-Recreate the container with the same named volumes to verify persistence.
+Open **http://localhost:8787** and follow the same checks. Recreate the container
+with the same volumes to check that the connection persists.
 
 ## Installed Kubernetes environments
 
-The [local installer](../deploy/local/README.md) and [manual Azure installation](../deploy/azure/README.md)
-provision PostgreSQL, migrate the current schema, configure repository execution,
-and mount the owner password. Open the installation's Goblin address and use the
-password chosen during setup. Follow those guides for installation and recovery;
-a standalone connection-only manifest is not a replacement for their configuration.
+The [local installer](../deploy/local/README.md) and
+[manual Azure installation](../deploy/azure/README.md) set up PostgreSQL, the schema,
+repository execution, and the owner password. Use the password chosen during setup,
+and follow those guides for installation and recovery.
 
-One owner and one application controller may use each data volume. Replacing its
-pod retains credentials on the application PVC; deleting that PVC loses them
-according to the storage class's reclaim policy. Application control-plane
-credentials manage repository sandboxes, while execution pods receive neither
-the application database certificate nor its service-account token.
+Each data volume has one owner and one application controller. Replacing the pod
+keeps credentials on the `platform-data` PVC; deleting the PVC can lose them,
+depending on the storage class's reclaim policy. Execution pods receive neither the
+application database certificate nor its service-account token.
 
 ## Configuration and storage
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `GOBLIN_DATA_DIR` | `.goblin-platform` locally; `/data/platform` in the image | Persistent private application data |
-| `GOBLIN_PASSWORD_HASH_FILE` | `.goblin-secrets/owner-password` supplied by the local launcher; `/etc/goblin/owner-password` in the Sandbox manifest | Required password verifier file in every environment |
-| `GOBLIN_HOST` | `127.0.0.1` locally; `0.0.0.0` in the image | Listening interface |
+| `GOBLIN_DATA_DIR` | `.goblin-platform`; `/data/platform` in the image | Private application data |
+| `GOBLIN_PASSWORD_HASH_FILE` | None; the local launcher uses `.goblin-secrets/owner-password` and the Sandbox manifest `/etc/goblin/owner-password` | Required password verifier |
+| `GOBLIN_HOST` | `127.0.0.1`; `0.0.0.0` in the image | Listening interface |
 | `GOBLIN_PORT` | `8787` | Listening port |
-| `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:8787` | Exact browser origin, used for Host and Origin checks |
-| `GOBLIN_ALLOW_INSECURE_HTTP` | `false`; explicitly `true` in the Azure overlay | Allows a public HTTP origin before HTTPS is configured; traffic is unencrypted |
-| `GOBLIN_CODEX_COMMAND` | Local pinned native binary, otherwise `codex` on `PATH` | Optional path to the official Codex executable |
+| `GOBLIN_PUBLIC_ORIGIN` | `http://localhost:<port>` | Exact browser origin for Host and Origin checks |
+| `GOBLIN_ALLOW_INSECURE_HTTP` | `false` | Allows a non-loopback HTTP origin; traffic is unencrypted |
+| `GOBLIN_CODEX_COMMAND` | Pinned binary under `node_modules`, otherwise `codex` on `PATH` | Path to the official Codex executable |
 
-Remote origins require HTTPS by default. The Azure overlay explicitly enables
-public HTTP with `GOBLIN_ALLOW_INSECURE_HTTP=true`, retaining exact Host/Origin
-checks and password authentication. Loopback HTTP is supported for local access
-and SSH/kubectl forwarding without that setting. After configuring TLS on the
-ingress, set `GOBLIN_PUBLIC_ORIGIN` to the HTTPS address, remove the HTTP opt-in,
-and recreate the application pod. HTTPS origins use Secure session cookies.
+Non-loopback origins must use HTTPS unless `GOBLIN_ALLOW_INSECURE_HTTP=true`. Loopback
+HTTP works for local access and SSH or kubectl port forwarding. HTTPS origins use
+Secure session cookies. See [environment variables](environment-variables.md) for
+naming and parsing rules.
 
-The application always reads the configured password verifier, including on
-localhost. Password collection happens during provisioning, outside the app.
-The password is compared exactly, including spaces. A missing or invalid
-verifier prevents startup. Password attempts use the existing rate limit and
-private session cookies. Restart Goblin after changing the verifier to load the
-new password and invalidate current browser sessions.
+The password is compared exactly, including spaces. Restart Goblin after changing
+the verifier to load the new password and end current sessions.
 
-Codex stores credentials in `codex/auth.json` under the data directory, with
-`cli_auth_credentials_store="file"`. It owns ChatGPT refresh and logout. The file
-contains credentials in plaintext; the parent directory is private, and storage
-and backups must be protected accordingly. The HTTP server never serves it.
-Don't copy it into images, source control, chat messages, or shared volumes.
+Codex stores credentials in plaintext in `codex/auth.json` under the data directory
+(`cli_auth_credentials_store="file"`) and owns ChatGPT refresh and logout. The
+directory is private and the HTTP server never serves it. Protect storage and
+backups, and do not copy the file into images, source control, chat, or shared
+volumes.
 
-The backend doesn't log RPC payloads, API keys, device codes, upstream error
-bodies, or configured passwords. It discards raw Codex stderr because it may
-contain authentication details. Error messages give safe retry guidance.
+The backend does not log RPC payloads, API keys, device codes, upstream error bodies,
+or passwords. It discards Codex stderr because it can contain authentication details.
 
 ## Automated checks
 
@@ -253,25 +209,12 @@ make browser-install
 make browser-test
 ```
 
-The test commands build first. `make test` uses the .NET generators for deterministic
-schema-generation check, then runs .NET serialization/transport tests and the HTTP
-integration tests against the C# host. Type checking also covers tests and scripts.
-Playwright loads its TypeScript configuration and browser tests directly. The browser module uses
-only type imports from `frontend/src/api/contracts.ts`, so it needs no client framework or bundler.
+`make test` includes the protocol generator check, .NET serialization and transport
+tests, and HTTP integration tests that use a fake Codex process. `make codex-test`
+runs the real pinned Codex binary with a temporary home and a synthetic, unusable key
+to check storage, restart, and logout. Browser tests use simulated sign-in and model
+replies. None of these use personal credentials or run a model task; a real ChatGPT
+sign-in remains a manual check.
 
-The integration tests exercise the HTTP and JSON-RPC paths with a fake Codex
-process: login notifications, cancellation, expiry, persistence, logout,
-credential isolation, access control, and key verification errors. The Codex check
-initializes the real pinned Codex binary with a temporary home and verifies
-local storage, restart, and logout using a synthetic, unusable key. Browser
-tests cover the same UI flow with simulated authentication and model replies,
-including mobile layout, clearing API-key inputs, automatic connection checks,
-retry and error states, session expiry, account changes, and avoiding repeated
-model requests during status polling.
-The unit tests also cover prompt validation, event ordering, failed and empty
-replies, cancellation, timeouts, and overlapping requests. These
-checks do not use personal credentials or run a model task. A real ChatGPT
-sign-in remains a manual acceptance check.
-
-See [Codex integration](codex-integration.md) for the C# project layout,
-protocol regeneration, and the boundary between Goblin orchestration and Codex Core.
+See [Codex integration](codex-integration.md) for the C# project layout, protocol
+regeneration, and the boundary between Goblin and Codex.

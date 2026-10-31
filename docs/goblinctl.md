@@ -1,63 +1,61 @@
 # Native administration with goblinctl
 
-Goblin ships a permanent operator CLI. The web UI controls Work; Work lifecycle
-rules and SQL migrations remain in .NET. The CLI installs and inspects the host,
-serves the temporary setup UI, manages local services and credentials, and runs
-PostgreSQL provisioning. It does not retry failed Work or modify Work history.
+`goblinctl` is Goblin's operator CLI. It installs and inspects the host, serves
+the temporary setup UI, manages local services and owner credentials, and runs
+PostgreSQL provisioning and migration Jobs. The web UI controls Work; Work
+lifecycle rules and SQL migrations stay in .NET. The CLI never retries failed Work
+or changes Work history.
 
-The main application is component `platform`; the independently deployed public
-site is component `website`. Both use namespace `goblin`. Installer manifests are
-in `deploy/platform/` and `deploy/azure/platform/`; embedded setup includes
-`deploy/azure/install-platform.sh`. Pod operations select `app=platform` and leave website
-pods alone. See [Kubernetes names](kubernetes-names.md) for the full naming and
-persistent-storage ownership. Embedded input changes require a new installer
-publication; the pin records the selected publication's immutable provenance.
+The main application is component `platform`; the public site is component
+`website`. Both use namespace `goblin`. Pod operations select `app=platform` and
+leave website pods alone. See [Kubernetes names](kubernetes-names.md).
 
-Production uses `goblinctl-x86_64-unknown-linux-musl.tar.gz`, following Codex's
-native Linux distribution model. This is a statically linked Linux executable;
-Ubuntu 24.04 on x86-64, including WSL with systemd, is the supported installation
-host. The distribution target does not promise support for arbitrary distributions.
-Python, Rust, and Cargo are unnecessary on installed hosts. Bash, systemd, curl,
-Git, k3s, and the application's existing build/runtime dependencies remain.
+The release archive is `goblinctl-x86_64-unknown-linux-musl.tar.gz`, a statically
+linked Linux executable. The supported host is Ubuntu 24.04 on x86-64, including
+WSL with systemd. Installed hosts do not need Python, Rust, or Cargo; the
+installer adds curl, Docker, and k3s when they are missing.
 
 ## Commands
 
-The PostgreSQL commands on this page assume a root shell.
-
 ```bash
-goblinctl install --hostname goblin.example --certificate-email owner@example.com --source-ref COMMIT
+sudo goblinctl install --hostname goblin.example --certificate-email owner@example.com --source-ref COMMIT
 sudo goblinctl install status --json
 sudo goblinctl install retry
 sudo goblinctl status --json
 sudo goblinctl doctor --json
 sudo goblinctl logs --follow
 sudo goblinctl password set --replace
-goblinctl db setup
-goblinctl db host
-goblinctl db connect wsl --local --forward-port 55432
-goblinctl db migrate IMAGE
+sudo goblinctl db setup
+sudo goblinctl db host
+sudo goblinctl db migrate IMAGE
 ```
 
-`status` checks live services and application readiness; `install status` reports
-historical installer progress. `doctor` adds certificate-manager rollouts and
-private-directory ownership checks. These health checks are read-only, return
-versioned JSON with `--json`, and exit 1 when a check fails. They do not establish
-end-to-end certificate authentication or an authenticated model execution.
+`install` with `--hostname` requires `--certificate-email` and starts a public
+HTTPS installation; `--source-ref` defaults to `master`. Without `--hostname` it
+starts a dedicated local installation, like `local start`.
 
-`password set` reuses a valid saved verifier; `--replace` selects a new password.
+`status` checks live services and application readiness; `install status` shows
+installer progress. `doctor` also checks the cert-manager rollouts and the
+ownership and mode of the private configuration directory. These checks are
+read-only, print versioned JSON with `--json`, and exit 1 when a check fails. They
+do not prove certificate authentication or a working model run. `logs` shows the
+last 100 lines of the bootstrap and installer logs; `--follow` streams them.
+
+`password set` keeps a valid saved verifier; `--replace` chooses a new password.
 It prompts twice without echo, or reads `GOBLIN_LOCAL_PASSWORD` for unattended
-setup. With an installed Azure host it updates the Kubernetes Secret, retains the
-verifier, and restarts the application pod. The private installer lock excludes
-concurrent installation. Failure after Secret replacement requires inspecting the
-pod and completing its restart. Passwords and verifiers never enter CLI arguments.
-`--path` explicitly manages a verifier file instead of changing a running host.
+setup. Passwords and verifiers never go into CLI arguments. On an installed host,
+`--replace` requires a finished installation and fails while the installer lock is
+held. It updates the Kubernetes Secret, saves the verifier, and restarts the
+application pod, which ends existing sessions. If it fails after the Secret is
+replaced, check the pod and finish its restart. `--path` manages a verifier file
+instead of a running host.
 
-Dedicated local installations retain ownership checks and a checkout association:
+Dedicated local installations check ownership and remember their checkout:
 
 ```bash
-make local-start                 # builds the current CLI for development
+make local-start                 # runs the CLI from the current source
 sudo goblinctl --repo "$PWD" local start      # uses a precompiled binary
-sudo goblinctl local stop                     # retains application data and PVCs
+sudo goblinctl local stop                     # keeps application data and PVCs
 sudo goblinctl local retry --refresh          # retries a failed install with the current checkout
 sudo goblinctl local reset --yes              # deletes only this owned local cluster
 goblinctl --repo "$PWD" password set --replace
@@ -65,181 +63,137 @@ sudo goblinctl local start                    # loads the changed local verifier
 goblinctl local database
 ```
 
-The local source snapshot includes Git-visible working-tree changes and untracked
-files, excludes ignored stores/build products, and refuses symlinks. A completed
-installation resumes without rebuilding. Failed installation requires explicit
-retry. `retry` reuses the failed attempt's source snapshot; `retry --refresh`
-first replaces that snapshot and the installed setup assets with the current
-checkout and CLI, so a fix can be tested without deleting the cluster. It accepts
-only a stopped, failed installation. Stop is suspension; reset is explicit deletion
-of the owned test cluster. The native CLI, its license documents, and the verified
-download cache in `/var/cache/goblin/downloads` remain after reset.
+`local status`, `local logs`, and `local password` inspect the local installation.
+The local source snapshot includes tracked and untracked Git-visible files,
+excludes ignored files, and refuses symlinks. A completed installation starts
+again without rebuilding. A failed installation needs an explicit retry. `retry`
+reuses the failed attempt's source snapshot. `retry --refresh` works only on a
+stopped, failed installation; it first replaces the snapshot and installed setup
+assets with the current checkout and CLI, so a fix can be tested without deleting
+the cluster. `stop` suspends; `reset` deletes the owned test cluster and its
+application data but keeps the repository password verifier, the native CLI, and
+the Docker and download caches.
 
-The installer retains its existing root worker and unprivileged DynamicUser setup
-service as separate processes. Public setup exposes static assets, status,
-health, and the read-only `/setup/events` progress stream. Its local health socket appears only after the public listener binds.
-The server bounds request sizes, connection count and timeouts. The existing
-handoff marker, installer lock, rollback, and retained-source retry rules remain.
+The installer runs a root worker and a separate unprivileged (`DynamicUser`) setup
+service. Public setup serves static assets, status, health, and the read-only
+`/setup/events` progress stream, with bounded request sizes, connections, and
+timeouts. Public Azure setup cannot retry; use `sudo goblinctl install retry`.
 
-Public Azure setup is read-only and has no retry helper connection. Use the root
-CLI to retry. Local loopback setup exposes `POST /setup/retry`, accepting a JSON body
-with the owner password. The setup service
-relays it, unread, to `goblin-setup-control.socket`. For each connection, systemd starts a root
-`goblinctl internal setup-control` process, one at a time. That process returns
-`not-failed` unless the installation has failed, checks the password against the
-private verifier, and starts `goblin-installer.service` unless it is already
-active. Responses are `202 started`, `400 invalid`, `401 unauthorized`,
+Local setup also accepts `POST /setup/retry` with a JSON body containing the owner
+password. Requiring JSON makes cross-site browser requests fail CORS preflight.
+The setup service passes the body unread to `goblin-setup-control.socket`, where
+systemd starts one root `goblinctl internal setup-control` process at a time. It
+returns `not-failed` unless the installation failed, checks the password against
+the private verifier, and starts `goblin-installer.service` unless it is already
+running. Responses are `202 started`, `400 invalid`, `401 unauthorized`,
 `409 not-failed` or `running`, `429 throttled`, and `503 unavailable`. Five
 consecutive wrong passwords lock page retries for one minute, doubling up to 15
-minutes; the root-only `retry-throttle.json` beside the verifier records this.
-Requiring JSON makes cross-site browser requests fail CORS preflight.
+minutes; root-only `retry-throttle.json` beside the verifier records this.
 
-PostgreSQL client profiles are independent of `--repo` and installer state. See
-[the database guide](database.md) for WSL/Azure connections, Windows exports,
-refresh, cleanup and per-command profile selection. Client commands need `psql`
-and OpenSSL; Azure access also needs SSH.
+PostgreSQL client profiles do not depend on `--repo` or installer state. See
+[the database guide](database.md) for WSL and Azure connections, Windows exports,
+and profile selection. Client commands need `psql` and OpenSSL; Azure access also
+needs SSH.
 
-Developer-only `make relay-start`, `make relay-status`, and `make relay-stop`
-commands live in xtask. See [ChatGPT local testing](chatgpt-local-testing.md).
-The production CLI contains no WSL relay commands.
+Developer-only `make relay-start`, `make relay-status`, and `make relay-stop` run
+through xtask; see [ChatGPT local testing](chatgpt-local-testing.md). The
+production CLI has no relay commands.
 
 ## Parallel installation and live progress
 
-After retaining and validating the source snapshot, the installer builds Goblin
-alongside k3s setup. K3s setup downloads the pinned k3s binary and airgap
-system-image archive in parallel, verifies both, and keeps them in
-`/var/cache/goblin/downloads`. Retries and local resets reuse them, and an
-installation removes cached files from other k3s versions. The upstream install
-script then runs with `INSTALL_K3S_SKIP_DOWNLOAD=true`. K3s imports the archive at
-startup. Traefik is disabled. A separate worker installs pinned F5 NGINX from a
-checksum-verified inline Helm chart and starts its Service as `ClusterIP`.
+The installer builds the Goblin image while it sets up k3s. After k3s is ready,
+NGINX, cert-manager, Agent Sandbox, and the service-image prefetch run in
+parallel; PostgreSQL, migration, deployment, and verification follow in
+dependency order. Traefik is disabled; the pinned F5 NGINX chart is
+checksum-verified and its Service starts as `ClusterIP`.
 
-After k3s is ready, NGINX, certificate manager, Sandbox, and the service-image prefetch
-run concurrently. Each add-on pulls its own images before applying manifests.
-PostgreSQL waits for both add-ons and the prefetch; image import waits for the build
-and k3s; migration waits for PostgreSQL and image import. Deployment waits for the
-migration and image downloads. Verification waits for NGINX and application readiness. Azure then serves progress
-and ACME validation publicly before enabling the final HTTPS Goblin route.
-Downloads come first, so the fixed rollout timeouts measure startup only.
-The production Dockerfile keeps its original build stages and asset packaging.
+The pinned k3s binary and airgap image archive are verified and kept in
+`/var/cache/goblin/downloads`. Retries and local resets reuse them; files for
+other k3s versions are removed. Downloads resume from partial files and fail only
+when less than 1 KiB/s arrives for two minutes, with six attempts in total.
+Permanent HTTP errors stop at once.
 
-Installer downloads resume from partial files. They fail only when under 1 KiB/s
-arrives for two minutes, with six attempts in total; permanent HTTP errors stop
-immediately. Four workers prefetch service images by default. Set
-`GOBLIN_IMAGE_PULL_WORKERS=1` through `8` in a `goblin-installer.service` systemd
-environment override to tune smaller hosts. Containerd cancels an image pull that
-stops receiving data; the installer resumes it up to three times. A two-hour limit
-per pull only ends a hang that containerd misses. Kubernetes and BuildKit also
-perform their own pulls. Service references come from validated application
-manifests and the embedded PostgreSQL manifest; add-on references use the
-installer's pinned release versions.
+Four workers prefetch service images by default. To tune a smaller host, set
+`GOBLIN_IMAGE_PULL_WORKERS` to `1` through `8` in a systemd environment override
+for `goblin-installer.service`. Each image pull is tried up to three times; a
+two-hour limit per pull ends hangs that containerd misses.
 
-The setup page shows concurrent steps and a live installation log, including build
-stages, cache reuse, individual image downloads and database checks. Each running
-task also shows its latest activity, such as k3s download size and rate. These
-`progress` updates replace the task detail without adding log entries. The latest
-300 structured entries, with timestamps and attempt IDs, are retained in the
-atomic status document. Refreshing the page restores that tail. EventSource
-reconnects with an event ID between bounded SSE batches; status polling continues
-through the ingress handoff. “Follow latest” controls scrolling without pausing
-collection. Public messages are authored progress events and reconstructed
-BuildKit records; arbitrary package/compiler output, credentials and upstream
-errors remain in the private host log, available through `sudo goblinctl logs`.
+The setup page shows concurrent steps, the latest activity of each step, and a
+live log of build stages, cache reuse, image downloads, and database checks. The
+status document keeps the latest 300 structured entries, so a page refresh
+restores them. Public messages contain only authored progress events and BuildKit
+records; package and compiler output, credentials, and upstream errors stay in the
+private host log (`sudo goblinctl logs`).
 
-Each worker runs in an owned process group. A failure starts no new tasks. Workers
-already running finish, so their downloads and builds are kept for the retry, and
-the page reports how many are finishing. A service stop still stops all workers
-before recovery releases the attempt lock. State writes
-use a separate short file lock so concurrent updates cannot overwrite each other.
-Failed installations disable their boot unit and require an explicit retry, either
-from the setup page with the owner password or with `goblinctl install retry`;
-the setup page remains available. The retained source archive, password, completed
-Docker/k3s images, build cache, certificates and PVCs are reused and checked on retry.
-Saved step completion alone never causes infrastructure readiness checks to be skipped.
+After a failure, no new tasks start; running workers finish so their downloads and
+builds can be reused. A failed installation disables its boot unit and needs an
+explicit retry, from the setup page with the owner password or with
+`goblinctl install retry`. A retry reuses and checks the retained source archive,
+password, images, build cache, certificates, and PVCs. Installation failure never
+resets the database.
 
-The database migration command reconciles its named, owned job after interruption.
-An active job is observed, a completed job is collected, and a confirmed failed job
-can be replaced by an explicit invocation. A different image or owner requires
-inspection. PostgreSQL's advisory lock and transactional migration ledger remain
-authoritative for schema application. Installation failure never resets the database.
+`goblinctl db migrate` checks its owned `goblin-schema` Job first. It waits for an
+active Job, collects a completed one, and replaces a failed one. A Job with a
+different image or owner needs manual inspection. The
+database's advisory lock and migration ledger still control schema application.
 
 ## Source and build boundaries
 
-The root Rust workspace has two crates:
+The Rust workspace has two crates:
 
-- `tools/goblinctl`: CLI with shared credential, installation, state/server,
-  database, file, and local-administration modules. It embeds an explicit asset
-  allowlist, including the existing shell orchestration and manifests. Installed
-  operation does not require the original checkout or downloaded application source.
-- `tools/xtask`: developer/CI commands for native packaging, release pin updates,
-  deterministic ARM generation, development startup, EF newline normalization,
-  and optional PostgreSQL tests. It reuses the CLI library.
+- `tools/goblinctl`: the CLI and its library. It embeds an explicit allowlist of
+  setup assets, shell scripts, and PostgreSQL manifests, so an installed host does
+  not need the checkout.
+- `tools/xtask`: developer and CI commands (`cargo xtask --help`), including
+  packaging, releases, dependency resolution, Azure asset generation, and
+  development startup. It uses the CLI library.
 
-```bash
-make rust-build
-make rust-test
-make rust-test-doc
-make rust-lint
-make rust-format-check
-make test
-make browser-test ARGS=tests/e2e/setup.spec.ts
-```
+See the [Rust development guide](rust-development.md) for tools, build, lint, and
+test commands.
 
-Install the pinned helpers and configure your editor using the
-[Rust development guide](rust-development.md).
-
-`make dev-start DB_PROFILE=wsl` prepares the selected database profile and owner credentials,
-then launches .NET through `cargo xtask dev --profile wsl`.
-Protocol/Kubernetes generators, EF scaffolding, and the .NET SQL migration engine
-remain authoritative. Production shell helpers find the installed CLI via
-`GOBLINCTL` or PATH; developer scripts can use `GOBLINCTL="$PWD/target/debug/goblinctl"`.
-`--repo` selects the checkout used by local installation and owner-password
-commands. PostgreSQL client commands use the per-user profile store independently
-of this flag; see [profile storage](database.md#profile-management-and-storage).
-The local ownership file retains its existing `repo` JSON key.
+`make dev-start DB_PROFILE=wsl` prepares the database profile and owner
+credentials, then starts .NET through `cargo xtask dev --profile wsl`. Shell
+helpers find the CLI through `GOBLINCTL` or `PATH`; developer scripts can set
+`GOBLINCTL="$PWD/target/debug/goblinctl"`. `--repo` selects the checkout used by
+local installation and owner-password commands; PostgreSQL client commands use the
+per-user [profile store](database.md#profile-management-and-storage) instead.
 
 ## Releases
 
 [The release guide](releases.md) covers coordinated Goblin and goblinctl
-candidates, publication approval, website installation, and optional development
-pin updates. Preparing a candidate does not publish it.
+candidates, publication approval, website installation, and development pin
+updates. Changes to embedded inputs need a new installer publication.
 
-To build a review artifact locally:
+To build a local review archive in `.artifacts/goblinctl/`:
 
 ```bash
-rustup target add x86_64-unknown-linux-musl
-cargo build --locked --release -p goblinctl --target x86_64-unknown-linux-musl
-cargo xtask package --binary target/x86_64-unknown-linux-musl/release/goblinctl
+make release-package-local
 ```
 
-`cargo xtask release build-installer` instead requires a clean checkout and compiles into a
-fresh temporary target directory before packaging. Coordinated preparation performs
-the same isolated build for its frozen release source;
-`package` alone does not prove an arbitrary supplied binary came from this checkout.
+`cargo xtask release build-installer` requires a clean checkout whose commit is
+on `origin/master`, and builds in a fresh temporary target directory before
+packaging. `cargo xtask package --binary PATH` alone does not prove that a binary
+came from this checkout.
 
-Local packages are written to `.artifacts/goblinctl/`, outside the test-output
-directory that `make tools-build` cleans.
+The archive contains `goblinctl`, `LICENSE`, `NOTICE`, and
+`THIRD_PARTY_NOTICES.md`; setup assets are compiled into the binary. Archive
+order, timestamps, ownership, modes, and compression are deterministic for the
+same binary; compiler output is not claimed to be reproducible across machines.
 
-The archive contains `goblinctl` and its license documents; setup assets are compiled into that binary.
-Archive order, timestamps, ownership, modes and compression are deterministic for
-the same binary. Compiler-level reproducibility across machines is not claimed.
-The checksum covers final archive bytes. Bootstrap downloads the exact pinned
-version over HTTPS and validates it before execution. A failed download prevents
-setup readiness; there is no `latest` fallback. Existing worker shutdown/recovery
-and locking precede activation of the new binary. A stable
-`/opt/goblin/bin/goblinctl` points into versioned directories; `/usr/local/bin/goblinctl`
-exposes it on PATH.
+Bootstrap downloads the exact pinned version over HTTPS and checks its checksum,
+archive contents, and version before running it; there is no `latest` fallback.
+It stops the installer and takes the installer lock before activating the new
+binary. `/opt/goblin/bin/goblinctl` points into versioned directories, and
+`/usr/local/bin/goblinctl` puts it on `PATH`.
 
-Goblin is preproduction and supports current installation formats. Recreate
-verified disposable installations when those formats change; in-place application
-or cluster upgrade tooling is not provided. CLI repair/retry reuses the current
-installation's retained inputs and does not authorize retrying failed Work.
+Goblin is preproduction and supports only current installation formats. When
+formats change, recreate disposable installations; there is no in-place upgrade
+tooling.
 
 ## Verification
 
-Use [Rust checks](rust-development.md#build-format-lint-and-test), offline release
-compiler/input checks, deterministic packaging, and affected deployment/browser
-journeys for tooling changes. A local review archive is not a published installer.
-Only authenticated release metadata establishes the pin used for published Azure
-assets. Real PostgreSQL, systemd/Kubernetes behavior, and manual Azure installation
-require their actual integration checks; report skips and unverified boundaries.
+For tooling changes, use the [Rust checks](rust-development.md#build-format-lint-and-test),
+`make release-check-installer`, deterministic packaging, and the affected
+deployment and browser journeys. A local review archive is not a published
+installer. Real PostgreSQL, systemd and Kubernetes behavior, and manual Azure
+installation need their own integration checks; report skips.

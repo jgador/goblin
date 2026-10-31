@@ -3,49 +3,46 @@
 Your self-hosted AI coworker.
 
 Goblin turns conversations into durable, reviewable Work. PostgreSQL records
-context, decisions, attempts, outputs, and approvals; Codex executes the attempts.
-New Work receives the default Goblin agent and waits for an explicit start.
-Failures require attention and explicit recovery. Runtime success alone does
-not complete Work.
+context, decisions, attempts, results, and approvals; Codex runs the attempts.
+New Work gets the default Goblin agent and waits for an explicit start. Every
+failure needs attention and an explicit recovery. Work completes only when its
+result is approved, not when the runtime succeeds.
 
-The C#/.NET application serves a TypeScript browser. Repository tasks use isolated
-Kubernetes sandboxes, GitHub access through Goblin's broker, and one persistent
-workspace per Work. Files and unpublished commits stay on its PVC. Slack supports
-customer-owned apps, linked owner identities, and durable DM/mention conversations.
-Codex is the only implemented runtime; additional runtimes, Teams, and Knowledge
-indexing remain future work.
+The .NET application serves a TypeScript browser UI. Repository tasks run in
+isolated Kubernetes sandboxes, use GitHub through Goblin's broker, and keep one
+persistent workspace per Work on its PVC. Slack supports customer-owned apps,
+linked owner identities, and DM and mention conversations. Codex is the only
+implemented runtime; Teams and Knowledge indexing are not implemented.
 
-See [the documentation index](docs/README.md), [architecture](docs/architecture.md),
-and [Work interface](docs/work-centered-ui.md) for current behavior and limits.
+The [documentation index](docs/README.md) lists the guides for architecture,
+behavior, connections, operations, and limits.
 
 ## Install
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://goblinboard.com/install/)
 
 Choose a version on the [installation page](https://goblinboard.com/install/), then
-deploy manually through Azure Portal. The installer provisions the application,
-PostgreSQL, Kubernetes execution, Headlamp, and saved logs. Open the deployment's
-`setupUrl` for read-only progress. The installer configures Let’s Encrypt HTTPS
-for Azure's generated hostname; supply a certificate contact email, then open
-`goblinUrl` and use the password chosen during setup. No custom DNS record is needed.
-See the [Azure guide](deploy/azure/README.md) and [reference](deploy/azure/reference.md).
+deploy it manually in Azure Portal. The installer sets up the application,
+PostgreSQL, Kubernetes execution, Headlamp, and saved logs, with Let's Encrypt
+HTTPS for Azure's generated hostname. Open the deployment's `setupUrl` for
+read-only progress, then open `goblinUrl` and use the Goblin password you entered in the
+Portal. See the [Azure guide](deploy/azure/README.md).
 
-To test the full installation in a dedicated WSL/Ubuntu environment with systemd:
+To test the full installation in WSL/Ubuntu with systemd:
 
 ```bash
 make local-start
 ```
 
-Open **http://localhost:8788** in Windows. First start asks for a password in the
-terminal. The [local installer guide](deploy/local/README.md) covers prerequisites,
-logs, stop/resume, and destructive reset. Goblin is preproduction and supports
-current installation/database formats; development installations can be recreated
-when those formats change.
+Open **http://localhost:8788** in Windows. The first start asks for a Goblin
+password in the terminal. The [local installer guide](deploy/local/README.md)
+covers prerequisites, logs, stop, and reset. Goblin is preproduction; recreate
+development installations when formats change.
 
 ## Develop
 
-Install GNU Make, .NET 10, Node.js 24+, and the Ubuntu build prerequisites described
-in [Rust development](docs/rust-development.md), then run:
+Install GNU Make, .NET 10, Node.js 24+, and the Ubuntu build prerequisites in
+[Rust development](docs/rust-development.md), then run:
 
 ```bash
 make rust-setup
@@ -54,30 +51,20 @@ make install
 make dev-start ARGS=--without-database
 ```
 
-This starts connection management at **http://localhost:8787** without durable
-Work. For Work development, create a migrated PostgreSQL profile using the
+This starts the application at **http://localhost:8787** with Work disabled.
+For Work development, create a migrated PostgreSQL profile with the
 [database workflow](docs/database.md#wsl-and-windows-pgadmin), then run
-`make dev-start DB_PROFILE=wsl`. Both paths share the Rust password verifier.
-Use [authentication](docs/authentication.md) for Codex sign-in and connection checks,
-and [execution hosting](docs/execution-hosting.md) for repository configuration.
-Connect a customer-created [ChatGPT plugin](docs/chatgpt-integration.md) to read
-Work explicitly shared from your own instance.
+`make dev-start DB_PROFILE=wsl`.
 
 `make help` lists tasks. Common commands are `make build`, `make test`,
-`make check`, and `make format`; choose verification using the
-[repository guide](docs/repository-layout.md#choosing-verification). PostgreSQL tests
-are opt-in, and fixtures do not establish authenticated model coverage.
-[AGENTS.md](AGENTS.md) defines contribution rules; [agent workflow](docs/agent-workflow.md),
-[formatting](docs/formatting.md), and [secret scanning](docs/secret-scanning.md) cover
-contributor tooling. The native [goblinctl CLI](docs/goblinctl.md) ships separately
-and needs no Rust compiler or Python on installed hosts.
+`make check`, and `make format`; choose checks with the
+[repository guide](docs/repository-layout.md#choosing-verification).
+[AGENTS.md](AGENTS.md) defines contribution rules.
 
-The public [website](website/README.md) is independent of the application. Run
-`make website-start` for Docker development at **http://localhost:5173**,
-and `make website-stop` to stop it. Delivery procedures live in
-[releases](docs/releases.md), [GitHub Actions](docs/github-actions.md), and
-[website production](website/production/README.md).
+The public [website](website/README.md) is separate from the application. Run
+`make website-start` to develop it at **http://localhost:5173**, and
+`make website-stop` to stop it.
 
 Goblin's original code and documentation use [Apache 2.0](LICENSE).
 [Third-party notices](THIRD_PARTY_NOTICES.md) describe dependency licenses and the
-separate treatment of [fonts and brand artwork](assets/branding/README.md).
+separate terms for [fonts and brand artwork](assets/branding/README.md).

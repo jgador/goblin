@@ -1,25 +1,27 @@
 # Formatting
 
 The Codex Stop hook in `.codex/config.toml` selects formatters from staged,
-unstaged, and non-ignored untracked changes, including earlier turns; deletions
-are excluded. Each selected formatter runs on its full language scope:
+unstaged, and non-ignored untracked changes, including changes from earlier
+turns; deletions are ignored. Each selected formatter runs on its full language
+scope:
 
 | Files | Formatter |
 | --- | --- |
-| `.ts`, `.tsx`, `.mts`, `.cts` | Prettier for repository TypeScript |
+| `.ts`, `.tsx`, `.mts`, `.cts` | `make typescript-format` (Prettier) |
 | `.rs` | `make rust-format` for both Rust crates |
-| `.cs` | .NET whitespace and style passes for the backend solution, excluding generated protocol and EF types |
+| `.cs` | `make backend-format`: .NET whitespace and style passes, excluding generated protocol and EF types |
 
-Other files trigger no formatter. Run the manual commands when changing formatting
-configuration alone. After changing the hook, restart Codex and review and trust it
-with `/hooks`; the project must also be trusted. Formatter output goes to stderr,
-while stdout remains JSON for the [Stop hook contract](https://learn.chatgpt.com/docs/hooks#stop).
+Other files trigger no formatter. Run the commands manually when you change only
+formatting configuration. After changing the hook, restart Codex, then review and
+trust it with `/hooks`; the project must also be trusted. Formatter output goes to
+stderr, while stdout stays JSON for the [Stop hook contract](https://learn.chatgpt.com/docs/hooks#stop).
+The hook does not run tests.
 
-Install Node.js 24+, the SDK from `global.json`, and Rust tools via `make rust-setup`
-(see [Rust development](rust-development.md)); run `make install` for pinned
-Prettier and TypeScript dependencies. Missing Prettier is reported as a skip. If
-Cargo is absent from PATH, the Rust hook adds `$CARGO_HOME/bin`, or
-`$HOME/.cargo/bin` by default.
+Install Node.js 24+, the SDK from `global.json`, and the Rust tools from
+`make rust-setup` (see [Rust development](rust-development.md)); run
+`make install` for the pinned Prettier and TypeScript. The hook skips TypeScript
+formatting when Prettier is missing. If Cargo is not on PATH, it adds
+`$CARGO_HOME/bin`, or `$HOME/.cargo/bin` by default.
 
 ```bash
 make format
@@ -29,72 +31,70 @@ make rust-format
 make backend-format
 ```
 
-Prettier respects `.gitignore` and skips embedded-language formatting. Rust uses
+Prettier respects `.gitignore` and does not format embedded languages. Rust uses
 `imports_granularity=Item`; `make rust-format-check` checks without writing. C#
 uses `dotnet format whitespace` and `dotnet format style --severity info` on
-`backend/Goblin.slnx`; the style pass excludes `IDE0130` and `IDE1006` (see
-[Makefile](../Makefile)). The hook does not run tests.
+`backend/Goblin.slnx`; the style pass excludes `IDE0130` and `IDE1006` (see the
+[Makefile](../Makefile)).
 
 ## C# construction and contracts
 
 Use regular constructors for class declarations and readonly fields for retained
 dependencies. Constructor signatures and positional record declarations may change
-as part of refactoring; do not preserve them solely because they already exist.
-Prefer cohesive types and clear construction APIs over long positional or optional
-parameter lists. Preserve public property contracts, JSON behavior, and relied-upon
-record semantics by default; change them when the task calls for it. Update affected
-callers and relevant tests together, and identify any external compatibility impact.
+during refactoring; do not keep them only because they exist. Prefer cohesive
+types and clear construction APIs over long positional or optional parameter
+lists. Preserve public property contracts, JSON behavior, and relied-upon record
+semantics unless the task calls for a change. Update affected callers and tests
+together, and identify any external compatibility impact.
 
 Use classes for boundary DTOs, application projections, commands, configuration
-carriers, and persistence/worker snapshots unless they require value or copy
+carriers, and persistence/worker snapshots unless they need value or copy
 semantics. Put JSON attributes on explicit properties. Small constructors plus
-named initialization can make larger contracts clearer; a parameter-count
-threshold alone does not justify an arbitrary wrapper.
+named initialization can make larger contracts clearer; a parameter count alone
+does not justify a wrapper type.
 
-Retain records where behavior relies on them. `ExecutionTarget` and its repository
-grant use value comparisons during claim/restore validation. `SetupFile` values
-are compared with `SequenceEqual` to detect changed preparation inputs. Work
-decisions/results, connection state, execution observations, and `ProcessIdentity`
-use immutable replacement or `with` copies. Protocol request IDs and `ProtocolNull`
-have deliberate value semantics. Arrays inside records still have shallow equality;
-records do not imply structural array comparison or deep immutability.
+Keep records where behavior relies on them. `ExecutionTarget` and its
+`GitRepositoryGrant` use value comparison in repository approval and access checks.
+`SetupFile` values are compared with `SequenceEqual` to detect changed setup
+inputs. Work decisions and results, connection state, and `ProcessIdentity` use
+`with` copies. The protocol `RequestId` and `ProtocolNull` have deliberate value
+semantics. Arrays inside records still compare by reference; records do not give
+structural array comparison or deep immutability.
 
 Construction changes must preserve required properties, omitted/null defaults,
-polymorphism, enum wire names, and serialization order where relied upon. Command
-replay fingerprints hash serialized content, so an apparently equivalent JSON
-refactor can change replay behavior. Test raw wire shape and relevant equality or
-copy behavior when changing these contracts.
+polymorphism, enum wire names, and serialization order where relied upon. Work
+command fingerprints hash the serialized command, so a JSON change that looks
+equivalent can change replay behavior. Test the raw wire shape and relevant
+equality or copy behavior when you change these contracts.
 
 ### Typed JSON boundaries
 
 Read known production payloads into purpose-specific DTOs with explicit
-`JsonPropertyName` properties; ignore upstream fields Goblin does not consume.
+`JsonPropertyName` properties; ignore upstream fields Goblin does not use.
 Preserve bounded HTTP buffering and object/syntax validation, unknown Kubernetes
 readings, Slack event field-presence semantics, and existing response shapes.
-Repository workers, Codex results, and workspace inspection use typed contracts.
-Dynamic JSON remains appropriate for JSON-RPC envelopes, arbitrary generated
-schema values, converters, schema generators, and wire-format tests. Core
-lifecycle types must not depend on JSON or runtime protocols.
+Dynamic JSON stays appropriate for JSON-RPC envelopes, arbitrary generated schema
+values, converters, schema generators, and wire-format tests. Core lifecycle types
+must not depend on JSON or runtime protocols.
 
 Separate C# type declarations, methods, constructors, and attributed members with
 at least one blank line. Keep attributes on their own lines directly above the
-declaration they annotate. Put enum braces and each enum value on separate lines;
-separate attributed enum values with a blank line. Adjacent plain fields and
-properties may remain grouped. Formatting alone should not change record shape;
-refactoring may replace positional declarations with explicit construction APIs
-while preserving the required behavior and contracts. These spacing rules also
-apply to generated C#; update the generators when their output needs changes.
+declaration. Put enum braces and each enum value on separate lines; separate
+attributed enum values with a blank line. Adjacent plain fields and properties may
+stay grouped. These spacing rules also apply to generated C#; change the
+generators when their output needs changes.
 
 Generated Codex and Kubernetes classes belong to their schema selections and C#
-generators. EF mappings belong to SQL and the scaffolding workflow. Do not manually
-format these outputs or revive removed generator implementations. Regenerate and
-run the owning drift checks described in [repository verification](repository-layout.md#choosing-verification)
-and the [database guide](database.md#reverse-engineer-the-database).
+generators. EF mappings belong to SQL and the scaffolding workflow. Do not format
+these outputs by hand. Regenerate them and run the owning drift checks described
+in [repository verification](repository-layout.md#choosing-verification) and the
+[database guide](database.md#reverse-engineer-the-database).
 
 ## Deployment assets
 
 Formatting does not rebuild deployment artifacts. After editing a bootstrap or
-Bicep source, run `make deploy-generate` to generate review assets in `.artifacts/azure`.
-Release preparation generates and verifies the assets it publishes. This requires the standalone Bicep CLI on PATH (version 0.47.16 is used in
-CI). Changes to embedded setup assets require a new goblinctl release and a pin
-update; see [native tooling](goblinctl.md). The hook does not run tests automatically.
+Bicep source, run `make deploy-generate` to write review assets to
+`.artifacts/azure`. This needs the standalone Bicep CLI on PATH (CI uses 0.47.16).
+Release preparation generates and verifies the assets it publishes. Changes to
+setup assets embedded in goblinctl need a new goblinctl release and a pin update;
+see [native tooling](goblinctl.md).

@@ -1,15 +1,10 @@
 # Test the installation from WSL
 
 Run the same setup page and background installer used by Azure directly in Ubuntu
-24.04 / WSL 2. The installer installs k3s, cert-manager, Agent Sandbox, and Goblin
-in this Linux environment. It uses your current checkout, including uncommitted
-source changes.
-
-The application runs as Sandbox/container/Service `platform` in namespace
-`goblin`, using image `goblin-platform`. The website has an independent local
-workflow in the same namespace; see [Kubernetes names](../../docs/kubernetes-names.md).
-Inspect bound PVCs and ownership before changing storage manifests. A naming
-change does not authorize resetting this installation.
+24.04 on WSL 2. The installer installs k3s, cert-manager, Agent Sandbox, and Goblin
+in this Linux environment from your current checkout, including uncommitted
+changes. For workload, image, and PVC names and storage ownership rules, see
+[Kubernetes names](../../docs/kubernetes-names.md).
 
 ## Start
 
@@ -19,58 +14,51 @@ With systemd enabled in WSL, run from the repository root:
 make local-start
 ```
 
-Open **http://localhost:8788** in your Windows browser. You will see the installation
-page with actual progress. When Goblin is ready, the page opens it automatically
-at the **same address**. On first start, choose and confirm your Goblin password
-in the terminal. Enter that password when the workspace opens.
+On first start, choose and confirm your Goblin password in the terminal. Open
+**http://localhost:8788** in your Windows browser to see installation progress.
+When Goblin is ready, the page opens it at the same address; enter your password.
 
 The command requests `sudo` when needed, returns once the page is available, and
 leaves installation running in the background. Keep WSL running; closing the
 browser or terminal does not stop the installer. Starting an existing installation
-preserves its data and password.
+keeps its data and password.
 
-Goblin is preproduction. Recreate this development installation when database,
-application, or cluster formats change; use the [reset commands](#stop-resume-or-start-clean) below.
+Goblin is preproduction. Recreate this installation when database, application,
+or cluster formats change; use the [reset commands](#stop-resume-or-start-clean).
 
-There is no nested VM, VM image download, Windows hosts-file edit, or manual
-port forwarding. Windows uses WSL's default localhost forwarding. The runner
-maintains a small TCP forwarder from loopback port 8788 to Linux port 80, so
-Windows access continues when Kubernetes takes over from the setup server.
-The setup UI stops and disables itself after installation; the forwarder remains.
+Windows reaches the page through WSL's default localhost forwarding. A forwarder
+from loopback port 8788 to Linux port 80 keeps access working when Kubernetes takes
+over from the setup page. The setup page stops and disables itself after
+installation; the forwarder remains.
 
-The progress page shows expandable stages, tasks, and live logs. Progress counts
-completed tasks, not time remaining. On failure, running tasks finish and no new
-tasks start; enter the Goblin password and select **Retry installation** to resume.
-The k3s binary and image archive resume after interruption; transfers below
-1 KiB/s for two minutes stop and resume within a limit of six total attempts,
-while permanent HTTP errors stop immediately. Service images are downloaded
-before rollout waits begin.
+The progress page shows stages, tasks, and live logs. Progress counts completed
+tasks, not time remaining. On failure, running tasks finish and no new tasks start;
+enter the Goblin password and select **Retry installation** to resume.
 
 Open **Settings → Cluster → Open cluster**, or
-**http://localhost:8788/headlamp/**, to inspect Kubernetes in Headlamp using your
-Goblin login. This is read-only access to workloads, logs, events, and storage.
-The path uses the same chosen browser port. See [the cluster view](../../docs/cluster-view.md).
+**http://localhost:8788/headlamp/**, for read-only Kubernetes access in Headlamp
+with your Goblin login. See [the cluster view](../../docs/cluster-view.md).
 
-Azure uses its assigned DNS name instead of localhost. Open the deployment's
-`setupUrl` output to follow progress; it opens the HTTPS `goblinUrl` after
-certificate issuance and application verification. The local forwarder is only
-for testing and is not included in Azure provisioning.
+To use a different browser port, choose it on the first start; changing it later
+requires a reset:
+
+```bash
+make local-start ARGS="--http-port 8888"
+```
 
 ## Requirements
 
-Use Ubuntu on x86-64 with systemd, curl and Git (plus Rust when building from a checkout). Allow several GiB of
-free memory and disk space for Kubernetes, image downloads, and the application
-build. The installer needs Linux ports 80 and 443 and the chosen browser port.
-Windows port 80 can remain occupied; the Windows browser uses 8788.
+Use Ubuntu on x86-64 with systemd, curl, Git, and Rust (the make targets build
+`goblinctl` from the checkout). Allow several GiB of free memory and disk space for
+Kubernetes, image downloads, and the application build. The installer needs Linux
+ports 80 and 443 and the browser port free. Windows port 80 can stay in use.
 
-Docker Desktop and its WSL integration are not required. The installer uses the
-native Linux Docker engine with its own private client configuration for anonymous
-public-image pulls. It does not use or modify your personal Docker configuration,
-registry logins, Desktop credential helper, contexts, or builders. Existing images
-and build caches on the native engine are retained. Docker Hub's anonymous pull
-limits still apply.
+Docker Desktop is not required. The installer uses the native Linux Docker engine
+with its own private client configuration for anonymous public-image pulls. It
+does not use or change your Docker configuration, registry logins, credential
+helpers, contexts, or builders. Docker Hub's anonymous pull limits apply.
 
-If systemd is disabled, add this to `/etc/wsl.conf`, preserving other settings:
+If systemd is disabled, add this to `/etc/wsl.conf`, keeping other settings:
 
 ```ini
 [boot]
@@ -79,7 +67,7 @@ systemd=true
 
 Then run `wsl --shutdown` from Windows and reopen WSL. The runner refuses to adopt
 an existing k3s or Goblin installation that it did not create. Use a dedicated
-WSL distribution if your existing distribution already has one.
+WSL distribution if your current one already has one.
 
 ## Progress and logs
 
@@ -91,43 +79,36 @@ make local-retry
 make local-retry ARGS=--refresh
 ```
 
-`retry`, and **Retry installation** on the page, restart a failed installation
-with its retained source snapshot, password, and data. After fixing installer or
-application code, use `make local-retry ARGS=--refresh`. It replaces the failed
-attempt's source snapshot and installer with your current checkout, keeping the
-cluster, completed images, and downloads. A reset is only needed when formats
-change. If bootstrap failed before launching the installer, run `start` again. A
-completed installation reports `ready`, and both setup services are stopped and
-disabled.
+`local-retry`, like **Retry installation** on the page, restarts a failed
+installation with its saved source snapshot, password, and data. After fixing
+installer or application code, use `make local-retry ARGS=--refresh`. It replaces
+the failed attempt's source snapshot and installer with your current checkout and
+keeps the cluster, completed images, and downloads. If bootstrap failed before the
+installer started, run `make local-start` again. A completed installation reports
+`ready`, and both setup services are stopped and disabled.
 
-Logs are stored directly in WSL:
+Logs are stored in WSL:
 
 - `/var/log/goblin-bootstrap.log`
 - `/var/log/goblin-installer.log`
-- `.goblin-local/bootstrap.log` (local command's bootstrap output)
+- `.goblin-local/bootstrap.log` (output of the local start command)
 
-Kubernetes diagnostics are available through `sudo k3s kubectl` and
-`sudo journalctl -u k3s`. The installer explicitly uses
-`/etc/rancher/k3s/k3s.yaml` for all Kubernetes operations, including database
-helpers invoked through a separately installed `kubectl`.
-The installer provisions PostgreSQL and applies schema migrations before
-starting Goblin. PostgreSQL and the WSL host endpoint use port 5432. Client
-certificates live in user profiles outside the checkout. Windows access uses an
-additional listener inside WSL, for example port 55432; see
+For Kubernetes diagnostics, use `sudo k3s kubectl` and `sudo journalctl -u k3s`.
+
+The installer provisions PostgreSQL and applies schema migrations before starting
+Goblin. PostgreSQL is reachable from WSL at `localhost:5432` through
+`goblin-local-postgres.socket`, which binds only to loopback and forwards to the
+database Service in Kubernetes. Certificate authentication still applies. For
+client certificates and Windows access, see
 [the PostgreSQL workflow](../../docs/database.md#wsl-and-windows-pgadmin).
 
-To enable or repair local access for an already configured database:
+To enable or repair this endpoint for an installed database:
 
 ```bash
 make local-configure-database
 ```
 
-The endpoint runs as `goblin-local-postgres.socket`/`.service` under systemd and
-binds only to loopback. It forwards raw TCP to an internal Kubernetes Service;
-individual client resets do not stop other connections, and Kubernetes follows
-replacement database pods. No terminal or `kubectl port-forward` is required.
-Certificate authentication and server verification still apply. Inspect it from
-a root shell with `journalctl -u goblin-local-postgres.service`.
+Inspect it from a root shell with `journalctl -u goblin-local-postgres.service`.
 
 ## Stop, resume, or start clean
 
@@ -136,8 +117,8 @@ make local-stop
 make local-start
 ```
 
-`stop` shuts down this runner's installer, browser/database forwarders, and Kubernetes
-containers while retaining data. `start` resumes them.
+`stop` shuts down this runner's installer, browser and database forwarders, and
+Kubernetes containers, and keeps all data. `start` resumes them.
 
 For another installation test with your latest source changes:
 
@@ -147,88 +128,70 @@ make local-start
 ```
 
 **Reset deletes this runner's Kubernetes cluster, Goblin application data, logs,
-and cluster credentials.** It retains the shared repository password verifier,
-Docker and cached build images, and the verified k3s downloads in
-`/var/cache/goblin/downloads`. It does not remove other host services such as
-PostgreSQL. `destroy --yes` is an alias for
-`reset --yes`.
+and cluster credentials.** It keeps the checkout's password verifier, the native
+CLI, Docker images and build cache, and the verified k3s downloads in
+`/var/cache/goblin/downloads`.
 
-For a fresh local development installation, including password setup, run:
+For a fresh local development environment, including password setup, run:
 
 ```bash
 time make dev-reset
 ```
 
-Stop direct development servers and browser tests first. This `Makefile.dev`
-target runs the Bash helper and requests sudo. It checks that the installation
-belongs to this checkout, stops its systemd services, and runs
-`/usr/local/bin/k3s-uninstall.sh` to remove the whole local cluster. It then removes
-Goblin installation files and clears `.goblin-platform/`, `.goblin-local/`,
-`.goblin-secrets/` (including the saved password), `.goblin-browser-test/` leftovers, and
-`.artifacts/playwright/`. Tracked files and placeholders remain; mounted or
-symlinked cleanup roots are refused.
+Stop direct development servers and browser tests first. This target runs
+`scripts/dev-clean-slate.sh` in WSL with sudo; it needs Bash, Git, and `jq`. It
+checks that the installation belongs to this checkout, stops its systemd services,
+and runs `/usr/local/bin/k3s-uninstall.sh` to remove the whole local cluster. It
+then removes Goblin installation files and clears `.goblin-platform/`,
+`.goblin-local/`, `.goblin-secrets/` (including the saved password),
+`.goblin-browser-test/`, and `.artifacts/playwright/`. Tracked files remain.
+Mounted or symlinked cleanup paths, another checkout's installation, and
+installation leftovers without an ownership record stop the cleanup. It runs no
+kubectl commands and does not read `~/.kube/`.
 
-Running the target confirms full cleanup. Password setup and sign-in are required
-again, and deleted persistent data needs an existing backup to recover. Docker
-images, shared caches (including the verified k3s downloads in
-`/var/cache/goblin/downloads`), developer tools, other task artifacts, and external
-database profiles remain. Every installation checks cached downloads against
-their pinned checksums. To download them again, run
-`sudo rm -rf /var/cache/goblin`. Run `make local-start` separately to reinstall.
-
-The helper requires Bash, Git, standard Ubuntu system tools, and `jq` to check
-the installation ownership record. It does not build or invoke `goblinctl`.
-It runs no kubectl commands and does not access `~/.kube/` or its production
-contexts. The local k3s uninstaller runs with inherited environment variables
-cleared. Another checkout's installation or installation leftovers without
-ownership block cleanup.
-
-Choose a different browser port on the first start if necessary:
-
-```bash
-make local-start ARGS="--http-port 8888"
-```
+**Deleted data can only be recovered from an existing backup.** Password setup and
+sign-in are required again. Docker images, shared caches (including
+`/var/cache/goblin/downloads`), developer tools, other artifacts, and database
+client profiles remain. Each installation checks cached downloads against their
+pinned checksums; to download them again, run `sudo rm -rf /var/cache/goblin`.
+Run `make local-start` to reinstall.
 
 ## Password storage
 
-Local setup uses the shared Rust `goblinctl::credentials` module helper as Azure:
-PBKDF2-SHA256, 600,000 iterations, and a random 16-byte salt. Only the verifier is
-saved to `.goblin-secrets/owner-password` in this checkout (file mode `0600`,
-directory mode `0700`). Git ignores everything in that folder except the empty
-`.gitkeep`; Docker excludes the entire folder. The password is never prefilled.
+Local setup uses the same PBKDF2-SHA256 verifier as Azure (600,000 iterations,
+random 16-byte salt). Only the verifier is saved, in
+`.goblin-secrets/owner-password` (file mode `0600`, directory mode `0700`). Git
+ignores everything in that folder except `.gitkeep`, and Docker builds exclude the
+folder. The original password cannot be displayed; `make local-locate-password`
+reports the verifier's location.
 
-Both this installer and `make dev-start` reuse that verifier. The full installer passes
-its path to the shared Azure bootstrap, which copies the verifier to its private
-installation directory and creates the same Kubernetes Secret and read-only
-container mount as Azure. Local bootstrap scripts contain no original password.
-Azure obtains its password from the deployment form instead of the local prompt.
+Both this installer and `make dev-start` use that verifier. The installer copies
+it into its private installation directory and the same Kubernetes Secret and
+read-only container mount as Azure. If the checkout's copy is missing, the
+installer reuses its saved verifier.
 
-You can prepare the verifier separately with `make password-set`.
-For unattended first-time setup, supply `GOBLIN_LOCAL_PASSWORD` through the process
-environment. It does not override an existing verifier. The installer can reuse
-its retained password verifier if the checkout's copy is missing.
-`make local-locate-password` reports the verifier's location; the
-original password cannot be displayed.
+You can prepare the verifier separately with `make password-set`. For unattended
+first-time setup, supply `GOBLIN_LOCAL_PASSWORD` in the process environment; it
+does not replace an existing verifier.
 
-To change the shared local password, run:
+To change the local password, run:
 
 ```bash
 make password-set ARGS=--replace
 ```
 
 Restart `make dev-start` to load it. For a completed full installation, run
-`make local-start` to update the Secret and restart its application
-pod. Finish an in-progress installation before changing its password.
+`make local-start` to update the Secret and restart the application pod. Finish
+an in-progress installation before changing its password.
 
 The local source snapshot excludes Git-ignored files and rejects symlinks.
-Kubernetes readiness, cert-manager admission, image building, application readiness,
-and the browser handoff are real. Azure resource creation, DNS propagation,
-and Azure networking require manual verification on the intended Azure VM.
+Kubernetes readiness, cert-manager admission, image building, application
+readiness, and the browser handoff are real. Azure resource creation, DNS, and
+Azure networking need manual checks on an Azure VM.
 
 ## ChatGPT plugin development
 
-Local installation uses F5 NGINX with loopback HTTP; bundled Traefik is disabled.
-For fast iterations with a public HTTPS address, use the
-[Azure-to-WSL development relay](../../docs/chatgpt-local-testing.md). The relay
-keeps Azure’s certificate/DNS while routing the whole application to local code.
-Production routes directly to Azure’s installed Goblin.
+Local installation uses F5 NGINX over loopback HTTP, and ChatGPT stays disabled.
+For a public HTTPS address, use the
+[Azure-to-WSL development relay](../../docs/chatgpt-local-testing.md). It keeps
+Azure’s certificate and DNS while routing the whole application to local code.

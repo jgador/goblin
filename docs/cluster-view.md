@@ -2,64 +2,64 @@
 
 ## System overview
 
-The **System** shortcut or **Settings → System** shows whole-VM CPU, logical
-cores, memory, root disk, uptime, OS, conditions, and Goblin service and agent
-sandbox readiness, usage, and restart counts. It excludes completed pods and
-shows pending and failed pods. CPU and memory history covers five minutes at
-15-second intervals. On WSL this is the Linux VM, not Windows; separate data
-mounts are not included in root disk usage.
+The **System** shortcut or **Settings → System** shows whole-VM CPU, logical cores,
+memory, root disk, uptime, OS, node conditions, and the readiness, usage, and restart
+counts of Goblin services and agent sandboxes. Completed pods are hidden; pending
+and failed pods are shown. CPU and memory history covers five minutes at 15-second
+intervals. On WSL this is the Linux VM, not Windows. Separately mounted disks are
+not included in root disk usage.
 
-Memory uses kubelet working set; CPU is recent cores consumed divided by logical
+Memory is the kubelet working set. CPU is recent cores used divided by logical
 capacity. Reserved space can make disk used plus available less than total.
-Readings are observations, not scheduling guarantees. CPU or memory at 85%, disk
-availability below 10%, node pressure or readiness, disabled scheduling, and
-unready Goblin pods are highlighted. Missing values are unavailable and old
-observations are marked stale. History is cleared on restart and is not stored
-in PostgreSQL. Monitoring does not affect readiness, Work, retries, or admission.
+Readings are observations, not scheduling guarantees. The view highlights CPU or
+memory at 85% or more, less than 10% disk available, node pressure or not-ready
+conditions, disabled scheduling, and unready Goblin pods. Missing values show as
+unavailable, and readings older than 60 seconds are marked stale. History is kept in
+memory, cleared on restart, and not stored in PostgreSQL. Monitoring does not affect
+readiness, Work, retries, or admission.
 
-The controller uses `GOBLIN_NODE_NAME` and `GOBLIN_NAMESPACE` from the pod
-manifest to read its node via Kubernetes and that node's kubelet summary over
+The controller reads `GOBLIN_NODE_NAME` and `GOBLIN_NAMESPACE` from the pod manifest.
+It reads its node through the Kubernetes API and that node's kubelet summary over
 TLS on port 10250, validating the cluster CA and server name. The
-`goblin-system-reader` role gets nodes and nodes/stats and lists namespace pods;
-existing execution permissions supply agent pods. The authenticated `/api/system`
-returns selected measurements with normal host/origin checks and no caching,
-not raw kubelet data, credentials, pod specs, or upstream errors. Browsers cannot
-choose the upstream. This covers Goblin's node, not a multi-node aggregate.
-Standalone development without `GOBLIN_NODE_NAME` reports unavailable; custom
-clusters must allow kubelet access and trust its serving certificate. Tests cover
-reading semantics and UI; actual network/TLS access requires verification on the
-installation, including Azure.
+`goblin-system-reader` roles allow get on nodes and nodes/stats and list on pods in
+`goblin`; the execution role already allows listing agent pods. The authenticated
+`/api/system` returns selected measurements with the normal host and origin checks
+and `no-store` caching, not raw kubelet
+data, credentials, pod specs, or upstream errors. Browsers cannot choose the
+upstream. Only Goblin's own node is shown, not a multi-node total. Without
+`GOBLIN_NODE_NAME`, as in standalone development, monitoring reports as unsupported.
+Custom clusters must allow kubelet access and trust its serving certificate. Verify
+real network and TLS access on each installation, including Azure.
 
 ## Cluster view
 
-Headlamp is available via **Settings → Cluster → Open cluster** or `/headlamp/`
-on the Goblin address: for example `http://localhost:8788/headlamp/` on local
-WSL, or `https://<hostname>/headlamp/` for HTTPS. Use the Goblin password; locked
-sessions are redirected to login and back. No separate token, password, DNS
-record, or public port is needed. The Settings link opens a new tab; deep links
-and refreshes retain the prefix.
+Open Headlamp from **Settings → Cluster → Open cluster** or at `/headlamp/` on the
+Goblin address, for example `http://localhost:8788/headlamp/` on local WSL or
+`https://<hostname>/headlamp/` with HTTPS. Use the Goblin password; a locked session
+is sent to login and back. No separate token, password, DNS record, or public port
+is needed. The Settings link opens a new tab; deep links and refreshes keep the
+prefix.
 
-Headlamp runs as the private `goblin-headlamp` Deployment in the `goblin`
-namespace. NGINX routes through Goblin's authenticated proxy; its NetworkPolicy
-allows Goblin pods, not agent sandboxes, to reach it. Its read-only
+Headlamp runs as the private `goblin-headlamp` Deployment in namespace `goblin`.
+Browsers reach it only through Goblin's authenticated proxy, and its NetworkPolicy
+admits only `app=platform` pods, not agent sandboxes. Its read-only
 `goblin-cluster-viewer` account can inspect workloads, pod logs, events, nodes,
-networking, storage, metrics, RBAC metadata, and Goblin Sandbox resources, but
-cannot read Secrets, exec, forward ports, or mutate resources. Other custom
-resources require explicit RBAC. Kubernetes enforces these permissions separately
-from proxy restrictions.
+networking, storage, metrics, RBAC objects, and Agent Sandbox resources. It cannot
+read Secrets, exec, forward ports, or change resources. Other custom resources need
+explicit RBAC. Kubernetes enforces these permissions separately from the proxy.
 
-The proxy strips browser credentials, impersonation and proxy headers, blocks
-Headlamp administration, plugins, cluster import and external proxy, and permits
-read-only health checks. Watches and log streams require reauthorization after
-five minutes. Headlamp is trusted on Goblin's origin; when upgrading, verify its
-pinned inline script CSP hashes and run the browser check below. Headlamp failure
-does not fail Goblin readiness, but the installer waits for both services.
+The proxy strips browser credentials, impersonation, and proxy headers. It allows
+only Kubernetes reads, health checks, and access reviews, so Headlamp
+administration, plugin installation, cluster import, and the external proxy are
+unavailable. Watches and log streams end after five minutes and must authorize
+again. Headlamp runs on Goblin's origin; when upgrading it, check the pinned inline
+script CSP hashes in `HeadlampProxy` and run the browser check below. A Headlamp
+failure does not fail Goblin readiness, but the installer waits for both.
 
 For standalone development, `GOBLIN_HEADLAMP_URL` may point to a trusted private
-Headlamp configured with `-base-url=/headlamp`; Kubernetes sets it automatically.
-Do not use an arbitrary third-party origin. `make test` covers the proxy and
-installer. To test a real cluster, forward the private service, then run the
-browser check and stop the forward afterward:
+Headlamp started with `-base-url=/headlamp`; the Kubernetes manifest sets it. Do not
+use a third-party origin. `make test` covers the proxy and installer. To test a real
+cluster, forward the private service, run the browser check, then stop the forward:
 
 ```bash
 kubectl port-forward -n goblin service/goblin-headlamp 14466:4466 --address 127.0.0.1
@@ -67,6 +67,6 @@ kubectl port-forward -n goblin service/goblin-headlamp 14466:4466 --address 127.
 GOBLIN_TEST_HEADLAMP_URL=http://127.0.0.1:14466 make headlamp-test
 ```
 
-The browser check exercises authentication, Kubernetes reads, denied Secret and
-mutation access, logs, deep links, CSP, and logout. Azure DNS, network rules,
-and TLS require separate verification on that VM.
+The browser check covers authentication, Kubernetes reads, denied Secret and
+mutation access, logs, deep links, CSP, and logout. Azure DNS, network rules, and
+TLS need separate checks on that VM.

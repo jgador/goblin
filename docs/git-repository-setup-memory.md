@@ -3,59 +3,55 @@
 Goblin remembers verified repository preparation across Work items without adding
 files to the repository. Existing repository instructions take precedence. Codex
 still inspects the checkout, installed tools, and the current task; remembered
-commands are suggestions, never automatically replayed.
+commands are suggestions and are never replayed automatically.
 
 ## Recall
 
-The worker uses its broker capability; PostgreSQL access stays in the controller.
-Memory is scoped to the connected GitHub account and repository ID. A disabled
-repository, changed account, or revoked grant cannot retrieve it. Observations
-record topics, reasons, versions, commands, checks, file hashes, environment,
-verification time, and Work/attempt/turn and checkpoint provenance. Raw process
-output is not retained. Credentials and private URLs are prohibited; validation
-rejects common credential formats and credential paths.
+The worker reads and writes memory through its broker capability; only the
+controller accesses PostgreSQL (`repository_setup_memory`). Memory is scoped to the
+GitHub connection, account, and repository ID. Reads and writes require the current
+attempt and an enabled repository on the same connected account. Observations record
+topic, reason, tools and versions, commands, checks, input file hashes, environment,
+verification time, and the Work, attempt, turn, and checkpoint they came from. Raw
+process output is not kept. Credentials and private URLs are not allowed;
+validation rejects common credential formats and credential paths.
 
-Before each repository turn, recall filters observations by environment identity
-(image reference, OS, architecture, and worker assembly version) and input hashes.
-Inputs include common manifests, lockfiles, tool-version files, Dockerfiles and
-AGENTS.md files, including added or removed files; Codex can add relevant paths.
-Matching hashes indicate relevance, not proof that tools are installed or a recipe
-still works. Mutable image tags are not content digests. Changed requirements need
-reassessment; ordinary source edits can reuse memory.
+Before each repository turn, recall keeps only observations whose environment
+identity (image reference, OS, architecture, and worker build ID) and input hashes
+match. Inputs include common manifests, lockfiles, tool-version files, Dockerfiles,
+and `AGENTS.md` files, including added or removed files, plus the files Codex listed
+for the observation. Matching hashes show relevance, not that tools are installed or
+that a recipe still works. Mutable image tags are not content digests. Changed
+requirements need reassessment; ordinary source edits can reuse memory.
 
-Recall selects the latest observation per topic/environment/input variant before
-limiting the query to 64 candidates and supplying at most eight topics and 24 KB.
-Old variants are not expired: they may apply to older branches. Successful
+Recall takes the latest observation per topic, environment, and input variant, limits
+the query to 64 candidates, and supplies at most eight topics and 24 KB. Old
+variants do not expire because they may apply to older branches. Successful
 verification refreshes a variant; changed inputs create another variant.
 
 ## Verification and persistence
 
-A structured Codex proposal is not persisted by itself. After retiring Codex,
-the worker runs each check in the sandbox using `/bin/sh`, the original
-environment and repository root. Checks should inspect versions and dependencies,
-exit zero, and match expected trimmed stdout. Output is bounded and the batch has
-a two-minute deadline; changed requirements, escaping paths, and symlink inputs
-are rejected. These checks are evidence, not a security attestation or guarantee
-of future reproducibility.
+A Codex proposal is not saved on its own. After Codex exits, the worker runs each
+check in the sandbox with `/bin/sh`, the original environment, and the repository
+root. A check must exit zero and its trimmed stdout must match the expected output.
+Each command has a 30-second limit and bounded output, and the batch has a
+two-minute deadline. Goblin rejects observations whose inputs change during checks,
+paths that leave the checkout, and symlinked inputs. These checks are evidence, not a
+security guarantee or proof of future reproducibility.
 
-After all checks pass and a Git checkpoint is saved, the controller rechecks the
-attempt, turn, repository grant, and checkpoint under the Work concurrency lock.
-The batch is atomic; identical duplicate delivery does not change verification
-time, and stale or conflicting writes fail under the normal attention policy,
-without automatic retry. Setup commands and candidates are excluded from public
-progress and results. Repository scripts run only in the isolated sandbox.
+After all checks pass and a Git checkpoint is saved, the controller checks the
+attempt, turn, repository grant, and checkpoint again under the application
+transaction lock. The batch is atomic. An identical duplicate write does not change
+the verification time; a conflicting or stale write fails under the normal attention
+policy, without automatic retry. Setup commands and candidates are excluded from
+public progress and results. Repository scripts run only in the isolated sandbox.
 
 ## Workspace and storage
 
-PostgreSQL stores observations and Git provenance, not filesystem archives.
-`/workspace`, `/runtime`, and `/tmp` share the Work PVC and persist across pod
-replacement; tools outside those mounts do not gain that durability. Codex
-credentials and sessions in `/run/codex` have pod lifetime. See [workspace mounts](workspace-lifecycle.md#one-workspace-per-work).
-Large dependencies consume PVC storage. Shared prepared environments and
-cross-Work caches are separate work; memory does not guarantee installation can be
-skipped. Codex may suggest portable setup instructions without blocking work.
-
-The schema belongs to the unreleased `0001_initial.sql`; regenerate EF mappings
-from a fresh database. Recreate development databases with changed baselines only
-deliberately, as described in [database setup](database.md#apply-the-sql-schema).
-There is no compatibility migration or automatic reset.
+PostgreSQL stores observations and Git checkpoint metadata, not filesystem archives.
+`/workspace`, `/runtime`, and `/tmp` share the Work PVC and survive pod replacement;
+tools installed outside those mounts do not. Codex credentials and sessions in
+`/run/codex` last only as long as the pod. See
+[workspace mounts](workspace-lifecycle.md#one-workspace-per-work). Large
+dependencies use PVC storage. Memory does not guarantee that installation can be
+skipped, and there is no shared cache across Work items.

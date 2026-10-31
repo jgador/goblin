@@ -3,171 +3,165 @@
 Goblin runs one application controller with PostgreSQL and isolated repository
 executions. Work is durable whether or not it needs a sandbox. Codex 0.161.0 is
 the implemented runtime; the Work core and orchestration do not reference its
-protocol. Agent, Work, attempt, connection, and native session IDs stay distinct.
-
-Questions can pause an attempt, and runtime turns have distinct ownership; see
-[workspace lifecycle](workspace-lifecycle.md). An AI release decision suspends compute and retains the
-Work PVC; no filesystem archive is required.
+protocol. Agent, Work, attempt, connection, and native session IDs stay separate.
+Multi-turn attempts and the Work PVC are described in
+[workspace lifecycle](workspace-lifecycle.md).
 
 ## Choosing an environment
 
-A text question uses an independent worker process with tools and web search
-disabled. It does not allocate an Agent Sandbox or receive database credentials.
-This first text capability answers from supplied context; live research tools
-and a formal question/investigation taxonomy remain deferred.
+A text question runs in a separate local worker process with tools disabled. It
+does not allocate an Agent Sandbox or receive database credentials, and it answers
+from the supplied Work context.
 
-Repository execution uses a repository enabled in Settings or explicitly enabled
-through a saved Work authorization preview in the conversation.
-The agent's Git author name/email remain separate from the connected GitHub account.
+Repository execution needs a repository enabled in Settings, or one explicitly
+enabled through a saved authorization preview in the Work conversation. The
+agent's Git author name and email are separate from the connected GitHub account.
 Each attempt records the GitHub account identity and connection generation,
-repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>` branch.
-The Work's first repository allocation provisions a Sandbox and private PVC named
-`work-<work-id>` in `agents`. Explicit retries and revisions reuse them with new
-attempt permissions. Suspended compute resumes as a fresh pod on that PVC;
-retained compute serves later turns through the claimed-input channel.
-Environment references record `k8s/<namespace>/work-<work-id>`.
+repository ID, base branch, policy version, and `goblin/<work-id>/<attempt-id>`
+branch. The first repository allocation for a Work creates a Sandbox and private
+PVC named `work-<work-id>` in the `agents` namespace. Explicit retries and
+revisions reuse them with new attempt permissions. Suspended compute resumes as a
+new pod on the same PVC; retained compute picks up later turns by polling Goblin
+for the next claimed turn. Environment references are `k8s/<namespace>/work-<work-id>`.
 See [Kubernetes names](kubernetes-names.md).
 
-The sandbox receives repository content as a Git bundle and an attempt capability.
-It never receives the GitHub token. A trusted repository broker in the Goblin
-controller validates operations against the persisted attempt and processes Git
+The sandbox receives repository content as a Git bundle plus an attempt
+capability. It never receives the GitHub token. A trusted repository broker in the
+Goblin controller checks each operation against the saved attempt and handles Git
 objects in its own bare repository; agent Git configuration and hooks never enter
-that repository. `goblin-github publish` publishes commits to the exact assigned
-branch. `goblin-github pull-request` opens its draft PR (later branch publications
-update the same PR). `goblin-github fetch` refreshes the sandbox's origin references.
-The completed interaction publishes a Git checkpoint only when push is approved;
-otherwise the broker verifies a local Git checkpoint without publication. Only
-commit metadata is recorded in PostgreSQL; workspace files stay on the PVC. Merging,
-auto-merge, other branches, tags, and repository administration are unavailable.
+that repository. `goblin-github publish` pushes commits to the exact assigned
+branch. `goblin-github pull-request` opens a draft PR (later pushes update the same
+PR). `goblin-github fetch` refreshes the sandbox's origin branches. At the end of
+a turn the worker publishes only when push is approved; otherwise the broker
+verifies a local Git checkpoint without publishing. PostgreSQL stores only commit
+metadata; workspace files stay on the PVC. Merging, auto-merge, other branches,
+tags, and repository administration are not available.
 
-Publication commands are persisted with Wolverine dispatch intent. Repeated command
-IDs cannot publish again. An uncertain response is reconciled by checking the exact
-remote branch commit or PR; failed Work is never automatically retried. External
-CLI processes have a 120-second watchdog and the operation has a 120-second deadline.
-After controller loss, a saved boot identity and monotonic uptime bound child lifetime;
-remote absence alone is not proof that a write stopped. A replacement attempt gets
-a different branch and continues from the surviving local Git HEAD on the Work
-PVC, including unpublished commits. A missing volume requires attention.
+Publication commands are saved with Wolverine dispatch intent. A repeated command
+ID cannot publish again. An uncertain response is reconciled by checking the
+exact remote branch commit or PR; failed Work is never retried automatically.
+Each external CLI process has a 120-second watchdog, and the whole operation has
+a 120-second deadline. After controller loss, a saved boot ID and system uptime
+bound how long a child could still run; remote absence alone does not prove a
+write stopped. A replacement attempt gets a new branch and continues from the
+surviving local Git HEAD on the Work PVC, including unpublished commits. A missing
+volume requires attention.
 
-Account/repository changes wait for queued, active, uncertain, and cleanup-pending
-repository attempts. A different GitHub account disables the existing repository
-allowlist until it is explicitly configured again. Connection secrets and CLI
-output are excluded from Work history and browser responses.
+GitHub account and repository changes are rejected while a repository attempt is
+queued, active, uncertain, cleanup-pending, or holding compute. Signing in with a
+different GitHub account disables all enabled repositories until they are enabled
+again. Connection secrets and CLI output are kept out of Work history and browser
+responses.
 
-The worker image has non-root execution, a read-only root filesystem, dropped
+The sandbox pod runs as non-root with a read-only root filesystem, dropped
 capabilities, resource limits, and a one-hour deadline. Repository tools may edit
-and execute inside that sandbox without interactive command approval. Repository
-workers enable Codex's `shell_tool`, `unified_exec`, and `code_mode_host` features;
-the command host is required for model-directed commands even with the optional
-`code_mode` feature disabled. Text workers keep all three execution features off.
-Browser and computer-use tools remain disabled for both worker kinds.
-The pod has no application data volume, database certificate, or service-account token.
-Network policy allows DNS, public HTTP(S), and the controller’s internal repository
-port (8788). Other private network access and inbound traffic are blocked. The
-repository port accepts only attempt capabilities; it cannot serve the UI or
-workspace APIs, and public UI ports cannot serve repository operations. This uses Kubernetes container isolation on the installed
-runtime; it does not claim VM isolation or protection from a compromised kernel.
+and run commands inside the sandbox without interactive approval. Repository
+workers enable Codex's `shell_tool`, `unified_exec`, and `code_mode_host`
+features; model-directed commands need the command host even with `code_mode`
+disabled. Text workers keep all three off. Both worker kinds disable web search,
+browser, and computer-use tools. The pod has no application data volume, database
+certificate, or service-account token. Network policy allows DNS, public HTTP(S),
+and the controller's internal repository port (8788); other private network
+access and all inbound traffic are blocked. The repository port accepts only
+attempt capabilities and cannot serve the UI or workspace APIs, and public UI
+ports cannot serve repository operations. This is Kubernetes container isolation
+on the installed runtime, not VM isolation or protection from a compromised
+kernel.
 
 ## Durable ownership
 
-1. PostgreSQL commits Work, attempt identity, and dispatch intent together through
-   Wolverine's outbox. Browser disconnection does not cancel accepted Work.
-2. A short database transaction claims a queued attempt and its environment
-   before contacting the execution host. Redelivery of a claimed attempt cannot
-   launch it again. One active or cleanup-pending attempt can use a connection.
-3. Text workers use a persistent reservation, a process start identity, and a
-   file gate. Each Work owns a stable Sandbox identity. Versioned ownership
-   changes, separate input mounts, and PVC claim files for each attempt/turn
-   prevent delayed operations from affecting a replacement allocation.
-   Reconciliation can create a suspended identity before a delayed starter arrives.
-   Replacement pods cannot repeat a claimed turn.
-4. Recovery observes the existing process/pod. Missing proof produces attention;
-   it never launches a replacement. Failed delivery, runtime errors, cancellation
-   errors, and storage failures have no automatic Work retry. A local durable
-   journal carries failure evidence across a database outage.
-5. Cancellation is intent until the host confirms stopping. A confirmed late
-   result is retained for review. Retry is a separate explicit command and creates
-   a new attempt after uncertainty and cleanup are resolved.
-6. Outcomes and cleanup intent commit before credentials or runtime evidence are
-   removed. Cleanup suspends the Sandbox, waits for its pods to disappear, and
-   deletes its Secret and input ConfigMap. A cleanup failure becomes core-owned
-   Needs attention and requires explicit reconciliation.
+Claims, cancellation, retry, and attention follow [Work lifecycle](work-lifecycle.md).
+The host adds these rules:
+
+1. A short database transaction claims a queued attempt and its environment
+   before Goblin contacts the host. Redelivery of a claimed attempt cannot launch
+   it again. Browser disconnection does not cancel accepted Work.
+2. Text workers use a persistent reservation, a process start identity, and a
+   file gate. Each Work has a stable Sandbox identity. Versioned ownership changes,
+   separate input mounts, and a claim file per attempt and turn stop delayed
+   operations from affecting a newer allocation. Reconciliation can create a
+   suspended Sandbox before a delayed starter arrives. Replacement pods cannot
+   repeat a claimed turn.
+3. Recovery observes the existing process or pod. Missing proof produces
+   attention; it never launches a replacement. A local durable journal keeps
+   failure evidence across a database outage.
+4. Outcomes and cleanup intent commit before credentials or runtime evidence are
+   removed. Cleanup suspends the Sandbox, waits for its pod to disappear, and
+   deletes its Secret and input ConfigMap. A cleanup failure requires attention
+   and explicit reconciliation.
 
 Linux text-worker journals identify a process by PID, kernel start ticks, boot ID,
-and PID namespace. Wall-clock `Process.StartTime` values can differ between the
-worker and controller and must not be used to establish that a process stopped.
-Observation rereads the outcome after detecting exit so a just-published response
-is preserved. Only the current journal format is supported.
+and PID namespace. Do not use wall-clock `Process.StartTime` to decide that a
+process stopped; it can differ between the worker and controller. Observation
+rereads the outcome after detecting exit so a just-written result is kept.
 
-Suspended Sandbox identities and Work PVCs are retained. Identity fences must stay
-while delayed messages or controllers could still arrive. No automatic volume
-reclamation or age-based expiration is implemented; export and deletion require
-a separate retention policy. Runtime logs and sessions remain execution evidence,
-while PostgreSQL owns product history.
+Suspended Sandbox identities and Work PVCs are kept. Identity fences must stay
+while delayed messages or controllers could still arrive. There is no automatic
+volume reclamation or expiry; export and deletion need a separate retention
+policy. Runtime logs and sessions are execution evidence; PostgreSQL owns product
+history.
 
 Connection verification is separate from durable Work. Overlapping verification
-prompts are rejected; account changes wait for verification and cannot change
-credentials used by active or uncertain Work. Queued Work waits for a busy
-connection. A controller restart invalidates its temporary verification/account
-reservation, then refreshes connection availability. Multiple application
-controllers sharing the same credential directory are not supported.
+prompts are rejected, and Codex account changes are rejected while an attempt
+holds the connection. Queued Work waits while its connection is busy, changing,
+or being verified. A controller restart clears its temporary verification or
+account-change state, then refreshes connection availability. Running several
+application controllers on the same credential directory is not supported.
 
 ## Configuration and deployment
 
-Durable Work is enabled by default and requires a migrated PostgreSQL database.
-The [database guide](database.md) describes local connections. For a connection
-screen only, set `GOBLIN_WORK_ENABLED=false`; Work APIs are then disabled.
-`/readyz` checks PostgreSQL when Work is enabled and does not depend on Codex.
-An unavailable runtime remains visible through connection state and Work
-attention while the application and history stay accessible.
+Durable Work is on by default and needs a migrated PostgreSQL database; see the
+[database guide](database.md). To run only the connection screen, set
+`GOBLIN_WORK_ENABLED=false`; Work APIs are then disabled. `/readyz` checks
+PostgreSQL when Work is enabled and does not depend on Codex. An unavailable
+runtime shows in connection state and Work attention while the application and
+history stay available.
 
 | Setting | Purpose |
 | --- | --- |
 | `ConnectionStrings__Goblin` | Application database connection; never forwarded to workers. |
-| `GOBLIN_EXECUTION_NAMESPACE` | Enables repository hosting in the installed execution namespace. Without it, only text capability is advertised. |
+| `GOBLIN_EXECUTION_NAMESPACE` | Enables repository hosting in this namespace. Without it, only text execution is offered. |
 | `GOBLIN_EXECUTION_IMAGE` | Worker image, normally the same version as Goblin. |
 | `GOBLIN_KUBERNETES_URL` | Optional API address; defaults to the in-cluster API. |
-| `GOBLIN_KUBERNETES_TOKEN_FILE`, `GOBLIN_KUBERNETES_CA_FILE` | Controller credentials/trust paths, mounted only in the app. |
+| `GOBLIN_KUBERNETES_TOKEN_FILE`, `GOBLIN_KUBERNETES_CA_FILE` | Controller credential and CA paths, mounted only in the app. |
 
 GitHub sign-in uses the bundled official `gh` CLI (2.101.0, checksum-pinned for
 amd64 and arm64). Open **Settings → GitHub → Connect GitHub**, copy the device
 code, and authorize **GitHub CLI** on GitHub. No custom OAuth app, client ID,
-callback URL, or manually copied access token is needed. `gh` requests its standard
-OAuth scopes; Goblin's repository allowlist is enforced by the broker, not by a
-branch-scoped OAuth token.
+callback URL, or copied access token is needed. `gh` requests its standard OAuth
+scopes; the broker, not the token, enforces Goblin's repository allowlist.
 
-The private CLI profile lives under the persisted data directory's `github-cli/`.
-Headless containers use a private file with mode 0600 rather than a system keyring.
-No host `GH_TOKEN`, `GITHUB_TOKEN`, browser command, or CLI configuration is inherited.
-Disconnect removes Goblin's saved profile;
-remote revocation is available in GitHub's authorized application settings.
+The CLI profile lives in `github-cli/` under the data directory, in a private file
+with mode 0600 instead of a system keyring. No host `GH_TOKEN`, `GITHUB_TOKEN`,
+browser command, or CLI configuration is inherited. Disconnect removes Goblin's
+saved profile; revoke remote access in GitHub's authorized application settings.
 
-GitHub branch rules provide a second safeguard; account bypass privileges matter.
-Branch publication can trigger existing GitHub Actions under their configured
-permissions. The broker's branch restriction does not reconfigure those workflows.
+GitHub branch rules are a second safeguard; account bypass privileges matter.
+Branch pushes can trigger existing GitHub Actions with their configured
+permissions. The broker's branch restriction does not change those workflows.
 
-The Azure/local installer provisions PostgreSQL, verifies certificate login,
-runs `deploy/postgres/migrate.sh IMAGE`, then deploys the application and execution
-RBAC/network policy. The migration job alone receives the schema-admin client
-certificate. Neither Wolverine nor EF creates schema at application startup.
+Installation provisions PostgreSQL, verifies certificate login, runs
+`goblinctl db migrate IMAGE`, then deploys the application and the execution
+RBAC and network policy. Only the migration job receives the schema-admin client
+certificate. Neither Wolverine nor EF creates schema at startup.
 
 ## Verification limits
 
-Available tests cover core contracts, process fencing/cancellation, connection
-reservations, cleanup recovery, browser commands, and local Git bundles/bare
-remotes. PostgreSQL transaction and Wolverine-delivery coverage requires the
-opt-in database suites; certificate coverage requires their TLS fixture.
+Available tests cover core contracts, process fencing and cancellation,
+connection reservations, cleanup recovery, browser commands, and local Git bundles
+and bare remotes. PostgreSQL transaction and Wolverine delivery coverage needs the
+opt-in database suites; certificate coverage needs their TLS fixture.
 
-The pinned Codex initialization/storage/process-replacement/logout check uses a
-synthetic credential. It does not establish authenticated model execution.
-Kubernetes network/isolation checks and complete GitHub publication remain
-separate integration checks. Use [test selection](repository-layout.md#choosing-verification).
+`make codex-test` checks pinned Codex initialization, storage, process replacement,
+and logout with a synthetic credential. It does not prove authenticated model
+execution. Kubernetes network and isolation checks and full GitHub publication
+are separate integration checks. Use [test selection](repository-layout.md#choosing-verification).
 
-The command-host regression runs the pinned Codex binary against a local model
-fixture. It verifies that a model-issued nested command writes a file for repository
-Work and remains blocked for text Work. This catches a disabled `code_mode_host`,
-which a direct app-server `command/exec` check does not detect.
+The command-host regression in `Goblin.Tests` runs the pinned Codex binary against
+a local model fixture. It checks that a model-issued nested command writes a file
+for repository Work and stays blocked for text Work. This catches a disabled
+`code_mode_host`, which a direct app-server `command/exec` check misses.
 
-Authenticated execution and GitHub branch/PR delivery require configured
-service credentials and explicit live verification. Cross-runtime continuation
-is still a [planned experiment](architecture.md#connections-and-runtime-adapters).
+Authenticated execution and GitHub branch and PR delivery need configured service
+credentials and explicit live checks. Cross-runtime continuation is a
+[proposal](architecture.md#connections-and-runtime-adapters).

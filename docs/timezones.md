@@ -1,56 +1,54 @@
 # Workspace timezone
 
-After first unlock, Goblin suggests a timezone from the visitor's public IP via
-**ipwho.is**. If detection fails, is blocked, exceeds three seconds, or returns
-an unsupported zone, it falls back to the browser timezone, then UTC. Confirm
-with **Use timezone** or choose another zone; detection never saves it.
+After unlock, when no workspace timezone is saved, Goblin suggests one from the
+visitor's public IP through **ipwho.is**. If the lookup fails, is blocked, takes more
+than three seconds, or returns an unsupported zone, Goblin falls back to the browser
+timezone, then UTC. Confirm with **Use timezone** or choose another zone; detection
+never saves a timezone.
 
-The confirmed choice applies to the whole workspace across devices. Change it
-under **Settings → Time & date**; **Detect from IP** checks again, **Use
-suggestion** selects the result, and **Save timezone** applies it. Search accepts
-country, city, IANA ID, or current UTC offset, ignoring case, accents and extra
-spaces. The selector uses browser-supported IANA region/city zones, UTC, and a
-recognized suggestion alias when needed. Current offsets appear in the selector;
-displayed dates use each zone's daylight-saving and historical rules.
+The saved choice applies to the whole workspace on every device. Change it under
+**Settings → Time & date**: **Detect from IP** checks again, **Use suggestion**
+selects the result, and **Save timezone** applies it. Search matches country, city,
+IANA ID, or current UTC offset, ignoring case, accents, and extra spaces. The
+selector lists the IANA region/city zones that both the Goblin server and the
+browser support, plus UTC and the current selection or suggestion. It shows current
+offsets; displayed dates follow each zone's daylight-saving and historical rules.
 
-Absolute conversation, Work, execution, system and log times use this preference;
-relative labels remain elapsed time. Durable timestamps and log events retain UTC
-instants, and raw JSON and downloads can contain UTC strings. Open Goblin pages
-pick up changes on refresh. Reopen or refresh an open log view to apply a change.
-VMUI's timezone control can override the current tab until the view reloads.
+Absolute conversation, Work, execution, system, and log times use this preference;
+relative labels stay elapsed time. Stored timestamps and log events keep UTC
+instants, and raw JSON and downloads can contain UTC strings. Open Goblin pages pick
+up a change on refresh. Reopen or refresh an open log view to apply a change. The
+VMUI timezone control can override the current tab until the view reloads.
 
 ## Detection and data
 
-A VPN may cause IP detection to suggest its exit location; neither IP nor browser
-timezone guarantees physical location. The browser requests
-`https://ipwho.is/?fields=success,timezone.id` directly, so the provider receives
-its IP and normal request metadata including CORS origin. Goblin sends no
-credentials or referrer, rejects redirects, and stores only the confirmed timezone
-ID. The optional keyless service can be blocked or exhaust its quota; fallback
-still works. See [provider documentation](https://ipwhois.io/documentation).
+With a VPN, IP detection may suggest the VPN exit location; neither the IP nor the
+browser timezone proves physical location. The browser calls
+`https://ipwho.is/?fields=success,timezone.id` directly, so the provider receives the
+visitor's IP and normal request metadata, including the CORS origin. Goblin sends no
+credentials or referrer, rejects redirects, and stores only the saved timezone ID.
+The free service can be blocked or run out of quota; the fallback still works. See
+the [provider documentation](https://ipwhois.io/documentation).
 
-Country and city labels come from bundled IANA tzdb data and `Intl.DisplayNames`,
-not the location service. To update it, run
-`node scripts/update-timezone-places.mts /usr/share/zoneinfo` with the desired
-installed tzdb version. Builds do not depend on host tzdb files; unknown newer
-zones use their readable IANA ID.
+Country and city labels come from bundled IANA tzdb data
+(`frontend/src/settings/timezone-places.ts`) and `Intl.DisplayNames`, not from the
+location service. To update the data, run
+`node scripts/update-timezone-places.mts /usr/share/zoneinfo` with the desired tzdb
+version installed. Builds do not read host tzdb files; zones missing from the bundled
+data show their IANA ID.
 
 ## Storage and verification
 
-`workspace-preferences.json` in the persistent application data directory stores
-the preference independently of Work and database availability. Retain the volume
-across restarts and upgrades; this file is not a multi-replica configuration store.
-Authenticated same-origin saves include the previously read timezone to prevent
-stale overwrites and atomically replace the file. Read or write failures surface
-an error; failed initial saves keep onboarding open.
+The preference is stored in `workspace-preferences.json` in the persistent
+application data directory, independent of Work and database availability. Keep the
+volume across restarts and upgrades; this file is not a multi-replica configuration
+store. Authenticated same-origin saves include the previously read timezone to
+prevent stale overwrites, and replace the file atomically. Read or write failures
+show an error; a failed first save keeps the setup dialog open.
 
-The log adapter supplies the preference to the pinned VictoriaLogs UI via its
-`VLUI:TIMEZONE` storage contract before VMUI starts, including on direct links.
-Run the real log UI check when upgrading VictoriaLogs; see
-[log verification](logging.md#verification).
+The log proxy writes the preference to the pinned VictoriaLogs UI's `VLUI:TIMEZONE`
+local storage key before VMUI starts, including on direct links. Run the real log UI
+check when upgrading VictoriaLogs; see [log verification](logging.md#verification).
 
-HTTP and browser tests cover authorization, validation, concurrent saves,
-persistence, storage failures, detection fallbacks, search, confirmation, and
-time display with controlled responses. They do not depend on a live geolocation
-service; changes to the provider also require a live HTTPS/CORS browser smoke
-check. Verify real VMUI behavior separately from fixtures.
+Automated tests use controlled responses and do not call the live geolocation
+service. A change to the provider also needs a live HTTPS and CORS browser check.

@@ -1,16 +1,11 @@
 # Goblin releases
 
 Develop on `master`; stabilize and service each release line on
-`release/<major>.<minor>`. Goblin and goblinctl keep independent versions.
-The main product component is **platform**, following
-[the component naming agreement](kubernetes-names.md). **Platform Release**
-coordinates its publication with goblinctl. See [GitHub Actions](github-actions.md)
-for workflow and job naming.
-
-The workflow prepares and verifies coordinated candidates, requires publication
-approval, and supports recovery from partial publication. Existing releases retain
-their original assets and attestations; current installer authentication requires
-the **Platform Release** signing identity described below.
+`release/<major>.<minor>`. Goblin and goblinctl keep independent versions. The
+main product component is **platform** ([component names](kubernetes-names.md)).
+The **Platform Release** workflow prepares, verifies, and publishes one Goblin and
+goblinctl pair after a single approval. See [GitHub Actions](github-actions.md)
+for workflow and job names, installation asset commands, and the signing identity.
 
 ## Development and stabilization
 
@@ -20,50 +15,27 @@ the **Platform Release** signing identity described below.
 | `release/0.1` | Stabilization and later servicing for the `0.1.x` line. |
 | `backport/0.1/<issue>-<description>` | A temporary branch for a targeted fix, merged by PR into `release/0.1`. |
 
-Use feature/fix PRs targeting `master` for ordinary work. Cut a release branch
-when its source is ready for stabilization, before a backport is needed. Continue
-new development on `master`; keep the release branch focused on fixes needed for
-that line. Do not merge all of `master` into an existing release branch.
+Use PRs targeting `master` for ordinary work. Cut a release branch when its source
+is ready for stabilization. Keep the release branch limited to fixes for that line,
+and do not merge all of `master` into it.
 
-To cut a line, start with a clean working tree and fetch the current source:
+To cut a line, start with a clean working tree, fetch, and confirm that
+`test_results` passed for the exact `origin/master` commit you want. For `0.1`:
 
 ```bash
 git fetch origin
-```
-
-Confirm that `origin/master` is the intended stabilization point and that
-`test_results` passed for that exact commit. Then, for the `0.1` line:
-
-```bash
 git switch --create release/0.1 origin/master
 git push --set-upstream origin release/0.1
 ```
 
-Use the appropriate major/minor name for another line. Creating the branch does
-not require publishing goblinctl, updating its dependency pin, or creating a tag.
-Unreleased goblinctl changes may be present in the source being stabilized.
-
-PRs targeting `master` or `release/*`, and pushes to either, run **CI**.
-The `changes` job selects verification from extensions and recognized filenames.
-Selected language, integration, and installer jobs verify affected source and
-contracts. The required `test_results` job passes only when detection and every
-selected job succeed; documentation-only changes pass with intentional runtime
-skips. Failed detection, failed/cancelled selected jobs, and unexpected skips fail
-the required result. See [CI selection](github-actions.md#ci-selection-and-required-result).
-Job IDs use short
-lowercase names with at most one underscore; GitHub displays those IDs directly.
-The checked-in [ruleset template](../.github/goblin-ruleset.json) requires PRs, an up-to-date passing check, and resolved
-review conversations; it blocks deletion and force pushes. It has no bypass
-actors and requires no second reviewer, so a sole maintainer can merge a passing
-PR. Verify that the live repository ruleset matches the template. Once a release branch exists, make changes through PRs rather than direct
-pushes. Branch creation uses an already checked commit from `master`.
+After the branch exists, change it only through PRs. Cutting a branch or merging a
+backport does not publish anything, create a tag, or require a new goblinctl.
 
 ## Backport a fix
 
-Normally merge the fix into `master` first. Decide which existing release lines
-need it, and make a separate backport PR for each affected line.
-
-For example, replace `MASTER_FIX_COMMIT` with the commit that landed on `master`:
+Merge the fix into `master` first. Make a separate backport PR for each release
+line that needs it. Replace `MASTER_FIX_COMMIT` with the commit that landed on
+`master`:
 
 ```bash
 git fetch origin
@@ -71,300 +43,208 @@ git switch --create backport/0.1/123-fix-description origin/release/0.1
 git cherry-pick -x MASTER_FIX_COMMIT
 ```
 
-Use the resulting squash commit or the relevant ordinary commits. Do not blindly
-cherry-pick a merge commit. The `-x` option records the original commit so the fix
-can be traced across branches. Resolve conflicts for the release branch's code,
-then use `git cherry-pick --continue`; use `git cherry-pick --abort` to abandon the
-attempt. After resolving conflicts, confirm that the final commit message still
-identifies the original commit. Include any necessary prerequisite fixes explicitly.
+Cherry-pick the squash commit or the relevant ordinary commits, not a merge commit.
+Include required prerequisite fixes explicitly. Resolve conflicts for the release
+branch's code, then run `git cherry-pick --continue` (or `--abort` to stop). Keep
+the `-x` reference to the original commit in the final message.
 
-Run the checks relevant to the fix on the backport, then push its branch:
+Run the checks relevant to the fix, then push:
 
 ```bash
 git push --set-upstream origin backport/0.1/123-fix-description
 ```
 
-Open a PR with **base `release/0.1`** and this backport branch as the head. Link the
-original issue/PR and commit, explain why the release line needs the fix, and note
-conflict resolutions and verification. Wait for `test_results` and merge through
-the protected PR flow. Confirm the checks on the resulting release-branch commit
-before using it as a later candidate.
+Open a PR with **base `release/0.1`**. Link the original issue, PR, and commit;
+explain why the line needs the fix; note conflict resolutions and verification.
+Merge after `test_results` passes, and confirm the checks on the resulting
+release-branch commit before using it as a candidate.
 
-A fix that applies only to an older line may start there; document why it does
-not apply to `master`, or track the corresponding forward fix. Keep this an
-explicit exception to the master-first approach.
-
-Backport application code, goblinctl code, and bundled assets by the same process.
-Do not substitute a newer `master` installer or merge an unrelated dependency-pin
-update to make the backport possible. Coordinated preparation decides whether the release branch's source can reuse
-goblinctl or needs a new build. Neither cutting a branch nor merging a backport publishes a
-release.
+A fix that applies only to an older line may start on that line; document why it
+does not apply to `master`, or track the forward fix. Backport application code,
+goblinctl code, and bundled assets the same way. Do not substitute a newer `master`
+installer or merge an unrelated dependency-pin update to make a backport work.
 
 ## Prepare a coordinated candidate
 
-1. Merge source changes or backports into the intended release line. Wait for
-   **test_results** to pass for the exact commit.
-2. Open **Actions → Platform Release → Run workflow** on `master`.
-   The workflow uses the checked-in preparation tooling from this run; **Source
-   branch** selects the product source, for example `release/0.1`.
-3. Choose **preview** or **stable**. Leave the Goblin version blank to suggest the
-   next version within that line. An optional full source SHA must already belong
-   to that release branch; otherwise preparation captures its current tip once.
-4. Normally leave **goblinctl version** blank. Preparation reads published
-   installer metadata and compares the frozen source's shipping inputs and
-   required capabilities. It prefers the checked-in selection, then the source's
-   Cargo version, then newer published versions. An exact match can be reused
-   even when its source is older or the checked-in pin has not been updated.
-   Before reuse, preparation verifies the selected installer's archive,
-   authenticates its archive and manifest, and checks its tag's source commit.
-   Automatic selection skips historical manifest formats, including releases
-   without `schemaVersion`; their tags still reserve those versions. An explicit
-   override cannot reuse these releases. Failed downloads and invalid manifests
-   that declare the current schema still stop preparation.
-5. If nothing matches, preparation builds goblinctl from the captured source. It
-   uses the source's Cargo version when unused, otherwise suggests the next unused
-   patch version. An override can select a matching published installer or an
-   unused version. Releases, drafts, and orphan tags reserve their versions.
-6. Preparation uploads **goblin-candidate-<attempt>** and displays its summary. It contains the
-   selected installer archive, installer manifest/checksums, generated Azure
-   assets, and the coordinated `release.json` with checksums for every asset.
+1. Merge the source changes or backports into the release line. Wait for
+   `test_results` to pass for the exact commit.
+2. Open **Actions → Platform Release → Run workflow** and run it on `master`.
+   Preparation refuses other refs. Set **Source branch** to the line, for example
+   `release/0.1`.
+3. Choose **preview** or **stable**. Leave the Goblin version blank to use the
+   next version in that line. A version must belong to the line, match the
+   channel, and be unused. The optional source SHA must be a full lowercase commit
+   on that branch; blank uses the branch tip at preparation time.
+4. Normally leave **Optional goblinctl version** blank. Preparation reuses the first
+   published installer whose shipping inputs and capabilities match the source. It
+   checks the checked-in pin first, then the source's Cargo workspace version, then
+   other published versions, newest first. Published manifests without the current
+   `schemaVersion` are skipped. Before reuse it authenticates the archive and
+   manifest and checks that the tag points to the recorded source commit.
+5. If no installer matches, preparation builds goblinctl from the frozen source.
+   It uses the Cargo workspace version if unused, otherwise the next unused patch
+   version. An explicit goblinctl version reuses a matching published installer or
+   builds an unused version. Releases, drafts, and tags all reserve versions.
+6. Preparation uploads **goblin-candidate-<attempt>** and shows a summary. The
+   candidate contains the installer archive, its manifest and checksums, the
+   generated Azure assets, and `release.json` with checksums for every asset.
 
-Goblin and goblinctl retain independent versions. The chosen goblinctl version is
-an explicit compile-time input, recorded in its manifest and reported by the
-binary, metadata, and local installer paths. Cargo manifests and lockfiles are
-unchanged. A release branch cut before this build support existed needs the
-support backported if it must build a version different from its Cargo version.
+Shipping inputs are listed in
+[`tools/goblinctl/release-inputs.json`](../tools/goblinctl/release-inputs.json).
+The source's required installer capabilities are in
+[`deploy/goblinctl-requirements.json`](../deploy/goblinctl-requirements.json); the
+installer declares its own in
+[`tools/goblinctl/capabilities.json`](../tools/goblinctl/capabilities.json).
+Preparation does not change Cargo files, the development pin, or service image
+locks, and creates no PR.
 
-Source is exported from Git into an isolated tree under `.artifacts/`; build
-outputs cannot change the checkout. Bicep reads a candidate-specific installer
-selection in another isolated rendering tree, so both the bootstrap and displayed
-metadata use the recorded installer. Development pins and service image locks
-are unchanged, and preparation creates no dependency PR.
-
-Shipping inputs include Rust source/build configuration, setup and PostgreSQL
-bundles, branding, and licensing files. Additions and deletions count. Changed
-inputs require a matching publication or a new build. Missing capabilities in the
-source, failed authentication, failed source checks, and conflicting requested
-versions stop preparation with a failing job and a next action. Installer manifests
-must contain the current schema and input fingerprints.
-
-A nonmatching installer's signatures or tag cannot block a new
-build. Its metadata is used only to rule it out; preparation does not execute or
-include its archive in the candidate. Failed verification of a selected installer
-stops preparation. Investigate its provenance or start a new preparation with an
-unused **Optional goblinctl version** (`--installer-version` in the preparation
-CLI). Keep the existing release's tag and assets unchanged.
+Preparation stops with a next action when the source is not on the branch, its
+`test_results` has not passed, its dependency files are inconsistent, it lacks a
+required capability (backport the implementation and capability, then prepare
+again), a requested version is reserved or does not match, or the selected
+installer fails authentication. For a failed installer, start a new preparation
+with an unused **Optional goblinctl version** (`--installer-version`). Keep the
+existing release's tag and assets unchanged.
 
 ## Verify and publish the candidate
 
-Preparation and verification have read permissions. Verification uses a separate
-checkout of the captured source. It checks every candidate hash, the matching
-installer inputs and capabilities, the actual executable's version, metadata and
-installation validator, and reproduces the selected Azure assets byte-for-byte.
-It runs formatting, Clippy, `make test` with the candidate executable, and the setup
-and installation browser journeys. Source-check CI and candidate verification are
-both required. Database-dependent tests remain opt-in and report skips.
+The `verify` job checks out the frozen source separately. It checks every
+candidate hash, the installer inputs and capabilities, the executable's version,
+metadata and install-request validator, and reproduces the Azure assets
+byte-for-byte. It then runs `make install`, `make check`, and the setup and install
+browser journeys using the packaged goblinctl, and fails if tests change tracked
+files. PostgreSQL tests remain opt-in and report skips.
 
-After verification succeeds, a separate job downloads the original artifact by ID,
-seals its record with deploymentChecks: passed, attests the pair and any newly built installer, and
-uploads **goblin-ready-<attempt>**. Before sealing, deploymentChecks: pending is
-expected. Review the sealed candidate and the **Ready to publish** summary.
+The `seal` job marks the candidate `deploymentChecks: passed`, attests it and any
+newly built installer, and uploads **goblin-ready-<attempt>**. Review the sealed
+candidate and the **Ready to publish** summary.
 
-Use **Review deployments** to approve the `publish` job in **Platform Release**
-once for the pair. The goblin-release environment controls this approval. The
-publication job checks the original artifact, manifest digest, run/attempt,
-source and tooling revision, source checks, branch membership and provenance again.
-It checks both version slots before writing either one. It publishes a newly built
-goblinctl first, then publishes Goblin using the same verified assets; a reused installer is verified
-without creating another installer release. Tags and published assets are immutable
-under this workflow.
+Use **Review deployments** to approve the `publish` job once for the pair; the
+`goblin-release` environment controls this approval. Publication checks again the
+candidate digest, run and attempt, workflow revision and attestation, the source's
+`test_results` check, and branch membership, then authenticates the installer. It
+checks both version slots before writing either. It publishes a newly built
+goblinctl first, then Goblin; a reused installer must already be fully published.
+Publication never marks a release as GitHub's latest release.
 
-Website installation deployment follows successful publication. The workflow reports
-release publication separately from website installation deployment. **Make this release
-the installation default** is unchecked by default; only an explicit selection updates
-the recommendation.
+The `installation` job then updates the website installation assets.
+**Make this release the installation default** is unchecked by default; only an
+explicit selection changes the recommendation. The `report` job shows release
+publication and website installation results separately.
 
-To update the development installer dependency:
+Signing and authentication accept only `platform-release.yml` on `master`. A
+published installer signed by another workflow cannot be reused; publish a new
+installer version through **Platform Release** and keep existing tags and assets.
+
+To update the development installer pin after a publication (the release must
+match the checkout's installer inputs and capabilities):
 
 ```bash
 cargo xtask release pin-installer --version X.Y.Z
 ```
 
-Creating a release branch or merging a backport does not publish anything. A manual
-preparation run now proceeds to verification and then waits for publication approval.
-An unapproved candidate stays unpublished. Installer signing requires the
-`platform-release.yml` workflow on master. Candidate authentication checks this
-signer path, the recorded workflow revision, and `refs/heads/master`. Installer
-authentication accepts only that workflow path on master. Installers signed by
-superseded workflow paths need a new version published through **Platform Release**
-before reuse; existing tags and assets remain unchanged. After merging the rename,
-start a fresh run from updated master rather than rerunning an older workflow
-revision. Only the current release record schema is supported.
-
 ## Installation defaults and recommendation
 
-The [website installation page](https://goblinboard.com/install/) lists
-published Goblin versions and selects the recommendation. Each version opens its own Azure
-assets. Azure displays **Goblin version**, already bound to the source and installer.
+The [website installation page](https://goblinboard.com/install/) lists published
+Goblin versions and the recommended one. Each version opens its own Azure assets,
+already bound to its source and installer. Only current-format releases signed by
+`platform-release.yml` are listed. Older formats and releases signed by other
+workflows stay on GitHub Releases but are excluded. An invalid signature fails the
+run.
 
-For existing published releases, promotion, rollback, and installation hosting recovery use
-**Recommend Release** with an already published version. Uncheck its
-recommendation option to repair the website installation deployment while preserving the
+To recommend an existing release, roll back, or repair installation hosting, run
+**Recommend Release** from `master` with a published version. Its recommendation
+option is checked by default; uncheck it to redeploy the assets and keep the
 current default.
-An older published version in the current installation format remains
-independently installable. Superseded preproduction manifest formats stay on
-GitHub Releases as historical artifacts, and are excluded from the website catalog.
-Production also excludes releases signed by another workflow. Invalid signatures
-fail verification; they are never treated as historical releases. A recommendation
-must use the current format and `platform-release.yml` signing identity.
 
-An empty catalog requires a published version before installation is enabled.
-A deployed catalog with no recommendation requires an explicit version selection.
-On first publication, the newest stable version is selected, otherwise the newest
-preview. During development, explicitly recommend a tested preview. For a stable
-announcement, publish and recommend the stable release; later previews do not
-replace it automatically. A recommendation affects new installations.
+The first catalog recommends the newest stable release, otherwise the newest
+preview. After that, the deployed recommendation is kept, including no
+recommendation, until a run explicitly recommends a version. An empty catalog
+needs a published version before installation is available. A recommendation
+affects new installations only. GitHub's "latest release" never sets Goblin's
+default.
 
-Installation asset preparation follows coordinated publication through the reusable
-**Installation Assets** workflow (`installation-assets.yml`). It authenticates the
-selected release and installer, then lists the GitHub Releases API to download all
-current-format Goblin assets. Signed manifests, GitHub asset digests, template hashes,
-and checksums must agree. Historical preproduction formats stay on GitHub Releases.
-
-The frozen snapshot is a GitHub Actions artifact passed into **Website Release**.
-The tested Nginx image serves `goblinboard.com/install/azure/`, through the existing
-`website-production` approval. No distribution branch or GitHub Pages is involved.
-The currently deployed website catalog preserves the recommendation; explicit
-recommendation changes take effect when the approved website image deploys.
-For the first publication, the newest supported stable release is preferred,
-otherwise the newest preview. A null deployed recommendation remains null.
-The repository-wide GitHub “latest release” never determines Goblin's default.
-Deployment rejects an advanced source or a changed deployed catalog while approval
-was pending. Versioned assets remain attached to GitHub Releases.
-
-The installation page presents Azure as available now. AWS and Google Cloud
-Platform are planned and have no deployment action or templates. Provider assets
-and catalogs belong under their own website directory; Azure remains the only
-implemented provider and all cloud installation remains manual.
+The installation snapshot passes as an Actions artifact into **Website Release**,
+which deploys through the `website-production` approval. Deployment fails if
+`master` advanced or the deployed catalog changed while approval was pending, and
+the snapshot fails if a previously hosted release changed or disappeared.
+Versioned assets stay attached to GitHub Releases.
 
 ## Repository setup
 
-Source protection is defined in
-[`.github/goblin-ruleset.json`](../.github/goblin-ruleset.json). Apply it as an active
-repository ruleset for `master` and release branches. The
-[live ruleset](https://github.com/jgador/goblin/rules/24076471) is active for both.
-The ruleset uses GitHub's
-`refs/heads/release/**/*` pattern to cover both immediate and nested release
-branch names; Actions uses `release/**`. Verify the live ruleset as well as the
-file. Install `ci.yml` before activating protection in a new repository so
-the required `test_results` job exists. Its PR trigger covers all target branches;
-its push trigger covers `master` and `release/**`.
+Apply [`.github/goblin-ruleset.json`](../.github/goblin-ruleset.json) as an active
+ruleset for `master` and `refs/heads/release/**/*`. It requires PRs, an
+up-to-date passing `test_results` check, and resolved conversations, and blocks
+deletion and force pushes. It has no bypass actors and requires no approving
+review, so a sole maintainer can merge a passing PR. Editing the JSON does not
+change GitHub; check that the
+[live ruleset](https://github.com/jgador/goblin/rules/24076471) matches it. In a
+new repository, add `ci.yml` before activating protection so `test_results` exists.
 
-When adopting the CI rename in an existing repository, wait for `test_results` to
-pass on the rename PR, then replace the active ruleset's `goblin-checks` requirement
-with `test_results` from GitHub Actions before merging. Editing the JSON template
-does not update the active GitHub ruleset. Release preparation requires a source
-commit with a passing `test_results` check.
+- Configure the **goblin-release** environment with at least one required
+  reviewer, allow that maintainer to approve their own run, and allow the
+  **master** deployment branch. Preparation checks the reviewer and branch
+  settings before it starts.
+- Configure the **website-production** environment and GHCR package as described
+  in [website production](../website/production/README.md). This affects only the
+  `installation` job, not release publication.
 
-Preparation and verification need read access to source checks, releases and
-attestations. Signing has separate OIDC/attestation permissions; the protected
-publication job has release write permissions. The workflow checks that approval
-is configured before starting preparation. Website production configuration affects the
-later `installation` job and does not block recovery of release publication.
-
-- Configure **goblin-release** with at least one required maintainer reviewer.
-  Allow that maintainer to approve their own run. Keep its deployment branch policy
-  on **master**: this identifies the workflow, while the selected product source is
-  independently checked against release/<major>.<minor>.
-- Configure the existing **website-production** environment and GHCR package as
-  described in [website production](../website/production/README.md). The
-  **Installation Assets** workflow calls Website Release, including its production
-  approval. No GitHub Pages configuration or Azure credentials are required.
-- Keep **test_results** as the required source check. No pin-PR permissions or
-  separate goblinctl-release approval are needed by the coordinated workflow.
-
-Verify the active required check, master approval policy and website installation hosting
-against these settings. Azure credentials and subscription settings are not required.
+No GitHub Pages configuration, pin-PR permissions, or Azure credentials are needed.
 
 ### Manual Azure installation
 
-Repository automation does not authenticate to Azure, deploy Goblin, or create or
-delete Azure resources. There is no live Azure release check or scheduled cloud
-cleanup. Release preparation and publication require only the local checks and
-GitHub configuration described above.
-
-After publication, choose a release on the website installation page and follow
-[manual Azure deployment guide](../deploy/azure/README.md). The templates and
-installer remain available for that process. The maintainer chooses the Azure
-subscription and manages the installation and its resources directly.
-
+Repository automation does not sign in to Azure, deploy Goblin, or create or
+delete Azure resources. After publication, choose a release on the website
+installation page and follow the [manual Azure deployment guide](../deploy/azure/README.md).
 The release record contains the source and installer identities, asset checksums,
-and deployment-check result. It does not claim live Azure installation coverage.
+and the deployment-check result; it does not claim a live Azure installation.
 
-`AGENTS.md` makes the first production deployment the SQL migration immutability
-boundary. Record that deployment separately from an announcement. Local
-development provisioning does not freeze the unreleased baseline.
+The first production deployment, not an announcement, makes SQL migrations
+immutable (see `AGENTS.md`). Record that deployment separately.
 
 ## Local verification and recovery
 
 ```bash
-make dependencies-check
-make deploy-generate                      # writes .artifacts/azure/
-make rust-format
-make rust-lint CARGO_ARGS="-p xtask"
-make rust-test CARGO_ARGS="-p xtask"
-make test
+make check
 make browser-test ARGS="tests/e2e/setup.spec.ts tests/e2e/install.spec.ts"
 ```
 
-`make deploy-generate` generates review assets bound to the current SHA and a
-`0.0.0-preview.1` development label. These are local test outputs. Preparation
-creates the actual versioned release assets and requires clean merged source.
+`make check` includes `make deploy-generate`, which writes local review assets to
+`.artifacts/azure/` with the current SHA and a `0.0.0-preview.1` label. Only
+preparation creates real release assets.
 
-To authenticate the pinned installer and exercise its validator locally:
+To authenticate the pinned published installer and run its validator locally:
 
 ```bash
 make release-build
 cargo xtask release verify-installer
 ```
 
-The public archive is downloaded and verified; this command does not deploy Azure.
-`cargo xtask release check-installer` validates local compiler input coverage and
-contracts without requiring a published binary. `make release-package-local` creates a local
-review archive. Current provenance verification requires the **Platform Release**
-signing identity; installers signed by superseded workflows require a fresh
-publication under a new version before reuse.
+This downloads the public archive and does not deploy to Azure. After
+`make release-build`, `make release-check-installer` checks compiler-input
+coverage and contracts without a published binary. `make release-package-local`
+creates a local review archive.
 
 ## Recover a failed operation
 
-Candidate artifacts expire after 30 days. Use the original run's **Re-run failed
-jobs** action for failed verification, signing, publication or website installation
-deployment. The workflow retains successful upstream outputs, including the artifact IDs and the
-original preparation attempt. A retried publication job may require environment
-approval again; there is still one publication job for the pair.
+Candidate artifacts expire after 30 days. For a failed verification, seal,
+publication, or installation job, use **Re-run failed jobs** on the original run.
+Reruns keep the original artifacts, preparation attempt, and workflow revision. A
+rerun publication job may need approval again.
 
-Publication first verifies existing tags, drafts and assets against the retained
-candidate. Drafts are discovered through GitHub's paginated release list because
-the release-by-tag endpoint only returns published releases. Publication adds
-only missing draft assets, verifies every uploaded byte before
+Publication first checks existing tags, drafts, and assets against the candidate.
+It uploads only missing draft assets, verifies every uploaded byte before
 publishing the draft, and skips completed components. If goblinctl was published
-but Goblin failed, the retry verifies goblinctl and finishes Goblin. Conflicting
-tags, foreign drafts, changed assets or incomplete already-published releases stop
-with an error; the workflow never replaces them.
+but Goblin failed, the rerun verifies goblinctl and finishes Goblin. Conflicting
+tags, drafts from another candidate, changed assets, or incomplete published
+releases stop with an error; the workflow never replaces them.
 
-Use **Re-run all jobs** only when intentionally preparing a fresh candidate. A
-blank source SHA captures the release branch tip again. After changing release
-tooling, dispatch a new run from updated master: reruns use the original workflow
-revision. Missing/expired artifacts require fresh preparation and approval, with
-unused versions where a prior tag or draft reserved the old version. Preserve
-completed publications; do not substitute new bytes into them.
+Use **Re-run all jobs** only to prepare a fresh candidate; a blank source SHA
+takes the branch tip again. After changing release tooling, start a new run from
+updated `master`. Missing or expired artifacts need fresh preparation and
+approval, with unused versions where a tag or draft reserved the old ones. Do not
+change the bytes of a completed publication.
 
-If release publication succeeded and only website installation deployment failed, rerun
-the failed `installation` job or use **Recommend Release** for that published version.
-Uncheck recommendation to repair installation hosting without changing the installation default.
-The releases remain published even while website installation deployment needs attention.
-
-Automated release checks do not establish live Azure installation coverage. The
-app is built from source on the VM during manual installation; upstream OS and
-image tags can affect later installs. Opt-in PostgreSQL suites and real-runtime
-journeys report their own coverage and skips.
+If publication succeeded and only the `installation` job failed, rerun that job or
+use **Recommend Release** for the published version with recommendation unchecked.
+The releases stay published.
