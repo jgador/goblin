@@ -8,262 +8,40 @@ page, catalog, and versioned Azure templates at `goblinboard.com/install/`. See
 [workflow naming](../docs/github-actions.md) and
 [production deployment](production/README.md).
 
-The page leads with **“Turn team conversations into results.”**, followed by the
-short description **“Your self-hosted AI coworker.”** The headline explains the
-outcome; the supporting line identifies the product. The demo follows directly,
-without a longer explanatory paragraph or separate instructions that repeat what
-the example shows. “In the loop” remains part of the branding.
+The static HTML/CSS/JavaScript site presents a scripted interactive demonstration
+of Goblin coordinating work across channels. It accepts no messages or files and
+does not execute Work. Teams, Discord, and email illustrate future integrations;
+results and verification shown in the demo are fictional and remain for human review.
 
-The design follows a quiet, product-focused philosophy: explain the value first,
-make the example easy to explore, and keep decoration subordinate to the work.
-It uses Inter, a pale neutral background, dark green text, and one green accent
-for actions and selection. Shared CSS tokens own colors, borders, three corner
-radii, restrained shadows, and motion. Text, space, and alignment establish
-hierarchy; decorative miniature applications do not compete with the example.
+The demo offers channel selection, Conversation, Activity, Work and Files tabs,
+illustrative previews, and an About dialog. Playback pauses when manually paused,
+in other tabs, with a dialog open, or when the page is hidden. Keyboard selection
+and reduced-motion preferences show a complete conversation without moving effects.
+The layout adapts to narrow screens and preserves keyboard navigation, touch targets,
+zoom, and safe areas. Open `index.html` or use the development commands below.
 
-The header combines the Goblin mark and wordmark with Install and GitHub links.
-The compact introduction brings the interactive example higher on the page.
-An accessible section heading names the demo without adding visible copy.
-The interactive example puts simple channel cards and the Goblin hub beside the
-conversation on wider screens, with their top edges aligned. Each card names its
-platform and conversation type; the selected card has a green border and tint.
-The benefits have their own full-width section after the entire demo, introduced
-by “A little less coordination. A lot more room to do the work.” This section
-stays visually separate from the hub and uses four columns on desktop.
-The diagram gives its connections more vertical room while keeping the cards
-compact. It stays alongside the longer conversation while scrolling when the
-desktop viewport is tall enough to show the whole diagram. Some open space is
-intentional; the benefits are not filler for the diagram column.
-At widths of 1050 pixels and below, the hub and conversation stack. The benefits
-follow both in document order, then a compact “Give Goblin a home” installation
-invitation and a small open-source footer.
+The fictional scenarios draw on public sources; they are not quotations or
+endorsements, and Goblin has not performed the depicted work:
 
-| Benefit | Supporting copy |
-| --- | --- |
-| Less switching. More focus. | Follow conversations, progress, and results in one place. |
-| Context stays connected. | Keep each task connected to the conversation that started it. |
-| Your infrastructure. | Host Goblin on infrastructure you control. |
-| You decide what’s next. | Assign the work, review the results, and decide what happens next. |
+- GitHub: [dotnet/runtime issue #96277](https://github.com/dotnet/runtime/issues/96277).
+- Teams: [microsoft/TypeScript issue #62606](https://github.com/microsoft/TypeScript/issues/62606).
+- Email: [Linux mailing-list reply](https://lists.openwall.net/netdev/2024/09/11/354)
+  and [accepted commit](https://github.com/torvalds/linux/commit/7c6a3a65ace70f12b27b1a27c9a69cb791dc6e91).
+- Discord: [Circles Arrows](https://www.circlesarrows.com/about-us),
+  [Blueprint41](https://www.circlesarrows.com/blueprint41), and
+  [Compare41](https://www.circlesarrows.com/compare41).
 
-A visible “Illustrative example” label and planned-integration note explain
-scope beside Pause/Resume. Reduced-motion preferences show “Motion off”.
-Replies use readable body text, followed by a numbered “Proposed steps” list and
-an integrated result card. Numbers describe the proposed sequence rather than
-implying successful execution. The message composer has been removed: the demo
-accepts no messages, and its footer states that the conversation is scripted.
-Activity, Work, Files, and native dialog previews remain interactive.
+The Goblin mark uses official artwork from `assets/branding/svg/`, outside the
+repository's Apache license grant. Inter retains its SIL Open Font License in
+`assets/OFL.txt`. Provider artwork retains its license notices; the Gmail mark is
+from the [gilbarbara/logos collection](https://github.com/gilbarbara/logos).
+Channel names and marks belong to their respective owners. The files under
+`references/` are historical designs, not the current layout specification.
 
-On phones, five compact channel cards form a loose ring around Goblin. Thin
-connector tracks meet the card and logo edges. A short fiber light travels from
-the selected card to Goblin for the request, then back to that card for the
-response, following the conversation's timing. Other tracks stay quiet. The light
-pauses with playback and is hidden during thinking, completed replies, and reduced
-motion. The conversation follows in normal document flow, with all replies and
-deliverables available without a fixed-height nested scroller. Benefits use two
-columns, then one at the narrowest width. Controls have at least 44-pixel touch
-targets, hover styling is limited to
-fine pointers, zoom remains available, and page padding respects safe areas.
-
-The network retains its own height while messages appear. The conversation
-reserves space for replies during playback so arriving content does not move
-later sections. Hidden replies and controls are also inert and excluded from
-accessibility views. On wider layouts, every connector starts at its measured
-card dot and ends at the Goblin-side dot. Paths and animation lengths update
-with layout changes; moving dots and halos remain circular independent of SVG
-aspect ratio. Hover leaves card geometry stable so connectors stay attached.
-The icon, wordmark, and status scale together with an 18-pixel gap above the
-Discord endpoint when necessary.
-
-The website remains static HTML, CSS, and JavaScript with no account connections
-or build required to serve it. Open `index.html` in a modern browser or use the
-development commands below. The older `references/goblin-in-the-loop-v2.png`
-is retained as historical context, not the current layout specification.
-
-The hub's Goblin mark is a live SVG character rather than a video. On load, its
-blocks and head enter with a 300ms opacity/transform animation, staggered by 50ms,
-starting at scale 0.96 and an 8-pixel offset. The mark then stays still except for
-a subtle gaze: eyes look toward the active channel during travel, glance up while
-thinking, and return to center when the reply arrives. The gaze uses interruptible
-200ms Web Animations API transforms. Entrance and gaze share the strong
-`--ease-out` CSS token (`cubic-bezier(0.23, 1, 0.32, 1)`). There are no repeated
-hops, squashes, or idle blinks while visitors read. Mobile fiber lights run only
-during the active request and response, with no independent background loops.
-All demonstration motion pauses with playback, tabs, dialogs, and page visibility.
-Reduced motion shows the static mark; changing that preference does not replay
-the entrance. Pointer hover feedback is gated to devices with hover and a fine
-pointer. Pointer button presses use 160ms scale feedback; keyboard interaction
-and reduced motion stay immediate. Channel cards do not scale on press, keeping
-the connector endpoints fixed.
-
-The scenarios are associated with Josh A. (Slack), Anders H. (Microsoft
-Teams), Stephen T. (GitHub), Renko K. (Discord), and Linus T. (Gmail). The
-channel cards and conversation panel show platforms rather than people: each
-request appears under its platform's mark and name. Channel cards use provider
-logos and do not display participant avatars.
-
-Josh A.’s three Slack scenarios use a fictional log ingestion pipeline:
-handle higher traffic without losing accepted logs, protect logs during
-deployment, and review whether a wider release is ready. The primary request is
-“Help us handle higher traffic without losing accepted logs. Prepare a tested
-change and a deployment plan for review.” Goblin's reply explains the intended
-work and when a team decision is needed. The conversation uses three plain stages:
-understand the traffic problem, prepare and check the changes, and plan the
-deployment. Work details and deliverable previews retain the technical checks for
-bounded buffering, backpressure, durable enqueue, deduplication, health probes,
-graceful shutdown, load testing, and rollback without discarding queued logs.
-The illustrated result offers proposed changes, a verification summary, and a
-deployment plan for review. The dialogue is invented, not a quotation or a
-description of any actual system or work by Josh. No pipeline has been rewritten,
-load-tested, or deployed as part of this conversation.
-
-The GitHub card identifies an issue discussion; selecting it plays the
-GitHub conversation. Decorative repository navigation previews are removed.
-
-Its three scenarios are based on Stephen T.’s public
-[dotnet/runtime issue #96277](https://github.com/dotnet/runtime/issues/96277),
-“Investigate optimizing some OrderBy().Take calls to use a PriorityQueue.”
-They cover allocation reduction, stable ordering, and benchmarking when a bounded
-priority queue is worthwhile. The thread discusses preserving equal-key source
-order, reversing the heap comparison and output order, and measuring the actual
-System.Linq implementation: lower allocations can still come with slower execution.
-It also clarifies that the existing path uses partial sorting, so the example does
-not claim that it always sorts the whole source or promise an asymptotic speedup.
-The dialogue is fictional, not a quotation or endorsement. Work details and
-deliverable previews describe proposed investigation and checks; Goblin has not
-run these benchmarks, changed dotnet/runtime, or opened a pull request. The About
-dialog and GitHub deliverable previews link to the original issue.
-
-The Teams scenarios are based on Anders H.’s public
-[microsoft/TypeScript issue #62606](https://github.com/microsoft/TypeScript/issues/62606),
-“Changing property declaration order causes error.” In the reported `DerivedTable`
-example, reversing the `schema` and `readonlySchema` declarations removes an
-unexpected generic assignment error. The example combines indexed access
-intersections with a `Readonly` mapped type. The issue is closed; the fictional
-conversation imagines reviewing regression coverage, preserving errors for invalid
-assignments, and preparing a compiler team update. Additional invalid-assignment
-cases are proposed regression coverage, not findings from the issue. Goblin has not run
-the compiler tests or changed TypeScript. Work details, files, and previews follow
-each scenario; the About dialog and deliverable previews link to the source.
-The dialogue is not a quotation or endorsement by Anders H.
-
-The email scenarios are based on
-[Linus T.’s actual September 11, 2024 reply](https://lists.openwall.net/netdev/2024/09/11/354)
-to the AtomISP patch discussion and
-[torvalds/linux commit 7c6a3a65ace7](https://github.com/torvalds/linux/commit/7c6a3a65ace70f12b27b1a27c9a69cb791dc6e91),
-“minmax: reduce min/max macro expansion in atomisp driver.” Lorenzo S.
-authored the patch; Linus committed it and explicitly replied that he had taken
-this one patch, leaving the other two for their maintainers. It replaces nested
-macros with inline helpers and `clamp_t()` to address a reported Slackware 15.0
-32-bit build problem, with a focused change suitable for backporting to 5.15.
-Linus noted that the reported build problem did not affect the then-current Git
-tree after broader min/max cleanups. The example revisits that historical review;
-it does not imply that the fix is still pending in current Linux.
-
-Its three fictional asks cover reproducing the build failure, reviewing a
-focused backport, and recapping the patch decision. Compiler memory measurements,
-boundary checks, and build logs are proposed investigation work, not results from Goblin
-or claims of measured speedups. Both Linus’s reply and the accepted commit are
-linked from the About dialog and every email deliverable preview. The dialogue
-is not a quotation or endorsement; Goblin has not built Linux, applied a backport,
-or sent a mailing-list reply.
-
-Renko K.’s Discord scenarios draw on the public
-[Circles Arrows company description](https://www.circlesarrows.com/about-us),
-which emphasizes graph database tools, business applications, developer
-productivity, and generative AI. The linked product pages describe
-[Blueprint41](https://www.circlesarrows.com/blueprint41) as a C# object graph
-mapper with generated data objects and schema refactoring, and
-[Compare41](https://www.circlesarrows.com/compare41) as a tool for comparing
-graph models and data and selecting synchronization scope.
-
-The three asks use an invented customer-order-product dataset: outline a
-Blueprint41 model, review Compare41 differences, and plan an AI answer flow
-that shows its supporting graph records. These are proposed examples, not
-reported product issues, actual customer work, or statements made by Renko.
-The About page describes the company rather than Renko’s individual role;
-the website assigns him no unverified title. Source links appear in the About
-dialog and Discord deliverable previews. No graph database has been queried
-or synchronized, and no integration with these products is implied.
-
-Choose a channel card to see its primary scripted exchange. Additional
-scripted examples remain in the scene data; there is no scenario dropdown. The
-demonstration uses shorter requests and replies that describe the desired outcome
-before the implementation details. All fifteen stored examples retain their
-scenario-specific checks and source attribution where applicable. The initial
-Slack response is visible on arrival. Reduced-motion users see a complete
-conversation and can choose channel cards without moving message effects.
-Keyboard activation also shows the complete conversation immediately and pauses
-playback. Channel selection while manually paused preserves the pause and shows
-the full reply; Resume continues from there. Tab changes remain immediate.
-
-The animation loops from Gmail back to Slack automatically at its fixed pace.
-It pauses in other tabs, while a dialog is open, or when the browser page is hidden,
-then resumes when the conversation is visible again unless manually paused.
-Changing the reduced-motion preference updates the animation immediately.
-
-Message travel varies by channel. Each one-way trip takes
-0.6 seconds for Slack, 1 second for Teams and Discord, 1.6 seconds for Gmail,
-and 2.4 seconds for GitHub. The thinking pause also grows from quick chat
-exchanges to longer email and repository investigations. Replies appear when
-the returning dot or mobile fiber light arrives. Travel is linear along the path,
-with geometry measured on layout changes. Mobile curves are sampled in screen
-pixels to keep the light's speed and thickness consistent as the layout changes.
-Playback updates only transforms and opacity; the fiber light fades at each
-endpoint without moving the cards or logo.
-These are illustrative timings, not measured service latencies. Each exchange
-has a half-second lead-in and holds its completed reply
-for 2–3 seconds before the next channel. Exchange lengths follow their timing:
-5 seconds for Slack, 6 for Teams, 11 for GitHub, 6 for Discord, and 8 for Gmail.
-The full loop is 36 seconds, derived from the exchange timings.
-While a reply is being prepared, the conversation panel shows a gently pulsing
-green dot beside a stationary Goblin avatar and visible “Preparing a response”
-status text.
-The opacity-only pulse pauses with the demonstration and is disabled for
-reduced motion.
-
-The Conversation, Activity, Work, and Files tabs show related example content.
-Tabs support arrow keys, Home, and End. Deliverables open illustrative previews.
-The conversation and Files cards display “Ready for review” with an
-“Illustrative result” label. Activity connects the request to its proposed result,
-Work explains the planned checks, and Files lets visitors explore the deliverables.
-No successful execution or verification is claimed by the illustrated review state.
-Choose a channel to explore a scripted conversation. The example accepts no
-messages or files and includes no editable message composer.
-
-These conversations are illustrative. The website makes no external requests and
-does not execute Work. Teams, Discord, and email depict future possibilities,
-not implemented integrations. Proposed changes and draft deliverables remain
-for human review. The channel information icon opens the About dialog, which
-explains the website's scope.
-
-The Goblin icons are unchanged copies of the official artwork in the repository's
-`assets/branding/svg/` directory. The center hub draws the light-background
-icon's shapes inline with the same geometry and colors, so its parts can move;
-it sits directly on the page with a soft glow. Conversation avatars use the
-light-background icon without a surrounding tile. The About dialog uses the
-same icon on its white surface.
-Brand artwork remains outside the repository's Apache
-license grant. Inter fonts retain their SIL Open Font License in `assets/OFL.txt`.
-Slack, Teams, and GitHub artwork comes from existing frontend provider assets
-with their license notice. The Gmail mark in `assets/email.svg` comes from the
-[gilbarbara/logos collection](https://github.com/gilbarbara/logos) under the same
-provider license notice. The Discord mark identifies the depicted channel;
-channel names and marks belong to their respective owners.
-
-The production application, its asset map, and its security policy are independent
-of this website. Verify changes with `npm --prefix website run check`
-from the repository root, plus browser checks of channel scenarios, tabs,
-previews, automatic animation, narrow layouts, keyboard controls, and reduced motion.
-
-The existing `references/goblin-in-the-loop.gif` is an earlier exported design;
-it is not regenerated as part of this website update. Use `index.html` for the
-current interactive design.
-
-Production domain: <https://goblinboard.com>. See the
-[protected production deployment](production/README.md) for AK3S ingress,
-GitHub approval, TLS, and the DNS cutover procedure.
-The production overlay and workflow own this deployment; independent hosted
-copies are outside that workflow.
+Run `npm --prefix website run check`, and inspect changed interactions in a browser,
+including narrow layouts, keyboard controls, and reduced motion. The website and
+its asset map and security policy are independent from the application. See
+[production deployment](production/README.md) for hosting, TLS, and approvals.
 
 ## Installation page
 
