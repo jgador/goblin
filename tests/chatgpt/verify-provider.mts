@@ -246,6 +246,7 @@ try {
     check(
         tools.status === 200 &&
             [
+                "goblin_ping",
                 "goblin_list_work",
                 "goblin_get_work_status",
                 "goblin_get_work_attention",

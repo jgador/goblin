@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Application.ChatGpt;
@@ -32,6 +33,13 @@ internal sealed class ChatGptTools
         _configuration = configuration;
         _reader = reader;
     }
+
+    [McpServerTool(Name = "goblin_ping", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false,
+        UseStructuredContent = true, OutputSchemaType = typeof(ChatGptPingReply))]
+    [McpMeta("securitySchemes", JsonValue = OAuth)]
+    [Description("Test the ChatGPT plugin connection to Goblin. Returns a fixed confirmation without reading Work or requiring Work grants, approved results, or GitHub sign-in.")]
+    public Task<CallToolResult> PingAsync(CancellationToken token) =>
+        ReadAsync(_ => Task.FromResult(new ChatGptPingReply()), token);
 
     [McpServerTool(Name = "goblin_list_work", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(SharedWorkPage))]
@@ -94,4 +102,10 @@ internal sealed class ChatGptTools
 
     private static long Id(string value) => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out long id) &&
         id > 0 && value == id.ToString(CultureInfo.InvariantCulture) ? id : throw new McpException("Use a decimal string Work ID returned by goblin_list_work.");
+}
+
+internal sealed class ChatGptPingReply
+{
+    [JsonPropertyName("message")]
+    public string Message { get; init; } = "Goblin MCP connection is working.";
 }

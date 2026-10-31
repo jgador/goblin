@@ -33,6 +33,24 @@ and follow the [private plugin setup](chatgpt-integration.md#guided-private-setu
 Sign in with the local Goblin password. The ChatGPT server URL is the origin plus
 `/mcp`.
 
+## Test the connection without Work
+
+After installing and signing into the plugin, you can test the connection without
+sharing Work, approving a result, or signing into GitHub:
+
+1. Keep Goblin and the Chisel client running.
+2. Refresh the plugin's tools in ChatGPT after rebuilding Goblin, then open a new
+   conversation.
+3. Type **@** and select your installed Goblin plugin.
+4. Ask: **Call goblin_ping to test the connection.**
+5. Check that ChatGPT invokes `goblin_ping` and receives
+   **Goblin MCP connection is working.**
+
+The tool is on the existing `https://dev.goblinboard.com/mcp` endpoint and takes
+no arguments. It uses the same OAuth authentication as the Work tools and returns
+`{"message":"Goblin MCP connection is working."}`. A successful reply confirms
+an authenticated tool call through the gateway.
+
 ## Repeat tests
 
 For a code change, keep the gateway connected, stop the local application, then

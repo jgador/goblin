@@ -101,7 +101,7 @@ public sealed class ChatGptHttpTests
     }
 
     [Fact]
-    public async Task RealSdkDiscoversFourReadOnlyToolsAndDoesNotReuseAuthenticationBetweenRequests()
+    public async Task RealSdkDiscoversReadOnlyToolsAndDoesNotReuseAuthenticationBetweenRequests()
     {
         await using Host host = await Host.CreateAsync();
         using HttpClient http = host.Client();
@@ -117,7 +117,7 @@ public sealed class ChatGptHttpTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using McpClient client = await McpClient.CreateAsync(transport, cancellationToken: deadline.Token);
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: deadline.Token);
-        Assert.Equal(new[] { "goblin_get_work_attention", "goblin_get_work_result", "goblin_get_work_status", "goblin_list_work" }, tools.Select(t => t.Name).Order());
+        Assert.Equal(new[] { "goblin_get_work_attention", "goblin_get_work_result", "goblin_get_work_status", "goblin_list_work", "goblin_ping" }, tools.Select(t => t.Name).Order());
         foreach (McpClientTool tool in tools)
         {
             Assert.True(tool.ProtocolTool.Annotations?.ReadOnlyHint);
@@ -125,11 +125,17 @@ public sealed class ChatGptHttpTests
             Assert.NotNull(tool.ProtocolTool.OutputSchema);
             Assert.NotNull(tool.ProtocolTool.Meta?["securitySchemes"]);
         }
+        // This host has an unreachable database and no GitHub connection. Ping
+        // must confirm the transport without reading Work or its grants.
+        CallToolResult ping = await client.CallToolAsync("goblin_ping", cancellationToken: deadline.Token);
+        Assert.False(ping.IsError ?? false);
+        Assert.Equal("{\"message\":\"Goblin MCP connection is working.\"}", Assert.IsType<TextContentBlock>(Assert.Single(ping.Content)).Text);
+        Assert.Equal("Goblin MCP connection is working.", ping.StructuredContent!.Value.GetProperty("message").GetString());
         CallToolResult invalid = await client.CallToolAsync("goblin_get_work_status", new Dictionary<string, object?> { ["workId"] = "1e3" }, cancellationToken: deadline.Token);
         Assert.True(invalid.IsError);
         Assert.DoesNotContain("mcp/www_authenticate", JsonSerializer.Serialize(invalid));
         http.DefaultRequestHeaders.Authorization = new("Bearer", host.Tokens.Token("expiry"));
-        HttpRequestException failure = await Assert.ThrowsAsync<HttpRequestException>(async () => await client.ListToolsAsync(cancellationToken: deadline.Token));
+        HttpRequestException failure = await Assert.ThrowsAsync<HttpRequestException>(async () => await client.CallToolAsync("goblin_ping", cancellationToken: deadline.Token));
         Assert.Equal(HttpStatusCode.Unauthorized, failure.StatusCode);
     }
 

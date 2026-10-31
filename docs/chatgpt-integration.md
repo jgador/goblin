@@ -92,6 +92,9 @@ Open `/settings?section=chatgpt` and choose **Private plugin**.
    rejected. Sign in with the Goblin password and approve the connection. The
    scopes `openid offline_access goblin.work.read` give the owner identity,
    refresh tokens, and shared Work reads.
+   To test only the connection, mention the installed plugin with `@` in a new
+   conversation and ask **Call goblin_ping to test the connection.** Expect
+   **Goblin MCP connection is working.** This needs no Work grants or GitHub sign-in.
 4. **Share Work:** choose Work and an expiry of 1 hour, 24 hours, or 7 days.
    Goblin supplies the owner subject. Optionally include the latest approved
    result; this pins one attempt. Later results stay private.
@@ -131,6 +134,7 @@ current grants are supported.
 
 | Tool | Purpose |
 | --- | --- |
+| `goblin_ping` | Fixed connection confirmation, with no Work or GitHub access |
 | `goblin_list_work` | Authorized summaries, 25 per page |
 | `goblin_get_work_status` | Shared Work status |
 | `goblin_get_work_attention` | Shared attention details |
