@@ -5,11 +5,8 @@ formatter, Fluent Bit, and VictoriaLogs. Open **Settings → Logs → Open logs*
 visit **`/logs/`** on the Goblin address. VictoriaLogs' built-in VMUI uses the Goblin
 login and opens in a new tab. No CLI, separate UI pod, or second password is needed.
 
-Displayed log times use the shared [workspace timezone](timezones.md), confirmed
-on first access and editable under **Settings → Time & date**. IP location
-suggests the initial timezone, with browser detection and UTC as fallbacks. Reopen
-or refresh log views after changing the preference. Stored logs and raw timestamps
-remain UTC.
+Displayed times use the shared [workspace timezone](timezones.md); stored logs
+and raw timestamps remain UTC. Refresh an open log view after changing it.
 
 This change configures providers and delivery only. Application log statements
 and Work/Attempt instrumentation are deferred. Existing `Console.WriteLine` and
@@ -91,10 +88,9 @@ This local PVC survives pod replacement, but is not a backup against VM/disk los
 | Fluent Bit   | 25m / 250m          | 64 MiB / 256 MiB       |
 | VictoriaLogs | 100m / 1 CPU        | 256 MiB / 1 GiB        |
 
-VictoriaLogs has a 256 MiB cache budget, a 768 MiB Go soft memory limit, two
-concurrent search requests, and a 30-second query limit. These are initial budgets
-for the single-VM installation, not measured capacity guarantees. VMUI is served
-by VictoriaLogs itself, so the stack adds **two pods** on one node.
+VictoriaLogs uses a 256 MiB cache budget, 768 MiB Go soft memory limit, two
+concurrent searches, and a 30-second query limit. These are initial single-VM
+budgets, not capacity guarantees. VMUI runs inside VictoriaLogs.
 
 ## Authentication and deployment
 
