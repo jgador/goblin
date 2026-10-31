@@ -200,25 +200,12 @@ GitHub repository IDs retain their upstream values. HTTP exposes bigint IDs as d
 Inspection and repository-operation requests reserve IDs before submission and
 retain them on replay.
 
-Wolverine-owned tables retain the official packages' native names, `wolverine_`
-prefix, and library-defined key types:
-
-- `wolverine_agent_restrictions`
-- `wolverine_control_queue`
-- `wolverine_dead_letters`
-- `wolverine_incoming_envelopes`
-- `wolverine_node_records`
-- `wolverine_nodes`
-- `wolverine_node_assignments`
-- `wolverine_outgoing_envelopes`
-
-The administrator-only migration journal is `public.schema_migration`; its
-identity sequence is also inaccessible to the application role.
-Wolverine and the journal are excluded from Goblin EF scaffolding. The catalog has
-20 singular product tables, the singular journal, and eight native Wolverine
-tables, plus four native OpenIddict tables: `OpenIddictApplications`,
-`OpenIddictAuthorizations`, `OpenIddictScopes`, and `OpenIddictTokens`.
-OpenIddict owns these quoted names and mappings in `ChatGptOAuthDbContext`,
+Wolverine-owned tables retain their library-defined names, `wolverine_` prefix,
+and key types. The administrator-only `public.schema_migration` journal and its
+identity sequence are inaccessible to the application role. Both Wolverine tables
+and the journal are excluded from product EF scaffolding. The [SQL baseline](../backend/database/migrations/0001_initial.sql) is the
+authoritative table inventory, including the four native OpenIddict tables.
+OpenIddict owns their quoted names and mappings in `ChatGptOAuthDbContext`,
 using bigint keys. Their SQL is part of the administrator-applied baseline and
 they remain excluded from product scaffolding. OAuth grants/tokens persist in
 PostgreSQL; the owner subject and private signing/encryption keys stay in the
