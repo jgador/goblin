@@ -101,21 +101,10 @@ the page and catalog do not grant cross-origin access.
 
 ## Promo video
 
-`video/` is a development-only [Remotion](https://www.remotion.dev/) project. It
-renders a 30-second, 1920 × 1080, 30 fps landscape promo for social posts and
-launches. React components rebuild the website's hub, channel cards, and Slack
-conversation. A scripted camera moves from the headline to the network,
-where the Slack card is spotlighted, then through the conversation and review. It
-pulls back to the full network, where a shield badge on the Goblin mark and a
-“Self-hosted” caption label mark the hosting benefit, and ends on the website and
-repository addresses. A second composition, `GoblinLogo`, is a 12-second,
-1080 × 1080 seamless loop of the Goblin mark as a character. Its blocks pop in and
-the head drops onto them. It then blinks, looks around, tilts curiously, and
-thinks while the blocks take turns lifting. Finally it hops with happy eyes and
-leaves, so the clip ends on the same empty stage it starts with. The package has
-its own lockfile. It is excluded from the website image, release workflow paths,
-and the development container's dependencies. The selected JavaScript CI group
-installs its locked dependencies and runs its type check.
+`video/` is a development-only [Remotion](https://www.remotion.dev/) project
+with a 30-second 1080p promo and a 12-second square `GoblinLogo` loop. It has
+its own lockfile and is excluded from the website image, release paths, and
+development container; the JavaScript CI group type-checks it.
 
 Run these commands from the repository root:
 
@@ -135,27 +124,16 @@ paths; re-render and commit them when a composition changes. The
 first render downloads Remotion's Chrome Headless Shell into the package's
 `node_modules`. `check` type-checks the project.
 
-`video/src/content.ts` mirrors the hero copy in `index.html` and the first Slack
-scenario in `website.js`; update it when that wording changes. `video/src/timeline.ts`
-holds frame timing and `video/src/camera.ts` holds the camera shots.
-`video/src/GoblinLogo.tsx` holds the logo loop's beats and motion. It redraws the
-parts of `assets/goblin.svg` in their original shapes and colours, adding only
-brief arc eyes for the happy moment; update its geometry if the mark changes. The
-project uses `assets/` as its public directory, so the video uses the same Inter
-fonts, Goblin artwork, and provider marks as the website, under the notices above.
-Like the website, the promo shows the “Illustrative example” notice. Only the Slack
-`#log-pipeline` conversation is depicted. The end card states that the Slack
-dialogue is fictional and does not describe an actual system or work, and that
-Teams, Discord, and email are planned integrations.
+`video/src/content.ts` mirrors the homepage hero and first Slack scenario;
+update it with their wording. `timeline.ts` and `camera.ts` own timing and camera
+shots; `GoblinLogo.tsx` owns the logo loop and must track the artwork's geometry.
+The project uses the website's `assets/` and associated notices. Its end card
+identifies the Slack dialogue as fictional and Teams, Discord, and email as planned.
 
-Remotion reads `tsconfig.json` through the TypeScript JavaScript API, which the
-repository's TypeScript 7 compiler does not expose, so `video/remotion.config.ts`
-sets the automatic JSX runtime for its bundler directly.
-
-Remotion is source-available under its own
-[license](https://www.remotion.dev/license), not an open-source license. It is
-free for individuals, non-profit organizations, and for-profit organizations with
-up to three employees; larger for-profit organizations need a company license.
+`video/remotion.config.ts` sets the bundler's automatic JSX runtime for
+compatibility with the repository's TypeScript compiler. Remotion is
+source-available under its own [license](https://www.remotion.dev/license); check
+its current terms before use.
 
 ## Develop in Docker
 
