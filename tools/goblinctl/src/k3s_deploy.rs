@@ -148,7 +148,7 @@ fn compatible_source(k3s: &K3s) -> Result<()> {
     }
     ensure!(
         installed == current,
-        "Schema or installation manifests differ from the installed baseline. Image deployment cannot apply these changes; request a deliberate make k3s-reset ARGS=--yes and reinstall."
+        "Schema or installation manifests differ from the installed baseline. Image deployment cannot apply these changes; request a deliberate make k3s-reset and reinstall."
     );
     Ok(())
 }

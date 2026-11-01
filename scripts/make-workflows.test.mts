@@ -210,7 +210,7 @@ test("CI verification Make commands resolve their targets and prerequisites", as
     }
 });
 
-test("install keeps packages separate and local reset requires explicit consent flags", async () => {
+test("install keeps packages separate and k3s reset supplies confirmation", async () => {
     const installed = await workflow(["install"]);
     assert.equal(installed.result.status, 0, installed.result.stderr);
     assert.deepEqual(installed.commands, [
@@ -222,12 +222,11 @@ test("install keeps packages separate and local reset requires explicit consent 
     const reset = await workflow(["k3s-reset"]);
     assert.equal(reset.result.status, 0, reset.result.stderr);
     assert.deepEqual(reset.commands, [
-        "cargo run --locked -q -p goblinctl -- k3s reset",
-    ]);
-    const explicit = await workflow(["k3s-reset", "ARGS=--yes"]);
-    assert.deepEqual(explicit.commands, [
         "cargo run --locked -q -p goblinctl -- k3s reset --yes",
     ]);
+    const failedReset = await workflow(["k3s-reset"], reset.commands[0]);
+    assert.notEqual(failedReset.result.status, 0);
+    assert.deepEqual(failedReset.commands, reset.commands);
     const selected = await workflow([
         "rust-test",
         "CARGO_ARGS=-p goblinctl",

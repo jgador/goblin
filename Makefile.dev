@@ -108,9 +108,9 @@ k3s-status:
 k3s-stop:
 	cargo run --locked -q -p goblinctl -- k3s stop $(ARGS)
 
-# Remove the owned cluster, data and saved password; requires ARGS=--yes.
+# Remove the owned WSL cluster, data and saved password without a confirmation flag.
 k3s-reset:
-	cargo run --locked -q -p goblinctl -- k3s reset $(ARGS)
+	cargo run --locked -q -p goblinctl -- k3s reset --yes $(ARGS)
 
 # Read local installation logs; use ARGS=--follow to stream them.
 k3s-logs:

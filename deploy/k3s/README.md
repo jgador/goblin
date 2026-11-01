@@ -127,9 +127,11 @@ Kubernetes containers, and keeps all data. `start` resumes them.
 For a full clean slate, stop direct development servers and browser tests first:
 
 ```bash
-make k3s-reset ARGS=--yes
+make k3s-reset
 make k3s-start
 ```
+
+The Make target supplies the CLI's `--yes` automatically.
 
 **Reset deletes this runner's Kubernetes cluster, Goblin application data, logs,
 cluster credentials, and saved owner password.** The CLI embeds

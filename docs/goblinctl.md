@@ -54,6 +54,7 @@ Dedicated local installations check ownership and remember their checkout:
 
 ```bash
 make k3s-start                 # runs the CLI from the current source
+make k3s-reset                 # supplies the CLI confirmation for the owned WSL installation
 sudo goblinctl --repo "$PWD" k3s start        # uses a precompiled binary
 sudo goblinctl k3s stop                     # keeps application data and PVCs
 sudo goblinctl k3s retry --refresh          # retries a failed install with the current checkout

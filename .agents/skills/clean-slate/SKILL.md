@@ -130,7 +130,7 @@ to preserve.
 For the standard, verified local installation, run from the repository root:
 
 ```bash
-env -u K3S_DATA_DIR make k3s-reset ARGS=--yes
+env -u K3S_DATA_DIR make k3s-reset
 ```
 
 The runner requests sudo if needed. Its reset stops the installer **before** setup
