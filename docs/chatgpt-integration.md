@@ -3,8 +3,8 @@
 Each customer connects ChatGPT to their own Goblin instance with
 **Add custom MCP server**. Goblin hosts the read-only MCP tools and an embedded
 OpenIddict OAuth/OpenID Connect server. There is no separate identity server or
-user-account system. Private connections need no directory review. To test a
-local build through public HTTPS, see [ChatGPT local testing](chatgpt-local-testing.md).
+user-account system. Private connections need no directory review. For local
+Chisel setup or live production testing, see [plugin testing](plugin-testing.md).
 
 The Goblin owner password authenticates browser sign-in and consent. The saved
 Codex connection is separate and is never used to issue MCP tokens. Signing in
@@ -92,19 +92,14 @@ Open `/settings?section=chatgpt` and choose **Private plugin**.
    rejected. Sign in with the Goblin password and approve the connection. The
    scopes `openid offline_access goblin.work.read` give the owner identity,
    refresh tokens, and shared Work reads.
-   To test only the connection, mention the installed plugin with `@` in a new
-   conversation and ask **Call goblin_ping now and show every field from the tool
-   response unchanged.** Match the returned `responseId` to the `goblin_ping
-   response` event in Goblin's logs. The reply includes UTC time and basic runtime
-   details. This needs no Work grants or GitHub sign-in; see the
-   [connection test](chatgpt-local-testing.md#test-the-connection-without-work).
+   Follow the [connection test](plugin-testing.md#test-the-connection-without-work)
+   to verify the installed plugin without Work grants or GitHub sign-in.
 4. **Share Work:** choose Work and an expiry of 1 hour, 24 hours, or 7 days.
    Goblin supplies the owner subject. Optionally include the latest approved
    result; this pins one attempt. Later results stay private. Leave **Also share
    the latest approved result** unchecked if there is no approved result;
    requesting a missing result rejects the entire sharing request.
-5. **Test:** mention the installed plugin with `@` in a conversation. List shared
-   Work, compare status and attention, and check that an unshared Work ID is denied.
+5. **Test:** follow the [Work access checks](plugin-testing.md#test-work-access).
 
 Setup progress and confirmations are saved in this browser, scoped to the issuer,
 MCP resource, and owner subject; changing any of them resets progress. Secrets,

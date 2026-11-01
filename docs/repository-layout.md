@@ -123,7 +123,7 @@ Owners of other targets: [Rust development](rust-development.md) (`rust-*`,
 [dependencies](dependencies.md) (`dependencies-*`),
 [releases](releases.md) (`release-*`),
 [local installation](../deploy/local/README.md) (`local-*`, `dev-reset`,
-`password-set`), [ChatGPT local testing](chatgpt-local-testing.md) (`relay-*`),
+`password-set`),
 [Chisel](../deploy/chisel/README.md) (`chisel-check`),
 [logging](logging.md) (`logging-test*`), [cluster view](cluster-view.md)
 (`headlamp-test`), [website guide](../website/README.md) (`website-*`), and

@@ -95,10 +95,6 @@ PostgreSQL client profiles do not depend on `--repo` or installer state. See
 and profile selection. Client commands need `psql` and OpenSSL; Azure access also
 needs SSH.
 
-Developer-only `make relay-start`, `make relay-status`, and `make relay-stop` run
-through xtask; see [ChatGPT local testing](chatgpt-local-testing.md). The
-production CLI has no relay commands.
-
 ## Parallel installation and live progress
 
 The installer builds the Goblin image while it sets up k3s. After k3s is ready,

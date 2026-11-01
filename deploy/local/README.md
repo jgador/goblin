@@ -192,6 +192,6 @@ Azure networking need manual checks on an Azure VM.
 ## ChatGPT plugin development
 
 Local installation uses F5 NGINX over loopback HTTP, and ChatGPT stays disabled.
-For a public HTTPS address, use one of the
-[local testing gateways](../../docs/chatgpt-local-testing.md): Chisel or the Azure
-test VM relay.
+Use [Chisel tunneling](../chisel/README.md) for the public HTTPS connection and
+[plugin testing](../../docs/plugin-testing.md#local-testing) for Goblin startup,
+OAuth installation, and connection checks.

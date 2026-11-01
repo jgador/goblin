@@ -1,9 +1,18 @@
-# Chisel on AK3S
+# Chisel tunneling
+
+This guide owns Chisel server installation and the WSL client connection. For
+Goblin startup, OAuth plugin installation, and tool verification, use
+[plugin testing](../../docs/plugin-testing.md).
+
+For the existing gateway, start with [Install the WSL client](#install-the-wsl-client)
+and [Connect WSL](#connect-wsl). Server provisioning is under
+[Install the server on AK3S](#install-the-server-on-ak3s).
+
+## Gateway
 
 One Chisel server in the [website cluster](../../website/production/README.md)
-forwards a public HTTPS address to Goblin in WSL for
-[ChatGPT local testing](../../docs/chatgpt-local-testing.md). It runs in the shared
-`goblin` namespace with two ingress routes:
+forwards a public HTTPS address to Goblin in WSL. It runs in the shared `goblin`
+namespace with two ingress routes:
 
 | Host | Service port | Purpose |
 | --- | --- | --- |
@@ -21,7 +30,84 @@ writable root filesystem, capabilities, or a Kubernetes API token. Probes check 
 tunnel port, not whether WSL is connected. Keep one replica and the Recreate
 strategy: the application listener and its tunnel must be on the same server.
 
-## Administrator bootstrap
+## Install the WSL client
+
+Install the [Chisel 1.12.0 release](https://github.com/jpillora/chisel/releases/tag/v1.12.0)
+for your WSL architecture. The tested X64 WSL environment uses the Linux amd64
+binary. Verify the downloaded archive against the release's checksums, extract
+the executable, and install it on your `PATH`. Check the installed version:
+
+```bash
+chisel --version
+```
+
+### Client credentials and fingerprint
+
+Keep the server username, password, and trusted full server fingerprint in a
+password manager such as Bitwarden, outside the repository and `.artifacts/`.
+Routine connection to the existing gateway requires no AK3S kubeconfig or server
+PEM private key. The administrator owns provisioning and key rotation.
+
+The fingerprint is `Base64(SHA256(SSH-encoded server public key))`. It identifies
+the server key and is separate from the username/password credential and the
+hash of the PEM file bytes. If only the password was saved, obtain the trusted
+public fingerprint from the administrator before connecting.
+
+## Connect WSL
+
+Start local Goblin using [local plugin setup](../../docs/plugin-testing.md#local-testing)
+so it listens on `127.0.0.1:8787`. In a second WSL Bash terminal, enter the trusted
+fingerprint, username, and password:
+
+```bash
+(
+  read -r -p 'Server fingerprint: ' chisel_fingerprint
+  read -r -p 'Chisel username: ' chisel_username
+  read -r -s -p 'Chisel password: ' chisel_password
+  printf '\n'
+
+  AUTH="${chisel_username}:${chisel_password}" \
+    chisel client --fingerprint "$chisel_fingerprint" \
+    https://dev-tunnel.goblinboard.com \
+    R:0.0.0.0:8787:127.0.0.1:8787
+)
+```
+
+Wait for `Connected` and keep both terminals open. The client reads its credential
+from `AUTH` and opens an outbound HTTPS connection, so WSL needs no public IP,
+router port, or VPN. The `0.0.0.0` listener is inside the server pod; public access
+goes through the HTTPS ingress.
+
+Open `https://dev.goblinboard.com` and continue with
+[plugin installation and testing](../../docs/plugin-testing.md#install-the-plugin).
+
+### Stop the tunnel
+
+Stop the WSL Chisel client with Ctrl+C when finished. The public development
+address then returns an unavailable response. Stop the local Goblin process in
+its terminal when finished testing.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| `502 Bad Gateway` on `dev.goblinboard.com` | Confirm local Goblin listens on port 8787 and the Chisel terminal shows `Connected`. Both processes must remain running. |
+| Fingerprint mismatch | Compare the full trusted fingerprint. Obtain a newly verified fingerprint from the administrator if the server key changed. |
+| Authentication failure | Check the username and password separately from the fingerprint. The credential is `username:password`. |
+| Connection closes after server deployment | Deployment restarts Chisel. Restart the client, using updated credentials or a newly trusted fingerprint if they changed. |
+
+Check the local Goblin listener with:
+
+```bash
+ss -ltnp '( sport = :8787 )'
+```
+
+## Install the server on AK3S
+
+The following administrator steps provision the gateway. Testers using the
+existing server can start at [Install the WSL client](#install-the-wsl-client).
+
+### Administrator bootstrap
 
 Run once, outside GitHub Actions, with the intended AK3S kubeconfig:
 
@@ -43,7 +129,7 @@ The hosted runner must reach the Kubernetes API with valid TLS. The kubeconfig m
 not need local files or an interactive exec plugin. A one-hour TokenRequest token
 expires; use a credential with a planned rotation.
 
-## GitHub environment and deployment
+### GitHub environment and deployment
 
 Create GitHub environment `ak3s-production`. Under **Deployment branches and tags**,
 choose **Selected branches and tags** and add a **Branch** rule `release/*`. Set
@@ -88,23 +174,6 @@ temporary staging files; keep a private backup of the server key outside that
 directory. The WSL client needs only the username/password and trusted public
 fingerprint, not the PEM key or cluster configuration.
 
-## Connect WSL
-
-Install the matching [Chisel release](https://github.com/jpillora/chisel/releases/tag/v1.12.0)
-in WSL and follow the complete
-[local testing walkthrough](../../docs/chatgpt-local-testing.md#prepare-wsl).
-It covers the WSL database profile, local Goblin startup, private credential
-prompt, OAuth plugin installation, and verifying a fresh response ID in logs.
-Routine testing against this existing gateway uses credentials and a trusted
-fingerprint saved externally; it requires no AK3S kubeconfig.
-
-The client reads its credential from `AUTH` and opens an outbound HTTPS connection,
-so WSL needs no public IP, router port, or VPN. The `0.0.0.0` listener is inside
-the server pod; public access still goes only through the HTTPS ingress.
-
-Stop the WSL client with Ctrl+C when finished; the public application hostname
-then returns an unavailable response.
-
 ### Obtain the server fingerprint (administrator)
 
 An administrator can read the server's fingerprint with the intended kubeconfig:
@@ -114,12 +183,11 @@ kubectl --kubeconfig /path/to/ak3s-admin.yaml -n goblin logs deployment/chisel
 ```
 
 Copy the full SHA-256 `Fingerprint` value; it stays the same while
-`CHISEL_SERVER_KEY` stays the same. It is the Base64-encoded SHA-256 hash of the
-SSH-encoded server public key, not the username/password or a hash of the PEM
-file bytes. Give the verified fingerprint to testers through a trusted channel
-and keep it with the saved credential in their password manager.
+`CHISEL_SERVER_KEY` stays the same. Give the verified fingerprint to testers
+through a trusted channel as described in
+[client credentials and fingerprint](#client-credentials-and-fingerprint).
 
-## Verification
+### Verify the server installation
 
 ```bash
 make chisel-check
@@ -135,7 +203,8 @@ kubectl --kubeconfig /path/to/ak3s-admin.yaml apply \
 
 After deployment, check the rollout, both certificates, and HTTPS without
 bypassing certificate verification. Connect WSL and check that the public OAuth
-signing keys belong to the local instance. Complete a ChatGPT connection, then check
-that shared Work is readable, unshared Work is denied, and streamed responses and
-terminal WebSockets work. Stop the client and check that the endpoint becomes
-unavailable.
+signing keys belong to the local instance. Follow the
+[plugin connection test](../../docs/plugin-testing.md#test-the-connection-without-work)
+and optional [Work checks](../../docs/plugin-testing.md#test-work-access).
+Check streamed responses and terminal WebSockets, then stop the client and check
+that the endpoint becomes unavailable.

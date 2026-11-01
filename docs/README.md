@@ -24,7 +24,8 @@ preproduction; recreate local installations when formats change. Follow
 | [Codex integration](codex-integration.md) | Codex process, model selection, and protocol generation |
 | [Slack integration](slack-integration.md) | Slack app setup, linked users, and limits |
 | [ChatGPT plugin](chatgpt-integration.md) | Plugin setup, OAuth, Work access, and directory submission |
-| [ChatGPT local testing](chatgpt-local-testing.md) | WSL and Chisel walkthrough, OAuth setup, ping verification, troubleshooting, and Azure relay |
+| [Chisel tunneling](../deploy/chisel/README.md) | Server and WSL client installation, credentials, fingerprints, and tunnel connection |
+| [Plugin testing](plugin-testing.md) | Local Chisel and live production setup, shared OAuth installation, ping verification, and Work checks |
 | [Database](database.md) | SQL baseline, EF generation, and client access |
 | [goblinctl](goblinctl.md) | Native CLI commands, installation, and packaging |
 | [Kubernetes names](kubernetes-names.md) | Resource names, identities, and storage ownership |
