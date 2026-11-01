@@ -30,6 +30,12 @@ use std::time::Duration;
 
 const DATABASE_SOCKET: &str = "goblin-local-postgres.socket";
 const DATABASE_SERVICE: &str = "goblin-local-postgres.service";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BrowserRoute {
+    Ingress,
+    Platform(Ipv4Addr),
+}
 const UNITS: &[&str] = &[
     "goblin-local.socket",
     "goblin-local.service",
@@ -183,9 +189,66 @@ impl K3s {
             0o644,
             false,
         )?;
-        files::atomic_write(&self.unit("goblin-local.service"), b"[Unit]\nDescription=Forward the local browser to Goblin setup or Kubernetes\nRequires=goblin-local.socket\nAfter=network.target\n[Service]\nExecStart=/opt/goblin/bin/goblinctl internal forward\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n", 0o644, false)?;
+        self.write_browser_forwarder(self.browser_route()?)?;
         systemctl(&["daemon-reload"])?;
         systemctl(&["enable", "--now", "goblin-local.socket"])
+    }
+    fn browser_upstream(&self) -> PathBuf {
+        self.owner().with_file_name("browser-upstream")
+    }
+    fn browser_route(&self) -> Result<BrowserRoute> {
+        let path = self.browser_upstream();
+        files::reject_symlinks(&path)?;
+        if path.exists() {
+            let address: Ipv4Addr = fs::read_to_string(path)?.trim().parse()?;
+            ensure!(address.is_private(), "Invalid platform Service address");
+            Ok(BrowserRoute::Platform(address))
+        } else {
+            Ok(BrowserRoute::Ingress)
+        }
+    }
+    fn write_browser_forwarder(&self, route: BrowserRoute) -> Result<bool> {
+        let executable = match route {
+            BrowserRoute::Ingress => "/opt/goblin/bin/goblinctl internal forward".to_owned(),
+            BrowserRoute::Platform(address) => {
+                ensure!(address.is_private(), "Invalid platform Service address");
+                format!("/usr/lib/systemd/systemd-socket-proxyd {address}:8787")
+            }
+        };
+        let content = format!(
+            "[Unit]\nDescription=Forward the local browser to Goblin setup or Kubernetes\nRequires=goblin-local.socket\nAfter=network.target\n[Service]\nExecStart={executable}\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
+        );
+        let path = self.unit("goblin-local.service");
+        files::reject_symlinks(&path)?;
+        if fs::read_to_string(&path).is_ok_and(|current| current == content) {
+            return Ok(false);
+        }
+        files::atomic_write(&path, content.as_bytes(), 0o644, false)?;
+        Ok(true)
+    }
+    pub fn set_browser_route(&self, route: BrowserRoute) -> Result<()> {
+        self.owned_config()?;
+        let path = self.browser_upstream();
+        files::reject_symlinks(&path)?;
+        match route {
+            BrowserRoute::Ingress => files::remove_file(&path)?,
+            BrowserRoute::Platform(address) => {
+                ensure!(address.is_private(), "Invalid platform Service address");
+                files::atomic_write(&path, address.to_string().as_bytes(), 0o600, false)?;
+            }
+        }
+        let pending = self.owner().with_file_name("browser-forwarder-pending");
+        files::reject_symlinks(&pending)?;
+        if self.write_browser_forwarder(route)?
+            || pending.exists()
+            || !active("goblin-local.service")
+        {
+            files::atomic_write(&pending, b"", 0o600, false)?;
+            systemctl(&["daemon-reload"])?;
+            systemctl(&["restart", "goblin-local.service"])?;
+            files::remove_file(&pending)?;
+        }
+        Ok(())
     }
     pub fn configure_database(&self, config: &Value) -> Result<()> {
         ensure!(
@@ -321,6 +384,12 @@ impl K3s {
             self.configure_forwarder(&config)?;
         }
         let url = origin(&config)?;
+        let public_route = matches!(self.browser_route()?, BrowserRoute::Platform(_));
+        let probe = if public_route {
+            format!("{url}/readyz")
+        } else {
+            format!("{url}/")
+        };
         for attempt in 0..30 {
             if Command::new("curl")
                 .args([
@@ -330,7 +399,7 @@ impl K3s {
                     "*",
                     "--max-time",
                     "2",
-                    &format!("{url}/"),
+                    &probe,
                 ])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -346,9 +415,15 @@ impl K3s {
             );
             std::thread::sleep(Duration::from_secs(1));
         }
-        println!(
-            "Open in your Windows or Linux browser: {url}\nInstallation continues in WSL/Linux after this command exits.\nProgress: goblinctl install status\nSign in with the Goblin password chosen during setup."
-        );
+        if public_route {
+            println!(
+                "WSL forwarding endpoint: {url}\nOpen Goblin at the HTTPS public origin configured by k3s deploy.\nSign in with the Goblin password chosen during setup."
+            );
+        } else {
+            println!(
+                "Open in your Windows or Linux browser: {url}\nInstallation continues in WSL/Linux after this command exits.\nProgress: goblinctl install status\nSign in with the Goblin password chosen during setup."
+            );
+        }
         if self.status()?.is_some_and(|s| s["status"] == "failed") {
             println!(
                 "The previous attempt failed. Inspect logs, then run goblinctl install retry."
@@ -520,7 +595,17 @@ pub fn active(unit: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 fn systemctl(args: &[&str]) -> Result<()> {
-    files::run(Command::new("systemctl").args(args))
+    files::run(
+        Command::new("systemctl")
+            .env_clear()
+            .env(
+                environment::PATH,
+                std::env::var_os(environment::PATH).unwrap_or_else(|| {
+                    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".into()
+                }),
+            )
+            .args(args),
+    )
 }
 fn kubectl() -> Command {
     let mut c = Command::new("k3s");
@@ -616,10 +701,52 @@ pub fn snapshot_source(git_repository: &Path, destination: &Path) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
+    use super::BrowserRoute;
+    use super::K3s;
     use super::check_retained_tooling;
     use crate::install;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn browser_route_survives_resume_and_can_return_to_loopback_ingress() {
+        let artifacts =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/k3s-browser-route");
+        fs::create_dir_all(&artifacts).unwrap();
+        let root = tempfile::tempdir_in(artifacts).unwrap();
+        let k3s = K3s {
+            git_repository: root.path().to_owned(),
+            system: root.path().join("system"),
+        };
+        assert_eq!(k3s.browser_route().unwrap(), BrowserRoute::Ingress);
+        let route = BrowserRoute::Platform("10.43.0.20".parse().unwrap());
+        assert!(k3s.write_browser_forwarder(route).unwrap());
+        assert!(!k3s.write_browser_forwarder(route).unwrap());
+        let unit = fs::read_to_string(k3s.unit("goblin-local.service")).unwrap();
+        assert!(
+            unit.contains("ExecStart=/usr/lib/systemd/systemd-socket-proxyd 10.43.0.20:8787\n")
+        );
+        assert!(unit.contains("DynamicUser=yes"));
+        fs::create_dir_all(k3s.browser_upstream().parent().unwrap()).unwrap();
+        fs::write(k3s.browser_upstream(), "10.43.0.20").unwrap();
+        assert_eq!(k3s.browser_route().unwrap(), route);
+        fs::write(k3s.browser_upstream(), "203.0.113.20").unwrap();
+        assert!(k3s.browser_route().is_err());
+        assert!(
+            k3s.write_browser_forwarder(BrowserRoute::Platform("203.0.113.20".parse().unwrap()))
+                .is_err()
+        );
+        fs::remove_file(k3s.browser_upstream()).unwrap();
+        assert!(
+            k3s.write_browser_forwarder(k3s.browser_route().unwrap())
+                .unwrap()
+        );
+        assert!(
+            fs::read_to_string(k3s.unit("goblin-local.service"))
+                .unwrap()
+                .contains("ExecStart=/opt/goblin/bin/goblinctl internal forward\n")
+        );
+    }
 
     #[test]
     fn retained_native_tooling_and_licenses_allow_a_fresh_local_installation() {

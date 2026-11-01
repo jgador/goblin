@@ -55,12 +55,19 @@ public fingerprint from the administrator before connecting.
 
 ## Connect WSL
 
-Start local Goblin using [local plugin setup](../../docs/plugin-testing.md#local-testing)
-so it listens on `127.0.0.1:8787`. In a second WSL Bash terminal, enter the trusted
+Start Goblin using [local plugin setup](../../docs/plugin-testing.md#local-testing).
+Choose the WSL destination: **8787** for `dev-start`, or **8788** for the installed
+k3s platform configured with its HTTPS public origin. For a custom k3s browser
+port, use that port. In a second WSL Bash terminal, enter the local port, trusted
 fingerprint, username, and password:
 
 ```bash
 (
+  read -r -p 'Local Goblin port (8787 dev / 8788 k3s): ' chisel_port
+  if [[ ! "$chisel_port" =~ ^[0-9]{1,5}$ ]] || (( 10#$chisel_port < 1 || 10#$chisel_port > 65535 )); then
+    printf 'Enter a valid local port.\n' >&2
+    exit 1
+  fi
   read -r -p 'Server fingerprint: ' chisel_fingerprint
   read -r -p 'Chisel username: ' chisel_username
   read -r -s -p 'Chisel password: ' chisel_password
@@ -69,11 +76,13 @@ fingerprint, username, and password:
   AUTH="${chisel_username}:${chisel_password}" \
     chisel client --fingerprint "$chisel_fingerprint" \
     https://dev-tunnel.goblinboard.com \
-    R:0.0.0.0:8787:127.0.0.1:8787
+    "R:0.0.0.0:8787:127.0.0.1:${chisel_port}"
 )
 ```
 
-Wait for `Connected` and keep both terminals open. The client reads its credential
+Wait for `Connected` and keep the Chisel terminal open. For `dev-start`, keep the
+Goblin terminal open too. The remote port stays **8787** for both setups; only the
+local destination differs. The client reads its credential
 from `AUTH` and opens an outbound HTTPS connection, so WSL needs no public IP,
 router port, or VPN. The `0.0.0.0` listener is inside the server pod; public access
 goes through the HTTPS ingress.
@@ -84,14 +93,16 @@ Open `https://dev.goblinboard.com` and continue with
 ### Stop the tunnel
 
 Stop the WSL Chisel client with Ctrl+C when finished. The public development
-address then returns an unavailable response. Stop the local Goblin process in
-its terminal when finished testing.
+address then returns an unavailable response. Stop `dev-start` in its terminal
+when finished testing. The installed k3s instance keeps running until explicitly
+stopped with `make k3s-stop`.
 
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| `502 Bad Gateway` on `dev.goblinboard.com` | Confirm local Goblin listens on port 8787 and the Chisel terminal shows `Connected`. Both processes must remain running. |
+| `502 Bad Gateway` on `dev.goblinboard.com` | Confirm Goblin is reachable on the selected WSL port and the Chisel terminal shows `Connected`. Use 8787 for dev or the configured k3s browser port, normally 8788. |
+| OAuth reports HTTP or an invalid host when targeting k3s | Configure the HTTPS public origin with `make k3s-deploy` before tunneling to its browser port. This selects the direct platform Service route. |
 | Fingerprint mismatch | Compare the full trusted fingerprint. Obtain a newly verified fingerprint from the administrator if the server key changed. |
 | Authentication failure | Check the username and password separately from the fingerprint. The credential is `username:password`. |
 | Connection closes after server deployment | Deployment restarts Chisel. Restart the client, using updated credentials or a newly trusted fingerprint if they changed. |
@@ -99,7 +110,7 @@ its terminal when finished testing.
 Check the local Goblin listener with:
 
 ```bash
-ss -ltnp '( sport = :8787 )'
+ss -ltnp '( sport = :8787 or sport = :8788 )'
 ```
 
 ## Install the server on AK3S

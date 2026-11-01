@@ -9,6 +9,7 @@ pub mod files;
 pub mod install;
 pub mod k3s;
 pub mod k3s_deploy;
+pub mod k3s_runtime;
 pub mod operations;
 pub mod postgres;
 pub mod progress;

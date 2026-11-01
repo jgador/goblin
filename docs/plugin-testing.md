@@ -6,7 +6,7 @@ production instance. Choose the setup below, then use the same
 
 | Environment | Setup | Goblin public origin |
 | --- | --- | --- |
-| [Local](#local-testing) | Native WSL build and the existing Chisel gateway | `https://dev.goblinboard.com` |
+| [Local](#local-testing) | WSL k3s or a direct WSL development build, through the existing Chisel gateway | `https://dev.goblinboard.com` |
 | [Live production](#live-production-testing) | Running deployed Goblin with public HTTPS | Your deployment's origin, such as `https://app.example.com` |
 
 Always use the selected instance's public HTTPS address for settings and OAuth.
@@ -20,7 +20,56 @@ Chisel gateway. [Chisel tunneling](../deploy/chisel/README.md) owns server and
 client installation, credentials, fingerprints, connection commands, and tunnel
 troubleshooting. This guide owns Goblin startup, plugin installation, and tests.
 
-### Prepare WSL
+### Use the installed WSL k3s platform
+
+With the [WSL k3s installation](../deploy/k3s/README.md) ready, deploy your checkout
+and configure the same application settings used in production:
+
+```bash
+GOBLIN_PUBLIC_ORIGIN=https://dev.goblinboard.com \
+GOBLIN_CHATGPT_ENABLED=true \
+make k3s-deploy
+```
+
+This command explicitly selects this checkout's owned WSL cluster. It builds and
+imports the application image, applies the two settings to the platform Sandbox,
+and restarts the platform pod when the image or settings change. PostgreSQL,
+logging, credentials, and PVCs stay in k3s. No database profile or `dev-start`
+process is needed.
+
+For an HTTPS public origin, the existing WSL browser endpoint on port **8788**
+forwards directly to the platform Service. This preserves the Chisel gateway's
+Host and HTTPS header for OAuth and follows pod replacements. A different browser
+port chosen during installation still applies. Use the public HTTPS address for
+Goblin's UI; localhost remains the tunnel destination and health endpoint.
+
+Follow [Connect WSL](../deploy/chisel/README.md#connect-wsl) in another terminal,
+choosing **8788** as the local Goblin port. Then continue to
+[Install the plugin](#install-the-plugin). Sign in and authorize this k3s
+instance; the direct development instance has a separate data directory and OAuth
+keys even when it shares the database.
+
+After further edits, use `make k3s-deploy`. Unset variables retain the configured
+origin and ChatGPT enablement in the Sandbox. Keep Chisel running; no manual
+Sandbox edit or Kubernetes port-forward is needed. Stop/start retains this
+configuration; a reset and reinstall restores the defaults.
+
+To return to the default loopback UI, explicitly configure both settings again:
+
+```bash
+GOBLIN_PUBLIC_ORIGIN=http://localhost:8788 \
+GOBLIN_CHATGPT_ENABLED=false \
+make k3s-deploy
+```
+
+Use your installation's actual browser port if it differs from 8788.
+
+### Use the direct WSL development build
+
+Use `dev-start` for quick application edits and tests outside k3s. Choose this
+setup instead of the installed platform when that is the behavior you need to test.
+
+#### Prepare WSL
 
 Run from the repository root in WSL with the
 [development prerequisites](repository-layout.md#build-and-test).
@@ -48,7 +97,7 @@ running. Goblin started by that command runs as a native WSL .NET process on por
 8787; the installed k3s platform remains available on `http://localhost:8788`
 with the default local installation port.
 
-### Start the local build
+#### Start the local build
 
 Set the Chisel gateway's HTTPS origin.
 Use local PostgreSQL; a database-free development host cannot enable the plugin.
@@ -80,11 +129,11 @@ This log is temporary diagnostic output. Keep the persistent Goblin data
 directory and database; they own the
 [OAuth identity, keys, and tokens](chatgpt-integration.md#durable-identity-keys-and-schema).
 
-### Connect the existing Chisel gateway
+#### Connect the existing Chisel gateway
 
 With Goblin running, use a second WSL terminal to follow
 [Connect WSL](../deploy/chisel/README.md#connect-wsl). Install the client first if
-needed, as described in that guide.
+needed, as described in that guide. Choose **8787** as the local Goblin port.
 
 Continue to [Install the plugin](#install-the-plugin) using
 `https://dev.goblinboard.com`. Keep Goblin and the Chisel client running throughout
@@ -150,8 +199,9 @@ sharing Work, approving a result, or signing into GitHub:
 4. Check the tool result for a fresh `responseId`, `respondedAtUtc`, and the
    server's `operatingSystem`, `runtime`, and `processArchitecture`.
 5. Match the returned ID to the `goblin_ping response` event in the selected
-   instance's logs, using the [local](#verify-the-local-response) or
-   [production](#verify-the-production-response) instructions below.
+   instance's logs. Use [local terminal logs](#verify-the-local-response) for the
+   direct development build or [deployed logs](#verify-the-production-response)
+   for WSL k3s and production.
 6. Call again. The response ID changes and the UTC timestamp advances.
 
 The tool is on the selected instance's `/mcp` endpoint and takes

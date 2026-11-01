@@ -79,8 +79,8 @@ failure controls and credential-inheritance fixtures are not supported configura
 | --- | --- |
 | `GOBLIN_PASSWORD_HASH_FILE` | Private verifier file path, required by the web host. Tooling validates an explicit value without replacing it; otherwise dev and local installation use `.goblin-secrets/owner-password`. |
 | `GOBLIN_LOCAL_PASSWORD` | Unattended password input for creation or replacement. An existing verifier wins unless replacement is explicit. Native tooling removes it before starting child processes. |
-| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Public installation defaults to `https://<hostname>`; local installation uses loopback HTTP. |
-| `GOBLIN_CHATGPT_ENABLED` | Optional `true`/`false` flag for embedded OpenIddict and MCP. Unset or false disables both; the Azure overlay sets true. Requires durable Work and an HTTPS public origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
+| `GOBLIN_PUBLIC_ORIGIN` | Browser-facing origin. Public installation defaults to `https://<hostname>`; initial WSL installation uses loopback HTTP. `k3s deploy` applies an explicit value to the platform and retains its installed value when unset. |
+| `GOBLIN_CHATGPT_ENABLED` | Optional `true`/`false` flag for embedded OpenIddict and MCP. Unset or false disables both at application startup; the Azure overlay sets true. `k3s deploy` applies explicit values and retains the installed value when unset. Requires durable Work and an HTTPS public origin. Never forwarded to execution runtimes. See [ChatGPT setup](chatgpt-integration.md). |
 | `ConnectionStrings__Goblin` | Application PostgreSQL connection (`ConnectionStrings:Goblin`). Rust profiles set it, and the HTTP test harness forwards its opt-in test connection to it. |
 | `ConnectionStrings__GoblinAdmin` | Schema administrator connection (`ConnectionStrings:GoblinAdmin`); the Rust migration Job uses the same name. |
 | `GOBLIN_TEST_POSTGRES_APP` / `GOBLIN_TEST_POSTGRES_ADMIN` | Opt-in real-database test connection strings. Sensitive; never application defaults. |

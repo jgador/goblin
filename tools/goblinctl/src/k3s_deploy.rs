@@ -1,7 +1,9 @@
-//! Image-only development updates of the checkout-owned, single-node WSL cluster.
+//! Application image and explicit runtime settings for the owned WSL cluster.
 use crate::environment;
 use crate::files;
+use crate::k3s::BrowserRoute;
 use crate::k3s::K3s;
+use crate::k3s_runtime::Overrides;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
@@ -15,6 +17,7 @@ use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
+use std::net::Ipv4Addr;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -32,6 +35,7 @@ const CONTRACT_ROOTS: &[&str] = &[
 const BUILD_TAG: &str = "localhost/goblin-platform:development";
 
 pub fn deploy(k3s: &K3s) -> Result<()> {
+    let overrides = Overrides::from_environment()?;
     files::reject_symlinks(&k3s.path("var/lib/goblin/local-test/config.json"))?;
     let config = k3s.owned_config()?;
     ensure!(
@@ -67,13 +71,20 @@ pub fn deploy(k3s: &K3s) -> Result<()> {
         false,
     )?;
     let mut runner = ProcessRunner {
+        k3s,
         directory: directory.clone(),
         sequence: 0,
         local_cluster_verified: false,
     };
     println!("Deployment diagnostics: {}", directory.display());
     let started = Instant::now();
-    let result = update(&mut runner, &k3s.git_repository, &directory, &config);
+    let result = update(
+        &mut runner,
+        &k3s.git_repository,
+        &directory,
+        &config,
+        &overrides,
+    );
     if result.is_err() && runner.local_cluster_verified {
         // Only private log files receive application diagnostics, never CLI output.
         let _ = runner.command(
@@ -110,7 +121,9 @@ pub fn deploy(k3s: &K3s) -> Result<()> {
     )?;
     println!(
         "Goblin ready: {}\nImage: {}\nPod: {}\nVerify the changed behavior in this instance.",
-        crate::k3s::origin(&config)?,
+        receipt["publicOrigin"]
+            .as_str()
+            .context("Missing public origin receipt")?,
         receipt["image"].as_str().context("Missing image receipt")?,
         receipt["pod"].as_str().context("Missing pod receipt")?,
     );
@@ -204,14 +217,16 @@ trait Runner {
     ) -> Result<String>;
     fn import(&mut self, image: &str) -> Result<()>;
     fn pause(&mut self);
+    fn configure_browser(&mut self, route: BrowserRoute) -> Result<()>;
     fn confirmed_cluster(&mut self) {}
 }
-struct ProcessRunner {
+struct ProcessRunner<'a> {
+    k3s: &'a K3s,
     directory: PathBuf,
     sequence: usize,
     local_cluster_verified: bool,
 }
-impl ProcessRunner {
+impl ProcessRunner<'_> {
     fn process(&self, tool: Tool) -> Command {
         let mut command = Command::new(match tool {
             Tool::Docker => "docker",
@@ -265,7 +280,10 @@ impl ProcessRunner {
             )?)
     }
 }
-impl Runner for ProcessRunner {
+impl Runner for ProcessRunner<'_> {
+    fn configure_browser(&mut self, route: BrowserRoute) -> Result<()> {
+        self.k3s.set_browser_route(route)
+    }
     fn confirmed_cluster(&mut self) {
         self.local_cluster_verified = true;
     }
@@ -447,6 +465,7 @@ fn update(
     repository: &Path,
     directory: &Path,
     config: &Value,
+    overrides: &Overrides,
 ) -> Result<Value> {
     let server = runner.command(
         Tool::Kube,
@@ -480,6 +499,17 @@ fn update(
     let index = platform_index(&sandbox)?;
     let container = &sandbox["spec"]["podTemplate"]["spec"]["containers"][index];
     let previous_image = text(container, "image")?;
+    let settings = overrides.resolve(container, &crate::k3s::origin(config)?)?;
+    let route = if settings.origin.starts_with("https://") {
+        let service = json_command(
+            runner,
+            Tool::Kube,
+            &["get", "service", "platform", "-n", "goblin", "-o", "json"],
+        )?;
+        BrowserRoute::Platform(platform_service(&service)?)
+    } else {
+        BrowserRoute::Ingress
+    };
     ensure!(
         previous_image.starts_with("localhost/goblin-platform:"),
         "The platform uses an unexpected image repository"
@@ -566,20 +596,26 @@ fn update(
         None,
         Output::Log,
     )?;
-    let env = container["env"]
+    let env = settings
+        .environment
         .as_array()
         .context("Missing execution image configuration")?;
     let execution_index = env
         .iter()
         .position(|e| e["name"] == environment::GOBLIN_EXECUTION_IMAGE)
         .context("Missing execution image configuration")?;
+    let mut desired_env = settings.environment.clone();
+    desired_env[execution_index]["value"] = json!(image);
     let unchanged = previous_image == image
         && env[execution_index]["value"] == image
+        && container["env"] == desired_env
         && container["imagePullPolicy"] == "Never";
     if !unchanged {
-        println!("Importing the image and replacing the platform pod…");
+        println!("Updating the application and replacing the platform pod…");
         let started = Instant::now();
-        runner.import(&image)?;
+        if previous_image != image {
+            runner.import(&image)?;
+        }
         let built_id = configuration_id(runner, &manifest_digest)?;
         ensure!(
             image_id(runner, &image)? == built_id,
@@ -591,7 +627,7 @@ fn update(
             {"op":"test","path":"/metadata/resourceVersion","value":sandbox["metadata"]["resourceVersion"]},
             {"op":"test","path":format!("{base}/image"),"value":previous_image},
             {"op":"replace","path":format!("{base}/image"),"value":image},
-            {"op":"replace","path":format!("{base}/env/{execution_index}/value"),"value":image},
+            {"op":"replace","path":format!("{base}/env"),"value":desired_env},
             {"op":"replace","path":format!("{base}/imagePullPolicy"),"value":"Never"}
         ]);
         runner.command(
@@ -626,11 +662,11 @@ fn update(
             )?;
         }
         println!(
-            "Import/restart elapsed: {:.1}s",
+            "Update/restart elapsed: {:.1}s",
             started.elapsed().as_secs_f64()
         );
     } else {
-        println!("The image is unchanged; import and restart skipped.");
+        println!("The image and application settings are unchanged; import and restart skipped.");
     }
     let started = Instant::now();
     let pod = loop {
@@ -666,6 +702,15 @@ fn update(
     };
     let built_id = configuration_id(runner, &manifest_digest)?;
     verify_pod_image(runner, &pod, &built_id)?;
+    let running_index = pod["spec"]["containers"]
+        .as_array()
+        .and_then(|cs| cs.iter().position(|c| c["name"] == "platform"))
+        .context("Missing platform container")?;
+    ensure!(
+        pod["spec"]["containers"][running_index]["env"] == desired_env,
+        "The running platform settings differ from the requested settings"
+    );
+    runner.configure_browser(route)?;
     let endpoint = format!("{}/readyz", crate::k3s::origin(config)?);
     let health = json_command(
         runner,
@@ -684,10 +729,64 @@ fn update(
         ],
     )?;
     ensure!(health["ready"] == true, "The browser endpoint is not ready");
+    if settings.chatgpt {
+        let authority = settings
+            .origin
+            .strip_prefix("https://")
+            .context("Invalid HTTPS origin")?;
+        let discovery = json_command(
+            runner,
+            Tool::Curl,
+            &[
+                "--fail",
+                "--silent",
+                "--show-error",
+                "--noproxy",
+                "*",
+                "--connect-timeout",
+                "2",
+                "--max-time",
+                "5",
+                "--header",
+                &format!("Host: {authority}"),
+                "--header",
+                "X-Forwarded-Proto: https",
+                &format!(
+                    "{}/.well-known/oauth-authorization-server",
+                    crate::k3s::origin(config)?
+                ),
+            ],
+        )?;
+        ensure!(
+            discovery["issuer"] == format!("{}/", settings.origin),
+            "The local endpoint did not return the configured OAuth issuer"
+        );
+    }
     println!("Readiness elapsed: {:.1}s", started.elapsed().as_secs_f64());
     Ok(
-        json!({"status":"ready","image":image,"imageDigest":manifest_digest,"imageId":built_id,"pod":pod["metadata"]["name"],"podUid":pod["metadata"]["uid"],"restarted":!unchanged,"verifiedAtUtc":chrono::Utc::now().to_rfc3339()}),
+        json!({"status":"ready","image":image,"imageDigest":manifest_digest,"imageId":built_id,"pod":pod["metadata"]["name"],"podUid":pod["metadata"]["uid"],"publicOrigin":settings.origin,"chatgptEnabled":settings.chatgpt,"restarted":!unchanged,"verifiedAtUtc":chrono::Utc::now().to_rfc3339()}),
     )
+}
+
+fn platform_service(service: &Value) -> Result<Ipv4Addr> {
+    ensure!(
+        service["metadata"]["name"] == "platform"
+            && service["metadata"]["namespace"] == "goblin"
+            && service["spec"]["type"] == "ClusterIP"
+            && service["spec"]["selector"] == json!({"app":"platform"})
+            && service["spec"]["ports"].as_array().is_some_and(|ps| ps
+                .iter()
+                .any(|p| p["port"] == 8787 && p["targetPort"] == "http")),
+        "The platform Service has unexpected routing"
+    );
+    let address: Ipv4Addr = text(&service["spec"], "clusterIP")?
+        .parse()
+        .context("Invalid platform Service address")?;
+    ensure!(
+        address.is_private(),
+        "The platform Service must have a private IPv4 address"
+    );
+    Ok(address)
 }
 
 #[cfg(test)]
@@ -715,21 +814,25 @@ mod tests {
         server: String,
         old_polls: usize,
         deleted: bool,
+        routes: Vec<BrowserRoute>,
+        service: Value,
     }
     impl Fake {
         fn new(image: &str) -> Self {
             Self {
                 sandbox: json!({"metadata":{"uid":"sandbox-id","resourceVersion":"10"},"spec":{"podTemplate":{"spec":{
-                    "containers":[{"name":"platform","image":image,"imagePullPolicy":"Never","env":[{"name":environment::GOBLIN_EXECUTION_IMAGE,"value":image}]}],
+                    "containers":[{"name":"platform","image":image,"imagePullPolicy":"Never","env":[{"name":environment::GOBLIN_EXECUTION_IMAGE,"value":image},{"name":environment::GOBLIN_PUBLIC_ORIGIN,"value":"http://localhost:8788"},{"name":environment::GOBLIN_CHATGPT_ENABLED,"value":"false"}]}],
                     "volumes":[{"name":"data","persistentVolumeClaim":{"claimName":"platform-data"}}]
                 }}}}),
-                pod: json!({"metadata":{"name":"platform","uid":"old-pod","ownerReferences":[{"kind":"Sandbox","uid":"sandbox-id","controller":true}]},"spec":{"containers":[{"name":"platform","image":image}]},"status":{"containerStatuses":[{"name":"platform","ready":true,"imageID":ID}]}}),
+                pod: json!({"metadata":{"name":"platform","uid":"old-pod","ownerReferences":[{"kind":"Sandbox","uid":"sandbox-id","controller":true}]},"spec":{"containers":[{"name":"platform","image":image,"env":[{"name":environment::GOBLIN_EXECUTION_IMAGE,"value":image},{"name":environment::GOBLIN_PUBLIC_ORIGIN,"value":"http://localhost:8788"},{"name":environment::GOBLIN_CHATGPT_ENABLED,"value":"false"}]}]},"status":{"containerStatuses":[{"name":"platform","ready":true,"imageID":ID}]}}),
                 calls: Vec::new(),
                 imports: 0,
                 failure: Failure::None,
                 server: "https://127.0.0.1:6443".to_owned(),
                 old_polls: 0,
                 deleted: false,
+                routes: Vec::new(),
+                service: json!({"metadata":{"name":"platform","namespace":"goblin"},"spec":{"type":"ClusterIP","clusterIP":"10.43.0.20","selector":{"app":"platform"},"ports":[{"port":8787,"targetPort":"http"}]}}),
             }
         }
         fn called(&self, tool: Tool, verb: &str) -> bool {
@@ -761,18 +864,25 @@ mod tests {
                 Tool::Cri => Ok(json!({"status":{"id":if self.failure==Failure::Image {"sha256:unexpected"} else {ID}}}).to_string()),
                 Tool::Curl => {
                     ensure!(self.old_polls==0,"health checked before replacement");
+                    if args.last().unwrap().contains("/.well-known/") {
+                        let env=self.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"].as_array().unwrap();
+                        let origin=env.iter().find(|e|e["name"]==environment::GOBLIN_PUBLIC_ORIGIN).unwrap()["value"].as_str().unwrap();
+                        return Ok(json!({"issuer":format!("{origin}/")}).to_string());
+                    }
                     Ok(json!({"ready":self.failure!=Failure::Health}).to_string())
                 }
                 Tool::Kube => match args[..] {
                     ["config",..] => Ok(self.server.clone()),
                     ["get","nodes",..] => Ok(json!({"items":[{}]}).to_string()),
                     ["get","sandbox",..] => Ok(self.sandbox.to_string()),
+                    ["get","service",..] => Ok(self.service.to_string()),
                     ["get","pvc",..] => Ok(json!({"status":{"phase":"Bound"}}).to_string()),
                     ["get","pods",..] => {
                         let mut pod=self.pod.clone();
                         if self.deleted {
                             if self.old_polls>0 {self.old_polls-=1;} else {pod["metadata"]["uid"]=json!("new-pod");}
                             pod["spec"]["containers"][0]["image"]=self.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["image"].clone();
+                            pod["spec"]["containers"][0]["env"]=self.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"].clone();
                         }
                         Ok(json!({"items":[pod]}).to_string())
                     }
@@ -782,7 +892,7 @@ mod tests {
                         assert_eq!(patch[0],json!({"op":"test","path":"/metadata/uid","value":"sandbox-id"}));
                         assert_eq!(patch[1],json!({"op":"test","path":"/metadata/resourceVersion","value":"10"}));
                         self.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["image"]=patch[3]["value"].clone();
-                        self.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"][0]["value"]=patch[4]["value"].clone();
+                        self.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"]=patch[4]["value"].clone();
                         Ok(String::new())
                     }
                     ["delete",..] => {self.deleted=true;Ok(String::new())}
@@ -796,6 +906,10 @@ mod tests {
             Ok(())
         }
         fn pause(&mut self) {}
+        fn configure_browser(&mut self, route: BrowserRoute) -> Result<()> {
+            self.routes.push(route);
+            Ok(())
+        }
     }
     fn fixture() -> tempfile::TempDir {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/k3s-deploy-tests");
@@ -803,7 +917,118 @@ mod tests {
         tempfile::tempdir_in(root).unwrap()
     }
     fn run(fake: &mut Fake, root: &Path) -> Result<Value> {
-        update(fake, root, root, &json!({"http_port":8788}))
+        update(
+            fake,
+            root,
+            root,
+            &json!({"http_port":8788}),
+            &Overrides::default(),
+        )
+    }
+    fn public_overrides() -> Overrides {
+        Overrides::parse(|name| {
+            Ok(Some(
+                if name == environment::GOBLIN_PUBLIC_ORIGIN {
+                    "https://app.example.com"
+                } else {
+                    "true"
+                }
+                .to_owned(),
+            ))
+        })
+        .unwrap()
+    }
+    #[test]
+    fn explicit_runtime_settings_restart_the_current_image_and_unset_retains_them() {
+        let root = fixture();
+        let mut fake = Fake::new(IMAGE);
+        let receipt = update(
+            &mut fake,
+            root.path(),
+            root.path(),
+            &json!({"http_port":8788}),
+            &public_overrides(),
+        )
+        .unwrap();
+        assert_eq!(receipt["publicOrigin"], "https://app.example.com");
+        assert_eq!(receipt["chatgptEnabled"], true);
+        assert_eq!(receipt["restarted"], true);
+        assert_eq!(fake.imports, 0);
+        assert_eq!(
+            fake.routes,
+            [BrowserRoute::Platform("10.43.0.20".parse().unwrap())]
+        );
+        let discovery = fake
+            .calls
+            .iter()
+            .find(|(tool, args)| {
+                *tool == Tool::Curl && args.last().unwrap().contains("/.well-known/")
+            })
+            .unwrap();
+        assert!(discovery.1.iter().any(|a| a == "Host: app.example.com"));
+        assert!(discovery.1.iter().any(|a| a == "X-Forwarded-Proto: https"));
+        fake.pod["spec"]["containers"][0] =
+            fake.sandbox["spec"]["podTemplate"]["spec"]["containers"][0].clone();
+        fake.deleted = false;
+        fake.calls.clear();
+        let receipt = run(&mut fake, root.path()).unwrap();
+        assert_eq!(receipt["restarted"], false);
+        assert_eq!(receipt["chatgptEnabled"], true);
+        assert!(!fake.called(Tool::Kube, "patch"));
+        assert!(!fake.called(Tool::Kube, "delete"));
+        let reset = Overrides::parse(|name| {
+            Ok(Some(
+                if name == environment::GOBLIN_PUBLIC_ORIGIN {
+                    "http://localhost:8788"
+                } else {
+                    "false"
+                }
+                .to_owned(),
+            ))
+        })
+        .unwrap();
+        update(
+            &mut fake,
+            root.path(),
+            root.path(),
+            &json!({"http_port":8788}),
+            &reset,
+        )
+        .unwrap();
+        assert_eq!(fake.routes.last(), Some(&BrowserRoute::Ingress));
+    }
+    #[test]
+    fn invalid_settings_and_foreign_service_fail_before_build_or_mutation() {
+        let root = fixture();
+        let mut fake = Fake::new(IMAGE);
+        let invalid = Overrides::parse(|name| {
+            Ok((name == environment::GOBLIN_CHATGPT_ENABLED).then(|| "true".to_owned()))
+        })
+        .unwrap();
+        assert!(
+            update(
+                &mut fake,
+                root.path(),
+                root.path(),
+                &json!({"http_port":8788}),
+                &invalid
+            )
+            .is_err()
+        );
+        assert!(!fake.called(Tool::Docker, "build"));
+        fake.service["spec"]["selector"] = json!({"app":"other"});
+        assert!(
+            update(
+                &mut fake,
+                root.path(),
+                root.path(),
+                &json!({"http_port":8788}),
+                &public_overrides()
+            )
+            .is_err()
+        );
+        assert!(!fake.called(Tool::Kube, "patch"));
+        assert!(fake.routes.is_empty());
     }
     #[test]
     fn deployment_imports_and_updates_new_workers_before_replacing_only_the_platform_pod() {
@@ -845,7 +1070,7 @@ mod tests {
         fake.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"][0]["value"] =
             json!("localhost/goblin-platform:old-worker");
         assert_eq!(run(&mut fake, root.path()).unwrap()["restarted"], true);
-        assert_eq!(fake.imports, 1);
+        assert_eq!(fake.imports, 0);
     }
     #[test]
     fn failed_build_or_import_never_changes_the_running_platform() {

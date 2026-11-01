@@ -32,7 +32,7 @@ sudo goblinctl db migrate IMAGE
 
 `install` with `--hostname` requires `--certificate-email` and starts a public
 HTTPS installation; `--source-ref` defaults to `master`. Without `--hostname` it
-starts a dedicated local installation, like `local start`.
+starts a dedicated WSL installation, like `k3s start`.
 
 `status` checks live services and application readiness; `install status` shows
 installer progress. `doctor` also checks the cert-manager rollouts and the
@@ -68,13 +68,18 @@ goblinctl k3s database
 The local source snapshot includes tracked and untracked Git-visible files,
 excludes ignored files, and refuses symlinks. A completed installation starts
 again without rebuilding. `make k3s-deploy` builds, imports and verifies application
-edits without reinstalling; see [WSL k3s development](../deploy/k3s/README.md#deploy-application-edits). A failed installation needs an explicit retry. `retry`
+edits without reinstalling. Explicit `GOBLIN_PUBLIC_ORIGIN` and
+`GOBLIN_CHATGPT_ENABLED` values configure its platform container; unset variables
+retain its existing settings. The CLI preserves these two values across sudo for
+`k3s deploy`, keeps them out of build/worker subprocesses, and verifies the running
+pod configuration. See [WSL k3s development](../deploy/k3s/README.md#deploy-application-edits).
+A failed installation needs an explicit retry. `retry`
 reuses the failed attempt's source snapshot. `retry --refresh` works only on a
 stopped, failed installation; it first replaces the snapshot and installed setup
 assets with the current checkout and CLI, so a fix can be tested without deleting
 the cluster. `stop` suspends; `reset` deletes the owned test cluster and its
-application data but keeps the repository password verifier, the native CLI, and
-the Docker and download caches.
+application data and saved password verifier, while keeping the native CLI and
+Docker and download caches.
 
 The installer runs a root worker and a separate unprivileged (`DynamicUser`) setup
 service. Public setup serves static assets, status, health, and the read-only

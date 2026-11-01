@@ -9,6 +9,7 @@ use goblinctl::credentials;
 use goblinctl::database;
 use goblinctl::database_host;
 use goblinctl::deployment;
+use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
 use goblinctl::k3s::K3s;
@@ -504,7 +505,19 @@ fn k3s_action(config_root: &Path, command: K3sCommand) -> Result<()> {
     if unsafe { libc::geteuid() } != 0 {
         use std::os::unix::process::CommandExt;
         return Err(Command::new("sudo")
-            .arg("--preserve-env=GOBLIN_LOCAL_PASSWORD")
+            .arg(format!(
+                "--preserve-env={}",
+                if matches!(command, K3sCommand::Deploy) {
+                    [
+                        environment::GOBLIN_LOCAL_PASSWORD,
+                        environment::GOBLIN_PUBLIC_ORIGIN,
+                        environment::GOBLIN_CHATGPT_ENABLED,
+                    ]
+                    .join(",")
+                } else {
+                    environment::GOBLIN_LOCAL_PASSWORD.to_owned()
+                }
+            ))
             .arg(std::env::current_exe()?)
             .args(
                 if std::env::args_os()

@@ -161,12 +161,20 @@ the changed behavior needs the application running inside k3s:
 make k3s-deploy
 ```
 
+The command also accepts explicit `GOBLIN_PUBLIC_ORIGIN` and
+`GOBLIN_CHATGPT_ENABLED` environment values for the platform container, just as
+the application does in production. Unset values retain the Sandbox's current
+settings. Changing settings restarts the platform even when the image is unchanged.
+ChatGPT requires an HTTPS public origin. See [plugin testing](../../docs/plugin-testing.md#use-the-installed-wsl-k3s-platform)
+for the existing Chisel gateway setup.
+
 The command requires a completed installation belonging to this checkout. It
 locks out concurrent installer operations, checks the loopback Kubernetes API and
 single-node topology, and compares SQL and installation manifests with the
 original installation snapshot. Incompatible schema or manifest changes require
 a deliberate reset and reinstall; this command neither applies migrations nor
-updates infrastructure manifests.
+updates infrastructure manifests. Its explicit application settings are applied
+to the current Sandbox without editing the installation manifests.
 
 Docker builds the current working tree, including uncommitted and untracked
 runtime source, with its normal `.dockerignore` exclusions. It uses the native
@@ -179,12 +187,19 @@ For a changed image, the command streams it into k3s containerd, updates the
 platform Sandbox and the image selected for new execution workers, and replaces
 only the platform pod. PostgreSQL, logging, ingress, credentials, and all PVCs
 remain in place. Existing execution allocations keep their recorded identities
-and images. A concurrent Sandbox update stops deployment rather than being
-overwritten. An unchanged image skips import and restart, while still checking
+and images. Settings changes with the same image update and restart the platform
+without importing the image again. A concurrent Sandbox update stops deployment rather than being
+overwritten. An unchanged image and settings skip import and restart, while still checking
 the running image and readiness.
 
 Success requires the expected pod image to be ready and `/readyz` to succeed
 through the installed browser endpoint, normally `http://localhost:8788`.
+When the public origin is HTTPS, that loopback endpoint forwards directly to the
+platform Service, preserving the upstream Host and HTTPS header. The route is
+retained under `/var/lib/goblin/local-test/browser-upstream` and in the existing
+systemd forwarder; it survives stop/start and pod replacement. Configure the
+loopback public origin again to restore the normal NGINX route. The CLI also
+checks OAuth discovery through the local endpoint when ChatGPT is enabled.
 Deployment prints stage timings, the image, pod, browser URL, and a private
 diagnostics directory under `.artifacts/k3s-deploy/`. Successful deployment
 metadata is retained in `.goblin-local/deployment.json`; the receipt contains no
@@ -233,7 +248,8 @@ Azure networking need manual checks on an Azure VM.
 
 ## ChatGPT plugin development
 
-Local installation uses F5 NGINX over loopback HTTP, and ChatGPT stays disabled.
-Use [Chisel tunneling](../chisel/README.md) for the public HTTPS connection and
-[plugin testing](../../docs/plugin-testing.md#local-testing) for Goblin startup,
-OAuth installation, and connection checks.
+Initial installation uses F5 NGINX over loopback HTTP with ChatGPT disabled.
+The existing `k3s-deploy` workflow can configure the installed platform for the
+public HTTPS connection. [Plugin testing](../../docs/plugin-testing.md#local-testing)
+owns the choice between WSL k3s and direct development, enablement, and connection
+checks; [Chisel tunneling](../chisel/README.md) owns the tunnel connection.

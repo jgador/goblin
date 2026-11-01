@@ -96,7 +96,7 @@ k3s-run:
 k3s-start:
 	cargo run --locked -q -p goblinctl -- k3s start $(ARGS)
 
-# Build, import and verify the current Goblin image in the owned WSL cluster.
+# Deploy the current Goblin image and explicit application settings to WSL k3s.
 k3s-deploy:
 	cargo run --locked -q -p goblinctl -- k3s deploy $(ARGS)
 

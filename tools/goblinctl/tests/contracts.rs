@@ -393,15 +393,20 @@ fn local_services_preserve_connections_credentials_and_paused_data() {
         let script = r##"#!/bin/bash
 set -eu
 name=${0##*/}
-printf '%s %s\n' "$name" "$*" >> "$GOBLIN_NATIVE_TEST_ROOT/calls"
+fixture_root=${0%/*}/..
+printf '%s %s\n' "$name" "$*" >> "$fixture_root/calls"
 case "$name" in
 systemctl)
-  if [[ "$1" == enable && -f "$GOBLIN_NATIVE_TEST_ROOT/fail-enable-once" ]]; then
-    rm "$GOBLIN_NATIVE_TEST_ROOT/fail-enable-once"
+  if [[ "$1" == restart && -f "$fixture_root/fail-restart-once" ]]; then
+    rm "$fixture_root/fail-restart-once"
+    exit 1
+  fi
+  if [[ "$1" == enable && -f "$fixture_root/fail-enable-once" ]]; then
+    rm "$fixture_root/fail-enable-once"
     exit 1
   fi
   if [[ "$1" == is-active ]]; then
-    [[ "$3" == k3s.service || -f "$GOBLIN_NATIVE_TEST_ROOT/database-active" ]]
+    [[ "$3" == k3s.service || -f "$fixture_root/database-active" ]]
   fi
   ;;
 k3s)
@@ -544,6 +549,42 @@ esac
         !fs::read_to_string(root.join("calls"))
             .unwrap()
             .contains("k3s kubectl")
+    );
+    let browser_route = goblinctl::k3s::BrowserRoute::Platform("10.43.23.45".parse().unwrap());
+    fs::write(root.join("fail-restart-once"), "").unwrap();
+    assert!(k3s.set_browser_route(browser_route).is_err());
+    assert!(owner.with_file_name("browser-forwarder-pending").exists());
+    fs::write(root.join("calls"), "").unwrap();
+    k3s.set_browser_route(browser_route).unwrap();
+    assert!(
+        fs::read_to_string(root.join("calls"))
+            .unwrap()
+            .contains("restart goblin-local.service")
+    );
+    assert!(!owner.with_file_name("browser-forwarder-pending").exists());
+    let browser_service = k3s.path("etc/systemd/system/goblin-local.service");
+    assert!(
+        fs::read_to_string(&browser_service)
+            .unwrap()
+            .contains("systemd-socket-proxyd 10.43.23.45:8787")
+    );
+    fs::write(root.join("calls"), "").unwrap();
+    k3s.start(None).unwrap();
+    let calls = fs::read_to_string(root.join("calls")).unwrap();
+    assert!(calls.contains("http://localhost:8788/readyz"));
+    assert!(!calls.contains("k3s kubectl"));
+    assert!(
+        fs::read_to_string(&browser_service)
+            .unwrap()
+            .contains("systemd-socket-proxyd 10.43.23.45:8787")
+    );
+    k3s.set_browser_route(goblinctl::k3s::BrowserRoute::Ingress)
+        .unwrap();
+    assert!(!owner.with_file_name("browser-upstream").exists());
+    assert!(
+        fs::read_to_string(&browser_service)
+            .unwrap()
+            .contains("goblinctl internal forward")
     );
     k3s.stop().unwrap();
     assert!(owner.with_file_name("paused").exists());
