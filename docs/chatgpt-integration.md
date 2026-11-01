@@ -100,7 +100,9 @@ Open `/settings?section=chatgpt` and choose **Private plugin**.
    [connection test](chatgpt-local-testing.md#test-the-connection-without-work).
 4. **Share Work:** choose Work and an expiry of 1 hour, 24 hours, or 7 days.
    Goblin supplies the owner subject. Optionally include the latest approved
-   result; this pins one attempt. Later results stay private.
+   result; this pins one attempt. Later results stay private. Leave **Also share
+   the latest approved result** unchecked if there is no approved result;
+   requesting a missing result rejects the entire sharing request.
 5. **Test:** mention the installed plugin with `@` in a conversation. List shared
    Work, compare status and attention, and check that an unshared Work ID is denied.
 

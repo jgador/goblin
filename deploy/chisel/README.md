@@ -81,37 +81,43 @@ The authfile allows only the reverse tunnel `R:0.0.0.0:8787`. Each deployment
 restarts the server, so changed credentials and keys close open connections and
 briefly interrupt local testing.
 
+`CHISEL_AUTH` and `CHISEL_SERVER_KEY` are saved in the GitHub environment. The
+deployment script writes `users.json` and `key.pem` into Kubernetes Secret
+`goblin/chisel`, which the server mounts read-only. Files under `.artifacts/` are
+temporary staging files; keep a private backup of the server key outside that
+directory. The WSL client needs only the username/password and trusted public
+fingerprint, not the PEM key or cluster configuration.
+
 ## Connect WSL
 
 Install the matching [Chisel release](https://github.com/jpillora/chisel/releases/tag/v1.12.0)
-in WSL. Read the server's fingerprint with an administrator kubeconfig:
+in WSL and follow the complete
+[local testing walkthrough](../../docs/chatgpt-local-testing.md#prepare-wsl).
+It covers the WSL database profile, local Goblin startup, private credential
+prompt, OAuth plugin installation, and verifying a fresh response ID in logs.
+Routine testing against this existing gateway uses credentials and a trusted
+fingerprint saved externally; it requires no AK3S kubeconfig.
+
+The client reads its credential from `AUTH` and opens an outbound HTTPS connection,
+so WSL needs no public IP, router port, or VPN. The `0.0.0.0` listener is inside
+the server pod; public access still goes only through the HTTPS ingress.
+
+Stop the WSL client with Ctrl+C when finished; the public application hostname
+then returns an unavailable response.
+
+### Obtain the server fingerprint (administrator)
+
+An administrator can read the server's fingerprint with the intended kubeconfig:
 
 ```bash
 kubectl --kubeconfig /path/to/ak3s-admin.yaml -n goblin logs deployment/chisel
 ```
 
 Copy the full SHA-256 `Fingerprint` value; it stays the same while
-`CHISEL_SERVER_KEY` stays the same. Start the local build with origin
-`https://dev.goblinboard.com` as in
-[ChatGPT local testing](../../docs/chatgpt-local-testing.md#start-the-local-build).
-In another WSL terminal, enter the credential privately and start the tunnel:
-
-```bash
-read -r -s -p 'Chisel username:password: ' CHISEL_AUTH
-printf '\n'
-export AUTH="$CHISEL_AUTH"
-unset CHISEL_AUTH
-chisel client --fingerprint 'COPY_FULL_SERVER_FINGERPRINT' \
-  https://dev-tunnel.goblinboard.com R:0.0.0.0:8787:127.0.0.1:8787
-unset AUTH
-```
-
-The client reads its credential from `AUTH` and opens an outbound HTTPS connection,
-so WSL needs no public IP, router port, or VPN. The `0.0.0.0` listener is inside
-the server pod; public access still goes only through the HTTPS ingress.
-
-Then open `https://dev.goblinboard.com/settings?section=chatgpt`. Stop the client
-with Ctrl+C when finished; the hostname then returns an unavailable response.
+`CHISEL_SERVER_KEY` stays the same. It is the Base64-encoded SHA-256 hash of the
+SSH-encoded server public key, not the username/password or a hash of the PEM
+file bytes. Give the verified fingerprint to testers through a trusted channel
+and keep it with the saved credential in their password manager.
 
 ## Verification
 

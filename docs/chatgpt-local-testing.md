@@ -4,7 +4,8 @@ ChatGPT needs a public HTTPS address. Two gateways forward the whole Goblin
 application to a local build in WSL:
 
 - [Chisel on AK3S](../deploy/chisel/README.md) serves `https://dev.goblinboard.com`.
-  That guide owns the server deployment and the WSL client connection.
+  That guide owns server deployment; the WSL testing steps below use the existing
+  gateway.
 - The [Azure test VM relay](#prepare-the-test-vm-once) switches a dedicated Azure
   test installation's ingress to WSL through an SSH tunnel. The hostname and TLS
   certificate stay on Azure.
@@ -12,6 +13,31 @@ application to a local build in WSL:
 Always open the gateway's HTTPS address. OAuth registrations, keys, and Work grants
 belong to the instance that serves the request; a local address does not connect to
 the public one.
+
+## Prepare WSL
+
+Run from the repository root in WSL with the
+[development prerequisites](repository-layout.md#build-and-test). The Chisel path
+needs a [Chisel 1.12.0 client](https://github.com/jpillora/chisel/releases/tag/v1.12.0),
+the server username and password, and a trusted full server fingerprint.
+Keep the credential and verified fingerprint in a password
+manager such as Bitwarden. The client needs no server PEM private key or AK3S
+kubeconfig; the administrator owns server provisioning and fingerprint rotation.
+
+After the [local installation](../deploy/local/README.md) and
+[PostgreSQL WSL prerequisites](database.md#wsl-and-windows-pgadmin), create the
+database profile once from a root WSL shell:
+
+```bash
+cargo build --locked -p goblinctl
+target/debug/goblinctl db connect wsl --local --forward-port 55432
+```
+
+The local installation runs PostgreSQL in k3s and exposes it to WSL on
+`localhost:5432`. The optional Windows forwarding port is 55432. The profile and
+client certificates live under `~/.config/goblin/postgres/wsl/` by default. With
+the profile present, `make dev-start` refreshes access itself. Goblin started by
+that command runs as a native WSL .NET process.
 
 ## Start the local build
 
@@ -28,10 +54,60 @@ make dev-start DB_PROFILE=wsl
 Goblin listens on HTTP port 8787. The gateway terminates TLS and sends
 `X-Forwarded-Proto: https`.
 
-After the gateway is connected, open `https://<gateway-hostname>/settings?section=chatgpt`
-and follow the [private plugin setup](chatgpt-integration.md#guided-private-setup).
-Sign in with the local Goblin password. The ChatGPT server URL is the origin plus
-`/mcp`.
+After connecting either gateway, open
+`https://<gateway-hostname>/settings?section=chatgpt` and follow the
+[private plugin setup](chatgpt-integration.md#guided-private-setup).
+
+Goblin writes logs to this terminal. To save them for response-ID verification,
+use this alternative start command:
+
+```bash
+(
+  umask 077
+  mkdir -p .artifacts/chatgpt-local-testing
+  set -o pipefail
+  GOBLIN_PUBLIC_ORIGIN=https://dev.goblinboard.com \
+  GOBLIN_CHATGPT_ENABLED=true \
+    make dev-start DB_PROFILE=wsl 2>&1 |
+    tee .artifacts/chatgpt-local-testing/goblin.log
+)
+```
+
+This log is temporary diagnostic output. Keep the persistent Goblin data
+directory and database; they own the
+[OAuth identity, keys, and tokens](chatgpt-integration.md#durable-identity-keys-and-schema).
+
+## Connect the existing Chisel gateway
+
+In a second WSL Bash terminal, enter the trusted fingerprint, username, and
+password saved outside the repository:
+
+```bash
+(
+  read -r -p 'Server fingerprint: ' chisel_fingerprint
+  read -r -p 'Chisel username: ' chisel_username
+  read -r -s -p 'Chisel password: ' chisel_password
+  printf '\n'
+
+  AUTH="${chisel_username}:${chisel_password}" \
+    chisel client --fingerprint "$chisel_fingerprint" \
+    https://dev-tunnel.goblinboard.com \
+    R:0.0.0.0:8787:127.0.0.1:8787
+)
+```
+
+Wait for `Connected` and keep both terminals open. The full fingerprint is
+`Base64(SHA256(SSH-encoded server public key))`; it identifies the server key and
+is separate from the username/password credential. A saved password is enough
+for client authentication once you also have the trusted public fingerprint.
+
+Open `https://dev.goblinboard.com/settings?section=chatgpt` and follow the
+[private plugin setup](chatgpt-integration.md#guided-private-setup): create the
+OAuth client in Goblin, enter `https://dev.goblinboard.com/mcp` in ChatGPT's
+**Add custom MCP server** form with OAuth, and copy the generated client secret
+into that form. Save the exact callback displayed by ChatGPT in Goblin, then
+create and install the plugin in ChatGPT. Sign in on Goblin's HTTPS page with the
+local Goblin owner password and approve the connection.
 
 ## Test the connection without Work
 
@@ -50,6 +126,15 @@ sharing Work, approving a result, or signing into GitHub:
    returned `responseId`. This matches the response to an actual authenticated
    invocation on your local Goblin process.
 7. Call again. The response ID changes and the UTC timestamp advances.
+
+If you saved the Goblin log above, replace the placeholder with the returned ID:
+
+```bash
+rg --fixed-strings 'COPY_RESPONSE_ID' .artifacts/chatgpt-local-testing/goblin.log
+```
+
+Without log capture, search the Goblin terminal's scrollback. If that output is
+gone, call again while watching the terminal and compare the new ID.
 
 The tool is on the existing `https://dev.goblinboard.com/mcp` endpoint and takes
 no arguments. It uses the same OAuth authentication as the Work tools. For example
@@ -73,6 +158,31 @@ reply reached ChatGPT. Default Information logging includes this event; see
 [saved logs](logging.md) if logging levels or destinations have been changed.
 Only these public diagnostic fields are returned: no hostname, username, paths,
 environment variables, or credentials.
+
+`operatingSystem: Linux` is expected for WSL. `runtime` reports the .NET runtime
+of the process that answered; the SDK used to build it and the SDK/runtime pins
+in the [Dockerfile](../Dockerfile) are separate values. `respondedAtUtc` uses UTC;
+Manila time is eight hours later.
+
+## Troubleshoot this setup
+
+| Symptom | Check |
+| --- | --- |
+| `Create the profile with --local or --ssh USER@HOST` | Create the WSL profile in [Prepare WSL](#prepare-wsl), then rerun `make dev-start DB_PROFILE=wsl`. |
+| `502 Bad Gateway` on the public address | Confirm Goblin is listening on local port 8787 and the Chisel terminal shows `Connected`. Both processes must remain running. |
+| Fingerprint mismatch or authentication failure | Check the full trusted fingerprint separately from the username/password. Obtain a new trusted fingerprint from the administrator if the server key changed. |
+| ChatGPT still shows the old fixed ping reply | Rebuild and restart Goblin, refresh the connection's tools in ChatGPT, and start a new conversation with the plugin selected using `@`. |
+| Empty Work list or `No Work is shared yet` | Ping requires no grants. To test Work reads, select actual Work and share it in Goblin. Leave **Also share the latest approved result** unchecked unless an approved result exists; requesting a missing approved result prevents the grant. |
+| GitHub remains `Connecting` with no device code | GitHub sign-in is a separate flow. It is unnecessary for `goblin_ping`; investigate GitHub CLI/device-code behavior separately. |
+
+For a local listener check:
+
+```bash
+ss -ltnp '( sport = :8787 )'
+```
+
+The ping checks connectivity and authentication. Work grants, approved-result
+access, and GitHub sign-in need their own tests.
 
 ## Repeat tests
 
