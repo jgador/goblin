@@ -86,6 +86,11 @@ pub const GOBLIN_PASSWORD_HASH_FILE: &str = "GOBLIN_PASSWORD_HASH_FILE";
 /// Required: Optional. Sensitive: no.
 pub const GOBLIN_PUBLIC_ORIGIN: &str = "GOBLIN_PUBLIC_ORIGIN";
 
+/// Image selected for new isolated execution workers; deployment keeps it aligned with the platform.
+/// Format: Container image reference. Default/fallback: goblin-platform:0.1.0.
+/// Required: Optional for the host, explicit in installed deployments. Sensitive: no.
+pub const GOBLIN_EXECUTION_IMAGE: &str = "GOBLIN_EXECUTION_IMAGE";
+
 /// Opt-in real PostgreSQL test administrator connection.
 /// Format: Npgsql connection string.
 /// Default/fallback: Database tests skip when the required test connections are absent.

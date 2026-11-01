@@ -84,6 +84,13 @@ Repeat or broaden passing checks only for new changes, failures, unresolved risk
 or required coverage. Report failures and skips; PostgreSQL tests remain opt-in.
 Claim persistence or authenticated runtime coverage only from actual integration checks.
 
+Iterate with the required affected tests directly in WSL. When behavior depends on
+containers or Kubernetes, run `make k3s-deploy` and verify the affected behavior in
+this checkout's owned WSL k3s installation. Confirm the expected image is running;
+readiness alone is not feature verification. Preserve data; reset only when explicitly
+requested. Report performed checks and unverified behavior. See the linked
+[verification guide](docs/repository-layout.md#choosing-verification) for selection.
+
 Keep all temporary files created inside this repository under `.artifacts/` in
 task/tool subdirectories, including scratch scripts, fixtures, test results,
 reports, screenshots, traces, and logs. Configure test tools to use those paths.

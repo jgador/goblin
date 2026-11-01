@@ -53,20 +53,21 @@ instead of a running host.
 Dedicated local installations check ownership and remember their checkout:
 
 ```bash
-make local-start                 # runs the CLI from the current source
-sudo goblinctl --repo "$PWD" local start      # uses a precompiled binary
-sudo goblinctl local stop                     # keeps application data and PVCs
-sudo goblinctl local retry --refresh          # retries a failed install with the current checkout
-sudo goblinctl local reset --yes              # deletes only this owned local cluster
+make k3s-start                 # runs the CLI from the current source
+sudo goblinctl --repo "$PWD" k3s start        # uses a precompiled binary
+sudo goblinctl k3s stop                     # keeps application data and PVCs
+sudo goblinctl k3s retry --refresh          # retries a failed install with the current checkout
+sudo goblinctl k3s reset --yes              # removes owned data and saved password
 goblinctl --repo "$PWD" password set --replace
-sudo goblinctl local start                    # loads the changed local verifier
-goblinctl local database
+sudo goblinctl k3s start                    # loads the changed local verifier
+goblinctl k3s database
 ```
 
-`local status`, `local logs`, and `local password` inspect the local installation.
+`k3s status`, `k3s logs`, and `k3s password` inspect the local installation.
 The local source snapshot includes tracked and untracked Git-visible files,
 excludes ignored files, and refuses symlinks. A completed installation starts
-again without rebuilding. A failed installation needs an explicit retry. `retry`
+again without rebuilding. `make k3s-deploy` builds, imports and verifies application
+edits without reinstalling; see [WSL k3s development](../deploy/k3s/README.md#deploy-application-edits). A failed installation needs an explicit retry. `retry`
 reuses the failed attempt's source snapshot. `retry --refresh` works only on a
 stopped, failed installation; it first replaces the snapshot and installed setup
 assets with the current checkout and CLI, so a fix can be tested without deleting

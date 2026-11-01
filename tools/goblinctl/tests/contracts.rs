@@ -6,7 +6,7 @@ use goblinctl::database_host;
 use goblinctl::environment;
 use goblinctl::files;
 use goblinctl::install;
-use goblinctl::local::Local;
+use goblinctl::k3s::K3s;
 use goblinctl::setup;
 use serde_json::json;
 use std::fs;
@@ -287,26 +287,24 @@ fn local_ownership_is_required_before_reset() {
     let dir = tempfile::tempdir().unwrap();
     let git_repository = dir.path().join("git-repository");
     fs::create_dir(&git_repository).unwrap();
-    let local = Local {
+    let k3s = K3s {
         git_repository: git_repository.clone(),
         system: dir.path().join("system"),
     };
-    let owner = local.path("var/lib/goblin/local-test/config.json");
+    let owner = k3s.path("var/lib/goblin/local-test/config.json");
     for config in [
         json!({"mode":"direct","repo":"/another-checkout"}),
         json!({"mode":"vm","repo":git_repository}),
     ] {
         files::write_json(&owner, &config, 0o600).unwrap();
         assert!(
-            local
-                .owned_config()
+            k3s.owned_config()
                 .unwrap_err()
                 .to_string()
                 .contains("another runner or checkout")
         );
         assert!(
-            local
-                .reset()
+            k3s.reset()
                 .unwrap_err()
                 .to_string()
                 .contains("another runner or checkout")
@@ -314,7 +312,7 @@ fn local_ownership_is_required_before_reset() {
         assert_eq!(files::json(&owner).unwrap(), config);
     }
     fs::remove_file(owner).unwrap();
-    assert!(local.reset().is_err());
+    assert!(k3s.reset().is_err());
 }
 
 #[test]
@@ -322,14 +320,14 @@ fn retained_password_verifier_is_reused() {
     let dir = tempfile::tempdir().unwrap();
     let git_repository = dir.path().join("git-repository");
     fs::create_dir(&git_repository).unwrap();
-    let local = Local {
+    let k3s = K3s {
         git_repository,
         system: dir.path().join("system"),
     };
-    let retained = local.path("var/lib/goblin/install/private/owner-password");
+    let retained = k3s.path("var/lib/goblin/install/private/owner-password");
     let verifier = credentials::hash("retained-test").unwrap();
     credentials::save(&retained, &verifier).unwrap();
-    let path = local.prepare_password().unwrap();
+    let path = k3s.prepare_password().unwrap();
     assert_eq!(credentials::read(&path).unwrap().trim(), verifier);
 }
 
@@ -444,18 +442,18 @@ esac
     let root = Path::new(&root);
     let git_repository = root.join("git-repository");
     fs::create_dir(&git_repository).unwrap();
-    let local = Local {
+    let k3s = K3s {
         git_repository: git_repository.clone(),
         system: root.join("system"),
     };
-    let owner = local.path("var/lib/goblin/local-test/config.json");
+    let owner = k3s.path("var/lib/goblin/local-test/config.json");
     let config = json!({"mode":"direct","repo":git_repository,"http_port":8788});
     files::write_json(&owner, &config, 0o600).unwrap();
     let port = 5432;
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let occupied = listener.local_addr().unwrap();
     assert!(
-        database_host::configure_with_probe(&local.system, || {
+        database_host::configure_with_probe(&k3s.system, || {
             TcpListener::bind(occupied).map_err(|_| anyhow::anyhow!("occupied"))?;
             Ok(())
         })
@@ -470,9 +468,9 @@ esac
             .contains("k3s kubectl")
     );
     drop(listener);
-    database_host::configure_with_probe(&local.system, || Ok(())).unwrap();
-    let socket = local.path("etc/systemd/system/goblin-local-postgres.socket");
-    let service = local.path("etc/systemd/system/goblin-local-postgres.service");
+    database_host::configure_with_probe(&k3s.system, || Ok(())).unwrap();
+    let socket = k3s.path("etc/systemd/system/goblin-local-postgres.socket");
+    let service = k3s.path("etc/systemd/system/goblin-local-postgres.service");
     let socket_text = fs::read_to_string(&socket).unwrap();
     assert!(
         socket_text.contains(&format!("ListenStream=127.0.0.1:{port}"))
@@ -489,30 +487,30 @@ esac
         0o644
     );
     assert_eq!(
-        files::json(&local.path("var/lib/goblin/postgres/host.json")).unwrap()["port"],
+        files::json(&k3s.path("var/lib/goblin/postgres/host.json")).unwrap()["port"],
         port
     );
     fs::write(root.join("calls"), "").unwrap();
     fs::write(root.join("database-active"), "").unwrap();
     let _live = TcpListener::bind(occupied).unwrap();
-    local.configure_database(&config).unwrap();
+    k3s.configure_database(&config).unwrap();
     assert!(
         !fs::read_to_string(root.join("calls"))
             .unwrap()
             .contains("systemctl stop")
     );
     // A changed cluster address restores the previous working service on failure.
-    let host_state = local.path("var/lib/goblin/postgres/host.json");
+    let host_state = k3s.path("var/lib/goblin/postgres/host.json");
     let service_text = fs::read_to_string(&service)
         .unwrap()
         .replace("10.43.23.45", "10.43.23.46");
     fs::write(&service, &service_text).unwrap();
     fs::write(root.join("fail-enable-once"), "").unwrap();
-    assert!(database_host::configure_with_probe(&local.system, || Ok(())).is_err());
+    assert!(database_host::configure_with_probe(&k3s.system, || Ok(())).is_err());
     assert_eq!(fs::read_to_string(&service).unwrap(), service_text);
     assert_eq!(files::json(&host_state).unwrap()["port"], 5432);
-    database_host::configure_with_probe(&local.system, || Ok(())).unwrap();
-    assert!(!local.path("var/lib/goblin/postgres/pending.json").exists());
+    database_host::configure_with_probe(&k3s.system, || Ok(())).unwrap();
+    assert!(!k3s.path("var/lib/goblin/postgres/pending.json").exists());
     // Resume a completed installation, synchronize a changed verifier exactly once.
     for (name, bytes) in [
         ("proc/1/comm", b"systemd\n".as_slice()),
@@ -520,52 +518,40 @@ esac
         ("usr/lib/systemd/systemd-socket-proxyd", b""),
         ("var/lib/goblin/bootstrap-status", b"setup-ready\n"),
     ] {
-        files::atomic_write(&local.path(name), bytes, 0o644, false).unwrap();
+        files::atomic_write(&k3s.path(name), bytes, 0o644, false).unwrap();
     }
-    let state = local.path(setup::STATE);
+    let state = k3s.path(setup::STATE);
     setup::update(&state, SetupAction::Init, "").unwrap();
     setup::update(&state, SetupAction::Ready, "").unwrap();
-    let retained = local.path("var/lib/goblin/install/private/owner-password");
+    let retained = k3s.path("var/lib/goblin/install/private/owner-password");
     credentials::save(&retained, &credentials::hash("previous-test").unwrap()).unwrap();
     credentials::save(
-        &local.password(),
+        &k3s.password(),
         &credentials::hash("replacement-test").unwrap(),
     )
     .unwrap();
-    local.start(None).unwrap();
+    k3s.start(None).unwrap();
     assert_eq!(
         credentials::read(&retained).unwrap(),
-        credentials::read(&local.password()).unwrap()
+        credentials::read(&k3s.password()).unwrap()
     );
     let calls = fs::read_to_string(root.join("calls")).unwrap();
     assert!(calls.contains("delete pod"));
     assert!(!calls.contains("replacement-test"));
     fs::write(root.join("calls"), "").unwrap();
-    local.start(None).unwrap();
+    k3s.start(None).unwrap();
     assert!(
         !fs::read_to_string(root.join("calls"))
             .unwrap()
             .contains("k3s kubectl")
     );
-    local.stop().unwrap();
+    k3s.stop().unwrap();
     assert!(owner.with_file_name("paused").exists());
     assert!(retained.exists());
     let calls = fs::read_to_string(root.join("calls")).unwrap();
     assert!(calls.contains("disable --now goblin-local-postgres.socket"));
-    let listener = local.path("etc/systemd/system/goblin-setup.service.d/listener.conf");
-    let custom = listener.with_file_name("custom.conf");
-    files::atomic_write(&listener, b"owned setup listener", 0o644, false).unwrap();
-    files::atomic_write(&custom, b"operator setting", 0o644, false).unwrap();
-    files::atomic_write(
-        &local.path("usr/local/bin/k3s-uninstall.sh"),
-        b"#!/bin/sh\nexit 0\n",
-        0o755,
-        false,
-    )
-    .unwrap();
-    local.reset().unwrap();
-    assert!(!listener.exists());
-    assert!(custom.exists());
+    // Full reset is covered by isolated WSL filesystem fixtures in
+    // scripts/k3s-reset.test.mts; this contract covers resume and retained stop.
 }
 
 #[test]

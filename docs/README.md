@@ -30,7 +30,7 @@ preproduction; recreate local installations when formats change. Follow
 | [goblinctl](goblinctl.md) | Native CLI commands, installation, and packaging |
 | [Kubernetes names](kubernetes-names.md) | Resource names, identities, and storage ownership |
 | [System and cluster](cluster-view.md), [Logs](logging.md), [Timezones](timezones.md) | Monitoring views and workspace time |
-| [Local installation](../deploy/local/README.md) | Install and test from WSL |
+| [WSL k3s development](../deploy/k3s/README.md) | Install, deploy application edits, verify, and reset the owned cluster |
 | [Azure installation](../deploy/azure/README.md), [reference](../deploy/azure/reference.md) | Portal deployment, setup, and recovery |
 | [Website](../website/README.md), [website production](../website/production/README.md) | Public site and its deployment |
 

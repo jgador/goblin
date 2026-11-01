@@ -86,7 +86,7 @@ make install
 Workflows run serially even with `make -j`, because they share build outputs.
 Pass tool options through `ARGS`, for example
 `make browser-test ARGS="tests/e2e/setup.spec.ts --headed"` or
-`make local-start ARGS="--http-port 8888"`. Rust selectors use `CARGO_ARGS`, for
+`make k3s-start ARGS="--http-port 8888"`. Rust selectors use `CARGO_ARGS`, for
 example `make rust-test CARGO_ARGS="-p goblinctl"`.
 
 Frontend-only work can stay inside its package:
@@ -113,7 +113,8 @@ npm run typecheck
 | `make protocol-generate` / `make protocol-check` | Regenerate / check C# Codex protocol models |
 | `make kubernetes-generate` / `make kubernetes-check` | Regenerate / check selected Kubernetes and Agent Sandbox models |
 | `make ci-test` | Test CI change selection and the required-result policy |
-| `make dev-start DB_PROFILE=wsl` | Build and start the application with the selected PostgreSQL profile and local owner password |
+| `make dev-start DB_PROFILE=wsl` | Build and start the application directly in WSL with the selected PostgreSQL profile |
+| `make k3s-deploy` | Build, import and verify application edits in the owned WSL k3s installation |
 | `make artifacts-clean` | Delete everything in `.artifacts/` except its `.gitkeep` |
 
 Owners of other targets: [Rust development](rust-development.md) (`rust-*`,
@@ -122,7 +123,7 @@ Owners of other targets: [Rust development](rust-development.md) (`rust-*`,
 [database guide](database.md) (`database-*`),
 [dependencies](dependencies.md) (`dependencies-*`),
 [releases](releases.md) (`release-*`),
-[local installation](../deploy/local/README.md) (`local-*`, `dev-reset`,
+[WSL k3s development](../deploy/k3s/README.md) (`k3s-*`,
 `password-set`),
 [Chisel](../deploy/chisel/README.md) (`chisel-check`),
 [logging](logging.md) (`logging-test*`), [cluster view](cluster-view.md)
@@ -188,6 +189,18 @@ Choose checks for the behavior and boundaries you changed. Reuse passing results
 for unchanged content; repeat or broaden checks for new changes, failures,
 unresolved risks, or required coverage. Write regression tests that check
 behavior, not tests that only repeat the implementation.
+
+Use direct WSL tests for fast edit/debug cycles. Real PostgreSQL integration
+checks can use the database already installed in k3s without running the
+application there. When behavior depends on the container image, mounted
+configuration, ingress, networking, RBAC, worker scheduling/recovery, PVCs, or
+deployed logging, verify it against the owned WSL k3s installation. Use
+[`make k3s-deploy`](../deploy/k3s/README.md#deploy-application-edits) after the
+affected tests pass, confirm the reported image is running, and exercise the
+changed behavior. Repeat deployment for new runtime changes or a deployment
+failure; reuse unchanged passing checks. Report any required checks that could
+not be performed. Schema, infrastructure manifests, and installer changes need
+their own installation verification; image deployment cannot apply them.
 
 | Change | Relevant verification |
 | --- | --- |

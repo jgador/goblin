@@ -137,7 +137,8 @@ pub const DATABASE: &[(&str, &[u8])] = &[
         include_bytes!("../../../deploy/postgres/verify.yaml"),
     ),
 ];
-pub const POSTGRES_SERVICE: &[u8] = include_bytes!("../../../deploy/local/postgres-service.yaml");
+pub const POSTGRES_SERVICE: &[u8] = include_bytes!("../../../deploy/k3s/postgres-service.yaml");
+pub const K3S_RESET: &[u8] = include_bytes!("../../../scripts/k3s-reset.sh");
 pub fn unpack(destination: &Path, assets: &[(&str, &[u8])]) -> Result<()> {
     for (name, bytes) in assets {
         files::atomic_write(

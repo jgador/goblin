@@ -19,7 +19,7 @@ include Makefile.dev
 
 # List targets and their purpose; pass tool flags with ARGS or CARGO_ARGS.
 help:
-	@awk '/^# / { description = substr($$0, 3); next } /^[a-z][a-z-]*:/ { printf "  %-25s %s\n", $$1, description }' $(MAKEFILE_LIST)
+	@awk '/^# / { description = substr($$0, 3); next } /^[a-z][a-z0-9-]*:/ { printf "  %-25s %s\n", $$1, description }' $(MAKEFILE_LIST)
 
 # Install locked Node packages and fetch the pinned Rust workspace dependencies.
 install: node-install rust-install
@@ -213,7 +213,7 @@ chisel-check:
 
 # Verify Make workflow ordering, failure propagation, and explicit flag forwarding.
 make-test:
-	node --test scripts/make-workflows.test.mts
+	node --test scripts/make-workflows.test.mts scripts/k3s-reset.test.mts
 
 # =============================================================================
 # Node: locked tooling installation and compiled JavaScript tests.

@@ -26,6 +26,12 @@ authorization. Do not turn general caution into an invented approval gate.
 Rerunning local tests is not a retry of failed Work. The product's explicit retry
 and reconciliation rules still apply to the Work lifecycle being implemented.
 
+For fast WSL iteration and checks that need a running cluster, follow
+[verification selection](repository-layout.md#choosing-verification) and the
+[owned k3s deployment workflow](../deploy/k3s/README.md#deploy-application-edits).
+The short root instruction selects the workflow; the guides own commands,
+deployment limits, and verification examples.
+
 ## Keep skills narrowly scoped
 
 Repository skills live under `.agents/skills/`. A skill's description decides when

@@ -11,8 +11,8 @@ use goblinctl::database_host;
 use goblinctl::deployment;
 use goblinctl::files;
 use goblinctl::install;
-use goblinctl::local::Local;
-use goblinctl::local::{self};
+use goblinctl::k3s::K3s;
+use goblinctl::k3s::{self};
 use goblinctl::operations;
 use goblinctl::postgres::Access;
 use goblinctl::postgres::Role;
@@ -70,10 +70,10 @@ enum Commands {
         #[arg(long)]
         follow: bool,
     },
-    /// Manage the dedicated local Ubuntu/WSL cluster.
-    Local {
+    /// Manage this checkout's dedicated WSL k3s installation.
+    K3s {
         #[command(subcommand)]
-        command: LocalCommand,
+        command: K3sCommand,
     },
     /// Prepare or replace owner credentials.
     Password {
@@ -115,12 +115,15 @@ enum InstallCommand {
     Retry,
 }
 #[derive(Subcommand)]
-enum LocalCommand {
+enum K3sCommand {
     Start {
         #[arg(long, value_parser = clap::value_parser!(u16).range(1024..))]
         http_port: Option<u16>,
     },
+    /// Build and deploy the working tree to the owned WSL cluster.
+    Deploy,
     Stop,
+    /// Remove the owned cluster, application data and saved password.
     Reset {
         #[arg(long, required = true)]
         yes: bool,
@@ -356,7 +359,7 @@ fn execute(cli: Cli) -> Result<()> {
             Some(InstallCommand::Status { json }) => operations::install_status(json),
             Some(InstallCommand::Retry) => {
                 if Path::new("/var/lib/goblin/local-test/config.json").exists() {
-                    local_action(&config_root, LocalCommand::Retry { refresh: false })
+                    k3s_action(&config_root, K3sCommand::Retry { refresh: false })
                 } else {
                     operations::retry()
                 }
@@ -371,9 +374,9 @@ fn execute(cli: Cli) -> Result<()> {
                             .context("Supply --certificate-email for HTTPS installation")?,
                     )
                 } else {
-                    local_action(
+                    k3s_action(
                         &config_root,
-                        LocalCommand::Start {
+                        K3sCommand::Start {
                             http_port: args.http_port,
                         },
                     )
@@ -383,7 +386,7 @@ fn execute(cli: Cli) -> Result<()> {
         Commands::Status { json } => operations::status(json, false),
         Commands::Doctor { json } => operations::status(json, true),
         Commands::Logs { follow } => operations::logs(follow),
-        Commands::Local { command } => local_action(&config_root, command),
+        Commands::K3s { command } => k3s_action(&config_root, command),
         Commands::Password {
             command: PasswordCommand::Set { replace, path },
         } => {
@@ -487,17 +490,17 @@ fn execute(cli: Cli) -> Result<()> {
                 println!("{}", database::migration_state(&stdin_json()?, &image)?);
                 Ok(())
             }
-            InternalCommand::Forward => local::forward(),
+            InternalCommand::Forward => k3s::forward(),
             InternalCommand::Snapshot { destination } => {
-                local::snapshot_source(&config_root, &destination)
+                k3s::snapshot_source(&config_root, &destination)
             }
             InternalCommand::Preflight { port } => {
-                print_json(&Local::new(&config_root)?.preflight(port)?)
+                print_json(&K3s::new(&config_root)?.preflight(port)?)
             }
         },
     }
 }
-fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
+fn k3s_action(config_root: &Path, command: K3sCommand) -> Result<()> {
     if unsafe { libc::geteuid() } != 0 {
         use std::os::unix::process::CommandExt;
         return Err(Command::new("sudo")
@@ -522,32 +525,33 @@ fn local_action(config_root: &Path, command: LocalCommand) -> Result<()> {
     unsafe {
         libc::umask(0o077);
     }
-    let local = Local::new(config_root)?;
+    let k3s = K3s::new(config_root)?;
     match command {
-        LocalCommand::Password => {
+        K3sCommand::Password => {
             println!(
                 "Local password verifier: {}\nThe original password is not stored and cannot be displayed.",
-                local.password().display()
+                k3s.password().display()
             );
             Ok(())
         }
-        LocalCommand::Status { json } => {
-            local.owned_config()?;
+        K3sCommand::Status { json } => {
+            k3s.owned_config()?;
             operations::install_status(json)
         }
-        LocalCommand::Logs { follow } => {
-            local.owned_config()?;
+        K3sCommand::Logs { follow } => {
+            k3s.owned_config()?;
             operations::logs(follow)
         }
-        command => local.locked(|local| match command {
-            LocalCommand::Start { http_port } => local.start(http_port),
-            LocalCommand::Stop => local.stop(),
-            LocalCommand::Reset { yes } => {
+        command => k3s.locked(|k3s| match command {
+            K3sCommand::Start { http_port } => k3s.start(http_port),
+            K3sCommand::Deploy => goblinctl::k3s_deploy::deploy(k3s),
+            K3sCommand::Stop => k3s.stop(),
+            K3sCommand::Reset { yes } => {
                 ensure!(yes, "Reset requires --yes");
-                local.reset()
+                k3s.reset()
             }
-            LocalCommand::Retry { refresh } => local.retry(refresh),
-            LocalCommand::Database => local.configure_database(&local.owned_config()?),
+            K3sCommand::Retry { refresh } => k3s.retry(refresh),
+            K3sCommand::Database => k3s.configure_database(&k3s.owned_config()?),
             _ => unreachable!(),
         }),
     }
@@ -601,5 +605,32 @@ fn database_action(command: DbCommand) -> Result<()> {
             }
             files::run(&mut child)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn full_k3s_reset_requires_explicit_consent() {
+        assert!(Cli::try_parse_from(["goblinctl", "k3s", "reset"]).is_err());
+        let cli = Cli::try_parse_from(["goblinctl", "k3s", "reset", "--yes"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::K3s {
+                command: K3sCommand::Reset { yes: true }
+            }
+        ));
+    }
+    #[test]
+    fn deployment_uses_the_k3s_command_and_has_no_superseded_local_alias() {
+        let cli = Cli::try_parse_from(["goblinctl", "k3s", "deploy"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Commands::K3s {
+                command: K3sCommand::Deploy
+            }
+        ));
+        assert!(Cli::try_parse_from(["goblinctl", "local", "start"]).is_err());
     }
 }

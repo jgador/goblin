@@ -31,13 +31,18 @@ Portal. See the [Azure guide](deploy/azure/README.md).
 To test the full installation in WSL/Ubuntu with systemd:
 
 ```bash
-make local-start
+make k3s-start
 ```
 
 Open **http://localhost:8788** in Windows. The first start asks for a Goblin
-password in the terminal. The [local installer guide](deploy/local/README.md)
+password in the terminal. The [WSL k3s guide](deploy/k3s/README.md)
 covers prerequisites, logs, stop, and reset. Goblin is preproduction; recreate
 development installations when formats change.
+
+After application edits and the affected tests, use `make k3s-deploy` to build,
+import, and verify the image in this installation. See the
+[WSL k3s workflow](deploy/k3s/README.md#deploy-application-edits) for caching,
+verification, and reset limits.
 
 ## Develop
 

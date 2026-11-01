@@ -1,4 +1,4 @@
-//! Ownership-scoped administration of the dedicated Ubuntu/WSL installation.
+//! Ownership-scoped administration of the dedicated WSL k3s installation.
 use crate::credentials;
 use crate::database_host;
 use crate::environment;
@@ -41,11 +41,11 @@ const UNITS: &[&str] = &[
     DATABASE_SERVICE,
 ];
 
-pub struct Local {
+pub struct K3s {
     pub git_repository: PathBuf,
     pub system: PathBuf,
 }
-impl Local {
+impl K3s {
     pub fn new(git_repository: &Path) -> Result<Self> {
         Ok(Self {
             git_repository: git_repository.canonicalize()?,
@@ -70,7 +70,7 @@ impl Local {
     pub fn owned_config(&self) -> Result<Value> {
         ensure!(
             self.owner().exists(),
-            "No direct local installation exists. Run goblinctl local start."
+            "No direct local installation exists. Run goblinctl k3s start."
         );
         let config = files::json(&self.owner())?;
         ensure!(
@@ -363,7 +363,7 @@ impl Local {
             .context("Bootstrap is incomplete. Run start again.")?;
         ensure!(
             state["status"] != "ready",
-            "Installation is complete. Use local reset --yes, then start for a fresh test."
+            "Installation is complete. Use k3s reset --yes, then start for a fresh test."
         );
         if refresh {
             ensure!(
@@ -461,77 +461,23 @@ impl Local {
         Ok(())
     }
     pub fn reset(&self) -> Result<()> {
-        files::reject_symlinks(&self.unit("goblin-setup.service.d/listener.conf"))?;
-        self.stop()?;
-        let uninstall = self.path("usr/local/bin/k3s-uninstall.sh");
-        if uninstall.exists() {
-            files::run(
-                Command::new(uninstall)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null()),
-            )?;
-        } else {
-            ensure!(
-                !self.unit("k3s.service").exists() && !files::executable("k3s"),
-                "K3s is installed but its uninstaller is missing; local data was retained."
-            );
-            for p in ["etc/rancher/k3s", "var/lib/rancher/k3s"] {
-                remove_tree(&self.path(p))?;
-            }
+        files::reject_symlinks(&self.owner())?;
+        if self.owner().exists() {
+            self.owned_config()?;
         }
-        let kubelet = self.path("var/lib/kubelet");
-        if kubelet.exists() {
-            ensure!(
-                fs::read_dir(&kubelet)?.next().is_none(),
-                "Kubelet data remains after uninstall. Inspect /var/lib/kubelet, then retry reset."
-            );
-            if Command::new("mountpoint")
-                .arg("--quiet")
-                .arg(&kubelet)
-                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
-                .status()?
-                .success()
-            {
-                files::run(Command::new("umount").arg("--").arg(&kubelet))?;
-            }
-            fs::remove_dir(kubelet)?;
-        }
-        for name in UNITS {
-            let _ = Command::new("systemctl")
-                .args(["reset-failed", name])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
-                .status();
-            files::remove_file(&self.unit(name))?;
-        }
-        for (unit, file) in [
-            ("goblin-installer.service.d", "local-test.conf"),
-            ("goblin-setup.service.d", "listener.conf"),
-        ] {
-            let override_dir = self.unit(unit);
-            files::remove_file(&override_dir.join(file))?;
-            if override_dir.exists() && fs::read_dir(&override_dir)?.next().is_none() {
-                fs::remove_dir(override_dir)?;
-            }
-        }
-        for p in ["var/lib/goblin", "opt/goblin/setup"] {
-            remove_tree(&self.path(p))?;
-        }
-        for name in ["source.tar.gz", "bootstrap.sh", "bootstrap.log"] {
-            files::remove_file(&self.state().join(name))?;
-        }
-        for name in [
-            "var/log/goblin-bootstrap.log",
-            "var/log/goblin-installer.log",
-        ] {
-            files::remove_file(&self.path(name))?;
-        }
-        systemctl(&["daemon-reload"])?;
-        println!(
-            "Local Goblin cluster and application data removed. The repository password verifier, native CLI, Docker and download caches are retained."
-        );
-        Ok(())
+        files::input(
+            Command::new("bash")
+                .env_clear()
+                .env(
+                    environment::PATH,
+                    std::env::var_os(environment::PATH)
+                        .context("Missing executable search path")?,
+                )
+                .args(["-s", "--", "--yes", "--repo"])
+                .arg(&self.git_repository)
+                .arg(&self.system),
+            crate::assets::K3S_RESET,
+        )
     }
     pub fn locked<T>(&self, operation: impl FnOnce(&Self) -> Result<T>) -> Result<T> {
         files::require_root()?;
@@ -543,12 +489,6 @@ impl Local {
         lock.lock_exclusive()?;
         operation(self)
     }
-}
-fn remove_tree(path: &Path) -> Result<()> {
-    if path.exists() {
-        fs::remove_dir_all(path)?;
-    }
-    Ok(())
 }
 fn check_retained_tooling(path: &Path) -> Result<()> {
     if path.exists() {
@@ -684,7 +624,7 @@ mod tests {
     #[test]
     fn retained_native_tooling_and_licenses_allow_a_fresh_local_installation() {
         let artifacts =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/local-start-regression");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/k3s-start-regression");
         fs::create_dir_all(&artifacts).unwrap();
         let fixture = tempfile::tempdir_in(artifacts).unwrap();
         let binary = fixture.path().join("fixture-goblinctl");

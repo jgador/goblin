@@ -25,7 +25,7 @@ troubleshooting. This guide owns Goblin startup, plugin installation, and tests.
 Run from the repository root in WSL with the
 [development prerequisites](repository-layout.md#build-and-test).
 
-After the [local installation](../deploy/local/README.md) and
+After the [WSL k3s installation](../deploy/k3s/README.md) and
 [PostgreSQL WSL prerequisites](database.md#wsl-and-windows-pgadmin), create the
 database profile once from a root WSL shell:
 
@@ -264,7 +264,7 @@ For a fresh local owner identity, keys, clients, and Work:
 
 1. Stop the local Goblin process.
 2. Reset the local instance and database with the
-   [local reset](../deploy/local/README.md#stop-resume-or-start-clean)
+   [k3s reset](../deploy/k3s/README.md#stop-resume-or-start-clean)
    and [database](database.md) tools.
 3. Start the local build with the same HTTPS origin and port, then recreate the
    ChatGPT connection and sample Work.
