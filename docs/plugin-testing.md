@@ -34,11 +34,19 @@ cargo build --locked -p goblinctl
 target/debug/goblinctl db connect wsl --local --forward-port 55432
 ```
 
-The local installation runs PostgreSQL in k3s and exposes it to WSL on
-`localhost:5432`. The optional Windows forwarding port is 55432. The profile and
-client certificates live under `~/.config/goblin/postgres/wsl/` by default. With
-the profile present, `make dev-start` refreshes access itself. Goblin started by
-that command runs as a native WSL .NET process.
+Reuse the PostgreSQL server already running in WSL k3s for the installed Goblin
+platform. You do not need another PostgreSQL installation or database. The `wsl`
+profile configures client access to that server's existing `goblin` database;
+it does not provision a database. The native development build reads and writes
+the same database as the installed platform, so testing uses its stored data.
+
+The local installation exposes PostgreSQL to WSL on `localhost:5432`. The optional
+Windows forwarding port is 55432. The profile and client certificates live under
+`~/.config/goblin/postgres/wsl/` by default. With the profile present,
+`make dev-start` refreshes access itself. Keep k3s and the PostgreSQL forwarder
+running. Goblin started by that command runs as a native WSL .NET process on port
+8787; the installed k3s platform remains available on `http://localhost:8788`
+with the default local installation port.
 
 ### Start the local build
 
