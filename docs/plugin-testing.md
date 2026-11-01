@@ -23,7 +23,9 @@ troubleshooting. This guide owns Goblin startup, plugin installation, and tests.
 ### Use the installed WSL k3s platform
 
 With the [WSL k3s installation](../deploy/k3s/README.md) ready, deploy your checkout
-and configure the same application settings used in production:
+and configure the same application settings used in production. Then connect the
+Chisel client in a second terminal as described below; it provides the public
+HTTPS connection.
 
 ```bash
 GOBLIN_PUBLIC_ORIGIN=https://dev.goblinboard.com \
@@ -42,12 +44,24 @@ forwards directly to the platform Service. This preserves the Chisel gateway's
 Host and HTTPS header for OAuth and follows pod replacements. A different browser
 port chosen during installation still applies. Use the public HTTPS address for
 Goblin's UI; localhost remains the tunnel destination and health endpoint.
+Opening `http://localhost:8788/` directly now returns `invalid_host` because
+Goblin accepts the configured public hostname. This is expected after changing
+the public origin.
 
-Follow [Connect WSL](../deploy/chisel/README.md#connect-wsl) in another terminal,
-choosing **8788** as the local Goblin port. Then continue to
-[Install the plugin](#install-the-plugin). Sign in and authorize this k3s
-instance; the direct development instance has a separate data directory and OAuth
-keys even when it shares the database.
+#### Connect the public address
+
+`make k3s-deploy` does not start the Chisel client. The public address returns
+`502 Bad Gateway` while the tunnel is disconnected or cannot reach Goblin.
+
+1. Follow [Connect WSL](../deploy/chisel/README.md#connect-wsl) in another terminal,
+   choosing **8788** as the local Goblin port. If a previous client targets the
+   direct development build on 8787, stop it and reconnect using 8788.
+2. Wait for **Connected** and leave that terminal running. Open
+   `https://dev.goblinboard.com/settings?section=chatgpt` and continue to
+   [Install the plugin](#install-the-plugin).
+
+Sign in and authorize this k3s instance; the direct development instance has a
+separate data directory and OAuth keys even when it shares the database.
 
 After further edits, use `make k3s-deploy`. Unset variables retain the configured
 origin and ChatGPT enablement in the Sandbox. Keep Chisel running; no manual

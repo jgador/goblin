@@ -124,14 +124,21 @@ pub fn deploy(k3s: &K3s) -> Result<()> {
         &receipt,
         0o600,
     )?;
+    let browser_origin = receipt["publicOrigin"]
+        .as_str()
+        .context("Missing public origin receipt")?;
     println!(
-        "Goblin ready: {}\nImage: {}\nPod: {}\nVerify the changed behavior in this instance.",
-        receipt["publicOrigin"]
-            .as_str()
-            .context("Missing public origin receipt")?,
+        "Goblin deployed in WSL k3s.\nBrowser URL: {browser_origin}\nImage: {}\nPod: {}",
         receipt["image"].as_str().context("Missing image receipt")?,
         receipt["pod"].as_str().context("Missing pod receipt")?,
     );
+    if browser_origin.starts_with("https://") {
+        println!(
+            "WSL tunnel destination: {}\nConnect your HTTPS proxy or tunnel before opening the browser URL.",
+            crate::k3s::origin(&config)?,
+        );
+    }
+    println!("Verify the changed behavior in this instance.");
     Ok(())
 }
 

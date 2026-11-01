@@ -200,6 +200,8 @@ retained under `/var/lib/goblin/local-test/browser-upstream` and in the existing
 systemd forwarder; it survives stop/start and pod replacement. Configure the
 loopback public origin again to restore the normal NGINX route. The CLI also
 checks OAuth discovery through the local endpoint when ChatGPT is enabled.
+These checks verify the WSL endpoint. Connect your HTTPS proxy or tunnel to it
+before opening the public browser URL; deployment does not start that connection.
 Deployment compares pod settings with the Sandbox template while accounting for
 Kubernetes' default `fieldRef.apiVersion: v1`. It still rejects changed setting
 values or field references. Deployment prints stage timings, the image, pod, browser URL, and a private

@@ -58,8 +58,9 @@ public fingerprint from the administrator before connecting.
 Start Goblin using [local plugin setup](../../docs/plugin-testing.md#local-testing).
 Choose the WSL destination: **8787** for `dev-start`, or **8788** for the installed
 k3s platform configured with its HTTPS public origin. For a custom k3s browser
-port, use that port. In a second WSL Bash terminal, enter the local port, trusted
-fingerprint, username, and password:
+port, use that port. `make k3s-deploy` configures Goblin; start this client to
+connect the public address. In a second WSL Bash terminal, enter the local port,
+trusted fingerprint, username, and password:
 
 ```bash
 (
