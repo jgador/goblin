@@ -112,8 +112,13 @@ pub fn deploy(k3s: &K3s) -> Result<()> {
         "Deployment elapsed: {:.1}s",
         started.elapsed().as_secs_f64()
     );
-    let receipt =
-        result.with_context(|| format!("Deployment failed; inspect {}", directory.display()))?;
+    let receipt = result.map_err(|error| {
+        let message = format!(
+            "Deployment failed: {error}; inspect {}",
+            directory.display()
+        );
+        error.context(message)
+    })?;
     files::write_json(
         &k3s.git_repository.join(".goblin-local/deployment.json"),
         &receipt,
@@ -364,6 +369,27 @@ fn text(value: &Value, key: &str) -> Result<String> {
         .as_str()
         .context("Required deployment metadata is missing")?
         .to_owned())
+}
+
+fn normalized_environment(environment: &Value) -> Value {
+    let mut normalized = environment.clone();
+    if let Some(entries) = normalized.as_array_mut() {
+        for entry in entries {
+            if let Some(reference) = entry
+                .get_mut("valueFrom")
+                .and_then(|source| source.get_mut("fieldRef"))
+                .and_then(Value::as_object_mut)
+                && reference
+                    .get("apiVersion")
+                    .is_none_or(|version| version == "")
+            {
+                // Pod admission defaults ObjectFieldSelector.apiVersion to v1.
+                // The Sandbox template retains the author's omitted value.
+                reference.insert("apiVersion".to_owned(), json!("v1"));
+            }
+        }
+    }
+    normalized
 }
 fn platform_index(sandbox: &Value) -> Result<usize> {
     sandbox["spec"]["podTemplate"]["spec"]["containers"]
@@ -707,7 +733,8 @@ fn update(
         .and_then(|cs| cs.iter().position(|c| c["name"] == "platform"))
         .context("Missing platform container")?;
     ensure!(
-        pod["spec"]["containers"][running_index]["env"] == desired_env,
+        normalized_environment(&pod["spec"]["containers"][running_index]["env"])
+            == normalized_environment(&desired_env),
         "The running platform settings differ from the requested settings"
     );
     runner.configure_browser(route)?;
@@ -924,6 +951,47 @@ mod tests {
             &json!({"http_port":8788}),
             &Overrides::default(),
         )
+    }
+    #[test]
+    fn pod_environment_defaults_are_accepted_without_ignoring_real_configuration_drift() {
+        let root = fixture();
+        let mut fake = Fake::new(IMAGE);
+        fake.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"]
+            .as_array_mut()
+            .unwrap()
+            .push(
+                json!({"name":"NODE_NAME","valueFrom":{"fieldRef":{"fieldPath":"spec.nodeName"}}}),
+            );
+        fake.pod["spec"]["containers"][0]["env"] =
+            fake.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"].clone();
+        fake.pod["spec"]["containers"][0]["env"][3]["valueFrom"]["fieldRef"]["apiVersion"] =
+            json!("v1");
+        assert_eq!(run(&mut fake, root.path()).unwrap()["restarted"], false);
+        assert!(!fake.called(Tool::Kube, "patch"));
+        assert!(!fake.called(Tool::Kube, "delete"));
+        for (pointer, value) in [
+            (
+                "/spec/containers/0/env/3/valueFrom/fieldRef/fieldPath",
+                json!("metadata.name"),
+            ),
+            (
+                "/spec/containers/0/env/3/valueFrom/fieldRef/apiVersion",
+                json!("v2"),
+            ),
+            ("/spec/containers/0/env/2/value", json!("true")),
+        ] {
+            let mut stale = Fake::new(IMAGE);
+            stale.sandbox = fake.sandbox.clone();
+            stale.pod = fake.pod.clone();
+            *stale.pod.pointer_mut(pointer).unwrap() = value;
+            assert!(
+                run(&mut stale, root.path())
+                    .unwrap_err()
+                    .to_string()
+                    .contains("running platform settings")
+            );
+            assert!(stale.routes.is_empty());
+        }
     }
     fn public_overrides() -> Overrides {
         Overrides::parse(|name| {

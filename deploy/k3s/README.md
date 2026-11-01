@@ -200,10 +200,13 @@ retained under `/var/lib/goblin/local-test/browser-upstream` and in the existing
 systemd forwarder; it survives stop/start and pod replacement. Configure the
 loopback public origin again to restore the normal NGINX route. The CLI also
 checks OAuth discovery through the local endpoint when ChatGPT is enabled.
-Deployment prints stage timings, the image, pod, browser URL, and a private
+Deployment compares pod settings with the Sandbox template while accounting for
+Kubernetes' default `fieldRef.apiVersion: v1`. It still rejects changed setting
+values or field references. Deployment prints stage timings, the image, pod, browser URL, and a private
 diagnostics directory under `.artifacts/k3s-deploy/`. Successful deployment
 metadata is retained in `.goblin-local/deployment.json`; the receipt contains no
-authentication state. On failure, inspect that run's logs and fix the cause
+authentication state. On failure, the CLI prints the reason and diagnostics path.
+Inspect that run's logs and fix the cause
 before invoking deployment again. Deployment never resets data or automatically
 retries failed Work.
 
