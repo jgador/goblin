@@ -210,7 +210,7 @@ test("CI verification Make commands resolve their targets and prerequisites", as
     }
 });
 
-test("install keeps packages separate and local reset requires explicit consent flags", async () => {
+test("install keeps packages separate and k3s reset supplies confirmation", async () => {
     const installed = await workflow(["install"]);
     assert.equal(installed.result.status, 0, installed.result.stderr);
     assert.deepEqual(installed.commands, [
@@ -219,15 +219,14 @@ test("install keeps packages separate and local reset requires explicit consent 
         "rustup show active-toolchain",
         "cargo fetch --locked",
     ]);
-    const reset = await workflow(["local-reset"]);
+    const reset = await workflow(["k3s-reset"]);
     assert.equal(reset.result.status, 0, reset.result.stderr);
     assert.deepEqual(reset.commands, [
-        "cargo run --locked -q -p goblinctl -- local reset",
+        "cargo run --locked -q -p goblinctl -- k3s reset --yes",
     ]);
-    const explicit = await workflow(["local-reset", "ARGS=--yes"]);
-    assert.deepEqual(explicit.commands, [
-        "cargo run --locked -q -p goblinctl -- local reset --yes",
-    ]);
+    const failedReset = await workflow(["k3s-reset"], reset.commands[0]);
+    assert.notEqual(failedReset.result.status, 0);
+    assert.deepEqual(failedReset.commands, reset.commands);
     const selected = await workflow([
         "rust-test",
         "CARGO_ARGS=-p goblinctl",
@@ -276,7 +275,9 @@ test("the default goal lists shared and included development targets without run
     for (const target of [
         "build:",
         "dev-start:",
-        "local-start:",
+        "k3s-start:",
+        "k3s-deploy:",
+        "k3s-reset:",
         "docker-build:",
         "docker-clean-images:",
         "docker-clean-cache:",
@@ -284,6 +285,22 @@ test("the default goal lists shared and included development targets without run
         assert.ok(targets.includes(target));
     assert.equal(new Set(targets).size, targets.length);
     assert.doesNotMatch(result.stderr, /overriding recipe/);
+});
+
+test("k3s deployment invokes the owned-cluster CLI and propagates failure", async () => {
+    const deployed = await workflow(["k3s-deploy"]);
+    assert.equal(deployed.result.status, 0, deployed.result.stderr);
+    assert.deepEqual(deployed.commands, [
+        "cargo run --locked -q -p goblinctl -- k3s deploy",
+    ]);
+    const failed = await workflow(["k3s-deploy"], deployed.commands[0]);
+    assert.notEqual(failed.result.status, 0);
+    assert.deepEqual(failed.commands, deployed.commands);
+    for (const obsolete of ["local-start", "local-reset", "dev-reset"]) {
+        const result = await workflow([obsolete]);
+        assert.notEqual(result.result.status, 0);
+        assert.deepEqual(result.commands, []);
+    }
 });
 
 test("Docker builds report elapsed time, forward flags, and propagate failures", async () => {

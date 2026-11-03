@@ -38,7 +38,7 @@ This is a repository-local skill. Resolve the checkout with `git rev-parse
 
 Read the current implementations before relying on this inventory:
 
-- `deploy/local/README.md` and `tools/goblinctl/src/local.rs`: ownership, stop/reset,
+- `deploy/k3s/README.md` and `tools/goblinctl/src/k3s.rs`: ownership, stop/reset,
   preflight, systemd units, and ports.
 - `tools/goblinctl/src/credentials.rs` and
   `backend/src/Goblin.Web/Program.cs`: direct development startup and data overrides.
@@ -53,7 +53,7 @@ full process environments, or secret-bearing connection strings.
 1. Confirm the host is the intended WSL environment. Check
    `/var/lib/goblin/local-test/config.json`: `mode` must be `direct` and `repo`
    must match this resolved checkout. Record `http_port` and optional
-   `postgres_port`. Use `make local-status` when ownership exists.
+   `postgres_port`. Use `make k3s-status` when ownership exists.
    A missing installation is a valid repeat-cleanup case, not a reason to start one.
 2. Inspect the installation's systemd units, k3s configuration/drop-ins, uninstall
    and killall scripts, storage paths, and mounts. Check for a custom
@@ -130,7 +130,7 @@ to preserve.
 For the standard, verified local installation, run from the repository root:
 
 ```bash
-env -u K3S_DATA_DIR make local-reset ARGS=--yes
+env -u K3S_DATA_DIR make k3s-reset
 ```
 
 The runner requests sudo if needed. Its reset stops the installer **before** setup
@@ -155,8 +155,8 @@ not recursive deletion or a lazy/forced unmount.
 
 ## Remove remaining Goblin test data
 
-The built-in reset deliberately retains some local data. A full clean slate also
-removes these verified artifacts after their writers have stopped:
+The built-in reset removes the standard runtime directories below after their
+writers have stopped. Inspect additional or custom paths separately:
 
 | Target relative to this checkout | Cleanup scope |
 | --- | --- |
@@ -246,7 +246,7 @@ blockers, and verification results. Give the next command without running it
 unless the user separately asked to reinstall:
 
 ```bash
-make local-start
+make k3s-start
 ```
 
 The default Windows browser address is `http://localhost:8788`. A new password is

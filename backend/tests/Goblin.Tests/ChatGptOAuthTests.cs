@@ -151,7 +151,12 @@ public sealed class ChatGptOAuthTests
                 mcp.DefaultRequestHeaders.Authorization = new("Bearer", access);
                 await using var transport = new HttpClientTransport(new HttpClientTransportOptions { Endpoint = new Uri(Origin + "/mcp"), OAuth = null, TransportMode = HttpTransportMode.StreamableHttp }, mcp, ownsHttpClient: false);
                 await using McpClient client = await McpClient.CreateAsync(transport);
-                Assert.Equal(4, (await client.ListToolsAsync()).Count);
+                Assert.Equal(5, (await client.ListToolsAsync()).Count);
+                CallToolResult ping = await client.CallToolAsync("goblin_ping");
+                Assert.False(ping.IsError ?? false);
+                Assert.Equal("Goblin MCP connection is working.", ping.StructuredContent!.Value.GetProperty("message").GetString());
+                Assert.True(Guid.TryParseExact(ping.StructuredContent.Value.GetProperty("responseId").GetString(), "N", out _));
+                Assert.Equal(TimeSpan.Zero, ping.StructuredContent.Value.GetProperty("respondedAtUtc").GetDateTimeOffset().Offset);
                 CallToolResult empty = await client.CallToolAsync("goblin_list_work");
                 Assert.Contains("\"items\":[]", JsonSerializer.Serialize(empty));
                 await database.SeedWorkAsync();

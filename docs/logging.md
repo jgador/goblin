@@ -9,8 +9,10 @@ Displayed times use the shared [workspace timezone](timezones.md); Goblin asks f
 it first if it is not set. Stored logs and raw timestamps stay UTC. Refresh an open
 log view after changing the timezone.
 
-Goblin code does not yet write its own log statements. Existing
-`Console.WriteLine` and `Console.Error.WriteLine` output stays plain text.
+The ChatGPT `goblin_ping` tool writes an Information event with its generated
+response ID and UTC time. Match `State.ResponseId` in the console event (or
+`state.ResponseId` in VictoriaLogs) to the tool result to verify an invocation.
+Existing `Console.WriteLine` and `Console.Error.WriteLine` output stays plain text.
 
 ## What is collected
 

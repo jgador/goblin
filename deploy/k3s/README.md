@@ -1,4 +1,4 @@
-# Test the installation from WSL
+# Develop with the WSL k3s installation
 
 Run the same setup page and background installer used by Azure directly in Ubuntu
 24.04 on WSL 2. The installer installs k3s, cert-manager, Agent Sandbox, and Goblin
@@ -6,12 +6,16 @@ in this Linux environment from your current checkout, including uncommitted
 changes. For workload, image, and PVC names and storage ownership rules, see
 [Kubernetes names](../../docs/kubernetes-names.md).
 
+`dev-*` runs Goblin directly in WSL; `k3s-*` manages this checkout's installed
+single-node k3s environment. The commands explicitly select the WSL cluster,
+independent of your ambient kubectl context.
+
 ## Start
 
 With systemd enabled in WSL, run from the repository root:
 
 ```bash
-make local-start
+make k3s-start
 ```
 
 On first start, choose and confirm your Goblin password in the terminal. Open
@@ -43,7 +47,7 @@ To use a different browser port, choose it on the first start; changing it later
 requires a reset:
 
 ```bash
-make local-start ARGS="--http-port 8888"
+make k3s-start ARGS="--http-port 8888"
 ```
 
 ## Requirements
@@ -72,19 +76,19 @@ WSL distribution if your current one already has one.
 ## Progress and logs
 
 ```bash
-make local-status
-make local-logs
-make local-logs ARGS=--follow
-make local-retry
-make local-retry ARGS=--refresh
+make k3s-status
+make k3s-logs
+make k3s-logs ARGS=--follow
+make k3s-retry
+make k3s-retry ARGS=--refresh
 ```
 
-`local-retry`, like **Retry installation** on the page, restarts a failed
+`k3s-retry`, like **Retry installation** on the page, restarts a failed
 installation with its saved source snapshot, password, and data. After fixing
-installer or application code, use `make local-retry ARGS=--refresh`. It replaces
+installer or application code, use `make k3s-retry ARGS=--refresh`. It replaces
 the failed attempt's source snapshot and installer with your current checkout and
 keeps the cluster, completed images, and downloads. If bootstrap failed before the
-installer started, run `make local-start` again. A completed installation reports
+installer started, run `make k3s-start` again. A completed installation reports
 `ready`, and both setup services are stopped and disabled.
 
 Logs are stored in WSL:
@@ -105,7 +109,7 @@ client certificates and Windows access, see
 To enable or repair this endpoint for an installed database:
 
 ```bash
-make local-configure-database
+make k3s-configure-database
 ```
 
 Inspect it from a root shell with `journalctl -u goblin-local-postgres.service`.
@@ -113,33 +117,25 @@ Inspect it from a root shell with `journalctl -u goblin-local-postgres.service`.
 ## Stop, resume, or start clean
 
 ```bash
-make local-stop
-make local-start
+make k3s-stop
+make k3s-start
 ```
 
 `stop` shuts down this runner's installer, browser and database forwarders, and
 Kubernetes containers, and keeps all data. `start` resumes them.
 
-For another installation test with your latest source changes:
+For a full clean slate, stop direct development servers and browser tests first:
 
 ```bash
-make local-reset ARGS=--yes
-make local-start
+make k3s-reset
+make k3s-start
 ```
+
+The Make target supplies the CLI's `--yes` automatically.
 
 **Reset deletes this runner's Kubernetes cluster, Goblin application data, logs,
-and cluster credentials.** It keeps the checkout's password verifier, the native
-CLI, Docker images and build cache, and the verified k3s downloads in
-`/var/cache/goblin/downloads`.
-
-For a fresh local development environment, including password setup, run:
-
-```bash
-time make dev-reset
-```
-
-Stop direct development servers and browser tests first. This target runs
-`scripts/dev-clean-slate.sh` in WSL with sudo; it needs Bash, Git, and `jq`. It
+cluster credentials, and saved owner password.** The CLI embeds
+`scripts/k3s-reset.sh` and runs it in WSL with sudo; it needs Bash, Git, and `jq`. It
 checks that the installation belongs to this checkout, stops its systemd services,
 and runs `/usr/local/bin/k3s-uninstall.sh` to remove the whole local cluster. It
 then removes Goblin installation files and clears `.goblin-platform/`,
@@ -154,7 +150,73 @@ sign-in are required again. Docker images, shared caches (including
 `/var/cache/goblin/downloads`), developer tools, other artifacts, and database
 client profiles remain. Each installation checks cached downloads against their
 pinned checksums; to download them again, run `sudo rm -rf /var/cache/goblin`.
-Run `make local-start` to reinstall.
+Run `make k3s-start` to reinstall.
+
+## Deploy application edits
+
+Iterate with the required affected tests directly in WSL. Use this command when
+the changed behavior needs the application running inside k3s:
+
+```bash
+make k3s-deploy
+```
+
+The command also accepts explicit `GOBLIN_PUBLIC_ORIGIN` and
+`GOBLIN_CHATGPT_ENABLED` environment values for the platform container, just as
+the application does in production. Unset values retain the Sandbox's current
+settings. Changing settings restarts the platform even when the image is unchanged.
+ChatGPT requires an HTTPS public origin. See [plugin testing](../../docs/plugin-testing.md#use-the-installed-wsl-k3s-platform)
+for the existing Chisel gateway setup.
+
+The command requires a completed installation belonging to this checkout. It
+locks out concurrent installer operations, checks the loopback Kubernetes API and
+single-node topology, and compares SQL and installation manifests with the
+original installation snapshot. Incompatible schema or manifest changes require
+a deliberate reset and reinstall; this command neither applies migrations nor
+updates infrastructure manifests. Its explicit application settings are applied
+to the current Sandbox without editing the installation manifests.
+
+Docker builds the current working tree, including uncommitted and untracked
+runtime source, with its normal `.dockerignore` exclusions. It uses the native
+WSL Docker daemon and a private anonymous client configuration. Each invocation
+lets Docker reuse its retained build cache; unchanged instructions stay cached.
+The runtime image's content digest identifies the build independently of Git
+commits and changing build provenance timestamps.
+
+For a changed image, the command streams it into k3s containerd, updates the
+platform Sandbox and the image selected for new execution workers, and replaces
+only the platform pod. PostgreSQL, logging, ingress, credentials, and all PVCs
+remain in place. Existing execution allocations keep their recorded identities
+and images. Settings changes with the same image update and restart the platform
+without importing the image again. A concurrent Sandbox update stops deployment rather than being
+overwritten. An unchanged image and settings skip import and restart, while still checking
+the running image and readiness.
+
+Success requires the expected pod image to be ready and `/readyz` to succeed
+through the installed browser endpoint, normally `http://localhost:8788`.
+When the public origin is HTTPS, that loopback endpoint forwards directly to the
+platform Service, preserving the upstream Host and HTTPS header. The route is
+retained under `/var/lib/goblin/local-test/browser-upstream` and in the existing
+systemd forwarder; it survives stop/start and pod replacement. Configure the
+loopback public origin again to restore the normal NGINX route. The CLI also
+checks OAuth discovery through the local endpoint when ChatGPT is enabled.
+These checks verify the WSL endpoint. Connect your HTTPS proxy or tunnel to it
+before opening the public browser URL; deployment does not start that connection.
+Deployment compares pod settings with the Sandbox template while accounting for
+Kubernetes' default `fieldRef.apiVersion: v1`. It still rejects changed setting
+values or field references. Deployment prints stage timings, the image, pod, browser URL, and a private
+diagnostics directory under `.artifacts/k3s-deploy/`. Successful deployment
+metadata is retained in `.goblin-local/deployment.json`; the receipt contains no
+authentication state. On failure, the CLI prints the reason and diagnostics path.
+Inspect that run's logs and fix the cause
+before invoking deployment again. Deployment never resets data or automatically
+retries failed Work.
+
+Verify the actual changed interaction, route, worker behavior, or log output in
+the running installation. Readiness proves startup, not feature correctness.
+See [verification selection](../../docs/repository-layout.md#choosing-verification)
+for when cluster checks are necessary. Installer changes need installation tests;
+`k3s-deploy` is an application image update.
 
 ## Password storage
 
@@ -162,7 +224,7 @@ Local setup uses the same PBKDF2-SHA256 verifier as Azure (600,000 iterations,
 random 16-byte salt). Only the verifier is saved, in
 `.goblin-secrets/owner-password` (file mode `0600`, directory mode `0700`). Git
 ignores everything in that folder except `.gitkeep`, and Docker builds exclude the
-folder. The original password cannot be displayed; `make local-locate-password`
+folder. The original password cannot be displayed; `make k3s-locate-password`
 reports the verifier's location.
 
 Both this installer and `make dev-start` use that verifier. The installer copies
@@ -181,7 +243,7 @@ make password-set ARGS=--replace
 ```
 
 Restart `make dev-start` to load it. For a completed full installation, run
-`make local-start` to update the Secret and restart the application pod. Finish
+`make k3s-start` to update the Secret and restart the application pod. Finish
 an in-progress installation before changing its password.
 
 The local source snapshot excludes Git-ignored files and rejects symlinks.
@@ -191,7 +253,9 @@ Azure networking need manual checks on an Azure VM.
 
 ## ChatGPT plugin development
 
-Local installation uses F5 NGINX over loopback HTTP, and ChatGPT stays disabled.
-For a public HTTPS address, use one of the
-[local testing gateways](../../docs/chatgpt-local-testing.md): Chisel or the Azure
-test VM relay.
+Initial installation uses F5 NGINX over loopback HTTP with ChatGPT disabled.
+The existing `k3s-deploy` workflow can configure the installed platform for the
+public HTTPS connection. Follow [Plugin testing](../../docs/plugin-testing.md#local-testing)
+for the complete start, tunnel, deploy, install, test, and return-to-localhost
+session in one document. [Chisel installation](../chisel/README.md) covers
+one-time client and administrator setup.

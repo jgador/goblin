@@ -1,6 +1,6 @@
 use crate::environment;
 use crate::files;
-use crate::local;
+use crate::k3s;
 use crate::setup;
 use anyhow::Context;
 use anyhow::Result;
@@ -22,7 +22,7 @@ pub fn status(as_json: bool, doctor: bool) -> Result<()> {
     let mut checks = vec![
         json!({"name":"installation","ok":progress.is_some()}),
         json!({"name":"systemd","ok":fs::read_to_string("/proc/1/comm").is_ok_and(|s|s.trim()=="systemd")}),
-        json!({"name":"k3s","ok":local::active("k3s.service")}),
+        json!({"name":"k3s","ok":k3s::active("k3s.service")}),
     ];
     if files::executable("k3s") {
         for (name, args) in [

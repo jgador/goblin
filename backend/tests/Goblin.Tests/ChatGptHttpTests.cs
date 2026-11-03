@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -101,7 +103,7 @@ public sealed class ChatGptHttpTests
     }
 
     [Fact]
-    public async Task RealSdkDiscoversFourReadOnlyToolsAndDoesNotReuseAuthenticationBetweenRequests()
+    public async Task RealSdkDiscoversReadOnlyToolsAndDoesNotReuseAuthenticationBetweenRequests()
     {
         await using Host host = await Host.CreateAsync();
         using HttpClient http = host.Client();
@@ -117,7 +119,7 @@ public sealed class ChatGptHttpTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using McpClient client = await McpClient.CreateAsync(transport, cancellationToken: deadline.Token);
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: deadline.Token);
-        Assert.Equal(new[] { "goblin_get_work_attention", "goblin_get_work_result", "goblin_get_work_status", "goblin_list_work" }, tools.Select(t => t.Name).Order());
+        Assert.Equal(new[] { "goblin_get_work_attention", "goblin_get_work_result", "goblin_get_work_status", "goblin_list_work", "goblin_ping" }, tools.Select(t => t.Name).Order());
         foreach (McpClientTool tool in tools)
         {
             Assert.True(tool.ProtocolTool.Annotations?.ReadOnlyHint);
@@ -125,12 +127,38 @@ public sealed class ChatGptHttpTests
             Assert.NotNull(tool.ProtocolTool.OutputSchema);
             Assert.NotNull(tool.ProtocolTool.Meta?["securitySchemes"]);
         }
+        // This host has an unreachable database and no GitHub connection. Ping
+        // must confirm the transport without reading Work or its grants.
+        DateTimeOffset beforePing = DateTimeOffset.UtcNow;
+        CallToolResult ping = await client.CallToolAsync("goblin_ping", cancellationToken: deadline.Token);
+        Assert.False(ping.IsError ?? false);
+        JsonElement result = ping.StructuredContent!.Value;
+        using JsonDocument textResult = JsonDocument.Parse(Assert.IsType<TextContentBlock>(Assert.Single(ping.Content)).Text);
+        Assert.True(JsonElement.DeepEquals(result, textResult.RootElement));
+        Assert.Equal(new[] { "message", "operatingSystem", "processArchitecture", "respondedAtUtc", "responseId", "runtime" }, result.EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal("Goblin MCP connection is working.", result.GetProperty("message").GetString());
+        string responseId = result.GetProperty("responseId").GetString()!;
+        Assert.True(Guid.TryParseExact(responseId, "N", out _));
+        Assert.InRange(result.GetProperty("respondedAtUtc").GetDateTimeOffset(), beforePing, DateTimeOffset.UtcNow);
+        Assert.Equal(TimeSpan.Zero, result.GetProperty("respondedAtUtc").GetDateTimeOffset().Offset);
+        Assert.Contains(result.GetProperty("operatingSystem").GetString(), new[] { "Linux", "Windows", "macOS", "Other" });
+        Assert.Equal(RuntimeInformation.FrameworkDescription, result.GetProperty("runtime").GetString());
+        Assert.Equal(RuntimeInformation.ProcessArchitecture.ToString(), result.GetProperty("processArchitecture").GetString());
+        Assert.Contains(responseId, Assert.Single(host.PingLog.Messages));
+        CallToolResult nextPing = await client.CallToolAsync("goblin_ping", cancellationToken: deadline.Token);
+        JsonElement nextResult = nextPing.StructuredContent!.Value;
+        Assert.NotEqual(responseId, nextResult.GetProperty("responseId").GetString());
+        Assert.True(nextResult.GetProperty("respondedAtUtc").GetDateTimeOffset() >= result.GetProperty("respondedAtUtc").GetDateTimeOffset());
+        Assert.Equal(result.GetProperty("operatingSystem").GetString(), nextResult.GetProperty("operatingSystem").GetString());
+        Assert.Equal(2, host.PingLog.Messages.Count);
+        Assert.Contains(host.PingLog.Messages, message => message.Contains(nextResult.GetProperty("responseId").GetString()!, StringComparison.Ordinal));
         CallToolResult invalid = await client.CallToolAsync("goblin_get_work_status", new Dictionary<string, object?> { ["workId"] = "1e3" }, cancellationToken: deadline.Token);
         Assert.True(invalid.IsError);
         Assert.DoesNotContain("mcp/www_authenticate", JsonSerializer.Serialize(invalid));
         http.DefaultRequestHeaders.Authorization = new("Bearer", host.Tokens.Token("expiry"));
-        HttpRequestException failure = await Assert.ThrowsAsync<HttpRequestException>(async () => await client.ListToolsAsync(cancellationToken: deadline.Token));
+        HttpRequestException failure = await Assert.ThrowsAsync<HttpRequestException>(async () => await client.CallToolAsync("goblin_ping", cancellationToken: deadline.Token));
         Assert.Equal(HttpStatusCode.Unauthorized, failure.StatusCode);
+        Assert.Equal(2, host.PingLog.Messages.Count);
     }
 
     [Fact]
@@ -155,15 +183,28 @@ public sealed class ChatGptHttpTests
         public Task SignOutAsync(HttpContext context, string? scheme, AuthenticationProperties? properties) => throw new NotSupportedException();
     }
 
+    private sealed class PingLogger : ILogger<ChatGptTools>
+    {
+        public ConcurrentQueue<string> Messages { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Messages.Enqueue(formatter(state, exception));
+    }
+
     private sealed class Host : IAsyncDisposable
     {
         private readonly WebApplication _app;
         private readonly string _directory;
         public ChatGptAuthenticationTests.Tokens Tokens { get; }
         public string OwnerCookie { get; }
+        public PingLogger PingLog { get; }
 
-        private Host(WebApplication app, string directory, ChatGptAuthenticationTests.Tokens tokens, string cookie)
-        { _app = app; _directory = directory; Tokens = tokens; OwnerCookie = cookie; }
+        private Host(WebApplication app, string directory, ChatGptAuthenticationTests.Tokens tokens, string cookie, PingLogger pingLog)
+        { _app = app; _directory = directory; Tokens = tokens; OwnerCookie = cookie; PingLog = pingLog; }
 
         public static async Task<Host> CreateAsync(bool internalPort = false, bool configured = true)
         {
@@ -181,6 +222,8 @@ public sealed class ChatGptHttpTests
             string cookie = session.Response.Headers.SetCookie.ToString().Split(';')[0];
             WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
             builder.Logging.ClearProviders();
+            var pingLog = new PingLogger();
+            builder.Services.AddSingleton<ILogger<ChatGptTools>>(pingLog);
             builder.WebHost.UseTestServer();
             builder.Services.AddSingleton(workspace);
             builder.Services.AddGoblinPersistence("Host=127.0.0.1;Port=1;Database=unavailable;Username=unused;Timeout=1");
@@ -202,7 +245,7 @@ public sealed class ChatGptHttpTests
             app.UseMiddleware<WorkspaceMiddleware>(assets, true);
             ChatGptMcp.Map(app);
             await app.StartAsync();
-            return new Host(app, directory, tokens, cookie);
+            return new Host(app, directory, tokens, cookie, pingLog);
         }
 
         public HttpClient Client()

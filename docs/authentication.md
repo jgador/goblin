@@ -160,7 +160,7 @@ with the same volumes to check that the connection persists.
 
 ## Installed Kubernetes environments
 
-The [local installer](../deploy/local/README.md) and
+The [WSL k3s installer](../deploy/k3s/README.md) and
 [manual Azure installation](../deploy/azure/README.md) set up PostgreSQL, the schema,
 repository execution, and the owner password. Use the password chosen during setup,
 and follow those guides for installation and recovery.

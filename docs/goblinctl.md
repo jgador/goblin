@@ -32,7 +32,7 @@ sudo goblinctl db migrate IMAGE
 
 `install` with `--hostname` requires `--certificate-email` and starts a public
 HTTPS installation; `--source-ref` defaults to `master`. Without `--hostname` it
-starts a dedicated local installation, like `local start`.
+starts a dedicated WSL installation, like `k3s start`.
 
 `status` checks live services and application readiness; `install status` shows
 installer progress. `doctor` also checks the cert-manager rollouts and the
@@ -53,26 +53,33 @@ instead of a running host.
 Dedicated local installations check ownership and remember their checkout:
 
 ```bash
-make local-start                 # runs the CLI from the current source
-sudo goblinctl --repo "$PWD" local start      # uses a precompiled binary
-sudo goblinctl local stop                     # keeps application data and PVCs
-sudo goblinctl local retry --refresh          # retries a failed install with the current checkout
-sudo goblinctl local reset --yes              # deletes only this owned local cluster
+make k3s-start                 # runs the CLI from the current source
+make k3s-reset                 # supplies the CLI confirmation for the owned WSL installation
+sudo goblinctl --repo "$PWD" k3s start        # uses a precompiled binary
+sudo goblinctl k3s stop                     # keeps application data and PVCs
+sudo goblinctl k3s retry --refresh          # retries a failed install with the current checkout
+sudo goblinctl k3s reset --yes              # removes owned data and saved password
 goblinctl --repo "$PWD" password set --replace
-sudo goblinctl local start                    # loads the changed local verifier
-goblinctl local database
+sudo goblinctl k3s start                    # loads the changed local verifier
+goblinctl k3s database
 ```
 
-`local status`, `local logs`, and `local password` inspect the local installation.
+`k3s status`, `k3s logs`, and `k3s password` inspect the local installation.
 The local source snapshot includes tracked and untracked Git-visible files,
 excludes ignored files, and refuses symlinks. A completed installation starts
-again without rebuilding. A failed installation needs an explicit retry. `retry`
+again without rebuilding. `make k3s-deploy` builds, imports and verifies application
+edits without reinstalling. Explicit `GOBLIN_PUBLIC_ORIGIN` and
+`GOBLIN_CHATGPT_ENABLED` values configure its platform container; unset variables
+retain its existing settings. The CLI preserves these two values across sudo for
+`k3s deploy`, keeps them out of build/worker subprocesses, and verifies the running
+pod configuration. See [WSL k3s development](../deploy/k3s/README.md#deploy-application-edits).
+A failed installation needs an explicit retry. `retry`
 reuses the failed attempt's source snapshot. `retry --refresh` works only on a
 stopped, failed installation; it first replaces the snapshot and installed setup
 assets with the current checkout and CLI, so a fix can be tested without deleting
 the cluster. `stop` suspends; `reset` deletes the owned test cluster and its
-application data but keeps the repository password verifier, the native CLI, and
-the Docker and download caches.
+application data and saved password verifier, while keeping the native CLI and
+Docker and download caches.
 
 The installer runs a root worker and a separate unprivileged (`DynamicUser`) setup
 service. Public setup serves static assets, status, health, and the read-only
@@ -94,10 +101,6 @@ PostgreSQL client profiles do not depend on `--repo` or installer state. See
 [the database guide](database.md) for WSL and Azure connections, Windows exports,
 and profile selection. Client commands need `psql` and OpenSSL; Azure access also
 needs SSH.
-
-Developer-only `make relay-start`, `make relay-status`, and `make relay-stop` run
-through xtask; see [ChatGPT local testing](chatgpt-local-testing.md). The
-production CLI has no relay commands.
 
 ## Parallel installation and live progress
 

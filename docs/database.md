@@ -5,7 +5,7 @@ SQL owns the schema; EF generates the C# mappings.
 
 ## WSL and Windows pgAdmin
 
-After completing the [local installer](../deploy/local/README.md), run these
+After completing the [WSL k3s installer](../deploy/k3s/README.md), run these
 commands **inside WSL, as root** (a root shell, not `sudo`), from the repository root:
 
 ```bash
@@ -127,7 +127,7 @@ connections to child processes as environment variables and do not edit
 
 A profile refuses to continue if the source, cluster, database volume, or CA
 changes. Restore the original installation or use a new profile name. After
-[recreating a development installation](../deploy/local/README.md#stop-resume-or-start-clean),
+[recreating a development installation](../deploy/k3s/README.md#stop-resume-or-start-clean),
 disconnect and remove the old Linux profile and Windows export before reusing
 that name.
 

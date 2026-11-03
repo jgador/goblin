@@ -56,7 +56,7 @@ test("localhost requires the chosen password without prefilling it, including af
             ),
         ).toBe(false);
         await page.screenshot({
-            path: testInfo.outputPath("local-login.png"),
+            path: testInfo.outputPath("owner-login.png"),
             fullPage: true,
         });
 

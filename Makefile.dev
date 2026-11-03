@@ -46,17 +46,13 @@ relay-stop:
 	cargo xtask relay stop
 
 # =============================================================================
-# Dev: direct application startup and owned WSL environment reset.
+# Dev: direct application startup for fast WSL development.
 # =============================================================================
-.PHONY: dev-start dev-reset
+.PHONY: dev-start
 
 # Build the application, provision local credentials, and launch the .NET host.
 dev-start: build
 	cargo xtask dev --profile "$(DB_PROFILE)" $(ARGS)
-
-# Reset the owned WSL installation and runtime/test state, including the saved password.
-dev-reset:
-	bash scripts/dev-clean-slate.sh
 
 # =============================================================================
 # Docker: timed platform builds and image/cache cleanup.
@@ -88,45 +84,49 @@ goblinctl-run:
 	cargo run --locked --package goblinctl -- $(ARGS)
 
 # =============================================================================
-# Local: full installation lifecycle, database access, and inspection.
+# K3s: owned WSL installation, cached application deployment, and inspection.
 # =============================================================================
-.PHONY: local-run local-start local-status local-stop local-reset local-logs local-retry local-configure-database local-locate-password
+.PHONY: k3s-run k3s-start k3s-deploy k3s-status k3s-stop k3s-reset k3s-logs k3s-retry k3s-configure-database k3s-locate-password
 
 # Run a local installer command from source with arguments supplied through ARGS.
-local-run:
-	cargo run --locked -q -p goblinctl -- local $(ARGS)
+k3s-run:
+	cargo run --locked -q -p goblinctl -- k3s $(ARGS)
 
-# Start or update the full local installation, preserving installer safety checks.
-local-start:
-	cargo run --locked -q -p goblinctl -- local start $(ARGS)
+# Install or resume the owned WSL k3s environment.
+k3s-start:
+	cargo run --locked -q -p goblinctl -- k3s start $(ARGS)
+
+# Deploy the current Goblin image and explicit application settings to WSL k3s.
+k3s-deploy:
+	cargo run --locked -q -p goblinctl -- k3s deploy $(ARGS)
 
 # Report local installation status without starting or resetting it.
-local-status:
-	cargo run --locked -q -p goblinctl -- local status $(ARGS)
+k3s-status:
+	cargo run --locked -q -p goblinctl -- k3s status $(ARGS)
 
 # Stop the owned local installation using the existing operator CLI.
-local-stop:
-	cargo run --locked -q -p goblinctl -- local stop $(ARGS)
+k3s-stop:
+	cargo run --locked -q -p goblinctl -- k3s stop $(ARGS)
 
-# Reset the owned local installation; explicit ARGS=--yes remains required.
-local-reset:
-	cargo run --locked -q -p goblinctl -- local reset $(ARGS)
+# Remove the owned WSL cluster, data and saved password without a confirmation flag.
+k3s-reset:
+	cargo run --locked -q -p goblinctl -- k3s reset --yes $(ARGS)
 
 # Read local installation logs; use ARGS=--follow to stream them.
-local-logs:
-	cargo run --locked -q -p goblinctl -- local logs $(ARGS)
+k3s-logs:
+	cargo run --locked -q -p goblinctl -- k3s logs $(ARGS)
 
 # Explicitly retry a failed local installation using the operator CLI.
-local-retry:
-	cargo run --locked -q -p goblinctl -- local retry $(ARGS)
+k3s-retry:
+	cargo run --locked -q -p goblinctl -- k3s retry $(ARGS)
 
 # Configure the local installation’s PostgreSQL host endpoint on port 5432.
-local-configure-database:
-	cargo run --locked -q -p goblinctl -- local database $(ARGS)
+k3s-configure-database:
+	cargo run --locked -q -p goblinctl -- k3s database $(ARGS)
 
 # Report the local password verifier location through the operator CLI.
-local-locate-password:
-	cargo run --locked -q -p goblinctl -- local password $(ARGS)
+k3s-locate-password:
+	cargo run --locked -q -p goblinctl -- k3s password $(ARGS)
 
 # =============================================================================
 # Password: local owner password selection.

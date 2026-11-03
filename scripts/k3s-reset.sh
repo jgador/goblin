@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Report a cleanup error and stop the script.
 clean_fail() {
-    printf 'dev-reset: %s\n' "$1" >&2
+    printf 'k3s-reset: %s\n' "$1" >&2
     exit 1
 }
 
@@ -142,7 +142,7 @@ clean_installation() {
 }
 
 # Remove this checkout's local installation and known runtime directories.
-dev_clean_slate() {
+k3s_reset() {
     local repo=$1 system=${2%/} runtime file scratch
     local -a mounts=() runtime_directories=(.goblin-platform .goblin-local .goblin-secrets .goblin-browser-test .artifacts/playwright)
     local -A tracked=()
@@ -150,9 +150,9 @@ dev_clean_slate() {
     grep -qi microsoft "$system/proc/version" || clean_fail 'Use this helper in WSL.'
     clean_read_mounts
     for runtime in "${runtime_directories[@]}"; do clean_check_directory "$repo/$runtime"; done
-    clean_check_directory "$repo/.artifacts/dev-clean-slate"
-    mkdir -p -- "$repo/.artifacts/dev-clean-slate"
-    scratch=$(mktemp -d "$repo/.artifacts/dev-clean-slate/run-XXXXXX")
+    clean_check_directory "$repo/.artifacts/k3s-reset"
+    mkdir -p -- "$repo/.artifacts/k3s-reset"
+    scratch=$(mktemp -d "$repo/.artifacts/k3s-reset/run-XXXXXX")
     trap 'rm -rf --one-file-system -- "$scratch"' EXIT
     git -c safe.directory="$repo" -C "$repo" ls-files -z -- "${runtime_directories[@]}" > "$scratch/tracked" ||
         clean_fail 'Cannot inspect tracked files; runtime state has been retained.'
@@ -167,23 +167,18 @@ dev_clean_slate() {
     done
     rm -rf --one-file-system -- "$scratch"
     trap - EXIT
-    printf 'Development cleanup complete.\n'
+    printf 'WSL k3s cleanup complete.\n'
 }
 
-# Resolve the checkout and request sudo for host cleanup.
+# Private CLI invocation supplies the verified checkout and system root.
 clean_main() {
-    (($# == 0)) || clean_fail 'Usage: make dev-reset'
-    local script repo
-    script=$(realpath -- "${BASH_SOURCE[0]}")
-    repo=$(git -C "$(dirname -- "$script")" rev-parse --show-toplevel)
-    repo=$(realpath -- "$repo")
-    if [[ $(id -u) == 0 ]]; then
-        dev_clean_slate "$repo" /
-    else
-        sudo -- env -i PATH="$PATH" bash -c 'source "$1"; dev_clean_slate "$2" /' dev-clean-slate "$script" "$repo"
-    fi
+    (($# == 4)) && [[ $1 == --yes && $2 == --repo ]] || clean_fail 'Use goblinctl k3s reset --yes --repo CHECKOUT'
+    local repo
+    repo=$(realpath -- "$3")
+    [[ -d $repo/.git || -f $repo/.git ]] || clean_fail 'The checkout is not a Git repository.'
+    k3s_reset "$repo" "$4"
 }
 
-if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+if [[ -z ${BASH_SOURCE[0]:-} || ${BASH_SOURCE[0]} == "$0" ]]; then
     clean_main "$@"
 fi

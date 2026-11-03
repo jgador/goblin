@@ -1,4 +1,4 @@
-//! Ownership-scoped administration of the dedicated Ubuntu/WSL installation.
+//! Ownership-scoped administration of the dedicated WSL k3s installation.
 use crate::credentials;
 use crate::database_host;
 use crate::environment;
@@ -30,6 +30,12 @@ use std::time::Duration;
 
 const DATABASE_SOCKET: &str = "goblin-local-postgres.socket";
 const DATABASE_SERVICE: &str = "goblin-local-postgres.service";
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BrowserRoute {
+    Ingress,
+    Platform(Ipv4Addr),
+}
 const UNITS: &[&str] = &[
     "goblin-local.socket",
     "goblin-local.service",
@@ -41,11 +47,11 @@ const UNITS: &[&str] = &[
     DATABASE_SERVICE,
 ];
 
-pub struct Local {
+pub struct K3s {
     pub git_repository: PathBuf,
     pub system: PathBuf,
 }
-impl Local {
+impl K3s {
     pub fn new(git_repository: &Path) -> Result<Self> {
         Ok(Self {
             git_repository: git_repository.canonicalize()?,
@@ -70,7 +76,7 @@ impl Local {
     pub fn owned_config(&self) -> Result<Value> {
         ensure!(
             self.owner().exists(),
-            "No direct local installation exists. Run goblinctl local start."
+            "No direct local installation exists. Run goblinctl k3s start."
         );
         let config = files::json(&self.owner())?;
         ensure!(
@@ -183,9 +189,66 @@ impl Local {
             0o644,
             false,
         )?;
-        files::atomic_write(&self.unit("goblin-local.service"), b"[Unit]\nDescription=Forward the local browser to Goblin setup or Kubernetes\nRequires=goblin-local.socket\nAfter=network.target\n[Service]\nExecStart=/opt/goblin/bin/goblinctl internal forward\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n", 0o644, false)?;
+        self.write_browser_forwarder(self.browser_route()?)?;
         systemctl(&["daemon-reload"])?;
         systemctl(&["enable", "--now", "goblin-local.socket"])
+    }
+    fn browser_upstream(&self) -> PathBuf {
+        self.owner().with_file_name("browser-upstream")
+    }
+    fn browser_route(&self) -> Result<BrowserRoute> {
+        let path = self.browser_upstream();
+        files::reject_symlinks(&path)?;
+        if path.exists() {
+            let address: Ipv4Addr = fs::read_to_string(path)?.trim().parse()?;
+            ensure!(address.is_private(), "Invalid platform Service address");
+            Ok(BrowserRoute::Platform(address))
+        } else {
+            Ok(BrowserRoute::Ingress)
+        }
+    }
+    fn write_browser_forwarder(&self, route: BrowserRoute) -> Result<bool> {
+        let executable = match route {
+            BrowserRoute::Ingress => "/opt/goblin/bin/goblinctl internal forward".to_owned(),
+            BrowserRoute::Platform(address) => {
+                ensure!(address.is_private(), "Invalid platform Service address");
+                format!("/usr/lib/systemd/systemd-socket-proxyd {address}:8787")
+            }
+        };
+        let content = format!(
+            "[Unit]\nDescription=Forward the local browser to Goblin setup or Kubernetes\nRequires=goblin-local.socket\nAfter=network.target\n[Service]\nExecStart={executable}\nDynamicUser=yes\nNoNewPrivileges=yes\nProtectSystem=strict\nProtectHome=yes\nPrivateTmp=yes\nRestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX\n"
+        );
+        let path = self.unit("goblin-local.service");
+        files::reject_symlinks(&path)?;
+        if fs::read_to_string(&path).is_ok_and(|current| current == content) {
+            return Ok(false);
+        }
+        files::atomic_write(&path, content.as_bytes(), 0o644, false)?;
+        Ok(true)
+    }
+    pub fn set_browser_route(&self, route: BrowserRoute) -> Result<()> {
+        self.owned_config()?;
+        let path = self.browser_upstream();
+        files::reject_symlinks(&path)?;
+        match route {
+            BrowserRoute::Ingress => files::remove_file(&path)?,
+            BrowserRoute::Platform(address) => {
+                ensure!(address.is_private(), "Invalid platform Service address");
+                files::atomic_write(&path, address.to_string().as_bytes(), 0o600, false)?;
+            }
+        }
+        let pending = self.owner().with_file_name("browser-forwarder-pending");
+        files::reject_symlinks(&pending)?;
+        if self.write_browser_forwarder(route)?
+            || pending.exists()
+            || !active("goblin-local.service")
+        {
+            files::atomic_write(&pending, b"", 0o600, false)?;
+            systemctl(&["daemon-reload"])?;
+            systemctl(&["restart", "goblin-local.service"])?;
+            files::remove_file(&pending)?;
+        }
+        Ok(())
     }
     pub fn configure_database(&self, config: &Value) -> Result<()> {
         ensure!(
@@ -321,6 +384,12 @@ impl Local {
             self.configure_forwarder(&config)?;
         }
         let url = origin(&config)?;
+        let public_route = matches!(self.browser_route()?, BrowserRoute::Platform(_));
+        let probe = if public_route {
+            format!("{url}/readyz")
+        } else {
+            format!("{url}/")
+        };
         for attempt in 0..30 {
             if Command::new("curl")
                 .args([
@@ -330,7 +399,7 @@ impl Local {
                     "*",
                     "--max-time",
                     "2",
-                    &format!("{url}/"),
+                    &probe,
                 ])
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
@@ -346,9 +415,15 @@ impl Local {
             );
             std::thread::sleep(Duration::from_secs(1));
         }
-        println!(
-            "Open in your Windows or Linux browser: {url}\nInstallation continues in WSL/Linux after this command exits.\nProgress: goblinctl install status\nSign in with the Goblin password chosen during setup."
-        );
+        if public_route {
+            println!(
+                "WSL forwarding endpoint: {url}\nOpen Goblin at the HTTPS public origin configured by k3s deploy.\nSign in with the Goblin password chosen during setup."
+            );
+        } else {
+            println!(
+                "Open in your Windows or Linux browser: {url}\nInstallation continues in WSL/Linux after this command exits.\nProgress: goblinctl install status\nSign in with the Goblin password chosen during setup."
+            );
+        }
         if self.status()?.is_some_and(|s| s["status"] == "failed") {
             println!(
                 "The previous attempt failed. Inspect logs, then run goblinctl install retry."
@@ -363,7 +438,7 @@ impl Local {
             .context("Bootstrap is incomplete. Run start again.")?;
         ensure!(
             state["status"] != "ready",
-            "Installation is complete. Use local reset --yes, then start for a fresh test."
+            "Installation is complete. Use k3s reset --yes, then start for a fresh test."
         );
         if refresh {
             ensure!(
@@ -461,77 +536,23 @@ impl Local {
         Ok(())
     }
     pub fn reset(&self) -> Result<()> {
-        files::reject_symlinks(&self.unit("goblin-setup.service.d/listener.conf"))?;
-        self.stop()?;
-        let uninstall = self.path("usr/local/bin/k3s-uninstall.sh");
-        if uninstall.exists() {
-            files::run(
-                Command::new(uninstall)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null()),
-            )?;
-        } else {
-            ensure!(
-                !self.unit("k3s.service").exists() && !files::executable("k3s"),
-                "K3s is installed but its uninstaller is missing; local data was retained."
-            );
-            for p in ["etc/rancher/k3s", "var/lib/rancher/k3s"] {
-                remove_tree(&self.path(p))?;
-            }
+        files::reject_symlinks(&self.owner())?;
+        if self.owner().exists() {
+            self.owned_config()?;
         }
-        let kubelet = self.path("var/lib/kubelet");
-        if kubelet.exists() {
-            ensure!(
-                fs::read_dir(&kubelet)?.next().is_none(),
-                "Kubelet data remains after uninstall. Inspect /var/lib/kubelet, then retry reset."
-            );
-            if Command::new("mountpoint")
-                .arg("--quiet")
-                .arg(&kubelet)
-                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
-                .status()?
-                .success()
-            {
-                files::run(Command::new("umount").arg("--").arg(&kubelet))?;
-            }
-            fs::remove_dir(kubelet)?;
-        }
-        for name in UNITS {
-            let _ = Command::new("systemctl")
-                .args(["reset-failed", name])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .env_remove(environment::GOBLIN_LOCAL_PASSWORD)
-                .status();
-            files::remove_file(&self.unit(name))?;
-        }
-        for (unit, file) in [
-            ("goblin-installer.service.d", "local-test.conf"),
-            ("goblin-setup.service.d", "listener.conf"),
-        ] {
-            let override_dir = self.unit(unit);
-            files::remove_file(&override_dir.join(file))?;
-            if override_dir.exists() && fs::read_dir(&override_dir)?.next().is_none() {
-                fs::remove_dir(override_dir)?;
-            }
-        }
-        for p in ["var/lib/goblin", "opt/goblin/setup"] {
-            remove_tree(&self.path(p))?;
-        }
-        for name in ["source.tar.gz", "bootstrap.sh", "bootstrap.log"] {
-            files::remove_file(&self.state().join(name))?;
-        }
-        for name in [
-            "var/log/goblin-bootstrap.log",
-            "var/log/goblin-installer.log",
-        ] {
-            files::remove_file(&self.path(name))?;
-        }
-        systemctl(&["daemon-reload"])?;
-        println!(
-            "Local Goblin cluster and application data removed. The repository password verifier, native CLI, Docker and download caches are retained."
-        );
-        Ok(())
+        files::input(
+            Command::new("bash")
+                .env_clear()
+                .env(
+                    environment::PATH,
+                    std::env::var_os(environment::PATH)
+                        .context("Missing executable search path")?,
+                )
+                .args(["-s", "--", "--yes", "--repo"])
+                .arg(&self.git_repository)
+                .arg(&self.system),
+            crate::assets::K3S_RESET,
+        )
     }
     pub fn locked<T>(&self, operation: impl FnOnce(&Self) -> Result<T>) -> Result<T> {
         files::require_root()?;
@@ -543,12 +564,6 @@ impl Local {
         lock.lock_exclusive()?;
         operation(self)
     }
-}
-fn remove_tree(path: &Path) -> Result<()> {
-    if path.exists() {
-        fs::remove_dir_all(path)?;
-    }
-    Ok(())
 }
 fn check_retained_tooling(path: &Path) -> Result<()> {
     if path.exists() {
@@ -580,7 +595,17 @@ pub fn active(unit: &str) -> bool {
         .is_ok_and(|s| s.success())
 }
 fn systemctl(args: &[&str]) -> Result<()> {
-    files::run(Command::new("systemctl").args(args))
+    files::run(
+        Command::new("systemctl")
+            .env_clear()
+            .env(
+                environment::PATH,
+                std::env::var_os(environment::PATH).unwrap_or_else(|| {
+                    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".into()
+                }),
+            )
+            .args(args),
+    )
 }
 fn kubectl() -> Command {
     let mut c = Command::new("k3s");
@@ -676,15 +701,57 @@ pub fn snapshot_source(git_repository: &Path, destination: &Path) -> Result<()> 
 
 #[cfg(test)]
 mod tests {
+    use super::BrowserRoute;
+    use super::K3s;
     use super::check_retained_tooling;
     use crate::install;
     use std::fs;
     use std::path::Path;
 
     #[test]
+    fn browser_route_survives_resume_and_can_return_to_loopback_ingress() {
+        let artifacts =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/k3s-browser-route");
+        fs::create_dir_all(&artifacts).unwrap();
+        let root = tempfile::tempdir_in(artifacts).unwrap();
+        let k3s = K3s {
+            git_repository: root.path().to_owned(),
+            system: root.path().join("system"),
+        };
+        assert_eq!(k3s.browser_route().unwrap(), BrowserRoute::Ingress);
+        let route = BrowserRoute::Platform("10.43.0.20".parse().unwrap());
+        assert!(k3s.write_browser_forwarder(route).unwrap());
+        assert!(!k3s.write_browser_forwarder(route).unwrap());
+        let unit = fs::read_to_string(k3s.unit("goblin-local.service")).unwrap();
+        assert!(
+            unit.contains("ExecStart=/usr/lib/systemd/systemd-socket-proxyd 10.43.0.20:8787\n")
+        );
+        assert!(unit.contains("DynamicUser=yes"));
+        fs::create_dir_all(k3s.browser_upstream().parent().unwrap()).unwrap();
+        fs::write(k3s.browser_upstream(), "10.43.0.20").unwrap();
+        assert_eq!(k3s.browser_route().unwrap(), route);
+        fs::write(k3s.browser_upstream(), "203.0.113.20").unwrap();
+        assert!(k3s.browser_route().is_err());
+        assert!(
+            k3s.write_browser_forwarder(BrowserRoute::Platform("203.0.113.20".parse().unwrap()))
+                .is_err()
+        );
+        fs::remove_file(k3s.browser_upstream()).unwrap();
+        assert!(
+            k3s.write_browser_forwarder(k3s.browser_route().unwrap())
+                .unwrap()
+        );
+        assert!(
+            fs::read_to_string(k3s.unit("goblin-local.service"))
+                .unwrap()
+                .contains("ExecStart=/opt/goblin/bin/goblinctl internal forward\n")
+        );
+    }
+
+    #[test]
     fn retained_native_tooling_and_licenses_allow_a_fresh_local_installation() {
         let artifacts =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/local-start-regression");
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.artifacts/k3s-start-regression");
         fs::create_dir_all(&artifacts).unwrap();
         let fixture = tempfile::tempdir_in(artifacts).unwrap();
         let binary = fixture.path().join("fixture-goblinctl");

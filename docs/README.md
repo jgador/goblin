@@ -24,12 +24,13 @@ preproduction; recreate local installations when formats change. Follow
 | [Codex integration](codex-integration.md) | Codex process, model selection, and protocol generation |
 | [Slack integration](slack-integration.md) | Slack app setup, linked users, and limits |
 | [ChatGPT plugin](chatgpt-integration.md) | Plugin setup, OAuth, Work access, and directory submission |
-| [ChatGPT local testing](chatgpt-local-testing.md) | Test the plugin against a local build through a relay |
+| [Plugin testing](plugin-testing.md) | Complete WSL k3s → Chisel → private ChatGPT plugin test → localhost walkthrough, plus other environments |
+| [Chisel installation](../deploy/chisel/README.md) | One-time WSL client installation, credentials and fingerprint, and administrator gateway setup |
 | [Database](database.md) | SQL baseline, EF generation, and client access |
 | [goblinctl](goblinctl.md) | Native CLI commands, installation, and packaging |
 | [Kubernetes names](kubernetes-names.md) | Resource names, identities, and storage ownership |
 | [System and cluster](cluster-view.md), [Logs](logging.md), [Timezones](timezones.md) | Monitoring views and workspace time |
-| [Local installation](../deploy/local/README.md) | Install and test from WSL |
+| [WSL k3s development](../deploy/k3s/README.md) | Install, deploy application edits, verify, and reset the owned cluster |
 | [Azure installation](../deploy/azure/README.md), [reference](../deploy/azure/reference.md) | Portal deployment, setup, and recovery |
 | [Website](../website/README.md), [website production](../website/production/README.md) | Public site and its deployment |
 
