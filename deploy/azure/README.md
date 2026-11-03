@@ -98,7 +98,7 @@ the data you need.
 
 ## Test locally
 
-The [local WSL/Ubuntu installer](../local/README.md) runs the same installer with
+The [WSL k3s installer](../k3s/README.md) runs the same installer with
 your current checkout. Use [Chisel tunneling](../chisel/README.md) for the public
 development connection, then follow [plugin testing](../../docs/plugin-testing.md)
 for local or live production checks.
