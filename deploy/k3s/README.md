@@ -255,6 +255,7 @@ Azure networking need manual checks on an Azure VM.
 
 Initial installation uses F5 NGINX over loopback HTTP with ChatGPT disabled.
 The existing `k3s-deploy` workflow can configure the installed platform for the
-public HTTPS connection. [Plugin testing](../../docs/plugin-testing.md#local-testing)
-owns the choice between WSL k3s and direct development, enablement, and connection
-checks; [Chisel tunneling](../chisel/README.md) owns the tunnel connection.
+public HTTPS connection. Follow [Plugin testing](../../docs/plugin-testing.md#local-testing)
+for the complete start, tunnel, deploy, install, test, and return-to-localhost
+session in one document. [Chisel installation](../chisel/README.md) covers
+one-time client and administrator setup.

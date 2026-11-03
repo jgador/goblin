@@ -1,45 +1,55 @@
 # Chisel tunneling
 
-This guide owns Chisel server installation and the WSL client connection. For
-Goblin startup, OAuth plugin installation, and tool verification, use
-[plugin testing](../../docs/plugin-testing.md).
+This guide covers **one-time Chisel installation** and administrator gateway
+setup. The existing gateway connects `https://dev.goblinboard.com` to Goblin in
+WSL through `https://dev-tunnel.goblinboard.com`.
 
-For the existing gateway, start with [Install the WSL client](#install-the-wsl-client)
-and [Connect WSL](#connect-wsl). Server provisioning is under
-[Install the server on AK3S](#install-the-server-on-ak3s).
+For a tester, complete [Install the WSL client](#install-the-wsl-client) once and
+save the supplied credentials and fingerprint. Then use
+[Plugin testing](../../docs/plugin-testing.md#local-testing) for every session;
+that single walkthrough includes k3s startup, the Chisel command, public-origin
+deployment, plugin installation, tests, and restoring localhost.
 
-## Gateway
-
-One Chisel server in the [website cluster](../../website/production/README.md)
-forwards a public HTTPS address to Goblin in WSL. It runs in the shared `goblin`
-namespace with two ingress routes:
-
-| Host | Service port | Purpose |
-| --- | --- | --- |
-| `dev-tunnel.goblinboard.com` | `chisel:8080` | Authenticated tunnel connection from WSL |
-| `dev.goblinboard.com` | `chisel:8787` | The whole local Goblin application |
-
-Both use the `nginx` ingress class and the `letsencrypt-production` ClusterIssuer.
-Add DNS A records for both hosts pointing to the cluster's public ingress IP. The
-`chisel` Service is ClusterIP; only the HTTPS ingress exposes it. The
-`dev.goblinboard.com` route sends `X-Forwarded-Proto: https`, disables response
-buffering, and supports WebSockets.
-
-The image is Chisel 1.12.0, pinned by digest. The server runs without root, a
-writable root filesystem, capabilities, or a Kubernetes API token. Probes check the
-tunnel port, not whether WSL is connected. Keep one replica and the Recreate
-strategy: the application listener and its tunnel must be on the same server.
+If the client is already installed, go straight to that walkthrough. Gateway
+provisioning and deployment are [administrator tasks](#install-the-server-on-ak3s)
+and are unnecessary when testing against the existing server.
 
 ## Install the WSL client
 
-Install the [Chisel 1.12.0 release](https://github.com/jpillora/chisel/releases/tag/v1.12.0)
-for your WSL architecture. The tested X64 WSL environment uses the Linux amd64
-binary. Verify the downloaded archive against the release's checksums, extract
-the executable, and install it on your `PATH`. Check the installed version:
+Run this once in WSL from the repository root. Check whether Chisel is already
+installed:
 
 ```bash
 chisel --version
 ```
+
+If it reports **1.12.0**, continue to
+[Client credentials and fingerprint](#client-credentials-and-fingerprint).
+Otherwise install the [Chisel 1.12.0 release](https://github.com/jpillora/chisel/releases/tag/v1.12.0).
+The standard x86-64 WSL k3s installation uses the Linux **amd64** binary. This
+command downloads it, verifies the release checksum, and installs it on `PATH`:
+
+```bash
+(
+  set -e
+  umask 077
+  mkdir -p .artifacts/chisel/client
+  cd .artifacts/chisel/client
+  curl --fail --location --remote-name \
+    https://github.com/jpillora/chisel/releases/download/v1.12.0/chisel_1.12.0_linux_amd64.gz
+  curl --fail --location --remote-name \
+    https://github.com/jpillora/chisel/releases/download/v1.12.0/chisel_1.12.0_checksums.txt
+  sha256sum --check --ignore-missing chisel_1.12.0_checksums.txt
+  gzip -dc chisel_1.12.0_linux_amd64.gz > chisel
+  sudo install -m 0755 chisel /usr/local/bin/chisel
+  chisel --version
+)
+```
+
+Expect the archive checksum to report **OK** and the installed version to be
+**1.12.0**. For a different WSL architecture, choose the matching Linux archive
+from the release page. Downloaded files under `.artifacts/chisel/client/` are
+temporary; the installed executable is `/usr/local/bin/chisel`.
 
 ### Client credentials and fingerprint
 
@@ -55,48 +65,24 @@ public fingerprint from the administrator before connecting.
 
 ## Connect WSL
 
-Start Goblin using [local plugin setup](../../docs/plugin-testing.md#local-testing).
-Choose the WSL destination: **8787** for `dev-start`, or **8788** for the installed
-k3s platform configured with its HTTPS public origin. For a custom k3s browser
-port, use that port. `make k3s-deploy` configures Goblin; start this client to
-connect the public address. In a second WSL Bash terminal, enter the local port,
-trusted fingerprint, username, and password:
+Follow the complete [local plugin testing sequence](../../docs/plugin-testing.md#local-testing).
+Its [Start the tunnel](../../docs/plugin-testing.md#2-start-the-tunnel) step includes
+the connection command. Enter **8788** for installed k3s, **8787** for
+`dev-start`, or the browser port chosen for your k3s installation. The remote
+listener stays **8787** for all destinations.
 
-```bash
-(
-  read -r -p 'Local Goblin port (8787 dev / 8788 k3s): ' chisel_port
-  if [[ ! "$chisel_port" =~ ^[0-9]{1,5}$ ]] || (( 10#$chisel_port < 1 || 10#$chisel_port > 65535 )); then
-    printf 'Enter a valid local port.\n' >&2
-    exit 1
-  fi
-  read -r -p 'Server fingerprint: ' chisel_fingerprint
-  read -r -p 'Chisel username: ' chisel_username
-  read -r -s -p 'Chisel password: ' chisel_password
-  printf '\n'
-
-  AUTH="${chisel_username}:${chisel_password}" \
-    chisel client --fingerprint "$chisel_fingerprint" \
-    https://dev-tunnel.goblinboard.com \
-    "R:0.0.0.0:8787:127.0.0.1:${chisel_port}"
-)
-```
-
-Wait for `Connected` and keep the Chisel terminal open. For `dev-start`, keep the
-Goblin terminal open too. The remote port stays **8787** for both setups; only the
-local destination differs. The client reads its credential
-from `AUTH` and opens an outbound HTTPS connection, so WSL needs no public IP,
-router port, or VPN. The `0.0.0.0` listener is inside the server pod; public access
-goes through the HTTPS ingress.
-
-Open `https://dev.goblinboard.com` and continue with
-[plugin installation and testing](../../docs/plugin-testing.md#install-the-plugin).
+The client reads credentials from `AUTH` and connects outbound over HTTPS. WSL
+needs no public IP, router port, or VPN. The `0.0.0.0` listener is inside the
+server pod; public access goes through the HTTPS ingress.
 
 ### Stop the tunnel
 
-Stop the WSL Chisel client with Ctrl+C when finished. The public development
-address then returns an unavailable response. Stop `dev-start` in its terminal
-when finished testing. The installed k3s instance keeps running until explicitly
-stopped with `make k3s-stop`.
+For k3s, first follow [Return to local testing](../../docs/plugin-testing.md#return-to-local-testing)
+to restore the localhost origin and disable ChatGPT. Then stop the WSL Chisel
+client with **Ctrl+C**. The public development address becomes unavailable;
+the installed k3s instance keeps running until `make k3s-stop`.
+
+For `dev-start`, stop Goblin and the Chisel client in their terminals.
 
 ## Troubleshooting
 
@@ -117,7 +103,30 @@ ss -ltnp '( sport = :8787 or sport = :8788 )'
 ## Install the server on AK3S
 
 The following administrator steps provision the gateway. Testers using the
-existing server can start at [Install the WSL client](#install-the-wsl-client).
+existing server only need [Install the WSL client](#install-the-wsl-client), then
+[Plugin testing](../../docs/plugin-testing.md#local-testing).
+
+### Gateway
+
+One Chisel server in the [website cluster](../../website/production/README.md)
+forwards a public HTTPS address to Goblin in WSL. It runs in the shared `goblin`
+namespace with two ingress routes:
+
+| Host | Service port | Purpose |
+| --- | --- | --- |
+| `dev-tunnel.goblinboard.com` | `chisel:8080` | Authenticated tunnel connection from WSL |
+| `dev.goblinboard.com` | `chisel:8787` | The whole local Goblin application |
+
+Both use the `nginx` ingress class and the `letsencrypt-production` ClusterIssuer.
+Add DNS A records for both hosts pointing to the cluster's public ingress IP. The
+`chisel` Service is ClusterIP; only the HTTPS ingress exposes it. The
+`dev.goblinboard.com` route sends `X-Forwarded-Proto: https`, disables response
+buffering, and supports WebSockets.
+
+The image is Chisel 1.12.0, pinned by digest. The server runs without root, a
+writable root filesystem, capabilities, or a Kubernetes API token. Probes check
+the tunnel port, not whether WSL is connected. Keep one replica and the Recreate
+strategy: the application listener and its tunnel must be on the same server.
 
 ### Administrator bootstrap
 

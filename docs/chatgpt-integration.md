@@ -3,8 +3,10 @@
 Each customer connects ChatGPT to their own Goblin instance with
 **Add custom MCP server**. Goblin hosts the read-only MCP tools and an embedded
 OpenIddict OAuth/OpenID Connect server. There is no separate identity server or
-user-account system. Private connections need no directory review. For local
-Chisel setup or live production testing, see [plugin testing](plugin-testing.md).
+user-account system. Private connections need no directory review. For the
+complete WSL k3s and Chisel test session, start with [plugin testing](plugin-testing.md#local-testing).
+That walkthrough includes plugin installation, verification, and returning to
+localhost; it also covers direct WSL and live production testing.
 
 The Goblin owner password authenticates browser sign-in and consent. The saved
 Codex connection is separate and is never used to issue MCP tokens. Signing in
@@ -87,9 +89,13 @@ Open `/settings?section=chatgpt` and choose **Private plugin**.
    server and storage checks do not prove public reachability.
 3. **Install:** in ChatGPT, choose **+ → Add custom MCP server**, use the supplied
    `/mcp` URL (or a configured Secure MCP Tunnel), and select OAuth. The client ID
-   is `goblin-chatgpt`. Save the exact callback shown by ChatGPT in Goblin settings,
-   then create and install the plugin. Wildcards and other callback hosts are
-   rejected. Sign in with the Goblin password and approve the connection. The
+   is `goblin-chatgpt`. Paste the exact callback shown by ChatGPT into **ChatGPT
+   OAuth callback** in Goblin and click **Save OAuth client** before sign-in.
+   Leave secret rotation unchecked. The confirmed callback is
+   `https://chatgpt.com/connector_platform_oauth_redirect`; use the value shown
+   for your connection if it differs. Wildcards and other callback hosts are
+   rejected. Create the plugin in ChatGPT, sign in on Goblin with the owner
+   password, approve the connection, and finish installation in ChatGPT. The
    scopes `openid offline_access goblin.work.read` give the owner identity,
    refresh tokens, and shared Work reads.
    Follow the [connection test](plugin-testing.md#test-the-connection-without-work)
