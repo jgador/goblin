@@ -6,7 +6,7 @@ using Goblin.Protocol;
 
 namespace Goblin.Integrations.Codex;
 
-public sealed class Authentication : ICodexAuthentication, IDisposable
+public sealed class Authentication : ICodexAuthentication, ICodexPluginSetup, IDisposable
 {
     private readonly CodexClient _codex;
     private readonly Func<string, Task<VerificationState>> _verifyApiKey;
@@ -133,6 +133,38 @@ public sealed class Authentication : ICodexAuthentication, IDisposable
                     return new PromptResult(result.Reply, result.Model, result.DurationMs, authType);
                 });
             }
+            finally { Interlocked.Exchange(ref _promptPending, 0); }
+        }
+    }
+
+    public Task<PluginCreatorAccess> CheckPluginCreatorAsync(CancellationToken token) => PluginOperation(async () =>
+    {
+        await RequirePluginAccountAsync();
+        return await new PluginCreatorProbe(_codex).CheckAsync(token);
+    });
+
+    public Task<ChatGptPluginDraft> PreparePluginAsync(ChatGptPluginContext context, CancellationToken token) => PluginOperation(async () =>
+    {
+        await RequirePluginAccountAsync();
+        return await new PluginPreparation(_codex, _prompts).RunAsync(context, token);
+    });
+
+    private async Task RequirePluginAccountAsync()
+    {
+        await RefreshAsync();
+        lock (_gate)
+            if (_account is not ChatGPTAccountView)
+                throw new IntegrationFailure("plugin_chatgpt_login_required", "Connect a ChatGPT account in AI connections to prepare the plugin with Codex. An API key does not provide Plugin Creator access.");
+    }
+
+    private Task<T> PluginOperation<T>(Func<Task<T>> operation)
+    {
+        if (Interlocked.CompareExchange(ref _promptPending, 1, 0) != 0)
+            throw new IntegrationFailure("prompt_in_progress", "A Codex check or preparation is already running. Wait for it to finish.");
+        return Run();
+        async Task<T> Run()
+        {
+            try { return await Serial(operation); }
             finally { Interlocked.Exchange(ref _promptPending, 0); }
         }
     }

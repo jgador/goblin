@@ -2,6 +2,8 @@ import type {
     ChatGptState,
     ChatGptVerification,
     ChatGptPackage,
+    PluginCreatorAccess,
+    ChatGptCreatorDraft,
 } from "../api/chatgpt-contracts.js";
 import { escapeHtml as e } from "../work/presentation.js";
 
@@ -40,6 +42,9 @@ export type Workflow = {
     config: string;
     clientSecret: string;
     package?: ChatGptPackage;
+    creatorAccess?: PluginCreatorAccess;
+    creatorDraft?: ChatGptCreatorDraft;
+    creatorPending?: boolean;
 };
 
 export function action(
@@ -145,10 +150,31 @@ function provider(m: Workflow) {
 }
 function install(m: Workflow) {
     const s = m.state;
-    return `<h4 id="chatgpt-step-title" tabindex="-1">Create and install your private plugin</h4><p>Keep Goblin open while you complete the connection in ChatGPT.</p>
+    return `<h4 id="chatgpt-step-title" tabindex="-1">Create and install your private plugin</h4><p>Keep Goblin open while you complete the connection in ChatGPT.</p>${creatorPreparation(m)}
         ${task("1. Open the custom server form", `${external("https://chatgpt.com/plugins", "Open ChatGPT Plugins")}<p>Select <strong>+ → Add custom MCP server</strong>.</p>${copyField("Plugin name", "name", s.name)}${copyField("Description", "description", s.description, true)}`)}
         ${task("2. Paste your connection details", `<p>Choose <strong>Server URL</strong> and <strong>OAuth</strong>, or your configured Secure MCP Tunnel.</p>${copyField("Server URL", "serverUrl", s.serverUrl!)}${copyField("OAuth client ID", "clientId", s.clientId)}${copyField("OAuth scopes", "scope", s.scope)}<p>Paste the client secret generated in Goblin into ChatGPT's OAuth form.</p>`)}
         ${task("3. Save the callback and install", `<p>Copy the exact OAuth callback displayed by ChatGPT and save it here. Wildcard callbacks are rejected.</p>${clientForm(m)}<p>Return to ChatGPT, create and install the plugin, then enter your Goblin password on Goblin's HTTPS sign-in page and approve the connection.</p><p>Confirm these tools appear: <code>goblin_ping</code>, <code>goblin_list_work</code>, <code>goblin_get_work_status</code>, <code>goblin_get_work_attention</code>, and <code>goblin_get_work_result</code>.</p><p>To test the connection before sharing Work, select your plugin with <strong>@</strong> in a new ChatGPT conversation and ask “Call goblin_ping now and show every field from the tool response unchanged.” The reply includes a fresh response ID, UTC time, and basic server runtime details. Match the response ID to the goblin_ping response event in Goblin's logs to verify the call. No Work grants or GitHub sign-in are needed.</p>${confirm(m, "installed", "I installed the plugin, signed in, and can see its tools in ChatGPT.")}`)}`;
+}
+
+function creatorPreparation(m: Workflow) {
+    const access = m.creatorAccess;
+    const status = !access
+        ? ""
+        : !access.runtimeSupported
+          ? "The pinned runtime could not read all Plugin Creator capabilities. You can still prepare a handoff."
+          : !access.skillAvailable ||
+              !access.appInstalled ||
+              !access.appCallable
+            ? "Plugin Creator's skill or hosted tools are unavailable to this Codex connection. Install or enable Plugin Creator in the same ChatGPT account before running the handoff there."
+            : "Plugin Creator's skill and eligible hosted tools are visible. Registration of this existing MCP server still needs manual verification.";
+    return `<details><summary>Prepare with your Codex connection</summary><p>Goblin can use your saved ChatGPT login in AI connections to draft a request for Plugin Creator. This prepares connection details; creating and connecting the plugin remains a manual step.</p>
+        ${action("creator/check", "Check Plugin Creator access")}
+        <form data-chatgpt-form="creator"><label>Existing ChatGPT MCP connection ID (optional)<input name="registeredAppId" autocomplete="off" maxlength="116" pattern="plugin_asdk_app_[a-z0-9]{1,100}" placeholder="plugin_asdk_app_…" ${m.creatorPending ? "readonly" : ""}></label><p>If you already registered this MCP server, copy its technical ID from ChatGPT's plugin URL. Otherwise leave this empty.</p><button type="submit" id="chatgpt-creator-prepare">Prepare with Codex</button></form>
+        ${m.creatorPending ? action("creator/cancel", "Cancel preparation") : ""}
+        ${status ? `<p class="chatgpt-callout" data-creator-access>${e(status)}</p>` : ""}
+        ${access ? `<details><summary>Creator capability details</summary><p>Checked ${e(access.checkedAt)}. Source fingerprint: ${e(access.skillSha256 ?? "unavailable")}</p><ul>${access.tools.map((tool) => `<li>${e(tool.name)} · ${tool.enabled ? "enabled" : "disabled"}</li>`).join("")}</ul></details>` : ""}
+        ${m.creatorDraft ? `<div data-creator-draft><p>Handoff prepared. Goblin has not registered a plugin or verified the connection.</p>${copyField("Plugin Creator request", "creator-prompt", m.creatorDraft.creatorPrompt, true)}${action("creator/download", "Save creator handoff ZIP")}<p>Open Plugin Creator in ChatGPT or Codex and review this request. Enter secrets only in the OAuth form, save its callback in Goblin, then complete Install and Connect.</p></div>` : ""}
+    </details>`;
 }
 function share(m: Workflow) {
     const s = m.state;

@@ -161,6 +161,60 @@ already failed before the callback was saved, start the connection again from
 ChatGPT to get a fresh sign-in request. Signing in shares no Work; the ping test
 needs no Work grants or GitHub sign-in.
 
+## Test the Codex preparation handoff
+
+This optional acceptance test uses real accounts and model access. Automated tests
+use synthetic credentials and a protocol fixture; they do not prove authenticated
+Plugin Creator execution, ChatGPT installation, or Chisel connectivity.
+
+1. Complete [Local testing](#local-testing) through opening the public HTTPS
+   settings page. Create or reuse the OAuth client as described in
+   [Install the plugin](#install-the-plugin). Keep the tunnel running.
+2. In **AI connections**, authenticate Codex with the intended ChatGPT account.
+   Install or enable the official Plugin Creator in that same account where
+   available. An API-key-only connection should receive an explanation that a
+   ChatGPT login is required.
+3. Return to **Private plugin → Install**, expand **Prepare with your Codex
+   connection**, and choose **Check Plugin Creator access**. Record whether the
+   runtime can read the skill and hosted tools, and the source fingerprint if
+   returned. Unavailable capabilities must not be presented as successful
+   creation. The check starts no model turn or creator action.
+4. If this Goblin server is already registered in ChatGPT, enter its
+   `plugin_asdk_app_…` technical ID. Otherwise leave it empty. Choose **Prepare
+   with Codex**. This is a real request to Codex's default model and counts toward
+   the connected plan's limits. Check the configured public `/mcp` URL, issuer,
+   OAuth client ID and scopes, the five read-only tools, and the existing ID
+   when supplied. The result must still say the plugin has not been created or
+   connected.
+5. Save and inspect the handoff ZIP. It should contain
+   `skills/goblin-plugin-setup/SKILL.md`, `creator-prompt.txt`, and
+   `connection.json`. Confirm that it includes no client secret, owner password,
+   Codex credentials, owner subject, or Work data. This is Goblin's preparation
+   skill, not a copy of the official creator skill or an installable plugin ZIP.
+6. In your authenticated ChatGPT or Codex session with the actual official
+   Plugin Creator available, review and run the generated request. Record the
+   supported registration action and any generated package or installation link.
+   If the creator cannot register an existing external MCP server, complete
+   **Add custom MCP server** manually. A package or link alone does not prove
+   registration, installation, or an OAuth grant.
+7. Complete the exact callback, secret entry, owner sign-in, consent, and
+   Install/Connect steps in [Install the plugin](#install-the-plugin). Then run
+   [the ping test](#test-the-connection-without-work) and match its response ID to
+   Goblin's log. Only that fresh tool response establishes authenticated
+   connectivity through Chisel; test Work access separately.
+
+Also cancel a preparation while it is running, then start a fresh check. Goblin
+must stop the pending generation and permit the new operation without retrying
+creation. A runtime request for interactive approval should end with a manual
+action notice. No approval should be sent automatically. Changing the Codex
+account or disconnecting waits for the current operation to finish.
+
+Record the Goblin revision, pinned runtime version, capability fingerprint,
+actual creator tools used, registration/package outcome, OAuth outcome, and
+matched ping response ID, without credentials. The preparation implementation
+deliberately leaves automatic registration unavailable until the real creator's
+external-MCP contract can be verified.
+
 ## Test the connection without Work
 
 This is step **5** of the k3s session. Once the plugin is installed:

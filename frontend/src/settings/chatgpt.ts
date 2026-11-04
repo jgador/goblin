@@ -3,6 +3,8 @@ import type {
     ChatGptState,
     ChatGptVerification,
     ChatGptPackage,
+    PluginCreatorAccess,
+    ChatGptCreatorDraft,
 } from "../api/chatgpt-contracts.js";
 import { escapeHtml as e } from "../work/presentation.js";
 import {
@@ -34,6 +36,9 @@ export function mountChatGpt(root: HTMLElement) {
     let config = "";
     let clientSecret = "";
     let pluginPackage: ChatGptPackage | undefined;
+    let creatorAccess: PluginCreatorAccess | undefined;
+    let creatorDraft: ChatGptCreatorDraft | undefined;
+    let creatorController: AbortController | undefined;
     let notice = "";
     let storageAvailable = true;
     let discardDrafts = false;
@@ -56,6 +61,9 @@ export function mountChatGpt(root: HTMLElement) {
         config,
         clientSecret,
         package: pluginPackage,
+        creatorAccess,
+        creatorDraft,
+        creatorPending: !!creatorController,
     });
     const steps = () => (path === "private" ? privateSteps : publicSteps);
 
@@ -171,7 +179,9 @@ export function mountChatGpt(root: HTMLElement) {
             );
         if (busy)
             root.querySelectorAll<HTMLButtonElement>("button").forEach(
-                (button) => (button.disabled = true),
+                (button) =>
+                    (button.disabled =
+                        button.dataset.chatgpt !== "creator/cancel"),
             );
         if (focusId)
             root.querySelector<HTMLElement>(`#${CSS.escape(focusId)}`)?.focus();
@@ -204,6 +214,8 @@ export function mountChatGpt(root: HTMLElement) {
             step = 0;
             clientSecret = "";
             pluginPackage = undefined;
+            creatorAccess = undefined;
+            creatorDraft = undefined;
             drafts.delete("client");
             drafts.delete("grant");
             discardDrafts = true;
@@ -245,12 +257,17 @@ export function mountChatGpt(root: HTMLElement) {
         render("chatgpt-step-title");
     }
     function click(event: Event) {
-        if (!(event.target instanceof Element) || busy) return;
+        if (!(event.target instanceof Element)) return;
         const button = event.target.closest<HTMLButtonElement>(
             "button[data-chatgpt]",
         );
         if (!button || button.disabled) return;
         const name = button.dataset.chatgpt;
+        if (name === "creator/cancel") {
+            creatorController?.abort();
+            return;
+        }
+        if (busy) return;
         if (name === "restart-setup") {
             confirmed.clear();
             drafts.clear();
@@ -260,6 +277,8 @@ export function mountChatGpt(root: HTMLElement) {
             clientSecret = "";
             verification = undefined;
             pluginPackage = undefined;
+            creatorDraft = undefined;
+            creatorAccess = undefined;
             navigate(0, "private");
             announce(
                 "Setup progress cleared. Saved OAuth settings and shared Work can be managed in their setup steps.",
@@ -316,8 +335,29 @@ export function mountChatGpt(root: HTMLElement) {
             );
             return;
         }
+        if (name === "creator/download" && creatorDraft) {
+            saveFile(
+                new Blob(
+                    [
+                        Uint8Array.from(atob(creatorDraft.archiveBase64), (c) =>
+                            c.charCodeAt(0),
+                        ),
+                    ],
+                    { type: "application/zip" },
+                ),
+                "goblin-creator-handoff.zip",
+            );
+            announce(
+                "Creator handoff saved. This ZIP has no client secret and does not register the plugin.",
+            );
+            return;
+        }
         void run(async () => {
-            if (name === "package") {
+            if (name === "creator/check") {
+                creatorAccess = undefined;
+                creatorDraft = undefined;
+                await creatorRequest("/creator/check", {});
+            } else if (name === "package") {
                 pluginPackage = undefined;
                 announce("Building the plugin package…");
                 pluginPackage = await api<ChatGptPackage>("/package", {
@@ -388,6 +428,58 @@ export function mountChatGpt(root: HTMLElement) {
             )
         )
             pluginPackage = undefined;
+        if (
+            event.target instanceof Element &&
+            event.target.closest('form[data-chatgpt-form="creator"]') &&
+            creatorDraft
+        ) {
+            creatorDraft = undefined;
+            root.querySelector("[data-creator-draft]")?.remove();
+            announce("Connection ID changed. Prepare a new handoff to use it.");
+        }
+    }
+    async function creatorRequest(suffix: string, body: unknown) {
+        creatorController = new AbortController();
+        render();
+        announce(
+            suffix.endsWith("check")
+                ? "Checking Plugin Creator access…"
+                : "Preparing the handoff with Codex…",
+        );
+        try {
+            const result = await requestJson<
+                ChatGptCreatorDraft | PluginCreatorAccess
+            >(base + suffix, {
+                body,
+                signal: AbortSignal.any([
+                    controller.signal,
+                    creatorController.signal,
+                ]),
+                onUnauthorized: () =>
+                    window.dispatchEvent(new Event("goblin-workspace-locked")),
+            });
+            if (disposed) return;
+            if ("creatorPrompt" in result) {
+                creatorDraft = result;
+                creatorAccess = result.creatorAccess;
+                announce(
+                    "Handoff prepared. Review it before running Plugin Creator; registration and connection remain manual.",
+                );
+            } else {
+                creatorAccess = result;
+                announce(
+                    "Creator access checked. The result does not verify plugin registration or connectivity.",
+                );
+            }
+        } catch (error) {
+            if (creatorController.signal.aborted && !disposed) {
+                announce("Preparation cancelled. No plugin was registered.");
+                return;
+            }
+            throw error;
+        } finally {
+            creatorController = undefined;
+        }
     }
     function submit(event: Event) {
         const form = event.target;
@@ -397,7 +489,15 @@ export function mountChatGpt(root: HTMLElement) {
         if (busy) return;
         const data = new FormData(form);
         void run(async () => {
-            if (
+            if (form.dataset.chatgptForm === "creator") {
+                creatorDraft = undefined;
+                creatorAccess = undefined;
+                await creatorRequest("/creator/prepare", {
+                    registeredAppId:
+                        String(data.get("registeredAppId") ?? "").trim() ||
+                        null,
+                });
+            } else if (
                 form.dataset.chatgptForm === "listing" ||
                 form.dataset.chatgptForm === "review"
             ) {
@@ -459,6 +559,7 @@ export function mountChatGpt(root: HTMLElement) {
     return () => {
         disposed = true;
         controller.abort();
+        creatorController?.abort();
         root.removeEventListener("click", click);
         root.removeEventListener("change", change);
         root.removeEventListener("input", input);

@@ -13,6 +13,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Connections;
+using Goblin.Contracts;
 using Goblin.Integrations.ChatGpt;
 using Goblin.Persistence;
 using Goblin.Web;
@@ -87,6 +89,8 @@ public sealed class ChatGptHttpTests
     [Theory]
     [InlineData("/api/integrations/chatgpt/grants/revoke")]
     [InlineData("/api/integrations/chatgpt/package")]
+    [InlineData("/api/integrations/chatgpt/creator/check")]
+    [InlineData("/api/integrations/chatgpt/creator/prepare")]
     public async Task BearerTokenCannotAdministerSetupAndOwnerPostStillRequiresOrigin(string path)
     {
         await using Host host = await Host.CreateAsync();
@@ -100,6 +104,77 @@ public sealed class ChatGptHttpTests
         http.DefaultRequestHeaders.Remove("Origin");
         using HttpResponseMessage cookie = await http.PostAsync(path, Json("{\"id\":\"1\"}"));
         Assert.Equal(HttpStatusCode.Forbidden, cookie.StatusCode);
+    }
+
+    [Fact]
+    public async Task OwnerPreparesAHandoffUsingServerOwnedMetadataWithoutRegisteringOrSharingWork()
+    {
+        var authentication = new PluginAuthentication();
+        await using Host host = await Host.CreateAsync(pluginAuthentication: authentication);
+        using HttpClient http = host.Client();
+        http.DefaultRequestHeaders.Add("Cookie", host.OwnerCookie);
+        http.DefaultRequestHeaders.Add("Origin", ChatGptAuthenticationTests.Origin);
+        using HttpResponseMessage response = await http.PostAsync("/api/integrations/chatgpt/creator/prepare", Json("{\"registeredAppId\":\"plugin_asdk_app_1234\"}"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, authentication.Preparations);
+        Assert.Equal(ChatGptAuthenticationTests.Origin + "/mcp", authentication.Context!.ServerUrl);
+        Assert.Equal(ChatGptConfiguration.ClientId, authentication.Context.ClientId);
+        Assert.Equal("plugin_asdk_app_1234", authentication.Context.RegisteredAppId);
+        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        JsonElement result = document.RootElement;
+        Assert.False(result.GetProperty("pluginRegistered").GetBoolean());
+        Assert.False(result.GetProperty("connectionVerified").GetBoolean());
+        Assert.False(result.GetProperty("creatorAccess").GetProperty("automaticCreationAvailable").GetBoolean());
+        using var bytes = new MemoryStream(Convert.FromBase64String(result.GetProperty("archiveBase64").GetString()!));
+        using var archive = new System.IO.Compression.ZipArchive(bytes);
+        Assert.Equal(new[] { "connection.json", "creator-prompt.txt", "skills/goblin-plugin-setup/SKILL.md" }, archive.Entries.Select(e => e.FullName).Order());
+        using var reader = new StreamReader(archive.GetEntry("connection.json")!.Open());
+        string metadata = await reader.ReadToEndAsync();
+        Assert.DoesNotContain("clientSecret", metadata);
+        Assert.DoesNotContain("ownerSubject", metadata);
+        Assert.DoesNotContain("workId", metadata);
+        Assert.Equal(0, host.Tokens.Reads);
+    }
+
+    [Theory]
+    [InlineData("invalid-id", true, HttpStatusCode.BadRequest)]
+    [InlineData("plugin_asdk_app_1234", false, HttpStatusCode.Conflict)]
+    public async Task InvalidConnectionIdOrApiKeyCannotStartPreparation(string appId, bool chatGpt, HttpStatusCode expected)
+    {
+        var authentication = new PluginAuthentication(chatGpt);
+        await using Host host = await Host.CreateAsync(pluginAuthentication: authentication);
+        using HttpClient http = host.Client();
+        http.DefaultRequestHeaders.Add("Cookie", host.OwnerCookie);
+        http.DefaultRequestHeaders.Add("Origin", ChatGptAuthenticationTests.Origin);
+        using HttpResponseMessage response = await http.PostAsync("/api/integrations/chatgpt/creator/prepare", Json(JsonSerializer.Serialize(new { registeredAppId = appId })));
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Equal(0, authentication.Preparations);
+    }
+
+    private sealed class PluginAuthentication : ICodexAuthentication, ICodexPluginSetup
+    {
+        private readonly bool _chatGpt;
+
+        public PluginAuthentication(bool chatGpt = true) => _chatGpt = chatGpt;
+
+        public int Preparations { get; private set; }
+        public ChatGptPluginContext? Context { get; private set; }
+        public Task<AuthenticationState> StatusAsync() => Task.FromResult(new AuthenticationState(
+            _chatGpt ? new ChatGPTAccountView("owner@example.test", "plus") : new ApiKeyAccountView(), null, null, null, true));
+        public Task<PluginCreatorAccess> CheckPluginCreatorAsync(CancellationToken token) => Task.FromResult(new PluginCreatorAccess(
+            true, false, null, false, false, false, [], DateTimeOffset.UtcNow));
+        public async Task<ChatGptPluginDraft> PreparePluginAsync(ChatGptPluginContext context, CancellationToken token)
+        {
+            Preparations++;
+            Context = context;
+            return new("Fixture private plugin description", "Fixture creator prompt", "---\nname: goblin-plugin-setup\n---\n", "fixture-model", 1,
+                await CheckPluginCreatorAsync(token));
+        }
+        public Task<AuthenticationState> LoginChatGPTAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> LoginApiKeyAsync(string? value) => throw new NotSupportedException();
+        public Task<AuthenticationState> CancelLoginAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> LogoutAsync() => throw new NotSupportedException();
+        public Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     [Fact]
@@ -206,7 +281,8 @@ public sealed class ChatGptHttpTests
         private Host(WebApplication app, string directory, ChatGptAuthenticationTests.Tokens tokens, string cookie, PingLogger pingLog)
         { _app = app; _directory = directory; Tokens = tokens; OwnerCookie = cookie; PingLog = pingLog; }
 
-        public static async Task<Host> CreateAsync(bool internalPort = false, bool configured = true)
+        public static async Task<Host> CreateAsync(bool internalPort = false, bool configured = true,
+            ICodexAuthentication? pluginAuthentication = null)
         {
             string? root = Environment.CurrentDirectory;
             while (root is not null && !File.Exists(Path.Combine(root, "AGENTS.md"))) root = Path.GetDirectoryName(root);
@@ -226,6 +302,7 @@ public sealed class ChatGptHttpTests
             builder.Services.AddSingleton<ILogger<ChatGptTools>>(pingLog);
             builder.WebHost.UseTestServer();
             builder.Services.AddSingleton(workspace);
+            builder.Services.AddSingleton(new ConnectionService(pluginAuthentication ?? new PluginAuthentication()));
             builder.Services.AddGoblinPersistence("Host=127.0.0.1;Port=1;Database=unavailable;Username=unused;Timeout=1");
             ChatGptMcp.Configure(builder.Services, new ApplicationOptions
             {

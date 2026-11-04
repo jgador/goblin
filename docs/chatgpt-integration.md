@@ -113,6 +113,47 @@ drafts, checks, and Work data are not saved in browser storage. Reloading clears
 the displayed secret and checks. Goblin cannot observe ChatGPT installation or
 conversations; the user confirms those steps.
 
+### Prepare a Plugin Creator handoff with Codex
+
+In **Private plugin → Install**, expand **Prepare with your Codex connection**.
+Both actions require a saved ChatGPT login in **AI connections**. An API key can
+run ordinary Work but does not establish access to ChatGPT's Plugin Creator.
+
+**Check Plugin Creator access** reads account-scoped app metadata and checks whether
+the official creator skill is available. **Prepare with Codex** also runs Goblin's
+bundled `goblin-plugin-setup` skill through the same authenticated App Server. It
+drafts a short description; Goblin supplies the configured MCP URL, issuer, fixed
+OAuth client ID, scopes, and tool names. An optional `plugin_asdk_app_…` technical
+ID identifies an MCP connection already registered in ChatGPT. Leaving it empty
+produces a request for the supported external-MCP registration steps.
+
+The result provides a copyable Plugin Creator request and a handoff ZIP containing
+that request, public connection metadata, and the Goblin-authored preparation
+skill. It contains no OAuth client secret, owner password, Codex credentials,
+owner subject, or Work content. The ZIP is a handoff artifact, not an installable
+ChatGPT plugin. Drafts and capability results last only while this page is open.
+Cancellation interrupts generation and releases the connection reservation.
+
+Automatic creation is unavailable in this implementation. The official creator
+was not installed in the development session, so its source and external-MCP
+registration contract could not be verified. The documented local plugin workflow
+starts with an already registered MCP ID; the Sites workflow creates a new hosted
+server. Neither establishes how to register Goblin's existing Chisel endpoint.
+Skill or tool visibility therefore never sets `automaticCreationAvailable`,
+`pluginRegistered`, or `connectionVerified` to true. Complete creation,
+Install/Connect, OAuth, and the authenticated ping manually using the
+[acceptance walkthrough](plugin-testing.md#test-the-codex-preparation-handoff).
+
+The pinned Codex 0.161.0 probe uses `app/installed`, `app/read`, and
+`plugin/skill/read`. The official directory metadata identifies marketplace
+`oai-maintained-plugins`, plugin
+`plugin_connector_1p_e1a10c53223481918a42f1510ec46c1e`, and hosted app
+`connector_openai_plugin_creator`. A successful skill read reports its SHA-256
+fingerprint; the source is not copied into Goblin or executed. Unsupported RPCs
+report capability access as unavailable. App enablement is evaluated in a scoped
+metadata thread, not proof of a granted creation permission. No model turn runs
+in that thread, and no creator tool is invoked.
+
 ## OAuth and access boundaries
 
 The confidential client uses authorization-code flow with required PKCE S256 and
@@ -210,4 +251,7 @@ connecting user still needs Work grants in Goblin.
 - [ChatGPT OAuth requirements](https://developers.openai.com/plugins/build/auth)
 - [Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt)
 - [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+- [Codex skills and connectors](https://learn.chatgpt.com/docs/app-server#skills)
+- [Local plugins with a registered MCP server](https://developers.openai.com/plugins/build/plugins#create-and-test-a-plugin-locally-with-an-mcp-server)
+- [Plugin Creator and Sites](https://learn.chatgpt.com/docs/extend/mcp#build-an-mcp-plugin-with-plugin-creator-and-sites)
 - [OpenIddict](https://documentation.openiddict.com/introduction)

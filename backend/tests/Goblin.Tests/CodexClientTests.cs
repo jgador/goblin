@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Integrations.Codex;
@@ -20,6 +21,148 @@ namespace Goblin.Tests;
 
 public sealed class CodexClientTests
 {
+    private static ChatGptPluginContext PluginContext(string? appId = null) => new(
+        "https://goblin.example.test/mcp", "https://goblin.example.test/", "goblin-chatgpt",
+        "openid offline_access goblin.work.read", appId);
+
+    private static async Task<Authentication> PluginAuthenticationAsync(Fixture fixture, bool? chatGpt = true,
+        TimeSpan? timeout = null)
+    {
+        if (chatGpt is not null)
+            await File.WriteAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "auth.json"), chatGpt.Value
+                ? "{\"type\":\"chatgpt\",\"email\":\"owner@example.test\",\"planType\":\"plus\"}"
+                : "{\"type\":\"apiKey\"}");
+        return new Authentication(fixture.Client, _ => Task.FromResult(VerificationState.Accepted), timeout ?? TimeSpan.FromSeconds(3));
+    }
+
+    [Theory]
+    [InlineData("plugin-ready", true, true, true)]
+    [InlineData("plugin-source-unavailable", true, false, true)]
+    [InlineData("plugin-tools-unavailable", true, true, false)]
+    [InlineData("plugin-runtime-unsupported", false, false, false)]
+    public async Task PluginPreparationUsesASkillWithoutGrantingItsTurnHostedTools(string scenario, bool supported, bool source, bool callable)
+    {
+        await using Fixture fixture = await Fixture.CreateAsync(scenario);
+        using Authentication auth = await PluginAuthenticationAsync(fixture);
+        ChatGptPluginDraft draft = await auth.PreparePluginAsync(PluginContext("plugin_asdk_app_1234"), default);
+        Assert.Equal(supported, draft.CreatorAccess.RuntimeSupported);
+        Assert.Equal(source, draft.CreatorAccess.SkillAvailable);
+        Assert.Equal(callable, draft.CreatorAccess.AppCallable);
+        Assert.Equal(source ? 64 : 0, draft.CreatorAccess.SkillSha256?.Length ?? 0);
+        Assert.Contains("plugin_asdk_app_1234", draft.CreatorPrompt);
+        Assert.Contains(PluginContext().ServerUrl, draft.CreatorPrompt);
+        Assert.Contains("client_secret_basic", draft.CreatorPrompt);
+        Assert.Contains("goblin_ping", draft.CreatorPrompt);
+        Assert.Equal("test-model", draft.Model);
+        Assert.Contains("name: goblin-plugin-setup", draft.SkillMarkdown);
+        string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
+        using JsonDocument generation = JsonDocument.Parse(Assert.Single(requests, x => x.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal)));
+        JsonElement turn = generation.RootElement.GetProperty("params");
+        JsonElement skill = turn.GetProperty("input")[1];
+        Assert.Equal("skill", skill.GetProperty("type").GetString());
+        Assert.Equal(PluginSetupSkill.Name, skill.GetProperty("name").GetString());
+        string path = skill.GetProperty("path").GetString()!;
+        Assert.StartsWith(fixture.Workspace.CodexHome, path, StringComparison.Ordinal);
+        Assert.Equal(draft.SkillMarkdown, await File.ReadAllTextAsync(path));
+        Assert.False(turn.GetProperty("sandboxPolicy").GetProperty("networkAccess").GetBoolean());
+        Assert.Equal("never", turn.GetProperty("approvalPolicy").GetString());
+        Assert.Equal(new[] { "description" }, turn.GetProperty("outputSchema").GetProperty("required").EnumerateArray().Select(x => x.GetString()));
+        string[] starts = [.. requests.Where(x => x.Contains("\"method\":\"thread/start\"", StringComparison.Ordinal))];
+        Assert.Equal(2, starts.Length);
+        using JsonDocument metadataThread = JsonDocument.Parse(starts[0]);
+        JsonElement apps = metadataThread.RootElement.GetProperty("params").GetProperty("config").GetProperty("apps");
+        Assert.False(apps.GetProperty("_default").GetProperty("enabled").GetBoolean());
+        Assert.True(apps.GetProperty(PluginCreatorProbe.AppId).GetProperty("enabled").GetBoolean());
+        using JsonDocument preparationThread = JsonDocument.Parse(starts[1]);
+        JsonElement config = preparationThread.RootElement.GetProperty("params").GetProperty("config");
+        Assert.True(config.GetProperty("skills.include_instructions").GetBoolean());
+        Assert.False(config.TryGetProperty("features.apps", out _));
+        Assert.Equal(2, requests.Count(x => x.Contains("\"method\":\"thread/unsubscribe\"", StringComparison.Ordinal)));
+        string arguments = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "arguments.json"));
+        Assert.Contains("features.apps=false", arguments);
+        Assert.Contains("features.shell_tool=false", arguments);
+    }
+
+    [Theory]
+    [InlineData("plugin-skill-unavailable")]
+    [InlineData("plugin-skill-disabled")]
+    public async Task PreparationRequiresTheRuntimeToDiscoverTheEnabledBundledSkill(string scenario)
+    {
+        await using Fixture fixture = await Fixture.CreateAsync(scenario);
+        using Authentication auth = await PluginAuthenticationAsync(fixture);
+        IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => auth.PreparePluginAsync(PluginContext(), default));
+        Assert.Equal("plugin_skill_unavailable", error.Code);
+        string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
+        Assert.DoesNotContain(requests, line => line.Contains("turn/start", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(null)]
+    public async Task PluginPreparationRequiresTheSavedChatGptAccount(bool? chatGpt)
+    {
+        await using Fixture fixture = await Fixture.CreateAsync("plugin-ready");
+        using Authentication auth = await PluginAuthenticationAsync(fixture, chatGpt);
+        IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => auth.PreparePluginAsync(PluginContext(), default));
+        Assert.Equal("plugin_chatgpt_login_required", error.Code);
+        Assert.DoesNotContain(await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl")),
+            x => x.Contains("thread/start", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("plugin-output-invalid", "plugin_draft_invalid")]
+    [InlineData("plugin-timeout", "prompt_timeout")]
+    [InlineData("plugin-interactive", "plugin_manual_action_required")]
+    public async Task PluginPreparationDoesNotAcceptInvalidOutputOrApproveInteractiveActions(string scenario, string code)
+    {
+        await using Fixture fixture = await Fixture.CreateAsync(scenario);
+        using Authentication auth = await PluginAuthenticationAsync(fixture, timeout: TimeSpan.FromMilliseconds(200));
+        IntegrationFailure error = await Assert.ThrowsAsync<IntegrationFailure>(() => auth.PreparePluginAsync(PluginContext(), default));
+        Assert.Equal(code, error.Code);
+        string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
+        Assert.Single(requests, x => x.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal));
+        Assert.Equal(2, requests.Count(x => x.Contains("thread/unsubscribe", StringComparison.Ordinal)));
+        if (scenario != "plugin-output-invalid") Assert.Contains(requests, x => x.Contains("turn/interrupt", StringComparison.Ordinal));
+        if (scenario == "plugin-interactive")
+        {
+            using JsonDocument rejection = JsonDocument.Parse(Assert.Single(await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "server-responses.jsonl"))));
+            Assert.Equal(-32601, rejection.RootElement.GetProperty("error").GetProperty("code").GetInt32());
+        }
+    }
+
+    [Fact]
+    public async Task PluginPreparationRejectsOverlapsAndSerializesLogoutBehindTheTurn()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync("plugin-delayed");
+        using Authentication auth = await PluginAuthenticationAsync(fixture);
+        Task<ChatGptPluginDraft> preparation = auth.PreparePluginAsync(PluginContext(), default);
+        IntegrationFailure overlap = await Assert.ThrowsAsync<IntegrationFailure>(() => auth.CheckPluginCreatorAsync(default));
+        Assert.Equal("prompt_in_progress", overlap.Code);
+        Task<AuthenticationState> logout = auth.LogoutAsync();
+        Assert.False(logout.IsCompleted);
+        await preparation;
+        Assert.Null((await logout).Account);
+        IntegrationFailure disconnected = await Assert.ThrowsAsync<IntegrationFailure>(() => auth.CheckPluginCreatorAsync(default));
+        Assert.Equal("plugin_chatgpt_login_required", disconnected.Code);
+    }
+
+    [Fact]
+    public async Task PluginPreparationCancellationInterruptsAndAllowsANewCheck()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync("plugin-timeout");
+        using Authentication auth = await PluginAuthenticationAsync(fixture);
+        using var cancellation = new CancellationTokenSource();
+        Task<ChatGptPluginDraft> preparation = auth.PreparePluginAsync(PluginContext(), cancellation.Token);
+        string file = Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        while (!File.Exists(file) || !(await File.ReadAllTextAsync(file, deadline.Token)).Contains("turn/start", StringComparison.Ordinal))
+            await Task.Delay(10, deadline.Token);
+        cancellation.Cancel();
+        Assert.Equal("prompt_cancelled", (await Assert.ThrowsAsync<IntegrationFailure>(() => preparation)).Code);
+        Assert.True((await auth.CheckPluginCreatorAsync(default)).RuntimeSupported);
+        Assert.Contains("turn/interrupt", await File.ReadAllTextAsync(file));
+    }
+
     private static long _nextId = int.MaxValue;
 
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
@@ -307,7 +450,7 @@ public sealed class CodexClientTests
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "backend/schemas/codex"))) root = root.Parent;
-            string data = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}")).FullName;
+            string data = Directory.CreateDirectory(Path.Combine(root!.FullName, ".artifacts", "codex-client-tests", Guid.NewGuid().ToString("N"))).FullName;
             string passwordFile = Path.Combine(data, "owner-password");
             byte[] salt = RandomNumberGenerator.GetBytes(16);
             byte[] digest = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes("codex-client-test"), salt, 600_000, HashAlgorithmName.SHA256, 32);

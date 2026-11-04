@@ -23,6 +23,7 @@ public sealed class UserInputJsonConverter : JsonConverter<UserInput>
         return ProtocolUnion.ReadDiscriminator(ref reader, "type") switch
         {
             "text" => JsonSerializer.Deserialize<TextUserInput>(ref reader, options)!,
+            "skill" => JsonSerializer.Deserialize<SkillUserInput>(ref reader, options)!,
             _ => throw new JsonException("Unknown UserInput discriminator."),
         };
     }
@@ -32,6 +33,9 @@ public sealed class UserInputJsonConverter : JsonConverter<UserInput>
         switch (value)
         {
             case TextUserInput typed:
+                JsonSerializer.Serialize(writer, typed, options);
+                break;
+            case SkillUserInput typed:
                 JsonSerializer.Serialize(writer, typed, options);
                 break;
             default:

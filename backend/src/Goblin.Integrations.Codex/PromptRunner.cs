@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
@@ -19,7 +21,11 @@ public sealed class PromptRunner
 
     private static IntegrationFailure Cancelled() => new("prompt_cancelled", "The prompt was cancelled.");
 
-    public async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, CancellationToken cancellationToken = default)
+    public Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, CancellationToken cancellationToken = default) =>
+        RunAsync(prompt, null, null, cancellationToken);
+
+    internal async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, SkillUserInput? skill,
+        JsonElement? outputSchema, CancellationToken cancellationToken)
     {
         if (cancellationToken.IsCancellationRequested) throw Cancelled();
         var elapsed = Stopwatch.StartNew();
@@ -31,8 +37,11 @@ public sealed class PromptRunner
             resultError: reply => reply.Length == 0
                 ? new IntegrationFailure("prompt_empty_reply", "The model finished without a text reply. Please retry.") : null);
         void Disconnected() => transcript.Fail(IntegrationFailure.RuntimeUnavailable());
+        void InteractiveRequested() => transcript.Fail(new IntegrationFailure("plugin_manual_action_required",
+            "Codex requested an interactive action. Complete plugin setup manually in ChatGPT; no action was approved."));
         _codex.Notification += transcript.Handle;
         _codex.Disconnected += Disconnected;
+        if (skill is not null) _codex.ServerRequestRejected += InteractiveRequested;
         using CancellationTokenRegistration cancellation = cancellationToken.Register(() => transcript.Fail(Cancelled()));
         try
         {
@@ -42,7 +51,11 @@ public sealed class PromptRunner
                 Ephemeral = true,
                 ApprovalPolicy = AskForApproval.Never,
                 Sandbox = SandboxMode.ReadOnly,
-                BaseInstructions = "Answer the user's prompt briefly, using only the text in this conversation. Do not call tools, inspect files, browse, or perform any actions."
+                BaseInstructions = "Answer the user's prompt briefly, using only the text and explicitly supplied skill in this conversation. Do not call tools, inspect files, browse, or perform any actions.",
+                Config = skill is null ? null : new Dictionary<string, JsonElement>
+                {
+                    ["skills.include_instructions"] = JsonSerializer.SerializeToElement(true)
+                }
             });
             transcript.SetThread(thread.Thread.Id);
             if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" ||
@@ -53,7 +66,8 @@ public sealed class PromptRunner
             TurnStartResponse started = await _codex.RequestAsync<TurnStartParams, TurnStartResponse>("turn/start", new()
             {
                 ThreadId = transcript.ThreadId!,
-                Input = [new TextUserInput { Text = prompt }],
+                Input = skill is null ? [new TextUserInput { Text = prompt }] : [new TextUserInput { Text = prompt }, skill],
+                OutputSchema = outputSchema,
                 ApprovalPolicy = AskForApproval.Never,
                 SandboxPolicy = new ReadOnlySandboxPolicy { NetworkAccess = false }
             });
@@ -70,6 +84,7 @@ public sealed class PromptRunner
         {
             _codex.Notification -= transcript.Handle;
             _codex.Disconnected -= Disconnected;
+            if (skill is not null) _codex.ServerRequestRejected -= InteractiveRequested;
             // Observe faults even if thread/start or turn/start failed before the completion wait.
             _ = transcript.Completion.Task.Exception;
             string? threadId = transcript.ThreadId;

@@ -36,6 +36,7 @@ public sealed partial class CodexClient : IAsyncDisposable
     }
 
     public event Action<ServerNotification>? Notification;
+    public event Action? ServerRequestRejected;
 
     public event Action? Disconnected;
 
@@ -181,6 +182,7 @@ public sealed partial class CodexClient : IAsyncDisposable
                             Id = request.Id,
                             Error = new JSONRPCErrorError { Code = -32601, Message = "Interactive tools are disabled." }
                         });
+                        ServerRequestRejected?.Invoke();
                     }
                     else
                     {

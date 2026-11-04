@@ -1,5 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
@@ -8,7 +7,9 @@ import { writePasswordHash } from "../tests/support/backend.js";
 // Exercises the installed, pinned binary with an empty private CODEX_HOME.
 // A synthetic key tests local credential storage only. This bypasses HTTP key
 // verification and never reads personal credentials or submits a model task.
-const dataDir = await mkdtemp(join(tmpdir(), "goblin-codex-check-"));
+const artifactRoot = resolve(".artifacts", "codex-runtime-check");
+await mkdir(artifactRoot, { recursive: true });
+const dataDir = await mkdtemp(join(artifactRoot, "run-"));
 try {
     const passwordHashFile = join(dataDir, "owner-password");
     await writePasswordHash(passwordHashFile, "codex-storage-test");
@@ -35,7 +36,7 @@ try {
             throw new Error("The pinned Codex storage check failed.");
     }
     console.log(
-        "Pinned Rust Codex passed initialization, isolated key storage, read-only ephemeral thread creation, unsubscribe, process replacement, and logout through the C# client.",
+        "Pinned Rust Codex passed initialization, isolated key storage, packaged skill discovery, read-only ephemeral thread configuration, unsubscribe, process replacement, and logout through the C# client.",
     );
 } finally {
     await rm(dataDir, { recursive: true, force: true });

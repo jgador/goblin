@@ -256,6 +256,82 @@ for await (const line of createInterface({ input: process.stdin })) {
         await unlink(accountFile).catch(() => {});
         result(id, {});
         send({ method: "account/updated", params: { authMode: null } });
+    } else if (method === "app/installed") {
+        if (scenario === "plugin-runtime-unsupported") {
+            send({
+                id,
+                error: { code: -32601, message: "fixture unsupported method" },
+            });
+            continue;
+        }
+        result(id, {
+            apps:
+                scenario === "plugin-tools-unavailable"
+                    ? []
+                    : [
+                          {
+                              id: "connector_openai_plugin_creator",
+                              enabled: true,
+                              callable: true,
+                          },
+                      ],
+        });
+    } else if (method === "app/read") {
+        result(id, {
+            apps:
+                scenario === "plugin-tools-unavailable"
+                    ? []
+                    : [
+                          {
+                              id: "connector_openai_plugin_creator",
+                              toolSummaries: [
+                                  {
+                                      name: "fixture_tool",
+                                      isEnabled: true,
+                                      isReadOnly: true,
+                                  },
+                              ],
+                          },
+                      ],
+            missingAppIds:
+                scenario === "plugin-tools-unavailable"
+                    ? ["connector_openai_plugin_creator"]
+                    : [],
+        });
+    } else if (method === "plugin/skill/read") {
+        result(id, {
+            contents:
+                scenario === "plugin-source-unavailable"
+                    ? null
+                    : "---\nname: plugin-creator\ndescription: Synthetic metadata fixture.\n---\nFixture only; does not create a plugin.\n",
+        });
+    } else if (method === "skills/list") {
+        const skillPath = join(
+            root,
+            "skills",
+            "goblin-plugin-setup",
+            "SKILL.md",
+        );
+        const markdown = await readFile(skillPath, "utf8").catch(() => "");
+        result(id, {
+            data: [
+                {
+                    cwd: process.cwd(),
+                    errors: [],
+                    skills:
+                        markdown && scenario !== "plugin-skill-unavailable"
+                            ? [
+                                  {
+                                      name: "goblin-plugin-setup",
+                                      path: skillPath,
+                                      enabled:
+                                          scenario !== "plugin-skill-disabled",
+                                  },
+                              ]
+                            : [],
+                },
+            ],
+        });
     } else if (method === "thread/start") {
         result(id, {
             thread: {
@@ -289,6 +365,13 @@ for await (const line of createInterface({ input: process.stdin })) {
         const turnId = `test-turn-${threadNumber}`;
         const started = { id: turnId, status: "inProgress", items: [] };
         send({ method: "turn/started", params: { threadId, turn: started } });
+        if (scenario === "plugin-interactive") {
+            send({
+                id: "plugin-input",
+                method: "mcpServer/elicitation/request",
+                params: {},
+            });
+        }
         if (scenario === "work-retryable-error") {
             send({
                 method: "error",
@@ -319,20 +402,29 @@ for await (const line of createInterface({ input: process.stdin })) {
                 type: "agentMessage",
                 id: "answer",
                 phase: "final_answer",
-                text:
-                    scenario === "prompt-large"
-                        ? "x".repeat(8001)
-                        : scenario === "work-result"
+                text: prompt.startsWith("$goblin-plugin-setup")
+                    ? scenario === "plugin-output-invalid"
+                        ? JSON.stringify({
+                              description: "Fixture text",
+                              pluginRegistered: true,
+                          })
+                        : JSON.stringify({
+                              description:
+                                  "Read explicitly shared Work and approved results from Goblin.",
+                          })
+                    : scenario === "prompt-large"
+                      ? "x".repeat(8001)
+                      : scenario === "work-result"
+                        ? JSON.stringify({
+                              kind: "result",
+                              text: "A proposed Work outcome",
+                          })
+                        : scenario === "work-input"
                           ? JSON.stringify({
-                                kind: "result",
-                                text: "A proposed Work outcome",
+                                kind: "input",
+                                text: "Which outcome matters?",
                             })
-                          : scenario === "work-input"
-                            ? JSON.stringify({
-                                  kind: "input",
-                                  text: "Which outcome matters?",
-                              })
-                            : "Hello from the connected account.",
+                          : "Hello from the connected account.",
             };
             send({
                 method: "item/completed",
@@ -403,9 +495,14 @@ for await (const line of createInterface({ input: process.stdin })) {
                 },
             });
         }
-        if (scenario === "prompt-delayed")
+        if (
+            scenario === "prompt-delayed" ||
+            scenario === "plugin-delayed" ||
+            scenario === "plugin-interactive"
+        )
             promptTimer = setTimeout(complete, 150);
-        else if (scenario !== "prompt-timeout") complete();
+        else if (scenario !== "prompt-timeout" && scenario !== "plugin-timeout")
+            complete();
         // Deliberately deliver immediate events before the RPC response.
         result(id, { turn: started });
     } else if (method === "turn/interrupt") {

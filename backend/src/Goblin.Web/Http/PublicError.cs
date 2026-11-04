@@ -28,13 +28,14 @@ public sealed class PublicError : Exception
             "runtime_timeout" or "prompt_timeout" => 504,
             "prompt_cancelled" => 408,
             "prompt_limit_reached" => 429,
-            "already_connected" or "login_in_progress" or "not_connected" or "prompt_in_progress" => 409,
+            "already_connected" or "login_in_progress" or "not_connected" or "prompt_in_progress" or "plugin_chatgpt_login_required" or "plugin_manual_action_required" => 409,
             "invalid_api_key" or "invalid_prompt" => 400,
             _ => 502
         }),
         ApplicationFailure { Code: "github_connection_required" } => new("repository_unavailable", "Connect GitHub first.", 409),
         ApplicationFailure failure => new(failure.Code, failure.Code switch
         {
+            "plugin_chatgpt_login_required" => "Connect a ChatGPT account in AI connections to prepare the plugin with Codex. An API key does not provide Plugin Creator access.",
             "chatgpt_result_unavailable" => "This Work has no approved result to share. Share its status or approve a result in Goblin first.",
             "chatgpt_grant_limit" => "Revoke unused or expired ChatGPT grants before adding more. An instance supports up to 200 current grants.",
             "external_link_expired" => "This Slack link request expired or has already been used. Start linking again.",
