@@ -44,9 +44,12 @@ Docker build context. Runtime copies are unchanged unless noted:
   space are preserved.
   `frontend/public/assets/providers/codex.png` is an unchanged copy of
   `providers/codex.png`, the 128 × 128 icon published in OpenAI's Codex app.
-  Settings → Connections displays it in the same 32 × 32 slot as other providers,
-  retaining the original artwork and transparency. Its source is recorded in
-  the [third-party notices](../../THIRD_PARTY_NOTICES.md).
+  Settings → Connections centers every provider in a 32 × 32 slot with a visible
+  mark approximately 24 pixels wide. Codex uses a 40-pixel image and ChatGPT a
+  36-pixel image to account for the clear space embedded in their artwork; the
+  other images use 24 pixels. Scaling preserves proportions, colors, transparency,
+  and the full image without cropping. The Codex source is recorded in the
+  [third-party notices](../../THIRD_PARTY_NOTICES.md).
 - Website: `website/assets/goblin.svg` is `svg/icon-light.svg`, `goblin-dark.svg`
   is `svg/icon-dark.svg`, and the Medium and SemiBold fonts are copied there too.
 - Installer: `goblinctl` embeds `svg/icon-light.svg`, the Medium and SemiBold

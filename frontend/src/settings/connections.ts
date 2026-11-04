@@ -167,10 +167,10 @@ function slackSummary(state: SlackState): Summary {
 
 function providerLogo(provider: (typeof providers)[number]["id"]) {
     return (
-        '<img class="connection-logo" src="/assets/providers/' +
+        '<span class="connection-logo"><img src="/assets/providers/' +
         provider +
         (provider === "codex" ? ".png" : ".svg") +
-        '" width="32" height="32" alt="">'
+        '" width="24" height="24" alt=""></span>'
     );
 }
 
