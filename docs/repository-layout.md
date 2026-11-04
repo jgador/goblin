@@ -61,6 +61,12 @@ and npm scripts; do not add backend or test tooling to it. The root
 `frontend/tsconfig.json` compiles browser source without Node types. `global.json`
 stays at the root so the pinned .NET SDK applies from the root and from `backend/`.
 
+VS Code opens `backend/Goblin.slnx` through the checked-in
+`dotnet.defaultSolution` setting. `.artifacts/` is excluded from file discovery
+and watching so temporary project copies do not enter an editor-generated
+solution. If C# Dev Kit already has a generated solution open, use **.NET: Open
+Solution** and select `backend/Goblin.slnx`.
+
 `website/` has its own package manifest and lockfile. Application install, build,
 and test commands do not include it, and the application Docker build excludes
 it. See the [website guide](../website/README.md).
