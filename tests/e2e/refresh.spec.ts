@@ -59,6 +59,103 @@ async function home(page: Page) {
     return state;
 }
 
+for (const authenticated of [false, true]) {
+    for (const failures of [1, 2]) {
+        test(`${failures} failed startup session reads recover to ${authenticated ? "the workspace" : "the password screen"} without an error alert`, async ({
+            page,
+        }) => {
+            const now = new Date("2026-09-23T00:00:00Z");
+            await page.clock.install({ time: now });
+            await page.clock.pauseAt(now);
+            await page.addInitScript(() => {
+                const alerts: string[] = [];
+                Object.assign(window, { startupAlerts: alerts });
+                new MutationObserver(() => {
+                    for (const alert of document.querySelectorAll(
+                        '[role="alert"]',
+                    ))
+                        alerts.push(alert.textContent ?? "");
+                }).observe(document, { childList: true, subtree: true });
+            });
+            let sessionReads = 0;
+            await page.route("**/api/**", (route) => {
+                if (route.request().resourceType() === "script")
+                    return route.continue();
+                const path = new URL(route.request().url()).pathname;
+                if (path === "/api/session") {
+                    sessionReads++;
+                    if (sessionReads <= failures)
+                        return route.abort("connectionfailed");
+                    return route.fulfill({ json: { authenticated } });
+                }
+                if (path === "/api/preferences")
+                    return route.fulfill({ json: { timeZone: "Asia/Manila" } });
+                return route.fulfill({ json: [] });
+            });
+            await page.goto("/");
+            await expect.poll(() => sessionReads).toBe(1);
+            await expect(
+                page.getByRole("heading", { name: "Opening your workspace…" }),
+            ).toBeVisible();
+            if (failures > 1) {
+                await page.clock.runFor(3000);
+                await expect(
+                    page
+                        .getByRole("status")
+                        .filter({ hasText: "Reconnecting…" }),
+                ).toHaveText("Could not reach Goblin. Reconnecting…");
+            }
+            await page.clock.runFor(3000);
+            await expect(
+                page.getByRole("heading", {
+                    name: authenticated
+                        ? "What should we work on?"
+                        : "Open your workspace",
+                    exact: true,
+                }),
+            ).toBeVisible();
+            await expect(page.getByRole("alert")).toHaveCount(0);
+            await expect(
+                page.getByText("Could not reach Goblin. Reconnecting…", {
+                    exact: true,
+                }),
+            ).toHaveCount(0);
+            expect(
+                await page.evaluate(
+                    () =>
+                        (window as typeof window & { startupAlerts: string[] })
+                            .startupAlerts,
+                ),
+            ).toEqual([]);
+        });
+    }
+}
+
+test("a session connection gap preserves the workspace draft and clears its reconnecting status after recovery", async ({
+    page,
+}) => {
+    await home(page);
+    const draft = page.getByPlaceholder("Describe the intended outcome…");
+    await draft.fill("Keep my draft while reconnecting");
+    await page.route("**/api/session", (route) =>
+        route.abort("connectionfailed"),
+    );
+    await page.clock.runFor(3000);
+    await expect(
+        page.getByRole("status").filter({ hasText: "Reconnecting…" }),
+    ).toHaveText("Could not reach Goblin. Reconnecting…");
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await expect(draft).toHaveValue("Keep my draft while reconnecting");
+    await page.unroute("**/api/session");
+    await page.clock.runFor(3000);
+    await expect(
+        page.getByText("Could not reach Goblin. Reconnecting…", {
+            exact: true,
+        }),
+    ).toHaveCount(0);
+    await expect(draft).toHaveValue("Keep my draft while reconnecting");
+});
+
 for (const viewport of [
     { width: 1280, height: 720 },
     { width: 390, height: 500 },

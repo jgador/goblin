@@ -46,6 +46,10 @@ Selected Work uses `/work?item=<id>`.
 - The page refreshes every 3 seconds while visible, and when it becomes visible
   or goes online. A refresh keeps drafts, open disclosures, scroll positions, and
   focus. It does not re-render while a native select has focus.
+- A brief startup session request failure keeps the opening screen visible.
+  Repeated failures, or a lost connection after opening, show a reconnecting
+  status that clears when the session request succeeds, including at the password
+  screen. Connection status is separate from command errors and recovery notices.
 
 ## Command recovery and conversations
 

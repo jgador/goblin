@@ -91,6 +91,7 @@ let sidebarCollapsed =
     mobile.matches ||
     localStorage.getItem("goblin.sidebarCollapsed") === "true";
 let sessionChecked = false,
+    sessionFailures = 0,
     workUnavailable = false;
 let timezoneError = "";
 let settingsSection = query.get("section") ?? "connections";
@@ -326,6 +327,7 @@ async function refresh(preserveError = false) {
     try {
         const session = await api<{ authenticated: boolean }>("/api/session");
         signal.throwIfAborted();
+        sessionFailures = 0;
         authenticated = session.authenticated;
         sessionChecked = true;
         if (!authenticated) {
@@ -396,9 +398,8 @@ async function refresh(preserveError = false) {
         if (chats.status === "fulfilled") conversations = chats.value;
         if (people.status === "fulfilled") agents = people.value;
         if (capabilities.status === "fulfilled") runtimes = capabilities.value;
-    } catch (failure) {
-        if (!signal.aborted)
-            error = errorMessage(failure, "Work could not be loaded.");
+    } catch {
+        if (!signal.aborted) sessionFailures++;
     } finally {
         if (!signal.aborted) {
             if (!authenticated) forgetWorkspace();
@@ -834,12 +835,16 @@ function render(preserveHome = false, forceSelect = false) {
                 : view === "work" && authenticated && current()
                   ? current()!.work.objective.slice(0, 70) + " · Goblin"
                   : "Goblin";
+    const connectionNotice =
+        sessionFailures && (sessionChecked || sessionFailures > 1)
+            ? '<p class="command-notice" role="status">Could not reach Goblin. Reconnecting…</p>'
+            : "";
     if (!authenticated) {
-        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
+        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${connectionNotice}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
         const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
-            <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
+            <div class="workspace-notices">${connectionNotice}${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
             ${view === "settings" ? '<div id="settings-host"></div>' : view === "integrations" ? integrations.render() : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&
