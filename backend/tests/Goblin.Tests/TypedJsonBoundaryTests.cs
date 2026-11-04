@@ -167,12 +167,12 @@ public sealed class TypedJsonBoundaryTests
     {
         const string json = """
             {"kind":"result","text":"Ready for review","setup":[{"topic":"dotnet","reason":"Build the project",
-             "tools":["dotnet 10.0.100"],"commands":[],"files":["global.json"],
-             "checks":[{"command":"dotnet --version","expectedOutput":"10.0.100"}]}]}
+             "tools":["dotnet 10.0.403"],"commands":[],"files":["global.json"],
+             "checks":[{"command":"dotnet --version","expectedOutput":"10.0.403"}]}]}
             """;
         Goblin.Core.GitRepositories.GitRepositorySetup setup = Assert.Single(CodexWorkResults.Setup(CodexWorkResults.Read(json, true))!);
         Assert.Equal("dotnet", setup.Topic);
-        Assert.Equal("10.0.100", Assert.Single(setup.Checks).ExpectedOutput);
+        Assert.Equal("10.0.403", Assert.Single(setup.Checks).ExpectedOutput);
         Assert.Throws<IntegrationFailure>(() => CodexWorkResults.Setup(CodexWorkResults.Read(json.Replace("global.json", "../outside"), true)));
         Assert.Throws<IntegrationFailure>(() => CodexWorkResults.Setup(CodexWorkResults.Read("{\"kind\":\"result\",\"text\":\"Done\",\"setup\":[null]}", true)));
     }
