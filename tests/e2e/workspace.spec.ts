@@ -102,6 +102,65 @@ async function workspace(page: Page, connected = true) {
     return commands;
 }
 
+test("Create work saves a goal and leaves execution for an explicit Start", async ({
+    page,
+}) => {
+    await workspace(page);
+    const commands: Record<string, unknown>[] = [];
+    let saved: Record<string, unknown>[] = [];
+    await page.route("**/api/identities", (route) =>
+        route.fulfill({ json: { ids: ["10", "11"] } }),
+    );
+    await page.route("**/api/work", (route) => route.fulfill({ json: saved }));
+    await page.route("**/api/work/commands", (route) => {
+        const command = route.request().postDataJSON();
+        commands.push(command);
+        const at = "2026-11-04T00:00:00Z";
+        saved = [
+            {
+                version: "1",
+                createdAt: at,
+                updatedAt: at,
+                work: {
+                    id: command.workId,
+                    objective: command.text,
+                    status: "Ready",
+                    agentId: "1",
+                    attempts: [],
+                    history: [],
+                    decisions: [],
+                    results: [],
+                    artifacts: [],
+                },
+            },
+        ];
+        return route.fulfill({ json: {} });
+    });
+    await page.goto("/?new=work");
+    await page
+        .getByPlaceholder("Describe the intended outcome…")
+        .fill("Make the release guide easier to follow");
+    await page
+        .getByRole("button", { name: "Create work", exact: true })
+        .click();
+    await expect(page.locator(".detail h2")).toHaveText(
+        "Make the release guide easier to follow",
+    );
+    await expect(page).toHaveURL(/\/work\?item=11$/);
+    await expect(page.locator(".detail .status-pill")).toHaveText("Ready");
+    await expect(
+        page.getByRole("button", { name: "Start work", exact: true }),
+    ).toBeVisible();
+    expect(commands).toEqual([
+        {
+            commandId: "10",
+            workId: "11",
+            action: "Create",
+            text: "Make the release guide easier to follow",
+        },
+    ]);
+});
+
 test("home, Settings, and collapsing navigation preserve a draft without executing work", async ({
     page,
 }) => {
@@ -230,22 +289,31 @@ test("search finds output content and filters keep selection independent from br
     await search.fill("shorter"); // Result text, not a Work title.
     await expect(list.getByRole("button")).toHaveCount(3);
     await search.fill("");
-    await page.getByRole("button", { name: /^Needs attention/ }).click();
+    const workView = page.getByRole("combobox", { name: "Work view" });
+    await workView.selectOption("attention");
     await expect(list.getByRole("button")).toHaveCount(1);
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
     );
-    await page.getByRole("button", { name: /^Completed/ }).click();
+    await workView.selectOption("done");
     await expect(list.getByRole("button")).toHaveCount(1);
     await page.getByRole("button", { name: /Write the release notes/ }).click();
     await expect(page.locator(".detail .status-pill")).toHaveText("Completed");
-    await page.getByRole("button", { name: /My work/ }).click();
+    await workView.selectOption("assigned");
     await expect(list.getByRole("button")).toHaveCount(2);
     await search.fill("release notes");
     await expect(list.getByRole("button")).toHaveCount(1);
     await expect(list.getByRole("button")).toContainText(
         "Write the release notes",
     );
+    await search.fill("");
+    await expect(list.getByRole("button")).toHaveCount(2);
+    await expect(workView).toHaveValue("assigned");
+    await page
+        .getByRole("button", { name: "Back to work", exact: true })
+        .click();
+    await expect(workView).toHaveValue("all");
+    await expect(list.getByRole("button")).toHaveCount(3);
 });
 
 for (const width of [1024, 390, 320]) {

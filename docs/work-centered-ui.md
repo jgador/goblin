@@ -9,11 +9,17 @@ Opening the workspace selects the Work remembered for the browser tab, or the
 most recently updated Work. An empty workspace opens New work at `/?new=work`.
 Selected Work uses `/work?item=<id>`.
 
+New work centers one goal input and an explicit **Create work** action. Creating
+Work saves the goal; execution starts separately from Progress. Connection setup
+guidance appears only when the AI connection needs attention. The Work list comes
+first in the sidebar, with Knowledge, Integrations, Settings, and system resources
+below it. Agents are available from Settings and the selected Work's composer.
+
 ## Implemented behavior
 
-- The Work views are **All work**, **My work** (open Work with an agent),
-  **Needs attention**, and **Completed**. Lists are ordered by update time. Search
-  ignores the selected view.
+- The **Work view** dropdown offers **All work**, **My work** (open Work with an
+  agent), **Needs attention**, and **Completed**, with counts. Lists are ordered
+  by update time. Search ignores the selected view.
 - Search covers loaded Work objectives, IDs, agent names, decisions, results,
   artifact names and references, repository names, history text, and linked and
   untracked conversations. It is not a server-side index.

@@ -196,7 +196,7 @@ for (const viewport of [
             );
             const retained = await Promise.all([
                 homeElement.elementHandle(),
-                page.locator(".home-portrait").elementHandle(),
+                page.locator("#home-title").elementHandle(),
                 draft.elementHandle(),
                 page
                     .getByRole("button", { name: "Refresh", exact: true })
