@@ -47,8 +47,9 @@ The root `Makefile` holds shared builds, checks, tests, and release tooling. It
 includes `Makefile.dev` for local application, database, website, and Docker
 commands. Always run `make <target>` from the repository root; `make help` lists
 targets from both files. Targets use `<scope>-<action>[-<qualifier>]`, such as
-`backend-build` or `secrets-scan-staged`. Repository-wide workflows keep bare
-names: `install`, `build`, `typecheck`, `check`, `test`, and `format`. Use
+`backend-build` or `rust-format-check`. Tool entry points such as `gitleaks` use
+the tool name, with modes passed through `ARGS`. Repository-wide workflows keep
+bare names: `install`, `build`, `typecheck`, `check`, `test`, and `format`. Use
 `reset` for a fresh environment, `clean` to remove outputs or caches, and `stop`
 to halt services.
 
