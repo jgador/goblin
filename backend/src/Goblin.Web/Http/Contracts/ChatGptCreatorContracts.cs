@@ -69,11 +69,10 @@ internal sealed class ChatGptCreatorDraftView
 {
     private readonly ChatGptPluginDraft _draft;
 
-    public ChatGptCreatorDraftView(ChatGptPluginDraft draft, string archiveBase64)
+    public ChatGptCreatorDraftView(ChatGptPluginDraft draft)
     {
         _draft = draft;
         CreatorAccess = new(draft.CreatorAccess);
-        ArchiveBase64 = archiveBase64;
     }
 
     [JsonPropertyName("description")]
@@ -90,9 +89,6 @@ internal sealed class ChatGptCreatorDraftView
 
     [JsonPropertyName("creatorAccess")]
     public ChatGptCreatorAccessView CreatorAccess { get; }
-
-    [JsonPropertyName("archiveBase64")]
-    public string ArchiveBase64 { get; }
 
     [JsonPropertyName("pluginRegistered")]
     public bool PluginRegistered => false;

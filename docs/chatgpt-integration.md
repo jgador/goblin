@@ -83,15 +83,17 @@ Open `/settings?section=chatgpt` and choose **Private plugin**.
 
 1. **Prepare:** configure the HTTPS origin and enable ChatGPT. The generated
    settings do not deploy a server or create HTTPS.
-2. **Sign-in:** create the OAuth client. The client secret is shown only when it is
-   created or rotated; PostgreSQL stores its hash. Copy it into ChatGPT's OAuth
-   form. You can create the client before ChatGPT shows the callback. The local
-   server and storage checks do not prove public reachability.
+2. **Sign-in:** create the OAuth client and save its secret for ChatGPT's OAuth
+   form. This step does not ask for a callback; ChatGPT supplies that value during
+   **Install**. The secret is shown only when created or rotated; PostgreSQL
+   stores its hash. Reuse an existing client and secret. Replacement secrets
+   require explicit rotation and preserve the saved callback. The local server
+   and storage checks do not prove public reachability.
 3. **Install:** in ChatGPT, choose **+ → Add custom MCP server**, use the supplied
    `/mcp` URL (or a configured Secure MCP Tunnel), and select OAuth. The client ID
    is `goblin-chatgpt`. Paste the exact callback shown by ChatGPT into **ChatGPT
    OAuth callback** in Goblin and click **Save OAuth client** before sign-in.
-   Leave secret rotation unchecked. The confirmed callback is
+   Saving the callback preserves the client secret. The confirmed callback is
    `https://chatgpt.com/connector_platform_oauth_redirect`; use the value shown
    for your connection if it differs. Wildcards and other callback hosts are
    rejected. Create the plugin in ChatGPT, sign in on Goblin with the owner
@@ -107,15 +109,24 @@ Open `/settings?section=chatgpt` and choose **Private plugin**.
    requesting a missing result rejects the entire sharing request.
 5. **Test:** follow the [Work access checks](plugin-testing.md#test-work-access).
 
+The **Install** step collects the callback after showing ChatGPT's connection
+form and before instructing you to sign in. An empty callback cannot be saved,
+and installation confirmation stays disabled until a callback is saved. If an
+authorization request already failed with `invalid_request` / `ID2043`, save the
+exact callback in **Install**, then restart the connection from ChatGPT. Changing
+the saved callback clears earlier installation and connection-test confirmations.
+
 Setup progress and confirmations are saved in this browser, scoped to the issuer,
 MCP resource, and owner subject; changing any of them resets progress. Secrets,
 drafts, checks, and Work data are not saved in browser storage. Reloading clears
 the displayed secret and checks. Goblin cannot observe ChatGPT installation or
 conversations; the user confirms those steps.
 
-### Prepare a Plugin Creator handoff with Codex
+### Prepare a Plugin Creator request with Codex
 
-In **Private plugin → Install**, expand **Prepare with your Codex connection**.
+First complete **Prepare** and **Sign-in** to get the public endpoint and OAuth
+client secret. The callback is collected later when ChatGPT displays it. In
+**Private plugin → Install**, expand **Prepare with your Codex connection**.
 Both actions require a saved ChatGPT login in **AI connections**. An API key can
 run ordinary Work but does not establish access to ChatGPT's Plugin Creator.
 
@@ -127,22 +138,26 @@ OAuth client ID, scopes, and tool names. An optional `plugin_asdk_app_…` techn
 ID identifies an MCP connection already registered in ChatGPT. Leaving it empty
 produces a request for the supported external-MCP registration steps.
 
-The result provides a copyable Plugin Creator request and a handoff ZIP containing
-that request, public connection metadata, and the Goblin-authored preparation
-skill. It contains no OAuth client secret, owner password, Codex credentials,
-owner subject, or Work content. The ZIP is a handoff artifact, not an installable
-ChatGPT plugin. Drafts and capability results last only while this page is open.
-Cancellation interrupts generation and releases the connection reservation.
+The result provides a copyable Plugin Creator request containing the public
+connection details. Copy it into a ChatGPT Work task with the official Plugin
+Creator selected, or a Codex session with the creator's tools available. The
+request contains no OAuth client secret, owner password, Codex credentials, owner
+subject, or Work content. Goblin's preparation skill remains internal; this flow
+does not download a ZIP or install that helper in ChatGPT. Drafts and capability
+results last only while this page is open. Cancellation interrupts generation
+and releases the connection reservation.
 
-Automatic creation is unavailable in this implementation. The official creator
-was not installed in the development session, so its source and external-MCP
-registration contract could not be verified. The documented local plugin workflow
-starts with an already registered MCP ID; the Sites workflow creates a new hosted
-server. Neither establishes how to register Goblin's existing Chisel endpoint.
+Automatic creation is unavailable in this implementation. A manual ChatGPT test
+loaded the official creator skill but reported that its `create_plugin` tool and
+external-MCP registration tools were unavailable in that session. The documented
+local plugin workflow starts with an already registered MCP ID; the Sites workflow
+creates a new hosted server. Registration of Goblin's existing Chisel endpoint
+through creator tools remains unverified. If those tools are unavailable, complete
+**Add custom MCP server** manually or reuse an existing connection.
 Skill or tool visibility therefore never sets `automaticCreationAvailable`,
 `pluginRegistered`, or `connectionVerified` to true. Complete creation,
 Install/Connect, OAuth, and the authenticated ping manually using the
-[acceptance walkthrough](plugin-testing.md#test-the-codex-preparation-handoff).
+[acceptance walkthrough](plugin-testing.md#test-the-codex-preparation-request).
 
 The pinned Codex 0.161.0 probe uses `app/installed`, `app/read`, and
 `plugin/skill/read`. The official directory metadata identifies marketplace

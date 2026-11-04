@@ -121,11 +121,12 @@ belong to the selected instance; create a separate connection for each environme
 1. In Goblin's `/settings?section=chatgpt`, choose **Private plugin**. **Prepare**
    should show that the OAuth server and MCP endpoint are enabled. **Continue to
    Sign-in** opens the authentication setup step.
-2. In **Sign-in**, click **Create OAuth client** if no client exists. Copy and
-   save the generated secret; it is shown only when created or rotated. Click
-   **Check provider and storage**, then continue to **Install**. These local
-   checks verify configuration and storage; the ChatGPT connection test below
-   verifies the public connection.
+2. In **Sign-in**, click **Create OAuth client** if no client exists. This step
+   creates the client without asking for ChatGPT's callback. Copy and save the
+   generated secret; it is shown only when created or rotated. Reuse the saved
+   secret for an existing client. Click **Check provider and storage**, then
+   continue to **Install**. These local checks verify configuration and storage;
+   the ChatGPT connection test below verifies the public connection.
 3. Open [ChatGPT Plugins](https://chatgpt.com/plugins) and select
    **+ → Add custom MCP server**. Give the plugin a name that identifies the
    environment and enter Goblin's connection details:
@@ -138,10 +139,11 @@ belong to the selected instance; create a separate connection for each environme
    | OAuth client secret | The secret saved from Goblin |
    | OAuth scopes, if requested | `openid offline_access goblin.work.read` |
 
-4. Copy the exact OAuth callback shown by ChatGPT. In Goblin's **Install** step,
-   paste it into **ChatGPT OAuth callback** and click **Save OAuth client**.
-   Leave **Generate a new client secret and revoke previous connections**
-   unchecked. The confirmed callback for this workflow is:
+4. Before starting sign-in from ChatGPT, copy the exact OAuth callback shown by
+   its connection form. In Goblin's **Install** step, under **Save ChatGPT's
+   callback before sign-in**, paste it into **ChatGPT OAuth callback** and click
+   **Save OAuth client**. This preserves your existing secret. The confirmed
+   callback for this workflow is:
 
    ```text
    https://chatgpt.com/connector_platform_oauth_redirect
@@ -149,7 +151,8 @@ belong to the selected instance; create a separate connection for each environme
 
    Use the callback displayed for your connection if it differs. Saving it is
    required before sign-in; creating the client with an empty callback does not
-   register one. Wildcards are rejected.
+   register one. Wildcards are rejected. Installation confirmation stays disabled
+   until a callback has been saved.
 5. Return to ChatGPT and create the plugin. When the browser opens Goblin's
    HTTPS sign-in page, enter the Goblin owner password and approve the connection.
    Finish **Create as a plugin** and installation in ChatGPT. Confirm the tools
@@ -161,15 +164,17 @@ already failed before the callback was saved, start the connection again from
 ChatGPT to get a fresh sign-in request. Signing in shares no Work; the ping test
 needs no Work grants or GitHub sign-in.
 
-## Test the Codex preparation handoff
+## Test the Codex preparation request
 
 This optional acceptance test uses real accounts and model access. Automated tests
 use synthetic credentials and a protocol fixture; they do not prove authenticated
 Plugin Creator execution, ChatGPT installation, or Chisel connectivity.
 
 1. Complete [Local testing](#local-testing) through opening the public HTTPS
-   settings page. Create or reuse the OAuth client as described in
-   [Install the plugin](#install-the-plugin). Keep the tunnel running.
+   settings page. In **Sign-in**, create or reuse the OAuth client, save its
+   secret, and run **Check provider and storage** as described in
+   [Install the plugin](#install-the-plugin). Continue to **Install**. ChatGPT
+   supplies the callback later in its connection flow. Keep the tunnel running.
 2. In **AI connections**, authenticate Codex with the intended ChatGPT account.
    Install or enable the official Plugin Creator in that same account where
    available. An API-key-only connection should receive an explanation that a
@@ -184,15 +189,14 @@ Plugin Creator execution, ChatGPT installation, or Chisel connectivity.
    with Codex**. This is a real request to Codex's default model and counts toward
    the connected plan's limits. Check the configured public `/mcp` URL, issuer,
    OAuth client ID and scopes, the five read-only tools, and the existing ID
-   when supplied. The result must still say the plugin has not been created or
-   connected.
-5. Save and inspect the handoff ZIP. It should contain
-   `skills/goblin-plugin-setup/SKILL.md`, `creator-prompt.txt`, and
-   `connection.json`. Confirm that it includes no client secret, owner password,
-   Codex credentials, owner subject, or Work data. This is Goblin's preparation
-   skill, not a copy of the official creator skill or an installable plugin ZIP.
+   when supplied. The result must still say Goblin has not registered a plugin
+   or verified the connection.
+5. Use **Copy** beside **Plugin Creator request**. Review the copied text and
+   confirm it includes no client secret, owner password, Codex credentials, owner
+   subject, or Work data. There is no ZIP download or helper installation in this
+   flow; `goblin-plugin-setup` runs internally in Goblin to draft the description.
 6. In your authenticated ChatGPT or Codex session with the actual official
-   Plugin Creator available, review and run the generated request. Record the
+   Plugin Creator available, paste, review, and run the copied request. Record the
    supported registration action and any generated package or installation link.
    If the creator cannot register an existing external MCP server, complete
    **Add custom MCP server** manually. A package or link alone does not prove
@@ -309,7 +313,7 @@ connection; rotation revokes previous connections.
 | `502 Bad Gateway` on `dev.goblinboard.com` | Terminal B must show **Connected** and target local port **8788** for k3s. Wait for the public-origin deployment to succeed. A client still targeting the direct build on 8787 must be stopped and reconnected to 8788. |
 | `invalid_host` at `http://localhost:8788` | The public HTTPS origin is configured. Use `https://dev.goblinboard.com` during testing, then run both settings in [Return to local testing](#return-to-local-testing). |
 | OAuth reports HTTP or an invalid host through Chisel | Run the public-origin `k3s-deploy` command in step 3; it selects the direct platform Service route that preserves Host and HTTPS headers. |
-| `invalid_request`, redirect URI is not valid (`ID2043`) | Save the exact ChatGPT callback with **Save OAuth client** in Goblin. The confirmed callback is `https://chatgpt.com/connector_platform_oauth_redirect`. Keep secret rotation unchecked, then restart sign-in from ChatGPT. |
+| `invalid_request`, redirect URI is not valid (`ID2043`) | In Goblin's **Install** step, save the exact ChatGPT callback with **Save OAuth client**, then restart sign-in from ChatGPT. The confirmed callback is `https://chatgpt.com/connector_platform_oauth_redirect`. Creating the client in **Sign-in** does not register a callback; saving it in **Install** keeps the existing secret. |
 | Fingerprint mismatch or Chisel authentication failure | Check the trusted fingerprint and username/password separately. Ask the gateway administrator for updated verified values if they changed. See [Chisel troubleshooting](../deploy/chisel/README.md#troubleshooting) for server issues. |
 | Client closes after gateway deployment | Restart the client. Gateway deployment restarts the Chisel server; use updated credentials or a newly trusted fingerprint if they changed. |
 | ChatGPT still shows an old ping reply or tool list | Rebuild and deploy Goblin, refresh the connection's tools in ChatGPT, and start a new conversation with the plugin selected using **@**. |

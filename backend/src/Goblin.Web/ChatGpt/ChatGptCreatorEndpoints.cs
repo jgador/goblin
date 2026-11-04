@@ -1,7 +1,3 @@
-using System;
-using System.IO;
-using System.IO.Compression;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Goblin.Application.Connections;
 using Goblin.Contracts;
@@ -27,34 +23,8 @@ internal static partial class ChatGptCreatorEndpoints
             var metadata = new ChatGptPluginContext(configuration.Resource, configuration.Issuer,
                 ChatGptConfiguration.ClientId, ChatGptConfiguration.AuthorizationScopes, appId);
             ChatGptPluginDraft draft = await connection.PreparePluginAsync(metadata, context.RequestAborted);
-            return Results.Json(new ChatGptCreatorDraftView(draft, Archive(draft, metadata)));
+            return Results.Json(new ChatGptCreatorDraftView(draft));
         });
-    }
-
-    private static string Archive(ChatGptPluginDraft draft, ChatGptPluginContext context)
-    {
-        using var bytes = new MemoryStream();
-        using (var archive = new ZipArchive(bytes, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            Write("skills/goblin-plugin-setup/SKILL.md", draft.SkillMarkdown);
-            Write("creator-prompt.txt", draft.CreatorPrompt);
-            Write("connection.json", JsonSerializer.Serialize(new
-            {
-                serverUrl = context.ServerUrl,
-                issuer = context.Issuer,
-                clientId = context.ClientId,
-                scope = context.Scope,
-                registeredAppId = context.RegisteredAppId,
-                pluginRegistered = false,
-                connectionVerified = false
-            }, new JsonSerializerOptions { WriteIndented = true }));
-            void Write(string path, string content)
-            {
-                using var writer = new StreamWriter(archive.CreateEntry(path).Open());
-                writer.Write(content);
-            }
-        }
-        return Convert.ToBase64String(bytes.ToArray());
     }
 
     [GeneratedRegex("^plugin_asdk_app_[a-z0-9]{1,100}$", RegexOptions.CultureInvariant)]

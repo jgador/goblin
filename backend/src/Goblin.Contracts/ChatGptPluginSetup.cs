@@ -70,12 +70,11 @@ public sealed class PluginCreatorTool
 
 public sealed class ChatGptPluginDraft
 {
-    public ChatGptPluginDraft(string description, string creatorPrompt, string skillMarkdown, string model,
+    public ChatGptPluginDraft(string description, string creatorPrompt, string model,
         long durationMs, PluginCreatorAccess creatorAccess)
     {
         Description = description;
         CreatorPrompt = creatorPrompt;
-        SkillMarkdown = skillMarkdown;
         Model = model;
         DurationMs = durationMs;
         CreatorAccess = creatorAccess;
@@ -83,7 +82,6 @@ public sealed class ChatGptPluginDraft
 
     public string Description { get; }
     public string CreatorPrompt { get; }
-    public string SkillMarkdown { get; }
     public string Model { get; }
     public long DurationMs { get; }
     public PluginCreatorAccess CreatorAccess { get; }

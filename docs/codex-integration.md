@@ -14,7 +14,7 @@ are not requirements for other runtimes. See [architecture](architecture.md).
 | `backend/src/Goblin.Integrations.Codex/Authentication.cs` | Serialized login and logout, API-key verification, safe account summaries, and connection checks |
 | `backend/src/Goblin.Integrations.Codex/PromptRunner.cs` | Connection-check thread and turn, final reply text, interrupt and unsubscribe on cleanup |
 | `backend/src/Goblin.Integrations.Codex/PluginCreatorProbe.cs` | Read-only official creator skill and account-scoped app capability metadata |
-| `backend/src/Goblin.Integrations.Codex/PluginPreparation.cs` | Bundled preparation skill, bounded description generation, and server-owned public connection handoff |
+| `backend/src/Goblin.Integrations.Codex/PluginPreparation.cs` | Bundled preparation skill, bounded description generation, and server-owned public connection request |
 | `backend/src/Goblin.Integrations.Codex/CodexWorkRunner.cs` | Durable Work turns: runtime input, progress, session reference, result or question, and safe failures |
 | `backend/src/Goblin.Web` | Workspace paths, owner sessions, Host and Origin checks, static assets, and HTTP routes (`Access/`, `Http/Endpoints/`) |
 | Rust Codex App Server and Core | Credential storage and refresh, conversation context, turns, tokens, compaction, model metadata, and runtime behavior |
@@ -47,7 +47,7 @@ and then `thread/unsubscribe`; if the interrupt fails, the connection is retired
 
 ## Plugin preparation
 
-The optional [ChatGPT preparation flow](chatgpt-integration.md#prepare-a-plugin-creator-handoff-with-codex)
+The optional [ChatGPT preparation flow](chatgpt-integration.md#prepare-a-plugin-creator-request-with-codex)
 requires a saved ChatGPT account and uses the controller's existing private Codex
 home. It shares the account-operation queue, single-prompt guard, and durable
 connection verification reservation with connection checks. Account changes cannot
@@ -64,13 +64,14 @@ installed. Missing source or rejected RPCs cannot enable automatic creation.
 `PluginSetupSkill` installs the embedded Goblin-authored `goblin-plugin-setup`
 asset under `codex/skills/` with owner-only permissions, refreshes `skills/list`,
 and requires the runtime to discover that exact path as enabled before generation.
-`PluginPreparation` passes
-it as an explicit `skill` input to `PromptRunner` with a closed description-only
-output schema. The generation thread enables skill instructions and retains the
+`PluginPreparation` passes it as an explicit `skill` input to `PromptRunner` with a
+closed description-only output schema. The generation thread enables skill
+instructions and retains the
 ordinary connection check's disabled tools, read-only sandbox, disabled network,
 ephemeral history, and no-approval policy. The model supplies display text only;
-native code assembles the connection details and next action. An interactive
-server request is rejected with `-32601` and ends this turn with
+native code assembles the copyable connection request. The helper stays in Goblin's
+private Codex home; it is not returned in the HTTP response or a downloadable ZIP.
+An interactive server request is rejected with `-32601` and ends this turn with
 `plugin_manual_action_required`. No creator tool is called and no browser or
 developer-home credentials are imported.
 
@@ -130,7 +131,7 @@ reservation fencing, cancellation, and interactive-action rejection.
 checks discovery of the embedded skill through `skills/list`, and verifies the
 read-only skill-thread configuration without submitting a model task. Neither
 establishes authenticated model or Plugin Creator coverage. Follow the
-[manual acceptance test](plugin-testing.md#test-the-codex-preparation-handoff)
+[manual acceptance test](plugin-testing.md#test-the-codex-preparation-request)
 for the real account, creator, OAuth, and tunnel.
 
 Node.js builds the browser assets, provides npm's pinned Codex package, and runs test

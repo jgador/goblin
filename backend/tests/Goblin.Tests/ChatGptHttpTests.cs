@@ -107,7 +107,7 @@ public sealed class ChatGptHttpTests
     }
 
     [Fact]
-    public async Task OwnerPreparesAHandoffUsingServerOwnedMetadataWithoutRegisteringOrSharingWork()
+    public async Task OwnerPreparesARequestUsingServerOwnedMetadataWithoutRegisteringOrSharingWork()
     {
         var authentication = new PluginAuthentication();
         await using Host host = await Host.CreateAsync(pluginAuthentication: authentication);
@@ -125,14 +125,13 @@ public sealed class ChatGptHttpTests
         Assert.False(result.GetProperty("pluginRegistered").GetBoolean());
         Assert.False(result.GetProperty("connectionVerified").GetBoolean());
         Assert.False(result.GetProperty("creatorAccess").GetProperty("automaticCreationAvailable").GetBoolean());
-        using var bytes = new MemoryStream(Convert.FromBase64String(result.GetProperty("archiveBase64").GetString()!));
-        using var archive = new System.IO.Compression.ZipArchive(bytes);
-        Assert.Equal(new[] { "connection.json", "creator-prompt.txt", "skills/goblin-plugin-setup/SKILL.md" }, archive.Entries.Select(e => e.FullName).Order());
-        using var reader = new StreamReader(archive.GetEntry("connection.json")!.Open());
-        string metadata = await reader.ReadToEndAsync();
-        Assert.DoesNotContain("clientSecret", metadata);
-        Assert.DoesNotContain("ownerSubject", metadata);
-        Assert.DoesNotContain("workId", metadata);
+        Assert.Equal("Fixture creator prompt", result.GetProperty("creatorPrompt").GetString());
+        string payload = result.GetRawText();
+        Assert.False(result.TryGetProperty("archiveBase64", out _));
+        Assert.DoesNotContain("goblin-plugin-setup", payload);
+        Assert.DoesNotContain("clientSecret", payload);
+        Assert.DoesNotContain("ownerSubject", payload);
+        Assert.DoesNotContain("workId", payload);
         Assert.Equal(0, host.Tokens.Reads);
     }
 
@@ -167,7 +166,7 @@ public sealed class ChatGptHttpTests
         {
             Preparations++;
             Context = context;
-            return new("Fixture private plugin description", "Fixture creator prompt", "---\nname: goblin-plugin-setup\n---\n", "fixture-model", 1,
+            return new("Fixture private plugin description", "Fixture creator prompt", "fixture-model", 1,
                 await CheckPluginCreatorAsync(token));
         }
         public Task<AuthenticationState> LoginChatGPTAsync() => throw new NotSupportedException();

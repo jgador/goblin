@@ -54,7 +54,6 @@ public sealed class CodexClientTests
         Assert.Contains("client_secret_basic", draft.CreatorPrompt);
         Assert.Contains("goblin_ping", draft.CreatorPrompt);
         Assert.Equal("test-model", draft.Model);
-        Assert.Contains("name: goblin-plugin-setup", draft.SkillMarkdown);
         string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "requests.jsonl"));
         using JsonDocument generation = JsonDocument.Parse(Assert.Single(requests, x => x.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal)));
         JsonElement turn = generation.RootElement.GetProperty("params");
@@ -63,7 +62,7 @@ public sealed class CodexClientTests
         Assert.Equal(PluginSetupSkill.Name, skill.GetProperty("name").GetString());
         string path = skill.GetProperty("path").GetString()!;
         Assert.StartsWith(fixture.Workspace.CodexHome, path, StringComparison.Ordinal);
-        Assert.Equal(draft.SkillMarkdown, await File.ReadAllTextAsync(path));
+        Assert.Contains("name: goblin-plugin-setup", await File.ReadAllTextAsync(path));
         Assert.False(turn.GetProperty("sandboxPolicy").GetProperty("networkAccess").GetBoolean());
         Assert.Equal("never", turn.GetProperty("approvalPolicy").GetString());
         Assert.Equal(new[] { "description" }, turn.GetProperty("outputSchema").GetProperty("required").EnumerateArray().Select(x => x.GetString()));

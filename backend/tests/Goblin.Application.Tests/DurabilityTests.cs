@@ -1671,7 +1671,7 @@ public sealed partial class DurabilityTests
             PromptCalls++;
             PromptEntered.TrySetResult();
             await PromptRelease.Task.WaitAsync(token);
-            return new("Fixture description", "Fixture request", "Fixture skill", "fixture-model", 1, await CheckPluginCreatorAsync(token));
+            return new("Fixture description", "Fixture request", "fixture-model", 1, await CheckPluginCreatorAsync(token));
         }
 
         public async Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)

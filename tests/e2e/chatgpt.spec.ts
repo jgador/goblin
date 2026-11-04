@@ -18,7 +18,9 @@ async function fixture(page: Page, configured = true) {
         scope: "openid offline_access goblin.work.read",
         ownerSubject: configured ? "owner-<img src=x>" : null,
         clientConfigured: configured,
-        redirectUri: null,
+        redirectUri: configured
+            ? "https://chatgpt.com/connector_platform_oauth_redirect"
+            : null,
         environmentVariables: {
             publicOrigin: "GOBLIN_PUBLIC_ORIGIN",
             enabled: "GOBLIN_CHATGPT_ENABLED",
@@ -95,7 +97,6 @@ async function fixture(page: Page, configured = true) {
                 model: "fixture-model",
                 durationMs: 1,
                 creatorAccess,
-                archiveBase64: "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==",
                 pluginRegistered: false,
                 connectionVerified: false,
             };
@@ -153,10 +154,19 @@ async function fixture(page: Page, configured = true) {
     };
 }
 
-test("Codex preparation produces a handoff without confirming plugin installation", async ({
+test("Codex preparation provides a copyable request without a ZIP or installation confirmation", async ({
     page,
 }) => {
     const { writes } = await fixture(page);
+    await page.addInitScript(() => {
+        Object.defineProperty(navigator, "clipboard", {
+            value: {
+                writeText: async (value: string) => {
+                    Reflect.set(window, "copiedCreatorRequest", value);
+                },
+            },
+        });
+    });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("/settings?section=chatgpt");
@@ -187,13 +197,23 @@ test("Codex preparation produces a handoff without confirming plugin installatio
             "I installed the plugin, signed in, and can see its tools in ChatGPT.",
         ),
     ).not.toBeChecked();
-    const download = page.waitForEvent("download");
+    await expect(
+        page.getByRole("button", { name: "Save creator handoff ZIP" }),
+    ).toHaveCount(0);
+    const request = await page
+        .getByLabel("Plugin Creator request", { exact: true })
+        .inputValue();
     await page
-        .getByRole("button", { name: "Save creator handoff ZIP" })
+        .getByRole("button", {
+            name: "Copy plugin creator request",
+            exact: true,
+        })
         .click();
-    expect((await download).suggestedFilename()).toBe(
-        "goblin-creator-handoff.zip",
-    );
+    await expect
+        .poll(() =>
+            page.evaluate(() => Reflect.get(window, "copiedCreatorRequest")),
+        )
+        .toBe(request);
     expect(
         writes.filter((write) => write.path.endsWith("/creator/prepare")),
     ).toEqual([
@@ -225,10 +245,13 @@ test("Codex preparation produces a handoff without confirming plugin installatio
         page.getByLabel("Plugin Creator request", { exact: true }),
     ).toHaveCount(0);
     await expect(
-        page.getByRole("button", { name: "Save creator handoff ZIP" }),
+        page.getByRole("button", {
+            name: "Copy plugin creator request",
+            exact: true,
+        }),
     ).toHaveCount(0);
     await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "Prepare a new handoff",
+        "Prepare a new request",
     );
 });
 
@@ -328,9 +351,7 @@ test("private setup guides real actions, distinguishes failed checks, and preser
     await expect(
         page.getByRole("heading", { name: "Set up secure sign-in" }),
     ).toBeFocused();
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector_platform_oauth_redirect");
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
     await page
         .getByRole("button", { name: "Check provider and storage" })
         .click();
@@ -342,9 +363,7 @@ test("private setup guides real actions, distinguishes failed checks, and preser
     await expect(
         page.getByRole("button", { name: "Continue to Install" }),
     ).toBeDisabled();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
-        "https://chatgpt.com/connector_platform_oauth_redirect",
-    );
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
     verification.discovery = true;
     await page
         .getByRole("button", { name: "Check provider and storage" })
@@ -469,13 +488,21 @@ test("unconfigured setup generates usable settings inline and detects enablement
     );
 });
 
-test("client callback and secret are managed in Goblin without storing the secret", async ({
+test("first-time setup creates the secret before collecting ChatGPT's callback during Install", async ({
     page,
 }) => {
-    const { state, writes } = await fixture(page);
+    const { state, writes, verification } = await fixture(page);
     state.clientConfigured = false;
+    state.redirectUri = null;
+    verification.discovery = verification.issuerResponses = true;
     await page.goto("/settings?section=chatgpt");
-    await goToStep(page, "Sign-in");
+    await goToStep(page, "Install");
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
+    await page.getByRole("button", { name: "Go to Sign-in" }).click();
+    await expect(
+        page.getByRole("heading", { name: "Set up secure sign-in" }),
+    ).toBeFocused();
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
     await page.getByRole("button", { name: "Create OAuth client" }).click();
     await expect(
         page.getByLabel("OAuth client secret", { exact: true }),
@@ -484,14 +511,56 @@ test("client callback and secret are managed in Goblin without storing the secre
         redirectUri: "",
         rotateSecret: false,
     });
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
+    await page
+        .getByRole("heading", { name: "Set up secure sign-in" })
+        .scrollIntoViewIfNeeded();
+    await mkdir(".artifacts/chatgpt-callback/screenshots", {
+        recursive: true,
+    });
+    await page.screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/client-preparation.png",
+        fullPage: true,
+    });
+    await page
+        .getByRole("button", { name: "Check provider and storage" })
+        .click();
+    await page.getByRole("button", { name: "Continue to Install" }).click();
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveAttribute(
+        "required",
+        "",
+    );
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    await expect(page.getByLabel("Generate a new client secret")).toHaveCount(
+        0,
+    );
+    const clientWrites = () =>
+        writes.filter((write) => write.path.endsWith("/client"));
+    await page.getByRole("button", { name: "Save OAuth client" }).click();
+    expect(clientWrites()).toHaveLength(1);
+    await page.screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/awaiting-callback.png",
+        fullPage: true,
+    });
     await page
         .getByLabel("ChatGPT OAuth callback")
         .fill("https://chatgpt.com/connector_platform_oauth_redirect");
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    await goToStep(page, "Sign-in");
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
+    await goToStep(page, "Install");
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+    );
     await page.getByRole("button", { name: "Save OAuth client" }).click();
     expect(writes.at(-1)?.body).toEqual({
         redirectUri: "https://chatgpt.com/connector_platform_oauth_redirect",
         rotateSecret: false,
     });
+    await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
+    await expect(
+        page.getByLabel("OAuth client secret", { exact: true }),
+    ).toHaveValue("fixture-oauth-secret");
     expect(
         await page.evaluate(() => localStorage.getItem("goblin.chatgpt.setup")),
     ).not.toContain("fixture-oauth-secret");
@@ -501,6 +570,72 @@ test("client callback and secret are managed in Goblin without storing the secre
     ).toHaveCount(0);
     await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
         state.redirectUri!,
+    );
+});
+
+test("replacing a client secret preserves the saved callback and clears installation confirmation", async ({
+    page,
+}) => {
+    const { state, writes } = await fixture(page);
+    const savedCallback = state.redirectUri;
+    await page.goto("/settings?section=chatgpt");
+    await goToStep(page, "Install");
+    await page.getByLabel("I installed the plugin").check();
+    await page
+        .getByLabel("ChatGPT OAuth callback")
+        .fill("https://chatgpt.com/connector/oauth/unsaved-callback");
+    await goToStep(page, "Sign-in");
+    await page
+        .getByText("Need a replacement client secret?", { exact: true })
+        .click();
+    await page
+        .getByRole("button", { name: "Generate new client secret" })
+        .click();
+    expect(writes).toHaveLength(0);
+    await page
+        .getByLabel(
+            "Generate a new client secret and revoke previous connections",
+        )
+        .check();
+    await page
+        .getByRole("button", { name: "Generate new client secret" })
+        .click();
+    expect(writes).toEqual([
+        {
+            path: "/api/integrations/chatgpt/client",
+            body: { redirectUri: savedCallback, rotateSecret: true },
+        },
+    ]);
+    expect(state.redirectUri).toBe(savedCallback);
+    await goToStep(page, "Install");
+    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
+    await page.reload();
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
+        savedCallback!,
+    );
+});
+
+test("saving a different callback requires a fresh installation confirmation", async ({
+    page,
+}) => {
+    const { writes } = await fixture(page);
+    await page.goto("/settings?section=chatgpt");
+    await goToStep(page, "Install");
+    await page.getByLabel("I installed the plugin").check();
+    await page
+        .getByLabel("ChatGPT OAuth callback")
+        .fill("https://chatgpt.com/connector/oauth/new-callback");
+    await page.getByRole("button", { name: "Save OAuth client" }).click();
+    expect(writes.at(-1)?.body).toEqual({
+        redirectUri: "https://chatgpt.com/connector/oauth/new-callback",
+        rotateSecret: false,
+    });
+    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
+    await expect(
+        page.getByRole("button", { name: "Continue to Share Work" }),
+    ).toBeDisabled();
+    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
+        "restart the connection",
     );
 });
 
@@ -517,7 +652,7 @@ test("progress resumes without storing drafts or treating old provider checks as
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
     await goToStep(page, "Share Work");
-    await goToStep(page, "Sign-in");
+    await goToStep(page, "Install");
     await page
         .getByLabel("ChatGPT OAuth callback")
         .fill("https://chatgpt.com/connector/oauth/unsaved-callback");
@@ -654,7 +789,6 @@ test("starting setup again clears browser confirmations and drafts without revok
     await page.goto("/settings?section=chatgpt");
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
-    await goToStep(page, "Sign-in");
     await page
         .getByLabel("ChatGPT OAuth callback")
         .fill("https://chatgpt.com/connector/oauth/draft");
@@ -668,7 +802,6 @@ test("starting setup again clears browser confirmations and drafts without revok
     ).toBeVisible();
     await goToStep(page, "Install");
     await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
-    await goToStep(page, "Sign-in");
     await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
         state.redirectUri ?? "",
     );

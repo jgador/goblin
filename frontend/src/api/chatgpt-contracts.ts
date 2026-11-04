@@ -52,7 +52,6 @@ export type ChatGptCreatorDraft = {
     model: string;
     durationMs: number;
     creatorAccess: PluginCreatorAccess;
-    archiveBase64: string;
     pluginRegistered: boolean;
     connectionVerified: boolean;
 };

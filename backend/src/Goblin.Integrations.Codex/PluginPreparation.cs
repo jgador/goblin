@@ -81,7 +81,7 @@ internal sealed class PluginPreparation
             "Keep secrets out of chat and files. I will enter the client secret in ChatGPT's OAuth form and save its exact callback in Goblin. " +
             "I will complete Install/Connect, sign in to Goblin, approve consent, and test goblin_ping through my tunnel. " +
             "Do not claim installation or authenticated connectivity until those actions are completed.";
-        return new(description, prompt, PluginSetupSkill.Markdown, model, duration, access);
+        return new(description, prompt, model, duration, access);
     }
 
     [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]

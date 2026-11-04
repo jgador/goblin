@@ -217,6 +217,7 @@ export function mountChatGpt(root: HTMLElement) {
             creatorAccess = undefined;
             creatorDraft = undefined;
             drafts.delete("client");
+            drafts.delete("callback");
             drafts.delete("grant");
             discardDrafts = true;
             restoreProgress();
@@ -288,6 +289,7 @@ export function mountChatGpt(root: HTMLElement) {
         if (name === "step") return navigate(Number(button.dataset.step));
         if (name === "private" || name === "public") return navigate(0, name);
         if (name === "prepare") return navigate(0, "private");
+        if (name === "provider") return navigate(1, "private");
         if (name === "share") return navigate(3, "private");
         if (name === "back") return navigate(Math.max(0, step - 1));
         if (name === "next" && state && completed(model())[step]) {
@@ -332,23 +334,6 @@ export function mountChatGpt(root: HTMLElement) {
             );
             announce(
                 "Plugin ZIP saved. Upload it in the OpenAI submission portal.",
-            );
-            return;
-        }
-        if (name === "creator/download" && creatorDraft) {
-            saveFile(
-                new Blob(
-                    [
-                        Uint8Array.from(atob(creatorDraft.archiveBase64), (c) =>
-                            c.charCodeAt(0),
-                        ),
-                    ],
-                    { type: "application/zip" },
-                ),
-                "goblin-creator-handoff.zip",
-            );
-            announce(
-                "Creator handoff saved. This ZIP has no client secret and does not register the plugin.",
             );
             return;
         }
@@ -435,7 +420,7 @@ export function mountChatGpt(root: HTMLElement) {
         ) {
             creatorDraft = undefined;
             root.querySelector("[data-creator-draft]")?.remove();
-            announce("Connection ID changed. Prepare a new handoff to use it.");
+            announce("Connection ID changed. Prepare a new request to use it.");
         }
     }
     async function creatorRequest(suffix: string, body: unknown) {
@@ -444,7 +429,7 @@ export function mountChatGpt(root: HTMLElement) {
         announce(
             suffix.endsWith("check")
                 ? "Checking Plugin Creator access…"
-                : "Preparing the handoff with Codex…",
+                : "Preparing the Plugin Creator request with Codex…",
         );
         try {
             const result = await requestJson<
@@ -463,7 +448,7 @@ export function mountChatGpt(root: HTMLElement) {
                 creatorDraft = result;
                 creatorAccess = result.creatorAccess;
                 announce(
-                    "Handoff prepared. Review it before running Plugin Creator; registration and connection remain manual.",
+                    "Request prepared. Copy it into your Plugin Creator conversation; registration and connection remain manual.",
                 );
             } else {
                 creatorAccess = result;
@@ -513,27 +498,38 @@ export function mountChatGpt(root: HTMLElement) {
                 announce(
                     "Settings generated. Apply them to your Goblin application container, then restart it.",
                 );
-            } else if (form.dataset.chatgptForm === "client") {
+            } else if (
+                form.dataset.chatgptForm === "client" ||
+                form.dataset.chatgptForm === "callback"
+            ) {
+                const savingCallback = form.dataset.chatgptForm === "callback";
+                const redirectUri = savingCallback
+                    ? String(data.get("redirectUri") ?? "").trim()
+                    : (state!.redirectUri ?? "");
                 const result = await api<{ clientSecret: string | null }>(
                     "/client",
                     {
-                        redirectUri: String(
-                            data.get("redirectUri") ?? "",
-                        ).trim(),
-                        rotateSecret: data.has("rotateSecret"),
+                        redirectUri,
+                        rotateSecret:
+                            !savingCallback && data.has("rotateSecret"),
                     },
                 );
                 if (disposed) return;
-                if (result.clientSecret) {
-                    clientSecret = result.clientSecret;
+                if (result.clientSecret) clientSecret = result.clientSecret;
+                if (
+                    result.clientSecret ||
+                    redirectUri !== (state!.redirectUri ?? "")
+                ) {
                     confirmed.delete("installed");
                     resetConnectionTests();
                 }
-                drafts.delete("client");
+                drafts.delete(form.dataset.chatgptForm);
                 discardDrafts = true;
                 await refresh();
                 announce(
-                    "OAuth client saved. Copy a newly generated secret into ChatGPT before leaving this setup session.",
+                    savingCallback
+                        ? "OAuth callback saved. Return to ChatGPT to start sign-in. If an earlier request failed, restart the connection there."
+                        : "OAuth client saved. Save the generated secret, then continue to Install to get ChatGPT's callback.",
                 );
             } else if (form.dataset.chatgptForm === "grant") {
                 await api("/grants", {
