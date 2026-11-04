@@ -195,6 +195,28 @@
 .settings-page .codex-settings .card { background: transparent; }
 .settings-page .codex-settings .footnote { color: var(--muted); }
 .settings-section-select { display: none; }
+.connections-overview > h2 { color: var(--ink); font-size: 22px; letter-spacing: -.025em; margin-bottom: 12px; }
+.connection-list { list-style: none; padding: 0; margin: 24px 0 0; }
+.connection-row { display: flex; align-items: flex-start; gap: 16px; padding: 20px 0; border-top: 1px solid var(--border); }
+.connection-logo { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 32px; height: 32px; object-fit: contain; color: var(--green); }
+.connection-logo svg { width: 26px; height: 26px; }
+.connection-copy { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.connection-copy h3 { margin: 0; font-size: 15px; line-height: 1.5; font-weight: 600; color: var(--ink); }
+.connection-copy > p { margin-top: 4px; font-size: 13px; line-height: 1.65; color: var(--muted); }
+.connection-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: 10px; }
+.connection-status { display: inline-flex; align-items: center; gap: 4px; border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 500; line-height: 1.5; }
+.connection-status svg { width: 13px; height: 13px; }
+.connection-status.neutral { background: #f0f2f1; color: #58645e; }
+.connection-status.connected { background: var(--accent); color: var(--green); }
+.connection-status.attention { background: #fbf5e8; color: #806127; }
+.connection-detail { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.connection-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0; font-size: 12px; text-decoration: none; white-space: nowrap; }
+.connection-action svg { width: 14px; height: 14px; }
+.connection-back { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin-bottom: 20px; color: var(--muted); text-decoration: none; font-size: 13px; }
+.connection-back svg { transform: rotate(180deg); width: 16px; height: 16px; }
+.connection-back[hidden] { display: none; }
+.connection-back:focus-visible, .connection-action:focus-visible { outline: 2px solid var(--control-focus); outline-offset: 3px; }
+@media (forced-colors: active) { .connection-status { border: 1px solid currentColor; } }
 @media (hover: hover) and (pointer: fine) {
     .settings-nav a:hover { background: var(--accent); color: var(--green); }
 }
@@ -218,4 +240,7 @@
     .settings-content .provider-heading { flex-wrap: wrap; }
     .settings-content .provider-default { margin-left: 0; }
     .settings-code { flex-wrap: wrap; }
+    .connection-row { flex-wrap: wrap; gap: 12px; padding-block: 20px; }
+    .connection-copy { flex-basis: calc(100% - 44px); }
+    .connection-action { margin-left: 44px; min-height: 44px; }
 }

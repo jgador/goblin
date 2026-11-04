@@ -28,6 +28,9 @@ test("Slack setup supports manual code entry and explicit owner linking", async 
     await page.route("**/api/github", (route) =>
         route.fulfill({ json: { configured: false } }),
     );
+    await page.route("**/api/integrations/chatgpt", (route) =>
+        route.fulfill({ json: { configured: false } }),
+    );
     await page.route("**/api/system", (route) =>
         route.fulfill({
             json: {
@@ -93,10 +96,9 @@ test("Slack setup supports manual code entry and explicit owner linking", async 
         }
         await route.fulfill({ json: state });
     });
-    await page.goto("/settings?section=integrations");
-    await page.getByRole("link", { name: "Open integrations" }).click();
+    await page.goto("/settings?section=connections");
     await page
-        .getByRole("button", { name: "Connect Slack", exact: true })
+        .getByRole("link", { name: "Connect Slack", exact: true })
         .click();
     await page
         .getByRole("region", { name: "Settings", exact: true })

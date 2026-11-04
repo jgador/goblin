@@ -169,7 +169,7 @@ test("Codex preparation provides a copyable request without a ZIP or installatio
     });
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page
         .getByText("Prepare with your Codex connection", { exact: true })
@@ -259,7 +259,7 @@ test("creator access errors preserve the form and preparation can be cancelled",
     page,
 }) => {
     await fixture(page);
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page
         .getByText("Prepare with your Codex connection", { exact: true })
@@ -271,7 +271,8 @@ test("creator access errors preserve the form and preparation can be cancelled",
             json: {
                 error: {
                     code: "plugin_chatgpt_login_required",
-                    message: "Connect a ChatGPT account in AI connections.",
+                    message:
+                        "Connect a ChatGPT account under Connections → Codex.",
                 },
             },
         }),
@@ -340,7 +341,7 @@ test("private setup guides real actions, distinguishes failed checks, and preser
     const { verification, writes } = await fixture(page);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await expect(
         page.getByRole("heading", { name: "Prepare your instance" }),
     ).toBeVisible();
@@ -442,7 +443,7 @@ test("unconfigured setup generates usable settings inline and detects enablement
     page,
 }) => {
     const { state } = await fixture(page, false);
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await expect(
         page.getByRole("button", { name: "Continue to Sign-in" }),
     ).toBeDisabled();
@@ -495,7 +496,7 @@ test("first-time setup creates the secret before collecting ChatGPT's callback d
     state.clientConfigured = false;
     state.redirectUri = null;
     verification.discovery = verification.issuerResponses = true;
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
     await page.getByRole("button", { name: "Go to Sign-in" }).click();
@@ -578,7 +579,7 @@ test("replacing a client secret preserves the saved callback and clears installa
 }) => {
     const { state, writes } = await fixture(page);
     const savedCallback = state.redirectUri;
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
     await page
@@ -619,7 +620,7 @@ test("saving a different callback requires a fresh installation confirmation", a
     page,
 }) => {
     const { writes } = await fixture(page);
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
     await page
@@ -644,7 +645,7 @@ test("progress resumes without storing drafts or treating old provider checks as
 }) => {
     const { state, verification } = await fixture(page);
     verification.discovery = verification.issuerResponses = true;
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Sign-in");
     await page
         .getByRole("button", { name: "Check provider and storage" })
@@ -686,7 +687,7 @@ test("public submission is a separate workflow with explicit external confirmati
     page,
 }) => {
     const { writes } = await fixture(page);
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await page.getByRole("button", { name: /^Publish publicly/ }).click();
     await expect(
         page.getByRole("heading", { name: "Prepare your public listing" }),
@@ -786,7 +787,7 @@ test("starting setup again clears browser confirmations and drafts without revok
     page,
 }) => {
     const { writes, state } = await fixture(page);
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
     await page
@@ -813,7 +814,7 @@ test("grant failures preserve the form and cannot claim success", async ({
 }) => {
     const fixtureState = await fixture(page);
     fixtureState.reject();
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Share Work");
     await page.getByLabel("Also share the latest approved result").check();
     await shareWork(page);
@@ -839,7 +840,7 @@ test("empty Work and temporary load failures have recovery actions", async ({
 }) => {
     const fixtureState = await fixture(page);
     fixtureState.fail(true);
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await expect(
         page.getByText("Setup is temporarily unavailable."),
     ).toBeVisible();
@@ -866,7 +867,7 @@ test("workflow remains usable without clipboard or browser storage and fits narr
             throw new Error("Storage unavailable");
         };
     });
-    await page.goto("/settings?section=chatgpt");
+    await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page.getByRole("button", { name: "Copy server URL" }).click();
     await expect(page.getByLabel("Server URL", { exact: true })).toBeFocused();
@@ -909,14 +910,16 @@ test("workflow remains usable without clipboard or browser storage and fits narr
     });
 });
 
-test("configured setup does not claim an installed connection in the directory", async ({
+test("configured ChatGPT setup does not claim an installed connection", async ({
     page,
 }) => {
     await fixture(page);
-    await page.goto("/integrations");
-    const row = page.locator(".integration-row").filter({ hasText: "ChatGPT" });
+    await page.goto("/settings?section=connections");
+    const row = page.locator('[data-connection="chatgpt"]');
     await expect(row).toContainText("Configured");
     await expect(row).toContainText("verify sign-in in ChatGPT");
-    await page.getByRole("tab", { name: /^Connected/ }).click();
-    await expect(row).toHaveCount(0);
+    await expect(row.locator(".connection-status")).toHaveText("Configured");
+    await expect(row.locator(".connection-status")).not.toHaveClass(
+        /connected/,
+    );
 });

@@ -103,7 +103,7 @@ configured. Use the public HTTPS URL for the rest of the session.
 
 #### 4. Open Goblin and connect the plugin
 
-Open [Goblin's ChatGPT settings](https://dev.goblinboard.com/settings?section=chatgpt)
+Open [Goblin's ChatGPT settings](https://dev.goblinboard.com/settings?section=connections&provider=chatgpt)
 and enter this installation's Goblin password. For a first installation, follow
 [Install the plugin](#install-the-plugin) below. If the plugin is already
 installed, continue directly to [the connection test](#test-the-connection-without-work).
@@ -118,9 +118,9 @@ the origin is `https://dev.goblinboard.com`. A production connection uses that
 deployment's HTTPS origin instead. OAuth clients, keys, tokens, and Work grants
 belong to the selected instance; create a separate connection for each environment.
 
-1. In Goblin's `/settings?section=chatgpt`, choose **Private plugin**. **Prepare**
-   should show that the OAuth server and MCP endpoint are enabled. **Continue to
-   Sign-in** opens the authentication setup step.
+1. In Goblin's `/settings?section=connections&provider=chatgpt`, choose **Private
+   plugin**. **Prepare** should show that the OAuth server and MCP endpoint are
+   enabled. **Continue to Sign-in** opens the authentication setup step.
 2. In **Sign-in**, click **Create OAuth client** if no client exists. This step
    creates the client without asking for ChatGPT's callback. Copy and save the
    generated secret; it is shown only when created or rotated. Reuse the saved
@@ -175,7 +175,7 @@ Plugin Creator execution, ChatGPT installation, or Chisel connectivity.
    secret, and run **Check provider and storage** as described in
    [Install the plugin](#install-the-plugin). Continue to **Install**. ChatGPT
    supplies the callback later in its connection flow. Keep the tunnel running.
-2. In **AI connections**, authenticate Codex with the intended ChatGPT account.
+2. In **Connections → Codex**, authenticate Codex with the intended ChatGPT account.
    Install or enable the official Plugin Creator in that same account where
    available. An API-key-only connection should receive an explanation that a
    ChatGPT login is required.
@@ -420,7 +420,8 @@ defines the HTTPS and proxy requirements.
 1. Confirm the build includes `goblin_ping`, has PostgreSQL and persistent
    storage, and uses `GOBLIN_CHATGPT_ENABLED=true` with `GOBLIN_PUBLIC_ORIGIN`
    set to its actual HTTPS origin.
-2. Open that origin's `/settings?section=chatgpt` and enter its Goblin owner password.
+2. Open that origin's `/settings?section=connections&provider=chatgpt` and enter
+   its Goblin owner password.
 3. Follow [Install the plugin](#install-the-plugin) with that deployment's MCP URL
    and a separate ChatGPT connection.
 4. Run [the ping test](#test-the-connection-without-work) and verify its response ID

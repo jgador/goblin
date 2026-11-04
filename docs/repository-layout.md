@@ -260,10 +260,11 @@ The frontend build writes JavaScript, HTML, CSS, and static assets to
 `frontend/dist/`. `Goblin.Web` copies this directory into its output and
 published `wwwroot/`. Browser URLs are mapped explicitly in
 `backend/src/Goblin.Web/Http/StaticAssets.cs`; add new browser modules there.
-`/`, `/work`, `/integrations`, `/knowledge`, and `/settings` serve the workspace
+`/`, `/work`, `/knowledge`, and `/settings` serve the workspace
 shell, also with a trailing slash, behind the workspace access screen. Settings
-selects its section with `?section=<name>`; the names are listed in
-`frontend/src/settings/settings.ts`.
+selects its section with `?section=<name>`. Connection details use
+`?section=connections&provider=<name>`; the names and URL parsing are in
+`frontend/src/settings/navigation.ts`.
 The connection panel is shared with Settings through `/connection/panel.html`.
 Runtime assets keep their `/assets/*` URLs, including the bundled Inter fonts.
 Shared platform controls and font declarations live in `frontend/src/controls.css`.

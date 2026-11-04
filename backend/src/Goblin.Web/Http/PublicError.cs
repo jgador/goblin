@@ -35,7 +35,7 @@ public sealed class PublicError : Exception
         ApplicationFailure { Code: "github_connection_required" } => new("repository_unavailable", "Connect GitHub first.", 409),
         ApplicationFailure failure => new(failure.Code, failure.Code switch
         {
-            "plugin_chatgpt_login_required" => "Connect a ChatGPT account in AI connections to prepare the plugin with Codex. An API key does not provide Plugin Creator access.",
+            "plugin_chatgpt_login_required" => "Connect a ChatGPT account under Connections → Codex to prepare the plugin with Codex. An API key does not provide Plugin Creator access.",
             "chatgpt_result_unavailable" => "This Work has no approved result to share. Share its status or approve a result in Goblin first.",
             "chatgpt_grant_limit" => "Revoke unused or expired ChatGPT grants before adding more. An instance supports up to 200 current grants.",
             "external_link_expired" => "This Slack link request expired or has already been used. Start linking again.",

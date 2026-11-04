@@ -192,7 +192,7 @@ function creatorPreparation(m: Workflow) {
               !access.appCallable
             ? "Plugin Creator's skill or hosted tools are unavailable to this Codex connection. Install or enable Plugin Creator in the same ChatGPT account before running the request there."
             : "Plugin Creator's skill and eligible hosted tools are visible. Registration of this existing MCP server still needs manual verification.";
-    return `<details><summary>Prepare with your Codex connection</summary><p>Goblin can use your saved ChatGPT login in AI connections to draft a request for Plugin Creator. This prepares connection details; creating and connecting the plugin remains a manual step.</p>
+    return `<details><summary>Prepare with your Codex connection</summary><p>Goblin can use your saved ChatGPT login under Connections → Codex to draft a request for Plugin Creator. This prepares connection details; creating and connecting the plugin remains a manual step.</p>
         ${action("creator/check", "Check Plugin Creator access")}
         <form data-chatgpt-form="creator"><label>Existing ChatGPT MCP connection ID (optional)<input name="registeredAppId" autocomplete="off" maxlength="116" pattern="plugin_asdk_app_[a-z0-9]{1,100}" placeholder="plugin_asdk_app_…" ${m.creatorPending ? "readonly" : ""}></label><p>If you already registered this MCP server, copy its technical ID from ChatGPT's plugin URL. Otherwise leave this empty.</p><button type="submit" id="chatgpt-creator-prepare">Prepare with Codex</button></form>
         ${m.creatorPending ? action("creator/cancel", "Cancel preparation") : ""}

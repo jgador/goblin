@@ -61,7 +61,14 @@ async function settingsFixture(page: Page) {
                     request.postDataJSON().enabled === "true";
             json = gitHubRepository.enabled ? [gitHubRepository] : [];
         } else if (path === "/api/connections")
-            json = [{ id: "1", name: "Codex", availability: "Available" }];
+            json = [
+                {
+                    id: "1",
+                    runtime: "codex",
+                    name: "Codex",
+                    availability: "Available",
+                },
+            ];
         await route.fulfill({ json });
     });
     return { github, gitHubRepository };
@@ -82,10 +89,10 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     const dialog = page.getByRole("region", { name: "Settings" });
     await expect(dialog).toBeVisible();
     await expect(
-        dialog.getByRole("heading", { name: "AI connections" }),
+        dialog.getByRole("heading", { name: "Connections" }),
     ).toBeVisible();
     await dialog
-        .getByRole("button", { name: "Manage connection", exact: true })
+        .getByRole("link", { name: "Manage Codex", exact: true })
         .click();
     await expect(dialog.getByText("owner@example.test · plus")).toBeVisible();
     await dialog.getByRole("link", { name: "Cluster", exact: true }).click();
@@ -95,7 +102,10 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     await expect(
         dialog.getByText(/Your Goblin login gives you read-only access/),
     ).toBeVisible();
-    await dialog.getByRole("link", { name: "GitHub", exact: true }).click();
+    await dialog
+        .getByRole("link", { name: "Connections", exact: true })
+        .click();
+    await dialog.locator("#connection-github").click();
     await dialog
         .getByRole("button", { name: "Connect GitHub", exact: true })
         .click();
@@ -109,7 +119,10 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
         page.getByPlaceholder("Describe the intended outcome…"),
     ).toHaveValue("Keep this draft while I connect GitHub");
     await page.locator('.sidebar [data-action="settings"]').click();
-    await dialog.getByRole("link", { name: "GitHub", exact: true }).click();
+    await dialog
+        .getByRole("link", { name: "Connections", exact: true })
+        .click();
+    await dialog.locator("#connection-github").click();
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     github.status = "Connected";
     github.login = "owner";
@@ -142,14 +155,14 @@ test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
         .click();
     await page.locator('.sidebar [data-action="settings"]').click();
     const dialog = page.getByRole("region", { name: "Settings" });
-    await page
-        .getByRole("combobox", { name: "Settings section", exact: true })
-        .selectOption("github");
+    await dialog.locator("#connection-github").click();
     await dialog
         .getByRole("button", { name: "Connect GitHub", exact: true })
         .click();
     await page.reload();
-    await expect(page).toHaveURL(/\/settings\?section=github$/);
+    await expect(page).toHaveURL(
+        /\/settings\?section=connections&provider=github$/,
+    );
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     await page.screenshot({
         path: test.info().outputPath("settings-mobile.png"),
@@ -179,11 +192,13 @@ test("settings sections have direct links and restore browser history without lo
         name: "Settings",
         exact: true,
     });
-    await settings.getByRole("link", { name: "GitHub", exact: true }).click();
-    await expect(page).toHaveURL(/\/settings\?section=github$/);
+    await settings.locator("#connection-github").click();
+    await expect(page).toHaveURL(
+        /\/settings\?section=connections&provider=github$/,
+    );
     await page.goBack();
     await expect(
-        settings.getByRole("heading", { name: "AI connections" }),
+        settings.getByRole("heading", { name: "Connections" }),
     ).toBeVisible();
     await page.goBack();
     await expect(draft).toHaveValue(
@@ -210,8 +225,8 @@ test("settings direct links retain the workspace access gate, including trailing
     page,
 }) => {
     for (const path of [
-        "/settings?section=github",
-        "/settings/?section=codex",
+        "/settings?section=connections&provider=github",
+        "/settings/?section=connections&provider=codex",
     ]) {
         const response = await page.goto(path);
         expect(response?.status()).toBe(200);

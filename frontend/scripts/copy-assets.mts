@@ -4,10 +4,10 @@ const root = new URL("../", import.meta.url);
 const output = new URL("dist/", root);
 const controls = await readFile(new URL("src/controls.css", root), "utf8");
 await cp(new URL("public/", root), output, { recursive: true });
-await mkdir(new URL("integrations/", output), { recursive: true });
+await mkdir(new URL("knowledge/", output), { recursive: true });
 await copyFile(
-    new URL("src/integrations/styles.css", root),
-    new URL("integrations/styles.css", output),
+    new URL("src/knowledge/styles.css", root),
+    new URL("knowledge/styles.css", output),
 );
 for (const page of ["connection", "work"]) {
     await mkdir(new URL(`${page}/`, output), { recursive: true });

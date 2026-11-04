@@ -8,24 +8,13 @@ import { mountTimeZonePicker } from "./timezone-picker.js";
 import { requestJson } from "../api/client.js";
 import { ReadScope } from "../api/read-scope.js";
 import type { Agent } from "../api/workspace-contracts.js";
-
-const providers = [
-    "agents",
-    "connections",
-    "codex",
-    "github",
-    "system",
-    "cluster",
-    "logs",
-    "timezone",
-    "integrations",
-    "slack",
-    "chatgpt",
-] as const;
-type Provider = (typeof providers)[number];
-function providerFrom(value: string): Provider {
-    return providers.find((provider) => provider === value) ?? "connections";
-}
+import { Connections } from "./connections.js";
+import {
+    isConnectionProvider,
+    settingsPanels,
+    settingsTarget,
+} from "./navigation.js";
+import type { SettingsSelection } from "./navigation.js";
 
 export class Settings {
     readonly element = document.createElement("section");
@@ -37,12 +26,13 @@ export class Settings {
     private codexDispose?: () => void;
     private githubDispose?: () => void;
     private timezoneDispose?: () => void;
-    private selected?: Provider;
+    private selected?: SettingsSelection;
     private readonly reads = new ReadScope();
+    private readonly connections = new Connections();
 
     constructor(
         private readonly system: SystemResources,
-        private readonly onNavigate: (provider: string) => void,
+        private readonly onNavigate: (provider: SettingsSelection) => void,
     ) {
         this.element.className = "settings-page";
         this.element.dataset.scroll = "settings";
@@ -51,16 +41,9 @@ export class Settings {
             {
                 label: "Workspace",
                 items: [
+                    ["connections", "Connections", "integrations"],
                     ["agents", "Agents", "agents"],
                     ["timezone", "Time & date", "clock"],
-                ],
-            },
-            {
-                label: "Connections",
-                items: [
-                    ["connections", "AI connections", "spark"],
-                    ["github", "GitHub", "branch"],
-                    ["integrations", "Integrations", "integrations"],
                 ],
             },
             {
@@ -72,7 +55,7 @@ export class Settings {
                 ],
             },
         ];
-        this.element.innerHTML = `<header class="settings-page-heading"><div><p class="page-eyebrow">YOUR WORKSPACE</p><h1 id="settings-title" tabindex="-1">Settings</h1><p>Make Goblin feel at home.</p></div><button class="secondary" data-action="return-settings" type="button">${icon("arrow")}<span>Back to workspace</span></button></header><label class="settings-section-select">Settings section<select id="settings-section" aria-label="Settings section" class="field-control select-control">${groups.map((group) => `<optgroup label="${group.label}">${group.items.map(([provider, label]) => `<option value="${provider}">${label}</option>`).join("")}</optgroup>`).join("")}</select></label><div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">${groups.map((group) => `<div class="settings-nav-group"><p>${group.label}</p>${group.items.map(([provider, label, glyph]) => `<a href="/settings?section=${provider}" data-provider="${provider}">${icon(glyph!)}${label}</a>`).join("")}</div>`).join("")}<button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content">${providers.map((provider) => `<section data-provider-panel="${provider}" aria-label="${provider === "system" ? "System resources" : provider === "codex" ? "Codex connection" : provider === "github" ? "GitHub connection" : provider}" class="${provider === "codex" ? "codex-settings" : ""}" hidden></section>`).join("")}</div></div>`;
+        this.element.innerHTML = `<header class="settings-page-heading"><div><h1 id="settings-title" tabindex="-1">Settings</h1><p>Manage your workspace.</p></div><button class="secondary" data-action="return-settings" type="button">${icon("arrow")}<span>Back to workspace</span></button></header><label class="settings-section-select">Settings section<select id="settings-section" aria-label="Settings section" class="field-control select-control">${groups.map((group) => `<optgroup label="${group.label}">${group.items.map(([provider, label]) => `<option value="${provider}">${label}</option>`).join("")}</optgroup>`).join("")}</select></label><div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">${groups.map((group) => `<div class="settings-nav-group"><p>${group.label}</p>${group.items.map(([provider, label, glyph]) => `<a href="/settings?section=${provider}" data-provider="${provider}">${icon(glyph!)}${label}</a>`).join("")}</div>`).join("")}<button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><a class="connection-back" href="/settings?section=connections" data-provider="connections" data-connection-back hidden>${icon("arrow")}Back to connections</a>${settingsPanels.map((provider) => `<section data-provider-panel="${provider}" aria-label="${provider === "system" ? "System resources" : provider === "codex" ? "Codex connection" : provider === "github" ? "GitHub connection" : provider}" class="${provider === "codex" ? "codex-settings" : ""}" hidden></section>`).join("")}</div></div>`;
         this.element
             .querySelector<HTMLSelectElement>("#settings-section")!
             .addEventListener("change", (event) => {
@@ -100,6 +83,7 @@ export class Settings {
     reset() {
         this.generation++;
         this.reads.reset();
+        this.connections.reset();
         this.codexDispose?.();
         this.githubDispose?.();
         this.slackDispose?.();
@@ -120,13 +104,34 @@ export class Settings {
             panel.replaceWith(panel.cloneNode(false));
     }
     open(value = "connections") {
-        this.onNavigate(providerFrom(value));
+        this.onNavigate(settingsTarget(value));
+    }
+    refreshConnections() {
+        if (this.selected === "connections") void this.connections.refresh();
+    }
+    focusSelection(previous?: string) {
+        const target =
+            this.selected === "connections" &&
+            previous &&
+            isConnectionProvider(previous)
+                ? this.element.querySelector<HTMLElement>(
+                      `#connection-${previous}`,
+                  )
+                : this.element.querySelector<HTMLElement>(
+                      "[data-provider-panel]:not([hidden]) h3, [data-provider-panel]:not([hidden]) h2",
+                  );
+        if (target) {
+            if (target.matches("h2, h3")) target.tabIndex = -1;
+            target.focus();
+        } else
+            this.element.querySelector<HTMLElement>("#settings-title")?.focus();
     }
     attach(host: HTMLElement, value: string) {
         host.append(this.element);
-        const provider = providerFrom(value);
+        const provider = settingsTarget(value);
         if (this.selected === provider) return;
         this.selected = provider;
+        if (provider !== "connections") this.connections.deactivate();
         if (provider !== "slack") {
             this.slackDispose?.();
             this.slackDispose = undefined;
@@ -145,17 +150,17 @@ export class Settings {
             .forEach((panel) => {
                 panel.hidden = panel.dataset.providerPanel !== provider;
             });
-        const parent =
-            provider === "codex"
-                ? "connections"
-                : provider === "slack" || provider === "chatgpt"
-                  ? "integrations"
-                  : provider;
+        const parent = isConnectionProvider(provider)
+            ? "connections"
+            : provider;
+        this.element.querySelector<HTMLElement>(
+            "[data-connection-back]",
+        )!.hidden = !isConnectionProvider(provider);
         this.element.querySelector<HTMLSelectElement>(
             "#settings-section",
         )!.value = parent;
         this.element
-            .querySelectorAll<HTMLElement>("[data-provider]")
+            .querySelectorAll<HTMLElement>(".settings-nav [data-provider]")
             .forEach((link) => {
                 const active = link.dataset.provider === parent;
                 link.classList.toggle("selected", active);
@@ -171,7 +176,7 @@ export class Settings {
                 window.dispatchEvent(new Event("goblin-workspace-locked")),
         });
     }
-    private async mount(provider: Provider) {
+    private async mount(provider: SettingsSelection) {
         if (provider === "chatgpt") {
             this.chatgptDispose?.();
             this.chatgptDispose = mountChatGpt(
@@ -179,14 +184,6 @@ export class Settings {
                     '[data-provider-panel="chatgpt"]',
                 )!,
             );
-            return;
-        }
-        if (provider === "integrations") {
-            const panel = this.element.querySelector<HTMLElement>(
-                '[data-provider-panel="integrations"]',
-            )!;
-            panel.innerHTML =
-                '<h3>Integrations</h3><p class="settings-description">Connect and manage external tools in the integrations directory.</p><a class="settings-primary" href="/integrations" data-action="integrations" data-open-directory>Open integrations</a>';
             return;
         }
         if (provider === "slack") {
@@ -238,12 +235,8 @@ export class Settings {
             const panel = this.element.querySelector<HTMLElement>(
                 '[data-provider-panel="connections"]',
             )!;
-            panel.innerHTML = `<h3>AI connections</h3><p class="settings-description">Choose how Goblin connects to the AI that does your work.</p><div class="provider-card"><div class="provider-heading">${icon("spark")}<h4>Codex</h4><span class="provider-default">Default</span></div><p class="settings-description">Connect with your ChatGPT account or an OpenAI API key.</p><button class="settings-primary" data-connect-codex>Manage connection</button></div><p class="settings-description">GitHub repository access is managed separately under GitHub.</p>`;
-            panel
-                .querySelector("[data-connect-codex]")!
-                .addEventListener("click", () => {
-                    this.open("codex");
-                });
+            panel.append(this.connections.element);
+            void this.connections.refresh();
             return;
         }
         if (provider === "cluster") {
@@ -318,14 +311,7 @@ export class Settings {
             if (!response.ok) throw new Error();
             const html = await response.text();
             if (generation !== this.generation) return;
-            panel.innerHTML =
-                '<button class="provider-back" type="button">← AI connections</button>' +
-                html;
-            panel
-                .querySelector(".provider-back")!
-                .addEventListener("click", () => {
-                    this.open("connections");
-                });
+            panel.innerHTML = html;
             const dispose = await mountCodex(
                 panel,
                 undefined,
@@ -336,7 +322,7 @@ export class Settings {
         } catch {
             if (generation !== this.generation) return;
             panel.innerHTML =
-                '<p class="settings-notice" role="alert">Codex settings could not be loaded. Return to AI connections and try again.</p>';
+                '<p class="settings-notice" role="alert">Codex settings could not be loaded. Return to Connections and try again.</p>';
             this.codexMounted = false;
         }
     }

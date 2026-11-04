@@ -79,7 +79,7 @@ new grants. Owner browser sessions reset on restart.
 
 ## Guided private setup
 
-Open `/settings?section=chatgpt` and choose **Private plugin**.
+Open `/settings?section=connections&provider=chatgpt` and choose **Private plugin**.
 
 1. **Prepare:** configure the HTTPS origin and enable ChatGPT. The generated
    settings do not deploy a server or create HTTPS.
@@ -127,8 +127,8 @@ conversations; the user confirms those steps.
 First complete **Prepare** and **Sign-in** to get the public endpoint and OAuth
 client secret. The callback is collected later when ChatGPT displays it. In
 **Private plugin → Install**, expand **Prepare with your Codex connection**.
-Both actions require a saved ChatGPT login in **AI connections**. An API key can
-run ordinary Work but does not establish access to ChatGPT's Plugin Creator.
+Both actions require a saved ChatGPT login in **Connections → Codex**. An API key
+can run ordinary Work but does not establish access to ChatGPT's Plugin Creator.
 
 **Check Plugin Creator access** reads account-scoped app metadata and checks whether
 the official creator skill is available. **Prepare with Codex** also runs Goblin's
@@ -228,9 +228,9 @@ installation.
 ### Optional directory submission
 
 Private customer-created plugins need no public listing. **Publish publicly** in
-`/settings?section=chatgpt` prepares a separate submission; Goblin does not submit
-or publish it. The workflow records operator confirmations, not proof of submission
-or approval. Goblin has no approved listing.
+`/settings?section=connections&provider=chatgpt` prepares a separate submission;
+Goblin does not submit or publish it. The workflow records operator confirmations,
+not proof of submission or approval. Goblin has no approved listing.
 
 Public review needs a stable, publicly reachable HTTPS MCP endpoint; Secure MCP
 Tunnels do not qualify. Customer-specific URL templates are limited to eligible

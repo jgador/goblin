@@ -154,7 +154,7 @@ public sealed class Authentication : ICodexAuthentication, ICodexPluginSetup, ID
         await RefreshAsync();
         lock (_gate)
             if (_account is not ChatGPTAccountView)
-                throw new IntegrationFailure("plugin_chatgpt_login_required", "Connect a ChatGPT account in AI connections to prepare the plugin with Codex. An API key does not provide Plugin Creator access.");
+                throw new IntegrationFailure("plugin_chatgpt_login_required", "Connect a ChatGPT account under Connections → Codex to prepare the plugin with Codex. An API key does not provide Plugin Creator access.");
     }
 
     private Task<T> PluginOperation<T>(Func<Task<T>> operation)

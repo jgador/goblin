@@ -431,7 +431,7 @@ test("Settings keeps one content scroller and exposes repository loading without
     );
     await page.locator('.sidebar [data-action="settings"]').click();
     const dialog = page.getByRole("region", { name: "Settings" });
-    await dialog.getByRole("link", { name: "GitHub", exact: true }).click();
+    await dialog.locator("#connection-github").click();
     await dialog.getByRole("button", { name: "Choose repositories" }).click();
     await expect(
         dialog.getByText("Loading repositories…", { exact: true }),

@@ -354,7 +354,7 @@ impl Relay {
             "Public HTTPS is not serving this local Goblin identity. Inspect relay status; relay stop restores Azure routing."
         );
         println!(
-            "Development relay active: {}\nOpen {}/settings?section=chatgpt to test the local build.\nRun {} to restore Azure's Goblin instance.",
+            "Development relay active: {}\nOpen {}/settings?section=connections&provider=chatgpt to test the local build.\nRun {} to restore Azure's Goblin instance.",
             self.session.origin,
             self.session.origin,
             self.stop_command()

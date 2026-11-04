@@ -179,10 +179,10 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
         .click();
     const settings = page.getByRole("region", { name: "Settings" });
     await expect(
-        settings.getByRole("heading", { name: "AI connections" }),
+        settings.getByRole("heading", { name: "Connections" }),
     ).toBeVisible();
     await settings
-        .getByRole("button", { name: "Manage connection", exact: true })
+        .getByRole("link", { name: "Connect Codex", exact: true })
         .click();
     await expect(
         settings.getByRole("button", { name: "Continue with ChatGPT" }),

@@ -12,7 +12,7 @@ Selected Work uses `/work?item=<id>`.
 New work centers one goal input and an explicit **Create work** action. Creating
 Work saves the goal; execution starts separately from Progress. Connection setup
 guidance appears only when the AI connection needs attention. The Work list comes
-first in the sidebar, with Knowledge, Integrations, Settings, and system resources
+first in the sidebar, with Knowledge, Settings, and system resources
 below it. Agents are available from Settings and the selected Work's composer.
 
 ## Implemented behavior
@@ -66,13 +66,21 @@ the resent command. Refresh reads saved state and never replays commands.
 Untracked conversations store context and offer **Track this work**; they do not
 execute. Unsent drafts survive navigation within the page, not a browser reload.
 
-## Integrations and Knowledge
+## Connections and Knowledge
 
-`/integrations` lists integrations with **All** and **Connected** tabs and a search
-field. GitHub and Slack status come from their APIs. ChatGPT shows only whether it
-is configured and never counts as connected. A failed status read shows
-**Status unavailable**. Microsoft Teams is **Planned** and has no action. Codex
-connections are under Agents and Settings.
+**Settings → Connections** (`/settings?section=connections`) is the shared home
+for Codex, ChatGPT, GitHub, Slack, and Microsoft Teams. One list shows their
+purpose, current status, and a setup or management link. Provider details use
+`/settings?section=connections&provider=<name>`, keep Connections selected in
+Settings navigation, and return through **Back to connections**. Workspace and
+Knowledge shortcuts open these same settings. There is no separate Integrations
+page or provider section in the Settings navigation.
+
+Codex runs Work using the owner's ChatGPT account or API key. The ChatGPT plugin
+reads explicitly shared Work; its configuration status does not attest to an
+installed or authenticated connection. Codex, GitHub, and Slack status come from
+their APIs. A failed read shows **Status unavailable**. Microsoft Teams is
+**Planned** and has no action.
 
 `/knowledge` shows a disabled search and no sources. There is no knowledge
 indexing or retrieval API.

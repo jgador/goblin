@@ -16,6 +16,7 @@ under the [SIL Open Font License 1.1](fonts/OFL.txt). See the
 | `slack/` | Derived app icon for Slack |
 | `fonts/` | Inter Medium, SemiBold, and ExtraBold from the design package |
 | `source/` | Editable Illustrator document (`logo.ai`) and package report (`report.txt`) |
+| `providers/` | Original third-party provider artwork; sources and terms are recorded in the [third-party notices](../../THIRD_PARTY_NOTICES.md) |
 
 SVG, PNG, and JPEG exports use the same base names:
 
@@ -37,6 +38,15 @@ Docker build context. Runtime copies are unchanged unless noted:
   holds the Medium and SemiBold fonts. Register browser URLs for files under
   `frontend/public/assets/` in `backend/src/Goblin.Web/Http/StaticAssets.cs`; the
   frontend build copies them into `frontend/dist/assets/`.
+  `frontend/public/assets/providers/chatgpt.svg` is an unchanged copy of
+  `providers/chatgpt.svg`, the official black OpenAI Blossom mark used to identify
+  ChatGPT in Settings → Connections. Its original proportions, color, and clear
+  space are preserved.
+  `frontend/public/assets/providers/codex.png` is an unchanged copy of
+  `providers/codex.png`, the 128 × 128 icon published in OpenAI's Codex app.
+  Settings → Connections displays it in the same 32 × 32 slot as other providers,
+  retaining the original artwork and transparency. Its source is recorded in
+  the [third-party notices](../../THIRD_PARTY_NOTICES.md).
 - Website: `website/assets/goblin.svg` is `svg/icon-light.svg`, `goblin-dark.svg`
   is `svg/icon-dark.svg`, and the Medium and SemiBold fonts are copied there too.
 - Installer: `goblinctl` embeds `svg/icon-light.svg`, the Medium and SemiBold

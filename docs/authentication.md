@@ -1,11 +1,11 @@
 # Authentication and connection checks
 
 Goblin has one owner password and one Codex connection. Codex signs in with
-ChatGPT device-code login or an OpenAI API key. Open **Settings → AI connections →
-Manage connection** to connect, and a connection check confirms model access for the
-saved account. GitHub uses the official GitHub CLI device flow under **Settings →
-GitHub**. See [execution hosting](execution-hosting.md) for repository authority and
-credential isolation.
+ChatGPT device-code login or an OpenAI API key. Open **Settings → Connections →
+Codex** to connect, and a connection check confirms model access for the saved
+account. GitHub uses the official GitHub CLI device flow under **Settings →
+Connections → GitHub**. See [execution hosting](execution-hosting.md) for repository
+authority and credential isolation.
 
 The private ChatGPT MCP integration uses the owner password for browser sign-in and
 consent through embedded OpenIddict. It has one owner subject. Its OAuth tokens
@@ -31,8 +31,8 @@ To build separately, run `make build`, then `cargo xtask dev --without-database`
 
 On first start, choose and confirm the password in the terminal. Open
 **http://localhost:8787**, enter the password, and select **Open workspace**.
-`/settings?section=codex` opens the Codex connection directly. There is no default
-password.
+`/settings?section=connections&provider=codex` opens the Codex connection directly.
+There is no default password.
 
 Every environment requires `GOBLIN_PASSWORD_HASH_FILE`. The local launcher sets it
 to `.goblin-secrets/owner-password` unless you set another verifier path. A missing

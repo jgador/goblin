@@ -7,7 +7,11 @@ import {
     ConnectionAvailability,
 } from "../api/values.js";
 import { Settings } from "../settings/settings.js";
-import { IntegrationsDirectory } from "../integrations/directory.js";
+import {
+    settingsHref,
+    settingsSelection,
+    settingsTarget,
+} from "../settings/navigation.js";
 import { renderKnowledge } from "../knowledge/page.js";
 import { requestJson, errorMessage } from "../api/client.js";
 import type {
@@ -62,17 +66,13 @@ let selected =
         sessionStorage.getItem("goblin.selectedWork") ??
         "",
     activeChat = "";
-type WorkspaceView =
-    "work" | "chat" | "new" | "integrations" | "knowledge" | "settings";
-const pageFromPath = ():
-    "integrations" | "knowledge" | "settings" | undefined =>
-    /^\/integrations\/?$/.test(location.pathname)
-        ? "integrations"
-        : /^\/knowledge\/?$/.test(location.pathname)
-          ? "knowledge"
-          : /^\/settings\/?$/.test(location.pathname)
-            ? "settings"
-            : undefined;
+type WorkspaceView = "work" | "chat" | "new" | "knowledge" | "settings";
+const pageFromPath = (): "knowledge" | "settings" | undefined =>
+    /^\/knowledge\/?$/.test(location.pathname)
+        ? "knowledge"
+        : /^\/settings\/?$/.test(location.pathname)
+          ? "settings"
+          : undefined;
 let view: WorkspaceView =
         pageFromPath() ??
         (location.pathname.startsWith("/work") && selected ? "work" : "new"),
@@ -81,8 +81,7 @@ let view: WorkspaceView =
     conversationsOpen = false;
 let selectInitialWork =
     !pageFromPath() && !query.has("new") && !query.has("conversation");
-const isDirectoryPage = () =>
-    view === "integrations" || view === "knowledge" || view === "settings";
+const isDirectoryPage = () => view === "knowledge" || view === "settings";
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
@@ -94,7 +93,9 @@ let sessionChecked = false,
     sessionFailures = 0,
     workUnavailable = false;
 let timezoneError = "";
-let settingsSection = query.get("section") ?? "connections";
+let settingsSection = settingsSelection(query);
+if (view === "settings")
+    history.replaceState(null, "", settingsHref(settingsSection));
 let settingsReturn: { view: WorkspaceView; id: string } = {
     view: "new",
     id: "",
@@ -178,16 +179,11 @@ const settings = new Settings(system, (provider) => {
             provider: trigger?.dataset.provider,
         };
     }
+    const previous = settingsSection;
     navigate("settings", provider);
     render();
-    document.getElementById("settings-title")?.focus();
+    settings.focusSelection(previous);
 });
-const integrations = new IntegrationsDirectory(
-    () => {
-        if (authenticated && view === "integrations") render();
-    },
-    (provider) => void settings.open(provider),
-);
 const timezoneSetup = new TimeZoneSetup();
 window.addEventListener("goblin-timezone-changed", () => render(true));
 window.addEventListener("goblin-workspace-locked", () => {
@@ -199,7 +195,7 @@ let gitHubRepositories: GitRepositoryInfo[] = [];
 window.addEventListener("goblin-connections-changed", () => {
     modelCatalogs.clear();
     void refreshConnections();
-    if (authenticated && view === "integrations") void integrations.refresh();
+    if (authenticated) settings.refreshConnections();
 });
 const current = () => work.find((x) => x.work.id === selected);
 function composerWork(): Work | undefined {
@@ -318,7 +314,6 @@ function forgetWorkspace() {
     loaded = false;
     system.reset();
     settings.reset();
-    integrations.reset();
 }
 async function refresh(preserveError = false) {
     if (loading || submission.sending) return;
@@ -347,7 +342,7 @@ async function refresh(preserveError = false) {
             return;
         }
         timezoneSetup.reset();
-        if (view === "integrations") void integrations.refresh();
+        settings.refreshConnections();
         if (query.get("returnTo") === "logs") {
             if (timezoneError) return;
             location.replace("/logs/select/vmui/" + location.hash);
@@ -518,7 +513,7 @@ function message(author: string, text: string, at?: string) {
 function connectionButton() {
     const agent = agents.find((a) => a.isDefault);
     const connection = connections.find((c) => c.id === agent?.connectionId);
-    return `<button class="connection-choice" type="button" data-action="settings" title="Manage AI connections">${icon("spark")}<span class="connection-name">${e(connection?.name ?? "AI connections")}</span>${icon("chevron")}</button>`;
+    return `<button class="connection-choice" type="button" data-action="settings-codex" title="Manage Codex connection">${icon("spark")}<span class="connection-name">${e(connection?.name ?? "Codex")}</span>${icon("chevron")}</button>`;
 }
 function composer(kind: string, placeholder: string) {
     const note =
@@ -559,10 +554,7 @@ function navigate(
     if (
         historyMode === "auto" &&
         (next !== view || (next === "settings" && id !== settingsSection)) &&
-        (isDirectoryPage() ||
-            next === "integrations" ||
-            next === "knowledge" ||
-            next === "settings")
+        (isDirectoryPage() || next === "knowledge" || next === "settings")
     )
         history.pushState(null, "", location.href);
     view = next;
@@ -577,18 +569,12 @@ function navigate(
             "/?conversation=" + encodeURIComponent(id),
         );
     } else if (next === "settings") {
-        settingsSection = id || "connections";
-        history.replaceState(
-            null,
-            "",
-            `/settings?section=${encodeURIComponent(settingsSection)}`,
-        );
+        settingsSection = settingsTarget(id);
+        history.replaceState(null, "", settingsHref(settingsSection));
         search = "";
-    } else if (next === "integrations" || next === "knowledge") {
+    } else if (next === "knowledge") {
         history.replaceState(null, "", `/${next}`);
         search = "";
-        if (authenticated && next === "integrations")
-            void integrations.refresh();
     } else history.replaceState(null, "", "/?new=work");
     draft = drafts.get(draftKey()) ?? "";
     changing = false;
@@ -668,11 +654,11 @@ function renderSidebar() {
         <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w, updatedAt }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${w.id}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)}"><span class="work-card-copy"><span class="work-title">${e(w.objective)}</span><span class="work-card-meta"><span>${e(workAgent(w)?.name ?? "Goblin")}</span><time datetime="${e(updatedAt ?? "")}">${e(relativeTime(updatedAt))}</time></span></span><span class="work-indicator ${statusClass(w)}" aria-label="${e(label(w.attention?.reason ?? w.status))}" title="${e(label(w.attention?.reason ?? w.status))}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "circleCheck" : w.status === WorkStatus.InProgress ? "activity" : "clock")}</span></button>`).join("") || `<p class="sidebar-empty">${search || filter !== "all" ? "No matching work." : loaded ? "Your work will appear here." : "Loading your work…"}</p>`}</nav>
         <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
         <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen || search ? "" : "hidden"}>${chats.map((c) => `<button class="work-card ${view === "chat" && activeChat === c.id ? "selected" : ""}" data-action="select-chat" data-id="${c.id}" aria-current="${view === "chat" && activeChat === c.id ? "page" : "false"}"><span class="work-title">${e(c.title)}</span></button>`).join("") || '<p class="sidebar-empty">Save ideas and context here.</p>'}</nav></div>
-        <nav class="primary-navigation" aria-label="Workspace navigation">${isDirectoryPage() ? `<button class="nav-button" data-action="browse-work">${icon("work")}Work</button>` : ""}<a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><a id="nav-integrations" class="nav-button ${view === "integrations" ? "active" : ""}" href="/integrations" data-action="integrations" aria-current="${view === "integrations" ? "page" : "false"}">${icon("integrations")}Integrations</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
+        <nav class="primary-navigation" aria-label="Workspace navigation">${isDirectoryPage() ? `<button class="nav-button" data-action="browse-work">${icon("work")}Work</button>` : ""}<a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
         <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button></aside>`;
 }
 function renderHeader() {
-    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "integrations" ? "Integrations" : view === "settings" ? "Settings" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
+    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "settings" ? "Settings" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
 }
 function renderSearchResults() {
     if (isDirectoryPage() || !search || !sidebarCollapsed) return "";
@@ -825,13 +811,11 @@ function render(preserveHome = false, forceSelect = false) {
     document.title =
         view === "settings"
             ? "Settings · Goblin"
-            : view === "integrations"
-              ? "Integrations · Goblin"
-              : view === "knowledge"
-                ? "Knowledge · Goblin"
-                : view === "work" && authenticated && current()
-                  ? current()!.work.objective.slice(0, 70) + " · Goblin"
-                  : "Goblin";
+            : view === "knowledge"
+              ? "Knowledge · Goblin"
+              : view === "work" && authenticated && current()
+                ? current()!.work.objective.slice(0, 70) + " · Goblin"
+                : "Goblin";
     const connectionNotice =
         sessionFailures && (sessionChecked || sessionFailures > 1)
             ? '<p class="command-notice" role="status">Could not reach Goblin. Reconnecting…</p>'
@@ -842,7 +826,7 @@ function render(preserveHome = false, forceSelect = false) {
         const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
             <div class="workspace-notices">${connectionNotice}${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
-            ${view === "settings" ? '<div id="settings-host"></div>' : view === "integrations" ? integrations.render() : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
+            ${view === "settings" ? '<div id="settings-host"></div>' : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&
             sameContext &&
@@ -1190,7 +1174,7 @@ document.addEventListener("click", async (event) => {
     }
     const action = target.dataset.action,
         value = target.dataset.value;
-    if (action === "integrations" || action === "knowledge") {
+    if (action === "knowledge") {
         navigate(action);
         render();
         document.getElementById(action + "-title")?.focus();
@@ -1216,42 +1200,6 @@ document.addEventListener("click", async (event) => {
                 ".directory-heading h1, #reply, #work-title-heading",
             )
         )?.focus();
-        return;
-    }
-    if (action === "add-integration") {
-        integrations.openPicker();
-        return;
-    }
-    if (action === "manage-integration") {
-        const provider = target.dataset.provider;
-        if (
-            provider === "github" ||
-            provider === "slack" ||
-            provider === "chatgpt"
-        )
-            await settings.open(provider);
-        return;
-    }
-    if (action === "refresh-integrations") {
-        await integrations.refresh();
-        return;
-    }
-    if (action === "integration-tab") {
-        integrations.tab = value === "connected" ? "connected" : "all";
-        render();
-        return;
-    }
-    if (action === "reset-integrations") {
-        integrations.search = "";
-        integrations.tab = "all";
-        render();
-        const input = root.querySelector<HTMLInputElement>(
-            "#integration-search",
-        );
-        if (input) {
-            input.value = "";
-            input.focus();
-        }
         return;
     }
     if (action === "toggle-model-picker") {
@@ -1289,7 +1237,6 @@ document.addEventListener("click", async (event) => {
     if (
         action === "settings" ||
         action === "settings-agents" ||
-        action === "settings-integrations" ||
         action === "settings-codex" ||
         action === "settings-system" ||
         action === "settings-github"
@@ -1303,9 +1250,7 @@ document.addEventListener("click", async (event) => {
                     ? "codex"
                     : action === "settings-agents"
                       ? "agents"
-                      : action === "settings-integrations"
-                        ? "integrations"
-                        : "connections",
+                      : "connections",
         );
         return;
     }
@@ -1665,14 +1610,6 @@ document.addEventListener("submit", async (event) => {
 document.addEventListener("input", (event) => {
     if (
         event.target instanceof HTMLInputElement &&
-        event.target.id === "integration-search"
-    ) {
-        integrations.search = event.target.value;
-        render();
-        return;
-    }
-    if (
-        event.target instanceof HTMLInputElement &&
         event.target.id === "work-effort"
     ) {
         const choice = modelSelection(composerWork());
@@ -1791,28 +1728,6 @@ function trapFocus(event: KeyboardEvent, selector: string) {
     }
 }
 document.addEventListener("keydown", (event) => {
-    if (integrations.isPickerOpen) return;
-    if (
-        view === "integrations" &&
-        event.target instanceof HTMLElement &&
-        event.target.closest('[role="tablist"]') &&
-        ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-    ) {
-        event.preventDefault();
-        integrations.tab =
-            event.key === "Home"
-                ? "all"
-                : event.key === "End"
-                  ? "connected"
-                  : integrations.tab === "all"
-                    ? "connected"
-                    : "all";
-        render();
-        document
-            .getElementById("integrations-tab-" + integrations.tab)
-            ?.focus();
-        return;
-    }
     const workspaceMenu =
         root.querySelector<HTMLDetailsElement>("#workspace-menu");
     if (event.key === "Escape" && workspaceMenu?.open) {
@@ -1831,11 +1746,7 @@ document.addEventListener("keydown", (event) => {
         event.preventDefault();
         document
             .getElementById(
-                view === "integrations"
-                    ? "integration-search"
-                    : view === "knowledge"
-                      ? "knowledge-search"
-                      : "work-search",
+                view === "knowledge" ? "knowledge-search" : "work-search",
             )
             ?.focus();
         return;
@@ -1948,7 +1859,7 @@ window.addEventListener("popstate", () => {
     navigate(
         section ?? (item ? "work" : conversation ? "chat" : "new"),
         section === "settings"
-            ? (params.get("section") ?? "connections")
+            ? settingsSelection(params)
             : (item ?? conversation ?? ""),
         "restore",
     );
