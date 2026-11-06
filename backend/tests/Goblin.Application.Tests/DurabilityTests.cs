@@ -1655,24 +1655,13 @@ public sealed partial class DurabilityTests
         Assert.Equal(2, authentication.PromptCalls);
     }
 
-    private sealed class CodexAuthentication : ICodexAuthentication, ICodexPluginSetup
+    private sealed class CodexAuthentication : ICodexAuthentication
     {
         public TaskCompletionSource PromptEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource PromptRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int PromptCalls { get; private set; }
         public bool FailPrompt { get; set; }
         public AccountView? Account { get; set; } = new ChatGPTAccountView("owner@example.test", "plus");
-
-        public Task<PluginCreatorAccess> CheckPluginCreatorAsync(CancellationToken token) => Task.FromResult(new PluginCreatorAccess(
-            true, false, null, false, false, false, [], DateTimeOffset.UtcNow));
-
-        public async Task<ChatGptPluginDraft> PreparePluginAsync(ChatGptPluginContext context, CancellationToken token)
-        {
-            PromptCalls++;
-            PromptEntered.TrySetResult();
-            await PromptRelease.Task.WaitAsync(token);
-            return new("Fixture description", "Fixture request", "fixture-model", 1, await CheckPluginCreatorAsync(token));
-        }
 
         public async Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
         {

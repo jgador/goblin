@@ -24,11 +24,19 @@ async function savedAccount(page: Page, account: Account = chatgpt) {
         "runtimes",
         "connections",
         "github/repositories",
+        "cluster",
+        "logs",
     ])
         await page.route(`**/api/${path}`, (route) =>
             route.fulfill({ json: [] }),
         );
     await page.route("**/api/github", (route) =>
+        route.fulfill({ json: { configured: false } }),
+    );
+    await page.route("**/api/integrations/slack", (route) =>
+        route.fulfill({ json: { available: false } }),
+    );
+    await page.route("**/api/integrations/chatgpt", (route) =>
         route.fulfill({ json: { configured: false } }),
     );
     await page.route("**/api/system", (route) =>

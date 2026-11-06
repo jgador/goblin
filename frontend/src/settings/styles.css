@@ -149,6 +149,8 @@
 .chatgpt-task .chatgpt-callback-label { margin: 0 0 8px; color: var(--green); font-size: 12px; font-weight: 600; }
 .chatgpt-task .chatgpt-callback-status { margin: 0; font-weight: 600; }
 .chatgpt-callback-task form { margin-bottom: 0; }
+.chatgpt-callback-instructions { padding-left: 22px; margin: 14px 0 18px; }
+.chatgpt-callback-instructions li { padding-left: 4px; margin-bottom: 10px; }
 .chatgpt-external { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--green); text-underline-offset: 3px; }
 .chatgpt-checks { padding: 0; list-style: none; }
 .chatgpt-checks li { padding: 12px 0; border-bottom: 1px solid var(--border); }

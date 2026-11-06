@@ -33,25 +33,3 @@ export type ChatGptPackage = {
     mcpJson: string;
     archiveBase64: string;
 };
-
-export type PluginCreatorAccess = {
-    runtimeSupported: boolean;
-    skillAvailable: boolean;
-    skillSha256: string | null;
-    appInstalled: boolean;
-    appEnabled: boolean;
-    appCallable: boolean;
-    tools: { name: string; enabled: boolean; readOnly: boolean }[];
-    checkedAt: string;
-    automaticCreationAvailable: boolean;
-};
-
-export type ChatGptCreatorDraft = {
-    description: string;
-    creatorPrompt: string;
-    model: string;
-    durationMs: number;
-    creatorAccess: PluginCreatorAccess;
-    pluginRegistered: boolean;
-    connectionVerified: boolean;
-};

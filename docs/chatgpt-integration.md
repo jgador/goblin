@@ -92,9 +92,12 @@ Open `/settings?section=connections&provider=chatgpt` and choose **Private plugi
 3. **Install:** in ChatGPT, choose **+ → Add custom MCP server**, use the supplied
    `/mcp` URL (or a configured Secure MCP Tunnel), and select OAuth. The client ID
    is `goblin-chatgpt`. In ChatGPT's OAuth settings, choose `client_secret_basic`
-   for **Token endpoint auth method**. Paste the exact callback shown by ChatGPT
-   into **ChatGPT OAuth callback** in Goblin and click **Save callback** before
-   sign-in.
+   for **Token endpoint auth method**. If **Base scopes** is shown, enter the
+   supplied OAuth scopes. ChatGPT displays an OAuth callback: the return URL
+   Goblin uses after sign-in. Goblin must allow this URL before the connection
+   can complete. In **Save ChatGPT's return URL in Goblin**, paste the exact URL
+   into **ChatGPT OAuth callback (return URL)** and click **Save callback** before
+   sign-in. Wait for **Callback saved**, then return to ChatGPT's open form.
    Saving the callback preserves the client secret. The confirmed callback is
    `https://chatgpt.com/connector_platform_oauth_redirect`; use the value shown
    for your connection if it differs. Wildcards and other callback hosts are
@@ -111,8 +114,11 @@ Open `/settings?section=connections&provider=chatgpt` and choose **Private plugi
    requesting a missing result rejects the entire sharing request.
 5. **Test:** follow the [Work access checks](plugin-testing.md#test-work-access).
 
-The **Install** step highlights the callback as **Required before sign-in**, with
-a shortcut to the field and a primary **Save callback** button. Entering a URL
+The **Install** step explains the plugin's purpose and follows the order of the
+setup across two tabs: enter Goblin's details in ChatGPT, save ChatGPT's return
+URL in Goblin, then return to ChatGPT to connect. The callback section is marked
+**Required in Goblin**, explains what the URL does, and identifies where to copy
+and paste it. The primary **Save callback** button persists it; entering a URL
 does not save it. Sign-in instructions and installation confirmation stay
 unavailable until Goblin confirms the callback is saved. Editing a saved callback
 shows **Unsaved changes** and blocks sign-in instructions until those changes
@@ -127,53 +133,6 @@ MCP resource, and owner subject; changing any of them resets progress. Secrets,
 drafts, checks, and Work data are not saved in browser storage. Reloading clears
 the displayed secret and checks. Goblin cannot observe ChatGPT installation or
 conversations; the user confirms those steps.
-
-### Prepare a Plugin Creator request with Codex
-
-First complete **Prepare** and **Sign-in** to get the public endpoint and OAuth
-client secret. The callback is collected later when ChatGPT displays it. In
-**Private plugin → Install**, expand **Prepare with your Codex connection**.
-Both actions require a saved ChatGPT login in **Connections → Codex**. An API key
-can run ordinary Work but does not establish access to ChatGPT's Plugin Creator.
-
-**Check Plugin Creator access** reads account-scoped app metadata and checks whether
-the official creator skill is available. **Prepare with Codex** also runs Goblin's
-bundled `goblin-plugin-setup` skill through the same authenticated App Server. It
-drafts a short description; Goblin supplies the configured MCP URL, issuer, fixed
-OAuth client ID, scopes, and tool names. An optional `plugin_asdk_app_…` technical
-ID identifies an MCP connection already registered in ChatGPT. Leaving it empty
-produces a request for the supported external-MCP registration steps.
-
-The result provides a copyable Plugin Creator request containing the public
-connection details. Copy it into a ChatGPT Work task with the official Plugin
-Creator selected, or a Codex session with the creator's tools available. The
-request contains no OAuth client secret, owner password, Codex credentials, owner
-subject, or Work content. Goblin's preparation skill remains internal; this flow
-does not download a ZIP or install that helper in ChatGPT. Drafts and capability
-results last only while this page is open. Cancellation interrupts generation
-and releases the connection reservation.
-
-Automatic creation is unavailable in this implementation. A manual ChatGPT test
-loaded the official creator skill but reported that its `create_plugin` tool and
-external-MCP registration tools were unavailable in that session. The documented
-local plugin workflow starts with an already registered MCP ID; the Sites workflow
-creates a new hosted server. Registration of Goblin's existing Chisel endpoint
-through creator tools remains unverified. If those tools are unavailable, complete
-**Add custom MCP server** manually or reuse an existing connection.
-Skill or tool visibility therefore never sets `automaticCreationAvailable`,
-`pluginRegistered`, or `connectionVerified` to true. Complete creation,
-Install/Connect, OAuth, and the authenticated ping manually using the
-[acceptance walkthrough](plugin-testing.md#test-the-codex-preparation-request).
-
-The pinned Codex 0.161.0 probe uses `app/installed`, `app/read`, and
-`plugin/skill/read`. The official directory metadata identifies marketplace
-`oai-maintained-plugins`, plugin
-`plugin_connector_1p_e1a10c53223481918a42f1510ec46c1e`, and hosted app
-`connector_openai_plugin_creator`. A successful skill read reports its SHA-256
-fingerprint; the source is not copied into Goblin or executed. Unsupported RPCs
-report capability access as unavailable. App enablement is evaluated in a scoped
-metadata thread, not proof of a granted creation permission. No model turn runs
-in that thread, and no creator tool is invoked.
 
 ## OAuth and access boundaries
 
@@ -272,7 +231,5 @@ connecting user still needs Work grants in Goblin.
 - [ChatGPT OAuth requirements](https://developers.openai.com/plugins/build/auth)
 - [Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt)
 - [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
-- [Codex skills and connectors](https://learn.chatgpt.com/docs/app-server#skills)
 - [Local plugins with a registered MCP server](https://developers.openai.com/plugins/build/plugins#create-and-test-a-plugin-locally-with-an-mcp-server)
-- [Plugin Creator and Sites](https://learn.chatgpt.com/docs/extend/mcp#build-an-mcp-plugin-with-plugin-creator-and-sites)
 - [OpenIddict](https://documentation.openiddict.com/introduction)

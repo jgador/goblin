@@ -36,7 +36,7 @@ try {
             throw new Error("The pinned Codex storage check failed.");
     }
     console.log(
-        "Pinned Rust Codex passed initialization, isolated key storage, packaged skill discovery, read-only ephemeral thread configuration, unsubscribe, process replacement, and logout through the C# client.",
+        "Pinned Rust Codex passed initialization, isolated key storage, read-only ephemeral thread configuration, unsubscribe, process replacement, and logout through the C# client.",
     );
 } finally {
     await rm(dataDir, { recursive: true, force: true });

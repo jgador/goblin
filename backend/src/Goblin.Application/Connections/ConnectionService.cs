@@ -53,28 +53,6 @@ public sealed class ConnectionService
         finally { if (_store is not null) await _store.EndVerificationAsync(ConnectionStore.DefaultConnectionId, available); }
     }
 
-    public Task<PluginCreatorAccess> CheckPluginCreatorAsync(CancellationToken token) =>
-        PluginVerificationAsync(setup => setup.CheckPluginCreatorAsync(token), token);
-
-    public Task<ChatGptPluginDraft> PreparePluginAsync(ChatGptPluginContext context, CancellationToken token) =>
-        PluginVerificationAsync(setup => setup.PreparePluginAsync(context, token), token);
-
-    private async Task<T> PluginVerificationAsync<T>(Func<ICodexPluginSetup, Task<T>> action, CancellationToken token)
-    {
-        if (_authentication is not ICodexPluginSetup setup) throw new InvalidOperationException("Plugin preparation is unavailable.");
-        AuthenticationState state = await StatusAsync(token);
-        if (state.Account is not ChatGPTAccountView) throw new ApplicationFailure("plugin_chatgpt_login_required");
-        if (_store is not null) await _store.BeginVerificationAsync(ConnectionStore.DefaultConnectionId, token);
-        bool available = false;
-        try
-        {
-            T result = await action(setup);
-            available = true;
-            return result;
-        }
-        finally { if (_store is not null) await _store.EndVerificationAsync(ConnectionStore.DefaultConnectionId, available); }
-    }
-
     public async Task<ConnectionView[]> ListAsync(CancellationToken token)
     {
         try { await StatusAsync(token); }

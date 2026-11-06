@@ -2,8 +2,6 @@ import type {
     ChatGptState,
     ChatGptVerification,
     ChatGptPackage,
-    PluginCreatorAccess,
-    ChatGptCreatorDraft,
 } from "../api/chatgpt-contracts.js";
 import { escapeHtml as e } from "../work/presentation.js";
 
@@ -43,9 +41,6 @@ export type Workflow = {
     clientSecret: string;
     callbackValue?: string;
     package?: ChatGptPackage;
-    creatorAccess?: PluginCreatorAccess;
-    creatorDraft?: ChatGptCreatorDraft;
-    creatorPending?: boolean;
 };
 
 export function action(
@@ -177,10 +172,10 @@ function clientPreparation(m: Workflow) {
 function callbackForm(m: Workflow) {
     if (!m.state.clientConfigured)
         return `<p class="chatgpt-callout">Create your OAuth client in Sign-in first, then return here to save ChatGPT's callback.</p>${action("provider", "Go to Sign-in", true)}`;
-    return `<form data-chatgpt-form="callback"><label for="chatgpt-callback-url">ChatGPT OAuth callback<input id="chatgpt-callback-url" name="redirectUri" type="url" required maxlength="512" value="${e(m.callbackValue ?? m.state.redirectUri ?? "")}" aria-describedby="chatgpt-callback-help chatgpt-callback-status" autocomplete="off" placeholder="Paste the exact callback from ChatGPT"></label><p id="chatgpt-callback-help" class="settings-description">Entering the URL does not save it. Click <strong>Save callback</strong> below. Your existing client secret stays the same.</p><button id="chatgpt-save-callback" type="submit" class="settings-primary">Save callback</button><p id="chatgpt-callback-status" class="chatgpt-callback-status" role="status">${callbackFeedback(m)}</p></form>`;
+    return `<form data-chatgpt-form="callback"><label for="chatgpt-callback-url">ChatGPT OAuth callback (return URL)<input id="chatgpt-callback-url" name="redirectUri" type="url" required maxlength="512" value="${e(m.callbackValue ?? m.state.redirectUri ?? "")}" aria-describedby="chatgpt-callback-purpose chatgpt-callback-help chatgpt-callback-status" autocomplete="off" placeholder="https://chatgpt.com/…"></label><p id="chatgpt-callback-help" class="settings-description">Use the exact URL shown by ChatGPT. Entering it does not save it; click <strong>Save callback</strong> below. Wildcards are rejected.</p><button id="chatgpt-save-callback" type="submit" class="settings-primary">Save callback</button><p id="chatgpt-callback-status" class="chatgpt-callback-status" role="status">${callbackFeedback(m)}</p></form>`;
 }
 function callbackTask(m: Workflow) {
-    return `<div class="chatgpt-task chatgpt-callback-task" data-callback-saved="${callbackSaved(m)}"><p class="chatgpt-callback-label" data-callback-label>${callbackSaved(m) ? "Callback saved" : "Required before sign-in"}</p><h5>3. Save ChatGPT's callback before sign-in</h5><p>Copy the exact OAuth callback from ChatGPT's connection form, paste it below, and click <strong>Save callback</strong> before starting sign-in in ChatGPT. Wildcard callbacks are rejected.</p>${callbackForm(m)}</div>`;
+    return `<div class="chatgpt-task chatgpt-callback-task" data-callback-saved="${callbackSaved(m)}"><p class="chatgpt-callback-label" data-callback-label>${callbackSaved(m) ? "Callback saved" : "Required in Goblin"}</p><h5>3. Save ChatGPT's return URL in Goblin</h5><p id="chatgpt-callback-purpose">The OAuth callback is the ChatGPT address Goblin sends you back to after you sign in. Goblin must allow this address before ChatGPT can connect.</p><ol class="chatgpt-callback-instructions"><li><strong>In ChatGPT:</strong> copy the <strong>OAuth callback</strong> URL displayed in the custom MCP server form after entering your connection details. Keep that form open.</li><li><strong>Here in Goblin:</strong> paste that URL below, click <strong>Save callback</strong>, and wait for <strong>Callback saved</strong>.</li></ol>${callbackForm(m)}</div>`;
 }
 function provider(m: Workflow) {
     const v = m.verification;
@@ -192,33 +187,13 @@ function provider(m: Workflow) {
 }
 function install(m: Workflow) {
     const s = m.state;
-    return `<h4 id="chatgpt-step-title" tabindex="-1">Create and install your private plugin</h4><p>Keep Goblin open while you complete the connection in ChatGPT.</p><div data-callback-reminder ${callbackSaved(m) ? "hidden" : ""}><p class="chatgpt-callout"><strong>Required before sign-in:</strong> paste ChatGPT's OAuth callback in Goblin and click <strong>Save callback</strong>.</p>${action("callback", "Go to required callback step")}</div>${creatorPreparation(m)}
-        ${task("1. Open the custom server form", `${external("https://chatgpt.com/plugins", "Open ChatGPT Plugins")}<p>Select <strong>+ → Add custom MCP server</strong>.</p>${copyField("Plugin name", "name", s.name)}${copyField("Description", "description", s.description, true)}`)}
-        ${task("2. Paste your connection details", `<p>Choose <strong>Server URL</strong> and <strong>OAuth</strong>, or your configured Secure MCP Tunnel.</p><p>In ChatGPT's OAuth settings, choose <code>client_secret_basic</code> for <strong>Token endpoint auth method</strong>.</p>${copyField("Server URL", "serverUrl", s.serverUrl!)}${copyField("OAuth client ID", "clientId", s.clientId)}${copyField("OAuth scopes", "scope", s.scope)}${clientSecret(m)}`)}
+    return `<h4 id="chatgpt-step-title" tabindex="-1">Create and install your private plugin</h4><p>Your plugin lets ChatGPT read the Work you choose to share from Goblin.</p><p>Keep Goblin and ChatGPT open in separate tabs. Enter Goblin's connection details in ChatGPT, save ChatGPT's return URL here, then sign in to approve the connection.</p>
+        ${task("1. Open the custom server form in ChatGPT", `${external("https://chatgpt.com/plugins", "Open ChatGPT Plugins")}<p>Select <strong>+ → Add custom MCP server</strong>, then copy the name and description below into that form.</p>${copyField("Plugin name", "name", s.name)}${copyField("Description", "description", s.description, true)}`)}
+        ${task("2. Enter Goblin's connection details in ChatGPT", `<p>In ChatGPT's form, choose <strong>Server URL</strong> and <strong>OAuth</strong>, or your configured Secure MCP Tunnel. Copy the values below into the matching fields there and enter your saved client secret.</p><p>Choose <code>client_secret_basic</code> for <strong>Token endpoint auth method</strong>. If <strong>Base scopes</strong> is shown, use the OAuth scopes below.</p>${copyField("Server URL", "serverUrl", s.serverUrl!)}${copyField("OAuth client ID", "clientId", s.clientId)}${copyField("OAuth scopes", "scope", s.scope)}${clientSecret(m)}`)}
         ${callbackTask(m)}
-        ${task("4. Install and approve the connection", `<div data-callback-blocked ${callbackSaved(m) ? "hidden" : ""}><p class="chatgpt-callout">Finish the required callback step above. Sign-in instructions become available after you click <strong>Save callback</strong> and Goblin confirms it is saved.</p></div><div data-callback-ready ${callbackSaved(m) ? "" : "hidden"}><p>Return to ChatGPT to create and install the plugin, then enter your Goblin password on Goblin's HTTPS sign-in page and approve the connection.</p><p>If sign-in already failed before you saved the callback, restart the connection from ChatGPT to get a fresh request.</p><p>Confirm these tools appear: <code>goblin_ping</code>, <code>goblin_list_work</code>, <code>goblin_get_work_status</code>, <code>goblin_get_work_attention</code>, and <code>goblin_get_work_result</code>.</p><p>To test the connection before sharing Work, select your plugin with <strong>@</strong> in a new ChatGPT conversation and ask “Call goblin_ping now and show every field from the tool response unchanged.” The reply includes a fresh response ID, UTC time, and basic server runtime details. Match the response ID to the goblin_ping response event in Goblin's logs to verify the call. No Work grants or GitHub sign-in are needed.</p></div>${confirm(m, "installed", "I installed the plugin, signed in, and can see its tools in ChatGPT.", !callbackSaved(m))}`)}`;
+        ${task("4. Return to ChatGPT and connect", `<div data-callback-blocked ${callbackSaved(m) ? "hidden" : ""}><p class="chatgpt-callout">Save the return URL in section 3 above before starting sign-in in ChatGPT. After Goblin shows <strong>Callback saved</strong>, you can continue here.</p></div><div data-callback-ready ${callbackSaved(m) ? "" : "hidden"}><p>Return to the form you left open in ChatGPT to create and install the plugin. When Goblin's HTTPS sign-in page opens, enter your Goblin password and approve the connection. Goblin then sends you back to ChatGPT to finish.</p><p>If sign-in already failed before you saved the callback, restart the connection from ChatGPT to get a fresh request.</p><p>Confirm these tools appear: <code>goblin_ping</code>, <code>goblin_list_work</code>, <code>goblin_get_work_status</code>, <code>goblin_get_work_attention</code>, and <code>goblin_get_work_result</code>.</p><p>To test the connection before sharing Work, select your plugin with <strong>@</strong> in a new ChatGPT conversation and ask “Call goblin_ping now and show every field from the tool response unchanged.” The reply includes a fresh response ID, UTC time, and basic server runtime details. Match the response ID to the goblin_ping response event in Goblin's logs to verify the call. No Work grants or GitHub sign-in are needed.</p></div>${confirm(m, "installed", "I installed the plugin, signed in, and can see its tools in ChatGPT.", !callbackSaved(m))}`)}`;
 }
 
-function creatorPreparation(m: Workflow) {
-    const access = m.creatorAccess;
-    const status = !access
-        ? ""
-        : !access.runtimeSupported
-          ? "The pinned runtime could not read all Plugin Creator capabilities. You can still prepare a request."
-          : !access.skillAvailable ||
-              !access.appInstalled ||
-              !access.appCallable
-            ? "Plugin Creator's skill or hosted tools are unavailable to this Codex connection. Install or enable Plugin Creator in the same ChatGPT account before running the request there."
-            : "Plugin Creator's skill and eligible hosted tools are visible. Registration of this existing MCP server still needs manual verification.";
-    return `<details><summary>Prepare with your Codex connection</summary><p>Goblin can use your saved ChatGPT login under Connections → Codex to draft a request for Plugin Creator. This prepares connection details; creating and connecting the plugin remains a manual step.</p>
-        ${action("creator/check", "Check Plugin Creator access")}
-        <form data-chatgpt-form="creator"><label>Existing ChatGPT MCP connection ID (optional)<input name="registeredAppId" autocomplete="off" maxlength="116" pattern="plugin_asdk_app_[a-z0-9]{1,100}" placeholder="plugin_asdk_app_…" ${m.creatorPending ? "readonly" : ""}></label><p>If you already registered this MCP server, copy its technical ID from ChatGPT's plugin URL. Otherwise leave this empty.</p><button type="submit" id="chatgpt-creator-prepare">Prepare with Codex</button></form>
-        ${m.creatorPending ? action("creator/cancel", "Cancel preparation") : ""}
-        ${status ? `<p class="chatgpt-callout" data-creator-access>${e(status)}</p>` : ""}
-        ${access ? `<details><summary>Creator capability details</summary><p>Checked ${e(access.checkedAt)}. Source fingerprint: ${e(access.skillSha256 ?? "unavailable")}</p><ul>${access.tools.map((tool) => `<li>${e(tool.name)} · ${tool.enabled ? "enabled" : "disabled"}</li>`).join("")}</ul></details>` : ""}
-        ${m.creatorDraft ? `<div data-creator-draft><p>Request prepared. Goblin has not registered a plugin or verified the connection.</p>${copyField("Plugin Creator request", "creator-prompt", m.creatorDraft.creatorPrompt, true)}<p>Copy this request into a ChatGPT Work task with the official Plugin Creator selected, or a Codex session with its creator tools available. If creation tools are unavailable, use Add custom MCP server in ChatGPT. Enter secrets only in the OAuth form, save its callback in Goblin, then complete Install and Connect.</p></div>` : ""}
-    </details>`;
-}
 function share(m: Workflow) {
     const s = m.state;
     return `<h4 id="chatgpt-step-title" tabindex="-1">Choose what ChatGPT can read</h4><p>Signing in grants no Work access. Share only the Work you want your ChatGPT connection to read.</p>

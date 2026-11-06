@@ -13,8 +13,6 @@ are not requirements for other runtimes. See [architecture](architecture.md).
 | `backend/src/Goblin.Integrations.Codex/CodexClient.cs` | Child process, private environment, JSONL framing, initialization, request correlation, notifications, timeouts, restart, and shutdown |
 | `backend/src/Goblin.Integrations.Codex/Authentication.cs` | Serialized login and logout, API-key verification, safe account summaries, and connection checks |
 | `backend/src/Goblin.Integrations.Codex/PromptRunner.cs` | Connection-check thread and turn, final reply text, interrupt and unsubscribe on cleanup |
-| `backend/src/Goblin.Integrations.Codex/PluginCreatorProbe.cs` | Read-only official creator skill and account-scoped app capability metadata |
-| `backend/src/Goblin.Integrations.Codex/PluginPreparation.cs` | Bundled preparation skill, bounded description generation, and server-owned public connection request |
 | `backend/src/Goblin.Integrations.Codex/CodexWorkRunner.cs` | Durable Work turns: runtime input, progress, session reference, result or question, and safe failures |
 | `backend/src/Goblin.Web` | Workspace paths, owner sessions, Host and Origin checks, static assets, and HTTP routes (`Access/`, `Http/Endpoints/`) |
 | Rust Codex App Server and Core | Credential storage and refresh, conversation context, turns, tokens, compaction, model metadata, and runtime behavior |
@@ -44,36 +42,6 @@ requests and retires the process. A new process starts only after the old one ex
 Shutdown sends SIGTERM on Unix (closes stdin on Windows) and kills the process tree
 after a 2-second grace period. Cancelling a connection check sends `turn/interrupt`
 and then `thread/unsubscribe`; if the interrupt fails, the connection is retired.
-
-## Plugin preparation
-
-The optional [ChatGPT preparation flow](chatgpt-integration.md#prepare-a-plugin-creator-request-with-codex)
-requires a saved ChatGPT account and uses the controller's existing private Codex
-home. It shares the account-operation queue, single-prompt guard, and durable
-connection verification reservation with connection checks. Account changes cannot
-switch credentials during preparation; failures and cancellation release the
-reservation. It creates no Work, durable runtime session, OAuth grant, or plugin
-installation record.
-
-The probe creates an ephemeral read-only thread with only Plugin Creator enabled
-for metadata discovery, default-denied app access, and no model turn. It reads
-`app/installed`, `app/read`, and `plugin/skill/read`, returning safe capability
-flags and a skill fingerprint. Remote creator instructions are not executed or
-installed. Missing source or rejected RPCs cannot enable automatic creation.
-
-`PluginSetupSkill` installs the embedded Goblin-authored `goblin-plugin-setup`
-asset under `codex/skills/` with owner-only permissions, refreshes `skills/list`,
-and requires the runtime to discover that exact path as enabled before generation.
-`PluginPreparation` passes it as an explicit `skill` input to `PromptRunner` with a
-closed description-only output schema. The generation thread enables skill
-instructions and retains the
-ordinary connection check's disabled tools, read-only sandbox, disabled network,
-ephemeral history, and no-approval policy. The model supplies display text only;
-native code assembles the copyable connection request. The helper stays in Goblin's
-private Codex home; it is not returned in the HTTP response or a downloadable ZIP.
-An interactive server request is rejected with `-32601` and ends this turn with
-`plugin_manual_action_required`. No creator tool is called and no browser or
-developer-home credentials are imported.
 
 ## Model selection and discovery
 
@@ -124,15 +92,11 @@ the exact steps and the selection and serialization rules.
 See [test selection](repository-layout.md#choosing-verification) for build and test
 scope. Transport and protocol tests use fixtures for serialization, concurrent
 initialization, request matching, UTF-8 framing, malformed or oversized output,
-server requests, timeouts, crashes, restart order, and cleanup. Preparation tests
-also cover account eligibility, source and tool availability, structured output,
-reservation fencing, cancellation, and interactive-action rejection.
-`make codex-test` uses the pinned official binary with synthetic credentials,
-checks discovery of the embedded skill through `skills/list`, and verifies the
-read-only skill-thread configuration without submitting a model task. Neither
-establishes authenticated model or Plugin Creator coverage. Follow the
-[manual acceptance test](plugin-testing.md#test-the-codex-preparation-request)
-for the real account, creator, OAuth, and tunnel.
+server requests, timeouts, crashes, restart order, and cleanup.
+`make codex-test` uses the pinned official binary with synthetic credentials and
+checks credential storage, restart, logout, and the read-only temporary-thread
+configuration without submitting a model task. These checks do not establish
+authenticated model execution.
 
 Node.js builds the browser assets, provides npm's pinned Codex package, and runs test
 tooling. The production host is .NET only and can use a separately installed Codex

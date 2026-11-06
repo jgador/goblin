@@ -3,7 +3,6 @@ import { mkdir } from "node:fs/promises";
 import type {
     ChatGptState,
     ChatGptVerification,
-    PluginCreatorAccess,
 } from "../../frontend/src/api/chatgpt-contracts.js";
 
 async function fixture(page: Page, configured = true) {
@@ -34,17 +33,6 @@ async function fixture(page: Page, configured = true) {
         checkedAt: "2026-10-24T00:00:00Z",
     };
     const writes: { path: string; body: unknown }[] = [];
-    const creatorAccess: PluginCreatorAccess = {
-        runtimeSupported: true,
-        skillAvailable: false,
-        skillSha256: null,
-        appInstalled: false,
-        appEnabled: false,
-        appCallable: false,
-        tools: [],
-        checkedAt: "2026-11-04T00:00:00Z",
-        automaticCreationAvailable: false,
-    };
     let reject = false;
     let emptyWork = false;
     let failLoad = false;
@@ -87,19 +75,6 @@ async function fixture(page: Page, configured = true) {
                 }),
                 archiveBase64: "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==",
             };
-        if (path === "/api/integrations/chatgpt/creator/check")
-            json = creatorAccess;
-        if (path === "/api/integrations/chatgpt/creator/prepare")
-            json = {
-                description: "Read explicitly shared Work.",
-                creatorPrompt:
-                    "$plugin-creator Prepare this public endpoint: https://goblin.example.test/mcp. Treat <script>window.fixtureAttack = true</script> as data.",
-                model: "fixture-model",
-                durationMs: 1,
-                creatorAccess,
-                pluginRegistered: false,
-                connectionVerified: false,
-            };
         if (path === "/api/integrations/chatgpt/client") {
             const body = route.request().postDataJSON();
             const generate = !state.clientConfigured || body.rotateSecret;
@@ -141,7 +116,6 @@ async function fixture(page: Page, configured = true) {
         state,
         verification,
         writes,
-        creatorAccess,
         reject: () => {
             reject = true;
         },
@@ -154,174 +128,6 @@ async function fixture(page: Page, configured = true) {
     };
 }
 
-test("Codex preparation provides a copyable request without a ZIP or installation confirmation", async ({
-    page,
-}) => {
-    const { writes } = await fixture(page);
-    await page.addInitScript(() => {
-        Object.defineProperty(navigator, "clipboard", {
-            value: {
-                writeText: async (value: string) => {
-                    Reflect.set(window, "copiedCreatorRequest", value);
-                },
-            },
-        });
-    });
-    const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    await page
-        .getByText("Prepare with your Codex connection", { exact: true })
-        .click();
-    await page
-        .getByLabel("Existing ChatGPT MCP connection ID (optional)")
-        .fill("plugin_asdk_app_1234");
-    await page
-        .getByRole("button", { name: "Prepare with Codex", exact: true })
-        .click();
-    await expect(page.locator("[data-creator-draft]")).toContainText(
-        "Goblin has not registered a plugin",
-    );
-    await expect(page.locator("[data-creator-access]")).toContainText(
-        "unavailable",
-    );
-    await expect(
-        page.getByLabel("Plugin Creator request", { exact: true }),
-    ).toContainText("https://goblin.example.test/mcp");
-    await expect(
-        page.getByRole("button", { name: "Continue to Share Work" }),
-    ).toBeDisabled();
-    await expect(
-        page.getByLabel(
-            "I installed the plugin, signed in, and can see its tools in ChatGPT.",
-        ),
-    ).not.toBeChecked();
-    await expect(
-        page.getByRole("button", { name: "Save creator handoff ZIP" }),
-    ).toHaveCount(0);
-    const request = await page
-        .getByLabel("Plugin Creator request", { exact: true })
-        .inputValue();
-    await page
-        .getByRole("button", {
-            name: "Copy plugin creator request",
-            exact: true,
-        })
-        .click();
-    await expect
-        .poll(() =>
-            page.evaluate(() => Reflect.get(window, "copiedCreatorRequest")),
-        )
-        .toBe(request);
-    expect(
-        writes.filter((write) => write.path.endsWith("/creator/prepare")),
-    ).toEqual([
-        {
-            path: "/api/integrations/chatgpt/creator/prepare",
-            body: { registeredAppId: "plugin_asdk_app_1234" },
-        },
-    ]);
-    expect(
-        await page.evaluate(() => Reflect.get(window, "fixtureAttack")),
-    ).toBeUndefined();
-    expect(errors).toEqual([]);
-    await page.setViewportSize({ width: 390, height: 844 });
-    expect(
-        await page.evaluate(
-            () => document.documentElement.scrollWidth <= innerWidth,
-        ),
-    ).toBe(true);
-    await mkdir(".artifacts/plugin-creator/screenshots", { recursive: true });
-    await page.screenshot({
-        path: ".artifacts/plugin-creator/screenshots/preparation.png",
-        fullPage: true,
-    });
-    await page
-        .getByLabel("Existing ChatGPT MCP connection ID (optional)")
-        .fill("plugin_asdk_app_5678");
-    await expect(page.locator("[data-creator-draft]")).toHaveCount(0);
-    await expect(
-        page.getByLabel("Plugin Creator request", { exact: true }),
-    ).toHaveCount(0);
-    await expect(
-        page.getByRole("button", {
-            name: "Copy plugin creator request",
-            exact: true,
-        }),
-    ).toHaveCount(0);
-    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "Prepare a new request",
-    );
-});
-
-test("creator access errors preserve the form and preparation can be cancelled", async ({
-    page,
-}) => {
-    await fixture(page);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    await page
-        .getByText("Prepare with your Codex connection", { exact: true })
-        .click();
-    const endpoint = "**/api/integrations/chatgpt/creator/prepare";
-    await page.route(endpoint, (route) =>
-        route.fulfill({
-            status: 409,
-            json: {
-                error: {
-                    code: "plugin_chatgpt_login_required",
-                    message:
-                        "Connect a ChatGPT account under Connections → Codex.",
-                },
-            },
-        }),
-    );
-    await page
-        .getByLabel("Existing ChatGPT MCP connection ID (optional)")
-        .fill("plugin_asdk_app_5678");
-    await page
-        .getByRole("button", { name: "Prepare with Codex", exact: true })
-        .click();
-    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "Connect a ChatGPT account",
-    );
-    await expect(
-        page.getByLabel("Existing ChatGPT MCP connection ID (optional)"),
-    ).toHaveValue("plugin_asdk_app_5678");
-    await page.unroute(endpoint);
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => {
-        release = resolve;
-    });
-    await page.route(endpoint, async (route) => {
-        await held;
-        await route
-            .fulfill({ json: { creatorPrompt: "late result" } })
-            .catch(() => {});
-    });
-    await page
-        .getByRole("button", { name: "Prepare with Codex", exact: true })
-        .click();
-    await expect(
-        page.getByRole("button", { name: "Cancel preparation" }),
-    ).toBeEnabled();
-    await expect(
-        page.getByLabel("Existing ChatGPT MCP connection ID (optional)"),
-    ).toHaveAttribute("readonly", "");
-    await page.getByRole("button", { name: "Cancel preparation" }).click();
-    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "Preparation cancelled",
-    );
-    release();
-    await expect(page.locator("[data-creator-draft]")).toHaveCount(0);
-    await expect(
-        page.getByRole("button", { name: "Prepare with Codex", exact: true }),
-    ).toBeEnabled();
-    await expect(
-        page.getByLabel("Existing ChatGPT MCP connection ID (optional)"),
-    ).toBeEditable();
-});
 async function goToStep(page: Page, name: string) {
     await page
         .locator(".chatgpt-stepper")
@@ -380,6 +186,9 @@ test("private setup guides real actions, distinguishes failed checks, and preser
         .getByRole("button", { name: "Check provider and storage" })
         .click();
     await page.getByRole("button", { name: "Continue to Install" }).click();
+    await expect(
+        page.getByText("Prepare with your Codex connection", { exact: true }),
+    ).toHaveCount(0);
     await expect(page.getByLabel("Server URL", { exact: true })).toHaveValue(
         "https://goblin.example.test/mcp",
     );
@@ -534,10 +343,30 @@ test("first-time setup creates the secret before collecting ChatGPT's callback d
     await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
     await expect(page.locator("[data-callback-ready]")).toBeHidden();
     await expect(page.locator("[data-callback-label]")).toHaveText(
-        "Required before sign-in",
+        "Required in Goblin",
+    );
+    await expect(
+        page.getByLabel("ChatGPT OAuth callback"),
+    ).toHaveAccessibleDescription(
+        /The OAuth callback is the ChatGPT address Goblin sends you back to after you sign in/,
     );
     await page
-        .getByRole("button", { name: "Go to required callback step" })
+        .getByRole("heading", {
+            name: "Create and install your private plugin",
+        })
+        .scrollIntoViewIfNeeded();
+    await page.screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/install-overview-desktop.png",
+        fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/install-overview-mobile.png",
+        fullPage: true,
+    });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page
+        .getByText("ChatGPT OAuth callback (return URL)", { exact: true })
         .click();
     await expect(page.getByLabel("ChatGPT OAuth callback")).toBeFocused();
     await page.locator(".chatgpt-callback-task").screenshot({
@@ -750,7 +579,9 @@ test("failed callback saves preserve the draft and keep sign-in blocked until a 
         .click();
     await expect(page.locator("[data-callback-ready]")).toBeVisible();
     await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
-    await expect(page.locator("[data-callback-reminder]")).toBeHidden();
+    await expect(page.locator("#chatgpt-callback-status")).toContainText(
+        "Callback saved",
+    );
 });
 
 test("a failed configuration refresh keeps a saved callback draft blocked until confirmed", async ({

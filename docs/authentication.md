@@ -128,13 +128,10 @@ tools, hooks, and memories disabled, a read-only sandbox, and no approvals. Acco
 changes and checks run one at a time, so a check cannot switch accounts partway
 through. Failures show safe messages without raw upstream errors or credentials.
 
-The optional [plugin preparation](chatgpt-integration.md#prepare-a-plugin-creator-request-with-codex)
-uses this saved connection too and requires ChatGPT authentication. It shares the
-check queue and reservation, but does not authenticate MCP or create a ChatGPT
-plugin. Its generated description is a real model request; checking creator
-metadata alone submits no model task. Goblin's owner password, OAuth client
-secret, and ChatGPT consent remain separate. Real creator execution and Chisel
-connectivity have a [manual acceptance test](plugin-testing.md#test-the-codex-preparation-request).
+ChatGPT plugin setup uses the manual connection flow in
+[the plugin testing guide](plugin-testing.md#install-the-plugin). Its Goblin owner
+password, OAuth client secret, and ChatGPT consent are separate from the Codex
+connection.
 
 ## Run in Docker
 

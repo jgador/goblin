@@ -6,7 +6,5 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Goblin.Tests" />
-    <InternalsVisibleTo Include="Goblin.TestHost" />
-    <EmbeddedResource Include="Skills/goblin-plugin-setup/SKILL.md" LogicalName="Goblin.PluginSetup.Skill" />
   </ItemGroup>
 </Project>

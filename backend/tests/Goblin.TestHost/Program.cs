@@ -76,15 +76,13 @@ if (config.RealCodex)
         await codex.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start",
             new ApiKeyLoginAccountParams { ApiKey = "sk-goblin-storage-check-this-is-not-a-real-api-key" });
         if ((await auth.StatusAsync()).Account is not ApiKeyAccountView) throw new Exception("Key was not saved.");
-        await PluginSetupSkill.LoadAsync(codex, default);
         if (!OperatingSystem.IsWindows() && File.GetUnixFileMode(Path.Combine(config.DataDir, "codex/auth.json")) != (UnixFileMode.UserRead | UnixFileMode.UserWrite))
             throw new Exception("Credential file permissions are incorrect.");
         ThreadStartResponse thread = await codex.RequestAsync<ThreadStartParams, ThreadStartResponse>("thread/start", new()
         {
             Ephemeral = true,
             ApprovalPolicy = AskForApproval.Never,
-            Sandbox = SandboxMode.ReadOnly,
-            Config = new() { ["skills.include_instructions"] = JsonSerializer.SerializeToElement(true) }
+            Sandbox = SandboxMode.ReadOnly
         });
         if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" || thread.Sandbox is not ReadOnlySandboxPolicy
             || thread.ApprovalPolicy is not StringAskForApproval { Value: AskForApprovalValue.Never })
