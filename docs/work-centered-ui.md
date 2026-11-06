@@ -76,11 +76,11 @@ Settings navigation, and return through **Back to connections**. Workspace and
 Knowledge shortcuts open these same settings. There is no separate Integrations
 page or provider section in the Settings navigation.
 
-Codex runs Work using the owner's ChatGPT account or API key. The ChatGPT plugin
-reads explicitly shared Work; its configuration status does not attest to an
-installed or authenticated connection. Codex, GitHub, and Slack status come from
-their APIs. A failed read shows **Status unavailable**. Microsoft Teams is
-**Planned** and has no action.
+Codex runs Work using the owner's ChatGPT account or API key. The authorized
+private ChatGPT plugin can read and manage all Work; its configuration status
+does not attest to an installed or authenticated connection. Codex, GitHub,
+and Slack status come from their APIs. A failed read shows **Status unavailable**.
+Microsoft Teams is **Planned** and has no action.
 
 `/knowledge` shows a disabled search and no sources. There is no knowledge
 indexing or retrieval API.

@@ -17,12 +17,11 @@ import {
 } from "./chatgpt-workflow.js";
 
 const base = "/api/integrations/chatgpt";
-const progressKey = "goblin.chatgpt.private-setup";
+const progressKey = "goblin.chatgpt.full-work-setup";
 const stepHints = [
     "Enable your instance",
     "Prepare secure access",
     "Connect in ChatGPT",
-    "Choose what to share",
     "Try a conversation",
 ];
 
@@ -31,7 +30,6 @@ export function mountChatGpt(root: HTMLElement) {
     let disposed = false;
     let busy = false;
     let state: ChatGptState | undefined;
-    let work: Workflow["work"] = [];
     let verification: ChatGptVerification | undefined;
     let step = 0;
     let confirmed = new Set<Confirmation>();
@@ -53,7 +51,6 @@ export function mountChatGpt(root: HTMLElement) {
         });
     const model = (): Workflow => ({
         state: state!,
-        work,
         verification,
         confirmed,
         step,
@@ -103,8 +100,8 @@ export function mountChatGpt(root: HTMLElement) {
     }
     function resetConnectionTests() {
         confirmed.delete("listed");
-        confirmed.delete("status");
-        confirmed.delete("denied");
+        confirmed.delete("written");
+        confirmed.delete("revoked");
         saveProgress();
     }
     function render(focusId?: string) {
@@ -124,7 +121,7 @@ export function mountChatGpt(root: HTMLElement) {
         }
         discardDrafts = false;
         const done = state ? completed(model()) : [];
-        root.innerHTML = `<header class="chatgpt-heading"><span class="chatgpt-logo" aria-hidden="true"><img src="/assets/providers/chatgpt.svg" width="28" height="28" alt=""></span><div><h3>ChatGPT plugin</h3><p class="settings-description">Bring the Work you choose to share into ChatGPT.</p></div></header>
+        root.innerHTML = `<header class="chatgpt-heading"><span class="chatgpt-logo" aria-hidden="true"><img src="/assets/providers/chatgpt.svg" width="28" height="28" alt=""></span><div><h3>ChatGPT plugin</h3><p class="settings-description">Read and manage all Work through your private connection.</p></div></header>
             <p class="chatgpt-notice" role="status" data-chatgpt-notice data-tone="${noticeTone}" ${notice ? "" : "hidden"}>${e(notice)}</p>
             ${
                 !state
@@ -132,12 +129,12 @@ export function mountChatGpt(root: HTMLElement) {
                       action("reload", "Reload setup") +
                       "</div>"
                     : `<div class="chatgpt-settings">
-                <div class="chatgpt-summary"><span class="chatgpt-server-status" data-enabled="${state.configured}"><i aria-hidden="true"></i>${state.configured ? "Server enabled" : "Setup required"}</span><span>Read-only access · Shared Work only</span></div>
+                <div class="chatgpt-summary"><span class="chatgpt-server-status" data-enabled="${state.configured}"><i aria-hidden="true"></i>${state.configured ? "Server enabled" : "Setup required"}</span><span>Read and manage all Work</span></div>
                 <div class="chatgpt-workflow">
                 <nav class="chatgpt-progress" aria-label="Plugin setup progress"><p class="chatgpt-rail-label">YOUR CONNECTION</p><ol class="chatgpt-stepper">${setupSteps
                     .map(
                         (label, i) =>
-                            `<li><button type="button" id="chatgpt-step-${i}" data-chatgpt="step" data-step="${i}" data-complete="${done[i]}" ${i === step ? 'aria-current="step"' : ""}><span class="chatgpt-step-number" aria-hidden="true">${done[i] ? "✓" : i + 1}</span><span>${label}<small>${done[i] ? ([0, 1, 3].includes(i) ? "Checked in Goblin" : "You confirmed") : stepHints[i]}</small></span></button></li>`,
+                            `<li><button type="button" id="chatgpt-step-${i}" data-chatgpt="step" data-step="${i}" data-complete="${done[i]}" ${i === step ? 'aria-current="step"' : ""}><span class="chatgpt-step-number" aria-hidden="true">${done[i] ? "✓" : i + 1}</span><span>${label}<small>${done[i] ? ([0, 1].includes(i) ? "Checked in Goblin" : "You confirmed") : stepHints[i]}</small></span></button></li>`,
                     )
                     .join(
                         "",
@@ -150,7 +147,7 @@ export function mountChatGpt(root: HTMLElement) {
                 <div class="chatgpt-step-panel"><div class="chatgpt-step-body"><p class="chatgpt-step-caption">Step ${step + 1} of ${setupSteps.length}</p>${stepContent(model())}</div>
                 <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${setupSteps.length} steps complete</span>${step < setupSteps.length - 1 ? action("next", `Continue to ${setupSteps[step + 1]}`, true, !done[step]) : ""}</div></div>
                 </div>
-                <details class="chatgpt-help"><summary>Need help with this step?</summary><div><p><strong>Cannot connect:</strong> check your HTTPS address and ChatGPT workspace permissions. A tunnel carries MCP traffic; sign-in still needs reachable HTTPS.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve the connection.</p><p><strong>Empty list or access denied:</strong> check shared Work and its expiry.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</div></details>
+                <details class="chatgpt-help"><summary>Need help with this step?</summary><div><p><strong>Cannot connect:</strong> check your HTTPS address and ChatGPT workspace permissions. A tunnel carries MCP traffic; sign-in still needs reachable HTTPS.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve full Work access.</p><p><strong>Work is unavailable:</strong> refresh the connection in ChatGPT, then reconnect if it still has an old read-only token.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</div></details>
                 <div class="chatgpt-meta"><p class="chatgpt-progress-note">${storageAvailable ? "Progress is saved in this browser." : "Progress stays on this page; browser storage is unavailable."} You confirm installation and conversation tests.</p>${action("restart-setup", "Start setup again")}</div>
             </div>`
             }`;
@@ -251,7 +248,6 @@ export function mountChatGpt(root: HTMLElement) {
     }
     async function refresh() {
         const next = await api<ChatGptState>();
-        const choices = next.configured ? await api<typeof work>("/work") : [];
         if (disposed) return;
         const nextScope = JSON.stringify([
             next.issuer,
@@ -266,12 +262,10 @@ export function mountChatGpt(root: HTMLElement) {
             clientSecret = "";
             drafts.delete("client");
             drafts.delete("callback");
-            drafts.delete("grant");
             discardDrafts = true;
             restoreProgress();
         }
         state = next;
-        work = choices;
     }
     async function run(operation: () => Promise<void>) {
         if (busy || disposed) return;
@@ -323,14 +317,13 @@ export function mountChatGpt(root: HTMLElement) {
             verification = undefined;
             navigate(0);
             announce(
-                "Setup progress cleared. Saved OAuth settings and shared Work can be managed in their setup steps.",
+                "Setup progress cleared. Saved OAuth settings and connections remain available.",
             );
             return;
         }
         if (name === "step") return navigate(Number(button.dataset.step));
         if (name === "prepare") return navigate(0);
         if (name === "provider") return navigate(1);
-        if (name === "share") return navigate(3);
         if (name === "back") return navigate(Math.max(0, step - 1));
         if (name === "next" && state && completed(model())[step]) {
             return navigate(Math.min(setupSteps.length - 1, step + 1));
@@ -367,13 +360,6 @@ export function mountChatGpt(root: HTMLElement) {
                         ? "Provider and storage checks passed. Continue to install in ChatGPT."
                         : "Some checks need attention. Follow the fixes below and check again.",
                 );
-            } else if (name === "revoke") {
-                await api("/grants/revoke", { id: button.dataset.id });
-                resetConnectionTests();
-                announce(
-                    "Access revoked. New reads will be denied; an in-progress read may finish.",
-                );
-                await refresh();
             } else if (name === "client/revoke") {
                 await api("/client/revoke", {});
                 confirmed.delete("installed");
@@ -474,18 +460,6 @@ export function mountChatGpt(root: HTMLElement) {
                         ? "OAuth callback saved. Return to ChatGPT to start sign-in. If an earlier request failed, restart the connection there."
                         : "OAuth client saved. Save the generated secret, then continue to Install to get ChatGPT's callback.",
                 );
-            } else if (form.dataset.chatgptForm === "grant") {
-                await api("/grants", {
-                    workId: data.get("workId"),
-                    hours: Number(data.get("hours")),
-                    shareApprovedResult: data.has("shareApprovedResult"),
-                });
-                resetConnectionTests();
-                announce(
-                    "Work shared. Continue to test the new access in ChatGPT.",
-                );
-                form.reset();
-                await refresh();
             }
         });
     }

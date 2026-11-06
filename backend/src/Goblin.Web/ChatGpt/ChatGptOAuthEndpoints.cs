@@ -40,7 +40,7 @@ internal static class ChatGptOAuthEndpoints
         if (form?["decision"].ToString() != "allow")
         {
             string hidden = string.Concat(request.GetParameters().Select(p => $"<input type=\"hidden\" name=\"{Encode(p.Key)}\" value=\"{Encode((string?)p.Value ?? "")}\">"));
-            return Page("Connect ChatGPT to Goblin", "ChatGPT may read Work that you explicitly share. Signing in does not share any Work or grant administration access.",
+            return Page("Connect ChatGPT to Goblin", "ChatGPT may read and manage all existing and future Work in this private Goblin instance. This does not grant instance administration access.",
                 $"<form method=\"post\" action=\"{ChatGptConfiguration.AuthorizationPath}\">{hidden}<button name=\"decision\" value=\"allow\">Allow connection</button><button name=\"decision\" value=\"deny\" class=\"secondary\">Cancel</button></form>");
         }
         var identity = new ClaimsIdentity(Scheme);
@@ -74,12 +74,14 @@ internal static class ChatGptOAuthEndpoints
         AuthenticateResult result = await context.AuthenticateAsync(Scheme);
         ClaimsPrincipal? principal = result.Principal;
         if (!result.Succeeded || principal?.GetClaim(Claims.Subject) != keys.OwnerSubject || !principal.HasScope(ChatGptConfiguration.ReadScope) ||
+            !principal.HasScope(ChatGptConfiguration.WriteScope) ||
             !principal.GetResources().SequenceEqual(new[] { configuration.Resource }))
             return Reject(Errors.InvalidGrant, "Connect ChatGPT to Goblin again.");
         if (!string.IsNullOrEmpty(request.Scope))
         {
-            if (!request.HasScope(ChatGptConfiguration.ReadScope) || request.GetScopes().Any(s => !principal.HasScope(s)))
-                return Reject(Errors.InvalidScope, "Keep the granted Goblin Work read scope.");
+            if (!request.HasScope(ChatGptConfiguration.ReadScope) || !request.HasScope(ChatGptConfiguration.WriteScope) ||
+                request.GetScopes().Any(s => !principal.HasScope(s)))
+                return Reject(Errors.InvalidScope, "Keep both granted Goblin Work scopes.");
             principal.SetScopes(request.GetScopes());
         }
         return Results.SignIn(principal, authenticationScheme: Scheme);

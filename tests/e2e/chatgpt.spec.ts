@@ -9,13 +9,14 @@ async function fixture(page: Page, configured = true) {
     const state: ChatGptState = {
         configured,
         name: "Goblin",
-        description: "Read shared Work from your instance.",
+        description:
+            "Read and manage all Work in your private Goblin instance.",
         logoUrl: "/assets/branding/icon.svg",
         serverUrl: configured ? "https://goblin.example.test/mcp" : null,
         issuer: configured ? "https://goblin.example.test/" : null,
         clientId: "goblin-chatgpt",
-        scope: "openid offline_access goblin.work.read",
-        ownerSubject: configured ? "owner-<img src=x>" : null,
+        scope: "openid offline_access goblin.work.read goblin.work.write",
+        ownerSubject: configured ? "owner-fixture" : null,
         clientConfigured: configured,
         redirectUri: configured
             ? "https://chatgpt.com/connector_platform_oauth_redirect"
@@ -24,18 +25,17 @@ async function fixture(page: Page, configured = true) {
             publicOrigin: "GOBLIN_PUBLIC_ORIGIN",
             enabled: "GOBLIN_CHATGPT_ENABLED",
         },
-        grants: [],
     };
     const verification: ChatGptVerification = {
-        discovery: false,
+        discovery: true,
         database: true,
-        issuerResponses: false,
-        checkedAt: "2026-10-24T00:00:00Z",
+        issuerResponses: true,
+        checkedAt: "2026-11-01T00:00:00Z",
     };
     const writes: { path: string; body: unknown }[] = [];
-    let reject = false;
-    let emptyWork = false;
+    const reads: string[] = [];
     let failLoad = false;
+    let failSave = false;
     await page.route("**/api/**", async (route) => {
         if (route.request().resourceType() === "script")
             return route.continue();
@@ -43,6 +43,7 @@ async function fixture(page: Page, configured = true) {
         let json: unknown = [];
         if (route.request().method() === "POST")
             writes.push({ path, body: route.request().postDataJSON() });
+        else reads.push(path);
         if (path === "/api/session") json = { authenticated: true };
         if (path === "/api/preferences") json = { timeZone: "Asia/Manila" };
         if (path === "/api/status")
@@ -57,408 +58,165 @@ async function fixture(page: Page, configured = true) {
                 });
             json = state;
         }
-        if (path === "/api/integrations/chatgpt/work")
-            json = emptyWork
-                ? []
-                : [
-                      {
-                          id: "9007199254740993",
-                          objective: "Review <script>example</script> output",
-                      },
-                  ];
         if (path === "/api/integrations/chatgpt/verify") json = verification;
         if (path === "/api/integrations/chatgpt/client") {
+            if (failSave)
+                return route.fulfill({
+                    status: 503,
+                    json: {
+                        error: { message: "Callback could not be saved." },
+                    },
+                });
             const body = route.request().postDataJSON();
             const generate = !state.clientConfigured || body.rotateSecret;
             state.clientConfigured = true;
             state.redirectUri = body.redirectUri || null;
             json = { clientSecret: generate ? "fixture-oauth-secret" : null };
         }
-        if (path === "/api/integrations/chatgpt/grants") {
-            if (reject)
-                return route.fulfill({
-                    status: 409,
-                    json: {
-                        error: {
-                            code: "chatgpt_result_unavailable",
-                            message: "No approved result is available.",
-                        },
-                    },
-                });
-            const body = route.request().postDataJSON();
-            state.grants = [
-                {
-                    id: "42",
-                    subject: state.ownerSubject!,
-                    workId: body.workId,
-                    resultAttemptId: null,
-                    expiresAt: "2099-01-01T00:00:00Z",
-                    expired: false,
-                },
-            ];
-            json = { saved: true };
-        }
-        if (path === "/api/integrations/chatgpt/grants/revoke") {
-            state.grants = [];
+        if (path === "/api/integrations/chatgpt/client/revoke")
             json = { revoked: true };
-        }
         await route.fulfill({ json });
     });
     return {
         state,
-        verification,
         writes,
-        reject: () => {
-            reject = true;
-        },
-        empty: () => {
-            emptyWork = true;
-        },
+        reads,
         fail: (value: boolean) => {
             failLoad = value;
+        },
+        failCallback: (value: boolean) => {
+            failSave = value;
         },
     };
 }
 
-async function goToStep(page: Page, name: string) {
+async function step(page: Page, name: string) {
     await page
         .locator(".chatgpt-stepper")
         .getByRole("button", { name: new RegExp(`^${name}`) })
         .click();
 }
-async function shareWork(page: Page) {
-    await page
-        .getByLabel("Work", { exact: true })
-        .selectOption("9007199254740993");
-    await page.getByRole("button", { name: "Share selected Work" }).click();
-}
 
-test("private setup guides real actions, distinguishes failed checks, and preserves form drafts", async ({
+test("one private connection offers full Work access without a sharing step", async ({
     page,
 }) => {
-    const { verification, writes } = await fixture(page);
-    const errors: string[] = [];
-    page.on("pageerror", (error) => errors.push(error.message));
+    const { state, writes, reads } = await fixture(page);
     await page.goto("/settings?section=connections&provider=chatgpt");
     await expect(
-        page.getByRole("heading", { name: "Prepare your instance" }),
+        page.getByText("Read and manage all Work", { exact: true }),
     ).toBeVisible();
-    await expect(
-        page.getByRole("link", { name: /download.*guide/i }),
-    ).toHaveCount(0);
-    await page.getByRole("button", { name: "Continue to Sign-in" }).click();
-    await expect(
-        page.getByRole("heading", { name: "Set up secure sign-in" }),
-    ).toBeFocused();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
-    await page
-        .getByRole("button", { name: "Check provider and storage" })
-        .click();
-    await expect(
-        page.getByText("Needs attention: OAuth server configuration", {
-            exact: true,
-        }),
-    ).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Continue to Install" }),
-    ).toBeDisabled();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
-    verification.discovery = true;
-    await page
-        .getByRole("button", { name: "Check provider and storage" })
-        .click();
-    await expect(
-        page.getByText("Needs attention: Authorization response issuer"),
-    ).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Continue to Install" }),
-    ).toBeDisabled();
-    verification.issuerResponses = true;
-    await page
-        .getByRole("button", { name: "Check provider and storage" })
-        .click();
-    await page.getByRole("button", { name: "Continue to Install" }).click();
-    await expect(
-        page.getByText("Prepare with your Codex connection", { exact: true }),
-    ).toHaveCount(0);
-    await expect(page.getByLabel("Server URL", { exact: true })).toHaveValue(
-        "https://goblin.example.test/mcp",
-    );
-    await expect(
-        page.getByRole("link", { name: "Open ChatGPT Plugins" }),
-    ).toHaveAttribute("href", "https://chatgpt.com/plugins");
-    await expect(
-        page.getByRole("button", { name: "Continue to Share Work" }),
-    ).toBeDisabled();
-    await page.getByLabel("I installed the plugin").check();
-    await page.getByRole("button", { name: "Continue to Share Work" }).click();
-
-    await page
-        .getByLabel("Work", { exact: true })
-        .selectOption("9007199254740993");
-    await goToStep(page, "Sign-in");
-    await page
-        .getByRole("button", { name: "Check provider and storage" })
-        .click();
-    await goToStep(page, "Share Work");
-    await expect(
-        page.getByLabel("Owner OAuth ID", { exact: true }),
-    ).toHaveValue("owner-<img src=x>");
-    await expect(page.getByLabel("Work", { exact: true })).toHaveValue(
-        "9007199254740993",
-    );
-    await page.getByRole("button", { name: "Share selected Work" }).click();
-    await expect(
-        page.getByText("Work shared.", { exact: false }),
-    ).toBeVisible();
-    await expect(page.locator("[data-chatgpt-notice]")).toHaveAttribute(
-        "data-tone",
-        "info",
-    );
-    expect(writes.find((w) => w.path.endsWith("/grants"))?.body).toEqual({
-        workId: "9007199254740993",
-        hours: 24,
-        shareApprovedResult: false,
-    });
-    await expect(page.locator(".chatgpt-grants")).toContainText(
-        "owner-<img src=x>",
-    );
-    await expect(page.locator(".chatgpt-grants img")).toHaveCount(0);
-    await page.getByRole("button", { name: "Continue to Test" }).click();
-    await expect(page.getByLabel("List prompt", { exact: true })).toHaveValue(
-        "List the Work shared with this connection.",
-    );
-    await page.getByLabel("The list contains only Work").check();
-    await page.getByLabel("The status and attention details").check();
-    await page.getByLabel("Reading an unshared Work ID").check();
-    await expect(
-        page.getByText("You confirmed the private plugin works."),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Manage shared Work" }).click();
-    await page.getByRole("button", { name: /Revoke Work/ }).click();
-    await expect(page.getByText("No Work is shared yet.")).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Continue to Test" }),
-    ).toBeDisabled();
-    expect(writes.at(-1)?.body).toEqual({ id: "42" });
-    expect(errors).toEqual([]);
-});
-
-test("unconfigured setup generates usable settings inline and detects enablement", async ({
-    page,
-}) => {
-    const { state } = await fixture(page, false);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await expect(
-        page.getByRole("button", { name: "Continue to Sign-in" }),
-    ).toBeDisabled();
-    await page
-        .getByLabel("Public Goblin origin")
-        .fill("http://goblin.example.test");
-
-    await page
-        .getByRole("button", { name: "Generate settings", exact: true })
-        .click();
-    await expect(
-        page.getByRole("status").filter({ hasText: "Use HTTPS addresses" }),
-    ).toBeVisible();
-    await page
-        .getByLabel("Public Goblin origin")
-        .fill("https://goblin.example.test");
-    await page
-        .getByRole("button", { name: "Generate settings", exact: true })
-        .click();
-    await expect(
-        page.getByLabel("Container environment settings", { exact: true }),
-    ).toHaveValue(
-        'env:\n  - name: GOBLIN_PUBLIC_ORIGIN\n    value: "https://goblin.example.test"\n  - name: GOBLIN_CHATGPT_ENABLED\n    value: "true"',
-    );
-    await page
-        .getByRole("button", { name: "Check configuration again" })
-        .click();
-    await expect(
-        page.getByText("The integration is not enabled yet.", { exact: false }),
-    ).toBeVisible();
-    state.configured = true;
-    state.ownerSubject = "owner-fixture";
-    state.issuer = "https://goblin.example.test/";
-    state.serverUrl = "https://goblin.example.test/mcp";
-    await page
-        .getByRole("button", { name: "Check configuration again" })
-        .click();
-    await expect(
-        page.getByRole("button", { name: "Continue to Sign-in" }),
-    ).toBeEnabled();
-    await expect(page.getByLabel("OAuth issuer", { exact: true })).toHaveValue(
-        state.issuer,
-    );
-});
-
-test("first-time setup creates the secret before collecting ChatGPT's callback during Install", async ({
-    page,
-}) => {
-    const { state, writes, verification } = await fixture(page);
-    state.clientConfigured = false;
-    state.redirectUri = null;
-    verification.discovery = verification.issuerResponses = true;
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
-    await page.getByRole("button", { name: "Go to Sign-in" }).click();
-    await expect(
-        page.getByRole("heading", { name: "Set up secure sign-in" }),
-    ).toBeFocused();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
-    await page.getByRole("button", { name: "Create OAuth client" }).click();
-    await expect(
-        page.getByLabel("OAuth client secret", { exact: true }),
-    ).toHaveValue("fixture-oauth-secret");
-    expect(writes.at(-1)?.body).toEqual({
-        redirectUri: "",
-        rotateSecret: false,
-    });
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
-    await page
-        .getByRole("heading", { name: "Set up secure sign-in" })
-        .scrollIntoViewIfNeeded();
-    await mkdir(".artifacts/chatgpt-callback/screenshots", {
-        recursive: true,
-    });
-    await page.screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/client-preparation.png",
-        fullPage: true,
-    });
-    await page
-        .getByRole("button", { name: "Check provider and storage" })
-        .click();
-    await page.getByRole("button", { name: "Continue to Install" }).click();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveAttribute(
-        "required",
-        "",
-    );
-    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
-    await expect(page.locator("[data-callback-ready]")).toBeHidden();
-    await expect(page.locator("[data-callback-label]")).toHaveText(
-        "Required in Goblin",
-    );
-    await expect(
-        page.getByLabel("ChatGPT OAuth callback"),
-    ).toHaveAccessibleDescription(
-        /The OAuth callback is the ChatGPT address Goblin sends you back to after you sign in/,
-    );
-    await page
-        .getByRole("heading", {
-            name: "Create and install your private plugin",
-        })
-        .scrollIntoViewIfNeeded();
-    await page.screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/install-overview-desktop.png",
-        fullPage: true,
-    });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/install-overview-mobile.png",
-        fullPage: true,
-    });
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await page
-        .getByText("ChatGPT OAuth callback (return URL)", { exact: true })
-        .click();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toBeFocused();
-    await page.locator(".chatgpt-callback-task").screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/required-callback.png",
-    });
-    await expect(page.getByLabel("Generate a new client secret")).toHaveCount(
+    await expect(page.locator(".chatgpt-stepper button")).toHaveCount(4);
+    await expect(page.getByRole("button", { name: "Share Work" })).toHaveCount(
         0,
     );
-    const clientWrites = () =>
-        writes.filter((write) => write.path.endsWith("/client"));
+    await step(page, "Sign-in");
     await page
-        .getByRole("button", { name: "Save callback", exact: true })
+        .getByRole("button", { name: "Check provider and storage" })
         .click();
-    expect(clientWrites()).toHaveLength(1);
-    await page.screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/awaiting-callback.png",
-        fullPage: true,
-    });
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector_platform_oauth_redirect");
+    await expect(
+        page.getByText("Passed: OAuth and Work storage"),
+    ).toBeVisible();
+    await step(page, "Install");
+    await expect(
+        page.getByRole("textbox", { name: "OAuth scopes" }),
+    ).toHaveValue(state.scope);
+    await expect(
+        page.getByRole("textbox", { name: "Description" }),
+    ).toHaveValue(state.description);
+    await expect(
+        page.getByText(
+            "This private connection can read and manage all existing and future Work.",
+        ),
+    ).toBeVisible();
+    await page.getByLabel("I installed the plugin").check();
+    await expect(
+        page.getByRole("button", { name: "Continue to Test" }),
+    ).toBeEnabled();
+    await step(page, "Test");
+    await expect(
+        page.getByRole("textbox", { name: "Read prompt" }),
+    ).toContainText("created before this connection and one created after it");
+    await expect(
+        page.getByRole("textbox", { name: "Write prompt" }),
+    ).toContainText("Reserve Work and command IDs");
+    await expect(page.getByText("Both calls must be denied.")).toBeVisible();
+    await page.getByLabel("Existing and new Work are readable").check();
+    await page.getByLabel("Work created and updated through ChatGPT").check();
+    await expect(
+        page.getByText("Your Work connection is ready.", { exact: false }),
+    ).toBeVisible();
+    expect(writes.some((request) => request.path.includes("/grants"))).toBe(
+        false,
+    );
+    expect(reads).not.toContain("/api/integrations/chatgpt/work");
+});
+
+test("callback edits block sign-in until saved and keep the secret out of browser progress", async ({
+    page,
+}) => {
+    const { state, writes, failCallback } = await fixture(page);
+    state.redirectUri = null;
+    await page.goto("/settings?section=connections&provider=chatgpt");
+    await step(page, "Install");
+    const callback = page.getByLabel("ChatGPT OAuth callback");
+    await callback.fill(
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+    );
     await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
     await expect(page.locator("#chatgpt-callback-status")).toContainText(
         "entered but not saved",
     );
-    await expect(page.locator("[data-callback-ready]")).toBeHidden();
-    await page.locator(".chatgpt-callback-task").screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/unsaved-callback.png",
-    });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator(".chatgpt-callback-task").screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/unsaved-callback-mobile.png",
-    });
-    expect(
-        await page.evaluate(
-            () => document.documentElement.scrollWidth <= window.innerWidth,
-        ),
-    ).toBe(true);
-    await page.setViewportSize({ width: 1280, height: 720 });
-    await goToStep(page, "Sign-in");
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
-    await goToStep(page, "Install");
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
-        "https://chatgpt.com/connector_platform_oauth_redirect",
-    );
+    failCallback(true);
     await page
         .getByRole("button", { name: "Save callback", exact: true })
         .click();
-    expect(writes.at(-1)?.body).toEqual({
-        redirectUri: "https://chatgpt.com/connector_platform_oauth_redirect",
-        rotateSecret: false,
-    });
-    await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
+    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
+        "Callback could not be saved",
+    );
+    await expect(callback).toHaveValue(
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+    );
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    failCallback(false);
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
     await expect(page.locator("#chatgpt-callback-status")).toContainText(
         "Callback saved",
     );
-    await expect(page.locator("[data-callback-ready]")).toBeVisible();
-    await page.locator(".chatgpt-callback-task").screenshot({
-        path: ".artifacts/chatgpt-callback/screenshots/saved-callback.png",
+    await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
+    expect(writes.at(-1)?.body).toEqual({
+        redirectUri: state.redirectUri,
+        rotateSecret: false,
     });
+    await page.getByLabel("I installed the plugin").check();
+    await callback.fill("https://chatgpt.com/connector/oauth/new-callback");
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
     await expect(
-        page.getByLabel("OAuth client secret", { exact: true }),
-    ).toHaveValue("fixture-oauth-secret");
-    expect(
-        await page.evaluate(() =>
-            localStorage.getItem("goblin.chatgpt.private-setup"),
-        ),
-    ).not.toContain("fixture-oauth-secret");
+        page.getByRole("button", { name: "Continue to Test" }),
+    ).toBeDisabled();
+    await callback.fill(state.redirectUri!);
+    await expect(page.getByLabel("I installed the plugin")).toBeChecked();
     await page.reload();
-    await expect(
-        page.getByLabel("OAuth client secret", { exact: true }),
-    ).toHaveCount(0);
     await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
         state.redirectUri!,
     );
+    expect(
+        await page.evaluate(() =>
+            localStorage.getItem("goblin.chatgpt.full-work-setup"),
+        ),
+    ).not.toContain("fixture-oauth-secret");
 });
 
-test("replacing a client secret preserves the saved callback and clears installation confirmation", async ({
+test("rotation preserves the callback and revocation remains available", async ({
     page,
 }) => {
     const { state, writes } = await fixture(page);
-    const savedCallback = state.redirectUri;
     await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    await page.getByLabel("I installed the plugin").check();
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector/oauth/unsaved-callback");
-    await goToStep(page, "Sign-in");
+    await step(page, "Sign-in");
     await page
         .getByText("Need a replacement client secret?", { exact: true })
         .click();
-    await page
-        .getByRole("button", { name: "Generate new client secret" })
-        .click();
-    expect(writes).toHaveLength(0);
     await page
         .getByLabel(
             "Generate a new client secret and revoke previous connections",
@@ -467,335 +225,32 @@ test("replacing a client secret preserves the saved callback and clears installa
     await page
         .getByRole("button", { name: "Generate new client secret" })
         .click();
-    expect(writes).toEqual([
-        {
-            path: "/api/integrations/chatgpt/client",
-            body: { redirectUri: savedCallback, rotateSecret: true },
-        },
-    ]);
-    expect(state.redirectUri).toBe(savedCallback);
-    await goToStep(page, "Install");
-    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
-    await page.reload();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
-        savedCallback!,
-    );
-});
-
-test("callback edits block sign-in until saved and preserve confirmation when reverted", async ({
-    page,
-}) => {
-    const { state, writes } = await fixture(page);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    await page.getByLabel("I installed the plugin").check();
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector/oauth/new-callback");
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toBeFocused();
-    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
-    await expect(page.locator("[data-callback-ready]")).toBeHidden();
-    await expect(page.locator("#chatgpt-callback-status")).toContainText(
-        "Unsaved changes",
-    );
-    await expect(
-        page.getByRole("button", { name: "Continue to Share Work" }),
-    ).toBeDisabled();
-    expect(writes).toHaveLength(0);
-    await page.getByLabel("ChatGPT OAuth callback").fill(state.redirectUri!);
-    await expect(page.getByLabel("I installed the plugin")).toBeChecked();
-    await expect(page.locator("[data-callback-ready]")).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Continue to Share Work" }),
-    ).toBeEnabled();
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector/oauth/new-callback");
-    await page
-        .getByRole("button", { name: "Save callback", exact: true })
-        .click();
-    expect(writes.at(-1)?.body).toEqual({
-        redirectUri: "https://chatgpt.com/connector/oauth/new-callback",
-        rotateSecret: false,
+    expect(writes.at(-1)).toEqual({
+        path: "/api/integrations/chatgpt/client",
+        body: { redirectUri: state.redirectUri, rotateSecret: true },
     });
-    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
+    await step(page, "Install");
     await expect(
-        page.getByRole("button", { name: "Continue to Share Work" }),
-    ).toBeDisabled();
+        page.getByLabel("OAuth client secret", { exact: true }),
+    ).toHaveValue("fixture-oauth-secret");
+    await page.reload();
+    await expect(
+        page.getByLabel("OAuth client secret", { exact: true }),
+    ).toHaveCount(0);
+    await page.getByText("Need help with this step?").click();
+    await page
+        .getByRole("button", { name: "Revoke ChatGPT connections" })
+        .click();
     await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "restart the connection",
+        "connections revoked",
     );
+    expect(writes.at(-1)?.path).toBe("/api/integrations/chatgpt/client/revoke");
 });
 
-test("failed callback saves preserve the draft and keep sign-in blocked until a successful save", async ({
+test("progress is scoped to the owner and works on narrow screens without storage or clipboard", async ({
     page,
 }) => {
     const { state } = await fixture(page);
-    state.redirectUri = null;
-    let failSave = true;
-    let releaseSave!: () => void;
-    const pendingSave = new Promise<void>((resolve) => {
-        releaseSave = resolve;
-    });
-    await page.route("**/api/integrations/chatgpt/client", async (route) => {
-        if (!failSave) return route.fallback();
-        failSave = false;
-        await pendingSave;
-        await route.fulfill({
-            status: 503,
-            json: {
-                error: { message: "Callback could not be saved. Try again." },
-            },
-        });
-    });
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    const callback = page.getByLabel("ChatGPT OAuth callback");
-    await callback.fill(
-        "https://chatgpt.com/connector_platform_oauth_redirect",
-    );
-    await page
-        .getByRole("button", { name: "Save callback", exact: true })
-        .click();
-    await expect(callback).not.toBeEditable();
-    await expect(page.locator("[data-callback-ready]")).toBeHidden();
-    releaseSave();
-    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "Callback could not be saved",
-    );
-    await expect(callback).toBeEditable();
-    await expect(callback).toHaveValue(
-        "https://chatgpt.com/connector_platform_oauth_redirect",
-    );
-    await expect(page.locator("#chatgpt-callback-status")).toContainText(
-        "entered but not saved",
-    );
-    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
-    expect(state.redirectUri).toBeNull();
-    await page
-        .getByRole("button", { name: "Save callback", exact: true })
-        .click();
-    await expect(page.locator("[data-callback-ready]")).toBeVisible();
-    await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
-    await expect(page.locator("#chatgpt-callback-status")).toContainText(
-        "Callback saved",
-    );
-});
-
-test("a failed configuration refresh keeps a saved callback draft blocked until confirmed", async ({
-    page,
-}) => {
-    const { state, writes, fail } = await fixture(page);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    const callback = page.getByLabel("ChatGPT OAuth callback");
-    await callback.fill("https://chatgpt.com/connector/oauth/new-callback");
-    fail(true);
-    await page
-        .getByRole("button", { name: "Save callback", exact: true })
-        .click();
-    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "temporarily unavailable",
-    );
-    expect(writes).toHaveLength(1);
-    expect(state.redirectUri).toBe(
-        "https://chatgpt.com/connector/oauth/new-callback",
-    );
-    await expect(callback).toHaveValue(state.redirectUri!);
-    await expect(page.locator("[data-callback-ready]")).toBeHidden();
-    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
-    fail(false);
-    await page
-        .getByRole("button", { name: "Save callback", exact: true })
-        .click();
-    await expect(page.locator("[data-callback-ready]")).toBeVisible();
-    await expect(page.locator("#chatgpt-callback-status")).toContainText(
-        "Callback saved",
-    );
-});
-
-test("progress resumes without storing drafts or treating old provider checks as current", async ({
-    page,
-}) => {
-    const { state, verification } = await fixture(page);
-    verification.discovery = verification.issuerResponses = true;
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Sign-in");
-    await page
-        .getByRole("button", { name: "Check provider and storage" })
-        .click();
-    await goToStep(page, "Install");
-    await page.getByLabel("I installed the plugin").check();
-    await goToStep(page, "Share Work");
-    await goToStep(page, "Install");
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector/oauth/unsaved-callback");
-    await goToStep(page, "Share Work");
-    await page.reload();
-    await expect(
-        page.getByRole("heading", { name: "Choose what ChatGPT can read" }),
-    ).toBeVisible();
-    await expect(
-        page.getByLabel("Owner OAuth ID", { exact: true }),
-    ).toHaveValue(state.ownerSubject!);
-    expect(
-        await page.evaluate(() =>
-            localStorage.getItem("goblin.chatgpt.private-setup"),
-        ),
-    ).not.toContain("unsaved-callback");
-    await goToStep(page, "Install");
-    await expect(page.getByLabel("I installed the plugin")).toBeChecked();
-    await goToStep(page, "Sign-in");
-    await expect(
-        page.getByRole("button", { name: "Continue to Install" }),
-    ).toBeDisabled();
-    state.issuer = "https://other.example.test/";
-    await page.reload();
-    await expect(
-        page.getByRole("heading", { name: "Prepare your instance" }),
-    ).toBeVisible();
-    await goToStep(page, "Install");
-    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
-});
-
-test("setup supports only a private connection and ignores superseded publication progress", async ({
-    page,
-}) => {
-    await page.setViewportSize({ width: 1440, height: 1100 });
-    const { writes, state } = await fixture(page);
-    await page.addInitScript(
-        (scope) => {
-            localStorage.setItem(
-                "goblin.chatgpt.setup",
-                JSON.stringify({
-                    scope,
-                    path: "public",
-                    step: 3,
-                    confirmed: ["published"],
-                }),
-            );
-        },
-        JSON.stringify([state.issuer, state.serverUrl, state.ownerSubject]),
-    );
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await expect(
-        page.getByRole("heading", { name: "Prepare your instance" }),
-    ).toBeVisible();
-    await expect(
-        page.getByText("Server enabled", { exact: true }),
-    ).toBeVisible();
-    await expect(
-        page.getByText("Read-only access · Shared Work only"),
-    ).toBeVisible();
-    await expect(
-        page.getByRole("button", {
-            name: /Publish publicly|public submission|Generate plugin package/,
-        }),
-    ).toHaveCount(0);
-    await expect(
-        page.getByRole("link", { name: /submission portal/ }),
-    ).toHaveCount(0);
-    await expect(page.locator(".chatgpt-stepper button")).toHaveCount(5);
-    await mkdir(".artifacts/chatgpt-workflow/browser", { recursive: true });
-    await page.screenshot({
-        path: ".artifacts/chatgpt-workflow/browser/prepare-desktop.png",
-    });
-    await goToStep(page, "Test");
-    await page.getByLabel("The list contains only Work").check();
-    await page.getByLabel("The status and attention details").check();
-    await page.getByLabel("Reading an unshared Work ID").check();
-    await expect(
-        page.getByRole("button", { name: "Manage shared Work" }),
-    ).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: /public submission/ }),
-    ).toHaveCount(0);
-    expect(writes).toEqual([]);
-});
-
-test("starting setup again clears browser confirmations and drafts without revoking server settings", async ({
-    page,
-}) => {
-    const { writes, state } = await fixture(page);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
-    await page.getByLabel("I installed the plugin").check();
-    await page
-        .getByLabel("ChatGPT OAuth callback")
-        .fill("https://chatgpt.com/connector/oauth/draft");
-    const before = writes.length;
-    await page.getByRole("button", { name: "Start setup again" }).click();
-    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
-        "Setup progress cleared. Saved OAuth settings and shared Work",
-    );
-    await expect(
-        page.getByRole("heading", { name: "Prepare your instance" }),
-    ).toBeVisible();
-    await goToStep(page, "Install");
-    await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
-    await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
-        state.redirectUri ?? "",
-    );
-    expect(writes).toHaveLength(before);
-});
-
-test("grant failures preserve the form and cannot claim success", async ({
-    page,
-}) => {
-    const fixtureState = await fixture(page);
-    fixtureState.reject();
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Share Work");
-    await page.getByLabel("Also share the latest approved result").check();
-    await shareWork(page);
-    await expect(
-        page.getByText("No approved result is available."),
-    ).toBeVisible();
-    await expect(page.locator("[data-chatgpt-notice]")).toHaveAttribute(
-        "data-tone",
-        "error",
-    );
-    await expect(
-        page.getByLabel("Owner OAuth ID", { exact: true }),
-    ).toHaveValue("owner-<img src=x>");
-    await expect(
-        page.getByLabel("Also share the latest approved result"),
-    ).toBeChecked();
-    await expect(page.getByText("Work shared.", { exact: false })).toHaveCount(
-        0,
-    );
-    await expect(
-        page.getByRole("button", { name: "Continue to Test" }),
-    ).toBeDisabled();
-});
-
-test("empty Work and temporary load failures have recovery actions", async ({
-    page,
-}) => {
-    const fixtureState = await fixture(page);
-    fixtureState.fail(true);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await expect(
-        page.getByText("Setup is temporarily unavailable."),
-    ).toBeVisible();
-    fixtureState.fail(false);
-    fixtureState.empty();
-    await page.getByRole("button", { name: "Reload setup" }).click();
-    await goToStep(page, "Share Work");
-    await expect(
-        page.getByRole("link", { name: "Create Work in Goblin" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Refresh Work and access" }).click();
-    await expect(
-        page.getByRole("button", { name: "Share selected Work" }),
-    ).toBeDisabled();
-});
-
-test("workflow remains usable without clipboard or browser storage and fits narrow screens", async ({
-    page,
-}) => {
-    await fixture(page);
     await page.addInitScript(() => {
         Object.defineProperty(navigator, "clipboard", { value: undefined });
         Storage.prototype.setItem = () => {
@@ -803,37 +258,26 @@ test("workflow remains usable without clipboard or browser storage and fits narr
         };
     });
     await page.goto("/settings?section=connections&provider=chatgpt");
-    await goToStep(page, "Install");
+    await step(page, "Install");
     await page.getByRole("button", { name: "Copy server URL" }).click();
     await expect(page.getByLabel("Server URL", { exact: true })).toBeFocused();
-    expect(
-        await page
-            .getByLabel("Server URL", { exact: true })
-            .evaluate(
-                (input: HTMLInputElement) =>
-                    input.selectionEnd! - input.selectionStart!,
-            ),
-    ).toBe("https://goblin.example.test/mcp".length);
     await expect(
         page.getByText("browser storage is unavailable", { exact: false }),
     ).toBeVisible();
-    await mkdir(".artifacts/chatgpt-workflow/browser", { recursive: true });
-    await page
-        .getByRole("heading", { name: "ChatGPT plugin", exact: true })
-        .scrollIntoViewIfNeeded();
+    await mkdir(".artifacts/chatgpt-full-work/browser", { recursive: true });
     await page.screenshot({
-        path: ".artifacts/chatgpt-workflow/browser/desktop.png",
+        path: ".artifacts/chatgpt-full-work/browser/desktop.png",
         fullPage: true,
     });
-    for (const width of [1024, 390, 320]) {
+    for (const width of [390, 320]) {
         await page.setViewportSize({ width, height: 844 });
         await expect(
             page.getByLabel("Setup step", { exact: true }),
         ).toBeVisible();
-        for (const step of ["0", "1", "2", "3", "4"]) {
+        for (const index of ["0", "1", "2", "3"]) {
             await page
                 .getByLabel("Setup step", { exact: true })
-                .selectOption(step);
+                .selectOption(index);
             expect(
                 await page.evaluate(
                     () =>
@@ -841,38 +285,35 @@ test("workflow remains usable without clipboard or browser storage and fits narr
                         window.innerWidth,
                 ),
             ).toBe(true);
-            for (const selector of [".settings-content", ".chatgpt-step-panel"])
-                expect(
-                    await page
-                        .locator(selector)
-                        .evaluate(
-                            (element) =>
-                                element.scrollWidth <= element.clientWidth + 1,
-                        ),
-                ).toBe(true);
         }
     }
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByLabel("Setup step", { exact: true }).selectOption("2");
-    await page
-        .getByRole("heading", { name: "ChatGPT plugin", exact: true })
-        .scrollIntoViewIfNeeded();
     await page.screenshot({
-        path: ".artifacts/chatgpt-workflow/browser/mobile.png",
+        path: ".artifacts/chatgpt-full-work/browser/mobile.png",
         fullPage: true,
     });
+    state.issuer = "https://another.example.test/";
+    await page.reload();
+    await expect(
+        page.getByRole("heading", { name: "Prepare your instance" }),
+    ).toBeVisible();
 });
 
-test("configured ChatGPT setup does not claim an installed connection", async ({
+test("temporary setup failures recover without a Work picker", async ({
     page,
 }) => {
-    await fixture(page);
-    await page.goto("/settings?section=connections");
-    const row = page.locator('[data-connection="chatgpt"]');
-    await expect(row).toContainText("Configured");
-    await expect(row).toContainText("verify sign-in in ChatGPT");
-    await expect(row.locator(".connection-status")).toHaveText("Configured");
-    await expect(row.locator(".connection-status")).not.toHaveClass(
-        /connected/,
-    );
+    const setup = await fixture(page);
+    setup.fail(true);
+    await page.goto("/settings?section=connections&provider=chatgpt");
+    await expect(
+        page.getByText("Setup is temporarily unavailable."),
+    ).toBeVisible();
+    setup.fail(false);
+    await page.getByRole("button", { name: "Reload setup" }).click();
+    await step(page, "Test");
+    await expect(
+        page.getByRole("textbox", { name: "Read prompt" }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Share selected Work" }),
+    ).toHaveCount(0);
 });

@@ -9,7 +9,8 @@ authority and credential isolation.
 
 The private ChatGPT MCP integration uses the owner password for browser sign-in and
 consent through embedded OpenIddict. It has one owner subject. Its OAuth tokens
-authorize only explicitly shared Work, not Codex execution or Goblin administration.
+authorize reading and managing all Work in this instance, including Work created
+after authorization. They do not grant unrelated Goblin administration.
 See [ChatGPT setup](chatgpt-integration.md).
 
 ## Run locally

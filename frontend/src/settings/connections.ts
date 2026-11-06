@@ -30,7 +30,8 @@ const providers = [
     {
         id: "chatgpt",
         name: "ChatGPT",
-        description: "Read Work you share through your own ChatGPT plugin.",
+        description:
+            "Read and manage all Work through your private ChatGPT plugin.",
     },
     {
         id: "github",
@@ -179,7 +180,7 @@ function chatgptSummary(state: ChatGptState): Summary {
         status: state.configured ? "Configured" : "Not configured",
         tone: "neutral",
         detail: state.configured
-            ? "Manage shared Work and verify sign-in in ChatGPT."
+            ? "Verify full Work access and sign-in in ChatGPT."
             : "Connect a plugin to your own Goblin instance.",
         action: "View setup",
         // Configuration alone cannot attest to installation or OAuth in ChatGPT.

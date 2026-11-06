@@ -11,14 +11,6 @@ export type ChatGptState = {
     clientConfigured: boolean;
     redirectUri: string | null;
     environmentVariables: { publicOrigin: string; enabled: string };
-    grants: {
-        id: string;
-        subject: string;
-        workId: string;
-        resultAttemptId: string | null;
-        expiresAt: string;
-        expired: boolean;
-    }[];
 };
 
 export type ChatGptVerification = {

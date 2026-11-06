@@ -115,7 +115,7 @@ The tunnel host `dev-tunnel.goblinboard.com` is only for the Chisel client.
 
 Do this once per Goblin instance and ChatGPT connection. For the k3s walkthrough,
 the origin is `https://dev.goblinboard.com`. A production connection uses that
-deployment's HTTPS origin instead. OAuth clients, keys, tokens, and Work grants
+deployment's HTTPS origin instead. OAuth clients, keys, and tokens
 belong to the selected instance; create a separate connection for each environment.
 
 1. Open Goblin's `/settings?section=connections&provider=chatgpt`.
@@ -138,7 +138,7 @@ belong to the selected instance; create a separate connection for each environme
    | Token endpoint auth method | `client_secret_basic` |
    | OAuth client ID | `goblin-chatgpt` |
    | OAuth client secret | The secret saved from Goblin |
-   | Base scopes / OAuth scopes, if requested | `openid offline_access goblin.work.read` |
+   | Base scopes / OAuth scopes, if requested | `openid offline_access goblin.work.read goblin.work.write` |
 
 4. Keep ChatGPT's connection form open and copy the exact OAuth callback it
    displays. This is ChatGPT's return URL: Goblin sends you there after sign-in
@@ -160,13 +160,16 @@ belong to the selected instance; create a separate connection for each environme
 5. Return to ChatGPT and create the plugin. When the browser opens Goblin's
    HTTPS sign-in page, enter the Goblin owner password and approve the connection.
    Finish **Create as a plugin** and installation in ChatGPT. Confirm the tools
-   include `goblin_ping`, `goblin_list_work`, `goblin_get_work_status`,
-   `goblin_get_work_attention`, and `goblin_get_work_result`.
+   include `goblin_ping`, `goblin_list_work`, `goblin_get_work`,
+   `goblin_get_work_section`, `goblin_get_work_result`,
+   `goblin_reserve_work_ids`, `goblin_create_work`, and
+   `goblin_add_work_context`, plus tools for the other Work actions.
 
 Creating and installing the plugin are both required. If an authorization page
 already failed before the callback was saved, start the connection again from
-ChatGPT to get a fresh sign-in request. Signing in shares no Work; the ping test
-needs no Work grants or GitHub sign-in.
+ChatGPT to get a fresh sign-in request. Authorization grants all existing and
+future Work access; the ping test needs no Work or GitHub sign-in. Existing
+read-only connections must reconnect and approve both Work scopes.
 
 ## Test the connection without Work
 
@@ -220,7 +223,7 @@ Use your installation's actual browser port if it differs from 8788. After the
 deployment succeeds, stop Chisel with **Ctrl+C** in Terminal B and open
 `http://localhost:8788`. Goblin's OAuth and MCP endpoints are disabled, and the
 public development address is unavailable. The installed ChatGPT plugin and
-Goblin's saved OAuth client, keys, tokens, and Work grants remain for the next
+Goblin's saved OAuth client, keys, and tokens remain for the next
 session. Reconnect if ChatGPT requests sign-in or a token has expired.
 
 The k3s instance keeps running. Use `make k3s-stop` only when you also want to
@@ -250,7 +253,7 @@ when finishing the session.
 For another onboarding test, remove this environment's connection in ChatGPT and
 follow [Install the plugin](#install-the-plugin) again using the saved client
 secret. To test revocation, first revoke the connection in Goblin. **Start setup
-again** clears browser progress; saved OAuth settings, tokens, and Work grants
+again** clears browser progress; saved OAuth settings and tokens
 stay. If the secret was lost, generate a new one in Goblin and update ChatGPT's
 connection; rotation revokes previous connections.
 
@@ -266,26 +269,35 @@ connection; rotation revokes previous connections.
 | Fingerprint mismatch or Chisel authentication failure | Check the trusted fingerprint and username/password separately. Ask the gateway administrator for updated verified values if they changed. See [Chisel troubleshooting](../deploy/chisel/README.md#troubleshooting) for server issues. |
 | Client closes after gateway deployment | Restart the client. Gateway deployment restarts the Chisel server; use updated credentials or a newly trusted fingerprint if they changed. |
 | ChatGPT still shows an old ping reply or tool list | Rebuild and deploy Goblin, refresh the connection's tools in ChatGPT, and start a new conversation with the plugin selected using **@**. |
-| Empty Work list or `No Work is shared yet` | Ping requires no grants. To test Work reads, share actual Work in Goblin. Leave **Also share the latest approved result** unchecked unless an approved result exists. |
+| Empty Work list | Create Work in Goblin or through the plugin, then refresh the list. If existing Work is missing, reconnect with both Work scopes and verify the selected instance. |
 | `Create the profile with --local or --ssh USER@HOST` | This concerns the optional direct WSL build. Create its database profile in [Prepare WSL](#prepare-wsl). The installed k3s workflow needs no profile. |
 | `502 Bad Gateway` on a production origin | Check that deployment's backend and reverse proxy using the [deployment guide](../deploy/azure/README.md#verify). |
 
 ## Test Work access
 
-These optional checks follow a successful ping. Ping confirms connectivity and
-authentication; Work and approved-result access require separate grants.
+These checks follow a successful ping. Do them in an isolated instance when you
+intend to create test Work. ChatGPT may confirm write calls according to your
+conversation or workspace settings.
 
-1. In Goblin's ChatGPT settings, choose actual Work and click **Share selected
-   Work**. Leave **Also share the latest approved result** unchecked unless the
-   Work has an approved result. Requesting a missing result rejects the whole grant.
-2. In ChatGPT, select the plugin with **@** and call `goblin_list_work`. Compare
-   the shared Work ID with Goblin.
-3. Call `goblin_get_work_status` and `goblin_get_work_attention` for that Work.
-   Compare the returned values with Goblin.
-4. To test results, explicitly share the latest approved result, then call
-   `goblin_get_work_result`. Confirm it matches the selected approved attempt.
-5. Remove the grant in Goblin and confirm that reading the same Work ID is denied.
-   Unshared Work and unshared results must stay inaccessible.
+1. Create one Work item in Goblin before connecting. After consent, select the
+   plugin with **@**, call `goblin_list_work`, and confirm the item appears.
+   Use `goblin_get_work` and `goblin_get_work_section` to compare its full
+   objective, status, attention, questions, messages, attempts, history,
+   results, and artifact metadata with Goblin. Follow `nextAfterWorkId` and
+   `nextOffset` until all pages are complete.
+2. Call `goblin_reserve_work_ids` with `forCreate: true`, then call
+   `goblin_create_work` using both returned IDs. Confirm
+   the Work appears in Goblin and in a new plugin list. Repeat the same Create
+   call and confirm it returns the original receipt without creating a second
+   item.
+3. Use the new Work's version, reserve another command ID, and submit AddContext.
+   Confirm the context appears in Goblin. Add context in Goblin and confirm the
+   plugin reads that update. An old expected version must return a conflict.
+4. If the instance has an attempt result, read it with `goblin_get_work_result`
+   and follow `nextOffset`. Proposed and approved results need no separate grant.
+5. In Goblin settings, select **Revoke ChatGPT connections**. Confirm both a
+   Work read and a write tool are denied with the existing connection. Reconnect
+   in ChatGPT and approve the scopes to resume.
 
 GitHub sign-in is separate and unnecessary for ping.
 

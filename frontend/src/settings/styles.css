@@ -169,10 +169,6 @@
 .chatgpt-checks strong { font-weight: 500; }
 .chatgpt-checks [data-passed="true"] { color: var(--green); }
 .chatgpt-checks [data-passed="false"] { color: #805333; }
-.chatgpt-grants { list-style: none; padding: 0; margin: 20px 0 0; }
-.chatgpt-grants li { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border); padding: 16px 0; }
-.chatgpt-grants li > div { display: grid; gap: 3px; flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.chatgpt-grants span, .chatgpt-grants small { color: var(--muted); font-size: 11px; }
 .chatgpt-step-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; border-top: 1px solid var(--border); margin-top: 28px; padding-top: 20px; }
 .chatgpt-step-footer > span { flex: 1; font-size: 11px; color: var(--muted); text-align: right; }
 .chatgpt-step-footer > .settings-primary { width: 100%; text-align: center; }
@@ -205,8 +201,6 @@
     .chatgpt-settings .chatgpt-mobile-step { display: grid; }
     .chatgpt-step-panel { border-left: 0; padding-left: 0; }
     .chatgpt-meta { align-items: flex-start; flex-direction: column; gap: 8px; }
-    .chatgpt-grants li { flex-wrap: wrap; }
-    .chatgpt-grants li > div { flex-basis: 100%; }
 }
 @media (max-width: 600px) {
     .chatgpt-heading { gap: 12px; align-items: flex-start; }

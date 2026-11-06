@@ -7,9 +7,10 @@ namespace Goblin.Integrations.ChatGpt;
 public sealed class ChatGptConfiguration
 {
     public const string ReadScope = "goblin.work.read";
-    public const string AuthorizationScopes = "openid offline_access " + ReadScope;
+    public const string WriteScope = "goblin.work.write";
+    public const string AuthorizationScopes = "openid offline_access " + ReadScope + " " + WriteScope;
     public const string MetadataPath = "/.well-known/oauth-protected-resource/mcp";
-    public const string Description = "Read Work shared from your Goblin instance: status, attention, and explicitly shared approved results.";
+    public const string Description = "Read and manage all Work in your private Goblin instance.";
 
     public const string ClientId = "goblin-chatgpt";
     public const string AuthorizationPath = "/oauth/authorize";
@@ -26,8 +27,6 @@ public sealed class ChatGptConfiguration
         Origin = origin.GetLeftPart(UriPartial.Authority);
         Issuer = Origin + "/";
         Resource = Origin + "/mcp";
-        // Keep the compound PostgreSQL grant identity comfortably below its
-        // btree entry limit, including a 256-character Unicode subject.
         if (Encoding.UTF8.GetByteCount(Issuer) > 512 || Encoding.UTF8.GetByteCount(Resource) > 512)
             throw new ArgumentException("The OAuth issuer and MCP resource must each fit within 512 UTF-8 bytes.");
         Discovery = new Uri(Origin + "/.well-known/openid-configuration");
@@ -37,5 +36,5 @@ public sealed class ChatGptConfiguration
     public string Origin { get; }
     public string Resource { get; }
     public Uri Discovery { get; }
-    public string Challenge => $"Bearer resource_metadata=\"{Origin + MetadataPath}\", scope=\"{ReadScope}\"";
+    public string Challenge => $"Bearer resource_metadata=\"{Origin + MetadataPath}\", scope=\"{ReadScope} {WriteScope}\"";
 }

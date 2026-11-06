@@ -76,12 +76,13 @@ async function workspace(page: Page) {
             "/api/integrations/chatgpt": {
                 configured: false,
                 name: "Goblin",
-                description: "Read shared Work from your instance.",
+                description:
+                    "Read and manage all Work in your private Goblin instance.",
                 logoUrl: "/assets/branding/icon.svg",
                 serverUrl: null,
                 issuer: null,
                 clientId: "goblin-chatgpt",
-                scope: "openid offline_access goblin.work.read",
+                scope: "openid offline_access goblin.work.read goblin.work.write",
                 ownerSubject: null,
                 clientConfigured: false,
                 redirectUri: null,
@@ -89,7 +90,6 @@ async function workspace(page: Page) {
                     publicOrigin: "GOBLIN_PUBLIC_ORIGIN",
                     enabled: "GOBLIN_CHATGPT_ENABLED",
                 },
-                grants: [],
             },
             "/api/system": {
                 status: "unsupported",

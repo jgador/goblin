@@ -132,7 +132,7 @@ try {
         response_type: "code",
         redirect_uri: callback,
         resource: resource.href,
-        scope: "openid offline_access goblin.work.read",
+        scope: "openid offline_access goblin.work.read goblin.work.write",
         state: "loopback-verification",
         code_challenge: createHash("sha256")
             .update(verifier)
@@ -207,7 +207,8 @@ try {
             (claims.aud === resource.href ||
                 claims.aud.includes(resource.href)) &&
             !!claims.sub &&
-            claims.scope.includes("goblin.work.read"),
+            claims.scope.includes("goblin.work.read") &&
+            claims.scope.includes("goblin.work.write"),
         "Access-token identity, audience or scope is incorrect.",
     );
     const keys = await request("/oauth/keys");
@@ -248,9 +249,24 @@ try {
             [
                 "goblin_ping",
                 "goblin_list_work",
-                "goblin_get_work_status",
-                "goblin_get_work_attention",
+                "goblin_get_work",
+                "goblin_get_work_section",
                 "goblin_get_work_result",
+                "goblin_reserve_work_ids",
+                "goblin_list_available_repositories",
+                "goblin_create_work",
+                "goblin_assign_work",
+                "goblin_add_work_context",
+                "goblin_execute_work",
+                "goblin_answer_work_question",
+                "goblin_request_work_changes",
+                "goblin_approve_work_result",
+                "goblin_cancel_work",
+                "goblin_reconcile_work",
+                "goblin_retry_work",
+                "goblin_prepare_work_repository",
+                "goblin_authorize_work_repository",
+                "goblin_deny_work_repository",
             ].every((name) => tools.text.includes(name)),
         "MCP tool discovery failed.",
     );

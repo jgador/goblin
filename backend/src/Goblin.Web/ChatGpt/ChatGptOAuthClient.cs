@@ -39,6 +39,7 @@ internal sealed class ChatGptOAuthClient
         descriptor.Permissions.UnionWith([Permissions.Endpoints.Authorization, Permissions.Endpoints.Token,
             Permissions.GrantTypes.AuthorizationCode, Permissions.GrantTypes.RefreshToken,
             Permissions.ResponseTypes.Code, Permissions.Prefixes.Scope + ChatGptConfiguration.ReadScope,
+            Permissions.Prefixes.Scope + ChatGptConfiguration.WriteScope,
             Permissions.Prefixes.Resource + _configuration.Resource]);
         descriptor.Requirements.Add(Requirements.Features.ProofKeyForCodeExchange);
         string? secret = application is null || rotateSecret ? Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32)) : null;

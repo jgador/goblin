@@ -8,7 +8,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application;
+using Goblin.Application.Work;
+using Goblin.Contracts;
+using Goblin.Core.Work;
 using Goblin.Database;
 using Goblin.Integrations.ChatGpt;
 using Goblin.Persistence;
@@ -25,6 +30,7 @@ using Microsoft.IdentityModel.Tokens;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using Npgsql;
+using Wolverine;
 using Xunit;
 using Env = Goblin.Contracts.Configuration.EnvironmentVariables;
 
@@ -70,7 +76,7 @@ public sealed class ChatGptOAuthTests
     }
 
     [OAuthDatabaseFact]
-    public async Task OwnerConsentPkceTokensAndWorkGrantsSurviveRestartAndCanBeRevoked()
+    public async Task OwnerConsentPkceTokensAndConnectionWideWorkAccessSurviveRestartAndCanBeRevoked()
     {
         await using Database database = await Database.CreateAsync();
         string directory = DirectoryPath();
@@ -151,7 +157,7 @@ public sealed class ChatGptOAuthTests
                 mcp.DefaultRequestHeaders.Authorization = new("Bearer", access);
                 await using var transport = new HttpClientTransport(new HttpClientTransportOptions { Endpoint = new Uri(Origin + "/mcp"), OAuth = null, TransportMode = HttpTransportMode.StreamableHttp }, mcp, ownsHttpClient: false);
                 await using McpClient client = await McpClient.CreateAsync(transport);
-                Assert.Equal(5, (await client.ListToolsAsync()).Count);
+                Assert.Equal(23, (await client.ListToolsAsync()).Count);
                 CallToolResult ping = await client.CallToolAsync("goblin_ping");
                 Assert.False(ping.IsError ?? false);
                 Assert.Equal("Goblin MCP connection is working.", ping.StructuredContent!.Value.GetProperty("message").GetString());
@@ -160,12 +166,111 @@ public sealed class ChatGptOAuthTests
                 CallToolResult empty = await client.CallToolAsync("goblin_list_work");
                 Assert.Contains("\"items\":[]", JsonSerializer.Serialize(empty));
                 await database.SeedWorkAsync();
-                using HttpResponseMessage share = await owner.PostAsync("/api/integrations/chatgpt/grants", Json(new { workId = "101", hours = 24, subject = "untrusted-subject" }));
-                Assert.Equal(HttpStatusCode.OK, share.StatusCode);
-                CallToolResult shared = await client.CallToolAsync("goblin_list_work");
-                Assert.Contains("Shared objective", JsonSerializer.Serialize(shared));
-                Assert.DoesNotContain("Private objective", JsonSerializer.Serialize(shared));
-                Assert.True((await client.CallToolAsync("goblin_get_work_status", new Dictionary<string, object?> { ["workId"] = "102" })).IsError);
+                CallToolResult listed = await client.CallToolAsync("goblin_list_work");
+                Assert.Contains("Existing objective", JsonSerializer.Serialize(listed));
+                Assert.Contains("Another objective", JsonSerializer.Serialize(listed));
+                Assert.False((await client.CallToolAsync("goblin_get_work", new Dictionary<string, object?> { ["workId"] = "102" })).IsError ?? false);
+                CallToolResult reserved = await client.CallToolAsync("goblin_reserve_work_ids", new Dictionary<string, object?> { ["forCreate"] = true });
+                Assert.False(reserved.IsError ?? false);
+                string workId = reserved.StructuredContent!.Value.GetProperty("workId").GetString()!;
+                string commandId = reserved.StructuredContent.Value.GetProperty("commandId").GetString()!;
+                var create = new Dictionary<string, object?>
+                {
+                    ["commandId"] = commandId,
+                    ["workId"] = workId,
+                    ["objective"] = "Plugin objective"
+                };
+                CallToolResult created = await client.CallToolAsync("goblin_create_work", create);
+                Assert.False(created.IsError ?? false);
+                Assert.Equal("Plugin objective", created.StructuredContent!.Value.GetProperty("work").GetProperty("objective").GetString());
+                CallToolResult repeated = await client.CallToolAsync("goblin_create_work", create);
+                Assert.Equal(created.StructuredContent.Value.GetProperty("work").GetProperty("version").GetInt64(),
+                    repeated.StructuredContent!.Value.GetProperty("work").GetProperty("version").GetInt64());
+                using HttpResponseMessage fromGoblin = await owner.GetAsync("/api/work/" + workId);
+                Assert.Equal("Plugin objective", (await DocumentAsync(fromGoblin)).GetProperty("work").GetProperty("objective").GetString());
+                CallToolResult updateId = await client.CallToolAsync("goblin_reserve_work_ids", new Dictionary<string, object?> { ["forCreate"] = false });
+                string contextId = updateId.StructuredContent!.Value.GetProperty("commandId").GetString()!;
+                long version = created.StructuredContent.Value.GetProperty("work").GetProperty("version").GetInt64();
+                CallToolResult contextUpdate = await client.CallToolAsync("goblin_add_work_context", new Dictionary<string, object?>
+                { ["commandId"] = contextId, ["workId"] = workId, ["expectedVersion"] = version, ["text"] = "Plugin context" });
+                Assert.False(contextUpdate.IsError ?? false);
+                version = contextUpdate.StructuredContent!.Value.GetProperty("work").GetProperty("version").GetInt64();
+                CallToolResult messages = await client.CallToolAsync("goblin_get_work_section", new Dictionary<string, object?>
+                { ["workId"] = workId, ["section"] = "Messages", ["expectedVersion"] = version });
+                Assert.Contains("Plugin context", messages.StructuredContent!.Value.GetProperty("contentJson").GetString());
+                using HttpResponseMessage goblinIds = await owner.PostAsync("/api/identities", Json(new { kinds = new[] { "Command" } }));
+                long goblinCommandId = long.Parse((await DocumentAsync(goblinIds)).GetProperty("ids")[0].GetString()!);
+                using HttpResponseMessage goblinUpdate = await owner.PostAsync("/api/work/commands", Json(new
+                { commandId = goblinCommandId, workId = long.Parse(workId), action = "AddContext", expectedVersion = version, text = "Goblin context" }));
+                Assert.Equal(HttpStatusCode.OK, goblinUpdate.StatusCode);
+                CallToolResult current = await client.CallToolAsync("goblin_get_work", new Dictionary<string, object?> { ["workId"] = workId });
+                long nextVersion = current.StructuredContent!.Value.GetProperty("version").GetInt64();
+                CallToolResult currentMessages = await client.CallToolAsync("goblin_get_work_section", new Dictionary<string, object?>
+                { ["workId"] = workId, ["section"] = "Messages", ["expectedVersion"] = nextVersion });
+                Assert.Contains("Goblin context", currentMessages.StructuredContent!.Value.GetProperty("contentJson").GetString());
+                CallToolResult staleId = await client.CallToolAsync("goblin_reserve_work_ids", new Dictionary<string, object?> { ["forCreate"] = false });
+                CallToolResult stale = await client.CallToolAsync("goblin_add_work_context", new Dictionary<string, object?>
+                {
+                    ["commandId"] = staleId.StructuredContent!.Value.GetProperty("commandId").GetString(),
+                    ["workId"] = workId,
+                    ["expectedVersion"] = version,
+                    ["text"] = "Stale context"
+                });
+                Assert.True(stale.IsError);
+                Assert.Contains("work_changed", JsonSerializer.Serialize(stale));
+                CallToolResult invalidId = await client.CallToolAsync("goblin_reserve_work_ids", new Dictionary<string, object?> { ["forCreate"] = false });
+                CallToolResult invalidAction = await client.CallToolAsync("goblin_approve_work_result", new Dictionary<string, object?>
+                {
+                    ["commandId"] = invalidId.StructuredContent!.Value.GetProperty("commandId").GetString(),
+                    ["workId"] = workId,
+                    ["expectedVersion"] = nextVersion,
+                    ["attemptId"] = "999"
+                });
+                Assert.True(invalidAction.IsError);
+
+                CallToolResult disconnectedIds = await client.CallToolAsync("goblin_reserve_work_ids",
+                    new Dictionary<string, object?> { ["forCreate"] = true });
+                string disconnectedWorkId = disconnectedIds.StructuredContent!.Value.GetProperty("workId").GetString()!;
+                string disconnectedCommandId = disconnectedIds.StructuredContent.Value.GetProperty("commandId").GetString()!;
+                mcp.DefaultRequestHeaders.Accept.ParseAdd("application/json, text/event-stream");
+                await using (var blocker = new NpgsqlConnection(database.Admin))
+                {
+                    await blocker.OpenAsync();
+                    await using NpgsqlTransaction transaction = await blocker.BeginTransactionAsync();
+                    await new NpgsqlCommand("LOCK TABLE work_item IN ACCESS EXCLUSIVE MODE", blocker, transaction).ExecuteNonQueryAsync();
+                    try
+                    {
+                        using var disconnected = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                        Task<HttpResponseMessage> request = mcp.PostAsync("/mcp", Json(new
+                        {
+                            jsonrpc = "2.0",
+                            id = 9,
+                            method = "tools/call",
+                            @params = new
+                            {
+                                name = "goblin_create_work",
+                                arguments = new
+                                { commandId = disconnectedCommandId, workId = disconnectedWorkId, objective = "Accepted despite disconnect" }
+                            }
+                        }), disconnected.Token);
+                        await database.WaitForWorkLockAsync(request);
+                        disconnected.Cancel();
+                        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await request);
+                    }
+                    finally { await transaction.RollbackAsync(); }
+                }
+                JsonElement afterDisconnect = default;
+                for (int attempt = 0; attempt < 100; attempt++)
+                {
+                    using HttpResponseMessage response = await owner.GetAsync("/api/work/" + disconnectedWorkId);
+                    if (response.StatusCode == HttpStatusCode.OK)
+                    {
+                        afterDisconnect = await DocumentAsync(response);
+                        break;
+                    }
+                    await Task.Delay(50);
+                }
+                Assert.Equal("Accepted despite disconnect", afterDisconnect.GetProperty("work").GetProperty("objective").GetString());
             }
             await using (Host restarted = await Host.CreateAsync(database.App, directory))
             {
@@ -174,7 +279,7 @@ public sealed class ChatGptOAuthTests
                 using HttpResponseMessage setup = await owner.GetAsync("/api/integrations/chatgpt");
                 JsonElement state = await DocumentAsync(setup);
                 Assert.Equal(subject, state.GetProperty("ownerSubject").GetString());
-                Assert.Equal(subject, state.GetProperty("grants")[0].GetProperty("subject").GetString());
+                Assert.False(state.TryGetProperty("grants", out _));
                 using HttpClient exchange = restarted.Client();
                 exchange.DefaultRequestHeaders.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(ChatGptConfiguration.ClientId + ":" + secret)));
                 using HttpResponseMessage rotated = await exchange.PostAsync("/oauth/token", Refresh(refresh));
@@ -193,8 +298,22 @@ public sealed class ChatGptOAuthTests
                 Assert.Equal(HttpStatusCode.OK, valid.StatusCode);
                 using HttpResponseMessage revoked = await owner.PostAsync("/api/integrations/chatgpt/client/revoke", Json(new { }));
                 Assert.Equal(HttpStatusCode.OK, revoked.StatusCode);
-                using HttpResponseMessage denied = await bearer.PostAsync("/mcp", Json(new { }));
+                using HttpResponseMessage denied = await bearer.PostAsync("/mcp", Json(new
+                {
+                    jsonrpc = "2.0",
+                    id = 2,
+                    method = "tools/call",
+                    @params = new { name = "goblin_get_work", arguments = new { workId = "102" } }
+                }));
                 Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
+                using HttpResponseMessage deniedWrite = await bearer.PostAsync("/mcp", Json(new
+                {
+                    jsonrpc = "2.0",
+                    id = 3,
+                    method = "tools/call",
+                    @params = new { name = "goblin_create_work", arguments = new { commandId = "999", workId = "998", objective = "Denied" } }
+                }));
+                Assert.Equal(HttpStatusCode.Unauthorized, deniedWrite.StatusCode);
                 using HttpResponseMessage refreshDenied = await exchange.PostAsync("/oauth/token", Refresh(renewedRefresh));
                 Assert.Equal(HttpStatusCode.BadRequest, refreshDenied.StatusCode);
             }
@@ -222,7 +341,7 @@ public sealed class ChatGptOAuthTests
             {
                 Dictionary<string, string?> parameters = Parameters(verifier);
                 if (invalid == "resource") parameters["resource"] = "https://other.example.test/mcp";
-                if (invalid == "scope") parameters["scope"] = "openid";
+                if (invalid == "scope") parameters["scope"] = "openid offline_access " + ChatGptConfiguration.ReadScope;
                 if (invalid == "pkce") parameters["code_challenge_method"] = "plain";
                 if (invalid == "callback") parameters["redirect_uri"] = "https://other.example.test/callback";
                 using HttpResponseMessage rejected = await owner.GetAsync(QueryHelpers.AddQueryString("/oauth/authorize", parameters));
@@ -293,7 +412,7 @@ public sealed class ChatGptOAuthTests
         ["client_id"] = ChatGptConfiguration.ClientId,
         ["response_type"] = "code",
         ["redirect_uri"] = Callback,
-        ["scope"] = "openid offline_access " + ChatGptConfiguration.ReadScope,
+        ["scope"] = ChatGptConfiguration.AuthorizationScopes,
         ["resource"] = Origin + "/mcp",
         ["state"] = "fixture-state",
         ["code_challenge"] = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier))),
@@ -365,12 +484,18 @@ public sealed class ChatGptOAuthTests
             builder.WebHost.UseTestServer();
             builder.Services.AddSingleton(workspace);
             builder.Services.AddGoblinPersistence(connection);
+            builder.Services.AddSingleton<WorkOutboxFactory>();
+            builder.Services.AddSingleton<WorkStore>();
+            builder.Services.AddSingleton<IdentityStore>();
+            builder.Services.AddSingleton<GitHubStore>();
+            builder.Host.UseWolverine(o => ApplicationServices.ConfigureMessaging(o, connection));
             ChatGptMcp.Configure(builder.Services, new ApplicationOptions { EnableWork = true, EnableChatGpt = true, PublicOrigin = Origin, DataDirectory = directory });
             WebApplication app = builder.Build();
             StaticAssets assets = await StaticAssets.LoadAsync(Path.Combine(Repository(), "frontend", "dist"));
             app.UseMiddleware<WorkspaceMiddleware>(assets, false);
             app.UseAuthentication();
             SessionEndpoints.Map(app);
+            WorkEndpoints.Map(app);
             ChatGptMcp.Map(app);
             await app.StartAsync();
             return new Host(app);
@@ -391,9 +516,11 @@ public sealed class ChatGptOAuthTests
     {
         private readonly string _name;
         private readonly string _admin;
+        public string Admin { get; }
         public string App { get; }
 
-        private Database(string name, string admin, string app) { _name = name; _admin = admin; App = app; }
+        private Database(string name, string admin, string adminForDatabase, string app)
+        { _name = name; _admin = admin; Admin = adminForDatabase; App = app; }
 
         public static async Task<Database> CreateAsync()
         {
@@ -409,14 +536,45 @@ public sealed class ChatGptOAuthTests
             await db.OpenAsync();
             await new NpgsqlCommand("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO goblin_app; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO goblin_app;", db).ExecuteNonQueryAsync();
             await SqlMigrations.ApplyAsync(admin.ConnectionString, Path.Combine(Repository(), "backend", "database", "migrations"), TextWriter.Null);
-            return new Database(name, administrative, app.ConnectionString);
+            return new Database(name, administrative, admin.ConnectionString, app.ConnectionString);
+        }
+
+        public async Task WaitForWorkLockAsync(Task<HttpResponseMessage> request)
+        {
+            await using var observer = new NpgsqlConnection(Admin);
+            await observer.OpenAsync();
+            for (int attempt = 0; attempt < 200; attempt++)
+            {
+                if (request.IsCompleted)
+                {
+                    using HttpResponseMessage response = await request;
+                    throw new InvalidOperationException("The Work command finished before the lock wait: " + response.StatusCode +
+                        " " + await response.Content.ReadAsStringAsync());
+                }
+                await using var command = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = @name AND wait_event_type = 'Lock' AND query LIKE '%work_item%')", observer);
+                command.Parameters.AddWithValue("name", _name);
+                if ((bool)(await command.ExecuteScalarAsync())!) return;
+                await Task.Delay(50);
+            }
+            throw new TimeoutException("The Work command did not reach its database lock.");
         }
 
         public async Task SeedWorkAsync()
         {
             await using var db = new NpgsqlConnection(App);
             await db.OpenAsync();
-            await new NpgsqlCommand("INSERT INTO work_item (id, objective, state) VALUES (101, 'Shared objective', '{}'), (102, 'Private objective', '{}');", db).ExecuteNonQueryAsync();
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            foreach ((long id, string objective) in new[] { (101L, "Existing objective"), (102L, "Another objective") })
+            {
+                var work = new WorkItem(id, objective, now);
+                work.Assign(1, now);
+                await using var command = new NpgsqlCommand("INSERT INTO work_item (id, objective, state, status, agent_id) VALUES (@id, @objective, @state::jsonb, @status, 1)", db);
+                command.Parameters.AddWithValue("id", id);
+                command.Parameters.AddWithValue("objective", objective);
+                command.Parameters.AddWithValue("state", JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options));
+                command.Parameters.AddWithValue("status", work.Status.ToString());
+                await command.ExecuteNonQueryAsync();
+            }
         }
 
         public async ValueTask DisposeAsync()

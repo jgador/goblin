@@ -27,8 +27,11 @@ public sealed class ChatGptAuthenticationTests
     [InlineData("expiry")]
     [InlineData("future")]
     [InlineData("subject")]
+    [InlineData("wrong_subject")]
     [InlineData("id")]
     [InlineData("scope")]
+    [InlineData("read_scope")]
+    [InlineData("write_scope")]
     [InlineData("type")]
     [InlineData("signature")]
     public async Task TokenMustProveIdentityResourceLifetimeAndScope(string invalid)
@@ -105,11 +108,12 @@ public sealed class ChatGptAuthenticationTests
     public void CallbackAllowsExactDisplayedChatGptRedirect() =>
         ChatGptCallback.Require("https://chatgpt.com/connector/oauth/test-callback");
 
-    internal sealed class Tokens : IJwksDocumentSource, IDisposable
+    internal sealed class Tokens : IChatGptOwnerSource, IDisposable
     {
         private readonly RSA _rsa = RSA.Create(2048);
         private readonly RSA _other = RSA.Create(2048);
         public int Reads { get; private set; }
+        public string OwnerSubject => "subject-one";
         public bool Unavailable { get; set; }
         public Uri? Address { get; private set; }
 
@@ -118,9 +122,15 @@ public sealed class ChatGptAuthenticationTests
             var key = new RsaSecurityKey(invalid == "signature" ? _other : _rsa) { KeyId = invalid == "signature" ? "other" : "current" };
             var claims = new Dictionary<string, object>
             {
-                ["sub"] = invalid == "subject" ? "" : "subject-one",
+                ["sub"] = invalid == "subject" ? "" : invalid == "wrong_subject" ? "subject-two" : OwnerSubject,
                 ["jti"] = invalid == "id" ? "" : Guid.NewGuid().ToString("N"),
-                ["scope"] = invalid == "scope" ? "other.read" : ChatGptConfiguration.ReadScope
+                ["scope"] = invalid switch
+                {
+                    "scope" => "other.read",
+                    "read_scope" => ChatGptConfiguration.ReadScope,
+                    "write_scope" => ChatGptConfiguration.WriteScope,
+                    _ => ChatGptConfiguration.ReadScope + " " + ChatGptConfiguration.WriteScope
+                }
             };
             return new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
             {

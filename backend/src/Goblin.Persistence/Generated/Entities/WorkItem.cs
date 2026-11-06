@@ -40,9 +40,6 @@ public partial class WorkItem
     public virtual Agent? Agent { get; set; }
 
     [InverseProperty("Work")]
-    public virtual ICollection<ChatgptWorkGrant> ChatgptWorkGrants { get; set; } = [];
-
-    [InverseProperty("Work")]
     public virtual ICollection<Conversation> Conversations { get; set; } = [];
 
     [InverseProperty("Work")]

@@ -4,23 +4,16 @@ import type {
 } from "../api/chatgpt-contracts.js";
 import { escapeHtml as e } from "../work/presentation.js";
 
-export const setupSteps = [
-    "Prepare",
-    "Sign-in",
-    "Install",
-    "Share Work",
-    "Test",
-] as const;
+export const setupSteps = ["Prepare", "Sign-in", "Install", "Test"] as const;
 export const confirmations = [
     "installed",
     "listed",
-    "status",
-    "denied",
+    "written",
+    "revoked",
 ] as const;
 export type Confirmation = (typeof confirmations)[number];
 export type Workflow = {
     state: ChatGptState;
-    work: { id: string; objective: string }[];
     verification?: ChatGptVerification;
     confirmed: Set<Confirmation>;
     step: number;
@@ -61,7 +54,7 @@ function task(title: string, body: string) {
     return `<div class="chatgpt-task"><h5><span class="chatgpt-task-number">${number}</span>${label.join(". ")}</h5>${body}</div>`;
 }
 function unavailable() {
-    return `<h4 id="chatgpt-step-title" tabindex="-1">Prepare your instance first</h4><p class="chatgpt-callout">Prepare this Goblin instance first to get its connection details and enable sharing.</p>${action("prepare", "Go to Prepare", true)}`;
+    return `<h4 id="chatgpt-step-title" tabindex="-1">Prepare your instance first</h4><p class="chatgpt-callout">Prepare this Goblin instance first to get its connection details.</p>${action("prepare", "Go to Prepare", true)}`;
 }
 export function providerReady(model: Workflow) {
     return !!(
@@ -94,8 +87,7 @@ export function completed(model: Workflow): boolean[] {
         model.state.configured,
         providerReady(model),
         callbackSaved(model) && c.has("installed"),
-        model.state.grants.some((g) => !g.expired),
-        c.has("listed") && c.has("status") && c.has("denied"),
+        c.has("listed") && c.has("written"),
     ];
 }
 export function stepContent(model: Workflow): string {
@@ -107,8 +99,6 @@ export function stepContent(model: Workflow): string {
             return provider(model);
         case 2:
             return install(model);
-        case 3:
-            return share(model);
         default:
             return testConnection(model);
     }
@@ -153,29 +143,20 @@ function provider(m: Workflow) {
         `<li data-passed="${ok}"><strong>${ok ? "Passed" : "Needs attention"}: ${title}</strong></li>`;
     return `<h4 id="chatgpt-step-title" tabindex="-1">Set up secure sign-in</h4><p>ChatGPT connects as the Goblin owner. You will unlock Goblin and approve the connection in your browser.</p>
         ${task("1. Prepare the OAuth client", clientPreparation(m))}
-        ${task("2. Check the server and storage", `${action("verify", "Check provider and storage", true)}${v ? `<ul class="chatgpt-checks">${check(v.discovery, "OAuth server configuration")}${check(v.database, "OAuth and Work grant storage")}${check(v.issuerResponses, "Authorization response issuer")}</ul><p class="settings-description">Checked ${e(new Date(v.checkedAt).toLocaleString())}. These are local Goblin checks. Verify HTTPS reachability and ChatGPT sign-in when installing.</p>` : "<p>Run this after creating the client. A passing check unlocks the next step.</p>"}`)}`;
+        ${task("2. Check the server and storage", `${action("verify", "Check provider and storage", true)}${v ? `<ul class="chatgpt-checks">${check(v.discovery, "OAuth server configuration")}${check(v.database, "OAuth and Work storage")}${check(v.issuerResponses, "Authorization response issuer")}</ul><p class="settings-description">Checked ${e(new Date(v.checkedAt).toLocaleString())}. These are local Goblin checks. Verify HTTPS reachability and ChatGPT sign-in when installing.</p>` : "<p>Run this after creating the client. A passing check unlocks the next step.</p>"}`)}`;
 }
 function install(m: Workflow) {
     const s = m.state;
-    return `<h4 id="chatgpt-step-title" tabindex="-1">Create and install your private plugin</h4><p>Keep Goblin and ChatGPT open in separate tabs. Enter Goblin's details in ChatGPT, save its return URL here, then sign in. Your private plugin reads only the Work you choose to share.</p>
+    return `<h4 id="chatgpt-step-title" tabindex="-1">Create and install your private plugin</h4><p>Keep Goblin and ChatGPT open in separate tabs. Enter Goblin's details in ChatGPT, save its return URL here, then sign in. This private connection can read and manage all existing and future Work.</p>
         ${task("1. Open the custom server form in ChatGPT", `${external("https://chatgpt.com/plugins", "Open ChatGPT Plugins")}<p>Select <strong>+ → Add custom MCP server</strong>, then copy the name and description below into that form.</p>${copyField("Plugin name", "name", s.name)}${copyField("Description", "description", s.description, true)}`)}
         ${task("2. Enter Goblin's connection details in ChatGPT", `<p>In ChatGPT's form, choose <strong>Server URL</strong> and <strong>OAuth</strong>, or your configured Secure MCP Tunnel. Copy the values below into the matching fields there and enter your saved client secret.</p><p>Choose <code>client_secret_basic</code> for <strong>Token endpoint auth method</strong>. If <strong>Base scopes</strong> is shown, use the OAuth scopes below.</p>${copyField("Server URL", "serverUrl", s.serverUrl!)}${copyField("OAuth client ID", "clientId", s.clientId)}${copyField("OAuth scopes", "scope", s.scope)}${clientSecret(m)}`)}
         ${callbackTask(m)}
-        ${task("4. Return to ChatGPT and connect", `<div data-callback-blocked ${callbackSaved(m) ? "hidden" : ""}><p class="chatgpt-callout">Save the return URL in section 3 above before starting sign-in in ChatGPT. After Goblin shows <strong>Callback saved</strong>, you can continue here.</p></div><div data-callback-ready ${callbackSaved(m) ? "" : "hidden"}><p>Return to the form you left open in ChatGPT to create and install the plugin. When Goblin's HTTPS sign-in page opens, enter your Goblin password and approve the connection. Goblin then sends you back to ChatGPT to finish.</p><p>If sign-in already failed before you saved the callback, restart the connection from ChatGPT to get a fresh request.</p><details><summary>Check tools and try a first call</summary><p>Confirm these tools appear: <code>goblin_ping</code>, <code>goblin_list_work</code>, <code>goblin_get_work_status</code>, <code>goblin_get_work_attention</code>, and <code>goblin_get_work_result</code>.</p><p>To test the connection before sharing Work, select your plugin with <strong>@</strong> in a new ChatGPT conversation and ask “Call goblin_ping now and show every field from the tool response unchanged.” The reply includes a fresh response ID, UTC time, and basic server runtime details. Match the response ID to the goblin_ping response event in Goblin's logs to verify the call. No Work grants or GitHub sign-in are needed.</p></details></div>${confirm(m, "installed", "I installed the plugin, signed in, and can see its tools in ChatGPT.", !callbackSaved(m))}`)}`;
-}
-
-function share(m: Workflow) {
-    const s = m.state;
-    return `<h4 id="chatgpt-step-title" tabindex="-1">Choose what ChatGPT can read</h4><p>Signing in grants no Work access. Share only the Work you want your ChatGPT connection to read.</p>
-        ${copyField("Owner OAuth ID", "ownerSubject", s.ownerSubject!)}
-        <form data-chatgpt-form="grant"><label><span id="chatgpt-work-label">Work</span><select name="workId" aria-labelledby="chatgpt-work-label" required><option value="">Choose Work</option>${m.work.map((w) => `<option value="${e(w.id)}">${e(w.objective.slice(0, 120))} (${e(w.id)})</option>`).join("")}</select></label><label><span id="chatgpt-expiry-label">Access expires in</span><select name="hours" aria-labelledby="chatgpt-expiry-label"><option value="24">24 hours</option><option value="1">1 hour</option><option value="168">7 days</option></select></label><label class="chatgpt-checkbox"><input type="checkbox" name="shareApprovedResult">Also share the latest approved result</label><p class="settings-description">Shares the objective, status, and attention codes. Including a result pins its approved attempt; later results remain private. Re-sharing this Work replaces its grant.</p><button class="settings-primary" ${m.work.length ? "" : "disabled"}>Share selected Work</button></form>
-        ${m.work.length ? "" : '<p class="chatgpt-callout">No Work is available to share. <a href="/">Create Work in Goblin</a>, then return here.</p>'}${action("reload", "Refresh Work and access")}
-        ${s.grants.length ? `<ul class="chatgpt-grants">${s.grants.map((g) => `<li><div><strong>Work ${e(g.workId)}</strong><span>${e(g.subject)}</span><small>${g.resultAttemptId ? `Approved result from attempt ${e(g.resultAttemptId)} included. ` : "Status and attention only. "}${g.expired ? "Expired" : "Expires"} ${e(new Date(g.expiresAt).toLocaleString())}</small></div><button type="button" data-chatgpt="revoke" data-id="${e(g.id)}" aria-label="Revoke Work ${e(g.workId)} for ${e(g.subject)}">Revoke</button></li>`).join("")}</ul>` : "<p>No Work is shared yet.</p>"}`;
+        ${task("4. Return to ChatGPT and connect", `<div data-callback-blocked ${callbackSaved(m) ? "hidden" : ""}><p class="chatgpt-callout">Save the return URL in section 3 above before starting sign-in in ChatGPT. After Goblin shows <strong>Callback saved</strong>, you can continue here.</p></div><div data-callback-ready ${callbackSaved(m) ? "" : "hidden"}><p>Return to the form you left open in ChatGPT to create and install the plugin. When Goblin's HTTPS sign-in page opens, enter your Goblin password and approve full Work access. Goblin then sends you back to ChatGPT to finish.</p><p>If sign-in already failed before you saved the callback, restart the connection from ChatGPT to get a fresh request. Reconnect an older read-only plugin to grant write access.</p><details><summary>Check tools and try a first call</summary><p>Refresh the plugin in ChatGPT and confirm it shows <code>goblin_list_work</code>, <code>goblin_get_work</code>, <code>goblin_get_work_section</code>, <code>goblin_reserve_work_ids</code>, <code>goblin_create_work</code>, and <code>goblin_add_work_context</code>, plus tools for the other Work actions and available repository discovery.</p><p>Select your plugin with <strong>@</strong> in a new conversation and ask “Call goblin_ping now and show every field from the tool response unchanged.” Match its response ID to the goblin_ping event in Goblin's logs. ChatGPT may confirm writes according to your conversation and workspace settings.</p></details></div>${confirm(m, "installed", "I installed the plugin, signed in, and can see its tools in ChatGPT.", !callbackSaved(m))}`)}`;
 }
 function testConnection(m: Workflow) {
-    return `<h4 id="chatgpt-step-title" tabindex="-1">Try your plugin in a conversation</h4><p>Open a new ChatGPT conversation, type <strong>@</strong>, and select your installed Goblin plugin. Run these checks using the account you granted access to.</p>${external("https://chatgpt.com/", "Open ChatGPT")}
-        ${task("1. List your shared Work", `${copyField("List prompt", "list-prompt", "List the Work shared with this connection.", true)}<p>Expect only this user’s unexpired Work grants. An empty list usually means the user ID or grant needs checking.</p>${confirm(m, "listed", "The list contains only Work I shared with this user.")}`)}
-        ${task("2. Compare its status with Goblin", `${copyField("Status prompt", "status-prompt", "Show the status and attention details for the first Work item in that list.", true)}<p>Compare the answer with that Work in Goblin. An approved result is readable only if you explicitly included it in the grant.</p>${confirm(m, "status", "The status and attention details match Goblin.")}`)}
-        ${task("3. Check that private Work stays private", `<p>Copy the ID of a Work item you did <strong>not</strong> share with this user, then ask ChatGPT for its status. Expect an access denial with no private details.</p>${confirm(m, "denied", "Reading an unshared Work ID was denied.")}`)}
-        ${completed(m)[4] ? `<p class="chatgpt-callout"><strong>You confirmed the private plugin works.</strong> Keep using it with @ in ChatGPT. Return to Share Work to change or revoke access.</p>${action("share", "Manage shared Work")}` : '<p class="settings-description">Check each result after testing. Goblin cannot observe your ChatGPT conversation.</p>'}`;
+    return `<h4 id="chatgpt-step-title" tabindex="-1">Try your plugin in a conversation</h4><p>Open a new ChatGPT conversation, type <strong>@</strong>, and select your installed Goblin plugin.</p>${external("https://chatgpt.com/", "Open ChatGPT")}
+        ${task("1. Read existing and new Work", `${copyField("Read prompt", "list-prompt", "List all Goblin Work. Show the full objective, status, questions, attempts, and results for one Work item created before this connection and one created after it. Use continuation until content is complete.", true)}<p>Compare both items with Goblin. No individual grant or result selection is needed.</p>${confirm(m, "listed", "Existing and new Work are readable without sharing either item.")}`)}
+        ${task("2. Create and update Work", `${copyField("Write prompt", "write-prompt", "Reserve Work and command IDs, then create a Goblin Work item with the objective ‘Draft a short checklist for a weekend garden project.’ Read its version, reserve another command ID, add the context ‘Keep the checklist under five steps,’ then show its current status and messages.", true)}<p>Confirm the item and context appear in Goblin. ChatGPT may ask you to confirm write tool calls.</p>${confirm(m, "written", "Work created and updated through ChatGPT appears in Goblin.")}`)}
+        ${task("3. Verify revocation when needed", `<p>Use <strong>Revoke ChatGPT connections</strong> below, then ask the same conversation to list Work and create another item. Both calls must be denied. Reconnect in ChatGPT to resume access.</p>${confirm(m, "revoked", "Revocation denied both reads and writes.")}`)}
+        ${completed(m)[3] ? `<p class="chatgpt-callout"><strong>Your Work connection is ready.</strong> Keep using it with @ in ChatGPT. Goblin lifecycle rules still apply to execution, approval, and retry.</p>` : '<p class="settings-description">Check each result after testing. Goblin cannot observe your ChatGPT conversation.</p>'}`;
 }

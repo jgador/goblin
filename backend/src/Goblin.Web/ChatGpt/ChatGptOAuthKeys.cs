@@ -10,7 +10,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Goblin.Web;
 
-internal sealed class ChatGptOAuthKeys : IJwksDocumentSource, IDisposable
+internal sealed class ChatGptOAuthKeys : IChatGptOwnerSource, IDisposable
 {
     private readonly ChatGptConfiguration _configuration;
     public X509Certificate2 Signing { get; }
