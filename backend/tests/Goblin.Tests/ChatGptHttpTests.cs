@@ -86,7 +86,7 @@ public sealed class ChatGptHttpTests
 
     [Theory]
     [InlineData("/api/integrations/chatgpt/grants/revoke")]
-    [InlineData("/api/integrations/chatgpt/package")]
+    [InlineData("/api/integrations/chatgpt/client/revoke")]
     public async Task BearerTokenCannotAdministerSetupAndOwnerPostStillRequiresOrigin(string path)
     {
         await using Host host = await Host.CreateAsync();
@@ -105,7 +105,8 @@ public sealed class ChatGptHttpTests
     [Theory]
     [InlineData("/api/integrations/chatgpt/creator/check")]
     [InlineData("/api/integrations/chatgpt/creator/prepare")]
-    public async Task RemovedCodexSetupEndpointsAreUnavailableToTheOwner(string path)
+    [InlineData("/api/integrations/chatgpt/package")]
+    public async Task RemovedSetupEndpointsAreUnavailableToTheOwner(string path)
     {
         await using Host host = await Host.CreateAsync();
         using HttpClient http = host.Client();

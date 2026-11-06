@@ -27,9 +27,3 @@ export type ChatGptVerification = {
     issuerResponses: boolean;
     checkedAt: string;
 };
-
-export type ChatGptPackage = {
-    pluginJson: string;
-    mcpJson: string;
-    archiveBase64: string;
-};

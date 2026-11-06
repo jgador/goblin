@@ -118,8 +118,8 @@ the origin is `https://dev.goblinboard.com`. A production connection uses that
 deployment's HTTPS origin instead. OAuth clients, keys, tokens, and Work grants
 belong to the selected instance; create a separate connection for each environment.
 
-1. In Goblin's `/settings?section=connections&provider=chatgpt`, choose **Private
-   plugin**. **Prepare** should show that the OAuth server and MCP endpoint are
+1. Open Goblin's `/settings?section=connections&provider=chatgpt`.
+   **Prepare** should show that the OAuth server and MCP endpoint are
    enabled. **Continue to Sign-in** opens the authentication setup step.
 2. In **Sign-in**, click **Create OAuth client** if no client exists. This step
    creates the client without asking for ChatGPT's callback. Copy and save the
@@ -376,9 +376,6 @@ defines the HTTPS and proxy requirements.
 4. Run [the ping test](#test-the-connection-without-work) and verify its response ID
    in **Settings → Tools → Logs** on that origin. Refresh the connection and
    repeat after application deployments.
-
-For a published directory listing, see
-[directory submission](chatgpt-integration.md#optional-directory-submission).
 
 ## Confirmed workflow and verification limits
 

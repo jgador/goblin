@@ -55,8 +55,6 @@ internal static class ChatGptEndpoints
             });
         });
         if (configuration is null) return;
-        app.MapPost(Root + "/package", (HttpContext context) => Results.Json(ChatGptPackage.Create(configuration,
-            ApiRequest.Body<ChatGptPackageRequest>(context, ContractJson.Options))));
         app.MapGet(Root + "/work", async (IDbContextFactory<GoblinDbContext> factory, CancellationToken token) =>
         {
             await using GoblinDbContext db = await factory.CreateDbContextAsync(token);

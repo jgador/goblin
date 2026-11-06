@@ -67,14 +67,6 @@ async function fixture(page: Page, configured = true) {
                       },
                   ];
         if (path === "/api/integrations/chatgpt/verify") json = verification;
-        if (path === "/api/integrations/chatgpt/package")
-            json = {
-                pluginJson: JSON.stringify({ name: "goblin-demo" }),
-                mcpJson: JSON.stringify({
-                    mcpServers: { goblin: { url: state.serverUrl } },
-                }),
-                archiveBase64: "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==",
-            };
         if (path === "/api/integrations/chatgpt/client") {
             const body = route.request().postDataJSON();
             const generate = !state.clientConfigured || body.rotateSecret;
@@ -219,6 +211,10 @@ test("private setup guides real actions, distinguishes failed checks, and preser
     await expect(
         page.getByText("Work shared.", { exact: false }),
     ).toBeVisible();
+    await expect(page.locator("[data-chatgpt-notice]")).toHaveAttribute(
+        "data-tone",
+        "info",
+    );
     expect(writes.find((w) => w.path.endsWith("/grants"))?.body).toEqual({
         workId: "9007199254740993",
         hours: 24,
@@ -431,7 +427,9 @@ test("first-time setup creates the secret before collecting ChatGPT's callback d
         page.getByLabel("OAuth client secret", { exact: true }),
     ).toHaveValue("fixture-oauth-secret");
     expect(
-        await page.evaluate(() => localStorage.getItem("goblin.chatgpt.setup")),
+        await page.evaluate(() =>
+            localStorage.getItem("goblin.chatgpt.private-setup"),
+        ),
     ).not.toContain("fixture-oauth-secret");
     await page.reload();
     await expect(
@@ -642,7 +640,9 @@ test("progress resumes without storing drafts or treating old provider checks as
         page.getByLabel("Owner OAuth ID", { exact: true }),
     ).toHaveValue(state.ownerSubject!);
     expect(
-        await page.evaluate(() => localStorage.getItem("goblin.chatgpt.setup")),
+        await page.evaluate(() =>
+            localStorage.getItem("goblin.chatgpt.private-setup"),
+        ),
     ).not.toContain("unsaved-callback");
     await goToStep(page, "Install");
     await expect(page.getByLabel("I installed the plugin")).toBeChecked();
@@ -659,104 +659,59 @@ test("progress resumes without storing drafts or treating old provider checks as
     await expect(page.getByLabel("I installed the plugin")).not.toBeChecked();
 });
 
-test("public submission is a separate workflow with explicit external confirmations", async ({
+test("setup supports only a private connection and ignores superseded publication progress", async ({
     page,
 }) => {
-    const { writes } = await fixture(page);
-    await page.goto("/settings?section=connections&provider=chatgpt");
-    await page.getByRole("button", { name: /^Publish publicly/ }).click();
-    await expect(
-        page.getByRole("heading", { name: "Prepare your public listing" }),
-    ).toBeVisible();
-    await expect(
-        page.getByRole("button", { name: "Continue to Review tests" }),
-    ).toBeDisabled();
-    await expect(
-        page.getByRole("link", { name: "View Goblin logo" }),
-    ).not.toHaveAttribute("download");
-    await page.getByLabel("Plugin ID", { exact: true }).fill("goblin-demo");
-    await page.getByLabel("Verified publisher name").fill("Example Studio");
-    await page
-        .getByLabel("Website URL", { exact: true })
-        .fill("https://example.test");
-    await page
-        .getByLabel("Support URL", { exact: true })
-        .fill("https://example.test/support");
-    await page
-        .getByLabel("Privacy policy URL", { exact: true })
-        .fill("https://example.test/privacy");
-    await page
-        .getByLabel("Terms of service URL", { exact: true })
-        .fill("https://example.test/terms");
-    await page
-        .getByLabel("Listing description", { exact: true })
-        .fill("Read shared Work from this instance.");
-    await page.getByLabel("I have a public review endpoint").check();
-    await page
-        .getByRole("button", { name: "Continue to Review tests" })
-        .click();
-    await expect(page.locator(".chatgpt-review-tests li")).toHaveCount(8);
-    await page
-        .getByLabel("Status-only sample Work ID")
-        .fill("9007199254740993");
-    await page
-        .getByLabel("Shared-result sample Work ID")
-        .fill("9007199254740994");
-    await page.getByLabel("Unshared sample Work ID").fill("9007199254740995");
-    await page.getByLabel("Demo video URL").fill("https://example.test/demo");
-    await page.getByLabel("I ran all eight cases").check();
-    await page
-        .getByRole("button", { name: "Continue to Submit", exact: true })
-        .click();
-    await page.getByRole("button", { name: "Generate plugin package" }).click();
-    await page.getByText("Review package contents", { exact: true }).click();
-    await expect(page.locator(".chatgpt-template").first()).toContainText(
-        "goblin-demo",
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    const { writes, state } = await fixture(page);
+    await page.addInitScript(
+        (scope) => {
+            localStorage.setItem(
+                "goblin.chatgpt.setup",
+                JSON.stringify({
+                    scope,
+                    path: "public",
+                    step: 3,
+                    confirmed: ["published"],
+                }),
+            );
+        },
+        JSON.stringify([state.issuer, state.serverUrl, state.ownerSubject]),
     );
-    expect(writes.at(-1)?.body).toMatchObject({
-        packageId: "goblin-demo",
-        publisher: "Example Studio",
-        description: "Read shared Work from this instance.",
-        statusWorkId: "9007199254740993",
-        resultWorkId: "9007199254740994",
-        privateWorkId: "9007199254740995",
-        videoUrl: "https://example.test/demo",
+    await page.goto("/settings?section=connections&provider=chatgpt");
+    await expect(
+        page.getByRole("heading", { name: "Prepare your instance" }),
+    ).toBeVisible();
+    await expect(
+        page.getByText("Server enabled", { exact: true }),
+    ).toBeVisible();
+    await expect(
+        page.getByText("Read-only access · Shared Work only"),
+    ).toBeVisible();
+    await expect(
+        page.getByRole("button", {
+            name: /Publish publicly|public submission|Generate plugin package/,
+        }),
+    ).toHaveCount(0);
+    await expect(
+        page.getByRole("link", { name: /submission portal/ }),
+    ).toHaveCount(0);
+    await expect(page.locator(".chatgpt-stepper button")).toHaveCount(5);
+    await mkdir(".artifacts/chatgpt-workflow/browser", { recursive: true });
+    await page.screenshot({
+        path: ".artifacts/chatgpt-workflow/browser/prepare-desktop.png",
     });
-    const download = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Save plugin ZIP" }).click();
-    expect((await download).suggestedFilename()).toBe("goblin-plugin.zip");
+    await goToStep(page, "Test");
+    await page.getByLabel("The list contains only Work").check();
+    await page.getByLabel("The status and attention details").check();
+    await page.getByLabel("Reading an unshared Work ID").check();
     await expect(
-        page.getByRole("link", { name: "Open plugin submission portal" }),
-    ).toHaveAttribute("href", "https://platform.openai.com/plugins");
-    await expect(
-        page.getByRole("button", { name: "Continue to Publish", exact: true }),
-    ).toBeDisabled();
-    await page.getByLabel("The portal confirms I submitted").check();
-    await page
-        .getByRole("button", { name: "Continue to Publish", exact: true })
-        .click();
-    await expect(
-        page.getByText("Approval and publication are separate steps.", {
-            exact: false,
-        }),
+        page.getByRole("button", { name: "Manage shared Work" }),
     ).toBeVisible();
     await expect(
-        page.getByLabel("I published the approved plugin"),
-    ).not.toBeChecked();
-    await page.getByLabel("I published the approved plugin").check();
-    await expect(page.getByText("Publication recorded by you.")).toBeVisible();
-    expect(writes.map((write) => write.path)).toEqual([
-        "/api/integrations/chatgpt/package",
-    ]);
-    await page.reload();
-    await expect(
-        page.getByRole("heading", {
-            name: "Publish and use the approved plugin",
-        }),
-    ).toBeVisible();
-    await expect(
-        page.getByLabel("I published the approved plugin"),
-    ).toBeChecked();
+        page.getByRole("button", { name: /public submission/ }),
+    ).toHaveCount(0);
+    expect(writes).toEqual([]);
 });
 
 test("starting setup again clears browser confirmations and drafts without revoking server settings", async ({
@@ -797,6 +752,10 @@ test("grant failures preserve the form and cannot claim success", async ({
     await expect(
         page.getByText("No approved result is available."),
     ).toBeVisible();
+    await expect(page.locator("[data-chatgpt-notice]")).toHaveAttribute(
+        "data-tone",
+        "error",
+    );
     await expect(
         page.getByLabel("Owner OAuth ID", { exact: true }),
     ).toHaveValue("owner-<img src=x>");
@@ -866,16 +825,34 @@ test("workflow remains usable without clipboard or browser storage and fits narr
         path: ".artifacts/chatgpt-workflow/browser/desktop.png",
         fullPage: true,
     });
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.getByLabel("Setup step", { exact: true })).toBeVisible();
-    for (const step of ["0", "1", "2", "3", "4"]) {
-        await page.getByLabel("Setup step", { exact: true }).selectOption(step);
-        expect(
-            await page.evaluate(
-                () => document.documentElement.scrollWidth <= window.innerWidth,
-            ),
-        ).toBe(true);
+    for (const width of [1024, 390, 320]) {
+        await page.setViewportSize({ width, height: 844 });
+        await expect(
+            page.getByLabel("Setup step", { exact: true }),
+        ).toBeVisible();
+        for (const step of ["0", "1", "2", "3", "4"]) {
+            await page
+                .getByLabel("Setup step", { exact: true })
+                .selectOption(step);
+            expect(
+                await page.evaluate(
+                    () =>
+                        document.documentElement.scrollWidth <=
+                        window.innerWidth,
+                ),
+            ).toBe(true);
+            for (const selector of [".settings-content", ".chatgpt-step-panel"])
+                expect(
+                    await page
+                        .locator(selector)
+                        .evaluate(
+                            (element) =>
+                                element.scrollWidth <= element.clientWidth + 1,
+                        ),
+                ).toBe(true);
+        }
     }
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.getByLabel("Setup step", { exact: true }).selectOption("2");
     await page
         .getByRole("heading", { name: "ChatGPT plugin", exact: true })

@@ -23,7 +23,7 @@ preproduction; recreate local installations when formats change. Follow
 | [Authentication](authentication.md) | Owner password and Codex account setup and checks |
 | [Codex integration](codex-integration.md) | Codex process, model selection, and protocol generation |
 | [Slack integration](slack-integration.md) | Slack app setup, linked users, and limits |
-| [ChatGPT plugin](chatgpt-integration.md) | Plugin setup, OAuth, Work access, and directory submission |
+| [ChatGPT plugin](chatgpt-integration.md) | Private plugin setup, OAuth, and Work access |
 | [Plugin testing](plugin-testing.md) | Complete WSL k3s → Chisel → private ChatGPT plugin test → localhost walkthrough, plus other environments |
 | [Chisel installation](../deploy/chisel/README.md) | One-time WSL client installation, credentials and fingerprint, and administrator gateway setup |
 | [Database](database.md) | SQL baseline, EF generation, and client access |

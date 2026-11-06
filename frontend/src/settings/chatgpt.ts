@@ -2,7 +2,6 @@ import { errorMessage, requestJson } from "../api/client.js";
 import type {
     ChatGptState,
     ChatGptVerification,
-    ChatGptPackage,
 } from "../api/chatgpt-contracts.js";
 import { escapeHtml as e } from "../work/presentation.js";
 import {
@@ -11,16 +10,21 @@ import {
     callbackSaved,
     completed,
     confirmations,
-    privateSteps,
-    publicSteps,
+    setupSteps,
     stepContent,
     type Confirmation,
-    type SetupPath,
     type Workflow,
 } from "./chatgpt-workflow.js";
 
 const base = "/api/integrations/chatgpt";
-const progressKey = "goblin.chatgpt.setup";
+const progressKey = "goblin.chatgpt.private-setup";
+const stepHints = [
+    "Enable your instance",
+    "Prepare secure access",
+    "Connect in ChatGPT",
+    "Choose what to share",
+    "Try a conversation",
+];
 
 export function mountChatGpt(root: HTMLElement) {
     const controller = new AbortController();
@@ -29,14 +33,13 @@ export function mountChatGpt(root: HTMLElement) {
     let state: ChatGptState | undefined;
     let work: Workflow["work"] = [];
     let verification: ChatGptVerification | undefined;
-    let path: SetupPath = "private";
     let step = 0;
     let confirmed = new Set<Confirmation>();
     let scope = "";
     let config = "";
     let clientSecret = "";
-    let pluginPackage: ChatGptPackage | undefined;
     let notice = "";
+    let noticeTone: "info" | "error" = "info";
     let storageAvailable = true;
     let discardDrafts = false;
     const drafts = new Map<string, FormData>();
@@ -53,16 +56,13 @@ export function mountChatGpt(root: HTMLElement) {
         work,
         verification,
         confirmed,
-        path,
         step,
         config,
         clientSecret,
         callbackValue: drafts.has("callback")
             ? String(drafts.get("callback")!.get("redirectUri") ?? "")
             : undefined,
-        package: pluginPackage,
     });
-    const steps = () => (path === "private" ? privateSteps : publicSteps);
 
     function restoreProgress() {
         try {
@@ -70,11 +70,10 @@ export function mountChatGpt(root: HTMLElement) {
                 localStorage.getItem(progressKey) ?? "null",
             );
             if (saved?.scope !== scope) return;
-            path = saved.path === "public" ? "public" : "private";
             step =
                 Number.isInteger(saved.step) &&
                 saved.step >= 0 &&
-                saved.step < steps().length
+                saved.step < setupSteps.length
                     ? saved.step
                     : 0;
             confirmed = new Set(
@@ -94,7 +93,6 @@ export function mountChatGpt(root: HTMLElement) {
                 progressKey,
                 JSON.stringify({
                     scope,
-                    path,
                     step,
                     confirmed: [...confirmed],
                 }),
@@ -126,30 +124,34 @@ export function mountChatGpt(root: HTMLElement) {
         }
         discardDrafts = false;
         const done = state ? completed(model()) : [];
-        root.innerHTML = `<h3>ChatGPT plugin</h3><p class="settings-description">Bring shared Work into ChatGPT. Set up your private plugin, then publish it publicly if you choose.</p>
-            <p class="settings-notice" role="status" data-chatgpt-notice ${notice ? "" : "hidden"}>${e(notice)}</p>
+        root.innerHTML = `<header class="chatgpt-heading"><span class="chatgpt-logo" aria-hidden="true"><img src="/assets/providers/chatgpt.svg" width="28" height="28" alt=""></span><div><h3>ChatGPT plugin</h3><p class="settings-description">Bring the Work you choose to share into ChatGPT.</p></div></header>
+            <p class="chatgpt-notice" role="status" data-chatgpt-notice data-tone="${noticeTone}" ${notice ? "" : "hidden"}>${e(notice)}</p>
             ${
                 !state
-                    ? `<p data-chatgpt-loading>Loading setup…</p>${action("reload", "Reload setup")}`
+                    ? `<div class="chatgpt-loading"><p data-chatgpt-loading>${noticeTone === "error" ? "Connection details could not be loaded." : "Loading your connection details…"}</p>` +
+                      action("reload", "Reload setup") +
+                      "</div>"
                     : `<div class="chatgpt-settings">
-                <div class="chatgpt-paths" role="group" aria-label="Setup path"><button type="button" data-chatgpt="private" aria-pressed="${path === "private"}">Private plugin<span>Connect your own instance</span></button><button type="button" data-chatgpt="public" aria-pressed="${path === "public"}">Publish publicly<span>Apply to the plugin directory</span></button></div>
-                <nav aria-label="Plugin setup progress"><ol class="chatgpt-stepper">${steps()
+                <div class="chatgpt-summary"><span class="chatgpt-server-status" data-enabled="${state.configured}"><i aria-hidden="true"></i>${state.configured ? "Server enabled" : "Setup required"}</span><span>Read-only access · Shared Work only</span></div>
+                <div class="chatgpt-workflow">
+                <nav class="chatgpt-progress" aria-label="Plugin setup progress"><p class="chatgpt-rail-label">YOUR CONNECTION</p><ol class="chatgpt-stepper">${setupSteps
                     .map(
                         (label, i) =>
-                            `<li><button type="button" data-chatgpt="step" data-step="${i}" ${i === step ? 'aria-current="step"' : ""}><span class="chatgpt-step-number" aria-hidden="true">${done[i] ? "✓" : i + 1}</span><span>${label}<small>${done[i] ? (path === "private" && (i === 0 || i === 1 || i === 3) ? "Checked in Goblin" : "You confirmed") : ""}</small></span></button></li>`,
+                            `<li><button type="button" id="chatgpt-step-${i}" data-chatgpt="step" data-step="${i}" data-complete="${done[i]}" ${i === step ? 'aria-current="step"' : ""}><span class="chatgpt-step-number" aria-hidden="true">${done[i] ? "✓" : i + 1}</span><span>${label}<small>${done[i] ? ([0, 1, 3].includes(i) ? "Checked in Goblin" : "You confirmed") : stepHints[i]}</small></span></button></li>`,
                     )
                     .join(
                         "",
-                    )}</ol><label class="chatgpt-mobile-step"><span id="chatgpt-step-label">Setup step</span><select aria-labelledby="chatgpt-step-label" data-chatgpt-step ${busy ? "disabled" : ""}>${steps()
+                    )}</ol><label class="chatgpt-mobile-step"><span id="chatgpt-step-label">Setup step</span><select aria-labelledby="chatgpt-step-label" data-chatgpt-step ${busy ? "disabled" : ""}>${setupSteps
                     .map(
                         (label, i) =>
                             `<option value="${i}" ${i === step ? "selected" : ""}>${i + 1}. ${label}${done[i] ? " · Done" : ""}</option>`,
                     )
                     .join("")}</select></label></nav>
-                <div class="chatgpt-step-body"><p class="chatgpt-step-caption">${path === "private" ? "PRIVATE SETUP" : "PUBLIC SUBMISSION"} · STEP ${step + 1} OF ${steps().length}</p>${stepContent(model())}</div>
-                <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${steps().length} steps complete</span>${step < steps().length - 1 ? action("next", `Continue to ${steps()[step + 1]}`, true, !done[step]) : ""}</div>
-                <p class="chatgpt-progress-note">${storageAvailable ? "Your place and confirmations are saved in this browser." : "Progress is kept while this page is open; browser storage is unavailable."} ChatGPT installation and publication are confirmed by you.</p>${action("restart-setup", "Start setup again")}
-                <details><summary>Need help with this step?</summary><p><strong>Cannot connect:</strong> check HTTPS, the certificate, proxy Host forwarding, and ChatGPT workspace permissions. A tunnel carries MCP traffic; OAuth endpoints still need HTTPS reachability.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve the connection.</p><p><strong>Empty list or access denied:</strong> check Work grants and their expiry.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</details>
+                <div class="chatgpt-step-panel"><div class="chatgpt-step-body"><p class="chatgpt-step-caption">Step ${step + 1} of ${setupSteps.length}</p>${stepContent(model())}</div>
+                <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${setupSteps.length} steps complete</span>${step < setupSteps.length - 1 ? action("next", `Continue to ${setupSteps[step + 1]}`, true, !done[step]) : ""}</div></div>
+                </div>
+                <details class="chatgpt-help"><summary>Need help with this step?</summary><div><p><strong>Cannot connect:</strong> check your HTTPS address and ChatGPT workspace permissions. A tunnel carries MCP traffic; sign-in still needs reachable HTTPS.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve the connection.</p><p><strong>Empty list or access denied:</strong> check shared Work and its expiry.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</div></details>
+                <div class="chatgpt-meta"><p class="chatgpt-progress-note">${storageAvailable ? "Progress is saved in this browser." : "Progress stays on this page; browser storage is unavailable."} You confirm installation and conversation tests.</p>${action("restart-setup", "Start setup again")}</div>
             </div>`
             }`;
         for (const form of root.querySelectorAll<HTMLFormElement>(
@@ -181,14 +183,16 @@ export function mountChatGpt(root: HTMLElement) {
         if (focusId)
             root.querySelector<HTMLElement>(`#${CSS.escape(focusId)}`)?.focus();
     }
-    function announce(message: string) {
+    function announce(message: string, tone: "info" | "error" = "info") {
         if (disposed) return;
         notice = message;
+        noticeTone = tone;
         const element = root.querySelector<HTMLElement>(
             "[data-chatgpt-notice]",
         );
         if (element) {
             element.textContent = message;
+            element.dataset.tone = tone;
             element.hidden = !message;
         }
     }
@@ -229,7 +233,7 @@ export function mountChatGpt(root: HTMLElement) {
             ".chatgpt-step-footer > span",
         );
         if (progress)
-            progress.textContent = `${done.filter(Boolean).length} of ${steps().length} steps complete`;
+            progress.textContent = `${done.filter(Boolean).length} of ${setupSteps.length} steps complete`;
         const install = root.querySelector<HTMLElement>(
             '.chatgpt-stepper [data-step="2"]',
         );
@@ -237,7 +241,8 @@ export function mountChatGpt(root: HTMLElement) {
         if (number) number.textContent = done[2] ? "✓" : "3";
         const confirmation = install?.querySelector("small");
         if (confirmation)
-            confirmation.textContent = done[2] ? "You confirmed" : "";
+            confirmation.textContent = done[2] ? "You confirmed" : stepHints[2];
+        if (install) install.dataset.complete = String(done[2]);
         const option = root.querySelector<HTMLOptionElement>(
             '[data-chatgpt-step] option[value="2"]',
         );
@@ -257,10 +262,8 @@ export function mountChatGpt(root: HTMLElement) {
             scope = nextScope;
             verification = undefined;
             confirmed.clear();
-            path = "private";
             step = 0;
             clientSecret = "";
-            pluginPackage = undefined;
             drafts.delete("client");
             drafts.delete("callback");
             drafts.delete("grant");
@@ -288,6 +291,7 @@ export function mountChatGpt(root: HTMLElement) {
         } catch (error) {
             announce(
                 errorMessage(error, "ChatGPT setup could not be confirmed."),
+                "error",
             );
         } finally {
             busy = false;
@@ -295,8 +299,7 @@ export function mountChatGpt(root: HTMLElement) {
             render(focused);
         }
     }
-    function navigate(nextStep: number, nextPath = path) {
-        path = nextPath;
+    function navigate(nextStep: number) {
         step = nextStep;
         notice = "";
         saveProgress();
@@ -318,25 +321,19 @@ export function mountChatGpt(root: HTMLElement) {
             config = "";
             clientSecret = "";
             verification = undefined;
-            pluginPackage = undefined;
-            navigate(0, "private");
+            navigate(0);
             announce(
                 "Setup progress cleared. Saved OAuth settings and shared Work can be managed in their setup steps.",
             );
             return;
         }
         if (name === "step") return navigate(Number(button.dataset.step));
-        if (name === "private" || name === "public") return navigate(0, name);
-        if (name === "prepare") return navigate(0, "private");
-        if (name === "provider") return navigate(1, "private");
-        if (name === "share") return navigate(3, "private");
+        if (name === "prepare") return navigate(0);
+        if (name === "provider") return navigate(1);
+        if (name === "share") return navigate(3);
         if (name === "back") return navigate(Math.max(0, step - 1));
         if (name === "next" && state && completed(model())[step]) {
-            const form = root.querySelector<HTMLFormElement>(
-                'form[data-chatgpt-form="listing"], form[data-chatgpt-form="review"]',
-            );
-            if (form && !form.reportValidity()) return;
-            return navigate(Math.min(steps().length - 1, step + 1));
+            return navigate(Math.min(setupSteps.length - 1, step + 1));
         }
         if (name === "copy") {
             const input = root.querySelector<
@@ -358,36 +355,8 @@ export function mountChatGpt(root: HTMLElement) {
             }
             return;
         }
-        if (name === "download-package" && pluginPackage) {
-            saveFile(
-                new Blob(
-                    [
-                        Uint8Array.from(
-                            atob(pluginPackage.archiveBase64),
-                            (c) => c.charCodeAt(0),
-                        ),
-                    ],
-                    { type: "application/zip" },
-                ),
-                "goblin-plugin.zip",
-            );
-            announce(
-                "Plugin ZIP saved. Upload it in the OpenAI submission portal.",
-            );
-            return;
-        }
         void run(async () => {
-            if (name === "package") {
-                pluginPackage = undefined;
-                announce("Building the plugin package…");
-                pluginPackage = await api<ChatGptPackage>("/package", {
-                    ...Object.fromEntries(drafts.get("listing") ?? []),
-                    ...Object.fromEntries(drafts.get("review") ?? []),
-                });
-                announce(
-                    "Package generated. Review its contents here, then save the ZIP to upload.",
-                );
-            } else if (name === "verify") {
+            if (name === "verify") {
                 verification = undefined;
                 announce("Checking provider and storage…");
                 verification = await api<ChatGptVerification>("/verify", {});
@@ -449,13 +418,6 @@ export function mountChatGpt(root: HTMLElement) {
             drafts.set("callback", new FormData(event.target.form));
             updateCallback();
         }
-        if (
-            event.target instanceof Element &&
-            event.target.closest(
-                'form[data-chatgpt-form="listing"], form[data-chatgpt-form="review"]',
-            )
-        )
-            pluginPackage = undefined;
     }
     function submit(event: Event) {
         const form = event.target;
@@ -471,15 +433,7 @@ export function mountChatGpt(root: HTMLElement) {
             if (callback) callback.readOnly = true;
         }
         void run(async () => {
-            if (
-                form.dataset.chatgptForm === "listing" ||
-                form.dataset.chatgptForm === "review"
-            ) {
-                pluginPackage = undefined;
-                announce(
-                    "Details kept for this setup session. Confirm the checklist and continue when ready.",
-                );
-            } else if (form.dataset.chatgptForm === "instance") {
+            if (form.dataset.chatgptForm === "instance") {
                 const origin = httpsAddress(String(data.get("origin") ?? ""));
                 if (origin.pathname !== "/")
                     throw new Error("Use a Goblin origin without a path.");
@@ -569,13 +523,4 @@ function httpsAddress(value: string): URL {
             "Use HTTPS addresses without credentials, a query, or a fragment.",
         );
     return url;
-}
-
-function saveFile(blob: Blob, name: string) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = name;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

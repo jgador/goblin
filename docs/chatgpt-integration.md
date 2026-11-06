@@ -79,7 +79,10 @@ new grants. Owner browser sessions reset on restart.
 
 ## Guided private setup
 
-Open `/settings?section=connections&provider=chatgpt` and choose **Private plugin**.
+Open `/settings?section=connections&provider=chatgpt` to set up your private plugin.
+The progress rail lets you return to each step; on narrow screens, use **Setup step**.
+The server status reports Goblin configuration, while access remains limited to
+explicitly shared Work.
 
 1. **Prepare:** configure the HTTPS origin and enable ChatGPT. The generated
    settings do not deploy a server or create HTTPS.
@@ -170,7 +173,7 @@ current grants are supported.
 All tools are read-only. Creation, execution, answers, retry, and approval stay
 in Goblin. Work text is data, never instructions to expand access.
 
-## Verification and publication
+## Verification
 
 Run `ChatGptHttpTests` and the browser setup journeys in `tests/e2e/chatgpt.spec.ts`.
 For real PostgreSQL OAuth coverage, set `GOBLIN_TEST_POSTGRES_ADMIN` and
@@ -190,41 +193,7 @@ Record the Goblin revision, OpenIddict version, transport, workspace type, and
 results, without credentials. Local tests cannot prove a successful ChatGPT UI
 installation.
 
-### Optional directory submission
-
-Private customer-created plugins need no public listing. **Publish publicly** in
-`/settings?section=connections&provider=chatgpt` prepares a separate submission;
-Goblin does not submit or publish it. The workflow records operator confirmations,
-not proof of submission or approval. Goblin has no approved listing.
-
-Public review needs a stable, publicly reachable HTTPS MCP endpoint; Secure MCP
-Tunnels do not qualify. Customer-specific URL templates are limited to eligible
-trusted developers; check eligibility before assuming arbitrary customer domains
-are supported. Check the current
-[review requirements](https://developers.openai.com/plugins/deploy/app-review),
-[submission requirements](https://developers.openai.com/plugins/deploy/submission),
-and [plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines).
-
-Prepare the publisher identity, domain ownership, support contact, privacy policy,
-metadata, artwork, and release owner. Use a dedicated public demo instance that
-matches the submitted contract, without private-network, MFA, email/SMS, or
-magic-link barriers. The owner password also controls administration, so use a
-disposable password and neutral sample data, never a live installation's password.
-Do not package customer secrets or use API-key or basic-auth header shortcuts.
-
-In **Prepare listing**, enter metadata; in **Review tests**, supply a video and
-three distinct sample Work IDs. **Submit → Generate plugin package** produces a
-version 1.0.0 ZIP with `plugin.json`, `mcp.json`, a logo, OAuth settings, and five
-positive and three negative review cases. Check them against your actual tests.
-The generator does not check public reachability, domain ownership, or demo
-permissions. Draft fields last only while the settings page stays open.
-
-In the submission portal, upload the ZIP under the verified publisher, connect the
-MCP server with its client secret, save the portal's exact callback in Goblin, and
-serve the domain challenge at the public URL. Resolve scan findings, complete the
-review information including reviewer access, and submit for review. Publish
-explicitly after approval, then install and test the published listing. Each
-connecting user still needs Work grants in Goblin.
+Public directory submission and plugin package generation are not supported.
 
 ## References
 
