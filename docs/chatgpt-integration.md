@@ -91,8 +91,10 @@ Open `/settings?section=connections&provider=chatgpt` and choose **Private plugi
    and storage checks do not prove public reachability.
 3. **Install:** in ChatGPT, choose **+ → Add custom MCP server**, use the supplied
    `/mcp` URL (or a configured Secure MCP Tunnel), and select OAuth. The client ID
-   is `goblin-chatgpt`. Paste the exact callback shown by ChatGPT into **ChatGPT
-   OAuth callback** in Goblin and click **Save OAuth client** before sign-in.
+   is `goblin-chatgpt`. In ChatGPT's OAuth settings, choose `client_secret_basic`
+   for **Token endpoint auth method**. Paste the exact callback shown by ChatGPT
+   into **ChatGPT OAuth callback** in Goblin and click **Save callback** before
+   sign-in.
    Saving the callback preserves the client secret. The confirmed callback is
    `https://chatgpt.com/connector_platform_oauth_redirect`; use the value shown
    for your connection if it differs. Wildcards and other callback hosts are
@@ -109,9 +111,13 @@ Open `/settings?section=connections&provider=chatgpt` and choose **Private plugi
    requesting a missing result rejects the entire sharing request.
 5. **Test:** follow the [Work access checks](plugin-testing.md#test-work-access).
 
-The **Install** step collects the callback after showing ChatGPT's connection
-form and before instructing you to sign in. An empty callback cannot be saved,
-and installation confirmation stays disabled until a callback is saved. If an
+The **Install** step highlights the callback as **Required before sign-in**, with
+a shortcut to the field and a primary **Save callback** button. Entering a URL
+does not save it. Sign-in instructions and installation confirmation stay
+unavailable until Goblin confirms the callback is saved. Editing a saved callback
+shows **Unsaved changes** and blocks sign-in instructions until those changes
+are saved or the field is restored to its saved value. An empty callback cannot
+be saved, and failed saves preserve the draft without unlocking sign-in. If an
 authorization request already failed with `invalid_request` / `ID2043`, save the
 exact callback in **Install**, then restart the connection from ChatGPT. Changing
 the saved callback clears earlier installation and connection-test confirmations.

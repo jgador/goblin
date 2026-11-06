@@ -20,7 +20,7 @@
 .settings-content button:disabled { opacity:.55; cursor:not-allowed; }
 .settings-content .settings-primary { background:var(--green); border-color:var(--green); color:white; display:inline-block; text-decoration:none; }
 .settings-content .codex-settings .primary { color:white; background:var(--green); }
-.settings-content .settings-primary:hover,.settings-content .codex-settings .primary:hover:not(:disabled) { background:#1c603a; border-color:#1c603a; }
+.settings-content .settings-primary:hover:not(:disabled),.settings-content .codex-settings .primary:hover:not(:disabled) { background:#1c603a; border-color:#1c603a; }
 .settings-content .codex-settings .card { border:0; padding:0; box-shadow:none; }
 .settings-content .codex-settings .message { display:block; }
 .codex-settings #lock-button { display:none; }
@@ -144,6 +144,11 @@
 .chatgpt-task h5 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
 .chatgpt-task p { margin: 8px 0 14px; }
 .chatgpt-callout { padding: 14px 16px; border: 1px solid #cddace; border-radius: 10px; background: #f2f7f0; }
+.chatgpt-callback-task { padding: 18px; border: 1px solid var(--green); border-radius: 10px; background: #f2f7f0; }
+.chatgpt-callback-task[data-callback-saved="true"] { border-color: var(--border); background: var(--paper); }
+.chatgpt-task .chatgpt-callback-label { margin: 0 0 8px; color: var(--green); font-size: 12px; font-weight: 600; }
+.chatgpt-task .chatgpt-callback-status { margin: 0; font-weight: 600; }
+.chatgpt-callback-task form { margin-bottom: 0; }
 .chatgpt-external { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--green); text-underline-offset: 3px; }
 .chatgpt-checks { padding: 0; list-style: none; }
 .chatgpt-checks li { padding: 12px 0; border-bottom: 1px solid var(--border); }

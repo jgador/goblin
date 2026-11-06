@@ -9,6 +9,8 @@ import type {
 import { escapeHtml as e } from "../work/presentation.js";
 import {
     action,
+    callbackFeedback,
+    callbackSaved,
     completed,
     confirmations,
     privateSteps,
@@ -60,6 +62,9 @@ export function mountChatGpt(root: HTMLElement) {
         step,
         config,
         clientSecret,
+        callbackValue: drafts.has("callback")
+            ? String(drafts.get("callback")!.get("redirectUri") ?? "")
+            : undefined,
         package: pluginPackage,
         creatorAccess,
         creatorDraft,
@@ -197,6 +202,61 @@ export function mountChatGpt(root: HTMLElement) {
             element.hidden = !message;
         }
     }
+    function updateCallback() {
+        const current = model();
+        const saved = callbackSaved(current);
+        const task = root.querySelector<HTMLElement>(".chatgpt-callback-task");
+        if (task) task.dataset.callbackSaved = String(saved);
+        const label = root.querySelector<HTMLElement>("[data-callback-label]");
+        if (label)
+            label.textContent = saved
+                ? "Callback saved"
+                : "Required before sign-in";
+        const status = root.querySelector<HTMLElement>(
+            "#chatgpt-callback-status",
+        );
+        const feedback = callbackFeedback(current);
+        if (status && status.textContent !== feedback)
+            status.textContent = feedback;
+        for (const [selector, hidden] of [
+            ["[data-callback-reminder]", saved],
+            ["[data-callback-blocked]", saved],
+            ["[data-callback-ready]", !saved],
+        ] as const) {
+            const element = root.querySelector<HTMLElement>(selector);
+            if (element) element.hidden = hidden;
+        }
+        const installed = root.querySelector<HTMLInputElement>(
+            "#chatgpt-confirm-installed",
+        );
+        if (installed) {
+            installed.disabled = busy || !saved;
+            installed.checked = saved && confirmed.has("installed");
+        }
+        const done = completed(current);
+        const next = root.querySelector<HTMLButtonElement>(
+            '[data-chatgpt="next"]',
+        );
+        if (next) next.disabled = busy || !done[step];
+        const progress = root.querySelector<HTMLElement>(
+            ".chatgpt-step-footer > span",
+        );
+        if (progress)
+            progress.textContent = `${done.filter(Boolean).length} of ${steps().length} steps complete`;
+        const install = root.querySelector<HTMLElement>(
+            '.chatgpt-stepper [data-step="2"]',
+        );
+        const number = install?.querySelector(".chatgpt-step-number");
+        if (number) number.textContent = done[2] ? "✓" : "3";
+        const confirmation = install?.querySelector("small");
+        if (confirmation)
+            confirmation.textContent = done[2] ? "You confirmed" : "";
+        const option = root.querySelector<HTMLOptionElement>(
+            '[data-chatgpt-step] option[value="2"]',
+        );
+        if (option)
+            option.textContent = `3. Install${done[2] ? " · Done" : ""}`;
+    }
     async function refresh() {
         const next = await api<ChatGptState>();
         const choices = next.configured ? await api<typeof work>("/work") : [];
@@ -291,6 +351,15 @@ export function mountChatGpt(root: HTMLElement) {
         if (name === "prepare") return navigate(0, "private");
         if (name === "provider") return navigate(1, "private");
         if (name === "share") return navigate(3, "private");
+        if (name === "callback") {
+            if (!state?.clientConfigured) return navigate(1, "private");
+            const callback = root.querySelector<HTMLInputElement>(
+                "#chatgpt-callback-url",
+            );
+            callback?.focus();
+            callback?.scrollIntoView({ block: "center" });
+            return;
+        }
         if (name === "back") return navigate(Math.max(0, step - 1));
         if (name === "next" && state && completed(model())[step]) {
             const form = root.querySelector<HTMLFormElement>(
@@ -407,6 +476,14 @@ export function mountChatGpt(root: HTMLElement) {
     }
     function input(event: Event) {
         if (
+            event.target instanceof HTMLInputElement &&
+            event.target.id === "chatgpt-callback-url" &&
+            event.target.form
+        ) {
+            drafts.set("callback", new FormData(event.target.form));
+            updateCallback();
+        }
+        if (
             event.target instanceof Element &&
             event.target.closest(
                 'form[data-chatgpt-form="listing"], form[data-chatgpt-form="review"]',
@@ -473,6 +550,12 @@ export function mountChatGpt(root: HTMLElement) {
         event.preventDefault();
         if (busy) return;
         const data = new FormData(form);
+        if (form.dataset.chatgptForm === "callback") {
+            const callback = form.querySelector<HTMLInputElement>(
+                "#chatgpt-callback-url",
+            );
+            if (callback) callback.readOnly = true;
+        }
         void run(async () => {
             if (form.dataset.chatgptForm === "creator") {
                 creatorDraft = undefined;
@@ -523,9 +606,9 @@ export function mountChatGpt(root: HTMLElement) {
                     confirmed.delete("installed");
                     resetConnectionTests();
                 }
+                await refresh();
                 drafts.delete(form.dataset.chatgptForm);
                 discardDrafts = true;
-                await refresh();
                 announce(
                     savingCallback
                         ? "OAuth callback saved. Return to ChatGPT to start sign-in. If an earlier request failed, restart the connection there."

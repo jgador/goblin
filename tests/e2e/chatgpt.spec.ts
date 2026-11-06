@@ -532,12 +532,25 @@ test("first-time setup creates the secret before collecting ChatGPT's callback d
         "",
     );
     await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    await expect(page.locator("[data-callback-ready]")).toBeHidden();
+    await expect(page.locator("[data-callback-label]")).toHaveText(
+        "Required before sign-in",
+    );
+    await page
+        .getByRole("button", { name: "Go to required callback step" })
+        .click();
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toBeFocused();
+    await page.locator(".chatgpt-callback-task").screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/required-callback.png",
+    });
     await expect(page.getByLabel("Generate a new client secret")).toHaveCount(
         0,
     );
     const clientWrites = () =>
         writes.filter((write) => write.path.endsWith("/client"));
-    await page.getByRole("button", { name: "Save OAuth client" }).click();
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
     expect(clientWrites()).toHaveLength(1);
     await page.screenshot({
         path: ".artifacts/chatgpt-callback/screenshots/awaiting-callback.png",
@@ -547,18 +560,44 @@ test("first-time setup creates the secret before collecting ChatGPT's callback d
         .getByLabel("ChatGPT OAuth callback")
         .fill("https://chatgpt.com/connector_platform_oauth_redirect");
     await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    await expect(page.locator("#chatgpt-callback-status")).toContainText(
+        "entered but not saved",
+    );
+    await expect(page.locator("[data-callback-ready]")).toBeHidden();
+    await page.locator(".chatgpt-callback-task").screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/unsaved-callback.png",
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator(".chatgpt-callback-task").screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/unsaved-callback-mobile.png",
+    });
+    expect(
+        await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+    ).toBe(true);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await goToStep(page, "Sign-in");
     await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveCount(0);
     await goToStep(page, "Install");
     await expect(page.getByLabel("ChatGPT OAuth callback")).toHaveValue(
         "https://chatgpt.com/connector_platform_oauth_redirect",
     );
-    await page.getByRole("button", { name: "Save OAuth client" }).click();
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
     expect(writes.at(-1)?.body).toEqual({
         redirectUri: "https://chatgpt.com/connector_platform_oauth_redirect",
         rotateSecret: false,
     });
     await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
+    await expect(page.locator("#chatgpt-callback-status")).toContainText(
+        "Callback saved",
+    );
+    await expect(page.locator("[data-callback-ready]")).toBeVisible();
+    await page.locator(".chatgpt-callback-task").screenshot({
+        path: ".artifacts/chatgpt-callback/screenshots/saved-callback.png",
+    });
     await expect(
         page.getByLabel("OAuth client secret", { exact: true }),
     ).toHaveValue("fixture-oauth-secret");
@@ -616,17 +655,38 @@ test("replacing a client secret preserves the saved callback and clears installa
     );
 });
 
-test("saving a different callback requires a fresh installation confirmation", async ({
+test("callback edits block sign-in until saved and preserve confirmation when reverted", async ({
     page,
 }) => {
-    const { writes } = await fixture(page);
+    const { state, writes } = await fixture(page);
     await page.goto("/settings?section=connections&provider=chatgpt");
     await goToStep(page, "Install");
     await page.getByLabel("I installed the plugin").check();
     await page
         .getByLabel("ChatGPT OAuth callback")
         .fill("https://chatgpt.com/connector/oauth/new-callback");
-    await page.getByRole("button", { name: "Save OAuth client" }).click();
+    await expect(page.getByLabel("ChatGPT OAuth callback")).toBeFocused();
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    await expect(page.locator("[data-callback-ready]")).toBeHidden();
+    await expect(page.locator("#chatgpt-callback-status")).toContainText(
+        "Unsaved changes",
+    );
+    await expect(
+        page.getByRole("button", { name: "Continue to Share Work" }),
+    ).toBeDisabled();
+    expect(writes).toHaveLength(0);
+    await page.getByLabel("ChatGPT OAuth callback").fill(state.redirectUri!);
+    await expect(page.getByLabel("I installed the plugin")).toBeChecked();
+    await expect(page.locator("[data-callback-ready]")).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Continue to Share Work" }),
+    ).toBeEnabled();
+    await page
+        .getByLabel("ChatGPT OAuth callback")
+        .fill("https://chatgpt.com/connector/oauth/new-callback");
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
     expect(writes.at(-1)?.body).toEqual({
         redirectUri: "https://chatgpt.com/connector/oauth/new-callback",
         rotateSecret: false,
@@ -637,6 +697,91 @@ test("saving a different callback requires a fresh installation confirmation", a
     ).toBeDisabled();
     await expect(page.locator("[data-chatgpt-notice]")).toContainText(
         "restart the connection",
+    );
+});
+
+test("failed callback saves preserve the draft and keep sign-in blocked until a successful save", async ({
+    page,
+}) => {
+    const { state } = await fixture(page);
+    state.redirectUri = null;
+    let failSave = true;
+    let releaseSave!: () => void;
+    const pendingSave = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+    });
+    await page.route("**/api/integrations/chatgpt/client", async (route) => {
+        if (!failSave) return route.fallback();
+        failSave = false;
+        await pendingSave;
+        await route.fulfill({
+            status: 503,
+            json: {
+                error: { message: "Callback could not be saved. Try again." },
+            },
+        });
+    });
+    await page.goto("/settings?section=connections&provider=chatgpt");
+    await goToStep(page, "Install");
+    const callback = page.getByLabel("ChatGPT OAuth callback");
+    await callback.fill(
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+    );
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
+    await expect(callback).not.toBeEditable();
+    await expect(page.locator("[data-callback-ready]")).toBeHidden();
+    releaseSave();
+    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
+        "Callback could not be saved",
+    );
+    await expect(callback).toBeEditable();
+    await expect(callback).toHaveValue(
+        "https://chatgpt.com/connector_platform_oauth_redirect",
+    );
+    await expect(page.locator("#chatgpt-callback-status")).toContainText(
+        "entered but not saved",
+    );
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    expect(state.redirectUri).toBeNull();
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
+    await expect(page.locator("[data-callback-ready]")).toBeVisible();
+    await expect(page.getByLabel("I installed the plugin")).toBeEnabled();
+    await expect(page.locator("[data-callback-reminder]")).toBeHidden();
+});
+
+test("a failed configuration refresh keeps a saved callback draft blocked until confirmed", async ({
+    page,
+}) => {
+    const { state, writes, fail } = await fixture(page);
+    await page.goto("/settings?section=connections&provider=chatgpt");
+    await goToStep(page, "Install");
+    const callback = page.getByLabel("ChatGPT OAuth callback");
+    await callback.fill("https://chatgpt.com/connector/oauth/new-callback");
+    fail(true);
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
+    await expect(page.locator("[data-chatgpt-notice]")).toContainText(
+        "temporarily unavailable",
+    );
+    expect(writes).toHaveLength(1);
+    expect(state.redirectUri).toBe(
+        "https://chatgpt.com/connector/oauth/new-callback",
+    );
+    await expect(callback).toHaveValue(state.redirectUri!);
+    await expect(page.locator("[data-callback-ready]")).toBeHidden();
+    await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
+    fail(false);
+    await page
+        .getByRole("button", { name: "Save callback", exact: true })
+        .click();
+    await expect(page.locator("[data-callback-ready]")).toBeVisible();
+    await expect(page.locator("#chatgpt-callback-status")).toContainText(
+        "Callback saved",
     );
 });
 
