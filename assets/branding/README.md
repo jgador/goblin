@@ -42,14 +42,21 @@ Docker build context. Runtime copies are unchanged unless noted:
   `providers/chatgpt.svg`, the official black OpenAI Blossom mark used to identify
   ChatGPT in Settings → Connections. Its original proportions, color, and clear
   space are preserved.
-  `frontend/public/assets/providers/codex.png` is an unchanged copy of
-  `providers/codex.png`, the 128 × 128 icon published in OpenAI's Codex app.
+  `providers/codex.png` is the original 128 × 128 icon published in OpenAI's Codex
+  app. Its browser copy, `frontend/public/assets/providers/codex.png`, removes the
+  white app-icon tile and surrounding shadow, leaving the purple mark and white
+  symbol on a transparent canvas. The original source is unchanged.
   Settings → Connections centers every provider in a 32 × 32 slot with a visible
   mark approximately 24 pixels wide. Codex uses a 40-pixel image and ChatGPT a
   36-pixel image to account for the clear space embedded in their artwork; the
   other images use 24 pixels. Scaling preserves proportions, colors, transparency,
-  and the full image without cropping. The Codex source is recorded in the
+  and the full image without cropping. The New Work connection control uses the
+  transparent Codex image at 24 × 24 pixels. The Codex source is recorded in the
   [third-party notices](../../THIRD_PARTY_NOTICES.md).
+  Connections logos render on transparent canvases. GitHub retains its original
+  circular mark, and Teams retains its original T tile and people. Their original
+  SVGs are retained in `providers/github.svg` and `providers/teams.svg`. The browser
+  GitHub, Slack, and Teams SVGs remain unchanged upstream copies.
 - Website: `website/assets/goblin.svg` is `svg/icon-light.svg`, `goblin-dark.svg`
   is `svg/icon-dark.svg`, and the Medium and SemiBold fonts are copied there too.
 - Installer: `goblinctl` embeds `svg/icon-light.svg`, the Medium and SemiBold

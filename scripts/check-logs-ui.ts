@@ -222,11 +222,13 @@ try {
                 ),
                 fullPage: true,
             });
-            await page.goto(publicOrigin + "/?settings=logs");
-            const link = page.getByRole("link", {
-                name: "Open logs",
-                exact: true,
-            });
+            await page.goto(publicOrigin + "/settings?section=system");
+            const link = page
+                .getByRole("navigation", { name: "Tools", exact: true })
+                .getByRole("link", {
+                    name: "Logs (opens in a new tab)",
+                    exact: true,
+                });
             await expect(link).toHaveAttribute("href", "/logs/");
             await expect(link).toHaveAttribute("target", "_blank");
             await expect(link).toHaveAttribute("rel", "noopener");

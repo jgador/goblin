@@ -513,7 +513,7 @@ function message(author: string, text: string, at?: string) {
 function connectionButton() {
     const agent = agents.find((a) => a.isDefault);
     const connection = connections.find((c) => c.id === agent?.connectionId);
-    return `<button class="connection-choice" type="button" data-action="settings-codex" title="Manage Codex connection">${icon("spark")}<span class="connection-name">${e(connection?.name ?? "Codex")}</span>${icon("chevron")}</button>`;
+    return `<button class="connection-choice" type="button" data-action="settings-codex" title="Manage Codex connection"><img src="/assets/providers/codex.png" width="24" height="24" alt=""><span class="connection-name">${e(connection?.name ?? "Codex")}</span>${icon("chevron")}</button>`;
 }
 function composer(kind: string, placeholder: string) {
     const note =

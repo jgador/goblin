@@ -10,6 +10,8 @@ const icons: Record<string, string> = {
     chat: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-3 2V11.5A8.5 8.5 0 0 1 9.5 3H13a8 8 0 0 1 8 8.5Z"/><path d="M7 9h9M7 13h6"/>',
     work: '<rect x="4" y="5" width="16" height="16" rx="3"/><path d="M9 5V3h6v2M8 11l1 1 2-2M13 11h3M8 16h8"/>',
     arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
+    external:
+        '<path d="M14 3h7v7m0-7L10 14M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/>',
     up: '<path d="M12 19V5m-6 6 6-6 6 6"/>',
     check: '<path d="m5 12 4 4L19 6"/>',
     circleCheck: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',

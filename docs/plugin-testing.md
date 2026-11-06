@@ -229,7 +229,7 @@ This is step **5** of the k3s session. Once the plugin is installed:
 3. Ask: **Call goblin_ping now and show every field from the tool response unchanged.**
 4. Check the result for a fresh `responseId`, `respondedAtUtc`, and the server's
    `operatingSystem`, `runtime`, and `processArchitecture`.
-5. In Goblin, open **Settings → Logs → Open logs** at the same public origin.
+5. In Goblin, open **Settings → Tools → Logs** at the same public origin.
    For k3s, this is `https://dev.goblinboard.com/logs/`. Search for the returned
    response ID and find the `goblin_ping response` event. Its `state.ResponseId`
    must match ChatGPT's `responseId`.
@@ -425,7 +425,7 @@ defines the HTTPS and proxy requirements.
 3. Follow [Install the plugin](#install-the-plugin) with that deployment's MCP URL
    and a separate ChatGPT connection.
 4. Run [the ping test](#test-the-connection-without-work) and verify its response ID
-   in **Settings → Logs → Open logs** on that origin. Refresh the connection and
+   in **Settings → Tools → Logs** on that origin. Refresh the connection and
    repeat after application deployments.
 
 For a published directory listing, see

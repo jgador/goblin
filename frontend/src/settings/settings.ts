@@ -27,6 +27,7 @@ export class Settings {
     private githubDispose?: () => void;
     private timezoneDispose?: () => void;
     private selected?: SettingsSelection;
+    private toolsLoaded = false;
     private readonly reads = new ReadScope();
     private readonly connections = new Connections();
 
@@ -48,14 +49,26 @@ export class Settings {
             },
             {
                 label: "Administration",
-                items: [
-                    ["system", "System", "activity"],
-                    ["cluster", "Cluster", "work"],
-                    ["logs", "Logs", "file"],
-                ],
+                items: [["system", "System", "activity"]],
             },
         ];
         this.element.innerHTML = `<header class="settings-page-heading"><div><h1 id="settings-title" tabindex="-1">Settings</h1><p>Manage your workspace.</p></div><button class="secondary" data-action="return-settings" type="button">${icon("arrow")}<span>Back to workspace</span></button></header><label class="settings-section-select">Settings section<select id="settings-section" aria-label="Settings section" class="field-control select-control">${groups.map((group) => `<optgroup label="${group.label}">${group.items.map(([provider, label]) => `<option value="${provider}">${label}</option>`).join("")}</optgroup>`).join("")}</select></label><div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">${groups.map((group) => `<div class="settings-nav-group"><p>${group.label}</p>${group.items.map(([provider, label, glyph]) => `<a href="/settings?section=${provider}" data-provider="${provider}">${icon(glyph!)}${label}</a>`).join("")}</div>`).join("")}<button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><a class="connection-back" href="/settings?section=connections" data-provider="connections" data-connection-back hidden>${icon("arrow")}Back to connections</a>${settingsPanels.map((provider) => `<section data-provider-panel="${provider}" aria-label="${provider === "system" ? "System resources" : provider === "codex" ? "Codex connection" : provider === "github" ? "GitHub connection" : provider}" class="${provider === "codex" ? "codex-settings" : ""}" hidden></section>`).join("")}</div></div>`;
+        this.element
+            .querySelector(".settings-page-heading")!
+            .insertAdjacentHTML(
+                "afterend",
+                `<nav class="settings-tools" aria-label="Tools"><span class="settings-tools-label">Tools</span><div class="settings-tool-links">${[
+                    ["cluster", "Cluster", "/headlamp/", "work"],
+                    ["logs", "Logs", "/logs/", "file"],
+                ]
+                    .map(
+                        ([id, label, href, glyph]) =>
+                            `<a href="${href}" data-settings-tool="${id}" target="_blank" rel="noopener" aria-label="${label} (opens in a new tab)" title="${label} (opens in a new tab)">${icon(glyph!)}<span>${label}</span>${icon("external")}</a>`,
+                    )
+                    .join(
+                        "",
+                    )}</div><small data-tools-notice role="status" hidden></small></nav>`,
+            );
         this.element
             .querySelector<HTMLSelectElement>("#settings-section")!
             .addEventListener("change", (event) => {
@@ -76,8 +89,6 @@ export class Settings {
                 event.preventDefault();
                 this.open(link.dataset.provider);
             }
-            if (event.target.closest("[data-open-system-cluster]"))
-                this.open("cluster");
         });
     }
     reset() {
@@ -97,6 +108,23 @@ export class Settings {
                 undefined;
         this.codexMounted = this.githubMounted = false;
         this.selected = undefined;
+        this.toolsLoaded = false;
+        for (const link of this.element.querySelectorAll<HTMLAnchorElement>(
+            "[data-settings-tool]",
+        )) {
+            link.href =
+                link.dataset.settingsTool === "cluster"
+                    ? "/headlamp/"
+                    : "/logs/";
+            link.removeAttribute("aria-disabled");
+            link.setAttribute(
+                "aria-label",
+                `${link.textContent} (opens in a new tab)`,
+            );
+            link.title = `${link.textContent} (opens in a new tab)`;
+        }
+        this.element.querySelector<HTMLElement>("[data-tools-notice]")!.hidden =
+            true;
         this.element.remove();
         for (const panel of this.element.querySelectorAll<HTMLElement>(
             "[data-provider-panel]",
@@ -128,6 +156,10 @@ export class Settings {
     }
     attach(host: HTMLElement, value: string) {
         host.append(this.element);
+        if (!this.toolsLoaded) {
+            this.toolsLoaded = true;
+            void this.loadTools();
+        }
         const provider = settingsTarget(value);
         if (this.selected === provider) return;
         this.selected = provider;
@@ -175,6 +207,40 @@ export class Settings {
             onUnauthorized: () =>
                 window.dispatchEvent(new Event("goblin-workspace-locked")),
         });
+    }
+    private async loadTools() {
+        const generation = this.generation;
+        const tools = ["cluster", "logs"] as const;
+        const results = await Promise.allSettled(
+            tools.map((tool) =>
+                this.api<{ available: boolean }>(`/api/${tool}`),
+            ),
+        );
+        if (generation !== this.generation) return;
+        const unavailable: string[] = [];
+        results.forEach((result, index) => {
+            if (
+                result.status !== "fulfilled" ||
+                result.value.available !== false
+            )
+                return;
+            const link = this.element.querySelector<HTMLAnchorElement>(
+                `[data-settings-tool="${tools[index]}"]`,
+            )!;
+            unavailable.push(link.textContent!);
+            link.removeAttribute("href");
+            link.setAttribute("aria-disabled", "true");
+            link.setAttribute(
+                "aria-label",
+                `${link.textContent} (not configured)`,
+            );
+            link.title = `${link.textContent} is not configured for this installation.`;
+        });
+        const notice = this.element.querySelector<HTMLElement>(
+            "[data-tools-notice]",
+        )!;
+        notice.hidden = unavailable.length === 0;
+        notice.textContent = `${unavailable.join(" and ")} ${unavailable.length === 1 ? "is" : "are"} not configured for this installation.`;
     }
     private async mount(provider: SettingsSelection) {
         if (provider === "chatgpt") {
@@ -237,54 +303,6 @@ export class Settings {
             )!;
             panel.append(this.connections.element);
             void this.connections.refresh();
-            return;
-        }
-        if (provider === "cluster") {
-            const generation = this.generation;
-            const panel = this.element.querySelector<HTMLElement>(
-                '[data-provider-panel="cluster"]',
-            )!;
-            panel.innerHTML =
-                '<h3>Cluster</h3><p class="settings-description">Loading cluster access…</p>';
-            try {
-                const cluster = await this.api<{ available: boolean }>(
-                    "/api/cluster",
-                );
-                if (generation !== this.generation) return;
-                panel.innerHTML = `<h3>Cluster</h3><p class="settings-description">View pods, logs, events, and storage in Headlamp.</p>${
-                    cluster.available
-                        ? '<p class="settings-description">Your Goblin login gives you read-only access. Opens in a new tab.</p><a class="settings-primary" href="/headlamp/" target="_blank" rel="noopener">Open cluster</a>'
-                        : '<p class="settings-notice">The cluster view is available with Goblin’s Kubernetes installation.</p>'
-                }`;
-            } catch {
-                if (generation !== this.generation) return;
-                panel.innerHTML =
-                    '<h3>Cluster</h3><p class="settings-notice">Cluster access could not be loaded. Unlock Goblin and try again.</p>';
-            }
-            return;
-        }
-        if (provider === "logs") {
-            const panel = this.element.querySelector<HTMLElement>(
-                '[data-provider-panel="logs"]',
-            )!;
-            const generation = this.generation;
-            panel.innerHTML =
-                '<h3>Logs</h3><p class="settings-description">Loading log access…</p>';
-            try {
-                const logs = await this.api<{ available: boolean }>(
-                    "/api/logs",
-                );
-                if (generation !== this.generation) return;
-                panel.innerHTML =
-                    '<h3>Logs</h3><p class="settings-description">Search saved Goblin logs and follow new events.</p>' +
-                    (logs.available
-                        ? '<p class="settings-description">Opens in a new tab using your Goblin login.</p><a class="settings-primary" href="/logs/" target="_blank" rel="noopener">Open logs</a>'
-                        : '<p class="settings-notice">Saved logs are available with Goblin’s Kubernetes installation.</p>');
-            } catch {
-                if (generation !== this.generation) return;
-                panel.innerHTML =
-                    '<h3>Logs</h3><p class="settings-notice">Log access could not be loaded. Unlock Goblin and try again.</p>';
-            }
             return;
         }
         if (provider === "github") {

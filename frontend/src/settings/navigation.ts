@@ -1,11 +1,4 @@
-const sections = [
-    "connections",
-    "agents",
-    "timezone",
-    "system",
-    "cluster",
-    "logs",
-] as const;
+const sections = ["connections", "agents", "timezone", "system"] as const;
 const connectionProviders = ["codex", "github", "slack", "chatgpt"] as const;
 export const settingsPanels = [...sections, ...connectionProviders] as const;
 export type ConnectionProvider = (typeof connectionProviders)[number];

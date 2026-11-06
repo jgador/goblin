@@ -409,6 +409,7 @@ test("repository setup validates locally and keeps the branch and Git identity t
 
 test("Settings keeps one content scroller and exposes repository loading without losing navigation", async ({
     page,
+    context,
 }) => {
     await setup(page);
     let finish: () => void = () => {};
@@ -476,10 +477,28 @@ test("Settings keeps one content scroller and exposes repository loading without
         ).toBe(true);
     }
     await page.setViewportSize({ width: 1280, height: 720 });
-    await dialog.getByRole("link", { name: "Cluster", exact: true }).click();
+    await context.route("**/headlamp/", (route) =>
+        route.fulfill({
+            contentType: "text/html",
+            body: "<h1>Cluster fixture</h1>",
+        }),
+    );
+    const opened = page.waitForEvent("popup");
+    await dialog
+        .getByRole("link", {
+            name: "Cluster (opens in a new tab)",
+            exact: true,
+        })
+        .click();
+    const popup = await opened;
+    await expect(popup).toHaveURL(/\/headlamp\/$/);
+    await popup.close();
     await expect(
-        dialog.getByRole("heading", { name: "Cluster", exact: true }),
+        dialog.getByRole("button", { name: "Back to workspace" }),
     ).toBeInViewport();
+    await expect(
+        dialog.locator(".github-repository-picker .github-repository-row"),
+    ).toHaveCount(30);
     await dialog.getByRole("button", { name: "Back to workspace" }).click();
     await expect(dialog).not.toBeVisible();
 });
