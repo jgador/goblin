@@ -1,0 +1,42 @@
+{
+  "Model": "bge-int8.onnx",
+  "Batch": 1,
+  "Threads": 1,
+  "LoadSeconds": 0.1524519,
+  "LoadedRssBytes": 126758912,
+  "Processed": 2000,
+  "Seconds": 27.4578463,
+  "RecordsPerSecond": 72.8389247338747,
+  "Checkpoints": [
+    {
+      "Count": 500,
+      "DatabaseBytes": 2203648,
+      "RawVectorBytes": 768000,
+      "Seconds": 7.0155685
+    },
+    {
+      "Count": 1000,
+      "DatabaseBytes": 3100672,
+      "RawVectorBytes": 1536000,
+      "Seconds": 13.8397851
+    },
+    {
+      "Count": 2000,
+      "DatabaseBytes": 4874240,
+      "RawVectorBytes": 3072000,
+      "Seconds": 27.457782
+    }
+  ],
+  "Resources": {
+    "SampleCount": 530,
+    "PeakRssBytes": 225824768,
+    "MedianRssBytes": 200941568,
+    "AverageProcessCpuPercent": 104.47778213910857,
+    "PeakProcessCpuPercent": 206.92655635377747,
+    "AverageCapacityCpuPercent": 13.151424937077957,
+    "PeakCapacityCpuPercent": 27.05191681228826,
+    "PeakGcHeapBytes": 19961848,
+    "PeakThreads": 11,
+    "MinimumAvailableRamBytes": 6510714880
+  }
+}

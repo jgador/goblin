@@ -1,0 +1,74 @@
+[
+  {
+    "file": "vocab.txt",
+    "repo": "BAAI/bge-small-en-v1.5",
+    "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+    "url": "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/vocab.txt",
+    "bytes": 231508,
+    "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+  },
+  {
+    "file": "tokenizer.json",
+    "repo": "BAAI/bge-small-en-v1.5",
+    "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+    "url": "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/tokenizer.json",
+    "bytes": 711396,
+    "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+  },
+  {
+    "file": "tokenizer_config.json",
+    "repo": "BAAI/bge-small-en-v1.5",
+    "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+    "url": "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/tokenizer_config.json",
+    "bytes": 366,
+    "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+  },
+  {
+    "file": "config.json",
+    "repo": "BAAI/bge-small-en-v1.5",
+    "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+    "url": "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/config.json",
+    "bytes": 743,
+    "sha256": "094f8e891b932f2000c92cfc663bac4c62069f5d8af5b5278c4306aef3084750"
+  },
+  {
+    "file": "bge-fp32.onnx",
+    "repo": "BAAI/bge-small-en-v1.5",
+    "revision": "5c38ec7c405ec4b44b94cc5a9bb96e735b38267a",
+    "url": "https://huggingface.co/BAAI/bge-small-en-v1.5/resolve/5c38ec7c405ec4b44b94cc5a9bb96e735b38267a/onnx/model.onnx",
+    "bytes": 133093490,
+    "sha256": "828e1496d7fabb79cfa4dcd84fa38625c0d3d21da474a00f08db0f559940cf35"
+  },
+  {
+    "file": "bge-int8.onnx",
+    "repo": "Xenova/bge-small-en-v1.5",
+    "revision": "ea104dacec62c0de699686887e3f920caeb4f3e3",
+    "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/onnx/model_quantized.onnx",
+    "bytes": 34014426,
+    "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4"
+  },
+  {
+    "file": "nomic-fp32.onnx",
+    "repo": "nomic-ai/nomic-embed-text-v1.5",
+    "revision": "e9b6763023c676ca8431644204f50c2b100d9aab",
+    "url": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5/resolve/e9b6763023c676ca8431644204f50c2b100d9aab/onnx/model.onnx",
+    "bytes": 547310275,
+    "sha256": "147d5aa88c2101237358e17796cf3a227cead1ec304ec34b465bb08e9d952965"
+  },
+  {
+    "file": "nomic-vocab.txt",
+    "repo": "nomic-ai/nomic-embed-text-v1.5",
+    "revision": "e9b6763023c676ca8431644204f50c2b100d9aab",
+    "url": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5/resolve/e9b6763023c676ca8431644204f50c2b100d9aab/vocab.txt",
+    "bytes": 231508,
+    "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+  },
+  {
+    "file": "nomic-tokenizer.json",
+    "repo": "nomic-ai/nomic-embed-text-v1.5",
+    "revision": "e9b6763023c676ca8431644204f50c2b100d9aab",
+    "url": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5/resolve/e9b6763023c676ca8431644204f50c2b100d9aab/tokenizer.json",
+    "bytes": 711396,
+    "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+  }
+]
