@@ -96,8 +96,9 @@ storage. Durable workspace references use `k8s/<namespace>/work-<work-id>` and r
 their recorded namespace when configuration changes;
 [KubernetesWorkspaceAddress.cs](../backend/src/Goblin.Execution/KubernetesWorkspaceAddress.cs)
 owns their grammar and ownership validation. Execution resources use the selector
-`app=goblin-execution`. Per-turn Secret and ConfigMap names use
-`input-<work-id>-<attempt-id>-<n>`, where `n` is the workspace turn number;
+`app=goblin-execution`. Secret and ConfigMap names identify a workspace allocation:
+`input-<work-id>-<attempt-id>-<n>`, where `n` is the workspace number. A live pod can
+serve multiple turns of that allocation.
 [SandboxManifestBuilder.cs](../backend/src/Goblin.Execution/SandboxManifestBuilder.cs)
 owns input names and labels. See [workspaces](workspace-lifecycle.md) for execution
 identities and retained storage.
