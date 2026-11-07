@@ -47,6 +47,7 @@ import {
     renderProgress,
     renderDecisions,
     renderOutputs,
+    renderExecutions,
     renderActivity,
     renderConversation,
     matchesWork,
@@ -527,7 +528,7 @@ function composer(kind: string, placeholder: string) {
                 : current()?.work.status === WorkStatus.Ready
                   ? "Saves context for this work · Start work when ready"
                   : "Saves context with this work";
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="settings-github">${icon("github")}GitHub</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button><button class="composer-chip" type="button" data-action="settings-agents">${icon("user")}Agent</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
+    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
 }
 function rememberWork() {
     sessionStorage.setItem("goblin.selectedWork", selected);
@@ -790,10 +791,10 @@ function render(preserveHome = false, forceSelect = false) {
               )
               .map((x) => [x.id, x.value] as const)
         : [];
-    const openDetails = sameContext
-        ? Array.from(
-              root.querySelectorAll<HTMLDetailsElement>("details[open][id]"),
-          ).map((x) => x.id)
+    const detailStates = sameContext
+        ? Array.from(root.querySelectorAll<HTMLDetailsElement>("details[id]"))
+              .filter((x) => x.open || x.classList.contains("latest-result"))
+              .map((x) => [x.id, x.open] as const)
         : [];
     const focus =
         active instanceof HTMLTextAreaElement ||
@@ -851,9 +852,9 @@ function render(preserveHome = false, forceSelect = false) {
             HTMLInputElement | HTMLSelectElement | null;
         if (field) field.value = value;
     }
-    for (const id of openDetails) {
+    for (const [id, open] of detailStates) {
         const detail = document.getElementById(id) as HTMLDetailsElement | null;
-        if (detail) detail.open = true;
+        if (detail) detail.open = open;
     }
     const savedSetup = setupDrafts.get(context);
     const setup = savedSetup?.approval === approvalKey ? savedSetup : undefined;
@@ -926,12 +927,13 @@ function renderDetail() {
     const item = current()!;
     const w = item.work,
         attempt = w.attempts.at(-1);
-    const latestResult = w.results.find((r) => r.attemptId === attempt?.id);
-    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="icon-button activity-toggle" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("more")}</button></div></div><div class="detail-properties"><span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>${icon("spark")}Updated ${e(relativeTime(item.updatedAt))}</span>${status(w)}</div>${attempt?.target.repository ? `<p class="git-repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
-        <section class="work-section goal-section" aria-labelledby="goal-heading">${icon("goal", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="goal-heading">Goal</h3><button class="text-button goal-discuss" data-action="discuss-goal" aria-label="Discuss goal" title="Discuss goal">${icon("chat")}</button></div><p class="goal-text preserve-lines">${e(w.objective)}</p></div></section>
-        <section class="work-section" aria-labelledby="progress-heading">${icon("work", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}${w.attention?.reason === AttentionReason.ResultReview && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</div></section>
-        ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading">${icon("wait", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span>${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
-        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading">${icon("cube", "section-icon")}<div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3><p class="section-description">Results, artifacts, and executions from this work.</p></div>${w.results.length + w.artifacts.length + w.attempts.length > 3 ? '<button class="secondary" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section></div>
+    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1" class="preserve-lines">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="secondary activity-toggle" data-action="toggle-activity" aria-label="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button></div></div><div class="detail-properties">${status(w)}<span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div></header>
+        <div class="work-layout"><div class="work-main">${controls(w)}
+        ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading"><div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span class="section-count">${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
+        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3><p class="section-description">Results and artifacts from this work.</p></div>${w.results.length + w.artifacts.length > 3 ? '<button class="text-button" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section></div>
+        <aside class="work-support" aria-label="Work details"><section class="work-section progress-section" aria-labelledby="progress-heading"><div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}</div></section>
+        ${w.attempts.length ? `<section class="work-section executions-section" aria-labelledby="executions-heading"><div class="section-content"><div class="section-heading"><h3 id="executions-heading">Executions</h3><span class="section-count">${w.attempts.length}</span></div>${renderExecutions(w)}</div></section>` : ""}
+        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div></div></section></aside></div></div>
         <div class="work-composer"><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? `<div class="composer-heading"><h3>Conversation</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="true" aria-controls="work-conversation">Hide conversation</button></div>${renderConversation(w)}` : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === AttentionReason.InputRequired ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
 }
 function modelControls(w?: Work) {
@@ -1043,14 +1045,14 @@ function executionSetup(w: Work) {
 }
 function controls(w: Work) {
     if (w.attention?.reason === AttentionReason.CleanupRequired)
-        return `<div class="decision"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</div>`;
+        return `<section class="decision work-state" aria-label="Current status"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</section>`;
     if (w.attempts.at(-1)?.cleanupPending)
-        return `<div class="decision"><p>Saving the outcome and finishing execution cleanup…</p></div>`;
+        return `<section class="decision work-state" aria-label="Current status"><p>Saving the outcome and finishing execution cleanup…</p></section>`;
     let content = "";
     if (w.status === WorkStatus.Ready)
-        content = `${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${gitHubRepositorySetup(w)}` : ""}`;
+        content = `<h3>Ready to start</h3>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${gitHubRepositorySetup(w)}` : ""}`;
     if (w.attention?.reason === AttentionReason.ResultReview)
-        content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
+        content = `<h3>Ready for your review</h3><p>Read the proposed result below, then approve it or ask for changes.</p>${w.results.find((r) => r.attemptId === w.attempts.at(-1)?.id) ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(w.attempts.at(-1)?.id)}">Read proposed result ${icon("arrow")}</button>` : ""}<div class="work-state-actions">${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}</div>`;
     if (w.attention?.reason === AttentionReason.InputRequired)
         content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? gitHubRepositorySetup(w) : ""}`;
     if (w.attention?.reason === AttentionReason.GitRepositoryRequired)
@@ -1072,8 +1074,10 @@ function controls(w: Work) {
             WorkStatus.Cancelling,
         ].some((value) => value === w.status)
     )
-        content += button("cancel", "Cancel work");
-    return content ? `<div class="decision">${content}</div>` : "";
+        content += `<div class="work-state-secondary">${button("cancel", "Cancel work")}</div>`;
+    return content
+        ? `<section class="decision work-state" aria-label="Current status">${content}</section>`
+        : "";
 }
 function showSetupErrors() {
     const errors = setupErrors.get(renderedContext) ?? {};
@@ -1369,7 +1373,9 @@ document.addEventListener("click", async (event) => {
             target.dataset.id!,
         ) as HTMLDetailsElement | null;
         if (output) {
-            const all = output.closest<HTMLDetailsElement>("#all-outputs");
+            const all = output.closest<HTMLDetailsElement>(
+                "#all-outputs, #all-executions",
+            );
             if (all) all.open = true;
             output.open = true;
             output.scrollIntoView({ block: "nearest" });

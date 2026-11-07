@@ -1,7 +1,7 @@
 # Work-centered workspace
 
-The workspace has three regions: Work navigation on the left, the selected Work
-in the center, and its Activity on the right. The code is in `frontend/src/work/`:
+The workspace has Work navigation on the left and the selected Work in the
+center. Activity opens in a drawer from its labeled header button. The code is in `frontend/src/work/`:
 `app.ts` handles navigation, rendering, and commands, `contracts.ts` holds the
 HTTP views, and `surface.ts` renders saved Work state.
 
@@ -10,10 +10,11 @@ most recently updated Work. An empty workspace opens New work at `/?new=work`.
 Selected Work uses `/work?item=<id>`.
 
 New work centers one goal input and an explicit **Create work** action. Creating
-Work saves the goal; execution starts separately from Progress. Connection setup
+Work saves the goal; execution starts separately from the current status panel. Connection setup
 guidance appears only when the AI connection needs attention. The Work list comes
 first in the sidebar, with Knowledge, Settings, and system resources
-below it. Agents are available from Settings and the selected Work's composer.
+below it. Agent and GitHub shortcuts live in the selected Work's Details section;
+the composer keeps conversation and output navigation together.
 
 ## Implemented behavior
 
@@ -23,22 +24,28 @@ below it. Agents are available from Settings and the selected Work's composer.
 - Search covers loaded Work objectives, IDs, agent names, decisions, results,
   artifact names and references, repository names, history text, and linked and
   untracked conversations. It is not a server-side index.
-- The center shows **Goal**, **Progress**, **Decisions** (when any exist), and
-  **Outputs**. Progress has three rows: Goal captured, Work on the outcome, and
-  Review and complete. Runtime success never marks Work complete; a result with
-  requested changes does not complete the second row.
+- The goal appears once as the page heading, with status, agent, and update time.
+  The main column puts the current action first, then **Decisions** (when any
+  exist) and **Outputs**. Completed Work leads with its saved result. A supporting
+  column holds **Progress**, **Executions**, and **Details**. Progress has three
+  rows: Goal captured, Work on the outcome, and Review and complete. Runtime
+  success never marks Work complete; a result with requested changes does not
+  complete the second row.
 - New Work, including tracked conversations, is assigned to the default agent
   and stays `Ready`.
 - The start panel shows the agent and **Uses Codex**. **Options** holds model and
   reasoning choices, kept in session storage per Work. Without an available Codex
   connection it shows **Connect Codex** or a status notice instead of Start.
 - Start, repository setup, approve, answer, request changes, cancel, retry, and
-  reconcile controls are in Progress. They send expected versions and reserved
-  IDs. Nothing retries automatically, and reading or expanding content sends no
+  reconcile controls are in the current status panel. Cancellation has a separate,
+  quieter row. They send expected versions and reserved IDs. Nothing retries
+  automatically, and reading or expanding content sends no
   commands.
-- Outputs is one time-ordered list of results, artifacts, and executions; the
-  first three are shown, with **View all** for the rest. Execution details show
-  the agent, runtime, requested and reported model, reasoning effort, repository
+- Outputs contains results and artifacts, with the latest result first and
+  expanded on opening Work. Remaining outputs are ordered by time; the first
+  three are shown, with **View all** for the rest. Executions has its own list
+  and disclosure for older attempts. Execution details show the agent, runtime,
+  requested and reported model, reasoning effort, repository
   and branch, environment, earlier turns, history, failure, and pending cleanup.
 - The composer sends `AddContext`, or `Answer` / `RequestChanges` when the current
   state needs it; its note names the action. **Discuss goal** starts a context
@@ -47,11 +54,13 @@ below it. Agents are available from Settings and the selected Work's composer.
 - Activity is one time-ordered list of product events labeled Goblin Web, Goblin,
   or Agent. Linked conversation messages appear once, as `ContextAdded`. Claims,
   cleanup completion, and progress reports appear only in execution details.
-- Below 1200px Activity becomes a drawer; at 760px and below navigation does too.
+- Below 1280px supporting details follow the main content; Activity is a drawer
+  at every width. At 760px and below navigation becomes a drawer too.
   Drawers make the rest of the page inert, close with Escape, and return focus.
 - The page refreshes every 3 seconds while visible, and when it becomes visible
-  or goes online. A refresh keeps drafts, open disclosures, scroll positions, and
-  focus. It does not re-render while a native select has focus.
+  or goes online. A refresh keeps drafts, open disclosures, a collapsed latest
+  result, scroll positions, and focus. It does not re-render while a native
+  select has focus.
 - A brief startup session request failure keeps the opening screen visible.
   Repeated failures, or a lost connection after opening, show a reconnecting
   status that clears when the session request succeeds, including at the password
