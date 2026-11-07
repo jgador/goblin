@@ -1661,6 +1661,7 @@ public sealed partial class DurabilityTests
         public TaskCompletionSource PromptRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int PromptCalls { get; private set; }
         public bool FailPrompt { get; set; }
+        public AccountView? Account { get; set; } = new ChatGPTAccountView("owner@example.test", "plus");
 
         public async Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default)
         {
@@ -1677,7 +1678,7 @@ public sealed partial class DurabilityTests
             return new(null, null, null, null, true);
         }
 
-        public Task<AuthenticationState> StatusAsync() => throw new NotSupportedException();
+        public Task<AuthenticationState> StatusAsync() => Task.FromResult(new AuthenticationState(Account, null, null, null, true));
         public Task<AuthenticationState> LoginChatGPTAsync() => throw new NotSupportedException();
         public Task<AuthenticationState> LoginApiKeyAsync(string? value) => throw new NotSupportedException();
         public Task<AuthenticationState> CancelLoginAsync() => throw new NotSupportedException();

@@ -14,7 +14,7 @@ internal sealed class ChatGptSetupView
     [JsonPropertyName("description")]
     public string Description => ChatGptConfiguration.Description;
     [JsonPropertyName("logoUrl")]
-    public string LogoUrl => "/assets/branding/icon.svg";
+    public string LogoUrl => "/assets/branding/chatgpt.png";
     [JsonPropertyName("serverUrl")]
     public string? ServerUrl { get; init; }
     [JsonPropertyName("issuer")]
@@ -36,8 +36,6 @@ internal sealed class ChatGptSetupView
     [JsonPropertyName("environmentVariables")]
     public ChatGptEnvironmentView EnvironmentVariables { get; } = new();
 
-    [JsonPropertyName("grants")]
-    public ChatGptGrantView[] Grants { get; init; } = [];
 }
 
 internal sealed class ChatGptEnvironmentView
@@ -47,30 +45,6 @@ internal sealed class ChatGptEnvironmentView
 
     [JsonPropertyName("enabled")]
     public string Enabled => Env.GoblinChatGptEnabled;
-}
-
-internal sealed class ChatGptGrantView
-{
-    [JsonPropertyName("id")]
-    public required string Id { get; init; }
-    [JsonPropertyName("subject")]
-    public required string Subject { get; init; }
-    [JsonPropertyName("workId")]
-    public required string WorkId { get; init; }
-    [JsonPropertyName("resultAttemptId")]
-    public string? ResultAttemptId { get; init; }
-    [JsonPropertyName("expiresAt")]
-    public DateTimeOffset ExpiresAt { get; init; }
-    [JsonPropertyName("expired")]
-    public bool Expired { get; init; }
-}
-
-internal sealed class ChatGptWorkChoice
-{
-    [JsonPropertyName("id")]
-    public required string Id { get; init; }
-    [JsonPropertyName("objective")]
-    public required string Objective { get; init; }
 }
 
 internal sealed class ChatGptVerificationView

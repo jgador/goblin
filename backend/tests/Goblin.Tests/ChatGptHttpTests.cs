@@ -13,6 +13,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Application.Work;
+using Goblin.Contracts;
+using Goblin.Core.Work;
 using Goblin.Integrations.ChatGpt;
 using Goblin.Persistence;
 using Goblin.Web;
@@ -31,6 +34,51 @@ namespace Goblin.Tests;
 
 public sealed class ChatGptHttpTests
 {
+    [Fact]
+    public void WorkSectionsAndEveryResultRemainReadableBeyondOneMcpPage()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string longText = new string('r', 5999) + "😀" + new string('q', 6100);
+        var view = new WorkView(4, now, now, new WorkSnapshot
+        {
+            Id = 11,
+            Objective = "Full objective",
+            Attempts = [],
+            History = [],
+            Decisions = [],
+            Messages = [],
+            Artifacts = [],
+            Results = [new WorkResult(21, longText, now), new WorkResult(22, "Approved text", now, now)]
+        });
+        var section = new StringBuilder();
+        int offset = 0;
+        do
+        {
+            ChatGptWorkSectionPage page = ChatGptWorkProjection.Section(view, ChatGptWorkSection.Results, offset);
+            section.Append(page.ContentJson);
+            if (page.NextOffset is not int next) break;
+            offset = next;
+        } while (true);
+        using JsonDocument results = JsonDocument.Parse(section.ToString());
+        Assert.Equal(2, results.RootElement.GetArrayLength());
+        Assert.Equal("21", results.RootElement[0].GetProperty("attemptId").GetString());
+        Assert.Equal(longText, results.RootElement[0].GetProperty("text").GetString());
+
+        foreach (long attemptId in new long[] { 21, 22 })
+        {
+            var text = new StringBuilder();
+            offset = 0;
+            do
+            {
+                ChatGptWorkResultPage page = ChatGptWorkProjection.Result(view, attemptId, offset);
+                text.Append(page.Text);
+                if (page.NextOffset is not int next) break;
+                offset = next;
+            } while (true);
+            Assert.Equal(attemptId == 21 ? longText : "Approved text", text.ToString());
+        }
+    }
+
     [Fact]
     public async Task DisabledSetupSuppliesConfigurationNamesWithoutADocumentDownload()
     {
@@ -85,8 +133,7 @@ public sealed class ChatGptHttpTests
     }
 
     [Theory]
-    [InlineData("/api/integrations/chatgpt/grants/revoke")]
-    [InlineData("/api/integrations/chatgpt/package")]
+    [InlineData("/api/integrations/chatgpt/client/revoke")]
     public async Task BearerTokenCannotAdministerSetupAndOwnerPostStillRequiresOrigin(string path)
     {
         await using Host host = await Host.CreateAsync();
@@ -102,8 +149,23 @@ public sealed class ChatGptHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, cookie.StatusCode);
     }
 
+    [Theory]
+    [InlineData("/api/integrations/chatgpt/creator/check")]
+    [InlineData("/api/integrations/chatgpt/creator/prepare")]
+    [InlineData("/api/integrations/chatgpt/package")]
+    public async Task RemovedSetupEndpointsAreUnavailableToTheOwner(string path)
+    {
+        await using Host host = await Host.CreateAsync();
+        using HttpClient http = host.Client();
+        http.DefaultRequestHeaders.Add("Cookie", host.OwnerCookie);
+        http.DefaultRequestHeaders.Add("Origin", ChatGptAuthenticationTests.Origin);
+        using HttpResponseMessage response = await http.PostAsync(path, Json("{}"));
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(0, host.Tokens.Reads);
+    }
+
     [Fact]
-    public async Task RealSdkDiscoversReadOnlyToolsAndDoesNotReuseAuthenticationBetweenRequests()
+    public async Task RealSdkDiscoversFullWorkToolsAndDoesNotReuseAuthenticationBetweenRequests()
     {
         await using Host host = await Host.CreateAsync();
         using HttpClient http = host.Client();
@@ -119,16 +181,57 @@ public sealed class ChatGptHttpTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await using McpClient client = await McpClient.CreateAsync(transport, cancellationToken: deadline.Token);
         IList<McpClientTool> tools = await client.ListToolsAsync(cancellationToken: deadline.Token);
-        Assert.Equal(new[] { "goblin_get_work_attention", "goblin_get_work_result", "goblin_get_work_status", "goblin_list_work", "goblin_ping" }, tools.Select(t => t.Name).Order());
+        var actions = new Dictionary<WorkAction, string>
+        {
+            [WorkAction.Create] = "goblin_create_work",
+            [WorkAction.Assign] = "goblin_assign_work",
+            [WorkAction.AddContext] = "goblin_add_work_context",
+            [WorkAction.Execute] = "goblin_execute_work",
+            [WorkAction.Answer] = "goblin_answer_work_question",
+            [WorkAction.RequestChanges] = "goblin_request_work_changes",
+            [WorkAction.Approve] = "goblin_approve_work_result",
+            [WorkAction.Cancel] = "goblin_cancel_work",
+            [WorkAction.Reconcile] = "goblin_reconcile_work",
+            [WorkAction.Retry] = "goblin_retry_work",
+            [WorkAction.PrepareGitRepository] = "goblin_prepare_work_repository",
+            [WorkAction.AuthorizeGitRepository] = "goblin_authorize_work_repository",
+            [WorkAction.DenyGitRepository] = "goblin_deny_work_repository"
+        };
+        Assert.Equal(Enum.GetValues<WorkAction>().Order(), actions.Keys.Order());
+        Assert.Equal(actions.Values.Concat(new[] { "goblin_get_work", "goblin_get_work_result", "goblin_get_work_section",
+            "goblin_list_agents", "goblin_list_repositories", "goblin_list_available_repositories", "goblin_list_work", "goblin_ping", "goblin_reserve_work_ids",
+            "goblin_suggest_work_repositories" }).Order(), tools.Select(t => t.Name).Order());
         foreach (McpClientTool tool in tools)
         {
-            Assert.True(tool.ProtocolTool.Annotations?.ReadOnlyHint);
-            Assert.False(tool.ProtocolTool.Annotations?.DestructiveHint);
+            bool writes = actions.ContainsValue(tool.Name) || tool.Name == "goblin_reserve_work_ids";
+            Assert.Equal(!writes, tool.ProtocolTool.Annotations?.ReadOnlyHint);
+            bool destructive = tool.Name is "goblin_add_work_context" or "goblin_execute_work" or "goblin_answer_work_question"
+                or "goblin_cancel_work" or "goblin_reconcile_work" or "goblin_retry_work" or "goblin_prepare_work_repository"
+                or "goblin_authorize_work_repository" or "goblin_deny_work_repository";
+            Assert.Equal(destructive, tool.ProtocolTool.Annotations?.DestructiveHint);
+            Assert.Equal(destructive && tool.Name != "goblin_deny_work_repository" ||
+                tool.Name == "goblin_list_available_repositories", tool.ProtocolTool.Annotations?.OpenWorldHint);
+            Assert.Equal(tool.Name != "goblin_ping" && tool.Name != "goblin_reserve_work_ids", tool.ProtocolTool.Annotations?.IdempotentHint);
             Assert.NotNull(tool.ProtocolTool.OutputSchema);
             Assert.NotNull(tool.ProtocolTool.Meta?["securitySchemes"]);
+            Assert.Contains(ChatGptConfiguration.WriteScope, tool.ProtocolTool.Meta!["securitySchemes"]!.ToJsonString());
         }
+        foreach (string name in actions.Values)
+        {
+            using JsonDocument schema = JsonDocument.Parse(JsonSerializer.Serialize(tools.Single(t => t.Name == name).ProtocolTool.InputSchema));
+            JsonElement properties = schema.RootElement.GetProperty("properties");
+            Assert.Equal("string", properties.GetProperty("commandId").GetProperty("type").GetString());
+            Assert.Equal("string", properties.GetProperty("workId").GetProperty("type").GetString());
+            if (name == "goblin_create_work")
+                Assert.Equal("string", properties.GetProperty("objective").GetProperty("type").GetString());
+            else
+                Assert.Equal("integer", properties.GetProperty("expectedVersion").GetProperty("type").GetString());
+        }
+        using (JsonDocument sectionSchema = JsonDocument.Parse(JsonSerializer.Serialize(
+            tools.Single(t => t.Name == "goblin_get_work_section").ProtocolTool.InputSchema)))
+            Assert.Equal("string", sectionSchema.RootElement.GetProperty("properties").GetProperty("section").GetProperty("type").GetString());
         // This host has an unreachable database and no GitHub connection. Ping
-        // must confirm the transport without reading Work or its grants.
+        // must confirm the transport without reading Work.
         DateTimeOffset beforePing = DateTimeOffset.UtcNow;
         CallToolResult ping = await client.CallToolAsync("goblin_ping", cancellationToken: deadline.Token);
         Assert.False(ping.IsError ?? false);
@@ -152,7 +255,7 @@ public sealed class ChatGptHttpTests
         Assert.Equal(result.GetProperty("operatingSystem").GetString(), nextResult.GetProperty("operatingSystem").GetString());
         Assert.Equal(2, host.PingLog.Messages.Count);
         Assert.Contains(host.PingLog.Messages, message => message.Contains(nextResult.GetProperty("responseId").GetString()!, StringComparison.Ordinal));
-        CallToolResult invalid = await client.CallToolAsync("goblin_get_work_status", new Dictionary<string, object?> { ["workId"] = "1e3" }, cancellationToken: deadline.Token);
+        CallToolResult invalid = await client.CallToolAsync("goblin_get_work", new Dictionary<string, object?> { ["workId"] = "1e3" }, cancellationToken: deadline.Token);
         Assert.True(invalid.IsError);
         Assert.DoesNotContain("mcp/www_authenticate", JsonSerializer.Serialize(invalid));
         http.DefaultRequestHeaders.Authorization = new("Bearer", host.Tokens.Token("expiry"));

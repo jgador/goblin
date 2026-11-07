@@ -39,7 +39,9 @@ test("owner can use a one-character deployment password, connect ChatGPT, and sw
             },
             { times: 1 },
         );
-        await page.goto(`${origin}/settings?section=codex`);
+        await page.goto(
+            `${origin}/settings?section=connections&provider=codex`,
+        );
         await expect(
             page.getByRole("heading", { name: "Open your workspace" }),
         ).toBeVisible();

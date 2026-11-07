@@ -1,6 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
 
-async function settingsFixture(page: Page) {
+async function settingsFixture(
+    page: Page,
+    { cluster = true, logs = true } = {},
+) {
     const github = {
         configured: true,
         status: "Disconnected",
@@ -24,7 +27,8 @@ async function settingsFixture(page: Page) {
         if (path === "/api/session") json = { authenticated: true };
         else if (path === "/api/preferences")
             json = { timeZone: "Asia/Manila" };
-        else if (path === "/api/cluster") json = { available: true };
+        else if (path === "/api/cluster") json = { available: cluster };
+        else if (path === "/api/logs") json = { available: logs };
         else if (path === "/api/status")
             json = {
                 account: {
@@ -61,7 +65,14 @@ async function settingsFixture(page: Page) {
                     request.postDataJSON().enabled === "true";
             json = gitHubRepository.enabled ? [gitHubRepository] : [];
         } else if (path === "/api/connections")
-            json = [{ id: "1", name: "Codex", availability: "Available" }];
+            json = [
+                {
+                    id: "1",
+                    runtime: "codex",
+                    name: "Codex",
+                    availability: "Available",
+                },
+            ];
         await route.fulfill({ json });
     });
     return { github, gitHubRepository };
@@ -82,20 +93,16 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     const dialog = page.getByRole("region", { name: "Settings" });
     await expect(dialog).toBeVisible();
     await expect(
-        dialog.getByRole("heading", { name: "AI connections" }),
+        dialog.getByRole("heading", { name: "Connections" }),
     ).toBeVisible();
     await dialog
-        .getByRole("button", { name: "Manage connection", exact: true })
+        .getByRole("link", { name: "Manage Codex", exact: true })
         .click();
     await expect(dialog.getByText("owner@example.test · plus")).toBeVisible();
-    await dialog.getByRole("link", { name: "Cluster", exact: true }).click();
-    const cluster = dialog.getByRole("link", { name: "Open cluster" });
-    await expect(cluster).toHaveAttribute("href", "/headlamp/");
-    await expect(cluster).toHaveAttribute("target", "_blank");
-    await expect(
-        dialog.getByText(/Your Goblin login gives you read-only access/),
-    ).toBeVisible();
-    await dialog.getByRole("link", { name: "GitHub", exact: true }).click();
+    await dialog
+        .getByRole("link", { name: "Connections", exact: true })
+        .click();
+    await dialog.locator("#connection-github").click();
     await dialog
         .getByRole("button", { name: "Connect GitHub", exact: true })
         .click();
@@ -109,7 +116,10 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
         page.getByPlaceholder("Describe the intended outcome…"),
     ).toHaveValue("Keep this draft while I connect GitHub");
     await page.locator('.sidebar [data-action="settings"]').click();
-    await dialog.getByRole("link", { name: "GitHub", exact: true }).click();
+    await dialog
+        .getByRole("link", { name: "Connections", exact: true })
+        .click();
+    await dialog.locator("#connection-github").click();
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     github.status = "Connected";
     github.login = "owner";
@@ -131,6 +141,98 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     expect(errors).toEqual([]);
 });
 
+for (const width of [1280, 390]) {
+    test(`Cluster and Logs open directly from Tools at ${width}px without leaving Settings`, async ({
+        page,
+        context,
+    }) => {
+        await settingsFixture(page);
+        await page.setViewportSize({ width, height: 844 });
+        await context.route(/\/(headlamp|logs)\//, (route) =>
+            route.fulfill({
+                contentType: "text/html",
+                body: "<title>Tool fixture</title><h1>Tool opened</h1>",
+            }),
+        );
+        await page.goto("/settings?section=connections&provider=codex");
+        await expect(page.getByText("owner@example.test · plus")).toBeVisible();
+        const tools = page.getByRole("navigation", {
+            name: "Tools",
+            exact: true,
+        });
+        for (const [label, path] of [
+            ["Cluster", "/headlamp/"],
+            ["Logs", "/logs/"],
+        ]) {
+            const link = tools.getByRole("link", {
+                name: `${label} (opens in a new tab)`,
+                exact: true,
+            });
+            await expect(link).toBeVisible();
+            await expect(link).toHaveAttribute("href", path!);
+            await expect(link).toHaveAttribute("rel", "noopener");
+            const opened = page.waitForEvent("popup");
+            if (label === "Cluster") {
+                await link.focus();
+                await page.keyboard.press("Enter");
+            } else await link.click();
+            const popup = await opened;
+            await expect(popup).toHaveURL(new RegExp(`${path}$`));
+            await popup.close();
+            await expect(page).toHaveURL(
+                /\/settings\?section=connections&provider=codex$/,
+            );
+            await expect(
+                page.getByText("owner@example.test · plus"),
+            ).toBeVisible();
+        }
+        await expect(
+            page.locator(
+                '[data-provider-panel="cluster"], [data-provider-panel="logs"]',
+            ),
+        ).toHaveCount(0);
+        expect(
+            await page
+                .locator(".settings-page")
+                .evaluate(
+                    (element) => element.scrollWidth <= element.clientWidth,
+                ),
+        ).toBe(true);
+        await page.screenshot({
+            path: test.info().outputPath(`settings-tools-${width}.png`),
+            fullPage: true,
+        });
+    });
+}
+
+test("an unconfigured tool explains its availability while the other tool stays accessible", async ({
+    page,
+    context,
+}) => {
+    await settingsFixture(page, { cluster: false });
+    await context.route("**/logs/", (route) =>
+        route.fulfill({
+            contentType: "text/html",
+            body: "<title>Logs fixture</title>",
+        }),
+    );
+    await page.goto("/settings?section=connections");
+    const tools = page.getByRole("navigation", { name: "Tools", exact: true });
+    const cluster = tools.locator('[data-settings-tool="cluster"]');
+    await expect(cluster).toHaveAttribute("aria-disabled", "true");
+    await expect(cluster).not.toHaveAttribute("href", /./);
+    await expect(tools.getByRole("status")).toHaveText(
+        "Cluster is not configured for this installation.",
+    );
+    const opened = page.waitForEvent("popup");
+    await tools
+        .getByRole("link", { name: "Logs (opens in a new tab)" })
+        .click();
+    const popup = await opened;
+    await expect(popup).toHaveURL(/\/logs\/$/);
+    await popup.close();
+});
+
 test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
     page,
 }) => {
@@ -142,14 +244,14 @@ test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
         .click();
     await page.locator('.sidebar [data-action="settings"]').click();
     const dialog = page.getByRole("region", { name: "Settings" });
-    await page
-        .getByRole("combobox", { name: "Settings section", exact: true })
-        .selectOption("github");
+    await dialog.locator("#connection-github").click();
     await dialog
         .getByRole("button", { name: "Connect GitHub", exact: true })
         .click();
     await page.reload();
-    await expect(page).toHaveURL(/\/settings\?section=github$/);
+    await expect(page).toHaveURL(
+        /\/settings\?section=connections&provider=github$/,
+    );
     await expect(dialog.getByText("ABCD-1234", { exact: true })).toBeVisible();
     await page.screenshot({
         path: test.info().outputPath("settings-mobile.png"),
@@ -179,11 +281,13 @@ test("settings sections have direct links and restore browser history without lo
         name: "Settings",
         exact: true,
     });
-    await settings.getByRole("link", { name: "GitHub", exact: true }).click();
-    await expect(page).toHaveURL(/\/settings\?section=github$/);
+    await settings.locator("#connection-github").click();
+    await expect(page).toHaveURL(
+        /\/settings\?section=connections&provider=github$/,
+    );
     await page.goBack();
     await expect(
-        settings.getByRole("heading", { name: "AI connections" }),
+        settings.getByRole("heading", { name: "Connections" }),
     ).toBeVisible();
     await page.goBack();
     await expect(draft).toHaveValue(
@@ -210,8 +314,8 @@ test("settings direct links retain the workspace access gate, including trailing
     page,
 }) => {
     for (const path of [
-        "/settings?section=github",
-        "/settings/?section=codex",
+        "/settings?section=connections&provider=github",
+        "/settings/?section=connections&provider=codex",
     ]) {
         const response = await page.goto(path);
         expect(response?.status()).toBe(200);

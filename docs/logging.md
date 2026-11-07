@@ -1,7 +1,7 @@
 # Saved logs
 
 Goblin's Kubernetes installation sends `ILogger` output through Microsoft's JSON
-console formatter to Fluent Bit and VictoriaLogs. Open **Settings → Logs → Open logs**
+console formatter to Fluent Bit and VictoriaLogs. Open **Settings → Tools → Logs**
 or visit **`/logs/`** on the Goblin address. VictoriaLogs' built-in VMUI opens in a
 new tab and uses the Goblin login; there is no separate password or UI pod.
 

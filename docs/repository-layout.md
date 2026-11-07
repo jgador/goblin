@@ -47,8 +47,9 @@ The root `Makefile` holds shared builds, checks, tests, and release tooling. It
 includes `Makefile.dev` for local application, database, website, and Docker
 commands. Always run `make <target>` from the repository root; `make help` lists
 targets from both files. Targets use `<scope>-<action>[-<qualifier>]`, such as
-`backend-build` or `secrets-scan-staged`. Repository-wide workflows keep bare
-names: `install`, `build`, `typecheck`, `check`, `test`, and `format`. Use
+`backend-build` or `rust-format-check`. Tool entry points such as `gitleaks` use
+the tool name, with modes passed through `ARGS`. Repository-wide workflows keep
+bare names: `install`, `build`, `typecheck`, `check`, `test`, and `format`. Use
 `reset` for a fresh environment, `clean` to remove outputs or caches, and `stop`
 to halt services.
 
@@ -59,6 +60,12 @@ and npm scripts; do not add backend or test tooling to it. The root
 `tsconfig.json` compiles Node test tooling into the root `dist/`, while
 `frontend/tsconfig.json` compiles browser source without Node types. `global.json`
 stays at the root so the pinned .NET SDK applies from the root and from `backend/`.
+
+VS Code opens `backend/Goblin.slnx` through the checked-in
+`dotnet.defaultSolution` setting. `.artifacts/` is excluded from file discovery
+and watching so temporary project copies do not enter an editor-generated
+solution. If C# Dev Kit already has a generated solution open, use **.NET: Open
+Solution** and select `backend/Goblin.slnx`.
 
 `website/` has its own package manifest and lockfile. Application install, build,
 and test commands do not include it, and the application Docker build excludes
@@ -253,10 +260,11 @@ The frontend build writes JavaScript, HTML, CSS, and static assets to
 `frontend/dist/`. `Goblin.Web` copies this directory into its output and
 published `wwwroot/`. Browser URLs are mapped explicitly in
 `backend/src/Goblin.Web/Http/StaticAssets.cs`; add new browser modules there.
-`/`, `/work`, `/integrations`, `/knowledge`, and `/settings` serve the workspace
+`/`, `/work`, `/knowledge`, and `/settings` serve the workspace
 shell, also with a trailing slash, behind the workspace access screen. Settings
-selects its section with `?section=<name>`; the names are listed in
-`frontend/src/settings/settings.ts`.
+selects its section with `?section=<name>`. Connection details use
+`?section=connections&provider=<name>`; the names and URL parsing are in
+`frontend/src/settings/navigation.ts`.
 The connection panel is shared with Settings through `/connection/panel.html`.
 Runtime assets keep their `/assets/*` URLs, including the bundled Inter fonts.
 Shared platform controls and font declarations live in `frontend/src/controls.css`.

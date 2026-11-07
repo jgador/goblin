@@ -25,6 +25,13 @@ selections, and unused selections. A schema object marked closed must have all i
 fields selected so its class can still read valid Codex responses. Unselected methods
 get no generated notification models.
 
+Plugin preparation selects explicit `skill` turn inputs, thread configuration,
+`skills/list`, and the read-only `app/installed`, `app/read`, and
+`plugin/skill/read` request/response fields. These support local skill discovery
+and capability inspection, not plugin creation. Goblin does not select the
+under-development plugin list/install/uninstall APIs or a guessed external-MCP
+registration method. See [Codex integration](../../../docs/codex-integration.md#protocol-regeneration).
+
 Regenerate and check with:
 
 ```sh

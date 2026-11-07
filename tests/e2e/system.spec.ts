@@ -66,6 +66,7 @@ async function fixture(page: Page) {
 
 test("VM resources are one click away, preserve drafts, and distinguish stale readings", async ({
     page,
+    context,
 }) => {
     const state = await fixture(page);
     const errors: string[] = [];
@@ -96,11 +97,21 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
         path: test.info().outputPath("system-desktop.png"),
         fullPage: true,
     });
+    await context.route("**/headlamp/", (route) =>
+        route.fulfill({
+            contentType: "text/html",
+            body: "<title>Cluster fixture</title>",
+        }),
+    );
+    const opened = page.waitForEvent("popup");
     await panel
-        .getByRole("button", { name: /Open detailed cluster view/ })
+        .getByRole("link", { name: /Open detailed cluster view/ })
         .click();
+    const popup = await opened;
+    await expect(popup).toHaveURL(/\/headlamp\/$/);
+    await popup.close();
     await expect(
-        page.getByRole("link", { name: "Open cluster" }),
+        panel.getByRole("heading", { name: "Your system" }),
     ).toBeVisible();
     await page.getByRole("button", { name: "Back to workspace" }).click();
     await expect(

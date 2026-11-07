@@ -18,6 +18,11 @@ public interface IJwksDocumentSource
     Task<string> ReadAsync(Uri pinnedAddress, CancellationToken token);
 }
 
+public interface IChatGptOwnerSource : IJwksDocumentSource
+{
+    string OwnerSubject { get; }
+}
+
 public sealed class SigningKeyCache
 {
     private readonly ChatGptConfiguration _configuration;

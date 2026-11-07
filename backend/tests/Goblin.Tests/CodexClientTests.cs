@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Goblin.Contracts;
 using Goblin.Contracts.Runtime;
 using Goblin.Core.Work;
 using Goblin.Integrations.Codex;
@@ -307,7 +308,7 @@ public sealed class CodexClientTests
         {
             var root = new DirectoryInfo(AppContext.BaseDirectory);
             while (root is not null && !Directory.Exists(Path.Combine(root.FullName, "backend/schemas/codex"))) root = root.Parent;
-            string data = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), $"goblin-dotnet-{Guid.NewGuid():N}")).FullName;
+            string data = Directory.CreateDirectory(Path.Combine(root!.FullName, ".artifacts", "codex-client-tests", Guid.NewGuid().ToString("N"))).FullName;
             string passwordFile = Path.Combine(data, "owner-password");
             byte[] salt = RandomNumberGenerator.GetBytes(16);
             byte[] digest = Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes("codex-client-test"), salt, 600_000, HashAlgorithmName.SHA256, 32);

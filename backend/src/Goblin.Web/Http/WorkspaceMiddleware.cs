@@ -61,7 +61,7 @@ internal sealed class WorkspaceMiddleware
                 return;
             }
             // Endpoint routing treats page routes with trailing slashes as the same route.
-            if (path is "/work/" or "/integrations/" or "/knowledge/" or "/settings/") path = path.TrimEnd('/');
+            if (path is "/work/" or "/knowledge/" or "/settings/") path = path.TrimEnd('/');
             bool get = HttpMethods.IsGet(request.Method);
             bool post = HttpMethods.IsPost(request.Method);
             if (get && path is "/healthz" or "/readyz") { await _next(context); return; }

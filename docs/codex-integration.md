@@ -92,9 +92,11 @@ the exact steps and the selection and serialization rules.
 See [test selection](repository-layout.md#choosing-verification) for build and test
 scope. Transport and protocol tests use fixtures for serialization, concurrent
 initialization, request matching, UTF-8 framing, malformed or oversized output,
-server requests, timeouts, crashes, restart order, and cleanup. `make codex-test`
-uses the pinned official binary with synthetic credentials. Neither establishes
-authenticated model coverage.
+server requests, timeouts, crashes, restart order, and cleanup.
+`make codex-test` uses the pinned official binary with synthetic credentials and
+checks credential storage, restart, logout, and the read-only temporary-thread
+configuration without submitting a model task. These checks do not establish
+authenticated model execution.
 
 Node.js builds the browser assets, provides npm's pinned Codex package, and runs test
 tooling. The production host is .NET only and can use a separately installed Codex

@@ -26,9 +26,15 @@ certificate; check network and TLS access on each installation.
 
 ## Cluster view
 
-Open Headlamp from **Settings → Cluster → Open cluster** or at `/headlamp/` on the
+The **Tools** group at the top of Settings opens Cluster and Logs directly in a
+new tab on desktop and mobile. These tools use your Goblin login. Unconfigured
+tools are disabled with an availability message.
+
+Open Headlamp from **Settings → Tools → Cluster** or at `/headlamp/` on the
 Goblin address, such as `http://localhost:8788/headlamp/` on local WSL. Sign in
 with the Goblin password; no separate token, DNS record, or public port is needed.
+The System overview's **Open detailed cluster view** link also opens Headlamp
+directly, keeping the overview open.
 
 Headlamp runs as the private `goblin-headlamp` Deployment in namespace `goblin`.
 Browsers reach it only through Goblin's authenticated proxy, and its NetworkPolicy

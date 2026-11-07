@@ -61,7 +61,7 @@ RUN --mount=type=cache,id=goblin-platform-github-cli,target=/tmp/github-cli-cach
 
 # Publish the app and migration tool against the shared .NET runtime.
 # Only their publish outputs enter the final image; the SDK stays in build stages.
-FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS dotnet-base
+FROM mcr.microsoft.com/dotnet/sdk:10.0.403-noble AS dotnet-base
 
 WORKDIR /app
 

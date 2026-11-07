@@ -103,7 +103,7 @@ configured. Use the public HTTPS URL for the rest of the session.
 
 #### 4. Open Goblin and connect the plugin
 
-Open [Goblin's ChatGPT settings](https://dev.goblinboard.com/settings?section=chatgpt)
+Open [Goblin's ChatGPT settings](https://dev.goblinboard.com/settings?section=connections&provider=chatgpt)
 and enter this installation's Goblin password. For a first installation, follow
 [Install the plugin](#install-the-plugin) below. If the plugin is already
 installed, continue directly to [the connection test](#test-the-connection-without-work).
@@ -115,33 +115,42 @@ The tunnel host `dev-tunnel.goblinboard.com` is only for the Chisel client.
 
 Do this once per Goblin instance and ChatGPT connection. For the k3s walkthrough,
 the origin is `https://dev.goblinboard.com`. A production connection uses that
-deployment's HTTPS origin instead. OAuth clients, keys, tokens, and Work grants
+deployment's HTTPS origin instead. OAuth clients, keys, and tokens
 belong to the selected instance; create a separate connection for each environment.
 
-1. In Goblin's `/settings?section=chatgpt`, choose **Private plugin**. **Prepare**
-   should show that the OAuth server and MCP endpoint are enabled. **Continue to
-   Sign-in** opens the authentication setup step.
-2. In **Sign-in**, click **Create OAuth client** if no client exists. Copy and
-   save the generated secret; it is shown only when created or rotated. Click
-   **Check provider and storage**, then continue to **Install**. These local
-   checks verify configuration and storage; the ChatGPT connection test below
-   verifies the public connection.
+1. Open Goblin's `/settings?section=connections&provider=chatgpt`.
+   **Prepare** should show that the OAuth server and MCP endpoint are
+   enabled. **Continue to connection setup** opens the plugin credentials and
+   server checks.
+2. In **Connection setup**, click **Create OAuth client** if no client exists.
+   This step creates the client without asking for ChatGPT's callback. Copy and
+   save the generated secret; it is shown only when created or rotated. Reuse the saved
+   secret for an existing client. Click **Check provider and storage**, then
+   continue to **Install**. These local checks verify configuration and storage;
+   the ChatGPT connection test below verifies the public connection.
 3. Open [ChatGPT Plugins](https://chatgpt.com/plugins) and select
    **+ → Add custom MCP server**. Give the plugin a name that identifies the
-   environment and enter Goblin's connection details:
+   environment. In Goblin's **Install** step, select **Download Goblin logo**
+   and upload the 512 × 512 PNG as the plugin logo. The download is below
+   ChatGPT's 10 KB file-size limit. Enter Goblin's connection details:
 
    | Field | WSL k3s value |
    | --- | --- |
    | Server URL | `https://dev.goblinboard.com/mcp` |
    | Authentication | OAuth |
+   | Token endpoint auth method | `client_secret_basic` |
    | OAuth client ID | `goblin-chatgpt` |
    | OAuth client secret | The secret saved from Goblin |
-   | OAuth scopes, if requested | `openid offline_access goblin.work.read` |
+   | Base scopes / OAuth scopes, if requested | `openid offline_access goblin.work.read goblin.work.write` |
 
-4. Copy the exact OAuth callback shown by ChatGPT. In Goblin's **Install** step,
-   paste it into **ChatGPT OAuth callback** and click **Save OAuth client**.
-   Leave **Generate a new client secret and revoke previous connections**
-   unchecked. The confirmed callback for this workflow is:
+4. Keep ChatGPT's connection form open and copy the exact OAuth callback it
+   displays. This is ChatGPT's return URL: Goblin sends you there after sign-in
+   and must allow the address before ChatGPT can connect. In Goblin's **Install**
+   step, under **Save ChatGPT's return URL in Goblin**, paste it into **ChatGPT
+   OAuth callback (return URL)** and click **Save callback**. Wait for **Callback
+   saved** before returning to ChatGPT; entering the URL alone does not save it.
+   This preserves your existing secret.
+   The confirmed callback for this workflow is:
 
    ```text
    https://chatgpt.com/connector_platform_oauth_redirect
@@ -149,17 +158,21 @@ belong to the selected instance; create a separate connection for each environme
 
    Use the callback displayed for your connection if it differs. Saving it is
    required before sign-in; creating the client with an empty callback does not
-   register one. Wildcards are rejected.
+   register one. Wildcards are rejected. Installation confirmation stays disabled
+   until a callback has been saved.
 5. Return to ChatGPT and create the plugin. When the browser opens Goblin's
    HTTPS sign-in page, enter the Goblin owner password and approve the connection.
    Finish **Create as a plugin** and installation in ChatGPT. Confirm the tools
-   include `goblin_ping`, `goblin_list_work`, `goblin_get_work_status`,
-   `goblin_get_work_attention`, and `goblin_get_work_result`.
+   include `goblin_ping`, `goblin_list_work`, `goblin_get_work`,
+   `goblin_get_work_section`, `goblin_get_work_result`,
+   `goblin_reserve_work_ids`, `goblin_create_work`, and
+   `goblin_add_work_context`, plus tools for the other Work actions.
 
 Creating and installing the plugin are both required. If an authorization page
 already failed before the callback was saved, start the connection again from
-ChatGPT to get a fresh sign-in request. Signing in shares no Work; the ping test
-needs no Work grants or GitHub sign-in.
+ChatGPT to get a fresh sign-in request. Authorization grants all existing and
+future Work access; the ping test needs no Work or GitHub sign-in. Existing
+read-only connections must reconnect and approve both Work scopes.
 
 ## Test the connection without Work
 
@@ -171,7 +184,7 @@ This is step **5** of the k3s session. Once the plugin is installed:
 3. Ask: **Call goblin_ping now and show every field from the tool response unchanged.**
 4. Check the result for a fresh `responseId`, `respondedAtUtc`, and the server's
    `operatingSystem`, `runtime`, and `processArchitecture`.
-5. In Goblin, open **Settings → Logs → Open logs** at the same public origin.
+5. In Goblin, open **Settings → Tools → Logs** at the same public origin.
    For k3s, this is `https://dev.goblinboard.com/logs/`. Search for the returned
    response ID and find the `goblin_ping response` event. Its `state.ResponseId`
    must match ChatGPT's `responseId`.
@@ -213,7 +226,7 @@ Use your installation's actual browser port if it differs from 8788. After the
 deployment succeeds, stop Chisel with **Ctrl+C** in Terminal B and open
 `http://localhost:8788`. Goblin's OAuth and MCP endpoints are disabled, and the
 public development address is unavailable. The installed ChatGPT plugin and
-Goblin's saved OAuth client, keys, tokens, and Work grants remain for the next
+Goblin's saved OAuth client, keys, and tokens remain for the next
 session. Reconnect if ChatGPT requests sign-in or a token has expired.
 
 The k3s instance keeps running. Use `make k3s-stop` only when you also want to
@@ -243,7 +256,7 @@ when finishing the session.
 For another onboarding test, remove this environment's connection in ChatGPT and
 follow [Install the plugin](#install-the-plugin) again using the saved client
 secret. To test revocation, first revoke the connection in Goblin. **Start setup
-again** clears browser progress; saved OAuth settings, tokens, and Work grants
+again** clears browser progress; saved OAuth settings and tokens
 stay. If the secret was lost, generate a new one in Goblin and update ChatGPT's
 connection; rotation revokes previous connections.
 
@@ -255,30 +268,39 @@ connection; rotation revokes previous connections.
 | `502 Bad Gateway` on `dev.goblinboard.com` | Terminal B must show **Connected** and target local port **8788** for k3s. Wait for the public-origin deployment to succeed. A client still targeting the direct build on 8787 must be stopped and reconnected to 8788. |
 | `invalid_host` at `http://localhost:8788` | The public HTTPS origin is configured. Use `https://dev.goblinboard.com` during testing, then run both settings in [Return to local testing](#return-to-local-testing). |
 | OAuth reports HTTP or an invalid host through Chisel | Run the public-origin `k3s-deploy` command in step 3; it selects the direct platform Service route that preserves Host and HTTPS headers. |
-| `invalid_request`, redirect URI is not valid (`ID2043`) | Save the exact ChatGPT callback with **Save OAuth client** in Goblin. The confirmed callback is `https://chatgpt.com/connector_platform_oauth_redirect`. Keep secret rotation unchecked, then restart sign-in from ChatGPT. |
+| `invalid_request`, redirect URI is not valid (`ID2043`) | In Goblin's **Install** step, save the exact ChatGPT callback with **Save callback**, wait for **Callback saved**, then restart sign-in from ChatGPT. The confirmed callback is `https://chatgpt.com/connector_platform_oauth_redirect`. Creating the client in **Connection setup** does not register a callback; saving it in **Install** keeps the existing secret. |
 | Fingerprint mismatch or Chisel authentication failure | Check the trusted fingerprint and username/password separately. Ask the gateway administrator for updated verified values if they changed. See [Chisel troubleshooting](../deploy/chisel/README.md#troubleshooting) for server issues. |
 | Client closes after gateway deployment | Restart the client. Gateway deployment restarts the Chisel server; use updated credentials or a newly trusted fingerprint if they changed. |
 | ChatGPT still shows an old ping reply or tool list | Rebuild and deploy Goblin, refresh the connection's tools in ChatGPT, and start a new conversation with the plugin selected using **@**. |
-| Empty Work list or `No Work is shared yet` | Ping requires no grants. To test Work reads, share actual Work in Goblin. Leave **Also share the latest approved result** unchecked unless an approved result exists. |
+| Empty Work list | Create Work in Goblin or through the plugin, then refresh the list. If existing Work is missing, reconnect with both Work scopes and verify the selected instance. |
 | `Create the profile with --local or --ssh USER@HOST` | This concerns the optional direct WSL build. Create its database profile in [Prepare WSL](#prepare-wsl). The installed k3s workflow needs no profile. |
 | `502 Bad Gateway` on a production origin | Check that deployment's backend and reverse proxy using the [deployment guide](../deploy/azure/README.md#verify). |
 
 ## Test Work access
 
-These optional checks follow a successful ping. Ping confirms connectivity and
-authentication; Work and approved-result access require separate grants.
+These checks follow a successful ping. Do them in an isolated instance when you
+intend to create test Work. ChatGPT may confirm write calls according to your
+conversation or workspace settings.
 
-1. In Goblin's ChatGPT settings, choose actual Work and click **Share selected
-   Work**. Leave **Also share the latest approved result** unchecked unless the
-   Work has an approved result. Requesting a missing result rejects the whole grant.
-2. In ChatGPT, select the plugin with **@** and call `goblin_list_work`. Compare
-   the shared Work ID with Goblin.
-3. Call `goblin_get_work_status` and `goblin_get_work_attention` for that Work.
-   Compare the returned values with Goblin.
-4. To test results, explicitly share the latest approved result, then call
-   `goblin_get_work_result`. Confirm it matches the selected approved attempt.
-5. Remove the grant in Goblin and confirm that reading the same Work ID is denied.
-   Unshared Work and unshared results must stay inaccessible.
+1. Create one Work item in Goblin before connecting. After consent, select the
+   plugin with **@**, call `goblin_list_work`, and confirm the item appears.
+   Use `goblin_get_work` and `goblin_get_work_section` to compare its full
+   objective, status, attention, questions, messages, attempts, history,
+   results, and artifact metadata with Goblin. Follow `nextAfterWorkId` and
+   `nextOffset` until all pages are complete.
+2. Call `goblin_reserve_work_ids` with `forCreate: true`, then call
+   `goblin_create_work` using both returned IDs. Confirm
+   the Work appears in Goblin and in a new plugin list. Repeat the same Create
+   call and confirm it returns the original receipt without creating a second
+   item.
+3. Use the new Work's version, reserve another command ID, and submit AddContext.
+   Confirm the context appears in Goblin. Add context in Goblin and confirm the
+   plugin reads that update. An old expected version must return a conflict.
+4. If the instance has an attempt result, read it with `goblin_get_work_result`
+   and follow `nextOffset`. Proposed and approved results need no separate grant.
+5. In Goblin settings, select **Revoke ChatGPT connections**. Confirm both a
+   Work read and a write tool are denied with the existing connection. Reconnect
+   in ChatGPT and approve the scopes to resume.
 
 GitHub sign-in is separate and unnecessary for ping.
 
@@ -362,15 +384,13 @@ defines the HTTPS and proxy requirements.
 1. Confirm the build includes `goblin_ping`, has PostgreSQL and persistent
    storage, and uses `GOBLIN_CHATGPT_ENABLED=true` with `GOBLIN_PUBLIC_ORIGIN`
    set to its actual HTTPS origin.
-2. Open that origin's `/settings?section=chatgpt` and enter its Goblin owner password.
+2. Open that origin's `/settings?section=connections&provider=chatgpt` and enter
+   its Goblin owner password.
 3. Follow [Install the plugin](#install-the-plugin) with that deployment's MCP URL
    and a separate ChatGPT connection.
 4. Run [the ping test](#test-the-connection-without-work) and verify its response ID
-   in **Settings → Logs → Open logs** on that origin. Refresh the connection and
+   in **Settings → Tools → Logs** on that origin. Refresh the connection and
    repeat after application deployments.
-
-For a published directory listing, see
-[directory submission](chatgpt-integration.md#optional-directory-submission).
 
 ## Confirmed workflow and verification limits
 

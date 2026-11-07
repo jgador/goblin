@@ -13,10 +13,10 @@ shared Goblin app, central account, cloud relay, OAuth callback, public inbound
 endpoint, or Slack-specific DNS or TLS. Goblin stays the authority for users,
 permissions, Work, agents, repositories, identity mappings, history, and execution.
 
-Slack requires durable Work (PostgreSQL). Open **Integrations** (`/integrations`;
-**Settings → Integrations** links there), then select **Connect** or **Manage** on
-Slack. This opens the Slack page in Settings (`/settings?section=slack`). The app is
-named **Goblin** and its bot user is **goblin**.
+Slack requires durable Work (PostgreSQL). Open **Settings → Connections**, then
+select **Connect** or **Manage** on Slack. The Slack detail page is
+`/settings?section=connections&provider=slack`. The app is named **Goblin** and its
+bot user is **goblin**.
 
 ## Automatic setup
 

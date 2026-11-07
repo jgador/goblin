@@ -134,7 +134,9 @@ the Linux x64 SDK **10.0.403** from Microsoft's public
 `dotnetcli.blob.core.windows.net` feed, not the `aka.ms` redirect. It checks a
 pinned SHA-512 before extraction and keeps files under `.artifacts/dotnet/`. CI
 (through `setup-verification`) and Platform Release use it. Change the version and
-checksum together; the SDK must satisfy `global.json`.
+checksum together with `global.json` and the Dockerfile's SDK image so local,
+CI, and container builds select the same SDK release. SDK versions are separate
+from runtime and NuGet package versions.
 
 ## Installation commands and artifacts
 

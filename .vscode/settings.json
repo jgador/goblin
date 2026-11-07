@@ -1,4 +1,11 @@
 {
+  "dotnet.defaultSolution": "backend/Goblin.slnx",
+  "files.exclude": {
+    "**/.artifacts": true
+  },
+  "files.watcherExclude": {
+    "**/.artifacts/**": true
+  },
   "files.associations": {
     "Makefile.dev": "makefile"
   },

@@ -7,7 +7,11 @@ import {
     ConnectionAvailability,
 } from "../api/values.js";
 import { Settings } from "../settings/settings.js";
-import { IntegrationsDirectory } from "../integrations/directory.js";
+import {
+    settingsHref,
+    settingsSelection,
+    settingsTarget,
+} from "../settings/navigation.js";
 import { renderKnowledge } from "../knowledge/page.js";
 import { requestJson, errorMessage } from "../api/client.js";
 import type {
@@ -43,6 +47,7 @@ import {
     renderProgress,
     renderDecisions,
     renderOutputs,
+    renderExecutions,
     renderActivity,
     renderConversation,
     matchesWork,
@@ -62,17 +67,13 @@ let selected =
         sessionStorage.getItem("goblin.selectedWork") ??
         "",
     activeChat = "";
-type WorkspaceView =
-    "work" | "chat" | "new" | "integrations" | "knowledge" | "settings";
-const pageFromPath = ():
-    "integrations" | "knowledge" | "settings" | undefined =>
-    /^\/integrations\/?$/.test(location.pathname)
-        ? "integrations"
-        : /^\/knowledge\/?$/.test(location.pathname)
-          ? "knowledge"
-          : /^\/settings\/?$/.test(location.pathname)
-            ? "settings"
-            : undefined;
+type WorkspaceView = "work" | "chat" | "new" | "knowledge" | "settings";
+const pageFromPath = (): "knowledge" | "settings" | undefined =>
+    /^\/knowledge\/?$/.test(location.pathname)
+        ? "knowledge"
+        : /^\/settings\/?$/.test(location.pathname)
+          ? "settings"
+          : undefined;
 let view: WorkspaceView =
         pageFromPath() ??
         (location.pathname.startsWith("/work") && selected ? "work" : "new"),
@@ -81,8 +82,7 @@ let view: WorkspaceView =
     conversationsOpen = false;
 let selectInitialWork =
     !pageFromPath() && !query.has("new") && !query.has("conversation");
-const isDirectoryPage = () =>
-    view === "integrations" || view === "knowledge" || view === "settings";
+const isDirectoryPage = () => view === "knowledge" || view === "settings";
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
@@ -91,9 +91,12 @@ let sidebarCollapsed =
     mobile.matches ||
     localStorage.getItem("goblin.sidebarCollapsed") === "true";
 let sessionChecked = false,
+    sessionFailures = 0,
     workUnavailable = false;
 let timezoneError = "";
-let settingsSection = query.get("section") ?? "connections";
+let settingsSection = settingsSelection(query);
+if (view === "settings")
+    history.replaceState(null, "", settingsHref(settingsSection));
 let settingsReturn: { view: WorkspaceView; id: string } = {
     view: "new",
     id: "",
@@ -177,16 +180,11 @@ const settings = new Settings(system, (provider) => {
             provider: trigger?.dataset.provider,
         };
     }
+    const previous = settingsSection;
     navigate("settings", provider);
     render();
-    document.getElementById("settings-title")?.focus();
+    settings.focusSelection(previous);
 });
-const integrations = new IntegrationsDirectory(
-    () => {
-        if (authenticated && view === "integrations") render();
-    },
-    (provider) => void settings.open(provider),
-);
 const timezoneSetup = new TimeZoneSetup();
 window.addEventListener("goblin-timezone-changed", () => render(true));
 window.addEventListener("goblin-workspace-locked", () => {
@@ -198,7 +196,7 @@ let gitHubRepositories: GitRepositoryInfo[] = [];
 window.addEventListener("goblin-connections-changed", () => {
     modelCatalogs.clear();
     void refreshConnections();
-    if (authenticated && view === "integrations") void integrations.refresh();
+    if (authenticated) settings.refreshConnections();
 });
 const current = () => work.find((x) => x.work.id === selected);
 function composerWork(): Work | undefined {
@@ -317,7 +315,6 @@ function forgetWorkspace() {
     loaded = false;
     system.reset();
     settings.reset();
-    integrations.reset();
 }
 async function refresh(preserveError = false) {
     if (loading || submission.sending) return;
@@ -326,6 +323,7 @@ async function refresh(preserveError = false) {
     try {
         const session = await api<{ authenticated: boolean }>("/api/session");
         signal.throwIfAborted();
+        sessionFailures = 0;
         authenticated = session.authenticated;
         sessionChecked = true;
         if (!authenticated) {
@@ -345,7 +343,7 @@ async function refresh(preserveError = false) {
             return;
         }
         timezoneSetup.reset();
-        if (view === "integrations") void integrations.refresh();
+        settings.refreshConnections();
         if (query.get("returnTo") === "logs") {
             if (timezoneError) return;
             location.replace("/logs/select/vmui/" + location.hash);
@@ -396,9 +394,8 @@ async function refresh(preserveError = false) {
         if (chats.status === "fulfilled") conversations = chats.value;
         if (people.status === "fulfilled") agents = people.value;
         if (capabilities.status === "fulfilled") runtimes = capabilities.value;
-    } catch (failure) {
-        if (!signal.aborted)
-            error = errorMessage(failure, "Work could not be loaded.");
+    } catch {
+        if (!signal.aborted) sessionFailures++;
     } finally {
         if (!signal.aborted) {
             if (!authenticated) forgetWorkspace();
@@ -517,7 +514,7 @@ function message(author: string, text: string, at?: string) {
 function connectionButton() {
     const agent = agents.find((a) => a.isDefault);
     const connection = connections.find((c) => c.id === agent?.connectionId);
-    return `<button class="connection-choice" type="button" data-action="settings" title="Manage AI connections">${icon("spark")}${e(connection?.name ?? "AI connections")}${icon("chevron")}</button>`;
+    return `<button class="connection-choice" type="button" data-action="settings-codex" title="Manage Codex connection"><img src="/assets/providers/codex.png" width="24" height="24" alt=""><span class="connection-name">${e(connection?.name ?? "Codex")}</span>${icon("chevron")}</button>`;
 }
 function composer(kind: string, placeholder: string) {
     const note =
@@ -531,7 +528,7 @@ function composer(kind: string, placeholder: string) {
                 : current()?.work.status === WorkStatus.Ready
                   ? "Saves context for this work · Start work when ready"
                   : "Saves context with this work";
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" ${kind !== "new" ? 'aria-describedby="composer-note"' : ""} required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="settings-github">${icon("github")}GitHub</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button><button class="composer-chip" type="button" data-action="settings-agents">${icon("user")}Agent</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p class="composer-hint">Save your idea, then start when you’re ready.</p>' : ""}</div>`;
+    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
 }
 function rememberWork() {
     sessionStorage.setItem("goblin.selectedWork", selected);
@@ -558,10 +555,7 @@ function navigate(
     if (
         historyMode === "auto" &&
         (next !== view || (next === "settings" && id !== settingsSection)) &&
-        (isDirectoryPage() ||
-            next === "integrations" ||
-            next === "knowledge" ||
-            next === "settings")
+        (isDirectoryPage() || next === "knowledge" || next === "settings")
     )
         history.pushState(null, "", location.href);
     view = next;
@@ -576,18 +570,12 @@ function navigate(
             "/?conversation=" + encodeURIComponent(id),
         );
     } else if (next === "settings") {
-        settingsSection = id || "connections";
-        history.replaceState(
-            null,
-            "",
-            `/settings?section=${encodeURIComponent(settingsSection)}`,
-        );
+        settingsSection = settingsTarget(id);
+        history.replaceState(null, "", settingsHref(settingsSection));
         search = "";
-    } else if (next === "integrations" || next === "knowledge") {
+    } else if (next === "knowledge") {
         history.replaceState(null, "", `/${next}`);
         search = "";
-        if (authenticated && next === "integrations")
-            void integrations.refresh();
     } else history.replaceState(null, "", "/?new=work");
     draft = drafts.get(draftKey()) ?? "";
     changing = false;
@@ -634,13 +622,11 @@ function renderSidebar() {
     return `<aside id="workspace-sidebar" class="sidebar" aria-label="Workspace" ${sidebarCollapsed || activityOpen ? "inert" : ""} ${mobile.matches && !sidebarCollapsed ? 'role="dialog" aria-modal="true"' : ""}>
         <div class="sidebar-heading"><a class="brand" href="/" data-action="new-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button></div>
         <button class="new-chat" data-action="new-work">${icon("plus")}New work</button>
-        <nav class="primary-navigation" aria-label="Workspace navigation"><h2><button class="nav-button ${isDirectoryPage() ? "" : "active"}" data-action="browse-work" aria-current="${isDirectoryPage() ? "false" : "page"}">${icon("sidebar")}Work</button></h2><button class="nav-button" data-action="settings-agents">${icon("agents")}Agents</button><a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><a id="nav-integrations" class="nav-button ${view === "integrations" ? "active" : ""}" href="/integrations" data-action="integrations" aria-current="${view === "integrations" ? "page" : "false"}">${icon("integrations")}Integrations</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
-        <nav class="work-views" aria-label="Work views">${[
-            ["all", "All work", "work", work.length],
+        <div class="sidebar-history" data-scroll="sidebar"><div class="history-heading"><h2>${search ? "Search results" : "Your work"}</h2><label class="sr-only" for="work-view">Work view</label><select id="work-view" class="field-control select-control work-view">${[
+            ["all", "All work", work.length],
             [
                 "assigned",
                 "My work",
-                "user",
                 work.filter(
                     (x) =>
                         !!x.work.agentId &&
@@ -652,30 +638,28 @@ function renderSidebar() {
             [
                 "attention",
                 "Needs attention",
-                "wait",
                 work.filter((x) => attention(x.work)).length,
             ],
             [
                 "done",
                 WorkStatus.Completed,
-                "circleCheck",
                 work.filter((x) => x.work.status === WorkStatus.Completed)
                     .length,
             ],
         ]
             .map(
-                ([value, name, glyph, count]) =>
-                    `<button class="filter ${filter === value ? "active" : ""}" data-action="filter" data-value="${value}" aria-pressed="${filter === value}">${icon(String(glyph))}<span>${name}</span>${count !== "" ? `<small>${count}</small>` : ""}</button>`,
+                ([value, name, count]) =>
+                    `<option value="${value}" ${filter === value ? "selected" : ""}>${name} (${count})</option>`,
             )
-            .join("")}</nav>
-        <div class="sidebar-history" data-scroll="sidebar"><div class="history-heading"><h3>${search ? "Search results" : "Your work"}</h3><span>${shown.length}</span></div>
+            .join("")}</select></div>
         <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w, updatedAt }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${w.id}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)}"><span class="work-card-copy"><span class="work-title">${e(w.objective)}</span><span class="work-card-meta"><span>${e(workAgent(w)?.name ?? "Goblin")}</span><time datetime="${e(updatedAt ?? "")}">${e(relativeTime(updatedAt))}</time></span></span><span class="work-indicator ${statusClass(w)}" aria-label="${e(label(w.attention?.reason ?? w.status))}" title="${e(label(w.attention?.reason ?? w.status))}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "circleCheck" : w.status === WorkStatus.InProgress ? "activity" : "clock")}</span></button>`).join("") || `<p class="sidebar-empty">${search || filter !== "all" ? "No matching work." : loaded ? "Your work will appear here." : "Loading your work…"}</p>`}</nav>
         <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
         <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen || search ? "" : "hidden"}>${chats.map((c) => `<button class="work-card ${view === "chat" && activeChat === c.id ? "selected" : ""}" data-action="select-chat" data-id="${c.id}" aria-current="${view === "chat" && activeChat === c.id ? "page" : "false"}"><span class="work-title">${e(c.title)}</span></button>`).join("") || '<p class="sidebar-empty">Save ideas and context here.</p>'}</nav></div>
+        <nav class="primary-navigation" aria-label="Workspace navigation">${isDirectoryPage() ? `<button class="nav-button" data-action="browse-work">${icon("work")}Work</button>` : ""}<a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
         <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button></aside>`;
 }
 function renderHeader() {
-    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "integrations" ? "Integrations" : view === "settings" ? "Settings" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
+    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "settings" ? "Settings" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
 }
 function renderSearchResults() {
     if (isDirectoryPage() || !search || !sidebarCollapsed) return "";
@@ -706,12 +690,12 @@ function renderHome() {
     const disconnected =
         !connections.length ||
         connections.every((c) => c.availability === "Disconnected");
-    return `<section class="home"><div class="home-content"><img class="home-portrait" src="/assets/branding/icon.svg" alt=""><p class="page-eyebrow">FROM CONVERSATION TO RESULTS</p><h1>What should we work on?</h1><p class="home-description">Bring an idea. Give it a goal. We’ll take it from here, together.</p>${composer("new", "Describe the intended outcome…")}<div class="home-links"><a href="/integrations" data-action="integrations">${icon("integrations")}<span><strong>Bring your tools together</strong><small>Connect where your team works.</small></span></a><a href="/settings?section=connections" data-action="settings">${icon("spark")}<span><strong>Meet your AI coworker</strong><small>Manage your AI connection.</small></span></a></div><div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
+    return `<section class="home" aria-labelledby="home-title"><div class="home-content"><h1 id="home-title">What should we work on?</h1>${composer("new", "Describe the intended outcome…")}<div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
 }
 function refreshHome(html: string) {
     const next = document.createElement("template");
     next.innerHTML = html;
-    // Keep the home, portrait, composer and header mounted. Only server-backed
+    // Keep the home, heading, composer and header mounted. Only server-backed
     // regions that actually changed need replacing during a refresh.
     for (const selector of [
         ".sidebar",
@@ -802,14 +786,15 @@ function render(preserveHome = false, forceSelect = false) {
                           "work-model",
                           "work-effort",
                           "model-connection",
+                          "work-view",
                       ].includes(x.id),
               )
               .map((x) => [x.id, x.value] as const)
         : [];
-    const openDetails = sameContext
-        ? Array.from(
-              root.querySelectorAll<HTMLDetailsElement>("details[open][id]"),
-          ).map((x) => x.id)
+    const detailStates = sameContext
+        ? Array.from(root.querySelectorAll<HTMLDetailsElement>("details[id]"))
+              .filter((x) => x.open || x.classList.contains("latest-result"))
+              .map((x) => [x.id, x.open] as const)
         : [];
     const focus =
         active instanceof HTMLTextAreaElement ||
@@ -827,20 +812,22 @@ function render(preserveHome = false, forceSelect = false) {
     document.title =
         view === "settings"
             ? "Settings · Goblin"
-            : view === "integrations"
-              ? "Integrations · Goblin"
-              : view === "knowledge"
-                ? "Knowledge · Goblin"
-                : view === "work" && authenticated && current()
-                  ? current()!.work.objective.slice(0, 70) + " · Goblin"
-                  : "Goblin";
+            : view === "knowledge"
+              ? "Knowledge · Goblin"
+              : view === "work" && authenticated && current()
+                ? current()!.work.objective.slice(0, 70) + " · Goblin"
+                : "Goblin";
+    const connectionNotice =
+        sessionFailures && (sessionChecked || sessionFailures > 1)
+            ? '<p class="command-notice" role="status">Could not reach Goblin. Reconnecting…</p>'
+            : "";
     if (!authenticated) {
-        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
+        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${connectionNotice}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
     } else {
         const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
         const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
-            <div class="workspace-notices">${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
-            ${view === "settings" ? '<div id="settings-host"></div>' : view === "integrations" ? integrations.render() : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
+            <div class="workspace-notices">${connectionNotice}${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
+            ${view === "settings" ? '<div id="settings-host"></div>' : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
         if (
             preserveHome &&
             sameContext &&
@@ -865,9 +852,9 @@ function render(preserveHome = false, forceSelect = false) {
             HTMLInputElement | HTMLSelectElement | null;
         if (field) field.value = value;
     }
-    for (const id of openDetails) {
+    for (const [id, open] of detailStates) {
         const detail = document.getElementById(id) as HTMLDetailsElement | null;
-        if (detail) detail.open = true;
+        if (detail) detail.open = open;
     }
     const savedSetup = setupDrafts.get(context);
     const setup = savedSetup?.approval === approvalKey ? savedSetup : undefined;
@@ -940,12 +927,13 @@ function renderDetail() {
     const item = current()!;
     const w = item.work,
         attempt = w.attempts.at(-1);
-    const latestResult = w.results.find((r) => r.attemptId === attempt?.id);
-    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="icon-button activity-toggle" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("more")}</button></div></div><div class="detail-properties"><span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>${icon("spark")}Updated ${e(relativeTime(item.updatedAt))}</span>${status(w)}</div>${attempt?.target.repository ? `<p class="git-repository-detail">${icon("branch")}${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? ` · ${e(attempt.target.repository.grant.branch)}` : ""}</p>` : ""}</header>
-        <section class="work-section goal-section" aria-labelledby="goal-heading">${icon("goal", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="goal-heading">Goal</h3><button class="text-button goal-discuss" data-action="discuss-goal" aria-label="Discuss goal" title="Discuss goal">${icon("chat")}</button></div><p class="goal-text preserve-lines">${e(w.objective)}</p></div></section>
-        <section class="work-section" aria-labelledby="progress-heading">${icon("work", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}${w.attention?.reason === AttentionReason.ResultReview && latestResult ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(latestResult.attemptId)}">Read proposed result ${icon("arrow")}</button>` : ""}${controls(w)}</div></section>
-        ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading">${icon("wait", "section-icon")}<div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span>${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
-        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading">${icon("cube", "section-icon")}<div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3><p class="section-description">Results, artifacts, and executions from this work.</p></div>${w.results.length + w.artifacts.length + w.attempts.length > 3 ? '<button class="secondary" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section></div>
+    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1" class="preserve-lines">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="secondary activity-toggle" data-action="toggle-activity" aria-label="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button></div></div><div class="detail-properties">${status(w)}<span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div></header>
+        <div class="work-layout"><div class="work-main">${controls(w)}
+        ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading"><div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span class="section-count">${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
+        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3><p class="section-description">Results and artifacts from this work.</p></div>${w.results.length + w.artifacts.length > 3 ? '<button class="text-button" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section></div>
+        <aside class="work-support" aria-label="Work details"><section class="work-section progress-section" aria-labelledby="progress-heading"><div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}</div></section>
+        ${w.attempts.length ? `<section class="work-section executions-section" aria-labelledby="executions-heading"><div class="section-content"><div class="section-heading"><h3 id="executions-heading">Executions</h3><span class="section-count">${w.attempts.length}</span></div>${renderExecutions(w)}</div></section>` : ""}
+        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div></div></section></aside></div></div>
         <div class="work-composer"><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? `<div class="composer-heading"><h3>Conversation</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="true" aria-controls="work-conversation">Hide conversation</button></div>${renderConversation(w)}` : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === AttentionReason.InputRequired ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
 }
 function modelControls(w?: Work) {
@@ -1057,14 +1045,14 @@ function executionSetup(w: Work) {
 }
 function controls(w: Work) {
     if (w.attention?.reason === AttentionReason.CleanupRequired)
-        return `<div class="decision"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</div>`;
+        return `<section class="decision work-state" aria-label="Current status"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</section>`;
     if (w.attempts.at(-1)?.cleanupPending)
-        return `<div class="decision"><p>Saving the outcome and finishing execution cleanup…</p></div>`;
+        return `<section class="decision work-state" aria-label="Current status"><p>Saving the outcome and finishing execution cleanup…</p></section>`;
     let content = "";
     if (w.status === WorkStatus.Ready)
-        content = `${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${gitHubRepositorySetup(w)}` : ""}`;
+        content = `<h3>Ready to start</h3>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${gitHubRepositorySetup(w)}` : ""}`;
     if (w.attention?.reason === AttentionReason.ResultReview)
-        content = `<h3>Ready for your review</h3><p>You decide when the outcome is complete.</p>${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}`;
+        content = `<h3>Ready for your review</h3><p>Read the proposed result below, then approve it or ask for changes.</p>${w.results.find((r) => r.attemptId === w.attempts.at(-1)?.id) ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(w.attempts.at(-1)?.id)}">Read proposed result ${icon("arrow")}</button>` : ""}<div class="work-state-actions">${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}</div>`;
     if (w.attention?.reason === AttentionReason.InputRequired)
         content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? gitHubRepositorySetup(w) : ""}`;
     if (w.attention?.reason === AttentionReason.GitRepositoryRequired)
@@ -1086,8 +1074,10 @@ function controls(w: Work) {
             WorkStatus.Cancelling,
         ].some((value) => value === w.status)
     )
-        content += button("cancel", "Cancel work");
-    return content ? `<div class="decision">${content}</div>` : "";
+        content += `<div class="work-state-secondary">${button("cancel", "Cancel work")}</div>`;
+    return content
+        ? `<section class="decision work-state" aria-label="Current status">${content}</section>`
+        : "";
 }
 function showSetupErrors() {
     const errors = setupErrors.get(renderedContext) ?? {};
@@ -1188,7 +1178,7 @@ document.addEventListener("click", async (event) => {
     }
     const action = target.dataset.action,
         value = target.dataset.value;
-    if (action === "integrations" || action === "knowledge") {
+    if (action === "knowledge") {
         navigate(action);
         render();
         document.getElementById(action + "-title")?.focus();
@@ -1214,42 +1204,6 @@ document.addEventListener("click", async (event) => {
                 ".directory-heading h1, #reply, #work-title-heading",
             )
         )?.focus();
-        return;
-    }
-    if (action === "add-integration") {
-        integrations.openPicker();
-        return;
-    }
-    if (action === "manage-integration") {
-        const provider = target.dataset.provider;
-        if (
-            provider === "github" ||
-            provider === "slack" ||
-            provider === "chatgpt"
-        )
-            await settings.open(provider);
-        return;
-    }
-    if (action === "refresh-integrations") {
-        await integrations.refresh();
-        return;
-    }
-    if (action === "integration-tab") {
-        integrations.tab = value === "connected" ? "connected" : "all";
-        render();
-        return;
-    }
-    if (action === "reset-integrations") {
-        integrations.search = "";
-        integrations.tab = "all";
-        render();
-        const input = root.querySelector<HTMLInputElement>(
-            "#integration-search",
-        );
-        if (input) {
-            input.value = "";
-            input.focus();
-        }
         return;
     }
     if (action === "toggle-model-picker") {
@@ -1287,7 +1241,6 @@ document.addEventListener("click", async (event) => {
     if (
         action === "settings" ||
         action === "settings-agents" ||
-        action === "settings-integrations" ||
         action === "settings-codex" ||
         action === "settings-system" ||
         action === "settings-github"
@@ -1301,9 +1254,7 @@ document.addEventListener("click", async (event) => {
                     ? "codex"
                     : action === "settings-agents"
                       ? "agents"
-                      : action === "settings-integrations"
-                        ? "integrations"
-                        : "connections",
+                      : "connections",
         );
         return;
     }
@@ -1422,7 +1373,9 @@ document.addEventListener("click", async (event) => {
             target.dataset.id!,
         ) as HTMLDetailsElement | null;
         if (output) {
-            const all = output.closest<HTMLDetailsElement>("#all-outputs");
+            const all = output.closest<HTMLDetailsElement>(
+                "#all-outputs, #all-executions",
+            );
             if (all) all.open = true;
             output.open = true;
             output.scrollIntoView({ block: "nearest" });
@@ -1466,10 +1419,6 @@ document.addEventListener("click", async (event) => {
     if (action === "select-chat") navigate("chat", target.dataset.id!);
     if (action === "select-work") navigate("work", target.dataset.id!);
 
-    if (action === "filter") {
-        if (isDirectoryPage()) navigate(current() ? "work" : "new", selected);
-        filter = value!;
-    }
     if (action === "changes") changing = true;
     if (action === "execute" && current())
         await command(WorkAction.Execute, modelPayload(current()!.work));
@@ -1667,14 +1616,6 @@ document.addEventListener("submit", async (event) => {
 document.addEventListener("input", (event) => {
     if (
         event.target instanceof HTMLInputElement &&
-        event.target.id === "integration-search"
-    ) {
-        integrations.search = event.target.value;
-        render();
-        return;
-    }
-    if (
-        event.target instanceof HTMLInputElement &&
         event.target.id === "work-effort"
     ) {
         const choice = modelSelection(composerWork());
@@ -1716,6 +1657,21 @@ document.addEventListener("input", (event) => {
     }
 });
 document.addEventListener("change", (event) => {
+    if (
+        event.target instanceof HTMLSelectElement &&
+        event.target.id === "work-view"
+    ) {
+        const nextFilter = event.target.value;
+        const fromDirectory = isDirectoryPage();
+        if (fromDirectory) navigate(current() ? "work" : "new", selected);
+        filter = nextFilter;
+        render(false, true);
+        if (fromDirectory && mobile.matches)
+            root.querySelector<HTMLElement>(
+                "#work-title-heading, #reply",
+            )?.focus();
+        return;
+    }
     if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "work-effort"
@@ -1763,7 +1719,7 @@ document.addEventListener("focusin", (event) => {
 function trapFocus(event: KeyboardEvent, selector: string) {
     const targets = Array.from(
         root.querySelectorAll<HTMLElement>(
-            `${selector} a, ${selector} button, ${selector} input, ${selector} summary`,
+            `${selector} a, ${selector} button, ${selector} input, ${selector} select, ${selector} summary`,
         ),
     ).filter((x) => x.getClientRects().length && !x.matches(":disabled"));
     const first = targets[0],
@@ -1778,28 +1734,6 @@ function trapFocus(event: KeyboardEvent, selector: string) {
     }
 }
 document.addEventListener("keydown", (event) => {
-    if (integrations.isPickerOpen) return;
-    if (
-        view === "integrations" &&
-        event.target instanceof HTMLElement &&
-        event.target.closest('[role="tablist"]') &&
-        ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-    ) {
-        event.preventDefault();
-        integrations.tab =
-            event.key === "Home"
-                ? "all"
-                : event.key === "End"
-                  ? "connected"
-                  : integrations.tab === "all"
-                    ? "connected"
-                    : "all";
-        render();
-        document
-            .getElementById("integrations-tab-" + integrations.tab)
-            ?.focus();
-        return;
-    }
     const workspaceMenu =
         root.querySelector<HTMLDetailsElement>("#workspace-menu");
     if (event.key === "Escape" && workspaceMenu?.open) {
@@ -1818,11 +1752,7 @@ document.addEventListener("keydown", (event) => {
         event.preventDefault();
         document
             .getElementById(
-                view === "integrations"
-                    ? "integration-search"
-                    : view === "knowledge"
-                      ? "knowledge-search"
-                      : "work-search",
+                view === "knowledge" ? "knowledge-search" : "work-search",
             )
             ?.focus();
         return;
@@ -1935,7 +1865,7 @@ window.addEventListener("popstate", () => {
     navigate(
         section ?? (item ? "work" : conversation ? "chat" : "new"),
         section === "settings"
-            ? (params.get("section") ?? "connections")
+            ? settingsSelection(params)
             : (item ?? conversation ?? ""),
         "restore",
     );

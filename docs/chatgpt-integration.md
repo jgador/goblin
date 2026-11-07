@@ -1,22 +1,17 @@
-# Customer-created ChatGPT plugin
+# Private ChatGPT plugin
 
-Each customer connects ChatGPT to their own Goblin instance with
-**Add custom MCP server**. Goblin hosts the read-only MCP tools and an embedded
-OpenIddict OAuth/OpenID Connect server. There is no separate identity server or
-user-account system. Private connections need no directory review. For the
-complete WSL k3s and Chisel test session, start with [plugin testing](plugin-testing.md#local-testing).
-That walkthrough includes plugin installation, verification, and returning to
-localhost; it also covers direct WSL and live production testing.
+Each owner connects ChatGPT to one Goblin instance with **Add custom MCP
+server**. Goblin hosts the MCP tools and an embedded OpenIddict OAuth server.
+The connection can read and manage **all existing and future Work** after owner
+sign-in and consent. No Work picker, grant renewal, or separate result sharing is
+needed. This authority does not include unrelated instance administration,
+credentials, or raw upstream errors. For a WSL k3s session, see
+[plugin testing](plugin-testing.md#local-testing).
 
-The Goblin owner password authenticates browser sign-in and consent. The saved
-Codex connection is separate and is never used to issue MCP tokens. Signing in
-does not share Work.
+## Deployment
 
-## Deployment and enablement
-
-Deploy the current Goblin backend with PostgreSQL and persistent storage. A static
-website alone is not enough. OAuth and MCP share Goblin's public origin, such as
-`https://app.example.com`; a landing page can use another host.
+Enable durable Work, PostgreSQL, persistent storage, and an HTTPS public origin.
+For example:
 
 ```yaml
 env:
@@ -26,188 +21,146 @@ env:
     value: "true"
 ```
 
-Keep the owner password verifier, database configuration, and data volume. Restart
-after configuration changes. Enabling ChatGPT requires durable Work and an HTTPS
-public origin without a path, credentials, query, or fragment. Unset or false
-disables both OAuth and MCP. The issuer is the origin plus `/`; the resource is
-the origin plus `/mcp`.
-
-Publish these paths with a valid HTTPS certificate:
+OAuth and MCP share the public origin. The issuer is the origin plus `/`; the
+resource is the origin plus `/mcp`. The origin must have no path, credentials,
+query, or fragment. Disabling ChatGPT disables both endpoints. A Secure MCP
+Tunnel can carry MCP traffic but OAuth discovery, sign-in, token, and key
+endpoints still need public HTTPS.
 
 | Path | Purpose |
 | --- | --- |
 | `/mcp` | Streamable HTTP MCP |
-| `/.well-known/oauth-protected-resource/mcp` | Protected-resource metadata |
+| `/.well-known/oauth-protected-resource/mcp` | Protected resource and scopes |
 | `/.well-known/openid-configuration` | OIDC discovery |
 | `/.well-known/oauth-authorization-server` | OAuth discovery |
-| `/oauth/authorize` | Owner sign-in and consent |
-| `/oauth/unlock` | Owner password form submission |
-| `/oauth/token` | Code exchange and refresh |
-| `/oauth/keys` | Public signing keys |
-| `/oauth/userinfo` | Stable owner subject for OIDC clients |
+| `/oauth/authorize`, `/oauth/unlock` | Owner sign-in and consent |
+| `/oauth/token`, `/oauth/keys`, `/oauth/userinfo` | Tokens, public keys, owner subject |
 
 The reverse proxy must preserve Host, Origin, Authorization, form bodies, and
-streamed responses. When it terminates TLS, it must send `X-Forwarded-Proto: https`.
-Goblin accepts this header only from loopback or RFC 1918 private addresses, one
-hop away; restrict network ingress to the intended proxy. OAuth refuses HTTP
-requests. Settings and owner sign-in must also use the HTTPS origin.
+streamed responses. If it terminates TLS, send `X-Forwarded-Proto: https` from
+the one trusted private hop. OAuth rejects HTTP. Settings and owner sign-in must
+use the same HTTPS origin.
 
-A **Secure MCP Tunnel** can carry MCP traffic if it preserves the Host. It does not
-carry OAuth: the browser and ChatGPT still need HTTPS discovery, sign-in, token,
-and key endpoints.
+The persistent data directory's `chatgpt-oauth/` contains the stable owner
+subject, RSA signing certificate, and encryption certificate. Keep the private
+keys with the database backup and out of execution pods and version control.
+Startup reuses them and refuses expired or invalid keys. Replacing keys requires
+a new ChatGPT connection. Owner browser sessions reset on restart. PostgreSQL
+stores native OpenIddict client, authorization, and token records; it owns Work
+history and command receipts. Startup never creates or upgrades tables.
 
-## Durable identity, keys, and schema
+## Connect
 
-PostgreSQL stores the OAuth client, authorizations, and tokens in the four native
-OpenIddict tables in `0001_initial.sql`. OpenIddict owns their EF mappings in
-`ChatGptOAuthDbContext`; Goblin's scaffolding excludes them. Startup never creates
-or upgrades tables. See the [database guide](database.md).
+Open `/settings?section=connections&provider=chatgpt` on the public origin.
+The four setup steps are **Prepare**, **Connection setup**, **Install**, and **Test**.
 
-The persistent data directory contains `chatgpt-oauth/`:
+1. Prepare the HTTPS origin and enable the server.
+2. In **Connection setup**, create the OAuth client and save its secret. It is
+   shown only on creation or explicit rotation. Run the local provider and
+   storage check. Owner sign-in happens later, during **Install**.
+3. In ChatGPT Plugins, choose **+ → Add custom MCP server**. Use the displayed
+   `/mcp` URL, OAuth, client ID `goblin-chatgpt`, the saved secret, and
+   `client_secret_basic`. If ChatGPT shows Base scopes, enter
+   `openid offline_access goblin.work.read goblin.work.write`. In Goblin's
+   **Install** step, select **Download Goblin logo** and upload the 512 × 512
+   light-background PNG as the plugin logo in ChatGPT. The download is below
+   ChatGPT's 10 KB file-size limit.
+4. Copy the exact OAuth callback shown by ChatGPT into Goblin's **Install**
+   step and click **Save callback**. Wait for **Callback saved**, then return to
+   ChatGPT and connect. The confirmed callback for the current form is
+   `https://chatgpt.com/connector_platform_oauth_redirect`; use the displayed
+   value if it differs. Wildcards and foreign callback hosts are rejected.
+5. Enter the Goblin owner password and approve access to all Work. Refresh the
+   plugin's tools in ChatGPT and test it in a new conversation.
 
-- `owner-subject`: one generated stable owner ID, independent of Codex accounts.
-- `signing.pfx`: RSA signing certificate and private key.
-- `encryption.pfx`: RSA encryption certificate and private key for codes and refresh tokens.
+Entering a callback does not save it. An unsaved edit blocks installation
+confirmation; failed saves preserve the draft. Saving a different callback
+clears the previous installation confirmation. If authorization already failed,
+save the callback and restart the connection from ChatGPT. Setup progress is
+stored in this browser, scoped to issuer, resource, and owner subject. Secrets,
+drafts, and Work data are not stored there. Goblin cannot observe installation
+or conversations, so the owner confirms those steps.
 
-Goblin creates these files atomically with owner-only permissions and reuses them
-across restarts. Back up this directory with the database. Keep the private keys
-out of execution pods, manifests, chat, and version control. Certificates last five
-years; startup refuses expired or invalid keys. Replacing keys requires a Goblin
-restart and a new ChatGPT connection; codes and refresh tokens encrypted with old
-keys stop working. Deleting `owner-subject` changes the owner identity and requires
-new grants. Owner browser sessions reset on restart.
+**Existing read-only connections must reconnect and approve the new scopes.**
+An old access token cannot gain write access by refreshing. Refresh the custom
+plugin's tool list after updating Goblin; ChatGPT may need a new conversation.
+Rotating the client secret revokes prior connections. **Revoke ChatGPT
+connections** revokes access and refresh tokens; subsequent reads and writes
+are denied. An operation accepted before revocation or a disconnect may still
+complete through Goblin's durable Work path.
 
-## Guided private setup
+## OAuth and security
 
-Open `/settings?section=chatgpt` and choose **Private plugin**.
+Goblin uses a confidential client, authorization code with required PKCE S256,
+`client_secret_basic`, and rotating refresh tokens without reuse leeway. Requests
+must name the exact MCP resource. Access tokens are RS256 `at+jwt` tokens with
+the installation's owner subject, a `jti`, exact issuer and audience, both Work
+scopes, and a five-minute lifetime. Codes expire in five minutes; refresh tokens
+expire in 14 days. Password, implicit, client credentials, and dynamic client
+registration flows are disabled. OIDC exposes only the stable owner subject.
 
-1. **Prepare:** configure the HTTPS origin and enable ChatGPT. The generated
-   settings do not deploy a server or create HTTPS.
-2. **Sign-in:** create the OAuth client. The client secret is shown only when it is
-   created or rotated; PostgreSQL stores its hash. Copy it into ChatGPT's OAuth
-   form. You can create the client before ChatGPT shows the callback. The local
-   server and storage checks do not prove public reachability.
-3. **Install:** in ChatGPT, choose **+ → Add custom MCP server**, use the supplied
-   `/mcp` URL (or a configured Secure MCP Tunnel), and select OAuth. The client ID
-   is `goblin-chatgpt`. Paste the exact callback shown by ChatGPT into **ChatGPT
-   OAuth callback** in Goblin and click **Save OAuth client** before sign-in.
-   Leave secret rotation unchecked. The confirmed callback is
-   `https://chatgpt.com/connector_platform_oauth_redirect`; use the value shown
-   for your connection if it differs. Wildcards and other callback hosts are
-   rejected. Create the plugin in ChatGPT, sign in on Goblin with the owner
-   password, approve the connection, and finish installation in ChatGPT. The
-   scopes `openid offline_access goblin.work.read` give the owner identity,
-   refresh tokens, and shared Work reads.
-   Follow the [connection test](plugin-testing.md#test-the-connection-without-work)
-   to verify the installed plugin without Work grants or GitHub sign-in.
-4. **Share Work:** choose Work and an expiry of 1 hour, 24 hours, or 7 days.
-   Goblin supplies the owner subject. Optionally include the latest approved
-   result; this pins one attempt. Later results stay private. Leave **Also share
-   the latest approved result** unchecked if there is no approved result;
-   requesting a missing result rejects the entire sharing request.
-5. **Test:** follow the [Work access checks](plugin-testing.md#test-work-access).
+MCP verifies signature, issuer, audience, lifetime, subject, both scopes, and
+the stored token and authorization state. It derives the acting identity from
+that authentication, never from a tool argument. Owner cookies cannot
+authenticate MCP; MCP bearer tokens cannot administer Goblin. Work text remains
+data and cannot expand authority. The public responses exclude credentials and
+raw upstream errors.
 
-Setup progress and confirmations are saved in this browser, scoped to the issuer,
-MCP resource, and owner subject; changing any of them resets progress. Secrets,
-drafts, checks, and Work data are not saved in browser storage. Reloading clears
-the displayed secret and checks. Goblin cannot observe ChatGPT installation or
-conversations; the user confirms those steps.
+## Work tools
 
-## OAuth and access boundaries
-
-The confidential client uses authorization-code flow with required PKCE S256 and
-`client_secret_basic`, plus rotating refresh tokens with no reuse leeway.
-Authorization and token requests must name the exact MCP resource. Access tokens
-are RS256 JWTs with `typ=at+jwt`, a subject, `jti`, the exact resource audience,
-`goblin.work.read`, and a five-minute lifetime. Codes expire after five minutes
-and refresh tokens after 14 days. Password, implicit, client-credentials, and
-dynamic client-registration flows are not enabled. OIDC returns only the owner
-subject, not a verified email.
-
-MCP checks the signature, exact issuer and audience, lifetime, and scope, then
-checks the stored token and authorization status. Every Work read checks its
-current grant in PostgreSQL. Owner cookies cannot authenticate MCP, and bearer
-tokens cannot administer Goblin. Rotating the client secret revokes earlier
-authorizations. **Revoke ChatGPT connections** rejects existing access and refresh
-tokens but keeps Work grants; a new connection can read only the currently shared Work.
-
-A grant exposes the objective (up to 500 characters), status, update time, and
-attention reason and failure codes. Approved results are limited to 8,000
-characters with a truncation flag. Questions, full history, runtime sessions,
-repositories, artifacts, files, and credentials are never exposed. Re-sharing
-replaces the grant atomically and records a local-owner audit event. Up to 200
-current grants are supported.
-
-| Tool | Purpose |
+| Tool | Use |
 | --- | --- |
-| `goblin_ping` | Fresh response ID and UTC time with OS, .NET runtime, and process architecture; no Work or GitHub access |
-| `goblin_list_work` | Authorized summaries, 25 per page |
-| `goblin_get_work_status` | Shared Work status |
-| `goblin_get_work_attention` | Shared attention details |
-| `goblin_get_work_result` | The explicitly selected approved result |
+| `goblin_ping` | Verify the selected connection with a fresh response ID. |
+| `goblin_list_work` | Page through all Work, 25 items at a time. |
+| `goblin_get_work` | Read the full objective, status, attention, version, agent, and repository decision. |
+| `goblin_get_work_section` | Page through history, attempts, decisions, messages, results, and artifact metadata. |
+| `goblin_get_work_result` | Page through any attempt's complete result text. |
+| `goblin_list_agents`, `goblin_list_repositories`, `goblin_list_available_repositories`, `goblin_suggest_work_repositories` | Discover supported Work choices, including available GitHub repositories when connected. |
+| `goblin_reserve_work_ids` | Reserve a command ID, plus a Work ID for creation. |
+| `goblin_create_work`, `goblin_assign_work`, `goblin_add_work_context` | Create Work, assign an agent, or add context. |
+| `goblin_execute_work`, `goblin_answer_work_question` | Start execution or answer a pending question. |
+| `goblin_request_work_changes`, `goblin_approve_work_result` | Review a proposed result. |
+| `goblin_cancel_work`, `goblin_reconcile_work`, `goblin_retry_work` | Cancel, reconcile uncertain execution, or explicitly retry. |
+| `goblin_prepare_work_repository`, `goblin_authorize_work_repository`, `goblin_deny_work_repository` | Make repository choices under Goblin's approval rules. |
 
-All tools are read-only. Creation, execution, answers, retry, and approval stay
-in Goblin. Work text is data, never instructions to expand access.
+These tools cover every current `WorkAction`: Create, Assign, AddContext,
+Execute, Answer, RequestChanges, Approve, Cancel, Reconcile, Retry,
+PrepareRepository, AuthorizeRepository, and DenyRepository. Each uses the same
+WorkStore application path as Goblin's Work API. Creation requires reserved
+Work and command IDs; later commands require a fresh expected version. Keep the
+command ID and exact input so a repeated delivery returns the same receipt
+without creating another Work item or attempt. A reused ID with different input
+or a stale version returns an actionable conflict. After acceptance, the Work
+transaction and outbox survive HTTP or MCP disconnects. Execution, failure
+attention, repository authorization, uncertain execution reconciliation, and
+explicit retry keep their existing lifecycle rules. A full permission grant
+does not bypass those rules or start automatic failure retries.
 
-## Verification and publication
+Section reads return `contentJson` in chunks with `nextOffset`; concatenate
+chunks in order, then parse the JSON array. The expected Work version prevents
+mixing chunks from different states. Result text has its own continuation. The
+artifact section returns supported artifact metadata and references; it does
+not read arbitrary files or expose credentials.
 
-Run `ChatGptHttpTests` and the browser setup journeys in `tests/e2e/chatgpt.spec.ts`.
-For real PostgreSQL OAuth coverage, set `GOBLIN_TEST_POSTGRES_ADMIN` and
-`GOBLIN_TEST_POSTGRES_APP` and run `ChatGptOAuthTests`. It creates and removes
-uniquely named test databases and writes temporary state under `.artifacts/openiddict/`.
-It covers owner unlock, consent, exact callbacks, code exchange and replay, refresh
-rotation, restart persistence, MCP discovery, explicit Work access, and revocation.
-It uses ASP.NET TestServer, so it does not prove external HTTPS reachability.
+All tools declare OAuth security and truthful MCP annotations. Read tools are
+read-only. ID reservation is a state change. Command tools that can start or
+cancel execution or authorize repository work declare their side effects. The
+command tools are idempotent because identical calls with the same command
+ID return one receipt. Goblin adds no per-action plugin approval gate. According
+to [OpenAI's custom MCP server guide](https://developers.openai.com/api/docs/guides/custom-mcp-server#how-to-use),
+ChatGPT writes require confirmation by default; an owner can remember a choice
+for a tool within a conversation, and workspace restrictions still apply. The
+plugin details page can toggle tools and refresh their descriptions. Goblin
+cannot override those ChatGPT controls. [OpenAI's annotation guidance](https://developers.openai.com/plugins/plugin-guidelines#correct-annotation)
+also says annotations inform safeguards and do not replace authorization.
 
-`tests/chatgpt/verify-provider.mts` is an opt-in HTTPS check against an isolated
-Goblin instance on `localhost`. Its JSON configuration contains `resource`,
-`caFile`, and `ownerPassword`; it never prints credentials. It rotates the OAuth
-client secret, so never run it against a live installation.
+## Verification
 
-Finally, perform the private ChatGPT installation and conversation checks above.
-Record the Goblin revision, OpenIddict version, transport, workspace type, and
-results, without credentials. Local tests cannot prove a successful ChatGPT UI
-installation.
-
-### Optional directory submission
-
-Private customer-created plugins need no public listing. **Publish publicly** in
-`/settings?section=chatgpt` prepares a separate submission; Goblin does not submit
-or publish it. The workflow records operator confirmations, not proof of submission
-or approval. Goblin has no approved listing.
-
-Public review needs a stable, publicly reachable HTTPS MCP endpoint; Secure MCP
-Tunnels do not qualify. Customer-specific URL templates are limited to eligible
-trusted developers; check eligibility before assuming arbitrary customer domains
-are supported. Check the current
-[review requirements](https://developers.openai.com/plugins/deploy/app-review),
-[submission requirements](https://developers.openai.com/plugins/deploy/submission),
-and [plugin guidelines](https://developers.openai.com/plugins/plugin-guidelines).
-
-Prepare the publisher identity, domain ownership, support contact, privacy policy,
-metadata, artwork, and release owner. Use a dedicated public demo instance that
-matches the submitted contract, without private-network, MFA, email/SMS, or
-magic-link barriers. The owner password also controls administration, so use a
-disposable password and neutral sample data, never a live installation's password.
-Do not package customer secrets or use API-key or basic-auth header shortcuts.
-
-In **Prepare listing**, enter metadata; in **Review tests**, supply a video and
-three distinct sample Work IDs. **Submit → Generate plugin package** produces a
-version 1.0.0 ZIP with `plugin.json`, `mcp.json`, a logo, OAuth settings, and five
-positive and three negative review cases. Check them against your actual tests.
-The generator does not check public reachability, domain ownership, or demo
-permissions. Draft fields last only while the settings page stays open.
-
-In the submission portal, upload the ZIP under the verified publisher, connect the
-MCP server with its client secret, save the portal's exact callback in Goblin, and
-serve the domain challenge at the public URL. Resolve scan findings, complete the
-review information including reviewer access, and submit for review. Publish
-explicitly after approval, then install and test the published listing. Each
-connecting user still needs Work grants in Goblin.
-
-## References
-
-- [ChatGPT OAuth requirements](https://developers.openai.com/plugins/build/auth)
-- [Connect ChatGPT](https://developers.openai.com/plugins/deploy/connect-chatgpt)
-- [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
-- [OpenIddict](https://documentation.openiddict.com/introduction)
+Run `ChatGptHttpTests`, `ChatGptAuthenticationTests`, browser setup journeys,
+and opt-in `ChatGptOAuthTests` against disposable real PostgreSQL databases.
+The OAuth tests cover consent, callback registration, PKCE, refresh, Work access,
+and revocation. TestServer does not prove external HTTPS reachability. The
+opt-in `tests/chatgpt/verify-provider.mts` script is for an isolated localhost
+instance; it rotates the OAuth client secret, so never run it against a live
+installation. Complete a private ChatGPT installation and conversation test
+for actual ChatGPT behavior. Public directory submission is not supported.

@@ -1,15 +1,16 @@
 # Authentication and connection checks
 
 Goblin has one owner password and one Codex connection. Codex signs in with
-ChatGPT device-code login or an OpenAI API key. Open **Settings → AI connections →
-Manage connection** to connect, and a connection check confirms model access for the
-saved account. GitHub uses the official GitHub CLI device flow under **Settings →
-GitHub**. See [execution hosting](execution-hosting.md) for repository authority and
-credential isolation.
+ChatGPT device-code login or an OpenAI API key. Open **Settings → Connections →
+Codex** to connect, and a connection check confirms model access for the saved
+account. GitHub uses the official GitHub CLI device flow under **Settings →
+Connections → GitHub**. See [execution hosting](execution-hosting.md) for repository
+authority and credential isolation.
 
 The private ChatGPT MCP integration uses the owner password for browser sign-in and
 consent through embedded OpenIddict. It has one owner subject. Its OAuth tokens
-authorize only explicitly shared Work, not Codex execution or Goblin administration.
+authorize reading and managing all Work in this instance, including Work created
+after authorization. They do not grant unrelated Goblin administration.
 See [ChatGPT setup](chatgpt-integration.md).
 
 ## Run locally
@@ -31,8 +32,8 @@ To build separately, run `make build`, then `cargo xtask dev --without-database`
 
 On first start, choose and confirm the password in the terminal. Open
 **http://localhost:8787**, enter the password, and select **Open workspace**.
-`/settings?section=codex` opens the Codex connection directly. There is no default
-password.
+`/settings?section=connections&provider=codex` opens the Codex connection directly.
+There is no default password.
 
 Every environment requires `GOBLIN_PASSWORD_HASH_FILE`. The local launcher sets it
 to `.goblin-secrets/owner-password` unless you set another verifier path. A missing
@@ -127,6 +128,11 @@ The check runs with shell tools, web search, apps, plugins, image tools, multi-a
 tools, hooks, and memories disabled, a read-only sandbox, and no approvals. Account
 changes and checks run one at a time, so a check cannot switch accounts partway
 through. Failures show safe messages without raw upstream errors or credentials.
+
+ChatGPT plugin setup uses the manual connection flow in
+[the plugin testing guide](plugin-testing.md#install-the-plugin). Its Goblin owner
+password, OAuth client secret, and ChatGPT consent are separate from the Codex
+connection.
 
 ## Run in Docker
 

@@ -13,7 +13,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Open workspace", exact: true })
             .click();
         await expect(
-            page.getByRole("heading", { name: "Work", exact: true }),
+            page.getByRole("navigation", { name: "Recent work", exact: true }),
         ).toBeVisible();
         const result = await page.request.post("/api/auth/api-key", {
             headers: { Origin: "http://127.0.0.1:8798" },
@@ -468,7 +468,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Show sidebar", exact: true })
             .click();
         await expect(
-            page.getByRole("heading", { name: "Work", exact: true }),
+            page.getByRole("navigation", { name: "Recent work", exact: true }),
         ).toBeVisible();
     });
 

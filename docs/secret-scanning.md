@@ -17,7 +17,7 @@ With Gitleaks on your `PATH` and Node.js 24 or newer, run from the repository:
 ```bash
 gitleaks version
 make secrets-setup
-make secrets-scan
+make gitleaks
 ```
 
 Setup enables the checked-in `.githooks/pre-commit` through this checkout's local
@@ -32,10 +32,13 @@ or build output.
 
 | Command | Coverage |
 | --- | --- |
-| `make secrets-scan` | Full contents of the current index, plus tracked working-tree files and non-ignored untracked files, including hidden files. |
-| `make secrets-scan-staged` | Full index contents of staged additions and modifications, including renames and type changes. Runs before each commit after setup. |
-| `make secrets-scan-history` | All commits reachable from local refs, including secrets added and removed in intermediate commits. Run before pushing existing commits. |
+| `make gitleaks` | Full contents of the current index, plus tracked working-tree files and non-ignored untracked files, including hidden files. |
+| `make gitleaks ARGS=staged` | Full index contents of staged additions and modifications, including renames and type changes. Runs before each commit after setup. |
+| `make gitleaks ARGS=history` | All commits reachable from local refs, including secrets added and removed in intermediate commits. Run before pushing existing commits. |
 | `make secrets-test` | Isolated integration tests against the installed Gitleaks CLI and Git hook. |
+
+Pass the scanner mode (`scan`, `staged`, or `history`) through `ARGS`. Omitting
+`ARGS` selects `scan`.
 
 The scanner reads exact index blobs, so fixing a working-tree file without
 restaging it does not hide a staged secret. A staged deletion can remove a secret

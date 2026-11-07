@@ -1,14 +1,11 @@
 using System;
-using System.Globalization;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using Goblin.Application.ChatGpt;
 using Goblin.Contracts;
 using Goblin.Integrations.ChatGpt;
 using Goblin.Persistence;
-using Goblin.Persistence.Entities;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -33,8 +30,6 @@ internal static class ChatGptEndpoints
                 .FindByClientIdAsync(ChatGptConfiguration.ClientId, context.RequestAborted);
             string? callback = client is null ? null : (await context.RequestServices.GetRequiredService<IOpenIddictApplicationManager>()
                 .GetRedirectUrisAsync(client, context.RequestAborted)).FirstOrDefault();
-            ChatgptWorkGrant[] grants = configuration is null ? [] : await context.RequestServices.GetRequiredService<ChatGptGrantStore>()
-                .ListAsync(configuration.Issuer, configuration.Resource, context.RequestAborted);
             return Results.Json(new ChatGptSetupView
             {
                 Configured = configuration is not null,
@@ -42,42 +37,10 @@ internal static class ChatGptEndpoints
                 Issuer = configuration?.Issuer,
                 OwnerSubject = configuration is null ? null : context.RequestServices.GetRequiredService<ChatGptOAuthKeys>().OwnerSubject,
                 ClientConfigured = client is not null,
-                RedirectUri = callback,
-                Grants = [.. grants.Select(g => new ChatGptGrantView
-                {
-                    Id = g.Id.ToString(CultureInfo.InvariantCulture),
-                    Subject = g.Subject,
-                    WorkId = g.WorkId.ToString(CultureInfo.InvariantCulture),
-                    ResultAttemptId = g.ResultAttemptId?.ToString(CultureInfo.InvariantCulture),
-                    ExpiresAt = g.ExpiresAt,
-                    Expired = g.ExpiresAt <= DateTime.UtcNow
-                })]
+                RedirectUri = callback
             });
         });
         if (configuration is null) return;
-        app.MapPost(Root + "/package", (HttpContext context) => Results.Json(ChatGptPackage.Create(configuration,
-            ApiRequest.Body<ChatGptPackageRequest>(context, ContractJson.Options))));
-        app.MapGet(Root + "/work", async (IDbContextFactory<GoblinDbContext> factory, CancellationToken token) =>
-        {
-            await using GoblinDbContext db = await factory.CreateDbContextAsync(token);
-            var rows = await db.WorkItems.AsNoTracking().OrderByDescending(w => w.UpdatedAt).Take(200)
-                .Select(w => new { w.Id, w.Objective }).ToArrayAsync(token);
-            return Results.Json(rows.Select(w => new ChatGptWorkChoice { Id = w.Id.ToString(CultureInfo.InvariantCulture), Objective = w.Objective }));
-        });
-        app.MapPost(Root + "/grants", async (HttpContext context, ChatGptGrantStore store) =>
-        {
-            ShareRequest request = ApiRequest.Body<ShareRequest>(context, ContractJson.Options);
-            string subject = context.RequestServices.GetRequiredService<ChatGptOAuthKeys>().OwnerSubject;
-            await store.ApproveAsync(configuration.Issuer, configuration.Resource, subject,
-                Id(request.WorkId), request.Hours, request.ShareApprovedResult, context.RequestAborted);
-            return Results.Json(new { saved = true });
-        });
-        app.MapPost(Root + "/grants/revoke", async (HttpContext context, ChatGptGrantStore store) =>
-        {
-            RevokeRequest request = ApiRequest.Body<RevokeRequest>(context, ContractJson.Options);
-            await store.RevokeAsync(configuration.Issuer, configuration.Resource, Id(request.Id), context.RequestAborted);
-            return Results.Json(new { revoked = true });
-        });
         app.MapPost(Root + "/verify", VerifyAsync);
         app.MapPost(Root + "/keys/refresh", (HttpContext context, ChatGptAuthentication authentication) =>
         {
@@ -125,7 +88,7 @@ internal static class ChatGptEndpoints
         try
         {
             await using GoblinDbContext db = await factory.CreateDbContextAsync(context.RequestAborted);
-            _ = await db.ChatgptWorkGrants.Select(g => g.Id).Take(1).ToArrayAsync(context.RequestAborted);
+            _ = await db.WorkItems.Select(w => w.Id).Take(1).ToArrayAsync(context.RequestAborted);
             _ = await oauth.Set<OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreApplication<long>>().Select(a => a.Id).Take(1).ToArrayAsync(context.RequestAborted);
             _ = await oauth.Set<OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreAuthorization<long>>().Select(a => a.Id).Take(1).ToArrayAsync(context.RequestAborted);
             _ = await oauth.Set<OpenIddict.EntityFrameworkCore.Models.OpenIddictEntityFrameworkCoreToken<long>>().Select(a => a.Id).Take(1).ToArrayAsync(context.RequestAborted);
@@ -134,25 +97,6 @@ internal static class ChatGptEndpoints
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { throw; }
         catch (Exception) { }
         return Results.Json(new ChatGptVerificationView { Discovery = discovery, Database = database, IssuerResponses = issuerResponses, CheckedAt = DateTimeOffset.UtcNow });
-    }
-
-    private static long Id(string? value) => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out long id) &&
-        id > 0 ? id : throw new PublicError("invalid_command", "Choose a saved Work item or access grant.");
-
-    private sealed class ShareRequest
-    {
-        [JsonPropertyName("workId")]
-        public string? WorkId { get; init; }
-        [JsonPropertyName("hours")]
-        public int Hours { get; init; } = 24;
-        [JsonPropertyName("shareApprovedResult")]
-        public bool ShareApprovedResult { get; init; }
-    }
-
-    private sealed class RevokeRequest
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; init; }
     }
 
     private sealed class ClientRequest

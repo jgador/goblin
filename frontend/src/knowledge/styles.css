@@ -1,0 +1,35 @@
+.directory-page { flex: 1; min-height: 0; overflow-y: auto; padding: 40px clamp(22px, 4vw, 64px) 36px; scrollbar-width: thin; }
+.directory-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 32px; max-width: 1100px; }
+.directory-heading h1 { color: var(--ink); font-size: 34px; font-weight: 600; letter-spacing: -.04em; line-height: 1.25; }
+.directory-heading p { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.directory-search { display: flex; align-items: center; gap: 10px; width: min(100%, 600px); min-height: 42px; padding: 8px 12px; border: 1px solid var(--control-border); border-radius: var(--control-radius); background: var(--paper); color: var(--muted); }
+.directory-search svg { width: 18px; height: 18px; }
+.directory-search input { width: 100%; min-width: 0; border: 0; background: transparent; font-size: 13px; padding: 0; outline: none; }
+.directory-search input::placeholder { color: var(--muted); opacity: 1; }
+.directory-search input:disabled { cursor: not-allowed; opacity: 1; }
+.directory-hint { max-width: 1100px; color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.7; }
+.directory-empty { display: flex; align-items: center; flex-direction: column; text-align: center; padding: 64px 20px; }
+.directory-empty > svg { width: 36px; height: 36px; stroke-width: 1.4; color: var(--green); margin-bottom: 20px; }
+.directory-empty h2 { font-size: 17px; font-weight: 500; }
+.directory-empty p { max-width: 410px; margin: 10px 0 22px; color: var(--muted); font-size: 13px; line-height: 1.8; }
+.directory-empty a { text-decoration: none; }
+.directory-footnote { max-width: 1100px; margin-top: 28px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.directory-footnote button { display: inline-flex; align-items: center; gap: 4px; padding: 0; color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
+.directory-footnote svg { width: 14px; height: 14px; }
+.knowledge-sources { max-width: 1100px; margin-top: 36px; background: var(--paper); border: 1px solid var(--border); border-radius: 16px; }
+.knowledge-sources > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
+.knowledge-sources > header h2 { font-size: 14px; font-weight: 600; }
+.knowledge-status { display: inline-flex; border-radius: 5px; padding: 3px 7px; font-size: 11px; font-weight: 500; line-height: 1.5; background: #f0f2f1; color: #58645e; }
+.primary-navigation a { text-decoration: none; }
+.workspace-section-label { display: flex; align-items: center; gap: 12px; flex: 1; color: var(--muted); font-size: 12px; }
+.workspace-section-label > span { color: #a0a7a2; }
+@media (max-width: 760px) {
+    .directory-page { padding: 28px 20px; }
+    .directory-heading { flex-wrap: wrap; gap: 20px; margin-bottom: 24px; }
+    .directory-heading h1 { font-size: 30px; }
+    .directory-search { min-height: 44px; }
+    .directory-search input { font-size: 16px; }
+    .knowledge-sources > header { padding: 18px; flex-wrap: wrap; }
+    .knowledge-sources .directory-empty { padding: 40px 20px; }
+}
+@media (forced-colors: active) { .knowledge-status { border: 1px solid currentColor; } }

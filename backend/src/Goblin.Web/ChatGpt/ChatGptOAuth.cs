@@ -34,7 +34,7 @@ internal static class ChatGptOAuth
                     .SetUserInfoEndpointUris(ChatGptConfiguration.UserInfoPath)
                     .AllowAuthorizationCodeFlow().AllowRefreshTokenFlow()
                     .RequireProofKeyForCodeExchange()
-                    .RegisterScopes(ChatGptConfiguration.ReadScope, Scopes.OpenId, Scopes.OfflineAccess)
+                    .RegisterScopes(ChatGptConfiguration.ReadScope, ChatGptConfiguration.WriteScope, Scopes.OpenId, Scopes.OfflineAccess)
                     .RegisterResources(configuration.Resource)
                     .SetAccessTokenLifetime(TimeSpan.FromMinutes(5))
                     .SetAuthorizationCodeLifetime(TimeSpan.FromMinutes(5))
@@ -54,8 +54,8 @@ internal static class ChatGptOAuth
                     {
                         if (!context.Request.GetResources().SequenceEqual(new[] { configuration.Resource }))
                             context.Reject(Errors.InvalidTarget, "Request the exact Goblin MCP resource.");
-                        else if (!context.Request.HasScope(ChatGptConfiguration.ReadScope))
-                            context.Reject(Errors.InvalidScope, "Request the Goblin Work read scope.");
+                        else if (!context.Request.HasScope(ChatGptConfiguration.ReadScope) || !context.Request.HasScope(ChatGptConfiguration.WriteScope))
+                            context.Reject(Errors.InvalidScope, "Request both Goblin Work scopes.");
                         return default;
                     }));
                 server.AddEventHandler<OpenIddictServerEvents.ValidateTokenRequestContext>(handler => handler

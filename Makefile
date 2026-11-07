@@ -9,7 +9,7 @@ CARGO_ARGS ?= --workspace
 ARGS ?=
 RUST_MIN_STACK ?= 8388608
 
-# Targets use <scope>-<action>[-<qualifier>]; repository-wide workflows use bare names.
+# Targets use <scope>-<action>[-<qualifier>]; tools and repository workflows use bare names.
 include Makefile.dev
 
 # =============================================================================
@@ -327,23 +327,15 @@ scripts-typecheck:
 # =============================================================================
 # Secrets: hook setup and working-tree, staged, and history scans.
 # =============================================================================
-.PHONY: secrets-setup secrets-scan secrets-scan-staged secrets-scan-history secrets-test
+.PHONY: secrets-setup gitleaks secrets-test
 
 # Install secret-scanning hooks without replacing an existing hook configuration.
 secrets-setup:
 	node scripts/install-git-hooks.mts
 
-# Scan the index and working tree with the existing Gitleaks safety rules.
-secrets-scan:
-	node scripts/check-secrets.mts
-
-# Scan staged file contents before committing.
-secrets-scan-staged:
-	node scripts/check-secrets.mts staged
-
-# Scan all reachable commit history before pushing.
-secrets-scan-history:
-	node scripts/check-secrets.mts history
+# Scan the index and working tree; use ARGS=staged or ARGS=history for other modes.
+gitleaks:
+	node scripts/check-secrets.mts $(ARGS)
 
 # Test secret scanning and Git hooks with the installed Gitleaks CLI.
 secrets-test:

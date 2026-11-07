@@ -10,7 +10,9 @@
     "TurnStartParams", "TurnStartResponse",
     "TurnInterruptParams", "TurnInterruptResponse",
     "ThreadUnsubscribeParams", "ThreadUnsubscribeResponse",
-    "ServerNotification"
+    "ServerNotification",
+    "AppsInstalledParams", "AppsInstalledResponse", "AppsReadParams", "AppsReadResponse",
+    "PluginSkillReadParams", "PluginSkillReadResponse", "SkillsListParams", "SkillsListResponse"
   ],
   "types": {
     "JSONRPCRequest": ["id", "method", "params"],
@@ -48,7 +50,7 @@
     "ModelListResponse": ["data", "nextCursor"],
     "Model": ["defaultReasoningEffort", "displayName", "hidden", "id", "isDefault", "model", "supportedReasoningEfforts"],
     "ReasoningEffortOption": ["reasoningEffort"],
-    "ThreadStartParams": ["approvalPolicy", "baseInstructions", "cwd", "ephemeral", "model", "sandbox"],
+    "ThreadStartParams": ["approvalPolicy", "baseInstructions", "config", "cwd", "ephemeral", "model", "sandbox"],
     "ThreadStartResponse": ["approvalPolicy", "model", "modelProvider", "sandbox", "thread"],
     "Thread": ["ephemeral", "id"],
     "AskForApproval": {
@@ -67,7 +69,8 @@
     "TurnStartParams": ["approvalPolicy", "effort", "input", "outputSchema", "sandboxPolicy", "threadId"],
     "UserInput": {
       "variants": {
-        "text": ["text"]
+        "text": ["text"],
+        "skill": ["name", "path"]
       }
     },
     "TurnStartResponse": ["turn"],
@@ -107,6 +110,20 @@
     "TurnStartedNotification": ["threadId", "turn"],
     "TurnCompletedNotification": ["threadId", "turn"],
     "ItemCompletedNotification": ["item", "threadId", "turnId"],
-    "AccountLoginCompletedNotification": ["loginId", "success"]
+    "AccountLoginCompletedNotification": ["loginId", "success"],
+    "AppsInstalledParams": ["threadId", "forceRefresh"],
+    "AppsInstalledResponse": ["apps"],
+    "InstalledApp": ["id", "enabled", "callable"],
+    "AppsReadParams": ["appIds", "threadId", "includeTools"],
+    "AppsReadResponse": ["apps", "missingAppIds"],
+    "ConnectorMetadata": ["id", "toolSummaries"],
+    "AppToolSummary": ["name", "isEnabled", "isReadOnly"],
+    "PluginSkillReadParams": ["remoteMarketplaceName", "remotePluginId", "skillName"],
+    "PluginSkillReadResponse": ["contents"],
+    "SkillsListParams": ["cwds", "forceReload"],
+    "SkillsListResponse": ["data"],
+    "SkillsListEntry": ["cwd", "skills", "errors"],
+    "SkillMetadata": ["name", "path", "enabled"],
+    "SkillErrorInfo": ["path", "message"]
   }
 }

@@ -47,6 +47,15 @@ public sealed partial class WorkStore
         return [.. rows.Select(View)];
     }
 
+    public async Task<WorkView[]> ListPageAsync(long afterWorkId, int limit, CancellationToken token = default)
+    {
+        if (afterWorkId < 0 || limit is < 1 or > 100) throw new ApplicationFailure("invalid_command");
+        await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
+        Row[] rows = await db.WorkItems.AsNoTracking().Where(x => x.Id > afterWorkId)
+            .OrderBy(x => x.Id).Take(limit).ToArrayAsync(token);
+        return [.. rows.Select(View)];
+    }
+
     public async Task<WorkView> GetAsync(long id, CancellationToken token = default)
     {
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);

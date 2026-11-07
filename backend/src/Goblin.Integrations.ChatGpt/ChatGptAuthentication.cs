@@ -16,12 +16,14 @@ public sealed class ChatGptAuthentication
 {
     private readonly ChatGptConfiguration _configuration;
     private readonly SigningKeyCache _keys;
+    private readonly string? _sourceOwnerSubject;
     private readonly JsonWebTokenHandler _handler = new() { MaximumTokenSizeInBytes = 8192, MapInboundClaims = false };
 
     public ChatGptAuthentication(ChatGptConfiguration configuration, IJwksDocumentSource source)
     {
         _configuration = configuration;
         _keys = new SigningKeyCache(configuration, source);
+        _sourceOwnerSubject = (source as IChatGptOwnerSource)?.OwnerSubject;
     }
 
     public async Task<ChatGptIdentity> AuthenticateAsync(string accessToken, CancellationToken token)
@@ -60,7 +62,9 @@ public sealed class ChatGptAuthentication
                 !jwt.TryGetPayloadValue("sub", out string? subject) || !ValidClaim(subject) ||
                 !jwt.TryGetPayloadValue("jti", out string? id) || !ValidClaim(id) ||
                 !jwt.TryGetPayloadValue("scope", out string? scope) ||
-                scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(ChatGptConfiguration.ReadScope, StringComparer.Ordinal) != true)
+                scope?.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(ChatGptConfiguration.ReadScope, StringComparer.Ordinal) != true ||
+                !scope.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains(ChatGptConfiguration.WriteScope, StringComparer.Ordinal) ||
+                _sourceOwnerSubject is not null && subject != _sourceOwnerSubject)
                 throw new ChatGptAuthenticationFailure();
             lease.RequireCurrent(_keys, token);
             return new ChatGptIdentity(this, lease, _configuration.Issuer, subject!, _configuration.Resource,
