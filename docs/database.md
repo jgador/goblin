@@ -255,8 +255,10 @@ uniquely named databases. Without the test connections, database tests skip and 
 tests need no server. `GOBLIN_TEST_POSTGRES_APP` opts in to durable Work HTTP and browser
 journeys; PostgreSQL schema integration suites also need `GOBLIN_TEST_POSTGRES_ADMIN`.
 [The environment catalog](../config/environment.mts) defines both connections. The
-profile runner supplies them with `--usage tests`; report database-dependent skips
-separately from passing fixture tests.
+profile runner uses `--role app` by default; `--usage tests` exposes test connections
+for the selected roles. Add `--role both` for schema suites; `make database-test`
+selects both roles. Report database-dependent skips separately from passing fixture
+tests.
 
 To run HTTP and browser journeys against a migrated, disposable development database:
 
