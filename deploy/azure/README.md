@@ -54,9 +54,9 @@ After setup:
 
 - Open `goblinUrl`, for example `https://goblin-prod.southeastasia.cloudapp.azure.com`,
   and enter your Goblin password.
-- **Settings → Cluster → Open cluster** opens read-only Headlamp at
+- **Settings → Tools → Cluster** opens read-only Headlamp at
   `<goblinUrl>/headlamp/` with the same password. See [the cluster view](../../docs/cluster-view.md).
-- **Settings → Logs → Open logs** opens saved application logs at
+- **Settings → Tools → Logs** opens saved application logs at
   `<goblinUrl>/logs/`. See [logging](../../docs/logging.md).
 - [Database setup](../../docs/database.md#installation-and-certificates) covers
   PostgreSQL repair and certificates. [Execution hosting](../../docs/execution-hosting.md)

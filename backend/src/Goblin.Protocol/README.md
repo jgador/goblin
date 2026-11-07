@@ -30,7 +30,7 @@ Plugin preparation selects explicit `skill` turn inputs, thread configuration,
 `plugin/skill/read` request/response fields. These support local skill discovery
 and capability inspection, not plugin creation. Goblin does not select the
 under-development plugin list/install/uninstall APIs or a guessed external-MCP
-registration method. See [Codex integration](../../../docs/codex-integration.md#plugin-preparation).
+registration method. See [Codex integration](../../../docs/codex-integration.md#protocol-regeneration).
 
 Regenerate and check with:
 
