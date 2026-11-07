@@ -1,58 +1,38 @@
 # Documentation
 
-These guides describe the current application and installation formats. Goblin is
-preproduction; recreate local installations when formats change. Follow
-[AGENTS.md](../AGENTS.md) for contribution rules.
+Start with [Goblin's quickstart](../README.md). These guides describe supported usage
+and the current installation format. Contribution rules are in
+[AGENTS.md](../AGENTS.md); unfinished work belongs in
+[GitHub Issues](https://github.com/jgador/goblin/issues).
 
-## Product and architecture
+## Use and connect Goblin
 
-| Guide | Purpose |
-| --- | --- |
-| [Architecture](architecture.md) | Boundaries, durability, isolation, and recovery |
-| [Work lifecycle](work-lifecycle.md) | Work states, commands, attention, and attempts |
-| [Work interface](work-centered-ui.md) | Browser navigation, controls, and known gaps |
-| [Execution hosting](execution-hosting.md) | Workers, sandboxes, claims, and cancellation |
-| [Workspace lifecycle](workspace-lifecycle.md) | Work PVC, turns, checkpoints, inspection, and retention |
-| [Repository authorization](git-repository-intent.md) | GitHub selection, enablement, grants, and publication |
-| [Repository setup memory](git-repository-setup-memory.md) | Saved setup observations and recall |
+- [Work](work-lifecycle.md#using-work): start, answer, review, and recover.
+- [Owner access and Codex sign-in](authentication.md).
+- [GitHub repositories](git-repository-intent.md), [Slack](slack-integration.md),
+  and [private ChatGPT plugin](chatgpt-integration.md).
 
-## Connections and operations
+## Install and operate
 
-| Guide | Purpose |
-| --- | --- |
-| [Authentication](authentication.md) | Owner password and Codex account setup and checks |
-| [Codex integration](codex-integration.md) | Codex process, model selection, and protocol generation |
-| [Slack integration](slack-integration.md) | Slack app setup, linked users, and limits |
-| [ChatGPT plugin](chatgpt-integration.md) | Private plugin setup, OAuth, and Work access |
-| [Plugin testing](plugin-testing.md) | Complete WSL k3s → Chisel → private ChatGPT plugin test → localhost walkthrough, plus other environments |
-| [Chisel installation](../deploy/chisel/README.md) | One-time WSL client installation, credentials and fingerprint, and administrator gateway setup |
-| [Database](database.md) | SQL baseline, EF generation, and client access |
-| [goblinctl](goblinctl.md) | Native CLI commands, installation, and packaging |
-| [Kubernetes names](kubernetes-names.md) | Resource names, identities, and storage ownership |
-| [System and cluster](cluster-view.md), [Logs](logging.md), [Timezones](timezones.md) | Monitoring views and workspace time |
-| [WSL k3s development](../deploy/k3s/README.md) | Install, deploy application edits, verify, and reset the owned cluster |
-| [Azure installation](../deploy/azure/README.md), [reference](../deploy/azure/reference.md) | Portal deployment, setup, and recovery |
-| [Website](../website/README.md), [website production](../website/production/README.md) | Public site and its deployment |
+- [Manual Azure installation](../deploy/azure/README.md) and
+  [repair and access reference](../deploy/azure/reference.md).
+- [WSL k3s development](../deploy/k3s/README.md), [PostgreSQL](database.md),
+  and [native administration](goblinctl.md).
+- [Monitoring and saved logs](logging.md).
+- [Local ChatGPT testing](plugin-testing.md) and
+  [Chisel client and gateway](../deploy/chisel/README.md).
+- [Public website development](../website/README.md) and
+  [production hosting](../website/production/README.md).
 
-## Development and delivery
+## Understand and contribute
 
-| Guide | Purpose |
-| --- | --- |
-| [Repository layout and verification](repository-layout.md) | Source locations and which checks to run |
-| [Formatting](formatting.md), [Rust development](rust-development.md) | Code conventions and Rust tools |
-| [Contract values](contract-values.md), [Environment variables](environment-variables.md) | Shared values, boundary parsing, and configuration names |
-| [Dependencies](dependencies.md) | Deployment pins and dependency updates |
-| [Releases](releases.md), [GitHub Actions](github-actions.md) | Release candidates, approvals, and required checks |
-| [Secret scanning](secret-scanning.md), [Agent workflow](agent-workflow.md) | Local secret checks and agent instructions |
-| [Agentic maintenance](agentic-maintenance.md) | Automated CI and documentation upkeep |
-| [Brand assets](../assets/branding/README.md), [Third-party notices](../THIRD_PARTY_NOTICES.md) | Asset sources and licenses |
-
-## Remaining proposals
-
-[TypeScript refactoring](typescript-refactoring.md) lists unfinished frontend
-extractions. A [second runtime](architecture.md#connections-and-runtime-adapters),
-such as a GitHub Copilot CLI adapter, is a proposal, not supported. Gap sections in
-other guides describe missing features, not available ones.
-
-When behavior changes, update its owning guide in the same change. Keep proposals
-separate from current behavior, and move completed plans into the lasting guide.
+- [Architecture](architecture.md), [execution and recovery](execution-hosting.md),
+  and [workspace storage](workspace-lifecycle.md).
+- [Build and verification](repository-layout.md), [C# conventions](formatting.md),
+  and [Rust development](rust-development.md).
+- [Shared contracts](contract-values.md), [configuration boundaries](environment-variables.md),
+  and [Codex adapter](codex-integration.md).
+- [Dependencies](dependencies.md), [releases](releases.md), and [GitHub Actions](github-actions.md).
+- [Agent workflow and documentation policy](agent-workflow.md),
+  [secret scanning](secret-scanning.md), [brand assets](../assets/branding/README.md),
+  and [licenses](../THIRD_PARTY_NOTICES.md).

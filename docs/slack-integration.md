@@ -1,22 +1,22 @@
 # Goblin Slack integration
 
 Goblin connects to a Slack app that the customer owns. It uses outbound Socket Mode,
-linked owner identities, durable intake of DMs and mentions, and delivery of
-questions and outcomes back to the original thread. The code is in
+linked owner identities, durable intake of DMs and mentions, and delivery of questions
+and outcomes back to the original thread. The code is in
 `backend/src/Goblin.Integrations.Slack`.
 
 ## Ownership and connection
 
-Each customer owns and runs their own Slack app and credentials. Goblin provides the
-app definition. Each deployment connects outbound through Socket Mode, so there is no
-shared Goblin app, central account, cloud relay, OAuth callback, public inbound
-endpoint, or Slack-specific DNS or TLS. Goblin stays the authority for users,
-permissions, Work, agents, repositories, identity mappings, history, and execution.
+Each customer owns and runs their own Slack app and credentials. Goblin provides the app
+definition. Each deployment connects outbound through Socket Mode, so there is no shared
+Goblin app, central account, cloud relay, OAuth callback, public inbound endpoint, or
+Slack-specific DNS or TLS. Goblin stays the authority for users, permissions, Work,
+agents, repositories, identity mappings, history, and execution.
 
-Slack requires durable Work (PostgreSQL). Open **Settings → Connections**, then
-select **Connect** or **Manage** on Slack. The Slack detail page is
-`/settings?section=connections&provider=slack`. The app is named **Goblin** and its
-bot user is **goblin**.
+Slack requires durable Work (PostgreSQL). Open **Settings → Connections**, then select
+**Connect** or **Manage** on Slack. The Slack detail page is
+`/settings?section=connections&provider=slack`. The app is named **Goblin** and its bot
+user is **goblin**.
 
 ## Automatic setup
 
@@ -30,22 +30,20 @@ bot user is **goblin**.
 5. Goblin ends the temporary setup authorization, verifies the runtime tokens again,
    encrypts them locally, and shows the workspace and bot.
 
-This is Slack's supported CLI authorization flow. On WSL, open Goblin's localhost URL
-in the Windows browser; no browser launch or callback into WSL is needed.
+This is Slack's supported CLI authorization flow. On WSL, open Goblin's localhost URL in
+the Windows browser; no browser launch or callback into WSL is needed.
 
-Setup downloads Slack CLI **4.8.0** for Linux x64 or ARM64 from GitHub releases,
-checks the pinned SHA-256 in
-[SlackSetup.cs](../backend/src/Goblin.Integrations.Slack/SlackSetup.cs) (see the
-[dependency rules](dependencies.md)), and runs it in a private temporary directory
-with its own profile and environment and telemetry disabled. Your own Slack CLI
-profile is not read or changed. The image contains no Slack CLI; runtime Socket Mode
-and messaging use Goblin's .NET adapter. Setup needs outbound HTTPS to GitHub and
-Slack. Normal operation needs the Slack Web API and Socket Mode.
+Setup downloads the checksum-pinned Slack CLI selected by
+[SlackSetup.cs](../backend/src/Goblin.Integrations.Slack/SlackSetup.cs) and runs it in a
+private temporary directory with its own profile and environment and telemetry disabled.
+Your own Slack CLI profile is not read or changed. The image contains no Slack CLI;
+runtime Socket Mode and messaging use Goblin's .NET adapter. Setup needs outbound HTTPS
+to GitHub and Slack. Normal operation needs the Slack Web API and Socket Mode.
 
 Setup expires after 15 minutes. **Cancel setup** tries to revoke the temporary CLI
-authorization, then removes the helper, profile, and captured tokens. Cancelling
-never deletes the customer's app. If revocation could not be confirmed, Goblin asks
-you to review the temporary CLI authorization in Slack. Startup removes data from an
+authorization, then removes the helper, profile, and captured tokens. Cancelling never
+deletes the customer's app. If revocation could not be confirmed, Goblin asks you to
+review the temporary CLI authorization in Slack. Startup removes data from an
 interrupted setup and shows a recovery notice.
 
 If the app was partly created, **Resume setup** continues in the same setup session.
@@ -66,28 +64,15 @@ recover an app:
 
 ## Manifest and branding
 
-The [embedded manifest](../backend/src/Goblin.Integrations.Slack/manifest.json)
-subscribes only to:
-
-| Event or scope | Use |
-| --- | --- |
-| `message.im` / `im:history` | Receive direct messages to Goblin |
-| `app_mention` / `app_mentions:read` | Receive explicit mentions |
-| `chat:write` | Post replies in the originating thread |
-| `users:read` | Use `bots.info` to check the bot token's app |
-| App-level `connections:write` | Open the Socket Mode connection |
+The [embedded manifest](../backend/src/Goblin.Integrations.Slack/manifest.json) owns
+subscriptions and scopes. It limits intake to DMs and explicit mentions.
 
 There is no channel-message subscription. Add the app to a channel before use, and
-mention `@goblin` again in channel thread replies. Verification checks the bot
-token's scopes and matches its app ID against the Socket Mode hello message.
+mention `@goblin` again in channel thread replies. Verification checks the bot token's
+scopes and matches its app ID against the Socket Mode hello message.
 
-<img src="../assets/branding/slack/icon-light.png" alt="Text-free Goblin app icon for light backgrounds" width="160" height="160">
-
-The icon is [icon-light.svg](../assets/branding/svg/icon-light.svg) without text on an
-opaque white 1024 × 1024 canvas, within Slack's 512–2000 pixel bounds. The source is
-[assets/branding/slack/icon-light.png](../assets/branding/slack/icon-light.png). Its
-copy [frontend/public/assets/branding/slack.png](../frontend/public/assets/branding/slack.png)
-is served at `/assets/branding/slack.png` and embedded in the .NET assembly for upload.
+The [brand asset guide](../assets/branding/README.md) owns icon provenance, dimensions,
+and regeneration.
 
 Setup uploads the icon with `apps.icon.set` using the setup authorization. If Slack
 rejects it, the connection still succeeds; select **Download Goblin icon** and add it
@@ -96,8 +81,8 @@ gets app-management scopes.
 
 ## Local identity and authorization
 
-Membership in the Slack workspace does not grant Goblin access. The deployment has
-one local owner, and only explicitly linked Slack users act as that owner:
+Membership in the Slack workspace does not grant Goblin access. The deployment has one
+local owner, and only explicitly linked Slack users act as that owner:
 
 1. In Goblin's Slack settings, select **Link a Slack identity**.
 2. Goblin shows a `link …` command that expires in five minutes.
@@ -106,8 +91,8 @@ one local owner, and only explicitly linked Slack users act as that owner:
    owner access**.
 
 The linking code is stored only as a hash and is not saved as a conversation message.
-**Remove access** revokes a linked identity. Authorization is checked when a message
-is received and again when its command is applied, so pending messages from a revoked
+**Remove access** revokes a linked identity. Authorization is checked when a message is
+received and again when its command is applied, so pending messages from a revoked
 identity cannot change Work.
 
 The Slack project depends on Goblin-owned conversation contracts and adds no Slack
@@ -117,29 +102,29 @@ execution decisions stay in the local application. See
 
 ## Conversations, durability, and visibility
 
-A new DM or mention thread creates a conversation and Work and starts it. A reply in
-the thread answers the pending input question if there is one; otherwise it adds
-context. Naming an enabled repository can start isolated repository execution. Slack
-cannot enable repositories, approve results, or retry failed Work; ordinary text such
-as `yes` never approves repository access. Messages longer than 4,000 characters,
-after removing the `@goblin` mention, are acknowledged to Slack and ignored: Goblin
-saves nothing and sends no reply.
+A new DM or mention thread creates a conversation and Work and starts it. A reply in the
+thread answers the pending input question if there is one; otherwise it adds context.
+Naming an enabled repository can start isolated repository execution. Slack cannot
+enable repositories, approve results, or retry failed Work; ordinary text such as `yes`
+never approves repository access. Messages longer than 4,000 characters, after removing
+the `@goblin` mention, are acknowledged to Slack and ignored: Goblin saves nothing and
+sends no reply.
 
 PostgreSQL stores external identities, link requests, thread associations, and event
-receipts. Receipts are unique by event ID and by workspace, channel, and message.
-Goblin acknowledges a Socket Mode envelope only after the message is saved, and
-duplicate deliveries do not start another attempt. Conversation messages, Work
-commands, and Wolverine dispatch intent commit in one transaction. Pending receipts
-are processed after reconnect or restart. Reconnecting never retries failed Work.
+receipts. Receipts are unique by event ID and by workspace, channel, and message. Goblin
+acknowledges a Socket Mode envelope only after the message is saved, and duplicate
+deliveries do not start another attempt. Conversation messages, Work commands, and
+Wolverine dispatch intent commit in one transaction. Pending receipts are processed
+after reconnect or restart. Reconnecting never retries failed Work.
 
 Work from Slack keeps its workspace, user, channel, thread, message, and event
 references. The web conversation labels these messages as Slack. Disconnecting keeps
-Work and history. Reconnecting creates a new installation identity, so Slack
-identities must be linked again.
+Work and history. Reconnecting creates a new installation identity, so Slack identities
+must be linked again.
 
 When a request is saved, Slack gets a short reply with a link to the Work in Goblin.
-Losing that reply cannot roll back or repeat accepted Work. The existing connection
-then checks committed Work every three seconds and posts to the original thread:
+Losing that reply cannot roll back or repeat accepted Work. The existing connection then
+checks committed Work and posts to the original thread:
 
 - Questions: the pending question, with a link to answer in Goblin. An authorized
   reply in the thread answers it; channel replies must mention `@goblin`. Each
@@ -149,7 +134,6 @@ then checks committed Work every three seconds and posts to the original thread:
   approval in Goblin, and separate messages for failures, uncertain execution,
   cleanup failures, and cancellation, with links to the recovery actions. Messages
   use Goblin-owned failure descriptions, never raw runtime errors or credentials.
-  `external_conversation.notified_work_sequence` records the last delivered outcome.
 
 Before posting, Goblin checks the current installation, thread, and the originating
 user's enabled owner grant, and rechecks the current outcome. Superseded outcomes are
@@ -167,19 +151,19 @@ Follow-ups sent while a turn is running do not reach the running agent; see
 [issue #54](https://github.com/jgador/goblin/issues/54).
 
 Runtime tokens are encrypted with AES-256-GCM under the deployment's private data
-directory (`slack/`), with a locally generated key and owner-only file permissions.
-Back up both the key and the encrypted file. Setup credentials are temporary and
-never reach execution workspaces, Work history, or settings responses.
+directory (`slack/`), with a locally generated key and owner-only file permissions. Back
+up both the key and the encrypted file. Setup credentials are temporary and never reach
+execution workspaces, Work history, or settings responses.
 
 ## Validation and remaining checks
 
-Run `make test` and the relevant browser checks; PostgreSQL tests are opt-in, so
-report their results separately. These tests do not show current Slack service
-behavior or authenticated model execution. Live acceptance should cover app authorization and installation, tokens
-working after setup logout and restart, identity linking, DM and channel-mention
-execution, question and outcome delivery, and administrator-approval recovery.
+Run `make test` and the relevant browser checks; PostgreSQL tests are opt-in, so report
+their results separately. These tests do not show current Slack service behavior or
+authenticated model execution. Live acceptance should cover app authorization and
+installation, tokens working after setup logout and restart, identity linking, DM and
+channel-mention execution, question and outcome delivery, and administrator-approval
+recovery.
 
-A `goblinctl` Slack setup command and Microsoft Teams support are not implemented.
 See [Work lifecycle](work-lifecycle.md) and the [architecture guide](architecture.md).
 
 ## Slack references

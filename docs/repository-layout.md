@@ -1,213 +1,84 @@
-# Repository layout
+# Development and verification
 
-Goblin has separate backend and frontend source trees and ships as one ASP.NET
-Core application. Run the commands below from the repository root.
-
-```text
-backend/
-  src/Goblin.Core/                  Work lifecycle rules and Goblin-owned execution types
-  src/Goblin.Contracts/             Public account/runtime contracts and environment names
-  src/Goblin.Application/           Durable commands, conversations, dispatch, and recovery
-  src/Goblin.Execution/             Runtime hosts, process identity, and isolated sandboxes
-  src/Goblin.Execution.Codex/       Codex worker entry points for those hosts
-  src/Goblin.Integrations.Codex/    Codex account, transport, and Work adapter
-  src/Goblin.Integrations.ChatGpt/  ChatGPT plugin token and OAuth callback validation
-  src/Goblin.Integrations.GitHub/   GitHub device sign-in and private credentials
-  src/Goblin.Integrations.Slack/    Slack setup, Socket Mode, and thread delivery
-  src/Goblin.Web/                   ASP.NET Core composition and HTTP adapters
-  src/Goblin.Protocol/              Generated Codex protocol models and serialization
-  src/Goblin.Persistence/           Database-first EF Core context and entities
-  database/migrations/              SQL schema migrations
-  tools/Goblin.Database/            SQL migration runner
-  tools/Goblin.Database.Scaffolding/  Developer-only EF tooling host
-  tests/                            .NET tests and the test-only application host
-  schemas/                          Pinned Codex and Kubernetes inputs to code generation
-  scripts/                          C# protocol and Kubernetes generators, EF scaffolding
-  Goblin.slnx                       .NET solution
-frontend/
-  src/                              Browser source by screen, plus shared api/ contracts
-  public/assets/                    Static assets copied into the browser build
-  scripts/                          Browser build helpers
-tools/goblinctl/                    Native operator CLI and shared installation code
-tools/xtask/                        Developer and release tooling (`cargo xtask`)
-tests/                              Node, HTTP, deployment, and Playwright tests with shared support
-website/                            Standalone static website
-config/                             Node environment catalog and CI verification selection
-deploy/                             Azure templates, Kubernetes manifests, and installer inputs
-assets/                             Original artwork, exports, and fonts
-scripts/                            Repository checks, CI, release, and maintenance scripts
-docs/                               Setup, architecture, and development documentation
-```
-
-See [environment variables](environment-variables.md) for the C#, Rust, and
-TypeScript catalogs. The [TypeScript refactoring review](typescript-refactoring.md)
-lists open browser refactoring steps.
-
-The root `Makefile` holds shared builds, checks, tests, and release tooling. It
-includes `Makefile.dev` for local application, database, website, and Docker
-commands. Always run `make <target>` from the repository root; `make help` lists
-targets from both files. Targets use `<scope>-<action>[-<qualifier>]`, such as
-`backend-build` or `rust-format-check`. Tool entry points such as `gitleaks` use
-the tool name, with modes passed through `ARGS`. Repository-wide workflows keep
-bare names: `install`, `build`, `typecheck`, `check`, `test`, and `format`. Use
-`reset` for a fresh environment, `clean` to remove outputs or caches, and `stop`
-to halt services.
-
-The root `package.json` has no task scripts or npm workspaces. It pins
-non-frontend Node tooling (Playwright, Prettier, TypeScript, Node types) and the
-Codex runtime. `frontend/package.json` and its lockfile own frontend dependencies
-and npm scripts; do not add backend or test tooling to it. The root
-`tsconfig.json` compiles Node test tooling into the root `dist/`, while
-`frontend/tsconfig.json` compiles browser source without Node types. `global.json`
-stays at the root so the pinned .NET SDK applies from the root and from `backend/`.
-
-VS Code opens `backend/Goblin.slnx` through the checked-in
-`dotnet.defaultSolution` setting. `.artifacts/` is excluded from file discovery
-and watching so temporary project copies do not enter an editor-generated
-solution. If C# Dev Kit already has a generated solution open, use **.NET: Open
-Solution** and select `backend/Goblin.slnx`.
-
-`website/` has its own package manifest and lockfile. Application install, build,
-and test commands do not include it, and the application Docker build excludes
-it. See the [website guide](../website/README.md).
-
-Node.js 24 or newer runs the `.mts` scripts, build helpers, and fake Codex fixture
-directly, without compiled output. Native Node execution strips types without
-checking them; `make scripts-typecheck` checks them through `tsconfig.scripts.json`,
-which permits only erasable TypeScript syntax.
-
-`deploy/azure/setup/app.js` stays JavaScript because goblinctl embeds it directly
-for the browser.
+Goblin ships the backend and frontend as one ASP.NET Core application. The
+[architecture guide](architecture.md) explains service ownership; browse
+[backend/src](../backend/src/), [frontend/src](../frontend/src/), and [tools](../tools/)
+for implementation. The standalone [website](../website/README.md) has its own package
+and workflow.
 
 ## Build and test
 
-Install GNU Make, Node.js 24+, and the .NET SDK selected by `global.json`. On
-Ubuntu/WSL, `build-essential` includes Make. Then run:
+Run commands from the repository root. Install GNU Make, Node.js 24 or newer, the SDK
+selected by [global.json](../global.json), and the
+[Rust prerequisites](rust-development.md#tool-versions-and-installation):
 
 ```bash
 make rust-setup
 source "$HOME/.cargo/env"
 make install
+make build
 ```
 
-Workflows run serially even with `make -j`, because they share build outputs.
-Pass tool options through `ARGS`, for example
-`make browser-test ARGS="tests/e2e/setup.spec.ts --headed"` or
-`make k3s-start ARGS="--http-port 8888"`. Rust selectors use `CARGO_ARGS`, for
-example `make rust-test CARGO_ARGS="-p goblinctl"`.
+Start without a database using `make dev-start ARGS=--without-database`; this disables
+Work. For Work, use a migrated [PostgreSQL profile](database.md#wsl-and-windows-pgadmin)
+and `make dev-start DB_PROFILE=wsl`. Restart after source edits. Full installation and
+container-dependent behavior use the [WSL k3s workflow](../deploy/k3s/README.md).
 
-Frontend-only work can stay inside its package:
+[Makefile](../Makefile) and [Makefile.dev](../Makefile.dev) own commands and ordering.
+`make help` lists them. Workflows remain serial even with `make -j` because they share
+outputs. Follow target naming conventions in those files' headers when adding commands.
+Pass tool flags with `ARGS` and Rust selectors with `CARGO_ARGS`, for example:
 
 ```bash
-cd frontend
-npm ci
-npm run build
-npm run typecheck
+make browser-test ARGS="tests/e2e/setup.spec.ts --headed"
+make rust-test CARGO_ARGS="-p goblinctl"
 ```
 
-| Command | Purpose |
-| --- | --- |
-| `make install` | Install both locked Node packages and fetch locked Rust dependencies |
-| `make build` | Build native tools, frontend assets, test tooling, and the .NET solution |
-| `make typecheck` | Check generated contract values, browser source, test tooling, and direct Node scripts; build .NET |
-| `make test` | Run the offline suite: script and contract tests, builds, Rust, .NET, frontend, HTTP, release, and deployment tests, and generated-model checks |
-| `make check` | Rust formatting and lint checks, `make test`, and `make typecheck` |
-| `make format` | Format TypeScript, Rust, and handwritten C# |
-| `make frontend-build` / `make frontend-test` | Build the frontend / run the compiled frontend tests |
-| `make backend-build` / `make backend-test` | Build the .NET solution with existing frontend output / run .NET tests |
-| `make browser-test` | Build and run Playwright journeys |
-| `make codex-test` | Check the pinned Codex binary's local storage and transport with synthetic credentials; no authenticated model task |
-| `make protocol-generate` / `make protocol-check` | Regenerate / check C# Codex protocol models |
-| `make kubernetes-generate` / `make kubernetes-check` | Regenerate / check selected Kubernetes and Agent Sandbox models |
-| `make ci-test` | Test CI change selection and the required-result policy |
-| `make dev-start DB_PROFILE=wsl` | Build and start the application directly in WSL with the selected PostgreSQL profile |
-| `make k3s-deploy` | Build, import and verify application edits in the owned WSL k3s installation |
-| `make artifacts-clean` | Delete everything in `.artifacts/` except its `.gitkeep` |
+Frontend-only build and typechecking are available through its
+[package scripts](../frontend/package.json). Root Node dependencies serve test and
+developer tooling; keep them out of the frontend package. Native Node type stripping
+does not typecheck scripts; `make scripts-typecheck` does.
 
-Owners of other targets: [Rust development](rust-development.md) (`rust-*`,
-`goblinctl-run`), [formatting](formatting.md) (`*-format`),
-[contract values](contract-values.md) (`contracts-*`),
-[database guide](database.md) (`database-*`),
-[dependencies](dependencies.md) (`dependencies-*`),
-[releases](releases.md) (`release-*`),
-[WSL k3s development](../deploy/k3s/README.md) (`k3s-*`,
-`password-set`),
-[Chisel](../deploy/chisel/README.md) (`chisel-check`),
-[logging](logging.md) (`logging-test*`), [cluster view](cluster-view.md)
-(`headlamp-test`), [website guide](../website/README.md) (`website-*`), and
-[secret scanning](secret-scanning.md) (`secrets-*`).
-
-After building frontend assets, publish with:
-
-```sh
-dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish
-```
-
-### Docker builds
-
-`make docker-build` builds and times the `linux/amd64` image
-`goblin-platform:local` with plain progress. Pass build options through `ARGS`,
-such as `make docker-build ARGS=--no-cache`.
-
-`--no-cache` reruns build instructions but does **not** empty persistent cache
-mounts. Removing the image also keeps the builder cache.
-`make docker-clean-images` removes image tags whose repository name starts with
-`goblin`; containers that use an image can block its removal.
-`make docker-clean-cache` prunes all unused cache of the default builder, for
-**all projects**; loaded base images remain.
-
-The Dockerfile copies all of `backend/src` before the web restore, so new
-production C# projects need no extra copy step, and any backend source change
-reruns the restore.
-
-For a cold-build benchmark, create a fresh builder **for every sample** and
-export to a new archive:
+After building browser assets, publish to a task directory:
 
 ```bash
-(
-    set -euo pipefail
-    benchmark_dir=".artifacts/docker-benchmark/$(date +%Y%m%d-%H%M%S)-$$"
-    benchmark_builder="goblin-cold-$$"
-    mkdir -p "$benchmark_dir"
-    docker buildx create --name "$benchmark_builder" --driver docker-container \
-        --driver-opt image=moby/buildkit:v0.26.2
-    trap 'docker buildx rm --force "$benchmark_builder"' EXIT
-    docker buildx inspect --bootstrap "$benchmark_builder" > "$benchmark_dir/builder.txt"
-    docker buildx du --builder "$benchmark_builder" > "$benchmark_dir/cache-before.txt"
-    /usr/bin/time -f 'elapsed_seconds=%e\nexit_code=%x' -o "$benchmark_dir/time.txt" \
-        docker buildx build --builder "$benchmark_builder" --platform linux/amd64 \
-        --no-cache --pull --progress=plain --provenance=false \
-        --output "type=docker,dest=$benchmark_dir/image.tar" \
-        --tag goblin-platform:benchmark --file Dockerfile . \
-        > "$benchmark_dir/build.log" 2>&1
-    cat "$benchmark_dir/time.txt"
-)
+dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish/application
 ```
 
-Builder startup is outside the timer. Use `--file` to select each Dockerfile
-variant. Run at least three samples per variant in alternating order on an idle
-machine, and compare medians and ranges. Check that each `cache-before.txt`
-reports `0B` and that base-image digests match across samples. Network and host
-caches still affect results.
+VS Code selects [backend/Goblin.slnx](../backend/Goblin.slnx). If C# Dev Kit has an
+editor-generated solution open, use **.NET: Open Solution** and select that file.
+Temporary projects belong under `.artifacts/`, which is excluded from editor discovery.
 
-### Choosing verification
+## Docker builds and cleanup
 
-Choose checks for the behavior and boundaries you changed. Reuse passing results
-for unchanged content; repeat or broaden checks for new changes, failures,
-unresolved risks, or required coverage. Write regression tests that check
-behavior, not tests that only repeat the implementation.
+`make docker-build` builds the application image. Docker's `--no-cache` reruns
+instructions but keeps persistent cache mounts. Removing an image keeps builder cache
+too. For a cold benchmark, use a fresh named builder per sample and place archives and
+logs under `.artifacts/docker-benchmark/`.
 
-Use direct WSL tests for fast edit/debug cycles. Real PostgreSQL integration
-checks can use the database already installed in k3s without running the
-application there. When behavior depends on the container image, mounted
-configuration, ingress, networking, RBAC, worker scheduling/recovery, PVCs, or
-deployed logging, verify it against the owned WSL k3s installation. Use
-[`make k3s-deploy`](../deploy/k3s/README.md#deploy-application-edits) after the
-affected tests pass, confirm the reported image is running, and exercise the
-changed behavior. Repeat deployment for new runtime changes or a deployment
-failure; reuse unchanged passing checks. Report any required checks that could
-not be performed. Schema, infrastructure manifests, and installer changes need
-their own installation verification; image deployment cannot apply them.
+`make docker-clean-images` targets image repositories starting with `goblin`.
+`make docker-clean-cache` prunes unused cache of the default builder across all
+projects. Inspect ownership and other consumers before cleanup; neither operation is
+part of ordinary verification.
+
+## Choosing verification
+
+Choose checks for the behavior and boundaries you changed. Reuse passing results for
+unchanged content; repeat or broaden checks for new changes, failures, unresolved risks,
+or required coverage. Write regression tests that check behavior, not tests that only
+repeat the implementation.
+
+Use direct WSL tests for fast edit/debug cycles. Real PostgreSQL integration checks can
+use the database already installed in k3s without running the application there. When
+behavior depends on the container image, mounted configuration, ingress, networking,
+RBAC, worker scheduling/recovery, PVCs, or deployed logging, verify it against the owned
+WSL k3s installation. Use
+[`make k3s-deploy`](../deploy/k3s/README.md#deploy-application-edits) after the affected
+tests pass, confirm the reported image is running, and exercise the changed behavior.
+Repeat deployment for new runtime changes or a deployment failure; reuse unchanged
+passing checks. Report any required checks that could not be performed. Schema,
+infrastructure manifests, and installer changes need their own installation
+verification; image deployment cannot apply them.
 
 | Change | Relevant verification |
 | --- | --- |
@@ -227,58 +98,48 @@ their own installation verification; image deployment cannot apply them.
 | Environment variables | Follow [adding a variable](environment-variables.md#adding-a-variable). |
 | CI policy or workflows | `make ci-test make-test scripts-typecheck`; see [GitHub Actions](github-actions.md#ci-selection-and-required-result). Check publication and merge-queue behavior need a real Actions run. |
 
-`make test` is the broad offline suite; real PostgreSQL checks run only with
-explicit test configuration. It does not run Rust lints, browser journeys,
-`make codex-test`, or website checks. `make check` adds Rust formatting and lint
-checks and type checks. Neither is required for every local edit.
+`make test` is the broad offline suite; real PostgreSQL checks run only with explicit
+test configuration. It does not run Rust lints, browser journeys, `make codex-test`, or
+website checks. `make check` adds Rust formatting and lint checks and type checks.
+Neither is required for every local edit.
 
-CI selects groups from changed files using
-[`config/ci-verification.json`](../config/ci-verification.json): C#, Rust, and
-JavaScript/TypeScript changes run their language group plus the integration and
-installer groups. Shared build and deployment inputs (such as SQL, shell, YAML,
-Dockerfiles, and Makefiles) and unclassified files run every group. Markdown
-outside `.github/workflows/` skips runtime groups. See
-[GitHub Actions](github-actions.md#ci-selection-and-required-result) for the full
-rules. Local results do not mean CI ran.
+CI selection and reporting are defined by
+[the CI policy](../config/ci-verification.json) and explained in
+[GitHub Actions](github-actions.md#ci-selection-and-required-result). Local results do
+not mean CI ran.
 
-Offline installer tests run as an ordinary user. `make tools-build` builds the
-test-only `host_fixture` Rust example, which runs host configuration against a
-private filesystem with mocked infrastructure commands. It is not shipped. The
-production `goblinctl db host` command still requires root.
+Offline installer tests run as an ordinary user. `make tools-build` builds the test-only
+`host_fixture` Rust example, which runs host configuration against a private filesystem
+with mocked infrastructure commands. It is not shipped. The production
+`goblinctl db host` command still requires root.
 
-The HTTP and browser tests use runtime fixtures. `make codex-test` uses the real
-pinned executable with synthetic credentials and submits no model task. Neither
-covers authenticated execution. PostgreSQL and database-backed browser journeys
-skip without their test setup; report those skips. Keep live-test credentials
-private. Without a live setup, report that coverage as unverified instead of
-claiming persistence or runtime verification. Do not add Azure login,
-provisioning, live deployment, or cleanup to these checks.
+The HTTP and browser tests use runtime fixtures. `make codex-test` uses the real pinned
+executable with synthetic credentials and submits no model task. Neither covers
+authenticated execution. PostgreSQL and database-backed browser journeys skip without
+their test setup; report those skips. Keep live-test credentials private. Without a live
+setup, report that coverage as unverified instead of claiming persistence or runtime
+verification. Do not add Azure login, provisioning, live deployment, or cleanup to these
+checks.
 
-## Build output and browser routes
+## Generated and published assets
 
-The frontend build writes JavaScript, HTML, CSS, and static assets to
-`frontend/dist/`. `Goblin.Web` copies this directory into its output and
-published `wwwroot/`. Browser URLs are mapped explicitly in
-`backend/src/Goblin.Web/Http/StaticAssets.cs`; add new browser modules there.
-`/`, `/work`, `/knowledge`, and `/settings` serve the workspace
-shell, also with a trailing slash, behind the workspace access screen. Settings
-selects its section with `?section=<name>`. Connection details use
-`?section=connections&provider=<name>`; the names and URL parsing are in
-`frontend/src/settings/navigation.ts`.
-The connection panel is shared with Settings through `/connection/panel.html`.
-Runtime assets keep their `/assets/*` URLs, including the bundled Inter fonts.
-Shared platform controls and font declarations live in `frontend/src/controls.css`.
+Browser output belongs to `frontend/dist/` and is copied into the application's
+`wwwroot/`; root `dist/` contains test tooling and is not shipped.
+[StaticAssets.cs](../backend/src/Goblin.Web/Http/StaticAssets.cs) explicitly maps
+browser modules and routes. New modules need routes; the
+[browser asset tests](../tests/deployment/browser-assets.test.ts) check dependencies.
+Connection screens share `/connection/panel.html`; add provider-specific behavior to
+that shared route rather than creating separate panels.
 
-The root `dist/` holds compiled test tooling and is not part of the application
-image. Both `dist/` directories, .NET `bin/` and `obj/`, `.artifacts/`, and local
-runtime data are ignored by Git. The root Dockerfile uses the repository root as
-its build context and excludes `docs/`, `tests/`, `website/`, and the Rust
-tooling. It copies `frontend/public/assets/branding/` because backend assemblies
-embed the Slack icon and the ChatGPT plugin logo.
+[Codex schema inputs](../backend/schemas/codex/) change with the runtime pin; follow
+[protocol regeneration](../backend/src/Goblin.Protocol/README.md). The setup UI's
+`deploy/azure/setup/app.js` stays JavaScript because
+[goblinctl embeds it directly](../tools/goblinctl/src/assets.rs), without a frontend
+build step.
 
-Keep original artwork in `assets/branding/` and copy only the assets the browser
-uses into `frontend/public/assets/`. Codex schemas belong under
-`backend/schemas/codex/`. Goblin account/runtime contracts belong to
-`Goblin.Contracts`; Work command/view contracts belong to `Goblin.Application/Work`.
-Browser types describe these public APIs, including `frontend/src/api/contracts.ts`
-for connection setup and `frontend/src/work/contracts.ts` for Work views.
+The [Dockerfile](../Dockerfile) and [.dockerignore](../.dockerignore) define production
+inputs and exclusions. Keep developer tools and private runtime state out of images.
+Original artwork stays under [assets/branding](../assets/branding/README.md); only
+required runtime copies belong in public assets. Keep `frontend/public/assets/branding/`
+in the application Docker build context: the Slack assembly embeds its upload icon from
+that source directory. The ChatGPT logo is published as browser content.
