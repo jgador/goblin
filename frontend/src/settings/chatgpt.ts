@@ -20,7 +20,7 @@ const base = "/api/integrations/chatgpt";
 const progressKey = "goblin.chatgpt.full-work-setup";
 const stepHints = [
     "Enable your instance",
-    "Prepare secure access",
+    "Prepare plugin access",
     "Connect in ChatGPT",
     "Try a conversation",
 ];
@@ -145,7 +145,7 @@ export function mountChatGpt(root: HTMLElement) {
                     )
                     .join("")}</select></label></nav>
                 <div class="chatgpt-step-panel"><div class="chatgpt-step-body"><p class="chatgpt-step-caption">Step ${step + 1} of ${setupSteps.length}</p>${stepContent(model())}</div>
-                <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${setupSteps.length} steps complete</span>${step < setupSteps.length - 1 ? action("next", `Continue to ${setupSteps[step + 1]}`, true, !done[step]) : ""}</div></div>
+                <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${setupSteps.length} steps complete</span>${step < setupSteps.length - 1 ? action("next", `Continue to ${setupSteps[step + 1].toLowerCase()}`, true, !done[step]) : ""}</div></div>
                 </div>
                 <details class="chatgpt-help"><summary>Need help with this step?</summary><div><p><strong>Cannot connect:</strong> check your HTTPS address and ChatGPT workspace permissions. A tunnel carries MCP traffic; sign-in still needs reachable HTTPS.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve full Work access.</p><p><strong>Work is unavailable:</strong> refresh the connection in ChatGPT, then reconnect if it still has an old read-only token.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</div></details>
                 <div class="chatgpt-meta"><p class="chatgpt-progress-note">${storageAvailable ? "Progress is saved in this browser." : "Progress stays on this page; browser storage is unavailable."} You confirm installation and conversation tests.</p>${action("restart-setup", "Start setup again")}</div>

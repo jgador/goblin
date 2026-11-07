@@ -14,7 +14,7 @@ internal sealed class ChatGptSetupView
     [JsonPropertyName("description")]
     public string Description => ChatGptConfiguration.Description;
     [JsonPropertyName("logoUrl")]
-    public string LogoUrl => "/assets/branding/icon.svg";
+    public string LogoUrl => "/assets/branding/chatgpt.png";
     [JsonPropertyName("serverUrl")]
     public string? ServerUrl { get; init; }
     [JsonPropertyName("issuer")]

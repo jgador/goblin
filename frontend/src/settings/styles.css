@@ -164,6 +164,10 @@
 .chatgpt-callback-instructions { padding-left: 20px; margin: 14px 0 18px; }
 .chatgpt-callback-instructions li { padding-left: 4px; margin-bottom: 10px; }
 .chatgpt-external { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--green); text-underline-offset: 4px; font-weight: 500; }
+.chatgpt-branding { display: flex; align-items: center; gap: 14px; margin: 16px 0; }
+.chatgpt-branding img { flex-shrink: 0; width: 64px; height: 64px; border: 1px solid var(--border); border-radius: 8px; }
+.chatgpt-branding p { min-width: 0; margin: 0; }
+.chatgpt-branding a { display: inline-flex; align-items: center; min-height: 40px; color: var(--green); text-underline-offset: 4px; font-weight: 500; }
 .chatgpt-checks { padding: 0; list-style: none; }
 .chatgpt-checks li { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
 .chatgpt-checks strong { font-weight: 500; }

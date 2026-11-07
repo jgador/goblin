@@ -30,6 +30,7 @@ test("the work preview and its assets are public while workspace APIs remain pro
         ["/work/model-selection.js", "text/javascript"],
         ["/work/styles.css", "text/css"],
         ["/assets/branding/icon.svg", "image/svg+xml"],
+        ["/assets/branding/chatgpt.png", "image/png"],
         ["/api/status", "application/json"],
     ]);
     for (const [path, contentType] of paths) {

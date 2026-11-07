@@ -14,6 +14,7 @@ under the [SIL Open Font License 1.1](fonts/OFL.txt). See the
 | `png/` | Original PNG exports |
 | `jpeg/` | Original JPEG exports |
 | `slack/` | Derived app icon for Slack |
+| `chatgpt/` | Derived plugin logo for ChatGPT |
 | `fonts/` | Inter Medium, SemiBold, and ExtraBold from the design package |
 | `source/` | Editable Illustrator document (`logo.ai`) and package report (`report.txt`) |
 | `providers/` | Original third-party provider artwork; sources and terms are recorded in the [third-party notices](../../THIRD_PARTY_NOTICES.md) |
@@ -76,3 +77,21 @@ Its runtime copy is `frontend/public/assets/branding/slack.png`, served at
 `/assets/branding/slack.png` and embedded by the Slack setup adapter for upload.
 To regenerate it, render the SVG at 896 pixels wide keeping its aspect ratio,
 center it on a 1024-pixel white square, and export as PNG.
+
+The [ChatGPT integration](../../docs/chatgpt-integration.md) uses
+[`chatgpt/icon-light.png`](chatgpt/icon-light.png), a 512 × 512 PNG made from
+`svg/icon-light.svg`: the artwork fits within 448 × 448 pixels, centered on an
+opaque white square, with at least 32 pixels of padding. It uses lossless RGB
+compression to stay below ChatGPT's 10 KB upload limit (at most 10,000 bytes).
+The runtime copy is
+`frontend/public/assets/branding/chatgpt.png`, served at
+`/assets/branding/chatgpt.png`. Settings → Connections → ChatGPT → Install shows
+a preview and **Download Goblin logo** beside the plugin name and description.
+Upload the downloaded `goblin-chatgpt.png` in ChatGPT's plugin creation form.
+To regenerate it, fit the SVG within 448 × 448 pixels keeping its aspect ratio,
+center it on a 512-pixel white square, and export as an opaque RGB PNG. Compress
+it losslessly and verify the final file is no larger than 10,000 bytes before
+copying it into the runtime assets. FFmpeg's PNG encoder with `-pix_fmt rgb24`,
+`-compression_level 9`, and `-pred mixed` meets the limit for this artwork without
+changing its pixels. The browser download journey checks both the dimensions
+and the file-size limit.

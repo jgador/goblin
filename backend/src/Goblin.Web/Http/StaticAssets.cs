@@ -35,6 +35,7 @@ internal sealed class StaticAssets
             ("/settings/chatgpt.js", "settings/chatgpt.js", "text/javascript; charset=utf-8"),
             ("/settings/chatgpt-workflow.js", "settings/chatgpt-workflow.js", "text/javascript; charset=utf-8"),
             ("/assets/branding/slack.png", "assets/branding/slack.png", "image/png"),
+            ("/assets/branding/chatgpt.png", "assets/branding/chatgpt.png", "image/png"),
             ("/settings/system.js", "settings/system.js", "text/javascript; charset=utf-8"),
             ("/settings/timezone.js", "settings/timezone.js", "text/javascript; charset=utf-8"),
             ("/settings/timezone-places.js", "settings/timezone-places.js", "text/javascript; charset=utf-8"),

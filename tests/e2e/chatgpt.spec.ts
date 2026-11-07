@@ -11,7 +11,7 @@ async function fixture(page: Page, configured = true) {
         name: "Goblin",
         description:
             "Read and manage all Work in your private Goblin instance.",
-        logoUrl: "/assets/branding/icon.svg",
+        logoUrl: "/assets/branding/chatgpt.png",
         serverUrl: configured ? "https://goblin.example.test/mcp" : null,
         issuer: configured ? "https://goblin.example.test/" : null,
         clientId: "goblin-chatgpt",
@@ -109,7 +109,12 @@ test("one private connection offers full Work access without a sharing step", as
     await expect(page.getByRole("button", { name: "Share Work" })).toHaveCount(
         0,
     );
-    await step(page, "Sign-in");
+    await page
+        .getByRole("button", {
+            name: "Continue to connection setup",
+            exact: true,
+        })
+        .click();
     await page
         .getByRole("button", { name: "Check provider and storage" })
         .click();
@@ -124,13 +129,30 @@ test("one private connection offers full Work access without a sharing step", as
         page.getByRole("textbox", { name: "Description" }),
     ).toHaveValue(state.description);
     await expect(
+        page.getByRole("img", { name: "Goblin plugin logo" }),
+    ).toBeVisible();
+    const downloading = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Download Goblin logo" }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toBe("goblin-chatgpt.png");
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(Buffer.from(chunk));
+    const png = Buffer.concat(chunks);
+    expect(png.length).toBeLessThanOrEqual(10_000);
+    expect(png.subarray(0, 8)).toEqual(
+        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    );
+    expect(png.readUInt32BE(16)).toBe(512);
+    expect(png.readUInt32BE(20)).toBe(512);
+    await expect(
         page.getByText(
             "This private connection can read and manage all existing and future Work.",
         ),
     ).toBeVisible();
     await page.getByLabel("I installed the plugin").check();
     await expect(
-        page.getByRole("button", { name: "Continue to Test" }),
+        page.getByRole("button", { name: "Continue to test" }),
     ).toBeEnabled();
     await step(page, "Test");
     await expect(
@@ -193,7 +215,7 @@ test("callback edits block sign-in until saved and keep the secret out of browse
     await callback.fill("https://chatgpt.com/connector/oauth/new-callback");
     await expect(page.getByLabel("I installed the plugin")).toBeDisabled();
     await expect(
-        page.getByRole("button", { name: "Continue to Test" }),
+        page.getByRole("button", { name: "Continue to test" }),
     ).toBeDisabled();
     await callback.fill(state.redirectUri!);
     await expect(page.getByLabel("I installed the plugin")).toBeChecked();
@@ -213,7 +235,7 @@ test("rotation preserves the callback and revocation remains available", async (
 }) => {
     const { state, writes } = await fixture(page);
     await page.goto("/settings?section=connections&provider=chatgpt");
-    await step(page, "Sign-in");
+    await step(page, "Connection setup");
     await page
         .getByText("Need a replacement client secret?", { exact: true })
         .click();
@@ -285,6 +307,14 @@ test("progress is scoped to the owner and works on narrow screens without storag
                         window.innerWidth,
                 ),
             ).toBe(true);
+            if (index === "0" || index === "1")
+                await page.locator(".chatgpt-step-footer").screenshot({
+                    path: `.artifacts/chatgpt-full-work/browser/step-${index}-${width}.png`,
+                });
+            if (index === "2")
+                await page.locator(".chatgpt-branding").screenshot({
+                    path: `.artifacts/chatgpt-full-work/browser/logo-${width}.png`,
+                });
         }
     }
     await page.screenshot({

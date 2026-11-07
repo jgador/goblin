@@ -78,7 +78,7 @@ async function workspace(page: Page) {
                 name: "Goblin",
                 description:
                     "Read and manage all Work in your private Goblin instance.",
-                logoUrl: "/assets/branding/icon.svg",
+                logoUrl: "/assets/branding/chatgpt.png",
                 serverUrl: null,
                 issuer: null,
                 clientId: "goblin-chatgpt",

@@ -52,15 +52,19 @@ history and command receipts. Startup never creates or upgrades tables.
 ## Connect
 
 Open `/settings?section=connections&provider=chatgpt` on the public origin.
-The four setup steps are **Prepare**, **Sign-in**, **Install**, and **Test**.
+The four setup steps are **Prepare**, **Connection setup**, **Install**, and **Test**.
 
 1. Prepare the HTTPS origin and enable the server.
-2. Create the OAuth client and save its secret. It is shown only on creation or
-   explicit rotation. Run the local provider and storage check.
+2. In **Connection setup**, create the OAuth client and save its secret. It is
+   shown only on creation or explicit rotation. Run the local provider and
+   storage check. Owner sign-in happens later, during **Install**.
 3. In ChatGPT Plugins, choose **+ → Add custom MCP server**. Use the displayed
    `/mcp` URL, OAuth, client ID `goblin-chatgpt`, the saved secret, and
    `client_secret_basic`. If ChatGPT shows Base scopes, enter
-   `openid offline_access goblin.work.read goblin.work.write`.
+   `openid offline_access goblin.work.read goblin.work.write`. In Goblin's
+   **Install** step, select **Download Goblin logo** and upload the 512 × 512
+   light-background PNG as the plugin logo in ChatGPT. The download is below
+   ChatGPT's 10 KB file-size limit.
 4. Copy the exact OAuth callback shown by ChatGPT into Goblin's **Install**
    step and click **Save callback**. Wait for **Callback saved**, then return to
    ChatGPT and connect. The confirmed callback for the current form is

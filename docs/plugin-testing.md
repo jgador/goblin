@@ -120,16 +120,19 @@ belong to the selected instance; create a separate connection for each environme
 
 1. Open Goblin's `/settings?section=connections&provider=chatgpt`.
    **Prepare** should show that the OAuth server and MCP endpoint are
-   enabled. **Continue to Sign-in** opens the authentication setup step.
-2. In **Sign-in**, click **Create OAuth client** if no client exists. This step
-   creates the client without asking for ChatGPT's callback. Copy and save the
-   generated secret; it is shown only when created or rotated. Reuse the saved
+   enabled. **Continue to connection setup** opens the plugin credentials and
+   server checks.
+2. In **Connection setup**, click **Create OAuth client** if no client exists.
+   This step creates the client without asking for ChatGPT's callback. Copy and
+   save the generated secret; it is shown only when created or rotated. Reuse the saved
    secret for an existing client. Click **Check provider and storage**, then
    continue to **Install**. These local checks verify configuration and storage;
    the ChatGPT connection test below verifies the public connection.
 3. Open [ChatGPT Plugins](https://chatgpt.com/plugins) and select
    **+ → Add custom MCP server**. Give the plugin a name that identifies the
-   environment and enter Goblin's connection details:
+   environment. In Goblin's **Install** step, select **Download Goblin logo**
+   and upload the 512 × 512 PNG as the plugin logo. The download is below
+   ChatGPT's 10 KB file-size limit. Enter Goblin's connection details:
 
    | Field | WSL k3s value |
    | --- | --- |
@@ -265,7 +268,7 @@ connection; rotation revokes previous connections.
 | `502 Bad Gateway` on `dev.goblinboard.com` | Terminal B must show **Connected** and target local port **8788** for k3s. Wait for the public-origin deployment to succeed. A client still targeting the direct build on 8787 must be stopped and reconnected to 8788. |
 | `invalid_host` at `http://localhost:8788` | The public HTTPS origin is configured. Use `https://dev.goblinboard.com` during testing, then run both settings in [Return to local testing](#return-to-local-testing). |
 | OAuth reports HTTP or an invalid host through Chisel | Run the public-origin `k3s-deploy` command in step 3; it selects the direct platform Service route that preserves Host and HTTPS headers. |
-| `invalid_request`, redirect URI is not valid (`ID2043`) | In Goblin's **Install** step, save the exact ChatGPT callback with **Save callback**, wait for **Callback saved**, then restart sign-in from ChatGPT. The confirmed callback is `https://chatgpt.com/connector_platform_oauth_redirect`. Creating the client in **Sign-in** does not register a callback; saving it in **Install** keeps the existing secret. |
+| `invalid_request`, redirect URI is not valid (`ID2043`) | In Goblin's **Install** step, save the exact ChatGPT callback with **Save callback**, wait for **Callback saved**, then restart sign-in from ChatGPT. The confirmed callback is `https://chatgpt.com/connector_platform_oauth_redirect`. Creating the client in **Connection setup** does not register a callback; saving it in **Install** keeps the existing secret. |
 | Fingerprint mismatch or Chisel authentication failure | Check the trusted fingerprint and username/password separately. Ask the gateway administrator for updated verified values if they changed. See [Chisel troubleshooting](../deploy/chisel/README.md#troubleshooting) for server issues. |
 | Client closes after gateway deployment | Restart the client. Gateway deployment restarts the Chisel server; use updated credentials or a newly trusted fingerprint if they changed. |
 | ChatGPT still shows an old ping reply or tool list | Rebuild and deploy Goblin, refresh the connection's tools in ChatGPT, and start a new conversation with the plugin selected using **@**. |
