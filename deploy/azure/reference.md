@@ -41,7 +41,7 @@ the Secret is missing, the pod cannot start; if its verifier is invalid, Goblin 
 to start.
 
 **Azure's Custom Script extension can keep its generated `script.sh` under
-`/var/lib/waagent/custom-script/download/<run>/`. ** That root-readable script contains
+`/var/lib/waagent/custom-script/download/<run>/`.** That root-readable script contains
 the original password in Base64, which is reversible. Bootstrap does not remove this
 extension-managed copy.
 

@@ -31,6 +31,15 @@ and skill changes follow the [agent workflow](docs/agent-workflow.md), including
 documentation maintenance policy. Check claims against current code and tests rather
 than old plans or test reports.
 
+For execution, recovery, or workspace storage, follow
+[execution hosting](docs/execution-hosting.md) and [workspace lifecycle](docs/workspace-lifecycle.md).
+Environment reads, sets, removals, and forwarding follow
+[environment variables](docs/environment-variables.md); shared behavior and values follow
+[contract values](docs/contract-values.md). C# construction and JSON contracts follow
+[C# conventions](docs/formatting.md#c-construction-and-contracts); Rust under `tools/`
+follows [Rust development](docs/rust-development.md). Workflow and required-check changes
+follow [GitHub Actions](docs/github-actions.md).
+
 # Project constraints
 
 - Work lifecycle rules belong in `backend/src/Goblin.Core/Work/`, independent of

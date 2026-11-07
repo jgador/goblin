@@ -24,11 +24,16 @@ payload; **Keep saved state** keeps the server view. Refresh never replays a com
 Drafts survive navigation within the page; unsent conversation drafts do not survive a
 reload. Browser search covers loaded content, not a server index.
 
+Commands cannot edit a saved goal, and Work has no milestone model. Artifacts expose
+metadata and references rather than content retrieval; there is no execution-log view.
+
 **Settings → Connections** manages Codex, GitHub, Slack, and the private ChatGPT plugin.
 Knowledge indexing and Teams are unavailable. Workspace inspection is currently an
 [API](workspace-lifecycle.md#inspection), without a browser file or terminal view. The
 [browser journeys](../tests/e2e/) exercise navigation, draft preservation, command
-recovery, focus, and accessibility.
+recovery, focus, and accessibility. Durable journeys need the
+[opt-in PostgreSQL test setup](database.md#application-configuration-and-verification);
+report skips separately from fixture results.
 
 ## Product identities
 

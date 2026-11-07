@@ -12,8 +12,10 @@ The four behavioral boundaries are the first four sections below.
 `backend/src/Goblin.Core/Work/` owns lifecycle transitions, decisions, attention,
 attempts, and result approval. Core types have no HTTP, persistence, messaging,
 process-configuration, runtime SDK, or generated-protocol dependencies.
-`Goblin.Application` turns commands into transactional changes and coordinates
-connections, execution, recovery, and conversations. `Goblin.Persistence` holds the
+`Goblin.Application/Work` owns application commands and their coordination; these are
+separate from the integration boundary types in `Goblin.Contracts`. Application
+commands become transactional changes that coordinate connections, execution, recovery,
+and conversations. `Goblin.Persistence` holds the
 SQL-first PostgreSQL mappings.
 
 Rules:
@@ -90,9 +92,15 @@ credentials.
 [Platform manifests](../deploy/platform/), the
 [Azure overlay](../deploy/azure/platform/), [website manifests](../website/k8s/), and
 [Chisel manifests](../deploy/chisel/) define names, labels, selectors, resources, and
-storage. Recorded execution references retain their namespace when configuration
-changes. See [workspaces](workspace-lifecycle.md) for execution identities and retained
-storage.
+storage. Durable workspace references use `k8s/<namespace>/work-<work-id>` and retain
+their recorded namespace when configuration changes;
+[KubernetesWorkspaceAddress.cs](../backend/src/Goblin.Execution/KubernetesWorkspaceAddress.cs)
+owns their grammar and ownership validation. Execution resources use the selector
+`app=goblin-execution`. Per-turn Secret and ConfigMap names use
+`input-<work-id>-<attempt-id>-<n>`, where `n` is the workspace turn number;
+[SandboxManifestBuilder.cs](../backend/src/Goblin.Execution/SandboxManifestBuilder.cs)
+owns input names and labels. See [workspaces](workspace-lifecycle.md) for execution
+identities and retained storage.
 
 Before applying storage changes or recreating an installation, inspect actual PVC/PV
 bindings, reclaim policies, and backing paths. A new empty claim preserves no data.

@@ -45,6 +45,9 @@ JavaScript actions, including nested actions in composites, must declare
 `runs.using: node24`. setup-node controls repository commands, not action runtimes. Keep
 SHA pins and review newly referenced actions.
 
+Artifact actions need Node 24 support: use `actions/upload-artifact` v6 or newer and
+`actions/download-artifact` v7 or newer, including inside reusable workflows.
+
 [global.json](../global.json), the
 [.NET setup action](../.github/actions/setup-dotnet/action.yml), and
 [Dockerfile](../Dockerfile) must select the same SDK release. Update the setup action's
@@ -57,6 +60,12 @@ the generic installer.
 [Docs Maintenance](../.github/workflows/documentation.md) propose bounded draft PRs.
 Their Markdown sources own triggers, actor restrictions, allowed files, budgets, and
 prompts; generated lock files must change with those sources.
+
+Configure the repository's `OPENAI_API_KEY` secret (or the compiler-supported
+`CODEX_API_KEY` alternative), and enable **Allow GitHub Actions to create and approve
+pull requests** in **Settings → Actions → General → Workflow permissions**. This setting
+permits draft creation; maintenance does not approve or merge proposals. The generated
+workflow's secret validation owns accepted key names.
 
 Only owner-initiated runs in this repository can infer or publish. Fork PRs, other
 actors' reruns, and maintenance branches cannot start maintenance inference. The
@@ -78,11 +87,34 @@ gh-aw packages committed local history. Only inside these workflows, the scoped 
 command may make a local commit on the generated maintenance branch; this exception does
 not authorize commits in developer checkouts. Keep the proposal's explicit base branch
 and run CI on it before merging: PRs created by `GITHUB_TOKEN` do not automatically
-trigger CI. Maintenance never satisfies the required result by itself.
+trigger CI. A separately scoped `GH_AW_CI_TRIGGER_TOKEN` can enable CI triggering;
+otherwise run CI on the proposal branch before merging. Maintenance never satisfies
+the required result by itself.
 
 The compiler pin is recorded with its [action lock](../.github/aw/actions-lock.json);
-install the matching gh-aw version. After editing executable workflow Markdown,
-regenerate and verify:
+install that version rather than maintaining another pin:
+
+```bash
+gh_aw_version=$(node -p '
+  Object.values(require("./.github/aw/actions-lock.json").entries)
+    .find(entry => entry.repo === "github/gh-aw-actions/setup").version
+')
+gh extension install github/gh-aw --pin "$gh_aw_version"
+```
+
+For a manual run, open **Actions → CI Maintenance** or **Docs Maintenance → Run
+workflow** and select the intended branch. Owner restrictions still apply. Inspect
+usage, failures, and safe outputs with the pinned CLI; use the numeric run ID from
+Actions for an audit:
+
+```bash
+gh aw logs ci-policy --last 5 --output .artifacts/maintenance/ci-policy
+gh aw logs documentation --last 5 --output .artifacts/maintenance/documentation
+gh aw audit RUN_ID --repo jgador/goblin --output .artifacts/maintenance/audit
+```
+
+Keep downloaded logs private and compare reported usage with actual provider billing.
+After editing executable workflow Markdown, regenerate and verify:
 
 ```bash
 gh aw compile ci-policy documentation --no-check-update

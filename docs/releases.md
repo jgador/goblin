@@ -5,8 +5,8 @@ Develop on `master`; stabilize and service each release line on
 product component is **platform** ([component
 names](architecture.md#resource-and-storage-ownership)). The **Platform Release**
 workflow prepares, verifies, and publishes one Goblin and goblinctl pair after a single
-approval. See [GitHub Actions](github-actions.md) for workflow and job names and
-installation asset commands.
+approval. The [workflow definitions](../.github/workflows/) own job names and commands;
+[GitHub Actions](github-actions.md) describes contributor rules and maintenance setup.
 
 ## Development and stabilization
 
@@ -54,7 +54,7 @@ Run the checks relevant to the fix, then push:
 git push --set-upstream origin backport/0.1/123-fix-description
 ```
 
-Open a PR with **base `release/0.1` **. Link the original issue, PR, and commit; explain
+Open a PR with **base `release/0.1`**. Link the original issue, PR, and commit; explain
 why the line needs the fix; note conflict resolutions and verification. Merge after
 `test_results` passes, and confirm the checks on the resulting release-branch commit
 before using it as a candidate.
@@ -170,6 +170,14 @@ deploys through the `website-production` approval. Deployment fails if `master` 
 or the deployed catalog changed while approval was pending, and the snapshot fails if a
 previously hosted release changed or disappeared. Versioned assets stay attached to
 GitHub Releases.
+
+For handoff diagnostics, [installation-assets.yml](../.github/workflows/installation-assets.yml)
+owns the source snapshot artifact and serialization of recommendations;
+[website-release.yml](../.github/workflows/website-release.yml) owns the validated
+snapshot artifact and serialization of website deployments. Their commands call
+[release-github.mts](../scripts/release-github.mts) for version-specific authentication
+and recommendation mode, and [installation-assets.mts](../scripts/installation-assets.mts)
+for snapshot creation and comparison with the deployed baseline.
 
 ## Repository setup
 

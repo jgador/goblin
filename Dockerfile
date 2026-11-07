@@ -81,7 +81,7 @@ FROM restore AS publish
 
 COPY backend/licenses ./backend/licenses
 
-# Backend assemblies embed the Slack icon and ChatGPT package logo.
+# The Slack assembly embeds its upload icon from the source asset directory.
 COPY frontend/public/assets/branding ./frontend/public/assets/branding
 
 # Compile and package once, including the SDK's gzip/Brotli assets and endpoint

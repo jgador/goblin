@@ -13,6 +13,14 @@ WSL, this is the Linux VM rather than Windows. Root-disk usage excludes separate
 mounted disks; memory is the kubelet working set. Short usage history is in memory and
 clears on restart.
 
+Custom installations must set `GOBLIN_NODE_NAME` to the observed node and set
+`GOBLIN_NAMESPACE` when the application's namespace differs from the default in
+[host configuration](../backend/src/Goblin.Web/Hosting/WebRuntimeConfiguration.cs).
+[KubernetesSystemSource.cs](../backend/src/Goblin.Web/Monitoring/KubernetesSystemSource.cs)
+owns health-warning thresholds;
+[SystemMonitor.cs](../backend/src/Goblin.Web/Monitoring/SystemMonitor.cs) owns when
+readings become stale.
+
 The controller reads its own node through the Kubernetes API and kubelet summary over
 TLS with CA and hostname validation. Public responses contain selected measurements,
 never pod specs, raw kubelet data, credentials, or upstream errors. Custom installations
@@ -30,7 +38,8 @@ mutations. Other custom resources require explicit RBAC.
 Goblin's [Headlamp proxy](../backend/src/Goblin.Web/Http/HeadlampProxy.cs) strips
 browser credentials, impersonation, and proxy headers and restricts operations.
 Administration, plugin installation, cluster import, and external proxying are
-unavailable. Long streams reconnect to recheck authorization. Headlamp is trusted code
+unavailable. Watch and log streams end after five minutes and reconnect to recheck
+authorization. Headlamp is trusted code
 running on Goblin's origin; update its inline-script CSP hashes and run browser checks
 when upgrading it.
 

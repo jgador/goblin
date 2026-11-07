@@ -15,7 +15,8 @@ Runtime errors require failure attention even when Codex suggests retrying them.
 turns have tools disabled. Repository tools run only within the
 [execution sandbox](execution-hosting.md). Broken transport retires the old process
 before a new one starts; transport recovery cannot relaunch claimed Work. Credentials,
-RPC payloads, raw stderr, and upstream error bodies stay private.
+RPC payloads, and upstream error bodies stay private. Raw Codex stderr is drained and
+discarded because it can contain authentication details.
 
 [Transport tests](../backend/tests/Goblin.Tests/) and
 [protocol tests](../backend/tests/Goblin.Protocol.Tests/) own framing, correlation,
@@ -27,6 +28,8 @@ session resume and live approval prompts are not supported.
 The Work Start and Retry options select a model and supported reasoning effort. Choices
 remain per-Work browser drafts until execution; a connection change resets them.
 Attempts preserve requested and reported models independently of later catalog changes.
+If Codex rejects the selected model, Work follows normal failure and attention rules;
+Goblin never automatically substitutes another model or retries the attempt.
 
 Discovery uses App Server model metadata, scoped to the account generation and
 executable identity. A failed refresh keeps a stale catalog for the same account; a

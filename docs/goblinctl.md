@@ -21,6 +21,14 @@ infrastructure and private-directory checks. They are read-only, support version
 and fail when unhealthy. They do not prove database authentication or model execution.
 Private installation logs require host access.
 
+On an installed host, inspect progress, diagnose infrastructure, and follow private logs:
+
+```bash
+sudo goblinctl install status --json
+sudo goblinctl doctor --json
+sudo goblinctl logs --follow
+```
+
 Password replacement is explicit and never takes passwords in command arguments. On an
 installed host it requires completed installation, updates the Secret and verifier, and
 restarts the application, ending sessions. If replacement fails after updating the
@@ -51,7 +59,8 @@ deleting data. See [WSL recovery](../deploy/k3s/README.md#progress-and-logs).
 
 Downloads and image pulls have bounded retries; these transport policies do not apply to
 Work. Read their tuning and timeout definitions in the
-[embedded installer](../deploy/azure/setup/installer.sh). Public progress contains
+[embedded installer](../deploy/azure/setup/installer.sh), including
+`GOBLIN_IMAGE_PULL_WORKERS` for image-download concurrency. Public progress contains
 authored safe events; compiler output, credentials, and upstream errors remain in
 private host logs.
 

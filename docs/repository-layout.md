@@ -26,7 +26,8 @@ container-dependent behavior use the [WSL k3s workflow](../deploy/k3s/README.md)
 
 [Makefile](../Makefile) and [Makefile.dev](../Makefile.dev) own commands and ordering.
 `make help` lists them. Workflows remain serial even with `make -j` because they share
-outputs. Pass tool flags with `ARGS` and Rust selectors with `CARGO_ARGS`, for example:
+outputs. Follow target naming conventions in those files' headers when adding commands.
+Pass tool flags with `ARGS` and Rust selectors with `CARGO_ARGS`, for example:
 
 ```bash
 make browser-test ARGS="tests/e2e/setup.spec.ts --headed"
@@ -127,8 +128,18 @@ Browser output belongs to `frontend/dist/` and is copied into the application's
 [StaticAssets.cs](../backend/src/Goblin.Web/Http/StaticAssets.cs) explicitly maps
 browser modules and routes. New modules need routes; the
 [browser asset tests](../tests/deployment/browser-assets.test.ts) check dependencies.
+Connection screens share `/connection/panel.html`; add provider-specific behavior to
+that shared route rather than creating separate panels.
+
+[Codex schema inputs](../backend/schemas/codex/) change with the runtime pin; follow
+[protocol regeneration](../backend/src/Goblin.Protocol/README.md). The setup UI's
+`deploy/azure/setup/app.js` stays JavaScript because
+[goblinctl embeds it directly](../tools/goblinctl/src/assets.rs), without a frontend
+build step.
 
 The [Dockerfile](../Dockerfile) and [.dockerignore](../.dockerignore) define production
 inputs and exclusions. Keep developer tools and private runtime state out of images.
 Original artwork stays under [assets/branding](../assets/branding/README.md); only
-required runtime copies belong in public assets.
+required runtime copies belong in public assets. Keep `frontend/public/assets/branding/`
+in the application Docker build context: the Slack assembly embeds its upload icon from
+that source directory. The ChatGPT logo is published as browser content.

@@ -127,3 +127,12 @@ and results. PostgreSQL holds observations, never workspace archives. Tools outs
 replacement; memory provides no shared filesystem cache. The
 [setup-memory policy tests](../backend/tests/Goblin.Application.Tests/GitRepositorySetupMemoryPolicyTests.cs)
 cover validation and recall boundaries.
+
+Recall and verification are bounded. The
+[store](../backend/src/Goblin.Application/GitRepositories/GitRepositorySetupStore.cs)
+limits recall candidates;
+[workspace verification](../backend/src/Goblin.Execution/GitRepositorySetupWorkspace.cs)
+owns selection size and batch deadlines, and the
+[command runner](../backend/src/Goblin.Execution/GitRepositorySetupCommandRunner.cs)
+owns per-check limits. Treat reaching a bound as incomplete evidence, never permission
+to replay unchecked setup.

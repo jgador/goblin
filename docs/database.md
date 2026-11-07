@@ -252,7 +252,11 @@ deploying Goblin. When Work is enabled, `/readyz` checks the database.
 
 Run `make database-test` against a development profile. The tests create and drop
 uniquely named databases. Without the test connections, database tests skip and ordinary
-tests need no server.
+tests need no server. `GOBLIN_TEST_POSTGRES_APP` opts in to durable Work HTTP and browser
+journeys; PostgreSQL schema integration suites also need `GOBLIN_TEST_POSTGRES_ADMIN`.
+[The environment catalog](../config/environment.mts) defines both connections. The
+profile runner supplies them with `--usage tests`; report database-dependent skips
+separately from passing fixture tests.
 
 To run HTTP and browser journeys against a migrated, disposable development database:
 
