@@ -1,60 +1,78 @@
 # Work lifecycle core
 
-`backend/src/Goblin.Core/Work/` owns the Work product model. `Goblin.Application`
-saves Work snapshots, commands, conversations, and attempt rows in PostgreSQL and
-dispatches through Wolverine. [Workspace lifecycle](workspace-lifecycle.md) covers
-multi-turn attempts, Git checkpoints, and PVCs. The [Work interface](work-centered-ui.md)
-covers the UI.
+`backend/src/Goblin.Core/Work/` owns the Work product model. `Goblin.Application` saves
+Work snapshots, commands, conversations, and attempt rows in PostgreSQL and dispatches
+through Wolverine. [Workspace lifecycle](workspace-lifecycle.md) covers multi-turn
+attempts, Git checkpoints, and PVCs.
+
+## Using Work
+
+In the browser, **Create work** saves a goal and assigns the default agent; **Start**
+begins execution separately. An authorized Slack DM or mention creates and starts Work;
+see [Slack](slack-integration.md). An untracked browser conversation stores context
+without running an agent; **Track this work** creates Work from it.
+
+The current status panel offers the next permitted action. Answer questions, review
+results with **Approve** or **Request changes**, and recover failures with an explicit
+retry or reconciliation. Repository setup uses a saved authorization preview; see
+[repository authority](git-repository-intent.md). Reading or expanding content never
+submits a command. Execution details preserve agent, runtime, requested and reported
+model, branch, and environment provenance.
+
+If a command response is lost, **Resend command** sends the original command ID and
+payload; **Keep saved state** keeps the server view. Refresh never replays a command.
+Drafts survive navigation within the page; unsent conversation drafts do not survive a
+reload. Browser search covers loaded content, not a server index.
+
+**Settings → Connections** manages Codex, GitHub, Slack, and the private ChatGPT plugin.
+Knowledge indexing and Teams are unavailable. Workspace inspection is currently an
+[API](workspace-lifecycle.md#inspection), without a browser file or terminal view. The
+[browser journeys](../tests/e2e/) exercise navigation, draft preservation, command
+recovery, focus, and accessibility.
 
 ## Product identities
 
-Goblin IDs are positive `long` / `bigint` values. Work HTTP responses encode them
-as decimal strings, and commands accept strings, because JavaScript numbers cannot
-hold the full 64-bit range. Runtime session references are opaque strings.
+Goblin IDs are positive `long` / `bigint` values. Work HTTP responses encode them as
+decimal strings, and commands accept strings, because JavaScript numbers cannot hold the
+full 64-bit range. Runtime session references are opaque strings.
 
-Before building a command, the browser posts `{ "kinds": ["Command", "Work"] }`
-to `/api/identities` and gets `{ "ids": ["1", "1"] }` in the same order. The
-endpoint accepts one to four of `Command`, `Work`, `Conversation`, `Message`, and
-`Inspection`. Each kind uses its own sequence, so IDs of different kinds can be
-equal. The browser keeps the full command, with its reserved IDs, to resend it
-after an unconfirmed response. Sequence gaps are expected.
-
-Attempt IDs are reserved inside the command transaction. Claim owners, decision
-IDs, and context message IDs use `work_event_id_seq`. The saved Work snapshot
-(schema version 2) is the source of truth; summary columns cannot replace it.
+Clients reserve IDs through the
+[identity endpoint](../backend/src/Goblin.Web/Http/Endpoints/WorkEndpoints.cs) before
+submitting commands and retain them after an unconfirmed response. Different identity
+kinds can have equal IDs; sequence gaps are expected. Attempts reserve their IDs in the
+command transaction. The saved Work snapshot is the source of truth; summary columns
+cannot replace it.
 
 ## Attention belongs to Work
 
-Work status is one of `Ready`, `Queued`, `InProgress`, `Cancelling`,
-`NeedsAttention`, `Completed`, or `Cancelled`. `NeedsAttention` always has one
-attention reason. Every observed failure requires attention, including temporary
-failures and failures before execution starts. Successful runtime execution never
-completes Work.
+The [core types](../backend/src/Goblin.Core/Work/WorkTypes.cs) define statuses and wire
+values. `NeedsAttention` always has one attention reason. Every observed failure
+requires attention, including temporary failures and failures before execution starts.
+Successful runtime execution never completes Work.
 
 | Attention reason | Next step |
 | --- | --- |
-| `InputRequired` | `Answer` the current decision. A paused (`Waiting`) attempt queues its next runtime turn; otherwise Work returns to `Ready`. An answer that names a repository or changes delivery scope asks for repository setup instead. |
+| `InputRequired` | `Answer` the current decision. A paused (`Waiting`) attempt queues its next runtime turn; otherwise Work returns to `Ready`. Repository choices and delivery changes still follow the authorization rules. |
 | `GitRepositoryRequired` (wire: `RepositoryRequired`) | `PrepareRepository`, then `AuthorizeRepository` or `DenyRepository` the saved preview. Enabled repositories start directly. |
 | `ResultReview` | `Approve` (Work becomes `Completed`) or `RequestChanges` (Work returns to `Ready`). |
 | `Failure` | `Retry` (new attempt) or `Cancel`. |
 | `UncertainExecution` | `Reconcile`, or `Cancel` and wait for confirmation. Retry is rejected until the stop is confirmed. |
 | `CleanupRequired` | `Reconcile` the failed cleanup. The outcome stays saved. |
 
-While cleanup is pending, answer, approve, request changes, cancel, retry, and
-new attempts are rejected. Confirmed cleanup restores the earlier `Failure`,
-`GitRepositoryRequired`, `InputRequired`, or `ResultReview` attention, or
-`Cancelled`. It never approves or retries.
+While cleanup is pending, answer, approve, request changes, cancel, retry, and new
+attempts are rejected. Confirmed cleanup restores the earlier `Failure`,
+`GitRepositoryRequired`, `InputRequired`, or `ResultReview` attention, or `Cancelled`.
+It never approves or retries.
 
-Core transitions never launch processes. Live tool approvals do not exist yet.
+Core transitions never launch processes. Repository tools run within the authorized
+sandbox without live tool approvals.
 
 ## Execution ownership and recovery
 
-Attempt status is one of `Queued`, `Starting`, `Running`, `Waiting`,
-`CancellationRequested`, `Succeeded`, `Failed`, `Uncertain`, or `Cancelled`.
-The normal path is `Queued` → `Starting` → `Running` → `Succeeded`. Each attempt
-keeps its agent and execution target. The requested model is stored separately
-from the model and session the runtime reports. Later configuration changes do
-not rewrite earlier attempts.
+The normal attempt path is `Queued` → `Starting` → `Running` → `Succeeded`. Each attempt
+keeps its agent and execution target. The requested model is stored separately from the
+model and session the runtime reports. Later configuration changes do not rewrite
+earlier attempts.
 
 - `TryClaimExecution` records the owner and environment before an external
   launch. Repeated claims return false, even for the same owner. Events from
@@ -75,26 +93,20 @@ not rewrite earlier attempts.
   the repository pod and deletes its credential secret. A cleanup failure moves
   Work to `CleanupRequired` and blocks new attempts.
 
-Command transactions take a PostgreSQL advisory lock. A unique index allows one
-active, cleanup-pending, or compute-retaining attempt per connection. State,
-history, the command receipt, and Wolverine dispatch intent commit together; the
-claim commits before Goblin contacts the host. A repeated command ID with the same
-payload returns the saved receipt; a different payload is rejected. Stale expected
-versions are rejected.
+Database concurrency enforcement allows one active, cleanup-pending, or
+compute-retaining attempt per connection. State, history, the command receipt, and
+Wolverine dispatch intent commit together; the claim commits before Goblin contacts the
+host. A repeated command ID with the same payload returns the saved receipt; a different
+payload is rejected. Stale expected versions are rejected.
 
-Each store operation creates its own EF Core context from
-`IDbContextFactory<GoblinDbContext>` and, for commands, a fresh Wolverine outbox.
-Stores keep no tracked entities between calls.
-
-Host journals keep failure evidence while PostgreSQL is unavailable; recovery
-applies it first. See [execution hosting](execution-hosting.md) for fencing and
-environments.
+Host journals keep failure evidence while PostgreSQL is unavailable; recovery applies it
+first. See [execution hosting](execution-hosting.md) for fencing and environments.
 
 ## Boundaries and verification
 
-`Goblin.Core` depends only on the .NET base library; an architecture test checks
-this. Failure transitions take Goblin `FailureKind` values, not upstream error
-text. Core rule errors carry no HTTP status codes.
+`Goblin.Core` depends only on the .NET base library; an architecture test checks this.
+Failure transitions take Goblin `FailureKind` values, not upstream error text. Core rule
+errors carry no HTTP status codes.
 
 ```bash
 dotnet test backend/tests/Goblin.Core.Tests
@@ -105,11 +117,11 @@ dispatch, restart, uncertainty, and cleanup. Core tests do not replace them.
 
 ## Repository authority
 
-[Repository intent](git-repository-intent.md) owns repository selection,
-authorization, and delivery. The lifecycle rules are:
+[Repository intent](git-repository-intent.md) owns repository selection, authorization,
+and delivery. The lifecycle rules are:
 
-- A repository named in an objective, context, or answer creates a setup request,
-  never access by itself.
+- Naming a repository in an objective, context, or answer never grants access by
+  itself; execution requires standing enablement or approval of a saved preview.
 - An enabled repository starts with a fresh grant. A disabled repository needs a
   saved preview and explicit approval; the attempt, receipt, enablement, and
   dispatch intent commit together.

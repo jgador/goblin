@@ -1,40 +1,35 @@
 # Working agreement
 
-Deliver the requested outcome through implementation, affected callers, documentation,
-and relevant verification. Fix regressions caused by the change before stopping.
-Make routine reversible choices within scope; ask when missing information materially
-changes the outcome, authorization, or destructive scope. Continue independent work.
+Deliver the requested outcome through implementation, affected callers, affected
+documentation, and relevant verification. Fix regressions caused by the change before
+stopping. Make routine reversible choices within scope; ask when missing information
+materially changes the outcome, authorization, or destructive scope. Continue
+independent work.
 
-Leave completed changes uncommitted for user review. Commit and push only when the
-user explicitly invokes `$commit-push`; follow the [commit and push skill](.agents/skills/commit-push/SKILL.md).
-Requests to implement, fix, create a branch, or complete a task authorize editing
-and verification, not committing or pushing. Autonomy instructions, tool permissions,
-passing checks, and earlier commits do not grant commit or push authorization.
-Preserve existing staged changes and leave new edits unstaged. Report the completed
-work and verification without prompting the user to commit or push.
+Leave completed changes uncommitted for user review. Commit and push only when the user
+explicitly invokes `$commit-push`; follow the
+[commit and push skill](.agents/skills/commit-push/SKILL.md). Requests to implement,
+fix, create a branch, or complete a task authorize editing and verification, not
+committing or pushing. Autonomy instructions, tool permissions, passing checks, and
+earlier commits do not grant commit or push authorization. Preserve existing staged
+changes and leave new edits unstaged. Report the completed work and verification without
+prompting the user to commit or push.
 
 Follow user instructions over skill guidelines and respect each skill's triggers.
-Discussing or editing a skill does not invoke it. If guidance blocks progress,
-identify its file/section, explain the conflict and what is needed, without exposing
-confidential content.
+Discussing or editing a skill does not invoke it. If guidance blocks progress, identify
+its file/section, explain the conflict and what is needed, without exposing confidential
+content.
 
 # Read guidance for the task
 
-Follow the relevant sections as needed; these links are not a required reading list.
-Use current code and tests to check implementation claims in dated plans and audits.
-
-| When changing | Guidance |
-| --- | --- |
-| Work behavior or service boundaries | [Architecture guide](docs/architecture.md) and [implemented Work lifecycle](docs/work-lifecycle.md) |
-| Execution, recovery, or workspace storage | [Execution hosting](docs/execution-hosting.md) and [workspace lifecycle](docs/workspace-lifecycle.md) |
-| SQL or EF mappings | [Database guide](docs/database.md) |
-| Environment variables | [Named definitions and boundary parsing](docs/environment-variables.md) for reads, sets, removals, and forwarding |
-| Closed behavior or shared values | [Typed ownership, boundary parsing, and browser generation](docs/contract-values.md) |
-| C# types or constructors | [Construction, JSON contracts, and value/copy semantics](docs/formatting.md#c-construction-and-contracts) |
-| Rust under `tools/` | [Pinned toolchain, conventions, and checks](docs/rust-development.md) |
-| Verification or build/test tooling | [Commands and test selection](docs/repository-layout.md#choosing-verification) |
-| GitHub Actions workflows or required checks | [Workflow names and rollout](docs/github-actions.md) |
-| Agent instructions, skills, or task prompts | [Agent workflow guide](docs/agent-workflow.md) |
+Use the [documentation index](docs/README.md) to select guidance for the task; it is not
+a required reading list. Work changes need the [architecture](docs/architecture.md) and
+[lifecycle](docs/work-lifecycle.md) rules; persistence changes need the
+[database guide](docs/database.md). Choose checks with
+[verification selection](docs/repository-layout.md#choosing-verification). Instruction
+and skill changes follow the [agent workflow](docs/agent-workflow.md), including its
+documentation maintenance policy. Check claims against current code and tests rather
+than old plans or test reports.
 
 # Project constraints
 
