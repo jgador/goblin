@@ -1,0 +1,35 @@
+{
+  "Count": 2000,
+  "Seconds": 0.0794477,
+  "RecordsPerSecond": 25173.793577410044,
+  "DatabaseBytes": 1318912,
+  "ProcessRssBytes": 81743872,
+  "ProcessCpuSeconds": 0.08566,
+  "IngestionAverageProcessCpuPercent": 107.81935789204722,
+  "FtsImmediatelySearchable": true,
+  "Pending": 2000,
+  "Vectors": 0,
+  "FtsAverageMs": 0.09840600000000002,
+  "FtsP95Ms": 0.1702,
+  "NoiseFilteredCount": 396,
+  "NoiseFilteredPercent": 19.8,
+  "TokenLengths": {
+    "Min": 3,
+    "Median": 51,
+    "P95": 114,
+    "Max": 512,
+    "TruncatedAt512": 2
+  },
+  "Resources": {
+    "SampleCount": 4,
+    "PeakRssBytes": 81715200,
+    "MedianRssBytes": 81715200,
+    "AverageProcessCpuPercent": 61.90433783732458,
+    "PeakProcessCpuPercent": 110.83083286100508,
+    "AverageCapacityCpuPercent": 7.67089928500944,
+    "PeakCapacityCpuPercent": 13.867435429866957,
+    "PeakGcHeapBytes": 17409960,
+    "PeakThreads": 11,
+    "MinimumAvailableRamBytes": 6647631872
+  }
+}

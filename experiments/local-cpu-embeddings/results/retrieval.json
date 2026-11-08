@@ -1,0 +1,1904 @@
+{
+  "Model": "bge-int8.onnx",
+  "Embedded": 2000,
+  "RrfK": 60,
+  "CandidateLimit": 50,
+  "Results": [
+    {
+      "Query": "Why did the production deployment fail?",
+      "Kind": "realistic",
+      "Relevant": [
+        1,
+        2,
+        3,
+        4,
+        8,
+        11
+      ],
+      "LexicalMs": 10.5101,
+      "QueryEmbeddingMs": 18.8511,
+      "VectorScanMs": 16.8527,
+      "FusionMs": 1.2382,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 4,
+            "Score": -8.095803750945427,
+            "Content": "The production service would not boot because the operating system crypto dependency was absent. Adding the OpenSSL runtime package restored successful launches.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 2,
+            "Score": -7.793695218450854,
+            "Content": "The production release could not complete because the database schema upgrade ran longer than the permitted execution period. The team restored the previous application version.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 248,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-12, deployment 1147, issue #747.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 404,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-27, deployment 1303, issue #903.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 494,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-23, deployment 1393, issue #993.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0.3333333333333333,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 694,
+            "Score": 0.7018308498026613,
+            "Content": "Follow-up from Leon in the engineering thread: A release was rolled back after its configuration file omitted the connection setting. Repository https://github.com/example/deploy-tools, branch experiment/deployment-35, deployment 1593, issue #1193. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 856,
+            "Score": 0.7006426259008975,
+            "Content": "Follow-up from Alex in the engineering thread: Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/deploy-tools, branch experiment/build-9, deployment 1755, issue #1355. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.",
+            "Topic": "build"
+          },
+          {
+            "Id": 1574,
+            "Score": 0.7003010689939231,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-22, deployment 2473, issue #2073.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1959,
+            "Score": 0.6992610637482812,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/payments-api, branch experiment/deployment-31, deployment 2858, issue #2458.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 850,
+            "Score": 0.6970350895227284,
+            "Content": "Follow-up from Leon in the engineering thread: A release was rolled back after its configuration file omitted the connection setting. Repository https://github.com/example/deploy-tools, branch experiment/deployment-3, deployment 1749, issue #1349. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0.025
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 404,
+            "Score": 0.027529761904761904,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-27, deployment 1303, issue #903.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1976,
+            "Score": 0.027402402402402402,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-1, deployment 2875, issue #2475.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 806,
+            "Score": 0.027346637102734665,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-6, deployment 1705, issue #1305.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1418,
+            "Score": 0.026050420168067225,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-7, deployment 2317, issue #1917.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1274,
+            "Score": 0.025728708679368183,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-4, deployment 2173, issue #1773.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0.045454545454545456
+      }
+    },
+    {
+      "Query": "What package fixed the API startup problem?",
+      "Kind": "realistic",
+      "Relevant": [
+        3,
+        4,
+        8
+      ],
+      "LexicalMs": 1.4668,
+      "QueryEmbeddingMs": 4.8946,
+      "VectorScanMs": 8.2101,
+      "FusionMs": 0.0612,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 3,
+            "Score": -25.484626037043178,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 8,
+            "Score": -10.359354794462025,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 57,
+            "Score": -5.733260612875013,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/payments-api, branch experiment/cache-9, deployment 956, issue #556.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 213,
+            "Score": -5.733260612875013,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/payments-api, branch experiment/cache-24, deployment 1112, issue #712.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 369,
+            "Score": -5.733260612875013,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/payments-api, branch experiment/cache-39, deployment 1268, issue #868.",
+            "Topic": "cache"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 3,
+            "Score": 0.8283609938391692,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 8,
+            "Score": 0.7784260422480429,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 627,
+            "Score": 0.7567572044113717,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/payments-api, branch experiment/build-15, deployment 1526, issue #1126.",
+            "Topic": "build"
+          },
+          {
+            "Id": 1797,
+            "Score": 0.7567175406060329,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/payments-api, branch experiment/build-10, deployment 2696, issue #2296.",
+            "Topic": "build"
+          },
+          {
+            "Id": 315,
+            "Score": 0.7556052062639083,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/payments-api, branch experiment/build-32, deployment 1214, issue #814.",
+            "Topic": "build"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 3,
+            "Score": 0.03278688524590164,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 8,
+            "Score": 0.03225806451612903,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 213,
+            "Score": 0.029910714285714284,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/payments-api, branch experiment/cache-24, deployment 1112, issue #712.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 627,
+            "Score": 0.02976190476190476,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/payments-api, branch experiment/build-15, deployment 1526, issue #1126.",
+            "Topic": "build"
+          },
+          {
+            "Id": 315,
+            "Score": 0.02946912242686891,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/payments-api, branch experiment/build-32, deployment 1214, issue #814.",
+            "Topic": "build"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "What was decided about automatically creating pull requests?",
+      "Kind": "realistic",
+      "Relevant": [
+        5,
+        10
+      ],
+      "LexicalMs": 0.613,
+      "QueryEmbeddingMs": 5.0064,
+      "VectorScanMs": 7.9708,
+      "FusionMs": 0.0371,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 5,
+            "Score": -27.872356107867063,
+            "Content": "Project decision: stop automatically creating pull requests for goblinctl release changes. Maintaining the automation and its guardrails cost more than it saved. Document a manual release checklist.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 8,
+            "Score": -7.687646704129267,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 10,
+            "Score": -7.221123655804212,
+            "Content": "We agreed to maintain release steps by hand rather than open change requests every time the installer input changes. Humans will review which client versions need publishing.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 206,
+            "Score": -4.227387141443873,
+            "Content": "Do not retry failed Work automatically. Surface attention and wait for the operator. Repository https://github.com/example/roslynkit, branch experiment/decision_other-17, deployment 1105, issue #705.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 674,
+            "Score": -4.227387141443873,
+            "Content": "Do not retry failed Work automatically. Surface attention and wait for the operator. Repository https://github.com/example/roslynkit, branch experiment/decision_other-15, deployment 1573, issue #1173.",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 5,
+            "Score": 0.776705664921792,
+            "Content": "Project decision: stop automatically creating pull requests for goblinctl release changes. Maintaining the automation and its guardrails cost more than it saved. Document a manual release checklist.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 1938,
+            "Score": 0.6702238480264295,
+            "Content": "Normalize repeated request lines before sending anomaly summaries to an agent. Repository https://github.com/example/relay-service, branch experiment/logging-10, deployment 2837, issue #2437.",
+            "Topic": "logging"
+          },
+          {
+            "Id": 1158,
+            "Score": 0.669086126592525,
+            "Content": "Normalize repeated request lines before sending anomaly summaries to an agent. Repository https://github.com/example/relay-service, branch experiment/logging-29, deployment 2057, issue #1657.",
+            "Topic": "logging"
+          },
+          {
+            "Id": 507,
+            "Score": 0.6677427055905696,
+            "Content": "Normalize repeated request lines before sending anomaly summaries to an agent. Repository https://github.com/example/payments-api, branch experiment/logging-36, deployment 1406, issue #1006.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "logging"
+          },
+          {
+            "Id": 144,
+            "Score": 0.6675390686151559,
+            "Content": "Normalize repeated request lines before sending anomaly summaries to an agent. Repository https://github.com/example/relay-service, branch experiment/logging-2, deployment 1043, issue #643.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "logging"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 5,
+            "Score": 0.03278688524590164,
+            "Content": "Project decision: stop automatically creating pull requests for goblinctl release changes. Maintaining the automation and its guardrails cost more than it saved. Document a manual release checklist.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 1827,
+            "Score": 0.021572002294893863,
+            "Content": "Do not retry failed Work automatically. Surface attention and wait for the operator. Repository https://github.com/example/payments-api, branch experiment/decision_other-40, deployment 2726, issue #2326.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 969,
+            "Score": 0.02097902097902098,
+            "Content": "Do not retry failed Work automatically. Surface attention and wait for the operator. Repository https://github.com/example/payments-api, branch experiment/decision_other-28, deployment 1868, issue #1468.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 8,
+            "Score": 0.016129032258064516,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 1938,
+            "Score": 0.016129032258064516,
+            "Content": "Normalize repeated request lines before sending anomaly summaries to an agent. Repository https://github.com/example/relay-service, branch experiment/logging-10, deployment 2837, issue #2437.",
+            "Topic": "logging"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "What happened with migration 0048?",
+      "Kind": "realistic",
+      "Relevant": [
+        1,
+        11
+      ],
+      "LexicalMs": 0.2687,
+      "QueryEmbeddingMs": 4.3842,
+      "VectorScanMs": 10.0081,
+      "FusionMs": 0.0158,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": -16.191607501890854,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 11,
+            "Score": -15.78372248679152,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": 0.7059956624930521,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 11,
+            "Score": 0.6904779211826622,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 666,
+            "Score": 0.6515647379371785,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/relay-service, branch experiment/build-7, deployment 1565, issue #1165.",
+            "Topic": "build"
+          },
+          {
+            "Id": 1290,
+            "Score": 0.6504243986564084,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/relay-service, branch experiment/build-20, deployment 2189, issue #1789.",
+            "Topic": "build"
+          },
+          {
+            "Id": 978,
+            "Score": 0.6501551326908839,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/relay-service, branch experiment/build-37, deployment 1877, issue #1477.",
+            "Topic": "build"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": 0.03278688524590164,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 11,
+            "Score": 0.03225806451612903,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 666,
+            "Score": 0.015873015873015872,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/relay-service, branch experiment/build-7, deployment 1565, issue #1165.",
+            "Topic": "build"
+          },
+          {
+            "Id": 1290,
+            "Score": 0.015625,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/relay-service, branch experiment/build-20, deployment 2189, issue #1789.",
+            "Topic": "build"
+          },
+          {
+            "Id": 978,
+            "Score": 0.015384615384615385,
+            "Content": "Restore failed with NU1301 while reading the package index; the proxy endpoint was unreachable. Repository https://github.com/example/relay-service, branch experiment/build-37, deployment 1877, issue #1477.",
+            "Topic": "build"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "What do we know about repository authorization?",
+      "Kind": "realistic",
+      "Relevant": [
+        6,
+        9
+      ],
+      "LexicalMs": 2.6559,
+      "QueryEmbeddingMs": 4.4651,
+      "VectorScanMs": 8.7664,
+      "FusionMs": 0.0325,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 428,
+            "Score": -3.2133154016713203,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/roslynkit, branch experiment/authorization_other-4, deployment 1327, issue #927.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 740,
+            "Score": -3.2133154016713203,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/roslynkit, branch experiment/authorization_other-34, deployment 1639, issue #1239.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 896,
+            "Score": -3.2133154016713203,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/roslynkit, branch experiment/authorization_other-2, deployment 1795, issue #1395.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 1754,
+            "Score": -3.2133154016713203,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/roslynkit, branch experiment/authorization_other-14, deployment 2653, issue #2253.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 1910,
+            "Score": -3.2133154016713203,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/roslynkit, branch experiment/authorization_other-29, deployment 2809, issue #2409.",
+            "Topic": "authorization_other"
+          }
+        ],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0.020833333333333332
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 6,
+            "Score": 0.7810324024057991,
+            "Content": "Repository authorization: https://github.com/jgador/goblin must first be explicitly enabled in the Goblin UI. A user then approves repository access for the individual Work before execution.",
+            "Topic": "authorization"
+          },
+          {
+            "Id": 9,
+            "Score": 0.7529405483938376,
+            "Content": "A repository being listed in the catalog does not grant execution permission. Work-scoped consent is required, and credentials must never enter conversation history.",
+            "Topic": "authorization"
+          },
+          {
+            "Id": 823,
+            "Score": 0.7355954350350373,
+            "Content": "Follow-up from Sam in the engineering thread: A Slack workspace invite does not permit opening a private repository. Repository https://github.com/example/goblin, branch experiment/authorization_other-23, deployment 1722, issue #1322. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 667,
+            "Score": 0.7318061026505802,
+            "Content": "Follow-up from Sam in the engineering thread: A Slack workspace invite does not permit opening a private repository. Repository https://github.com/example/goblin, branch experiment/authorization_other-8, deployment 1566, issue #1166. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 628,
+            "Score": 0.7317046997755767,
+            "Content": "Follow-up from Alex in the engineering thread: A Slack workspace invite does not permit opening a private repository. Repository https://github.com/example/deploy-tools, branch experiment/authorization_other-16, deployment 1527, issue #1127. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "authorization_other"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 6,
+            "Score": 0.02565270188221008,
+            "Content": "Repository authorization: https://github.com/jgador/goblin must first be explicitly enabled in the Goblin UI. A user then approves repository access for the individual Work before execution.",
+            "Topic": "authorization"
+          },
+          {
+            "Id": 1910,
+            "Score": 0.024818577648766327,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/roslynkit, branch experiment/authorization_other-29, deployment 2809, issue #2409.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 77,
+            "Score": 0.02418463239358762,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/work-console, branch experiment/authorization_other-29, deployment 976, issue #576.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 233,
+            "Score": 0.02388019427954668,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/work-console, branch experiment/authorization_other-44, deployment 1132, issue #732.",
+            "Topic": "authorization_other"
+          },
+          {
+            "Id": 1325,
+            "Score": 0.02350255170561375,
+            "Content": "A Slack workspace invite does not permit opening a private repository. Repository https://github.com/example/work-console, branch experiment/authorization_other-8, deployment 2224, issue #1824.",
+            "Topic": "authorization_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "Which deployment problem involved SSL libraries?",
+      "Kind": "realistic",
+      "Relevant": [
+        3,
+        4,
+        8
+      ],
+      "LexicalMs": 2.6553,
+      "QueryEmbeddingMs": 4.4218,
+      "VectorScanMs": 6.4507,
+      "FusionMs": 0.0296,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 3,
+            "Score": -7.992265351014806,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 248,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-12, deployment 1147, issue #747.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 404,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-27, deployment 1303, issue #903.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 494,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-23, deployment 1393, issue #993.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 806,
+            "Score": -1.6980913334098169E-06,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-6, deployment 1705, issue #1305.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0.3333333333333333,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": 0.749271800168799,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 1976,
+            "Score": 0.7204585649985802,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-1, deployment 2875, issue #2475.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 806,
+            "Score": 0.7159293263221116,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-6, deployment 1705, issue #1305.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 248,
+            "Score": 0.71370929406892,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-12, deployment 1147, issue #747.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 3,
+            "Score": 0.7136809694311523,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 3,
+            "Score": 0.03177805800756621,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 248,
+            "Score": 0.031754032258064516,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-12, deployment 1147, issue #747.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 806,
+            "Score": 0.03125763125763126,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-6, deployment 1705, issue #1305.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 494,
+            "Score": 0.030330882352941176,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-23, deployment 1393, issue #993.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1976,
+            "Score": 0.029827662395050816,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-1, deployment 2875, issue #2475.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0.3333333333333333,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "What source file handles durable Work persistence?",
+      "Kind": "realistic",
+      "Relevant": [
+        7,
+        12
+      ],
+      "LexicalMs": 1.5545,
+      "QueryEmbeddingMs": 4.4155,
+      "VectorScanMs": 9.5869,
+      "FusionMs": 0.0259,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 7,
+            "Score": -23.602413540898354,
+            "Content": "WorkStore.cs in backend/src/Goblin.Application/Work handles durable Work persistence. It commits the snapshot and dispatch intent in a transaction; Wolverine coordinates delivery.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 12,
+            "Score": -6.296547925875906,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 479,
+            "Score": -6.296547925875906,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-8, deployment 1378, issue #978.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 635,
+            "Score": -6.296547925875906,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-23, deployment 1534, issue #1134.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 1103,
+            "Score": -6.296547925875906,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-21, deployment 2002, issue #1602.",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 7,
+            "Score": 0.8079001667086914,
+            "Content": "WorkStore.cs in backend/src/Goblin.Application/Work handles durable Work persistence. It commits the snapshot and dispatch intent in a transaction; Wolverine coordinates delivery.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 1205,
+            "Score": 0.7584474531588654,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/work-console, branch experiment/cache-29, deployment 2104, issue #1704.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "cache"
+          },
+          {
+            "Id": 1678,
+            "Score": 0.7536180656927982,
+            "Content": "Follow-up from Leon in the engineering thread: A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/deploy-tools, branch experiment/cache-32, deployment 2577, issue #2177. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "cache"
+          },
+          {
+            "Id": 12,
+            "Score": 0.75051910512218,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 947,
+            "Score": 0.7430967952628293,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-6, deployment 1846, issue #1446.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 7,
+            "Score": 0.03278688524590164,
+            "Content": "WorkStore.cs in backend/src/Goblin.Application/Work handles durable Work persistence. It commits the snapshot and dispatch intent in a transaction; Wolverine coordinates delivery.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 12,
+            "Score": 0.031754032258064516,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 947,
+            "Score": 0.030536130536130537,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-6, deployment 1846, issue #1446.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 1979,
+            "Score": 0.028790389395194696,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/work-console, branch experiment/ui-4, deployment 2878, issue #2478.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 1205,
+            "Score": 0.02803379416282642,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/work-console, branch experiment/cache-29, deployment 2104, issue #1704.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "cache"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "PR #381",
+      "Kind": "identifier",
+      "Relevant": [
+        8
+      ],
+      "LexicalMs": 0.2628,
+      "QueryEmbeddingMs": 6.5593,
+      "VectorScanMs": 6.8041,
+      "FusionMs": 0.0195,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": -17.43029084718754,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 494,
+            "Score": 0.5914598930836519,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-23, deployment 1393, issue #993.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 404,
+            "Score": 0.588379585120947,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-27, deployment 1303, issue #903.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1274,
+            "Score": 0.5876005846914722,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-4, deployment 2173, issue #1773.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1886,
+            "Score": 0.587086083037093,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-5, deployment 2785, issue #2385.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1118,
+            "Score": 0.5851113510797177,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-36, deployment 2017, issue #1617.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": 0.01639344262295082,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 494,
+            "Score": 0.01639344262295082,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-23, deployment 1393, issue #993.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 404,
+            "Score": 0.016129032258064516,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-27, deployment 1303, issue #903.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1274,
+            "Score": 0.015873015873015872,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-4, deployment 2173, issue #1773.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1886,
+            "Score": 0.015625,
+            "Content": "Deployment readiness stayed false because the HTTP health endpoint returned 503. Repository https://github.com/example/roslynkit, branch experiment/deployment-5, deployment 2785, issue #2385.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "libssl3",
+      "Kind": "identifier",
+      "Relevant": [
+        3,
+        8
+      ],
+      "LexicalMs": 0.2379,
+      "QueryEmbeddingMs": 4.1036,
+      "VectorScanMs": 6.5507,
+      "FusionMs": 0.0159,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": -10.442381268750273,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 3,
+            "Score": -7.424295139370795,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": 0.7466583148365089,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 3,
+            "Score": 0.7387755086982111,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 860,
+            "Score": 0.6166684586664815,
+            "Content": "The callback domain resolved but the TLS handshake was rejected by the proxy. Repository https://github.com/example/roslynkit, branch experiment/network-13, deployment 1759, issue #1359.",
+            "Topic": "network"
+          },
+          {
+            "Id": 704,
+            "Score": 0.6158456510445234,
+            "Content": "The callback domain resolved but the TLS handshake was rejected by the proxy. Repository https://github.com/example/roslynkit, branch experiment/network-45, deployment 1603, issue #1203.",
+            "Topic": "network"
+          },
+          {
+            "Id": 1874,
+            "Score": 0.6116640558480171,
+            "Content": "The callback domain resolved but the TLS handshake was rejected by the proxy. Repository https://github.com/example/roslynkit, branch experiment/network-40, deployment 2773, issue #2373.",
+            "Topic": "network"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": 0.03278688524590164,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 3,
+            "Score": 0.03225806451612903,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 860,
+            "Score": 0.015873015873015872,
+            "Content": "The callback domain resolved but the TLS handshake was rejected by the proxy. Repository https://github.com/example/roslynkit, branch experiment/network-13, deployment 1759, issue #1359.",
+            "Topic": "network"
+          },
+          {
+            "Id": 704,
+            "Score": 0.015625,
+            "Content": "The callback domain resolved but the TLS handshake was rejected by the proxy. Repository https://github.com/example/roslynkit, branch experiment/network-45, deployment 1603, issue #1203.",
+            "Topic": "network"
+          },
+          {
+            "Id": 1874,
+            "Score": 0.015384615384615385,
+            "Content": "The callback domain resolved but the TLS handshake was rejected by the proxy. Repository https://github.com/example/roslynkit, branch experiment/network-40, deployment 2773, issue #2373.",
+            "Topic": "network"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "migration 0048",
+      "Kind": "identifier",
+      "Relevant": [
+        1,
+        11
+      ],
+      "LexicalMs": 0.2282,
+      "QueryEmbeddingMs": 9.6421,
+      "VectorScanMs": 6.7319,
+      "FusionMs": 0.0182,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": -16.191607501890854,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 11,
+            "Score": -15.78372248679152,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 11,
+            "Score": 0.6878778835248625,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 1,
+            "Score": 0.6650483935437137,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 1488,
+            "Score": 0.6416780113324023,
+            "Content": "A duplicate key violation returned SQLSTATE 23505; inspect the idempotency key. Repository https://github.com/example/relay-service, branch experiment/database_other-30, deployment 2387, issue #1987.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 474,
+            "Score": 0.6408110929882014,
+            "Content": "A duplicate key violation returned SQLSTATE 23505; inspect the idempotency key. Repository https://github.com/example/relay-service, branch experiment/database_other-3, deployment 1373, issue #973.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 1800,
+            "Score": 0.6353715939968083,
+            "Content": "A duplicate key violation returned SQLSTATE 23505; inspect the idempotency key. Repository https://github.com/example/relay-service, branch experiment/database_other-13, deployment 2699, issue #2299.",
+            "Topic": "database_other"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": 0.03252247488101534,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 11,
+            "Score": 0.03252247488101534,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 1488,
+            "Score": 0.015873015873015872,
+            "Content": "A duplicate key violation returned SQLSTATE 23505; inspect the idempotency key. Repository https://github.com/example/relay-service, branch experiment/database_other-30, deployment 2387, issue #1987.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 474,
+            "Score": 0.015625,
+            "Content": "A duplicate key violation returned SQLSTATE 23505; inspect the idempotency key. Repository https://github.com/example/relay-service, branch experiment/database_other-3, deployment 1373, issue #973.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 1800,
+            "Score": 0.015384615384615385,
+            "Content": "A duplicate key violation returned SQLSTATE 23505; inspect the idempotency key. Repository https://github.com/example/relay-service, branch experiment/database_other-13, deployment 2699, issue #2299.",
+            "Topic": "database_other"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "WorkStore.cs",
+      "Kind": "identifier",
+      "Relevant": [
+        7
+      ],
+      "LexicalMs": 0.2776,
+      "QueryEmbeddingMs": 3.9263,
+      "VectorScanMs": 8.4228,
+      "FusionMs": 0.0189,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 7,
+            "Score": -16.779850229950185,
+            "Content": "WorkStore.cs in backend/src/Goblin.Application/Work handles durable Work persistence. It commits the snapshot and dispatch intent in a transaction; Wolverine coordinates delivery.",
+            "Topic": "persistence"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 7,
+            "Score": 0.7734411310052138,
+            "Content": "WorkStore.cs in backend/src/Goblin.Application/Work handles durable Work persistence. It commits the snapshot and dispatch intent in a transaction; Wolverine coordinates delivery.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 1185,
+            "Score": 0.6662821305659747,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/payments-api, branch experiment/workspace-9, deployment 2084, issue #1684.",
+            "Topic": "workspace"
+          },
+          {
+            "Id": 1046,
+            "Score": 0.6638777080479485,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/roslynkit, branch experiment/workspace-11, deployment 1945, issue #1545.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "workspace"
+          },
+          {
+            "Id": 15,
+            "Score": 0.6636177196908051,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/payments-api, branch experiment/workspace-14, deployment 914, issue #514.",
+            "Topic": "workspace"
+          },
+          {
+            "Id": 717,
+            "Score": 0.6632310799980132,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/payments-api, branch experiment/workspace-11, deployment 1616, issue #1216.",
+            "Topic": "workspace"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 7,
+            "Score": 0.03278688524590164,
+            "Content": "WorkStore.cs in backend/src/Goblin.Application/Work handles durable Work persistence. It commits the snapshot and dispatch intent in a transaction; Wolverine coordinates delivery.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 1185,
+            "Score": 0.016129032258064516,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/payments-api, branch experiment/workspace-9, deployment 2084, issue #1684.",
+            "Topic": "workspace"
+          },
+          {
+            "Id": 1046,
+            "Score": 0.015873015873015872,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/roslynkit, branch experiment/workspace-11, deployment 1945, issue #1545.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "workspace"
+          },
+          {
+            "Id": 15,
+            "Score": 0.015625,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/payments-api, branch experiment/workspace-14, deployment 914, issue #514.",
+            "Topic": "workspace"
+          },
+          {
+            "Id": 717,
+            "Score": 0.015384615384615385,
+            "Content": "The workspace mount was read-only; writing the build output raised EACCES. Repository https://github.com/example/payments-api, branch experiment/workspace-11, deployment 1616, issue #1216.",
+            "Topic": "workspace"
+          }
+        ],
+        "RecallAt5": 1,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "Which dependency caused the container to fail during startup?",
+      "Kind": "semantic",
+      "Relevant": [
+        3,
+        4,
+        8
+      ],
+      "LexicalMs": 0.8664,
+      "QueryEmbeddingMs": 4.9027,
+      "VectorScanMs": 6.4544,
+      "FusionMs": 0.0311,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": -8.095803750945427,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 3,
+            "Score": -7.424295139370795,
+            "Content": "The API startup problem was fixed by installing libssl3 in the execution image. Before that the process exited with error code 127 and could not load libssl.so.3.",
+            "Topic": "ssl"
+          },
+          {
+            "Id": 74,
+            "Score": -7.35150178731362,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/roslynkit, branch experiment/cache-26, deployment 973, issue #573.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 230,
+            "Score": -7.35150178731362,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/roslynkit, branch experiment/cache-41, deployment 1129, issue #729.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 1400,
+            "Score": -7.35150178731362,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/roslynkit, branch experiment/cache-36, deployment 2299, issue #1899.",
+            "Topic": "cache"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 1288,
+            "Score": 0.6995879238584166,
+            "Content": "Follow-up from Alex in the engineering thread: The npm cache is cold; dependency restoration takes longer than compilation. Repository https://github.com/example/deploy-tools, branch experiment/cache-18, deployment 2187, issue #1787. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 364,
+            "Score": 0.6940753590359918,
+            "Content": "Follow-up from Alex in the engineering thread: The npm cache is cold; dependency restoration takes longer than compilation. Repository https://github.com/example/deploy-tools, branch experiment/cache-34, deployment 1263, issue #863. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 815,
+            "Score": 0.6918110307999541,
+            "Content": "The npm cache is cold; dependency restoration takes longer than compilation. Repository https://github.com/example/work-console, branch experiment/cache-15, deployment 1714, issue #1314.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 1673,
+            "Score": 0.6887001211263168,
+            "Content": "The npm cache is cold; dependency restoration takes longer than compilation. Repository https://github.com/example/work-console, branch experiment/cache-27, deployment 2572, issue #2172.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 1948,
+            "Score": 0.6847748662927415,
+            "Content": "Follow-up from Alex in the engineering thread: Build failed with CS0246: RepositoryCatalog was not found; check the project reference. Repository https://github.com/example/deploy-tools, branch experiment/build-20, deployment 2847, issue #2447. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "build"
+          }
+        ],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0.021739130434782608
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 8,
+            "Score": 0.025827404887101765,
+            "Content": "PR #381 on branch fix/api-startup-libssl3 repairs deployment 182 by installing libssl3. Review discussion requests a smoke test before merging.",
+            "Topic": "pr381"
+          },
+          {
+            "Id": 1049,
+            "Score": 0.025645240835114255,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/work-console, branch experiment/cache-14, deployment 1948, issue #1548.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 737,
+            "Score": 0.02312889812889813,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/work-console, branch experiment/cache-31, deployment 1636, issue #1236.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 893,
+            "Score": 0.022417153996101363,
+            "Content": "A package cache eviction caused repeated downloads during the worker bootstrap. Repository https://github.com/example/work-console, branch experiment/cache-46, deployment 1792, issue #1392.",
+            "Topic": "cache"
+          },
+          {
+            "Id": 1288,
+            "Score": 0.01639344262295082,
+            "Content": "Follow-up from Alex in the engineering thread: The npm cache is cold; dependency restoration takes longer than compilation. Repository https://github.com/example/deploy-tools, branch experiment/cache-18, deployment 2187, issue #1787. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "cache"
+          }
+        ],
+        "RecallAt5": 0.3333333333333333,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "Why was the live rollout blocked by a slow schema change?",
+      "Kind": "semantic",
+      "Relevant": [
+        1,
+        2,
+        11
+      ],
+      "LexicalMs": 0.8319,
+      "QueryEmbeddingMs": 5.4876,
+      "VectorScanMs": 6.4516,
+      "FusionMs": 0.0296,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 2,
+            "Score": -8.389925114975092,
+            "Content": "The production release could not complete because the database schema upgrade ran longer than the permitted execution period. The team restored the previous application version.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 1607,
+            "Score": -4.589954700319126,
+            "Content": "A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/work-console, branch experiment/tests-8, deployment 2506, issue #2106.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "tests"
+          },
+          {
+            "Id": 788,
+            "Score": -4.534677551851695,
+            "Content": "A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/roslynkit, branch experiment/tests-35, deployment 1687, issue #1287.",
+            "Topic": "tests"
+          },
+          {
+            "Id": 944,
+            "Score": -4.534677551851695,
+            "Content": "A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/roslynkit, branch experiment/tests-3, deployment 1843, issue #1443.",
+            "Topic": "tests"
+          },
+          {
+            "Id": 1100,
+            "Score": -4.534677551851695,
+            "Content": "A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/roslynkit, branch experiment/tests-18, deployment 1999, issue #1599.",
+            "Topic": "tests"
+          }
+        ],
+        "RecallAt5": 0.3333333333333333,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 1805,
+            "Score": 0.708296523410695,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-18, deployment 2704, issue #2304.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 1310,
+            "Score": 0.7061461827253197,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-40, deployment 2209, issue #1809.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 1,
+            "Score": 0.7004615118136712,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 243,
+            "Score": 0.6978438472356316,
+            "Content": "A release was rolled back after its configuration file omitted the connection setting. Repository https://github.com/example/payments-api, branch experiment/deployment-7, deployment 1142, issue #742.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 11,
+            "Score": 0.6949729912889495,
+            "Content": "Incident follow-up: migration 0048 holds an exclusive table lock while backfilling work_events. Move the backfill to small chunks and verify timeout behavior.",
+            "Topic": "migration"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 0.3333333333333333
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 1607,
+            "Score": 0.031054405392392875,
+            "Content": "A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/work-console, branch experiment/tests-8, deployment 2506, issue #2106.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "tests"
+          },
+          {
+            "Id": 2,
+            "Score": 0.030679156908665108,
+            "Content": "The production release could not complete because the database schema upgrade ran longer than the permitted execution period. The team restored the previous application version.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 1310,
+            "Score": 0.02574441687344913,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-40, deployment 2209, issue #1809.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 615,
+            "Score": 0.024322344322344324,
+            "Content": "A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/payments-api, branch experiment/tests-3, deployment 1514, issue #1114.",
+            "Topic": "tests"
+          },
+          {
+            "Id": 298,
+            "Score": 0.024127906976744187,
+            "Content": "Follow-up from Leon in the engineering thread: A flaky clock assertion passed locally but failed on the slow CI runner. Repository https://github.com/example/deploy-tools, branch experiment/tests-15, deployment 1197, issue #797. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.",
+            "Topic": "tests"
+          }
+        ],
+        "RecallAt5": 0.3333333333333333,
+        "ReciprocalRank": 0.5
+      }
+    },
+    {
+      "Query": "Which component saves the job history reliably?",
+      "Kind": "semantic",
+      "Relevant": [
+        7,
+        12
+      ],
+      "LexicalMs": 0.3052,
+      "QueryEmbeddingMs": 4.6528,
+      "VectorScanMs": 8.5412,
+      "FusionMs": 0.0328,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 12,
+            "Score": -16.183620333425946,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 9,
+            "Score": -7.89186124339576,
+            "Content": "A repository being listed in the catalog does not grant execution permission. Work-scoped consent is required, and credentials must never enter conversation history.",
+            "Topic": "authorization"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 12,
+            "Score": 0.7199684649125402,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 1979,
+            "Score": 0.6921583684037955,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/work-console, branch experiment/ui-4, deployment 2878, issue #2478.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 1506,
+            "Score": 0.6859695661579508,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/relay-service, branch experiment/ui-1, deployment 2405, issue #2005.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 947,
+            "Score": 0.6817533555686168,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-6, deployment 1846, issue #1446.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 904,
+            "Score": 0.6814212968535003,
+            "Content": "Follow-up from Alex in the engineering thread: The work list selection preserves keyboard navigation and a visible active state. Repository https://github.com/example/deploy-tools, branch experiment/ui-10, deployment 1803, issue #1403. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 12,
+            "Score": 0.03278688524590164,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 9,
+            "Score": 0.016129032258064516,
+            "Content": "A repository being listed in the catalog does not grant execution permission. Work-scoped consent is required, and credentials must never enter conversation history.",
+            "Topic": "authorization"
+          },
+          {
+            "Id": 1979,
+            "Score": 0.016129032258064516,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/work-console, branch experiment/ui-4, deployment 2878, issue #2478.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 1506,
+            "Score": 0.015873015873015872,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/relay-service, branch experiment/ui-1, deployment 2405, issue #2005.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 947,
+            "Score": 0.015625,
+            "Content": "A durable agent identity survives its temporary runtime sessions. Repository https://github.com/example/work-console, branch experiment/decision_other-6, deployment 1846, issue #1446.\nInvestigation notes: checked the release manifest, compared configuration to the previous revision, inspected the process output, and repeated the reproduction with a fresh checkout. The change is reversible and needs a focused review. This finding is specific to the observed run and does not establish the cause of unrelated failures.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "Why did the team choose to publish client updates by hand?",
+      "Kind": "semantic",
+      "Relevant": [
+        5,
+        10
+      ],
+      "LexicalMs": 0.6455,
+      "QueryEmbeddingMs": 5.3267,
+      "VectorScanMs": 7.2012,
+      "FusionMs": 0.0282,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 10,
+            "Score": -16.372537709955765,
+            "Content": "We agreed to maintain release steps by hand rather than open change requests every time the installer input changes. Humans will review which client versions need publishing.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 2,
+            "Score": -4.41164855813091,
+            "Content": "The production release could not complete because the database schema upgrade ran longer than the permitted execution period. The team restored the previous application version.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 50,
+            "Score": -4.41164855813091,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/roslynkit, branch experiment/decision_other-2, deployment 949, issue #549.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 596,
+            "Score": -4.41164855813091,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/roslynkit, branch experiment/decision_other-31, deployment 1495, issue #1095.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 908,
+            "Score": -4.41164855813091,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/roslynkit, branch experiment/decision_other-14, deployment 1807, issue #1407.",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 10,
+            "Score": 0.7815065600751598,
+            "Content": "We agreed to maintain release steps by hand rather than open change requests every time the installer input changes. Humans will review which client versions need publishing.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 579,
+            "Score": 0.6442005953176491,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-14, deployment 1478, issue #1078.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 1359,
+            "Score": 0.6349279807737531,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-42, deployment 2258, issue #1858.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 735,
+            "Score": 0.634366540162393,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-29, deployment 1634, issue #1234.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 33,
+            "Score": 0.633722278296041,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-32, deployment 932, issue #532.",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 10,
+            "Score": 0.03278688524590164,
+            "Content": "We agreed to maintain release steps by hand rather than open change requests every time the installer input changes. Humans will review which client versions need publishing.",
+            "Topic": "automation"
+          },
+          {
+            "Id": 33,
+            "Score": 0.030090497737556562,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-32, deployment 932, issue #532.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 579,
+            "Score": 0.029827662395050816,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-14, deployment 1478, issue #1078.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 735,
+            "Score": 0.028782894736842105,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-29, deployment 1634, issue #1234.",
+            "Topic": "decision_other"
+          },
+          {
+            "Id": 1359,
+            "Score": 0.028373015873015873,
+            "Content": "The team selected a modular monolith to keep operations simple. Repository https://github.com/example/payments-api, branch experiment/decision_other-42, deployment 2258, issue #1858.",
+            "Topic": "decision_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "Why couldn\u0027t the rollout finish within its allotted time?",
+      "Kind": "semantic",
+      "Relevant": [
+        1,
+        2,
+        11
+      ],
+      "LexicalMs": 0.6442,
+      "QueryEmbeddingMs": 5.327,
+      "VectorScanMs": 6.6133,
+      "FusionMs": 0.0343,
+      "Lexical": {
+        "Top5": [
+          {
+            "Id": 134,
+            "Score": -3.745386454357794,
+            "Content": "Short bot acknowledgements can remain searchable without spending inference time. Repository https://github.com/example/roslynkit, branch experiment/memory-39, deployment 1033, issue #633.",
+            "Topic": "memory"
+          },
+          {
+            "Id": 140,
+            "Score": -3.745386454357794,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-45, deployment 1039, issue #639.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 296,
+            "Score": -3.745386454357794,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-13, deployment 1195, issue #795.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 608,
+            "Score": -3.745386454357794,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-43, deployment 1507, issue #1107.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 764,
+            "Score": -3.745386454357794,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-11, deployment 1663, issue #1263.",
+            "Topic": "database_other"
+          }
+        ],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": 0.6927322022830822,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 2,
+            "Score": 0.6471232838963203,
+            "Content": "The production release could not complete because the database schema upgrade ran longer than the permitted execution period. The team restored the previous application version.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 555,
+            "Score": 0.6378124668661371,
+            "Content": "A release was rolled back after its configuration file omitted the connection setting. Repository https://github.com/example/payments-api, branch experiment/deployment-37, deployment 1454, issue #1054.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 399,
+            "Score": 0.635860698605029,
+            "Content": "A release was rolled back after its configuration file omitted the connection setting. Repository https://github.com/example/payments-api, branch experiment/deployment-22, deployment 1298, issue #898.",
+            "Topic": "deployment"
+          },
+          {
+            "Id": 1725,
+            "Score": 0.6358130264909505,
+            "Content": "A release was rolled back after its configuration file omitted the connection setting. Repository https://github.com/example/payments-api, branch experiment/deployment-32, deployment 2624, issue #2224.",
+            "Topic": "deployment"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 1,
+            "Score": 0.01639344262295082,
+            "Content": "Deployment 182 failed because migration 0048 exceeded the configured PostgreSQL statement timeout. The release was rolled back; increasing the limit requires approval.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 134,
+            "Score": 0.01639344262295082,
+            "Content": "Short bot acknowledgements can remain searchable without spending inference time. Repository https://github.com/example/roslynkit, branch experiment/memory-39, deployment 1033, issue #633.",
+            "Topic": "memory"
+          },
+          {
+            "Id": 2,
+            "Score": 0.016129032258064516,
+            "Content": "The production release could not complete because the database schema upgrade ran longer than the permitted execution period. The team restored the previous application version.",
+            "Topic": "migration"
+          },
+          {
+            "Id": 140,
+            "Score": 0.016129032258064516,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-45, deployment 1039, issue #639.",
+            "Topic": "database_other"
+          },
+          {
+            "Id": 296,
+            "Score": 0.015873015873015872,
+            "Content": "The index reduced query time for pending execution attempts. Repository https://github.com/example/roslynkit, branch experiment/database_other-13, deployment 1195, issue #795.",
+            "Topic": "database_other"
+          }
+        ],
+        "RecallAt5": 0.6666666666666666,
+        "ReciprocalRank": 1
+      }
+    },
+    {
+      "Query": "Where are job objectives recorded permanently?",
+      "Kind": "semantic",
+      "Relevant": [
+        7,
+        12
+      ],
+      "LexicalMs": 0.2467,
+      "QueryEmbeddingMs": 4.2513,
+      "VectorScanMs": 6.5764,
+      "FusionMs": 0.0161,
+      "Lexical": {
+        "Top5": [],
+        "RecallAt5": 0,
+        "ReciprocalRank": 0
+      },
+      "Vector": {
+        "Top5": [
+          {
+            "Id": 1506,
+            "Score": 0.7080720848631472,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/relay-service, branch experiment/ui-1, deployment 2405, issue #2005.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 1979,
+            "Score": 0.7079931353991924,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/work-console, branch experiment/ui-4, deployment 2878, issue #2478.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 12,
+            "Score": 0.7004769273900138,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 904,
+            "Score": 0.6785542778190177,
+            "Content": "Follow-up from Alex in the engineering thread: The work list selection preserves keyboard navigation and a visible active state. Repository https://github.com/example/deploy-tools, branch experiment/ui-10, deployment 1803, issue #1403. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 216,
+            "Score": 0.6775659049205274,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/relay-service, branch experiment/authorization_other-27, deployment 1115, issue #715.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "authorization_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 0.3333333333333333
+      },
+      "Hybrid": {
+        "Top5": [
+          {
+            "Id": 1506,
+            "Score": 0.01639344262295082,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/relay-service, branch experiment/ui-1, deployment 2405, issue #2005.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 1979,
+            "Score": 0.016129032258064516,
+            "Content": "Keep the Work objective in the center panel and place conversation controls below it. Repository https://github.com/example/work-console, branch experiment/ui-4, deployment 2878, issue #2478.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 12,
+            "Score": 0.015873015873015872,
+            "Content": "The application writes durable objective history through the work storage adapter. A single atomic database commit saves both the state and the outgoing delivery request.",
+            "Topic": "persistence"
+          },
+          {
+            "Id": 904,
+            "Score": 0.015625,
+            "Content": "Follow-up from Alex in the engineering thread: The work list selection preserves keyboard navigation and a visible active state. Repository https://github.com/example/deploy-tools, branch experiment/ui-10, deployment 1803, issue #1403. Reproduced in the test environment. Please retain the diagnostic output with the attempt and record the next verification step.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "ui"
+          },
+          {
+            "Id": 216,
+            "Score": 0.015384615384615385,
+            "Content": "The permission audit records which employee approved the operation. Repository https://github.com/example/relay-service, branch experiment/authorization_other-27, deployment 1115, issue #715.\nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. \nDocumentation fragment: record the objective, preserve source provenance, check access before execution, keep failed attempts visible, and use a manual review to decide the next action. ",
+            "Topic": "authorization_other"
+          }
+        ],
+        "RecallAt5": 0.5,
+        "ReciprocalRank": 0.3333333333333333
+      }
+    }
+  ]
+}
