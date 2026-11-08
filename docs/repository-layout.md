@@ -47,7 +47,7 @@ dotnet publish backend/src/Goblin.Web -c Release -o .artifacts/publish/applicati
 
 VS Code selects [backend/Goblin.slnx](../backend/Goblin.slnx). If C# Dev Kit has an
 editor-generated solution open, use **.NET: Open Solution** and select that file.
-Temporary projects belong under `.artifacts/`, which is excluded from editor discovery.
+Temporary projects belong under `.artifacts/`; they are not part of that solution.
 
 ## Docker builds and cleanup
 

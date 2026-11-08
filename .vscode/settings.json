@@ -1,7 +1,7 @@
 {
   "dotnet.defaultSolution": "backend/Goblin.slnx",
   "files.exclude": {
-    "**/.artifacts": true
+    "**/.artifacts": false
   },
   "files.watcherExclude": {
     "**/.artifacts/**": true
