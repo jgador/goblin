@@ -61,9 +61,35 @@ test("parallel installation bounds image pulls, overlaps independent steps, and 
     const steps = Object.fromEntries(
         progress.steps.map((step: { id: string }) => [step.id, step]),
     );
-    const start = (id: string) => Date.parse(steps[id].startedAt);
-    const end = (id: string) => Date.parse(steps[id].finishedAt);
-    assert.ok(start("image") < end("k3s") && start("k3s") < end("image"));
+    // Revisions order the real state updates under its file lock. Wall-clock
+    // corrections can put a finish timestamp before an overlapping start.
+    const event = (id: string, action: "started" | "completed") => {
+        const timestamp =
+            steps[id][action === "started" ? "startedAt" : "finishedAt"];
+        assert.ok(Number.isFinite(Date.parse(timestamp)));
+        const entry = progress.logs.findLast(
+            (entry: {
+                id: number;
+                step: string;
+                timestamp: string;
+                message: string;
+            }) =>
+                entry.step === id &&
+                entry.timestamp === timestamp &&
+                entry.message === `${steps[id].label} ${action}.`,
+        );
+        assert.ok(entry, `Missing ${action} event for ${id}`);
+        return entry.id;
+    };
+    const start = (id: string) => event(id, "started");
+    const end = (id: string) => event(id, "completed");
+    assert.ok(
+        start("image") < end("k3s") && start("k3s") < end("image"),
+        JSON.stringify({
+            image: [steps.image.startedAt, steps.image.finishedAt],
+            k3s: [steps.k3s.startedAt, steps.k3s.finishedAt],
+        }),
+    );
     // Image downloads start once k3s is running; dependent waits then cover startup only.
     for (const id of ["prefetch", "cert-manager", "sandbox"])
         assert.ok(start(id) >= end("k3s"));

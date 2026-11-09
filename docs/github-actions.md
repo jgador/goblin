@@ -45,7 +45,9 @@ The integration group runs the shared `make node-test` target after its ordered
 build and offline generators. Azure installer scenarios are split across four
 independent files with private fixture directories; generated ARM inputs are
 read-only during tests. The overlap fixture uses a bounded rendezvous so serial
-branches fail without relying on process scheduling. The pull-failure fixture
+branches fail without relying on process scheduling. Its ordering assertions use
+the real installer's progress revisions, so host clock corrections cannot turn
+overlapping steps into apparently serial timestamps. The pull-failure fixture
 holds the independent image build until the supervisor begins draining, so its
 ordering assertions also hold under CPU contention. Node file concurrency defaults
 to four. Benchmark changes with two and four workers before increasing it:
@@ -72,6 +74,13 @@ and distinguish elapsed CI time from summed runner time. Local benchmarks guide
 worker and cache choices; equivalent published Actions runs are needed to establish
 GitHub speedups. SDK, NuGet and image caches need measured transfer savings before
 adding them.
+
+The platform image's pinned GitHub CLI archive download makes at most four
+attempts for temporary HTTP errors or interrupted transfers, with a 60-second
+deadline per attempt and one-, two-, then four-second backoff. Permanent HTTP
+errors and checksum mismatches fail immediately. Download and cached bytes must
+match the pinned checksum before extraction; persistent upstream failures still
+fail the image job and `test_results`.
 
 ## Action runtimes
 
