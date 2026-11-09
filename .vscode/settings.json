@@ -4,7 +4,7 @@
     "**/.artifacts": false
   },
   "files.watcherExclude": {
-    "**/.artifacts/**": true
+    "**/.artifacts/**": false
   },
   "files.associations": {
     "Makefile.dev": "makefile"

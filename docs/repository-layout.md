@@ -113,6 +113,21 @@ Offline installer tests run as an ordinary user. `make tools-build` builds the t
 with mocked infrastructure commands. It is not shipped. The production
 `goblinctl db host` command still requires root.
 
+`make node-test` runs the frontend, HTTP and deployment files with four workers;
+override this with `NODE_TEST_CONCURRENCY=2` when benchmarking. The Azure scenario
+files can also run independently after `make build deploy-generate`:
+
+```bash
+mkdir -p .artifacts/deployment/tmp
+time TMPDIR="$PWD/.artifacts/deployment/tmp" node --test --test-concurrency=4 \
+  dist/tests/deployment/azure-*.test.js
+```
+
+Build and generator time is outside that measurement. Fixtures remain under
+`.artifacts/`, use private state and dynamic backend ports, and remove their owned
+directories after each test. Every Azure scenario uses mocked infrastructure;
+the platform image check separately invokes a real Docker build.
+
 The HTTP and browser tests use runtime fixtures. `make codex-test` uses the real pinned
 executable with synthetic credentials and submits no model task. Neither covers
 authenticated execution. PostgreSQL and database-backed browser journeys skip without

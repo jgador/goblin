@@ -213,7 +213,13 @@ test("release picker stays within the mobile viewport and scrolls long catalogs"
     const version = page.getByRole("combobox");
     await expect(version).toBeEnabled();
     await version.click();
-    const bounds = await page.getByRole("listbox").boundingBox();
+    const listbox = page.getByRole("listbox");
+    await listbox.evaluate(async (element) => {
+        await Promise.all(
+            element.getAnimations().map((animation) => animation.finished),
+        );
+    });
+    const bounds = await listbox.boundingBox();
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
     expect(bounds!.y).toBeGreaterThanOrEqual(0);

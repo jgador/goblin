@@ -170,7 +170,13 @@ test("parallel Make invocation preserves the full test lifecycle and shares buil
     const nextest = entries.find((entry) => entry.command[1] === "nextest");
     assert.equal(nextest?.stack, "8388608");
     assert.equal(nextest?.profile, "local");
-    assert.ok(commands.at(-1)?.startsWith("node --test dist/tests/frontend/"));
+    assert.ok(
+        commands
+            .at(-1)
+            ?.startsWith(
+                "node --test --test-concurrency=4 dist/tests/frontend/",
+            ),
+    );
 });
 
 test("frontend build failure stops later build and test stages", async () => {
@@ -180,6 +186,25 @@ test("frontend build failure stops later build and test stages", async () => {
     assert.equal(commands.at(-1), failed);
     assert.ok(!commands.some((command) => command.startsWith("dotnet ")));
     assert.ok(!commands.includes("cargo xtask azure"));
+});
+
+test("Node tests bound file concurrency and retain every suite when overridden", async () => {
+    for (const workers of [2, 4]) {
+        const { result, commands } = await workflow([
+            "node-test",
+            `NODE_TEST_CONCURRENCY=${workers}`,
+        ]);
+        assert.equal(result.status, 0, result.stderr);
+        assert.equal(
+            commands.at(-1),
+            `node --test --test-concurrency=${workers} dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js`,
+        );
+        assert.equal(
+            commands.filter((command) => command === "tsc -p tsconfig.json")
+                .length,
+            1,
+        );
+    }
 });
 
 test("CI verification Make commands resolve their targets and prerequisites", async () => {
@@ -352,4 +377,19 @@ test("Docker cache cleanup explicitly prunes all unused default-builder cache", 
     const { result, commands } = await workflow(["docker-clean-cache"]);
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(commands, ["docker builder prune --all --force"]);
+});
+
+test("platform image verification builds the expected tag and fails when build or inspection fails", async () => {
+    const build =
+        "docker build --platform linux/amd64 --progress=plain -t goblin-platform:check .";
+    const inspect =
+        "docker image inspect goblin-platform:check --format {{.Id}}";
+    const checked = await workflow(["platform-check-image"]);
+    assert.equal(checked.result.status, 0, checked.result.stderr);
+    assert.deepEqual(checked.commands, [build, inspect]);
+    for (const failed of [build, inspect]) {
+        const result = await workflow(["platform-check-image"], failed);
+        assert.notEqual(result.result.status, 0);
+        assert.equal(result.commands.at(-1), failed);
+    }
 });

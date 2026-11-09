@@ -7,6 +7,9 @@ inputs:
   rust:
     description: Install Rust and its verification tools.
     default: "false"
+  rust-cache:
+    description: CI-only Cargo build namespace; release preparation leaves caching disabled.
+    default: ""
   deployment:
     description: Install offline deployment tools.
     default: "false"
@@ -16,7 +19,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@v5
+    - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5, node24
       with:
         node-version: "24"
         cache: npm
@@ -28,6 +31,8 @@ runs:
       if: inputs.dotnet == 'true'
     - uses: ./.github/actions/setup-rust
       if: inputs.rust == 'true'
+      with:
+        cache: ${{ inputs.rust-cache }}
     - uses: ./.github/actions/setup-deployment
       if: inputs.deployment == 'true'
     - name: Install locked development packages

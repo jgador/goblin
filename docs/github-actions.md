@@ -39,6 +39,38 @@ dependencies. A group without an owning runner is not coverage. Run
 `make ci-test make-test scripts-typecheck` after changes. Check publication and
 merge-queue behavior require a real Actions run.
 
+## CI performance
+
+The integration group runs the shared `make node-test` target after its ordered
+build and offline generators. Azure installer scenarios are split across four
+independent files with private fixture directories; generated ARM inputs are
+read-only during tests. The overlap fixture uses a bounded rendezvous so serial
+branches fail without relying on process scheduling. Node file concurrency defaults
+to four. Benchmark changes with two and four workers before increasing it:
+each fixture already launches parallel installer subprocesses, and extra files
+can contend for CPU. Keep Make's
+shared-output ordering and the single Playwright worker with its shared server.
+
+The independent `image` group builds and inspects the platform image alongside
+the installer/browser group. Selecting installer verification also selects the
+image check; this is a selection dependency, not a job scheduling dependency.
+Both report directly to `test_results`, including for manual and merge-queue runs.
+
+CI opts into Cargo download and build caches through the Rust setup action.
+Download keys include the OS, architecture, pinned toolchain and lockfile. Build
+keys also separate verification profiles and targets, hash manifests, Cargo
+configuration, Rust source and embedded installer inputs, and omit incremental
+state. Musl builds also need the host release directory for procedural macros.
+A source change can restore a compatible dependency build; Cargo still
+executes locked builds and checks the current inputs. Cache misses run the same
+commands. Release preparation does not opt in and retains its fresh build recipe.
+
+Measure test wall time separately from setup, compilation and cache transfer,
+and distinguish elapsed CI time from summed runner time. Local benchmarks guide
+worker and cache choices; equivalent published Actions runs are needed to establish
+GitHub speedups. SDK, NuGet and image caches need measured transfer savings before
+adding them.
+
 ## Action runtimes
 
 JavaScript actions, including nested actions in composites, must declare

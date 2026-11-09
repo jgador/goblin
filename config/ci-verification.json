@@ -210,8 +210,7 @@
       "filenames": [],
       "requires": [],
       "commands": [
-        "make contracts-check contracts-test make-test ci-test maintenance-test chisel-check release-test dependencies-check build deploy-generate",
-        "node --test dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js",
+        "make contracts-check contracts-test make-test ci-test maintenance-test chisel-check release-test dependencies-check build deploy-generate node-test",
         "node --test website/release.test.mjs",
         "git diff --exit-code"
       ]
@@ -220,13 +219,19 @@
       "label": "Release installer / browser journeys",
       "extensions": [],
       "filenames": [],
-      "requires": [],
+      "requires": ["image"],
       "commands": [
         "make release-build release-check-installer browser-install",
         "make browser-test ARGS=\"tests/e2e/setup.spec.ts tests/e2e/install.spec.ts\"",
-        "make platform-check-image",
         "git diff --exit-code"
       ]
+    },
+    "image": {
+      "label": "Platform image build",
+      "extensions": [],
+      "filenames": [],
+      "requires": [],
+      "commands": ["make platform-check-image", "git diff --exit-code"]
     }
   }
 }
