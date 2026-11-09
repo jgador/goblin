@@ -45,7 +45,9 @@ The integration group runs the shared `make node-test` target after its ordered
 build and offline generators. Azure installer scenarios are split across four
 independent files with private fixture directories; generated ARM inputs are
 read-only during tests. The overlap fixture uses a bounded rendezvous so serial
-branches fail without relying on process scheduling. Node file concurrency defaults
+branches fail without relying on process scheduling. The pull-failure fixture
+holds the independent image build until the supervisor begins draining, so its
+ordering assertions also hold under CPU contention. Node file concurrency defaults
 to four. Benchmark changes with two and four workers before increasing it:
 each fixture already launches parallel installer subprocesses, and extra files
 can contend for CPU. Keep Make's

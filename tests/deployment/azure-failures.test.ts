@@ -15,7 +15,7 @@ test("a pull failure lets running tasks finish but starts no dependent task", as
     await assert.rejects(
         bootstrap(root, fakePassword, "ready", {
             state: "pull-failed",
-            slowBuild: 3000,
+            holdBuildUntilFailure: true,
         }),
         { status: 1 },
     );

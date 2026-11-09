@@ -57,6 +57,7 @@ export async function bootstrap(
         pullDelay?: number;
         slowBuild?: number;
         synchronizeRuntimeStart?: boolean;
+        holdBuildUntilFailure?: boolean;
         state?:
             | "ready"
             | "docker-failed"
@@ -88,6 +89,9 @@ export async function bootstrap(
             });
         await writeFile(rendezvous, "");
     }
+    const failureGate = join(root, "hold-build-until-failure");
+    await rm(failureGate, { force: true });
+    if (application.holdBuildUntilFailure) await writeFile(failureGate, "");
     await writeFile(join(bin, "package.json"), '{"type":"commonjs"}\n');
     const source = join(root, "archive/goblin");
     await mkdir(join(source, "deploy/azure"), { recursive: true });
@@ -252,6 +256,16 @@ if (name === 'curl') {
   if (args[0] === 'build') {
     meetRuntimeStep('image', 'k3s');
     fs.writeFileSync(path.join(root, 'build-pid'), String(process.pid));
+    // Keep this independent build running until the real supervisor observes
+    // the injected pull failure and starts draining its existing workers.
+    if (fs.existsSync(path.join(root, 'hold-build-until-failure'))) {
+      const draining = path.join(root, 'var/lib/goblin/install/private/work/pipeline.draining');
+      const deadline = Date.now() + 30000;
+      while (!fs.existsSync(draining)) {
+        if (Date.now() >= deadline) throw new Error('Installer did not drain running workers after the pull failure');
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+      }
+    }
     const buildDelay = Number(process.env["${Env.GOBLIN_BOOTSTRAP_SLOW_BUILD.name}"]);
     if (buildDelay) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, buildDelay);
     if (appState === 'build-failed') process.exit(1);
