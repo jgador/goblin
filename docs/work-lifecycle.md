@@ -7,6 +7,14 @@ attempts, Git checkpoints, and PVCs.
 
 ## Using Work
 
+**Work** opens as a list ordered by most recently updated. Choose **Board** to
+group items into Ready, In progress, Needs attention, and Closed. The board
+shows groups with matching items. Closed includes completed and cancelled Work.
+Use search and **Filter work** to narrow either layout. Open an item to see its
+conversation, next action, outputs, and activity. The dashboard shows the default
+agent’s connection and links to the most recently updated item awaiting attention.
+**Ask Goblin** opens an untracked conversation.
+
 In the browser, **Create work** saves a goal and assigns the default agent; **Start**
 begins execution separately. An authorized Slack DM or mention creates and starts Work;
 see [Slack](slack-integration.md). An untracked browser conversation stores context

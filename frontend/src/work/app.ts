@@ -14,6 +14,8 @@ import {
     savedTimeZone,
 } from "../settings/timezone.js";
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
+import { isWorkFilter } from "./board.js";
+import type { BoardLayout, WorkFilter } from "./board.js";
 import { CommandSubmission } from "./command-submission.js";
 import type { PendingCommand } from "./command-submission.js";
 import { WorkCommands } from "./commands.js";
@@ -62,7 +64,9 @@ const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
     conversationExpanded = false,
     conversationsOpen = navigation.view === "chat",
-    filter = "all",
+    filter: WorkFilter = "all",
+    boardFilter: WorkFilter = "all",
+    boardLayout: BoardLayout = "list",
     search = "";
 let sidebarCollapsed =
     mobile.matches ||
@@ -225,6 +229,9 @@ function forgetWorkspace() {
     repositoryDrafts.clear();
     pendingContext = undefined;
     changing = false;
+    filter = "all";
+    boardFilter = "all";
+    search = "";
     modelCatalogs.clear();
     modelSelections.clear();
     modelPickerOpen = false;
@@ -285,10 +292,8 @@ async function loadWorkspace(preserveError: boolean) {
         const loaded = await workspace.refreshWork();
         signal.throwIfAborted();
         if (loaded) {
-            const items = workspace.state.work;
-            const initial = navigation.initialWork(items);
-            if (initial) navigate("work", initial);
-            if (!commandActive) navigation.showHomeIfSelectionMissing(items);
+            if (!commandActive && navigation.view === "work" && !current())
+                navigate("board", "", "restore");
             if (
                 !commandActive &&
                 !submission.pending &&
@@ -417,7 +422,7 @@ function navigate(
     }
 }
 
-function render(preserveHome = false, forceSelect = false) {
+function render(preserveMounted = false, forceSelect = false) {
     const { context, view, settingsSection } = navigation;
     if (context !== dom.context) {
         modelPickerOpen = false;
@@ -433,9 +438,8 @@ function render(preserveHome = false, forceSelect = false) {
         context,
         approvalKey: repositoryApprovalKey(work),
         authenticated,
-        preserveHome,
+        preserveMounted,
         forceSelect,
-        home: view === "new",
         draft,
         ...submissionState,
         workUnavailable: workspace.state.workUnavailable,
@@ -444,9 +448,11 @@ function render(preserveHome = false, forceSelect = false) {
                 ? "Settings · Goblin"
                 : view === "knowledge"
                   ? "Knowledge · Goblin"
-                  : work && authenticated
-                    ? work.objective.slice(0, 70) + " · Goblin"
-                    : "Goblin",
+                  : view === "board" && authenticated
+                    ? "Work · Goblin"
+                    : work && authenticated
+                      ? work.objective.slice(0, 70) + " · Goblin"
+                      : "Goblin",
         markup: () => {
             const choice = work ? modelSelection(work) : undefined;
             return renderWorkspace({
@@ -458,6 +464,8 @@ function render(preserveHome = false, forceSelect = false) {
                 conversationExpanded,
                 conversationsOpen,
                 filter,
+                boardFilter,
+                boardLayout,
                 search,
                 draft,
                 changing,
@@ -602,7 +610,7 @@ document.addEventListener("click", async (event) => {
                 : null) ??
             opener ??
             root.querySelector<HTMLElement>(
-                ".directory-heading h1, #reply, #work-title-heading",
+                ".directory-heading h1, #reply, #work-title-heading, #board-heading",
             )
         )?.focus();
         return;
@@ -679,19 +687,20 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "browse-work") {
-        const fromDirectory = navigation.isDirectory;
-        if (fromDirectory)
-            navigate(current() ? "work" : "new", navigation.selected);
+        const returning = target.classList.contains("back-to-work");
         filter = "all";
-        search = "";
-        sidebarCollapsed = fromDirectory && mobile.matches;
-        activityOpen = false;
+        if (returning && navigation.canReturnToBoard) {
+            history.back();
+            return;
+        }
+        navigate("board");
         render();
-        root.querySelector<HTMLElement>(
-            fromDirectory
-                ? "#work-title-heading, #reply"
-                : '.work-card[aria-current="page"]',
-        )?.focus();
+        focusBoard(returning);
+        return;
+    }
+    if (action === "board-layout" && (value === "board" || value === "list")) {
+        boardLayout = value;
+        render();
         return;
     }
     if (action === "view-outputs") {
@@ -984,18 +993,28 @@ document.addEventListener("input", (event) => {
 document.addEventListener("change", (event) => {
     if (
         event.target instanceof HTMLSelectElement &&
+        event.target.id === "board-filter"
+    ) {
+        const nextFilter = event.target.value;
+        if (!isWorkFilter(nextFilter)) return;
+        boardFilter = nextFilter;
+        render(false, true);
+        return;
+    }
+    if (
+        event.target instanceof HTMLSelectElement &&
         event.target.id === "work-view"
     ) {
         const nextFilter = event.target.value;
-        const fromDirectory = navigation.isDirectory;
-        if (fromDirectory)
-            navigate(current() ? "work" : "new", navigation.selected);
+        if (!isWorkFilter(nextFilter)) return;
         filter = nextFilter;
+        const fromDirectory = navigation.isDirectory;
+        if (fromDirectory) {
+            boardFilter = nextFilter;
+            navigate("board");
+        }
         render(false, true);
-        if (fromDirectory && mobile.matches)
-            root.querySelector<HTMLElement>(
-                "#work-title-heading, #reply",
-            )?.focus();
+        if (fromDirectory) focusBoard(false);
         return;
     }
     if (
@@ -1173,12 +1192,25 @@ compact.addEventListener("change", updateResponsiveLayout);
 mobile.addEventListener("change", updateResponsiveLayout);
 window.addEventListener("popstate", () => {
     const { view, id } = navigation.locationTarget();
+    const fromWork = navigation.view === "work";
     navigate(view, id, "restore");
     render();
+    if (view === "board") {
+        focusBoard(fromWork);
+        return;
+    }
     root.querySelector<HTMLElement>(
         "#settings-title, .directory-heading h1, #work-title-heading, #reply",
     )?.focus();
 });
+function focusBoard(restoreItem: boolean) {
+    const entry = restoreItem
+        ? root.querySelector<HTMLElement>(
+              `.board-entry[data-id="${CSS.escape(navigation.selected)}"]`,
+          )
+        : null;
+    (entry ?? document.getElementById("board-heading"))?.focus();
+}
 window.addEventListener("online", () => void refresh());
 document.addEventListener("visibilitychange", () => {
     if (!document.hidden) void refresh();

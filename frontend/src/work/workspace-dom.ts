@@ -5,9 +5,8 @@ type RenderOptions = {
     context: WorkspaceContext;
     approvalKey: string;
     authenticated: boolean;
-    preserveHome: boolean;
+    preserveMounted: boolean;
     forceSelect: boolean;
-    home: boolean;
     draft: string;
     sending: boolean;
     pending: boolean;
@@ -49,21 +48,23 @@ export class WorkspaceDom {
         this.dragging = false;
     }
 
-    private refreshHome(html: string, options: RenderOptions) {
+    private refreshRegions(html: string, selectors: readonly string[]) {
         const next = document.createElement("template");
         next.innerHTML = html;
-        // Keep the home, heading, composer and header mounted. Only server-backed
-        // regions that actually changed need replacing during a refresh.
-        for (const selector of [
-            ".sidebar",
-            ".workspace-notices",
-            ".connection-choice",
-            ".connection-nudge",
-        ]) {
+        for (const selector of selectors) {
             const existing = this.root.querySelector(selector)!;
             const updated = next.content.querySelector(selector)!;
             if (!existing.isEqualNode(updated)) existing.replaceWith(updated);
         }
+    }
+
+    private refreshHome(html: string, options: RenderOptions) {
+        this.refreshRegions(html, [
+            ".sidebar",
+            ".workspace-notices",
+            ".connection-choice",
+            ".connection-nudge",
+        ]);
         const reply = this.root.querySelector<HTMLTextAreaElement>("#reply")!;
         if (reply.value !== options.draft) reply.value = options.draft;
         reply.disabled = options.sending;
@@ -77,9 +78,8 @@ export class WorkspaceDom {
             context,
             approvalKey,
             authenticated,
-            preserveHome,
+            preserveMounted,
             forceSelect,
-            home,
             settings,
         } = options;
         const active =
@@ -91,6 +91,8 @@ export class WorkspaceDom {
             "button[data-action]",
         );
         const buttonData = activeButton ? { ...activeButton.dataset } : null;
+        const buttonRegion =
+            activeButton?.closest<HTMLElement>("[data-scroll]")?.dataset.scroll;
         const sameContext = context === this.renderedContext;
         const previousApproval =
             root.querySelector<HTMLElement>("#github-repository-options")
@@ -146,6 +148,8 @@ export class WorkspaceDom {
                               "work-effort",
                               "model-connection",
                               "work-view",
+                              "board-filter",
+                              "work-search",
                           ].includes(x.id),
                   )
                   .map((x) => [x.id, x.value] as const)
@@ -183,12 +187,27 @@ export class WorkspaceDom {
         const html = options.markup();
         if (
             authenticated &&
-            preserveHome &&
+            preserveMounted &&
             sameContext &&
-            home &&
+            context === "new" &&
             root.querySelector(".home")
         )
             this.refreshHome(html, options);
+        else if (
+            authenticated &&
+            preserveMounted &&
+            sameContext &&
+            context === "board" &&
+            root.querySelector(".board-workspace")
+        )
+            this.refreshRegions(html, [
+                ".sidebar",
+                ".workspace-header",
+                ".workspace-notices",
+                ".coworker-strip",
+                ".board-toolbar",
+                ".board-content",
+            ]);
         else {
             // Keep live settings forms mounted across polling renders.
             settings?.detach();
@@ -245,10 +264,13 @@ export class WorkspaceDom {
             )
                 .find(
                     (b) =>
+                        b.id === (activeId ?? "") &&
                         b.dataset.action === buttonData.action &&
                         b.dataset.id === buttonData.id &&
                         b.dataset.value === buttonData.value &&
                         b.dataset.provider === buttonData.provider &&
+                        b.closest<HTMLElement>("[data-scroll]")?.dataset
+                            .scroll === buttonRegion &&
                         !b.closest("[inert]") &&
                         b.getClientRects().length,
                 )

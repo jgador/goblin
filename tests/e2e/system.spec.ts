@@ -71,7 +71,7 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
     const state = await fixture(page);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/");
+    await page.goto("/?new=work");
     await page
         .getByPlaceholder("Describe the intended outcome…")
         .fill("Keep my work draft");

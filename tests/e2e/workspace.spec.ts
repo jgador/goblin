@@ -214,7 +214,7 @@ test("the result leads the Work page, Activity opens on demand, and inspection p
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/");
+    await page.goto("/work?item=1");
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
     );
@@ -291,7 +291,7 @@ test("search finds output content and filters keep selection independent from br
     page,
 }) => {
     await workspace(page);
-    await page.goto("/");
+    await page.goto("/work?item=1");
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
     );
@@ -325,8 +325,204 @@ test("search finds output content and filters keep selection independent from br
     await page
         .getByRole("button", { name: "Back to work", exact: true })
         .click();
-    await expect(workView).toHaveValue("all");
-    await expect(list.getByRole("button")).toHaveCount(3);
+    await expect(
+        page.getByRole("heading", { name: "Work", exact: true }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole("list", { name: "Work list" }).getByRole("button"),
+    ).toHaveCount(3);
+});
+
+test("Work opens as a list and the optional board groups matching items", async ({
+    page,
+}) => {
+    const commands = await workspace(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    const board = page.getByRole("region", { name: "Work", exact: true });
+    const list = board.getByRole("list", { name: "Work list" });
+    await expect(
+        board.getByText("3 work items", { exact: true }),
+    ).toBeVisible();
+    await expect(list.getByRole("listitem")).toHaveCount(3);
+    await expect(
+        page.getByRole("navigation", { name: "Recent work" }),
+    ).toHaveCount(0);
+    await expect(board.locator(".board-lane")).toHaveCount(0);
+
+    const boardLayout = board.getByRole("button", {
+        name: "Board",
+        exact: true,
+    });
+    await boardLayout.click();
+    await expect(board.locator(".board-lane")).toHaveCount(3);
+    await expect(
+        board.getByRole("region", { name: "Ready", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+        board.getByRole("region", { name: "In progress" }).getByRole("button", {
+            name: "Investigate slow repository clones",
+        }),
+    ).toBeVisible();
+    await expect(board.getByRole("region", { name: "Closed" })).toContainText(
+        "Write the release notes",
+    );
+    const coworker = board.getByRole("region", { name: "Goblin coworker" });
+    const next = coworker.getByRole("button", {
+        name: /Ready for review.*Polish the welcome page/,
+    });
+    await next.click();
+    await expect(
+        page.getByRole("heading", { name: "Polish the welcome page" }),
+    ).toBeFocused();
+    await page.goBack();
+    await expect(boardLayout).toHaveAttribute("aria-pressed", "true");
+
+    const filter = board.getByRole("combobox", { name: "Filter work" });
+    await filter.selectOption("attention");
+    await expect(board.locator(".board-lane")).toHaveCount(1);
+    const layout = board.getByRole("button", { name: "List", exact: true });
+    await layout.click();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    const item = list.getByRole("button", { name: /Polish the welcome page/ });
+    await expect(item).toHaveAccessibleDescription(/Ready for review.*Updated/);
+    await item.press("Enter");
+    await expect(page).toHaveURL(/\/work\?item=1$/);
+    await page.getByRole("button", { name: "Back to work" }).click();
+    await expect(item).toBeFocused();
+    await expect(layout).toHaveAttribute("aria-pressed", "true");
+    await expect(filter).toHaveValue("attention");
+
+    const search = page.getByRole("searchbox");
+    await search.fill("shorter");
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await search.fill("release notes");
+    await expect(board.getByText("No work matches your search.")).toBeVisible();
+    await boardLayout.click();
+    await expect(board.locator(".board-lane")).toHaveCount(0);
+    await search.press("Escape");
+    await expect(search).toHaveValue("");
+    await layout.click();
+    await expect(item).toBeVisible();
+    await board.getByRole("button", { name: "Ask Goblin" }).click();
+    await expect(
+        page.getByRole("textbox", { name: "Add to the conversation…" }),
+    ).toBeFocused();
+    expect(commands).toEqual([]);
+});
+
+test("the Recent work filter fits its labels and keeps the open item selected", async ({
+    page,
+}) => {
+    const commands = await workspace(page);
+    const filter = page.getByRole("combobox", { name: "Work view" });
+    const list = page.getByRole("navigation", { name: "Recent work" });
+    const draft = page.locator("#reply");
+
+    for (const width of [1105, 800, 320]) {
+        await page.setViewportSize({ width, height: 893 });
+        await page.goto("/work?item=1");
+        await draft.fill("A note about the welcome page");
+        if (width === 320)
+            await page.getByRole("button", { name: "Show sidebar" }).click();
+        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+        await filter.click();
+        await expect(filter.locator("option").last()).toBeVisible();
+        const labelsFit = await filter.evaluate((select: HTMLSelectElement) => {
+            const style = getComputedStyle(select);
+            const contentWidth =
+                select.clientWidth -
+                parseFloat(style.paddingLeft) -
+                parseFloat(style.paddingRight);
+            return Array.from(select.options, (option) => {
+                const label = document.createRange();
+                label.selectNodeContents(option);
+                return (
+                    label.getClientRects().length === 1 &&
+                    label.getBoundingClientRect().width <= contentWidth
+                );
+            });
+        });
+        expect(labelsFit).toEqual([true, true, true, true]);
+
+        await filter
+            .getByRole("option", { name: "Needs attention (1)" })
+            .click();
+        await expect(filter).toHaveValue("attention");
+        await expect(list.getByRole("button")).toHaveCount(1);
+        await expect(
+            list.getByRole("button", { name: /Polish the welcome page/ }),
+        ).toHaveAttribute("aria-current", "page");
+        await expect(page).toHaveURL(/\/work\?item=1$/);
+        await expect(draft).toHaveValue("A note about the welcome page");
+    }
+    expect(commands).toEqual([]);
+});
+
+test("the Work filter has a steady width and single-line options", async ({
+    page,
+}) => {
+    await workspace(page);
+    await page.goto("/work");
+    const filter = page.getByRole("combobox", { name: "Filter work" });
+    await expect(filter).toBeVisible();
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+
+    for (const width of [1105, 320]) {
+        await page.setViewportSize({ width, height: 893 });
+        await filter.selectOption("all");
+        const triggerWidth = (await filter.boundingBox())!.width;
+        await filter.click();
+        await expect(filter.locator("option").last()).toBeVisible();
+        const optionLines = await filter.evaluate((select: HTMLSelectElement) =>
+            Array.from(select.options, (option) => {
+                const text = document.createRange();
+                text.selectNodeContents(option);
+                return text.getClientRects().length;
+            }),
+        );
+        expect(optionLines).toEqual([1, 1, 1, 1]);
+
+        await filter.getByRole("option", { name: "Needs attention" }).click();
+        await expect(filter).toHaveValue("attention");
+        expect((await filter.boundingBox())?.width).toBe(triggerWidth);
+    }
+});
+
+test("both Work layouts fit mobile and keep primary actions available with the sidebar closed", async ({
+    page,
+}) => {
+    await workspace(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/work");
+    const board = page.getByRole("region", { name: "Work", exact: true });
+    await expect(board.getByRole("button", { name: "New work" })).toBeVisible();
+    await expect(
+        board.getByRole("button", { name: "Ask Goblin" }),
+    ).toBeVisible();
+    await expect(board.getByRole("list", { name: "Work list" })).toBeVisible();
+    await board.getByRole("button", { name: "Board", exact: true }).click();
+    await expect(board.locator(".board-lane")).toHaveCount(3);
+    const lastLane = board.getByRole("region", { name: "Closed" });
+    await lastLane.scrollIntoViewIfNeeded();
+    await expect(lastLane).toBeInViewport();
+    expect(
+        await board.evaluate(
+            (element) => element.scrollWidth <= element.clientWidth,
+        ),
+    ).toBe(true);
+    await board.getByRole("button", { name: "List", exact: true }).click();
+    await expect(board.getByRole("list", { name: "Work list" })).toBeVisible();
+    expect(
+        await board.evaluate(
+            (element) => element.scrollWidth <= element.clientWidth,
+        ),
+    ).toBe(true);
+    await board.getByRole("button", { name: "New work" }).click();
+    await expect(
+        page.getByRole("textbox", { name: "Describe the intended outcome…" }),
+    ).toBeFocused();
 });
 
 for (const width of [1024, 390, 320]) {

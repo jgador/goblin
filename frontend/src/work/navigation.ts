@@ -4,10 +4,11 @@ import {
     settingsTarget,
 } from "../settings/navigation.js";
 import type { SettingsSelection } from "../settings/navigation.js";
-import type { View } from "./contracts.js";
 
-export type WorkspaceView = "work" | "chat" | "new" | "knowledge" | "settings";
+export type WorkspaceView =
+    "board" | "work" | "chat" | "new" | "knowledge" | "settings";
 export type WorkspaceContext =
+    | "board"
     | "new"
     | "knowledge"
     | `work:${string}`
@@ -22,26 +23,17 @@ function directory(path: string) {
 
 export class WorkspaceNavigation {
     readonly query = new URLSearchParams(location.search);
-    private workId =
-        this.query.get("item") ??
-        sessionStorage.getItem("goblin.selectedWork") ??
-        "";
-    private chatId = this.query.get("conversation") ?? "";
-    private page: WorkspaceView =
-        directory(location.pathname) ??
-        (this.query.has("conversation")
-            ? "chat"
-            : location.pathname.startsWith("/work") && this.workId
-              ? "work"
-              : "new");
+    private workId = "";
+    private chatId = "";
+    private page: WorkspaceView;
     private section = settingsSelection(this.query);
-    private returnDestination: Destination = { view: "new", id: "" };
-    private chooseInitialWork =
-        !this.isDirectory &&
-        !this.query.has("new") &&
-        !this.query.has("conversation");
+    private returnDestination: Destination = { view: "board", id: "" };
 
     constructor() {
+        const { view, id } = this.locationTarget();
+        this.page = view;
+        if (view === "work") this.workId = id;
+        if (view === "chat") this.chatId = id;
         if (this.page === "settings")
             history.replaceState(null, "", settingsHref(this.section));
     }
@@ -64,31 +56,15 @@ export class WorkspaceNavigation {
     get isDirectory() {
         return this.page === "knowledge" || this.page === "settings";
     }
+    get canReturnToBoard() {
+        return history.state?.returnToBoard === true;
+    }
 
     get context(): WorkspaceContext {
         if (this.page === "work") return `work:${this.workId}`;
         if (this.page === "chat") return `chat:${this.chatId}`;
         if (this.page === "settings") return `settings:${this.section}`;
         return this.page;
-    }
-
-    initialWork(items: readonly View[]) {
-        if (!this.chooseInitialWork) return;
-        this.chooseInitialWork = false;
-        return (
-            items.find((item) => item.work.id === this.workId) ??
-            items.toSorted(
-                (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-            )[0]
-        )?.work.id;
-    }
-
-    showHomeIfSelectionMissing(items: readonly View[]) {
-        if (
-            this.page === "work" &&
-            !items.some((item) => item.work.id === this.workId)
-        )
-            this.page = "new";
     }
 
     locationTarget(): Destination {
@@ -99,14 +75,13 @@ export class WorkspaceNavigation {
         if (page === "knowledge") return { view: page, id: "" };
         const item = params.get("item");
         const conversation = params.get("conversation");
-        return {
-            view: item ? "work" : conversation ? "chat" : "new",
-            id: item ?? conversation ?? "",
-        };
+        if (item) return { view: "work", id: item };
+        if (conversation !== null) return { view: "chat", id: conversation };
+        return { view: params.has("new") ? "new" : "board", id: "" };
     }
 
     navigate(next: WorkspaceView, id: string, mode: "auto" | "restore") {
-        this.chooseInitialWork = false;
+        const previous = this.page;
         if (next === "settings" && this.page !== "settings")
             this.returnDestination = {
                 view: this.page,
@@ -117,18 +92,18 @@ export class WorkspaceNavigation {
                           ? this.chatId
                           : "",
             };
-        if (
+        const push =
             mode === "auto" &&
             (next !== this.page ||
                 (next === "settings" && id !== this.section)) &&
-            (this.isDirectory || next === "knowledge" || next === "settings")
-        )
-            history.pushState(null, "", location.href);
+            (this.isDirectory ||
+                next === "knowledge" ||
+                next === "settings" ||
+                (this.page === "board" && next !== "board"));
         this.page = next;
         let path: string;
         if (next === "work") {
             this.workId = id;
-            sessionStorage.setItem("goblin.selectedWork", id);
             path = `/work?item=${encodeURIComponent(id)}`;
         } else if (next === "chat") {
             this.chatId = id;
@@ -136,7 +111,26 @@ export class WorkspaceNavigation {
         } else if (next === "settings") {
             this.section = settingsTarget(id);
             path = settingsHref(this.section);
-        } else path = next === "knowledge" ? "/knowledge" : "/?new=work";
-        history.replaceState(null, "", path);
+        } else if (next === "knowledge") path = "/knowledge";
+        else path = next === "board" ? "/work" : "/?new=work";
+        if (push)
+            history.pushState(
+                { returnToBoard: previous === "board" },
+                "",
+                path,
+            );
+        else {
+            const locationView = this.locationTarget();
+            if (
+                mode !== "restore" ||
+                locationView.view !== next ||
+                locationView.id !== id
+            )
+                history.replaceState(
+                    next === "board" ? null : history.state,
+                    "",
+                    path,
+                );
+        }
     }
 }

@@ -77,7 +77,7 @@ test("localhost requires the chosen password without prefilling it, including af
         await timezone.getByRole("button", { name: "Use timezone" }).click();
         await expect(timezone).not.toBeVisible();
         await expect(
-            page.getByRole("heading", { name: "What should we work on?" }),
+            page.getByRole("heading", { name: "Work", exact: true }),
         ).toBeVisible();
         expect(loginRequests).toEqual([
             { password: "goblin" },
@@ -86,7 +86,7 @@ test("localhost requires the chosen password without prefilling it, including af
         await page.reload();
         await expect(timezone).not.toBeVisible();
         await expect(
-            page.getByRole("heading", { name: "What should we work on?" }),
+            page.getByRole("heading", { name: "Work", exact: true }),
         ).toBeVisible();
         expect(loginRequests).toHaveLength(2);
 
@@ -100,7 +100,7 @@ test("localhost requires the chosen password without prefilling it, including af
         await password.fill(chosenPassword);
         await open.click();
         await expect(
-            page.getByRole("heading", { name: "What should we work on?" }),
+            page.getByRole("heading", { name: "Work", exact: true }),
         ).toBeVisible();
         expect(loginRequests).toHaveLength(3);
     } finally {
