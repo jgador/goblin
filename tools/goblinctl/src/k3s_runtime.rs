@@ -141,7 +141,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn overrides_preserve_unrelated_settings_and_unset_retains_installed_configuration() {
+    fn overrides_keep_unset_settings() {
         let container = json!({"env":[
             {"name":environment::GOBLIN_PUBLIC_ORIGIN,"value":"https://app.example.com"},
             {"name":environment::GOBLIN_CHATGPT_ENABLED,"value":"true"},

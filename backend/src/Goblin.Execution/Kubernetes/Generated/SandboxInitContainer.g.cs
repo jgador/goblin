@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecContainersItem
+public sealed class SandboxInitContainer
 {
     [JsonPropertyName("command")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -23,18 +23,14 @@ public sealed class SandboxSpecPodTemplateSpecContainersItem
 
     [JsonPropertyName("resources")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecContainersItemResources? Resources { get; init; }
+    public SandboxInitContainerResources? Resources { get; init; }
 
     [JsonPropertyName("securityContext")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecContainersItemSecurityContext? SecurityContext { get; init; }
+    public InitContainerSecurityContext? SecurityContext { get; init; }
 
     [JsonPropertyName("volumeMounts")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<SandboxSpecPodTemplateSpecContainersItemVolumeMountsItem>? VolumeMounts { get; init; }
-
-    [JsonPropertyName("workingDir")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? WorkingDir { get; init; }
+    public List<InitContainerVolumeMount>? VolumeMounts { get; init; }
 
 }

@@ -11,6 +11,6 @@ public sealed class SandboxSuspendPatch
 {
     [JsonPropertyName("spec")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSuspendPatchSpec? Spec { get; init; }
+    public SandboxSuspendSpec? Spec { get; init; }
 
 }

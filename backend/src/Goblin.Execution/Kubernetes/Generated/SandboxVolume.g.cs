@@ -7,15 +7,15 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecVolumesItem
+public sealed class SandboxVolume
 {
     [JsonPropertyName("configMap")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecVolumesItemConfigMap? ConfigMap { get; init; }
+    public SandboxVolumeConfigMap? ConfigMap { get; init; }
 
     [JsonPropertyName("emptyDir")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecVolumesItemEmptyDir? EmptyDir { get; init; }
+    public SandboxVolumeEmptyDir? EmptyDir { get; init; }
 
     [JsonPropertyName("name")]
     [JsonRequired]
@@ -23,10 +23,10 @@ public sealed class SandboxSpecPodTemplateSpecVolumesItem
 
     [JsonPropertyName("persistentVolumeClaim")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecVolumesItemPersistentVolumeClaim? PersistentVolumeClaim { get; init; }
+    public SandboxVolumeClaim? VolumeClaim { get; init; }
 
     [JsonPropertyName("secret")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecVolumesItemSecret? Secret { get; init; }
+    public SandboxVolumeSecret? Secret { get; init; }
 
 }

@@ -15,6 +15,34 @@
   "overrides": {
     "Sandbox.metadata": "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
   },
+  "typeNames": {
+    "Sandbox.spec.operatingMode": "SandboxOperatingMode",
+    "Sandbox.spec.shutdownPolicy": "SandboxShutdownPolicy",
+    "Sandbox.spec.podTemplate": "SandboxPodTemplate",
+    "Sandbox.spec.podTemplate.spec": "SandboxPodSpec",
+    "Sandbox.spec.podTemplate.spec.securityContext": "SandboxPodSecurityContext",
+    "Sandbox.spec.podTemplate.spec.securityContext.seccompProfile": "SandboxSeccompProfile",
+    "Sandbox.spec.podTemplate.spec.containers[]": "SandboxContainer",
+    "Sandbox.spec.podTemplate.spec.containers[].securityContext": "ContainerSecurityContext",
+    "Sandbox.spec.podTemplate.spec.containers[].securityContext.capabilities": "ContainerCapabilities",
+    "Sandbox.spec.podTemplate.spec.containers[].volumeMounts[]": "ContainerVolumeMount",
+    "Sandbox.spec.podTemplate.spec.initContainers[]": "SandboxInitContainer",
+    "Sandbox.spec.podTemplate.spec.initContainers[].securityContext": "InitContainerSecurityContext",
+    "Sandbox.spec.podTemplate.spec.initContainers[].securityContext.capabilities": "InitContainerCapabilities",
+    "Sandbox.spec.podTemplate.spec.initContainers[].volumeMounts[]": "InitContainerVolumeMount",
+    "Sandbox.spec.podTemplate.spec.volumes[]": "SandboxVolume",
+    "Sandbox.spec.podTemplate.spec.volumes[].persistentVolumeClaim": "SandboxVolumeClaim",
+    "SandboxSuspendPatch.spec": "SandboxSuspendSpec",
+    "SandboxSuspendPatch.spec.operatingMode": "SandboxSuspendMode"
+  },
+  "memberNames": {
+    "SandboxPodSpec.automountServiceAccountToken": "MountServiceAccountToken",
+    "SandboxPodSpec.terminationGracePeriodSeconds": "TerminationGraceSeconds",
+    "ContainerSecurityContext.readOnlyRootFilesystem": "ReadOnlyRoot",
+    "InitContainerSecurityContext.readOnlyRootFilesystem": "ReadOnlyRoot",
+    "SandboxVolume.persistentVolumeClaim": "VolumeClaim",
+    "Volume.persistentVolumeClaim": "VolumeClaim"
+  },
   "roots": {
     "Sandbox": {
       "source": "agentSandbox",

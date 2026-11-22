@@ -7,10 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecVolumesItemEmptyDir
+public sealed class SandboxVolumeConfigMap
 {
-    [JsonPropertyName("sizeLimit")]
+    [JsonPropertyName("name")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public KubernetesIntOrString? SizeLimit { get; init; }
+    public string? Name { get; init; }
 
 }

@@ -7,14 +7,14 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplate
+public sealed class SandboxVolumeClaim
 {
-    [JsonPropertyName("metadata")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateMetadata? Metadata { get; init; }
-
-    [JsonPropertyName("spec")]
+    [JsonPropertyName("claimName")]
     [JsonRequired]
-    public required SandboxSpecPodTemplateSpec Spec { get; init; }
+    public required string ClaimName { get; init; }
+
+    [JsonPropertyName("readOnly")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ReadOnly { get; init; }
 
 }

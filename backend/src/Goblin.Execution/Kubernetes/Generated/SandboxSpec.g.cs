@@ -11,11 +11,11 @@ public sealed class SandboxSpec
 {
     [JsonPropertyName("operatingMode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecOperatingMode? OperatingMode { get; init; }
+    public SandboxOperatingMode? OperatingMode { get; init; }
 
     [JsonPropertyName("podTemplate")]
     [JsonRequired]
-    public required SandboxSpecPodTemplate PodTemplate { get; init; }
+    public required SandboxPodTemplate PodTemplate { get; init; }
 
     [JsonPropertyName("service")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -23,6 +23,6 @@ public sealed class SandboxSpec
 
     [JsonPropertyName("shutdownPolicy")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecShutdownPolicy? ShutdownPolicy { get; init; }
+    public SandboxShutdownPolicy? ShutdownPolicy { get; init; }
 
 }

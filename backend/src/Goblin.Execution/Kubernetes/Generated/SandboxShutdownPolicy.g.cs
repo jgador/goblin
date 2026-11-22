@@ -7,10 +7,12 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecSecurityContextSeccompProfile
+[JsonConverter(typeof(KubernetesStringEnumConverter<SandboxShutdownPolicy>))]
+public enum SandboxShutdownPolicy
 {
-    [JsonPropertyName("type")]
-    [JsonRequired]
-    public required string Type { get; init; }
+    [JsonStringEnumMemberName("Delete")]
+    Delete,
 
+    [JsonStringEnumMemberName("Retain")]
+    Retain,
 }

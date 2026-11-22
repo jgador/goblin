@@ -856,7 +856,7 @@ public sealed partial class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task PublishedCheckpointRequiresConfirmationAndRechecksOwnershipAfterRemoteVerification()
+    public async Task PublishedCheckpointRechecksOwnershipAfterVerification()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         await EnableHandoffGitRepository(fixture);
@@ -1164,7 +1164,7 @@ public sealed partial class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task RepositoryPublicationOutageEvidenceSurvivesRestartWithoutReplayingTheRemoteCall()
+    public async Task PublicationRecoversAfterRestartWithoutReplay()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         await EnableHandoffGitRepository(fixture);
@@ -1624,7 +1624,7 @@ public sealed partial class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task ConnectionServiceOwnsVerificationReservationsAndCompletesChangesAfterCancellation()
+    public async Task ConnectionChangesFinishAfterCallerCancellation()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         var authentication = new CodexAuthentication();

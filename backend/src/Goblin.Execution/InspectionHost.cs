@@ -45,7 +45,7 @@ public sealed class InspectionHost : IInspectionHost
         if (pod is null)
         {
             K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(Sandboxes(session) + "/" + name, token);
-            return sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Running ? InspectionObservation.Pending : InspectionObservation.Missing;
+            return sandbox?.Spec.OperatingMode == K.SandboxOperatingMode.Running ? InspectionObservation.Pending : InspectionObservation.Missing;
         }
         string phase = pod.Status?.Phase ?? "Pending";
         if (phase == "Running") return InspectionObservation.Running;
@@ -66,12 +66,12 @@ public sealed class InspectionHost : IInspectionHost
     public K.Sandbox Manifest(InspectionAllocation session, bool suspended)
     {
         string name = Name(session.Id);
-        var volumes = new List<K.SandboxSpecPodTemplateSpecVolumesItem>
+        var volumes = new List<K.SandboxVolume>
         {
             new()
             {
                 Name = "workspace",
-                PersistentVolumeClaim = new() { ClaimName = Source(session).Name, ReadOnly = true }
+                VolumeClaim = new() { ClaimName = Source(session).Name, ReadOnly = true }
             },
             new() { Name = "temporary", EmptyDir = new() { SizeLimit = "128Mi" } }
         };
@@ -82,17 +82,17 @@ public sealed class InspectionHost : IInspectionHost
             Metadata = new() { Name = name, Namespace = NamespaceFor(session) },
             Spec = new()
             {
-                OperatingMode = suspended ? K.SandboxSpecOperatingMode.Suspended : K.SandboxSpecOperatingMode.Running,
-                ShutdownPolicy = K.SandboxSpecShutdownPolicy.Retain,
+                OperatingMode = suspended ? K.SandboxOperatingMode.Suspended : K.SandboxOperatingMode.Running,
+                ShutdownPolicy = K.SandboxShutdownPolicy.Retain,
                 Service = false,
                 PodTemplate = new()
                 {
                     Metadata = new() { Labels = new() { ["app"] = "goblin-inspection" } },
                     Spec = new()
                     {
-                        AutomountServiceAccountToken = false,
+                        MountServiceAccountToken = false,
                         RestartPolicy = "Never",
-                        TerminationGracePeriodSeconds = 2,
+                        TerminationGraceSeconds = 2,
                         SecurityContext = new()
                         {
                             RunAsNonRoot = true,
@@ -108,7 +108,7 @@ public sealed class InspectionHost : IInspectionHost
                                 Command = ["sleep", "infinity"], WorkingDir = "/workspace/repository",
                                 SecurityContext = new()
                                 {
-                                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
+                                    AllowPrivilegeEscalation = false, ReadOnlyRoot = true,
                                     Capabilities = new() { Drop = ["ALL"] }
                                 },
                                 Resources = new()
@@ -132,6 +132,6 @@ public sealed class InspectionHost : IInspectionHost
 
     private static K.SandboxSuspendPatch SuspendPatch() => new()
     {
-        Spec = new() { OperatingMode = K.SandboxSuspendPatchSpecOperatingMode.Suspended }
+        Spec = new() { OperatingMode = K.SandboxSuspendMode.Suspended }
     };
 }
