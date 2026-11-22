@@ -57,11 +57,18 @@ internal sealed class StaticAssets
             ("/assets/providers/teams.svg", "assets/providers/teams.svg", "image/svg+xml"),
             ("/work/app.js", "work/app.js", "text/javascript; charset=utf-8"),
             ("/work/command-submission.js", "work/command-submission.js", "text/javascript; charset=utf-8"),
+            ("/work/commands.js", "work/commands.js", "text/javascript; charset=utf-8"),
+            ("/work/drafts.js", "work/drafts.js", "text/javascript; charset=utf-8"),
             ("/work/model-catalog.js", "work/model-catalog.js", "text/javascript; charset=utf-8"),
             ("/work/model-picker.js", "work/model-picker.js", "text/javascript; charset=utf-8"),
             ("/work/model-selection.js", "work/model-selection.js", "text/javascript; charset=utf-8"),
+            ("/work/navigation.js", "work/navigation.js", "text/javascript; charset=utf-8"),
             ("/work/presentation.js", "work/presentation.js", "text/javascript; charset=utf-8"),
+            ("/work/repository-setup.js", "work/repository-setup.js", "text/javascript; charset=utf-8"),
             ("/work/surface.js", "work/surface.js", "text/javascript; charset=utf-8"),
+            ("/work/workspace-dom.js", "work/workspace-dom.js", "text/javascript; charset=utf-8"),
+            ("/work/workspace-view.js", "work/workspace-view.js", "text/javascript; charset=utf-8"),
+            ("/work/workspace.js", "work/workspace.js", "text/javascript; charset=utf-8"),
             ("/work/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/assets/branding/icon.svg", "assets/branding/icon.svg", "image/svg+xml")
         }) staticFiles.Add(path, (await File.ReadAllBytesAsync(Path.Combine(directory, file)), type));

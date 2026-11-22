@@ -5,6 +5,7 @@ import type {
     FailureKind,
     WorkEventKind,
     GitRepositoryAuthorizationStatus,
+    WorkAction,
 } from "../api/values.js";
 // Goblin-owned Work HTTP views. IDs remain decimal strings.
 // Property names follow the existing JSON contract, just as C# uses JsonPropertyName.
@@ -127,3 +128,52 @@ export type Conversation = {
         };
     }[];
 };
+
+export type ModelSelectionPayload = {
+    modelSelectionProvided?: true;
+    model?: string | null;
+    reasoningEffort?: string | null;
+};
+export type RepositorySetupPayload = {
+    repository: Pick<
+        GitRepositoryChange,
+        "repository" | "gitAuthorName" | "gitAuthorEmail"
+    >;
+    delivery?: {
+        baseBranch: string | null;
+        push: boolean;
+        openPullRequest: boolean;
+    };
+};
+export type SelectedWorkAction =
+    | ({ action: typeof WorkAction.Execute } & Partial<RepositorySetupPayload> &
+          ModelSelectionPayload)
+    | ({
+          action: typeof WorkAction.PrepareGitRepository;
+      } & RepositorySetupPayload)
+    | ({ action: typeof WorkAction.Retry } & ModelSelectionPayload)
+    | {
+          action:
+              | typeof WorkAction.AuthorizeGitRepository
+              | typeof WorkAction.DenyGitRepository;
+          authorizationId: string;
+      }
+    | { action: typeof WorkAction.Reconcile | typeof WorkAction.Cancel }
+    | { action: typeof WorkAction.Approve; attemptId?: string }
+    | {
+          action:
+              | typeof WorkAction.RequestChanges
+              | typeof WorkAction.Answer
+              | typeof WorkAction.AddContext;
+          text: string;
+          attemptId?: string;
+          decisionId?: string;
+      };
+export type WorkCommandPayload = { commandId: string; workId: string } & (
+    | { action: typeof WorkAction.Create; text: string }
+    | ({ expectedVersion: string } & SelectedWorkAction)
+);
+export type ConversationCommandPayload = {
+    conversationId: string;
+    messageId: string;
+} & ({ text: string } | { text: null; workId: string });

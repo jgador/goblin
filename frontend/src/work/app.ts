@@ -1,36 +1,30 @@
 import {
-    WorkStatus,
     AttentionReason,
-    GitRepositoryAuthorizationStatus,
-    WorkAction,
-    IdentityKind,
     ConnectionAvailability,
+    WorkAction,
+    WorkStatus,
 } from "../api/values.js";
+import { errorMessage } from "../api/client.js";
 import { Settings } from "../settings/settings.js";
-import {
-    settingsHref,
-    settingsSelection,
-    settingsTarget,
-} from "../settings/navigation.js";
-import { renderKnowledge } from "../knowledge/page.js";
-import { requestJson, errorMessage } from "../api/client.js";
-import type {
-    Agent,
-    Connection,
-    RuntimeCapabilities,
-} from "../api/workspace-contracts.js";
-import { ReadScope } from "../api/read-scope.js";
-import { CommandSubmission } from "./command-submission.js";
-import type { PendingCommand } from "./command-submission.js";
 import { SystemResources } from "../settings/system.js";
 import {
-    formatTimestamp as time,
-    loadTimeZone,
-    savedTimeZone,
-    resetTimeZone,
     displayTimeZone,
+    loadTimeZone,
+    resetTimeZone,
+    savedTimeZone,
 } from "../settings/timezone.js";
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
+import { CommandSubmission } from "./command-submission.js";
+import type { PendingCommand } from "./command-submission.js";
+import { WorkCommands } from "./commands.js";
+import type { WorkCommandRequest } from "./commands.js";
+import type {
+    ModelSelectionPayload,
+    SelectedWorkAction,
+    Work,
+} from "./contracts.js";
+import { ComposerDrafts } from "./drafts.js";
+import type { DraftSnapshot } from "./drafts.js";
 import { ModelCatalogs } from "./model-catalog.js";
 import {
     ModelSelections,
@@ -39,79 +33,43 @@ import {
     effortStops,
     effortLabel,
 } from "./model-selection.js";
-import { renderModelPicker } from "./model-picker.js";
-import type { GitRepositoryInfo } from "../settings/github.js";
-import { icon, escapeHtml as e } from "./presentation.js";
-import type { Work, View, Conversation } from "./contracts.js";
+import { WorkspaceNavigation } from "./navigation.js";
+import type { WorkspaceContext, WorkspaceView } from "./navigation.js";
 import {
-    renderProgress,
-    renderDecisions,
-    renderOutputs,
-    renderExecutions,
-    renderActivity,
-    renderConversation,
-    matchesWork,
-    relativeTime,
-} from "./surface.js";
-const workspaceReads = new ReadScope();
-let work: View[] = [],
-    conversations: Conversation[] = [],
-    agents: Agent[] = [],
-    connections: Connection[] = [];
-let runtimes: RuntimeCapabilities[] = [],
-    connectionsLoading = false,
-    connectionsLoaded = false;
-const query = new URLSearchParams(location.search);
-let selected =
-        query.get("item") ??
-        sessionStorage.getItem("goblin.selectedWork") ??
-        "",
-    activeChat = "";
-type WorkspaceView = "work" | "chat" | "new" | "knowledge" | "settings";
-const pageFromPath = (): "knowledge" | "settings" | undefined =>
-    /^\/knowledge\/?$/.test(location.pathname)
-        ? "knowledge"
-        : /^\/settings\/?$/.test(location.pathname)
-          ? "settings"
-          : undefined;
-let view: WorkspaceView =
-        pageFromPath() ??
-        (location.pathname.startsWith("/work") && selected ? "work" : "new"),
-    filter = "all",
-    search = "",
-    conversationsOpen = false;
-let selectInitialWork =
-    !pageFromPath() && !query.has("new") && !query.has("conversation");
-const isDirectoryPage = () => view === "knowledge" || view === "settings";
+    isRepositoryHandoff,
+    readRepositorySetup,
+    repositoryApprovalKey,
+    RepositoryDrafts,
+} from "./repository-setup.js";
+import { WorkspaceController } from "./workspace.js";
+import { WorkspaceDom } from "./workspace-dom.js";
+import { renderWorkspace } from "./workspace-view.js";
+
+const workspace = new WorkspaceController(() =>
+    window.dispatchEvent(new Event("goblin-workspace-locked")),
+);
+const navigation = new WorkspaceNavigation();
+const drafts = new ComposerDrafts();
+const repositoryDrafts = new RepositoryDrafts();
+const root = document.querySelector<HTMLDivElement>("#app")!;
+const dom = new WorkspaceDom(root, repositoryDrafts);
+const commands = new WorkCommands(
+    async (...kinds) =>
+        (await api<{ ids: string[] }>("/api/identities", { kinds })).ids,
+);
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
-    conversationExpanded = false;
+    conversationExpanded = false,
+    conversationsOpen = navigation.view === "chat",
+    filter = "all",
+    search = "";
 let sidebarCollapsed =
     mobile.matches ||
     localStorage.getItem("goblin.sidebarCollapsed") === "true";
 let sessionChecked = false,
     sessionFailures = 0,
-    workUnavailable = false;
-let timezoneError = "";
-let settingsSection = settingsSelection(query);
-if (view === "settings")
-    history.replaceState(null, "", settingsHref(settingsSection));
-let settingsReturn: { view: WorkspaceView; id: string } = {
-    view: "new",
-    id: "",
-};
-const drafts = new Map<string, string>();
-const setupDrafts = new Map<
-    string,
-    {
-        values: [string, string][];
-        open: boolean;
-        advancedOpen: boolean;
-        approval: string;
-    }
->();
-const setupErrors = new Map<string, Record<string, string>>();
+    timezoneError = "";
 const modelSelections = new ModelSelections(sessionStorage);
 const modelCatalogs = new ModelCatalogs(
     api,
@@ -134,42 +92,24 @@ const modelCatalogs = new ModelCatalogs(
     },
 );
 let modelPickerOpen = false,
-    modelListOpen = false,
-    modelSliderDragging = false;
-const draftKey = () =>
-    view === "work"
-        ? `work:${selected}`
-        : view === "chat"
-          ? `chat:${activeChat}`
-          : view === "settings"
-            ? `settings:${settingsSection}`
-            : view;
-
-let github: {
-    configured: boolean;
-    login?: string;
-    userCode?: string;
-    verificationUrl?: string;
-    notice?: string;
-} | null = null;
+    modelListOpen = false;
 let authenticated = false,
-    loaded = false,
     error = "",
-    changing = false,
-    loading = false;
-let draft = "";
+    changing = false;
+let activeRefresh: Promise<void> | undefined;
+let commandActive = false;
+type SubmissionContext = { origin: WorkspaceContext; draft?: DraftSnapshot };
+let pendingContext: SubmissionContext | undefined;
 const submission = new CommandSubmission(
     sessionStorage,
     ({ path, body }) => api(path, body),
     () => render(),
 );
 error = submission.recoveryNotice;
-let renderedContext = "";
-const root = document.querySelector<HTMLDivElement>("#app")!;
 const system = new SystemResources();
 let settingsOpener: { id?: string; action?: string; provider?: string } = {};
 const settings = new Settings(system, (provider) => {
-    if (view !== "settings") {
+    if (navigation.view !== "settings") {
         const trigger =
             document.activeElement instanceof HTMLElement
                 ? document.activeElement.closest<HTMLElement>("[data-action]")
@@ -180,7 +120,7 @@ const settings = new Settings(system, (provider) => {
             provider: trigger?.dataset.provider,
         };
     }
-    const previous = settingsSection;
+    const previous = navigation.settingsSection;
     navigate("settings", provider);
     render();
     settings.focusSelection(previous);
@@ -192,29 +132,37 @@ window.addEventListener("goblin-workspace-locked", () => {
     forgetWorkspace();
     render();
 });
-let gitHubRepositories: GitRepositoryInfo[] = [];
 window.addEventListener("goblin-connections-changed", () => {
     modelCatalogs.clear();
     void refreshConnections();
     if (authenticated) settings.refreshConnections();
 });
-const current = () => work.find((x) => x.work.id === selected);
+const current = () =>
+    workspace.state.work.find((item) => item.work.id === navigation.selected);
 function composerWork(): Work | undefined {
-    if (view === "work") return current()?.work;
-    if (view === "chat") {
-        const linked = conversations.find((c) => c.id === activeChat)?.workId;
-        return work.find((x) => x.work.id === linked)?.work;
+    if (navigation.view === "work") return current()?.work;
+    if (navigation.view === "chat") {
+        const linked = workspace.state.conversations.find(
+            (chat) => chat.id === navigation.activeChat,
+        )?.workId;
+        return workspace.state.work.find((item) => item.work.id === linked)
+            ?.work;
     }
 }
-const workAgent = (w?: Work) => agents.find((a) => a.id === w?.agentId);
-const workConnection = (w?: Work) =>
-    connections.find((c) => c.id === workAgent(w)?.connectionId);
+const workAgent = (work?: Work) =>
+    workspace.state.agents.find((agent) => agent.id === work?.agentId);
+const workConnection = (work: Work) =>
+    workspace.state.connections.find(
+        (connection) => connection.id === workAgent(work)?.connectionId,
+    );
 const modelContext = (w?: Work) => ({ work: w, agent: workAgent(w) });
 const modelSelection = (w?: Work) => modelSelections.get(modelContext(w));
 const modelConnection = (w?: Work) => modelSelection(w).connectionId;
-function modelPayload(w: Work) {
+function modelPayload(w: Work): ModelSelectionPayload {
     const choice = modelSelection(w);
-    const source = connections.find((c) => c.id === choice.connectionId);
+    const source = workspace.state.connections.find(
+        (c) => c.id === choice.connectionId,
+    );
     if (source && source.runtime !== "codex") return {};
     return {
         modelSelectionProvided: true,
@@ -226,7 +174,9 @@ function modelCanSubmit(w: Work) {
     if (workConnection(w)?.availability !== ConnectionAvailability.Available)
         return false;
     const choice = modelSelection(w);
-    const source = connections.find((c) => c.id === choice.connectionId);
+    const source = workspace.state.connections.find(
+        (c) => c.id === choice.connectionId,
+    );
     if (source && source.runtime !== "codex") return true;
     if (!choice.model && !choice.effort) return true;
     const catalog = modelCatalogs.get(choice.connectionId).catalog;
@@ -251,7 +201,9 @@ function ensureModels() {
         workConnection(w)?.availability !== ConnectionAvailability.Available
     )
         return;
-    const source = connections.find((c) => c.id === connectionId);
+    const source = workspace.state.connections.find(
+        (c) => c.id === connectionId,
+    );
     if (source && source.runtime !== "codex") return;
     const choice = modelSelection(w);
     void modelCatalogs.load(connectionId, {
@@ -259,67 +211,42 @@ function ensureModels() {
         selectedModel: choice.model,
     });
 }
-const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
-const attention = (w: Work) => w.status === WorkStatus.NeedsAttention;
-const statusClass = (w: Work) =>
-    w.status === WorkStatus.Completed
-        ? "done"
-        : attention(w)
-          ? w.attention?.reason === AttentionReason.ResultReview
-              ? "review"
-              : "waiting"
-          : w.status === WorkStatus.InProgress
-            ? "working"
-            : "paused";
-const status = (w: Work) =>
-    `<span class="status-pill ${statusClass(w)}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "check" : "activity")}${e(label(w.attention?.reason ?? w.status))}</span>`;
-const button = (
-    action: string,
-    text: string,
-    primary = false,
-    disabled = false,
-) =>
-    `<button class="${primary ? "primary" : "secondary"}" data-action="${action}" ${disabled || submission.sending || ((submission.pending || workUnavailable) && !["resend", "dismiss", "new-work", "changes"].includes(action)) ? "disabled" : ""}>${e(text)}</button>`;
-async function api<T>(path: string, body?: unknown): Promise<T> {
-    return requestJson<T>(path, {
-        body,
-        signal: body === undefined ? workspaceReads.signal : undefined,
-        onUnauthorized: () =>
-            window.dispatchEvent(new Event("goblin-workspace-locked")),
-    });
+function api<T>(path: string, body?: unknown) {
+    return workspace.request<T>(path, body);
 }
+
 function forgetWorkspace() {
-    workspaceReads.reset();
-    loading = false;
-    connectionsLoading = false;
+    workspace.reset();
+    activeRefresh = undefined;
     timezoneSetup.reset();
     resetTimeZone();
     timezoneError = "";
-    work = [];
-    conversations = [];
-    agents = [];
-    connections = [];
-    runtimes = [];
-    connectionsLoaded = false;
-    gitHubRepositories = [];
-    github = null;
-    draft = "";
     drafts.clear();
-    setupDrafts.clear();
-    setupErrors.clear();
+    repositoryDrafts.clear();
+    pendingContext = undefined;
+    changing = false;
     modelCatalogs.clear();
     modelSelections.clear();
     modelPickerOpen = false;
     modelListOpen = false;
-    modelSliderDragging = false;
-    loaded = false;
+    dom.reset();
     system.reset();
     settings.reset();
 }
-async function refresh(preserveError = false) {
-    if (loading || submission.sending) return;
-    loading = true;
-    const signal = workspaceReads.signal;
+
+function refresh(preserveError = false) {
+    if (activeRefresh || commandActive) return activeRefresh;
+    const task = loadWorkspace(preserveError);
+    activeRefresh = task;
+    const finished = () => {
+        if (activeRefresh === task) activeRefresh = undefined;
+    };
+    void task.then(finished, finished);
+    return task;
+}
+
+async function loadWorkspace(preserveError: boolean) {
+    const signal = workspace.signal;
     try {
         const session = await api<{ authenticated: boolean }>("/api/session");
         signal.throwIfAborted();
@@ -344,240 +271,140 @@ async function refresh(preserveError = false) {
         }
         timezoneSetup.reset();
         settings.refreshConnections();
-        if (query.get("returnTo") === "logs") {
+        if (navigation.query.get("returnTo") === "logs") {
             if (timezoneError) return;
             location.replace("/logs/select/vmui/" + location.hash);
             return;
         }
-        if (query.get("returnTo") === "headlamp") {
+        if (navigation.query.get("returnTo") === "headlamp") {
             location.replace("/headlamp/");
             return;
         }
         void refreshConnections();
         void system.refresh();
-        const results = await Promise.allSettled([
-            api<View[]>("/api/work"),
-            api<Conversation[]>("/api/conversations"),
-            api<Agent[]>("/api/agents"),
-            api<typeof runtimes>("/api/runtimes"),
-        ]);
-        const [items, chats, people, capabilities] = results;
+        const loaded = await workspace.refreshWork();
         signal.throwIfAborted();
-        if (items.status === "fulfilled") {
-            work = items.value;
-            if (selectInitialWork) {
-                selectInitialWork = false;
-                const initial =
-                    work.find((x) => x.work.id === selected) ??
-                    work.toSorted(
-                        (a, b) =>
-                            Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-                    )[0];
-                if (initial) navigate("work", initial.work.id);
-            }
-            loaded = true;
-            workUnavailable = false;
-            if (view === "work" && !work.some((x) => x.work.id === selected))
-                view = "new";
+        if (loaded) {
+            const items = workspace.state.work;
+            const initial = navigation.initialWork(items);
+            if (initial) navigate("work", initial);
+            if (!commandActive) navigation.showHomeIfSelectionMissing(items);
             if (
+                !commandActive &&
                 !submission.pending &&
                 !preserveError &&
                 error !== submission.recoveryNotice
             )
                 error = "";
-        } else {
-            workUnavailable = true;
-            if (!submission.pending && !preserveError)
-                error =
-                    "Work could not be loaded. You can still manage connections in Settings.";
-        }
-        if (chats.status === "fulfilled") conversations = chats.value;
-        if (people.status === "fulfilled") agents = people.value;
-        if (capabilities.status === "fulfilled") runtimes = capabilities.value;
+        } else if (!commandActive && !submission.pending && !preserveError)
+            error =
+                "Work could not be loaded. You can still manage connections in Settings.";
     } catch {
         if (!signal.aborted) sessionFailures++;
     } finally {
         if (!signal.aborted) {
             if (!authenticated) forgetWorkspace();
-            loading = false;
             render(true);
         }
     }
 }
 async function refreshConnections() {
     if (!authenticated) return;
-    if (connectionsLoading) return;
-    connectionsLoading = true;
-    const signal = workspaceReads.signal;
-    const [runtime, gitHubConnection, enabled] = await Promise.allSettled([
-        api<Connection[]>("/api/connections"),
-        api<NonNullable<typeof github>>("/api/github"),
-        api<GitRepositoryInfo[]>("/api/github/repositories"),
-    ]);
-    if (signal.aborted || !authenticated) return;
-    if (runtime.status === "fulfilled") {
-        const previous = new Map(
-            connections.map((c) => [c.id, c.availability]),
-        );
-        connections = runtime.value;
-        for (const connection of connections)
-            if (
-                connection.availability === ConnectionAvailability.Available &&
-                previous.get(connection.id) !== ConnectionAvailability.Available
-            ) {
-                modelCatalogs.invalidate(connection.id);
-            }
-    } else
-        connections = connections.map((c) => ({
-            ...c,
-            availability: ConnectionAvailability.Unavailable,
-        }));
-    if (gitHubConnection.status === "fulfilled")
-        github = gitHubConnection.value;
-    else if (github)
-        github = { ...github, notice: "GitHub status could not be refreshed." };
-    if (enabled.status === "fulfilled") gitHubRepositories = enabled.value;
-    connectionsLoading = false;
-    connectionsLoaded = true;
+    const signal = workspace.signal;
+    const available = await workspace.refreshConnections();
+    if (!available || signal.aborted) return;
+    for (const id of available) modelCatalogs.invalidate(id);
     render(true);
 }
+
+function restoredContext(command: PendingCommand): WorkspaceContext {
+    if (command.path === "/api/work/commands")
+        return command.body.action === WorkAction.Create
+            ? "new"
+            : `work:${command.body.workId}`;
+    return `chat:${command.body.conversationId}`;
+}
+
 async function send(
-    path: PendingCommand["path"],
-    body: Record<string, unknown> | (() => Promise<Record<string, unknown>>),
-    repeat = false,
+    prepare?: () => Promise<WorkCommandRequest>,
+    consumesDraft = false,
 ) {
-    if (submission.sending || (submission.pending && !repeat)) return false;
+    if (commandActive || (prepare && submission.pending)) return;
+    const pending = submission.pending;
+    const context: SubmissionContext | undefined = prepare
+        ? {
+              origin: navigation.context,
+              draft: consumesDraft
+                  ? drafts.capture(navigation.context)
+                  : undefined,
+          }
+        : (pendingContext ??
+          (pending ? { origin: restoredContext(pending) } : undefined));
+    if (!context) return;
+    const signal = workspace.signal;
     error = "";
+    commandActive = true;
     let confirmed = false;
-    const submittedDraft = draftKey();
-    const signal = workspaceReads.signal;
     try {
-        const saved = repeat
-            ? await submission.resend()
-            : await submission.submit(async () => {
-                  const prepared =
-                      typeof body === "function" ? await body() : body;
+        const saved = prepare
+            ? await submission.submit(async () => {
+                  const command = await prepare();
                   signal.throwIfAborted();
-                  return { path, body: prepared };
-              });
-        if (!saved) return false;
-        if (signal.aborted) return false;
-        const command = saved.body;
-        draft = "";
-        changing = false;
+                  return command;
+              })
+            : await submission.resend();
+        if (!saved || signal.aborted) return;
+        // Let an earlier poll finish before selecting a newly confirmed item.
+        await activeRefresh;
+        if (signal.aborted) return;
         confirmed = true;
-        drafts.delete(submittedDraft);
-        if (
-            path === "/api/work/commands" &&
-            command.action === WorkAction.Create
-        ) {
-            selected = String(command.workId);
-            view = "work";
-            conversationExpanded = false;
-            rememberWork();
+        if (context.draft) drafts.confirm(context.draft);
+        if (navigation.context === context.origin) {
+            if (context.draft) changing = false;
+            if (
+                saved.path === "/api/work/commands" &&
+                saved.body.action === WorkAction.Create
+            )
+                navigate("work", saved.body.workId);
+            if (saved.path === "/api/conversations/commands") {
+                if (typeof saved.body.workId === "string")
+                    navigate("work", saved.body.workId);
+                else if (navigation.activeChat !== saved.body.conversationId)
+                    navigate("chat", saved.body.conversationId);
+            }
         }
     } catch (failure) {
-        if (!signal.aborted)
+        if (!signal.aborted) {
+            if (submission.pending) pendingContext = context;
             error = errorMessage(
                 failure,
                 "The request could not be confirmed.",
             );
+        }
     } finally {
-        if (!signal.aborted) await refresh(!confirmed);
+        commandActive = false;
+        if (!signal.aborted) {
+            if (!submission.pending) pendingContext = undefined;
+            await refresh(!confirmed);
+        } else render();
     }
-    return confirmed;
 }
-async function reserve(...kinds: IdentityKind[]): Promise<string[]> {
-    const result = await api<{ ids: string[] }>("/api/identities", { kinds });
-    return result.ids;
-}
-async function command(
-    action: WorkAction,
-    extra: Record<string, unknown> = {},
-) {
+
+async function command(action: SelectedWorkAction, consumesDraft = false) {
     const item = current();
-    if (item)
-        await send("/api/work/commands", async () => {
-            const [commandId] = await reserve(IdentityKind.Command);
-            return {
-                commandId,
-                workId: item.work.id,
-                action,
-                expectedVersion: item.version,
-                ...extra,
-            };
-        });
+    if (item) await send(() => commands.selected(item, action), consumesDraft);
 }
-function message(author: string, text: string, at?: string) {
-    return `<div class="message"><div class="${author === "Goblin" ? "bot-avatar" : "avatar"}">${author === "Goblin" ? '<img src="/assets/branding/icon.svg" alt="">' : "You"}</div><div><div class="message-name">${e(author)}<time>${at ? e(time(at)) : ""}</time></div><div class="message-text"><p class="preserve-lines">${e(text)}</p></div></div></div>`;
-}
-function connectionButton() {
-    const agent = agents.find((a) => a.isDefault);
-    const connection = connections.find((c) => c.id === agent?.connectionId);
-    return `<button class="connection-choice" type="button" data-action="settings-codex" title="Manage Codex connection"><img src="/assets/providers/codex.png" width="24" height="24" alt=""><span class="connection-name">${e(connection?.name ?? "Codex")}</span>${icon("chevron")}</button>`;
-}
-function composer(kind: string, placeholder: string) {
-    const note =
-        kind === "chat"
-            ? "Saved as a conversation · Track as Work to start Goblin"
-            : changing
-              ? "Requests changes to the current result"
-              : current()?.work.attention?.reason ===
-                  AttentionReason.InputRequired
-                ? "Answers the pending question"
-                : current()?.work.status === WorkStatus.Ready
-                  ? "Saves context for this work · Start work when ready"
-                  : "Saves context with this work";
-    return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
-}
-function rememberWork() {
-    sessionStorage.setItem("goblin.selectedWork", selected);
-    history.replaceState(
-        null,
-        "",
-        `/work?item=${encodeURIComponent(selected)}`,
-    );
-}
+
 function navigate(
     next: WorkspaceView,
     id = "",
     historyMode: "auto" | "restore" = "auto",
 ) {
-    selectInitialWork = false;
-    if (next === "settings" && view !== "settings")
-        settingsReturn = {
-            view,
-            id: view === "work" ? selected : view === "chat" ? activeChat : "",
-        };
-    const leavingSettings = view === "settings" && next !== "settings";
+    const leavingSettings =
+        navigation.view === "settings" && next !== "settings";
     if (leavingSettings) settings.reset();
-    drafts.set(draftKey(), draft);
-    if (
-        historyMode === "auto" &&
-        (next !== view || (next === "settings" && id !== settingsSection)) &&
-        (isDirectoryPage() || next === "knowledge" || next === "settings")
-    )
-        history.pushState(null, "", location.href);
-    view = next;
-    if (next === "work") {
-        selected = id;
-        rememberWork();
-    } else if (next === "chat") {
-        activeChat = id;
-        history.replaceState(
-            null,
-            "",
-            "/?conversation=" + encodeURIComponent(id),
-        );
-    } else if (next === "settings") {
-        settingsSection = settingsTarget(id);
-        history.replaceState(null, "", settingsHref(settingsSection));
-        search = "";
-    } else if (next === "knowledge") {
-        history.replaceState(null, "", `/${next}`);
-        search = "";
-    } else history.replaceState(null, "", "/?new=work");
-    draft = drafts.get(draftKey()) ?? "";
+    navigation.navigate(next, id, historyMode);
+    if (navigation.isDirectory) search = "";
     changing = false;
     conversationExpanded = false;
     activityOpen = false;
@@ -589,510 +416,86 @@ function navigate(
         void refreshConnections();
     }
 }
-function renderSidebar() {
-    const matches = work.filter(({ work: w }) =>
-        matchesWork(
-            w,
-            search,
-            conversations,
-            agents.find((a) => a.id === w.agentId)?.name ?? "",
-        ),
-    );
-    const inView = (w: Work) =>
-        filter === "attention"
-            ? attention(w)
-            : filter === "done"
-              ? w.status === WorkStatus.Completed
-              : filter === "assigned"
-                ? !!w.agentId &&
-                  ![WorkStatus.Completed, WorkStatus.Cancelled].some(
-                      (value) => value === w.status,
-                  )
-                : true;
-    const shown = matches
-        .filter((x) => search || inView(x.work))
-        .toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-    const chats = conversations.filter(
-        (c) =>
-            !c.workId &&
-            [c.title, ...c.messages.map((m) => m.text)].some((text) =>
-                text.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-            ),
-    );
-    return `<aside id="workspace-sidebar" class="sidebar" aria-label="Workspace" ${sidebarCollapsed || activityOpen ? "inert" : ""} ${mobile.matches && !sidebarCollapsed ? 'role="dialog" aria-modal="true"' : ""}>
-        <div class="sidebar-heading"><a class="brand" href="/" data-action="new-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button></div>
-        <button class="new-chat" data-action="new-work">${icon("plus")}New work</button>
-        <div class="sidebar-history" data-scroll="sidebar"><div class="history-heading"><h2>${search ? "Search results" : "Your work"}</h2><label class="sr-only" for="work-view">Work view</label><select id="work-view" class="field-control select-control work-view">${[
-            ["all", "All work", work.length],
-            [
-                "assigned",
-                "My work",
-                work.filter(
-                    (x) =>
-                        !!x.work.agentId &&
-                        ![WorkStatus.Completed, WorkStatus.Cancelled].some(
-                            (value) => value === x.work.status,
-                        ),
-                ).length,
-            ],
-            [
-                "attention",
-                "Needs attention",
-                work.filter((x) => attention(x.work)).length,
-            ],
-            [
-                "done",
-                WorkStatus.Completed,
-                work.filter((x) => x.work.status === WorkStatus.Completed)
-                    .length,
-            ],
-        ]
-            .map(
-                ([value, name, count]) =>
-                    `<option value="${value}" ${filter === value ? "selected" : ""}>${name} (${count})</option>`,
-            )
-            .join("")}</select></div>
-        <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w, updatedAt }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${w.id}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)}"><span class="work-card-copy"><span class="work-title">${e(w.objective)}</span><span class="work-card-meta"><span>${e(workAgent(w)?.name ?? "Goblin")}</span><time datetime="${e(updatedAt ?? "")}">${e(relativeTime(updatedAt))}</time></span></span><span class="work-indicator ${statusClass(w)}" aria-label="${e(label(w.attention?.reason ?? w.status))}" title="${e(label(w.attention?.reason ?? w.status))}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "circleCheck" : w.status === WorkStatus.InProgress ? "activity" : "clock")}</span></button>`).join("") || `<p class="sidebar-empty">${search || filter !== "all" ? "No matching work." : loaded ? "Your work will appear here." : "Loading your work…"}</p>`}</nav>
-        <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
-        <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen || search ? "" : "hidden"}>${chats.map((c) => `<button class="work-card ${view === "chat" && activeChat === c.id ? "selected" : ""}" data-action="select-chat" data-id="${c.id}" aria-current="${view === "chat" && activeChat === c.id ? "page" : "false"}"><span class="work-title">${e(c.title)}</span></button>`).join("") || '<p class="sidebar-empty">Save ideas and context here.</p>'}</nav></div>
-        <nav class="primary-navigation" aria-label="Workspace navigation">${isDirectoryPage() ? `<button class="nav-button" data-action="browse-work">${icon("work")}Work</button>` : ""}<a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
-        <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${system.summary()}</button></aside>`;
-}
-function renderHeader() {
-    return `<header class="workspace-header" ${(mobile.matches && !sidebarCollapsed) || activityOpen ? "inert" : ""}><div class="header-left"><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button></div>${isDirectoryPage() ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "settings" ? "Settings" : "Knowledge"}</span>` : `<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work, decisions, outputs…" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions"><button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button><button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
-}
-function renderSearchResults() {
-    if (isDirectoryPage() || !search || !sidebarCollapsed) return "";
-    const items = work.filter((x) =>
-        matchesWork(
-            x.work,
-            search,
-            conversations,
-            agents.find((a) => a.id === x.work.agentId)?.name ?? "",
-        ),
-    );
-    const chats = conversations.filter(
-        (c) =>
-            !c.workId &&
-            [c.title, ...c.messages.map((m) => m.text)].some((text) =>
-                text.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-            ),
-    );
-    return `<section class="search-results" aria-label="Search results"><div class="section-heading"><h3>Search results</h3><button class="text-button" data-action="clear-search">Clear search</button></div>${items.map(({ work: w }) => `<button class="work-card" data-action="search-work" data-id="${w.id}">${icon("work")}<span class="work-title">${e(w.objective)}</span></button>`).join("")}${chats.map((c) => `<button class="work-card" data-action="search-chat" data-id="${c.id}">${icon("chat")}<span class="work-title">${e(c.title)}</span></button>`).join("")}${!items.length && !chats.length ? '<p class="section-empty">No matching work or conversations.</p>' : ""}</section>`;
-}
-function renderActivityPanel() {
-    return `<aside id="work-activity" class="activity-panel ${activityOpen ? "is-open" : ""}" aria-label="Activity" ${activityOpen ? 'role="dialog" aria-modal="true"' : "inert"}><div class="activity-heading"><h2>${icon("activity")}Activity</h2><button id="close-activity" class="icon-button" data-action="toggle-activity" aria-label="Close activity">${icon("close")}</button></div><div class="activity-body" data-scroll="activity">${renderActivity(view === "work" ? current()?.work : undefined)}</div></aside>`;
-}
-function renderHome() {
-    const available = connections.some(
-        (c) => c.availability === ConnectionAvailability.Available,
-    );
-    const disconnected =
-        !connections.length ||
-        connections.every((c) => c.availability === "Disconnected");
-    return `<section class="home" aria-labelledby="home-title"><div class="home-content"><h1 id="home-title">What should we work on?</h1>${composer("new", "Describe the intended outcome…")}<div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><span>${disconnected ? "Connect an AI provider when you’re ready to start." : "Your AI connection may need attention."}</span><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
-}
-function refreshHome(html: string) {
-    const next = document.createElement("template");
-    next.innerHTML = html;
-    // Keep the home, heading, composer and header mounted. Only server-backed
-    // regions that actually changed need replacing during a refresh.
-    for (const selector of [
-        ".sidebar",
-        ".workspace-notices",
-        ".connection-choice",
-        ".connection-nudge",
-    ]) {
-        const existing = root.querySelector(selector)!;
-        const updated = next.content.querySelector(selector)!;
-        if (!existing.isEqualNode(updated)) existing.replaceWith(updated);
-    }
-    const reply = root.querySelector<HTMLTextAreaElement>("#reply")!;
-    if (reply.value !== draft) reply.value = draft;
-    reply.disabled = submission.sending;
-    root.querySelector<HTMLButtonElement>(".send")!.disabled =
-        submission.sending || !!submission.pending || workUnavailable;
-}
+
 function render(preserveHome = false, forceSelect = false) {
-    const active =
-        document.activeElement instanceof HTMLElement &&
-        root.contains(document.activeElement)
-            ? document.activeElement
-            : null;
-    const activeButton = active?.closest<HTMLButtonElement>(
-        "button[data-action]",
-    );
-    const buttonData = activeButton ? { ...activeButton.dataset } : null;
-    const context = draftKey();
-    const sameContext = context === renderedContext;
-    const authorization = current()?.work.repositoryAuthorization;
-    const approvalKey = authorization
-        ? `${authorization.id}:${authorization.status}`
-        : "";
-    const previousApproval =
-        root.querySelector<HTMLElement>("#github-repository-options")?.dataset
-            .approval ?? "";
-    const gitHubAuthorizationChanged =
-        sameContext && approvalKey !== previousApproval;
-    if (!sameContext) {
+    const { context, view, settingsSection } = navigation;
+    if (context !== dom.context) {
         modelPickerOpen = false;
         modelListOpen = false;
     }
-    // Keep the native picker and its keyboard interaction alive during polling.
-    // Loaded state is applied on the next render after the user leaves the select.
-    if (
-        (active?.closest("select") || modelSliderDragging) &&
-        sameContext &&
-        authenticated &&
-        !submission.sending &&
-        !forceSelect &&
-        !gitHubAuthorizationChanged
-    )
-        return;
-    if (
-        authenticated &&
-        renderedContext.startsWith("work:") &&
-        root.querySelector(".work-setup")
-    )
-        setupDrafts.set(renderedContext, {
-            approval: previousApproval,
-            values: Array.from(
-                root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-                    ".work-setup input:not([readonly]),.work-setup select",
-                ),
-            ).map((x) => [x.id, x.value]),
-            open:
-                root.querySelector<HTMLDetailsElement>(
-                    "#github-repository-options",
-                )?.open ?? false,
-            advancedOpen:
-                root.querySelector<HTMLDetailsElement>(
-                    "#github-repository-advanced",
-                )?.open ?? false,
-        });
-    const preserved = sameContext
-        ? Array.from(
-              root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
-                  "input[id],select[id]",
-              ),
-          )
-              .filter(
-                  (x) =>
-                      !(
-                          gitHubAuthorizationChanged &&
-                          x.closest('[data-form="github-repository"]')
-                      ) &&
-                      ![
-                          "work-model",
-                          "work-effort",
-                          "model-connection",
-                          "work-view",
-                      ].includes(x.id),
-              )
-              .map((x) => [x.id, x.value] as const)
-        : [];
-    const detailStates = sameContext
-        ? Array.from(root.querySelectorAll<HTMLDetailsElement>("details[id]"))
-              .filter((x) => x.open || x.classList.contains("latest-result"))
-              .map((x) => [x.id, x.open] as const)
-        : [];
-    const focus =
-        active instanceof HTMLTextAreaElement ||
-        active instanceof HTMLInputElement
-            ? active
-            : null;
-    const activeId = active?.id;
-    const activeSummary = active?.closest("summary")?.parentElement?.id;
-    const cursor = focus?.selectionStart,
-        cursorEnd = focus?.selectionEnd;
-    const scrolls = Array.from(
-        root.querySelectorAll<HTMLElement>("[data-scroll]"),
-    ).map((x) => [x.dataset.scroll, x.scrollTop] as const);
-    renderedContext = context;
-    document.title =
-        view === "settings"
-            ? "Settings · Goblin"
-            : view === "knowledge"
-              ? "Knowledge · Goblin"
-              : view === "work" && authenticated && current()
-                ? current()!.work.objective.slice(0, 70) + " · Goblin"
-                : "Goblin";
-    const connectionNotice =
-        sessionFailures && (sessionChecked || sessionFailures > 1)
-            ? '<p class="command-notice" role="status">Could not reach Goblin. Reconnecting…</p>'
-            : "";
-    if (!authenticated) {
-        root.innerHTML = `<main class="unlock-page"><a class="brand" href="/"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><section class="unlock-card"><h1>${sessionChecked ? "Open your workspace" : "Opening your workspace…"}</h1>${sessionChecked ? `<p>Enter the password chosen when this Goblin workspace was set up.</p><form data-form="unlock"><label for="password">Goblin password</label><input class="field-control" id="password" name="password" type="password" autocomplete="current-password" required maxlength="128"><button class="primary" type="submit">Open workspace${icon("arrow")}</button></form>` : ""}${connectionNotice}${error ? `<p class="command-notice" role="alert">${e(error)}</p>` : ""}</section><p class="unlock-note">Your self-hosted AI coworker</p></main>`;
-    } else {
-        const modal = (mobile.matches && !sidebarCollapsed) || activityOpen;
-        const html = `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile.matches && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
-            <div class="workspace-notices">${connectionNotice}${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
-            ${view === "settings" ? '<div id="settings-host"></div>' : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" && current() ? `<section class="detail" aria-label="Selected work">${renderDetail()}</section>` : renderHome()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
-        if (
-            preserveHome &&
-            sameContext &&
-            view === "new" &&
-            root.querySelector(".home")
-        )
-            refreshHome(html);
-        else {
-            // Reuse the live settings forms across workspace polling renders.
-            // Passwords, device sign-in, selection and local form state stay in their controllers.
-            if (view === "settings") settings.element.remove();
-            root.innerHTML = html;
-            if (view === "settings")
-                settings.attach(
-                    root.querySelector<HTMLElement>("#settings-host")!,
-                    settingsSection,
-                );
-        }
-    }
-    for (const [id, value] of preserved) {
-        const field = document.getElementById(id) as
-            HTMLInputElement | HTMLSelectElement | null;
-        if (field) field.value = value;
-    }
-    for (const [id, open] of detailStates) {
-        const detail = document.getElementById(id) as HTMLDetailsElement | null;
-        if (detail) detail.open = open;
-    }
-    const savedSetup = setupDrafts.get(context);
-    const setup = savedSetup?.approval === approvalKey ? savedSetup : undefined;
-    for (const [id, value] of setup?.values ?? []) {
-        const field = document.getElementById(id) as
-            HTMLInputElement | HTMLSelectElement | null;
-        if (field) field.value = value;
-    }
-    const gitHubRepositoryOptions = root.querySelector<HTMLDetailsElement>(
-        "#github-repository-options",
-    );
-    if (gitHubRepositoryOptions && setup?.open)
-        gitHubRepositoryOptions.open = true;
-    const advancedRepositoryOptions = root.querySelector<HTMLDetailsElement>(
-        "#github-repository-advanced",
-    );
-    if (advancedRepositoryOptions && setup?.advancedOpen)
-        advancedRepositoryOptions.open = true;
-    showSetupErrors();
-    if (focus?.id && sameContext) {
-        const replacement = document.getElementById(focus.id) as
-            HTMLInputElement | HTMLTextAreaElement | null;
-        if (replacement && !replacement.closest("[inert]")) {
-            replacement.focus({ preventScroll: true });
-            if (
-                cursor != null &&
-                (replacement instanceof HTMLTextAreaElement ||
-                    ["text", "search", "password"].includes(replacement.type))
-            )
-                replacement.setSelectionRange(cursor, cursorEnd ?? cursor);
-        }
-    }
-    if (buttonData?.action)
-        Array.from(
-            root.querySelectorAll<HTMLButtonElement>("button[data-action]"),
-        )
-            .find(
-                (b) =>
-                    b.dataset.action === buttonData.action &&
-                    b.dataset.id === buttonData.id &&
-                    b.dataset.value === buttonData.value &&
-                    b.dataset.provider === buttonData.provider &&
-                    !b.closest("[inert]") &&
-                    b.getClientRects().length,
-            )
-            ?.focus({ preventScroll: true });
-    if (sameContext && !focus && !buttonData) {
-        const replacement = activeSummary
-            ? document
-                  .getElementById(activeSummary)
-                  ?.querySelector<HTMLElement>("summary")
-            : activeId
-              ? document.getElementById(activeId)
-              : null;
-        if (replacement && !replacement.closest("[inert]"))
-            replacement.focus({ preventScroll: true });
-    }
-    for (const [name, top] of scrolls) {
-        const element = root.querySelector<HTMLElement>(
-            `[data-scroll="${name}"]`,
-        );
-        if (element && (sameContext || name === "sidebar"))
-            element.scrollTop = top;
-    }
-    if (active?.isConnected && active.closest(".settings-page"))
-        active.focus({ preventScroll: true });
-    if (authenticated && view !== "settings") ensureModels();
-}
-function renderDetail() {
-    const item = current()!;
-    const w = item.work,
-        attempt = w.attempts.at(-1);
-    return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading"><div class="work-context"><button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button><span>Work ${e(w.id)}</span></div><div class="title-row"><h2 id="work-title-heading" tabindex="-1" class="preserve-lines">${e(w.objective)}</h2><div class="detail-actions"><button class="secondary" data-action="share-work">${icon("share")}Share</button><button id="show-activity" class="secondary activity-toggle" data-action="toggle-activity" aria-label="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button></div></div><div class="detail-properties">${status(w)}<span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div></header>
-        <div class="work-layout"><div class="work-main">${controls(w)}
-        ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading"><div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span class="section-count">${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
-        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3><p class="section-description">Results and artifacts from this work.</p></div>${w.results.length + w.artifacts.length > 3 ? '<button class="text-button" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section></div>
-        <aside class="work-support" aria-label="Work details"><section class="work-section progress-section" aria-labelledby="progress-heading"><div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}</div></section>
-        ${w.attempts.length ? `<section class="work-section executions-section" aria-labelledby="executions-heading"><div class="section-content"><div class="section-heading"><h3 id="executions-heading">Executions</h3><span class="section-count">${w.attempts.length}</span></div>${renderExecutions(w)}</div></section>` : ""}
-        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div></div></section></aside></div></div>
-        <div class="work-composer"><section class="work-conversation" id="work-conversation" data-scroll="conversation" aria-label="Conversation about this Work" ${conversationExpanded ? "" : "hidden"}>${conversationExpanded ? `<div class="composer-heading"><h3>Conversation</h3><button class="text-button" data-action="toggle-conversation" aria-expanded="true" aria-controls="work-conversation">Hide conversation</button></div>${renderConversation(w)}` : ""}</section>${composer("work", changing ? "What would you like Goblin to change?" : w.attention?.reason === AttentionReason.InputRequired ? "Answer Goblin’s question…" : "Add context to this work…")}</div>`;
-}
-function modelControls(w?: Work) {
-    const choice = modelSelection(w);
-    const state = modelCatalogs.get(choice.connectionId);
-    return renderModelPicker({
-        choice,
-        ...state,
-        connectionId: choice.connectionId,
-        runtime: connections.find((c) => c.id === choice.connectionId)?.runtime,
-        pickerOpen: modelPickerOpen,
-        listOpen: modelListOpen,
+    const work = view === "work" ? current()?.work : undefined;
+    const draft = drafts.get(context);
+    const submissionState = {
+        sending: commandActive,
+        pending: !!submission.pending,
+    };
+    const rendered = dom.render({
+        context,
+        approvalKey: repositoryApprovalKey(work),
+        authenticated,
+        preserveHome,
+        forceSelect,
+        home: view === "new",
+        draft,
+        ...submissionState,
+        workUnavailable: workspace.state.workUnavailable,
+        title:
+            view === "settings"
+                ? "Settings · Goblin"
+                : view === "knowledge"
+                  ? "Knowledge · Goblin"
+                  : work && authenticated
+                    ? work.objective.slice(0, 70) + " · Goblin"
+                    : "Goblin",
+        markup: () => {
+            const choice = work ? modelSelection(work) : undefined;
+            return renderWorkspace({
+                navigation,
+                workspace: workspace.state,
+                mobile: mobile.matches,
+                sidebarCollapsed,
+                activityOpen,
+                conversationExpanded,
+                conversationsOpen,
+                filter,
+                search,
+                draft,
+                changing,
+                authenticated,
+                sessionChecked,
+                sessionFailures,
+                timezoneError,
+                error,
+                submission: submissionState,
+                systemSummary: system.summary(),
+                canExecute: !!work && modelCanSubmit(work),
+                model: choice && {
+                    choice,
+                    ...modelCatalogs.get(choice.connectionId),
+                    connectionId: choice.connectionId,
+                    runtime: workspace.state.connections.find(
+                        (c) => c.id === choice.connectionId,
+                    )?.runtime,
+                    pickerOpen: modelPickerOpen,
+                    listOpen: modelListOpen,
+                },
+            });
+        },
+        settings:
+            authenticated && view === "settings"
+                ? {
+                      detach: () => settings.element.remove(),
+                      attach: () =>
+                          settings.attach(
+                              root.querySelector<HTMLElement>(
+                                  "#settings-host",
+                              )!,
+                              settingsSection,
+                          ),
+                  }
+                : undefined,
     });
-}
-function gitHubRepositorySetup(w: Work, required = false) {
-    const handoff = [
-        AttentionReason.GitRepositoryRequired,
-        AttentionReason.InputRequired,
-    ].some((reason) => reason === w.attention?.reason);
-    const approval = w.repositoryAuthorization;
-    const proposed = approval?.target.repository;
-    const grant =
-        approval?.status === GitRepositoryAuthorizationStatus.Invalidated
-            ? undefined
-            : proposed?.grant;
-    const pendingApproval =
-        approval?.status === GitRepositoryAuthorizationStatus.Pending;
-    const suggestions = w.repositoryRequest?.repositories ?? [];
-    const name =
-        proposed?.repository ??
-        (suggestions.length === 1 ? suggestions[0] : "");
-    const preview =
-        pendingApproval && grant
-            ? `<section class="github-repository-authorization" aria-label="GitHub authorization">
-                <header><h3>Authorize GitHub access</h3><p>Review the repository and Git actions for this Work.</p></header>
-                <dl class="execution-properties github-repository-authorization-details">
-                    <dt>Repository</dt><dd>${e(proposed?.repository)}</dd>
-                    <dt>GitHub account</dt><dd>${e(grant.login)}</dd>
-                    <dt>Base branch</dt><dd>${e(grant.baseBranch)}</dd>
-                    <dt>Work branch</dt><dd>${e(grant.branch)}</dd>
-                    <dt>Git author</dt><dd>${e(proposed?.gitAuthorName)} &lt;${e(proposed?.gitAuthorEmail)}&gt;</dd>
-                </dl>
-                <div class="github-repository-permissions"><h4>Git actions</h4><ul>
-                    <li>Fetch repository and create a local work branch.</li>
-                    <li>${grant.allowPush ? "Push changes to the work branch." : "Keep changes in this Work without pushing."}</li>
-                    <li>${grant.allowPullRequest ? "Open a draft pull request." : "No pull request."}</li>
-                </ul></div>
-                ${approval.enableRepository ? '<p class="github-repository-authorization-note">This also enables the repository in Goblin for future requests. Requests naming an enabled repository can start directly.</p>' : ""}
-                <div class="github-repository-actions">${button("authorize-github-repository", approval.enableRepository ? "Enable repository & authorize this Work" : "Authorize this Work", true)}${button("deny-github-repository", "Decline")}</div>
-            </section>`
-            : approval?.status === GitRepositoryAuthorizationStatus.Invalidated
-              ? "<p>Context changed. Review repository access again.</p>"
-              : approval?.status === GitRepositoryAuthorizationStatus.Denied
-                ? "<p>Repository access was declined. You can review a different request.</p>"
-                : "";
-    return `${preview}<details id="github-repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
-        <summary>${icon("chevron")}${pendingApproval ? "Change repository or actions" : "Repository access"}</summary>
-        <p>Choose an enabled repository to continue. Goblin uses its default branch and your connected GitHub commit identity. Changes stay local unless your request asks to publish them.</p>
-        ${suggestions.length > 1 ? `<p class="field-hint">Several repositories match: ${e(suggestions.join(", "))}. Choose the full name.</p>` : ""}
-        <form class="work-setup github-repository-form" data-form="github-repository" novalidate>
-            <div><label for="github-repository">Repository</label>
-                <input class="field-control" id="github-repository" name="github-repository" list="known-github-repositories" value="${e(name)}" placeholder="owner/repository or GitHub URL" required aria-describedby="github-repository-error">
-                <datalist id="known-github-repositories">${gitHubRepositories.map((r) => `<option value="${e(r.name)}">${r.enabled ? "Enabled" : "Requires enablement"}</option>`).join("")}</datalist>
-                <p class="field-error" id="github-repository-error" hidden></p>
-                <button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button>
-            </div>
-            <details id="github-repository-advanced"><summary>Branch, delivery, and commit identity</summary>
-            <div><label for="github-repository-branch">Base branch</label>
-                <input class="field-control" id="github-repository-branch" name="base-branch" value="${e(grant?.baseBranch ?? "")}" placeholder="From your request or repository default">
-            </div>
-            <div><label for="delivery-policy">Git actions</label>
-                <select class="field-control select-control" id="delivery-policy" name="delivery-policy">
-                    <button type="button"><selectedcontent></selectedcontent></button>
-                    <option value="message" ${!grant ? "selected" : ""}>Use the actions in my request</option>
-                    <option value="local" ${grant && !grant.allowPush ? "selected" : ""}>Keep changes local</option>
-                    <option value="push" ${grant?.allowPush && !grant.allowPullRequest ? "selected" : ""}>Push changes</option>
-                    <option value="pr" ${grant?.allowPullRequest ? "selected" : ""}>Push and open a draft PR</option>
-                </select>
-            </div>
-            <div class="identity-fields">
-                <div><label for="git-name">Git commit name (optional)</label><input class="field-control" id="git-name" name="git-name" value="${e(proposed?.gitAuthorName ?? "")}" placeholder="Connected GitHub account" aria-describedby="git-name-error"><p class="field-error" id="git-name-error" hidden></p></div>
-                <div><label for="git-email">Git commit email (optional)</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "")}" placeholder="GitHub no-reply email" aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
-            </div>
-            </details>
-            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="github-repository-actions"><button id="start-github-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !modelCanSubmit(w)) ? "disabled" : ""}>Use repository</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
-        </form>
-    </details>`;
-}
-function executionSetup(w: Work) {
-    const connection = workConnection(w);
-    const available =
-        connection?.availability === ConnectionAvailability.Available;
-    const disconnected =
-        connection?.availability === ConnectionAvailability.Disconnected;
-    const runtime =
-        connection?.runtime === "codex" ? "Codex" : connection?.name;
-    const notice = !connectionsLoaded
-        ? "Checking the coding agent connection…"
-        : disconnected
-          ? "Connect Codex so Goblin can start working."
-          : !connection
-            ? "Goblin’s coding agent connection is unavailable."
-            : connection.availability === ConnectionAvailability.Changing
-              ? "The Codex connection is changing. You can start work when it’s ready."
-              : connection.availability === ConnectionAvailability.Verifying
-                ? "Codex is being checked. You can start work when the check finishes."
-                : "Codex needs attention before Goblin can start working.";
-    return `<div class="work-executor"><img src="/assets/branding/icon.svg" alt=""><div class="executor-identity"><strong>${e(workAgent(w)?.name ?? "Goblin")}</strong>${runtime ? `<span>Uses ${e(runtime)}</span>` : ""}</div>${available ? modelControls(w) : ""}</div>${available ? "" : `<p role="status">${notice}</p>${connectionsLoaded ? button("settings-codex", disconnected ? "Connect Codex" : "Manage Codex connection", true) : ""}`}`;
-}
-function controls(w: Work) {
-    if (w.attention?.reason === AttentionReason.CleanupRequired)
-        return `<section class="decision work-state" aria-label="Current status"><h3>Needs attention</h3><p>The outcome is saved, but Goblin could not finish cleaning up the execution. Reconcile it before continuing.</p>${button("reconcile", "Reconcile execution", true)}</section>`;
-    if (w.attempts.at(-1)?.cleanupPending)
-        return `<section class="decision work-state" aria-label="Current status"><p>Saving the outcome and finishing execution cleanup…</p></section>`;
-    let content = "";
-    if (w.status === WorkStatus.Ready)
-        content = `<h3>Ready to start</h3>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `<p>Ready when you are.</p>${button("execute", "Start work", true, !modelCanSubmit(w))}${gitHubRepositorySetup(w)}` : ""}`;
-    if (w.attention?.reason === AttentionReason.ResultReview)
-        content = `<h3>Ready for your review</h3><p>Read the proposed result below, then approve it or ask for changes.</p>${w.results.find((r) => r.attemptId === w.attempts.at(-1)?.id) ? `<button class="text-button review-result" data-action="inspect-output" data-id="result-${e(w.attempts.at(-1)?.id)}">Read proposed result ${icon("arrow")}</button>` : ""}<div class="work-state-actions">${button("approve", "Approve & complete", true)}${button("changes", "Ask for changes")}</div>`;
-    if (w.attention?.reason === AttentionReason.InputRequired)
-        content = `<h3>Needs your input</h3><p>${e(w.decisions.at(-1)?.question)}</p>${!w.attempts.at(-1)?.target.repository ? gitHubRepositorySetup(w) : ""}`;
-    if (w.attention?.reason === AttentionReason.GitRepositoryRequired)
-        content = `${w.repositoryAuthorization?.status === GitRepositoryAuthorizationStatus.Pending ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${gitHubRepositorySetup(w, true)}`;
-    if (w.attention?.reason === AttentionReason.Failure)
-        content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? button("retry", "Retry work", true, !modelCanSubmit(w)) : ""}`;
-    if (w.attention?.reason === AttentionReason.UncertainExecution)
-        content = `<h3>Execution needs reconciliation</h3><p>Goblin cannot yet confirm the outcome. Check the execution or stop it before retrying.</p>${button("reconcile", "Reconcile execution", true)}`;
-    if (
-        [WorkStatus.Queued, WorkStatus.InProgress, WorkStatus.Cancelling].some(
-            (value) => value === w.status,
-        )
-    )
-        content = `<div class="progress-title">${icon("activity")} ${w.status === WorkStatus.InProgress ? "Goblin is working" : e(label(w.status))}</div><p>You can close this page. Accepted work continues independently.</p>`;
-    if (
-        ![
-            WorkStatus.Completed,
-            WorkStatus.Cancelled,
-            WorkStatus.Cancelling,
-        ].some((value) => value === w.status)
-    )
-        content += `<div class="work-state-secondary">${button("cancel", "Cancel work")}</div>`;
-    return content
-        ? `<section class="decision work-state" aria-label="Current status">${content}</section>`
-        : "";
-}
-function showSetupErrors() {
-    const errors = setupErrors.get(renderedContext) ?? {};
-    for (const id of ["github-repository", "git-name", "git-email"]) {
-        const field = document.getElementById(id);
-        const message = document.getElementById(id + "-error");
-        if (!field || !message) continue;
-        field.setAttribute("aria-invalid", String(!!errors[id]));
-        message.textContent = errors[id] ?? "";
-        message.hidden = !errors[id];
-    }
-}
-function renderChat() {
-    const c = conversations.find((x) => x.id === activeChat);
-    return `<section class="chat-workspace"><div class="detail-body" data-scroll="chat"><div class="thread-content">${c ? `<h1 class="conversation-title">${e(c.title)}</h1>` + c.messages.map((m) => message(m.source ? `${m.source.provider} · ${m.source.userId}` : "You", m.text, m.createdAt)).join("") + (c.workId ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>` : `<div class="decision"><h3>Ready to take this forward?</h3><p>Track this conversation as Work when you want Goblin to execute it.</p>${button("track", "Track this work", true)}</div>`) : `<div class="conversation-empty"><h1>A little room to think</h1><p>Save ideas and context here. Track them as Work when you’re ready for Goblin to start.</p></div>`}</div></div>${composer("chat", "Add to the conversation…")}</section>`;
+    if (rendered && authenticated && view !== "settings") ensureModels();
 }
 function setModelEffort(value: string, updateOnly = false) {
     const w = composerWork();
@@ -1149,10 +552,7 @@ function setModelEffort(value: string, updateOnly = false) {
     );
     if (gitHubRepositoryButton)
         gitHubRepositoryButton.disabled =
-            !w ||
-            !modelCanSubmit(w) ||
-            submission.sending ||
-            !!submission.pending;
+            !w || !modelCanSubmit(w) || commandActive || !!submission.pending;
 }
 document.addEventListener("click", async (event) => {
     if (!(event.target instanceof Element)) return;
@@ -1185,7 +585,8 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "return-settings") {
-        navigate(settingsReturn.view, settingsReturn.id);
+        const { view, id } = navigation.settingsReturn;
+        navigate(view, id);
         render();
         const opener = Array.from(
             root.querySelectorAll<HTMLElement>("[data-action]"),
@@ -1278,8 +679,9 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "browse-work") {
-        const fromDirectory = isDirectoryPage();
-        if (fromDirectory) navigate(current() ? "work" : "new", selected);
+        const fromDirectory = navigation.isDirectory;
+        if (fromDirectory)
+            navigate(current() ? "work" : "new", navigation.selected);
         filter = "all";
         search = "";
         sidebarCollapsed = fromDirectory && mobile.matches;
@@ -1328,11 +730,12 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "resend" && submission.pending) {
-        await send(submission.pending.path, submission.pending.body, true);
+        await send();
         return;
     }
     if (action === "dismiss") {
         submission.dismiss();
+        pendingContext = undefined;
         error = "";
     }
     if (action === "toggle-sidebar") {
@@ -1361,7 +764,8 @@ document.addEventListener("click", async (event) => {
     if (action === "toggle-conversation")
         conversationExpanded = !conversationExpanded;
     if (action === "discuss-goal") {
-        draft ||= "I'd like to clarify the goal: ";
+        if (!drafts.get(navigation.context))
+            drafts.set(navigation.context, "I'd like to clarify the goal: ");
         render();
         document.getElementById("reply")?.focus();
         return;
@@ -1420,50 +824,35 @@ document.addEventListener("click", async (event) => {
     if (action === "select-work") navigate("work", target.dataset.id!);
 
     if (action === "changes") changing = true;
-    if (action === "execute" && current())
-        await command(WorkAction.Execute, modelPayload(current()!.work));
-    if (action === "retry" && current())
-        await command(WorkAction.Retry, modelPayload(current()!.work));
+    const work = current()?.work;
+    if (action === "execute" && work)
+        await command({ action: WorkAction.Execute, ...modelPayload(work) });
+    if (action === "retry" && work)
+        await command({ action: WorkAction.Retry, ...modelPayload(work) });
     if (
         action === "authorize-github-repository" ||
         action === "deny-github-repository"
-    )
-        await command(
-            action === "authorize-github-repository"
-                ? WorkAction.AuthorizeGitRepository
-                : WorkAction.DenyGitRepository,
-            {
-                authorizationId: current()?.work.repositoryAuthorization?.id,
-            },
-        );
-    if (action === "reconcile") await command(WorkAction.Reconcile);
-    if (action === "cancel") await command(WorkAction.Cancel);
+    ) {
+        const authorizationId = work?.repositoryAuthorization?.id;
+        if (authorizationId)
+            await command({
+                action:
+                    action === "authorize-github-repository"
+                        ? WorkAction.AuthorizeGitRepository
+                        : WorkAction.DenyGitRepository,
+                authorizationId,
+            });
+    }
+    if (action === "reconcile") await command({ action: WorkAction.Reconcile });
+    if (action === "cancel") await command({ action: WorkAction.Cancel });
     if (action === "approve")
-        await command(WorkAction.Approve, {
-            attemptId: current()?.work.attempts.at(-1)?.id,
+        await command({
+            action: WorkAction.Approve,
+            attemptId: work?.attempts.at(-1)?.id,
         });
-    if (action === "track") {
-        const c = conversations.find((x) => x.id === activeChat)!;
-        const confirmed = await send(
-            "/api/conversations/commands",
-            async () => {
-                const [workId, messageId] = await reserve(
-                    IdentityKind.Work,
-                    IdentityKind.Message,
-                );
-                return {
-                    conversationId: c.id,
-                    messageId,
-                    text: null,
-                    workId,
-                };
-            },
-        );
-        if (confirmed) {
-            selected = conversations.find((x) => x.id === c.id)?.workId ?? "";
-            view = "work";
-            rememberWork();
-        }
+    if (action === "track" && navigation.activeChat) {
+        const conversationId = navigation.activeChat;
+        await send(() => commands.track(conversationId));
     }
     render();
     if (action === "changes") document.getElementById("reply")?.focus();
@@ -1485,69 +874,33 @@ document.addEventListener("submit", async (event) => {
     )
         return;
     event.preventDefault();
-    const kind = event.target.dataset.form,
-        data = new FormData(event.target);
+    const form = event.target;
+    const kind = form.dataset.form;
     if (kind === "github-repository") {
-        let gitHubRepository = String(
-            data.get("github-repository") ?? "",
-        ).trim();
-        const url = gitHubRepository.match(
-            /^(?:https?:\/\/)?github\.com\/([^/]+\/[^/]+)/i,
-        );
-        if (url) gitHubRepository = url[1].replace(/\.git$/, "");
-        const gitAuthorName = String(data.get("git-name") ?? "").trim();
-        const gitAuthorEmail = String(data.get("git-email") ?? "").trim();
-        const errors: Record<string, string> = {};
-        if (!/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(gitHubRepository))
-            errors["github-repository"] =
-                "Enter the full owner/repository name or GitHub URL.";
-        const email =
-            event.target.querySelector<HTMLInputElement>("#git-email")!;
-        if (gitAuthorEmail && email.validity.typeMismatch)
-            errors["git-email"] =
-                "Enter a valid email for the agent’s commits.";
-        setupErrors.set(renderedContext, errors);
-        showSetupErrors();
-        if (Object.keys(errors).length) {
-            document.getElementById(Object.keys(errors)[0])?.focus();
-            return;
-        }
-        const w = current()!.work;
-        const handoff = [
-            AttentionReason.GitRepositoryRequired,
-            AttentionReason.InputRequired,
-        ].some((reason) => reason === w.attention?.reason);
-        const policy = String(data.get("delivery-policy") ?? "message");
-        const baseBranch = String(data.get("base-branch") ?? "").trim() || null;
-        if (policy === "message" && baseBranch) {
-            errors["github-repository"] =
-                "Choose Git actions when specifying a base branch.";
-            setupErrors.set(renderedContext, errors);
-            showSetupErrors();
+        const work = current()?.work;
+        if (!work) return;
+        const context = navigation.context;
+        const { errors, payload } = readRepositorySetup(form);
+        repositoryDrafts.setErrors(context, errors ?? {});
+        repositoryDrafts.showErrors(root, context);
+        if (!payload) {
+            root.querySelector<HTMLElement>(
+                ".work-setup [aria-invalid=true]",
+            )?.focus();
             return;
         }
         await command(
-            handoff ? WorkAction.PrepareGitRepository : WorkAction.Execute,
-            {
-                ...(policy === "message"
-                    ? {}
-                    : {
-                          delivery: {
-                              baseBranch,
-                              push: policy === "push" || policy === "pr",
-                              openPullRequest: policy === "pr",
-                          },
-                      }),
-                repository: {
-                    repository: gitHubRepository,
-                    ...(gitAuthorName ? { gitAuthorName } : {}),
-                    ...(gitAuthorEmail ? { gitAuthorEmail } : {}),
-                },
-                ...(handoff ? {} : modelPayload(w)),
-            },
+            isRepositoryHandoff(work)
+                ? { action: WorkAction.PrepareGitRepository, ...payload }
+                : {
+                      action: WorkAction.Execute,
+                      ...payload,
+                      ...modelPayload(work),
+                  },
         );
         return;
     }
+    const data = new FormData(form);
     if (kind === "unlock") {
         event.target.querySelector<HTMLInputElement>(
             "input[type=password]",
@@ -1564,51 +917,24 @@ document.addEventListener("submit", async (event) => {
     const text = String(data.get("reply") ?? "").trim();
     if (!text) return;
     if (kind === "new") {
-        let id = "";
-        const confirmed = await send("/api/work/commands", async () => {
-            const [commandId, workId] = await reserve(
-                IdentityKind.Command,
-                IdentityKind.Work,
-            );
-            id = workId;
-            return { commandId, workId, action: WorkAction.Create, text };
-        });
-        if (confirmed) {
-            selected = id;
-            view = "work";
-            rememberWork();
-        }
+        await send(() => commands.create(text), true);
     } else if (kind === "chat") {
-        const confirmed = await send(
-            "/api/conversations/commands",
-            async () => {
-                const [messageId, conversationId] = await reserve(
-                    IdentityKind.Message,
-                    ...(activeChat ? [] : [IdentityKind.Conversation]),
-                );
-                activeChat ||= conversationId;
-                return { conversationId: activeChat, messageId, text };
-            },
-        );
-        if (confirmed)
-            history.replaceState(
-                null,
-                "",
-                "/?conversation=" + encodeURIComponent(activeChat),
-            );
-    } else {
-        const w = current()?.work;
+        const conversationId = navigation.activeChat;
+        await send(() => commands.append(conversationId, text), true);
+    } else if (kind === "work") {
+        const work = current()?.work;
         await command(
-            changing
-                ? WorkAction.RequestChanges
-                : w?.attention?.reason === AttentionReason.InputRequired
-                  ? WorkAction.Answer
-                  : WorkAction.AddContext,
             {
+                action: changing
+                    ? WorkAction.RequestChanges
+                    : work?.attention?.reason === AttentionReason.InputRequired
+                      ? WorkAction.Answer
+                      : WorkAction.AddContext,
                 text,
-                attemptId: w?.attempts.at(-1)?.id,
-                decisionId: w?.decisions.at(-1)?.id,
+                attemptId: work?.attempts.at(-1)?.id,
+                decisionId: work?.decisions.at(-1)?.id,
             },
+            true,
         );
     }
     render();
@@ -1639,15 +965,14 @@ document.addEventListener("input", (event) => {
         event.target instanceof HTMLInputElement &&
         event.target.closest(".work-setup")
     ) {
-        const errors = setupErrors.get(renderedContext);
-        if (errors) delete errors[event.target.id];
-        showSetupErrors();
+        repositoryDrafts.clearError(navigation.context, event.target.id);
+        repositoryDrafts.showErrors(root, navigation.context);
     }
     if (
         event.target instanceof HTMLTextAreaElement &&
         root.contains(event.target)
     )
-        draft = event.target.value;
+        drafts.set(navigation.context, event.target.value);
     if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "work-search"
@@ -1662,8 +987,9 @@ document.addEventListener("change", (event) => {
         event.target.id === "work-view"
     ) {
         const nextFilter = event.target.value;
-        const fromDirectory = isDirectoryPage();
-        if (fromDirectory) navigate(current() ? "work" : "new", selected);
+        const fromDirectory = navigation.isDirectory;
+        if (fromDirectory)
+            navigate(current() ? "work" : "new", navigation.selected);
         filter = nextFilter;
         render(false, true);
         if (fromDirectory && mobile.matches)
@@ -1676,30 +1002,16 @@ document.addEventListener("change", (event) => {
         event.target instanceof HTMLInputElement &&
         event.target.id === "work-effort"
     ) {
-        if (!modelSliderDragging) render(false, true);
+        if (!dom.sliderDragging) render(false, true);
         return;
     }
     if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "github-repository"
     ) {
-        const errors = setupErrors.get(renderedContext);
-        if (errors) delete errors["github-repository"];
-        showSetupErrors();
+        repositoryDrafts.clearError(navigation.context, "github-repository");
+        repositoryDrafts.showErrors(root, navigation.context);
     }
-});
-document.addEventListener("pointerdown", (event) => {
-    if (
-        event.target instanceof HTMLInputElement &&
-        event.target.id === "work-effort"
-    )
-        modelSliderDragging = true;
-});
-document.addEventListener("pointerup", () => {
-    modelSliderDragging = false;
-});
-document.addEventListener("pointercancel", () => {
-    modelSliderDragging = false;
 });
 document.addEventListener("focusin", (event) => {
     if (
@@ -1752,7 +1064,9 @@ document.addEventListener("keydown", (event) => {
         event.preventDefault();
         document
             .getElementById(
-                view === "knowledge" ? "knowledge-search" : "work-search",
+                navigation.view === "knowledge"
+                    ? "knowledge-search"
+                    : "work-search",
             )
             ?.focus();
         return;
@@ -1858,17 +1172,8 @@ function updateResponsiveLayout() {
 compact.addEventListener("change", updateResponsiveLayout);
 mobile.addEventListener("change", updateResponsiveLayout);
 window.addEventListener("popstate", () => {
-    const params = new URLSearchParams(location.search);
-    const section = pageFromPath();
-    const item = params.get("item");
-    const conversation = params.get("conversation");
-    navigate(
-        section ?? (item ? "work" : conversation ? "chat" : "new"),
-        section === "settings"
-            ? settingsSelection(params)
-            : (item ?? conversation ?? ""),
-        "restore",
-    );
+    const { view, id } = navigation.locationTarget();
+    navigate(view, id, "restore");
     render();
     root.querySelector<HTMLElement>(
         "#settings-title, .directory-heading h1, #work-title-heading, #reply",
@@ -1881,10 +1186,5 @@ document.addEventListener("visibilitychange", () => {
 setInterval(() => {
     if (!document.hidden) void refresh();
 }, 3000);
-if (!pageFromPath() && query.has("conversation")) {
-    view = "chat";
-    activeChat = query.get("conversation") ?? "";
-    conversationsOpen = true;
-}
 render();
 void refresh();
