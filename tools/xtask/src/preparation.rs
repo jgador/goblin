@@ -330,10 +330,10 @@ fn published_manifest(version: &str, directory: &Path) -> Result<Option<release:
         &["release.json"],
     )?;
     let metadata = files::json(&directory.join("release.json"))?;
-    parse_published_manifest(version, metadata)
+    parse_manifest(version, metadata)
 }
 
-fn parse_published_manifest(version: &str, metadata: Value) -> Result<Option<release::Release>> {
+fn parse_manifest(version: &str, metadata: Value) -> Result<Option<release::Release>> {
     // Historical formats cannot qualify for reuse, but their version slots stay reserved.
     // Malformed current records and lookup failures must still stop preparation.
     ensure!(

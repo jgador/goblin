@@ -184,7 +184,7 @@ fn historical_manifests_cannot_qualify_and_invalid_current_manifests_fail() {
     let (_, published, _) = fixture();
     let current = serde_json::to_value(&published).unwrap();
     assert_eq!(
-        parse_published_manifest(&published.version, current.clone()).unwrap(),
+        parse_manifest(&published.version, current.clone()).unwrap(),
         Some(published.clone())
     );
 
@@ -193,7 +193,7 @@ fn historical_manifests_cannot_qualify_and_invalid_current_manifests_fail() {
         json!({"schemaVersion":0,"version":"0.1.0"}),
         json!({"schemaVersion":2,"version":"0.1.0"}),
     ] {
-        assert_eq!(parse_published_manifest("0.1.0", historical).unwrap(), None);
+        assert_eq!(parse_manifest("0.1.0", historical).unwrap(), None);
     }
 
     let mut missing_inputs = current.clone();
@@ -207,13 +207,13 @@ fn historical_manifests_cannot_qualify_and_invalid_current_manifests_fail() {
         missing_inputs,
         bad_checksum,
     ] {
-        assert!(parse_published_manifest(&published.version, invalid).is_err());
+        assert!(parse_manifest(&published.version, invalid).is_err());
     }
-    assert!(parse_published_manifest("0.1.5", current).is_err());
+    assert!(parse_manifest("0.1.5", current).is_err());
 }
 
 #[test]
-fn automatic_selection_skips_historical_formats_but_keeps_their_versions_reserved() {
+fn historical_releases_reserve_versions_without_reuse() {
     let (snapshot, mut pin, mut inventory) = fixture();
     inventory.published_installers.insert("0.1.0".into());
     inventory.reserved.insert("goblinctl-v0.1.0".into());
@@ -231,7 +231,7 @@ fn automatic_selection_skips_historical_formats_but_keeps_their_versions_reserve
         |version| {
             inspected.push(version.to_owned());
             Ok(if version == "0.1.0" {
-                parse_published_manifest(version, json!({"version":version}))?
+                parse_manifest(version, json!({"version":version}))?
             } else {
                 Some(pin.clone())
             })
@@ -248,7 +248,7 @@ fn automatic_selection_skips_historical_formats_but_keeps_their_versions_reserve
         "0.1.4",
         &inventory,
         Some("0.1.0"),
-        |version| parse_published_manifest(version, json!({"version":version})),
+        |version| parse_manifest(version, json!({"version":version})),
     )
     .unwrap_err();
     assert!(error.to_string().contains("unsupported manifest format"));

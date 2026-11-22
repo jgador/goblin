@@ -20,12 +20,13 @@ jobs:
       javascript: ${{ steps.select.outputs.javascript }}
       integration: ${{ steps.select.outputs.integration }}
       installer: ${{ steps.select.outputs.installer }}
+      image: ${{ steps.select.outputs.image }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5, node24
         with:
           node-version: "24"
       - name: Select verification from changed files
@@ -37,7 +38,7 @@ jobs:
     if: needs.changes.outputs.csharp == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-verification
@@ -51,12 +52,13 @@ jobs:
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-verification
         with:
           rust: "true"
+          rust-cache: host-dev-test
           packages: "false"
       - name: Verify Rust
         run: node scripts/ci.mts run rust
@@ -66,7 +68,7 @@ jobs:
     if: needs.changes.outputs.javascript == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-verification
@@ -78,13 +80,14 @@ jobs:
     if: needs.changes.outputs.integration == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-verification
         with:
           dotnet: "true"
           rust: "true"
+          rust-cache: integration-host-dev
           deployment: "true"
       - name: Verify shared and deployment contracts
         run: node scripts/ci.mts run integration
@@ -94,26 +97,41 @@ jobs:
     if: needs.changes.outputs.installer == 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup-verification
         with:
           dotnet: "true"
           rust: "true"
+          rust-cache: installer-host-dev-musl-release
           deployment: "true"
       - name: Verify the release installer and browser journeys
         run: node scripts/ci.mts run installer
 
+  image:
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5, node24
+        with:
+          node-version: "24"
+      - name: Build and inspect the platform image
+        run: node scripts/ci.mts run image
+
   test_results:
-    needs: [changes, csharp, rust, javascript, integration, installer]
+    needs: [changes, csharp, rust, javascript, integration, installer, image]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5, node24
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5, node24
         with:
           node-version: "24"
       - name: Report selected checks and enforce the merge result

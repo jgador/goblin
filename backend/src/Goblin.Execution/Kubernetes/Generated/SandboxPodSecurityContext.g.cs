@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecSecurityContext
+public sealed class SandboxPodSecurityContext
 {
     [JsonPropertyName("fsGroup")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -27,6 +27,6 @@ public sealed class SandboxSpecPodTemplateSpecSecurityContext
 
     [JsonPropertyName("seccompProfile")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecSecurityContextSeccompProfile? SeccompProfile { get; init; }
+    public SandboxSeccompProfile? SeccompProfile { get; init; }
 
 }

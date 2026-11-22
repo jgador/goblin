@@ -1,5 +1,9 @@
 name: Set up Rust development
 description: Install the Rust toolchain and development helpers used locally and in CI.
+inputs:
+  cache:
+    description: CI build namespace (host dev/test or host dev and musl release); empty disables caching.
+    default: ""
 runs:
   using: composite
   steps:
@@ -10,3 +14,24 @@ runs:
     - uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532 # v2.62.49
       with:
         tool: nextest@0.9.103
+    - name: Cache locked Cargo downloads
+      if: inputs.cache != ''
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5, node24
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: cargo-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+    - name: Cache CI Rust builds
+      if: inputs.cache != ''
+      uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5, node24
+      with:
+        path: |
+          target/debug
+          target/release
+          target/x86_64-unknown-linux-musl/release
+          !target/**/incremental
+        key: cargo-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'tools/**/Cargo.toml', '.cargo/**') }}-${{ hashFiles('Makefile', 'Makefile.dev', '.github/actions/setup-rust/action.yml', '.github/actions/setup-verification/action.yml', '.github/workflows/ci.yml', 'tools/**', 'config/**', 'deploy/**', 'scripts/k3s-reset.sh', 'scripts/build-goblinctl-release.sh', 'assets/branding/**', 'LICENSE', 'NOTICE', 'THIRD_PARTY_NOTICES.md') }}
+        restore-keys: |
+          cargo-build-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock', 'Cargo.toml', 'tools/**/Cargo.toml', '.cargo/**') }}-

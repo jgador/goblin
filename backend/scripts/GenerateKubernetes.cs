@@ -142,6 +142,8 @@ internal sealed class KubernetesGenerator
     private readonly Dictionary<string, SelectedModel> _models = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<string>> _enums = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _referenceNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _typeOwners = new(StringComparer.Ordinal);
+    private readonly HashSet<(string Section, string Key)> _usedNames = [];
     private bool _usesIntOrString;
 
     internal IEnumerable<string> ModelNames => _models.Keys;
@@ -181,14 +183,25 @@ internal sealed class KubernetesGenerator
         return result;
     }
 
-    private static void Merge(Dictionary<string, SelectionNode> target, Dictionary<string, SelectionNode> source)
+    private string Rename(string section, string key, string fallback)
     {
-        foreach (var (key, child) in source)
-        {
-            if (!target.TryGetValue(key, out var node))
-                target.Add(key, node = new SelectionNode());
-            Merge(node.Children, child.Children);
-        }
+        if (!_selection.TryGetProperty(section, out var names) || !names.TryGetProperty(key, out var entry))
+            return fallback;
+        var name = entry.GetString();
+        if (name is null || !Regex.IsMatch(name, @"\A[A-Z][a-zA-Z0-9]*\z"))
+            throw new InvalidOperationException($"Invalid C# name in {section}: {key}");
+        _usedNames.Add((section, key));
+        return name;
+    }
+
+    private string ModelName(string fallback, string path)
+    {
+        var name = Rename("typeNames", path, fallback);
+        // A schema reference can select the same model from multiple paths.
+        var owner = name == fallback ? "" : path;
+        if (!_typeOwners.TryAdd(name, owner) && _typeOwners[name] != owner)
+            throw new InvalidOperationException($"Colliding Kubernetes type name: {name}");
+        return name;
     }
 
     private (JsonElement Schema, string Name) ResolveWithOverride(JsonElement schema, string name, string path)
@@ -224,7 +237,7 @@ internal sealed class KubernetesGenerator
         _referenceNames[name] = reference;
     }
 
-    internal void Select(
+    internal string Select(
         JsonElement schema, Dictionary<string, SelectionNode> fields,
         string name, string path, bool partial)
     {
@@ -234,49 +247,60 @@ internal sealed class KubernetesGenerator
         {
             RequireNoChildren(fields, path);
             _usesIntOrString = true;
-            return;
+            return "KubernetesIntOrString";
         }
         if (schema.TryGetProperty("enum", out var enumValues))
         {
             RequireNoChildren(fields, path, "Enum");
             if (Kind(schema) != "string")
                 throw new InvalidOperationException($"Unsupported enum: {path}");
-            _enums.TryAdd(name, enumValues.EnumerateArray().Select(value => value.GetString()!).ToList());
-            return;
+            name = ModelName(name, path);
+            var values = enumValues.EnumerateArray().Select(value => value.GetString()!).ToList();
+            if (_models.ContainsKey(name) || (!_enums.TryAdd(name, values) && !_enums[name].SequenceEqual(values)))
+                throw new InvalidOperationException($"Conflicting enum schema: {name}");
+            return name;
         }
         if (Kind(schema) == "array")
-        {
-            Select(schema.GetProperty("items"), fields, name + "Item", path + "[]", partial);
-            return;
-        }
+            return "List<" + Select(schema.GetProperty("items"), fields, name + "Item", path + "[]", partial) + ">";
         var hasProperties = schema.TryGetProperty("properties", out var properties);
         if (Kind(schema) == "object" && !hasProperties)
         {
             if (!schema.TryGetProperty("additionalProperties", out var values)
                 || values.ValueKind != JsonValueKind.Object)
                 throw new InvalidOperationException($"Untyped selected object: {path}");
-            Select(values, fields, name + "Value", path + "{}", partial);
-            return;
+            return "Dictionary<string, " + Select(values, fields, name + "Value", path + "{}", partial) + ">";
         }
         if (Kind(schema) == "object")
         {
+            name = ModelName(name, path);
+            if (_enums.ContainsKey(name))
+                throw new InvalidOperationException($"Conflicting model schema: {name}");
             if (!_models.TryGetValue(name, out var model))
                 _models.Add(name, model = new SelectedModel(schema, partial));
             if (!JsonElement.DeepEquals(model.Schema, schema) || model.Partial != partial)
                 throw new InvalidOperationException($"Conflicting model schema: {name}");
-            Merge(model.Fields, fields);
             foreach (var (key, children) in fields)
             {
                 if (!properties.TryGetProperty(key, out var child))
                     throw new InvalidOperationException($"Unknown selected field: {path}.{key}");
-                Select(child, children.Children, name + Pascal(key), path + "." + key, partial);
+                var type = Select(child, children.Children, name + Pascal(key), path + "." + key, partial);
+                if (!model.Fields.TryAdd(key, type) && model.Fields[key] != type)
+                    throw new InvalidOperationException($"Conflicting member type: {name}.{key}");
             }
-            return;
+            return name;
         }
 
         RequireNoChildren(fields, path);
-        if (Kind(schema) is not ("string" or "integer" or "number" or "boolean"))
-            throw new InvalidOperationException($"Unsupported selected schema at {path}: {schema.GetRawText()}");
+        return Kind(schema) switch
+        {
+            "string" => schema.TryGetProperty("format", out var format) && format.GetString() == "date-time"
+                ? "DateTimeOffset" : "string",
+            "integer" => schema.TryGetProperty("format", out var integerFormat) && integerFormat.GetString() == "int32"
+                ? "int" : "long",
+            "number" => "double",
+            "boolean" => "bool",
+            _ => throw new InvalidOperationException($"Unsupported selected schema at {path}: {schema.GetRawText()}")
+        };
     }
 
     private static void RequireNoChildren(Dictionary<string, SelectionNode> fields, string path, string kind = "Scalar")
@@ -288,44 +312,13 @@ internal sealed class KubernetesGenerator
     private static string? Kind(JsonElement schema) => schema.TryGetProperty("type", out var type)
         ? type.GetString() : null;
 
-    private string TypeName(JsonElement schema, string name, string path)
-    {
-        (schema, name) = ResolveWithOverride(schema, name, path);
-        if (schema.TryGetProperty("x-kubernetes-int-or-string", out var intOrString)
-            && intOrString.ValueKind == JsonValueKind.True)
-            return "KubernetesIntOrString";
-        if (schema.TryGetProperty("enum", out _))
-            return name;
-        switch (Kind(schema))
-        {
-            case "string":
-                return schema.TryGetProperty("format", out var format) && format.GetString() == "date-time"
-                    ? "DateTimeOffset" : "string";
-            case "integer":
-                return schema.TryGetProperty("format", out var integerFormat) && integerFormat.GetString() == "int32"
-                    ? "int" : "long";
-            case "number": return "double";
-            case "boolean": return "bool";
-            case "array":
-                return "List<" + TypeName(schema.GetProperty("items"), name + "Item", path + "[]") + ">";
-            case "object" when !schema.TryGetProperty("properties", out _):
-                if (!schema.TryGetProperty("additionalProperties", out var values)
-                    || values.ValueKind != JsonValueKind.Object)
-                    throw new InvalidOperationException($"Untyped selected object: {path}");
-                return "Dictionary<string, " + TypeName(values, name + "Value", path + "{}") + ">";
-            case "object": return name;
-            default:
-                throw new InvalidOperationException($"Unsupported selected schema at {path}: {schema.GetRawText()}");
-        }
-    }
-
     private static string Literal(string value) => "\""
         + JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\"";
 
-    private static string EnumBody(string name, List<string> values)
+    private string EnumBody(string name, List<string> values)
     {
-        var members = values.Select(Pascal).ToList();
-        if (members.Distinct(StringComparer.Ordinal).Count() != members.Count)
+        var members = values.Select(value => Rename("memberNames", name + "." + value, Pascal(value))).ToList();
+        if (members.Contains(name, StringComparer.Ordinal) || members.Distinct(StringComparer.Ordinal).Count() != members.Count)
             throw new InvalidOperationException($"Enum member collision: {name}");
         var lines = new List<string>
         {
@@ -348,15 +341,15 @@ internal sealed class KubernetesGenerator
         if (model.Fields.Count == 0)
             throw new InvalidOperationException($"Selected object has no fields: {name}");
         var lines = new List<string> { $"public sealed class {name}", "{" };
-        var properties = model.Schema.GetProperty("properties");
-        foreach (var key in model.Fields.Keys.Order(StringComparer.Ordinal))
+        var members = new HashSet<string>(StringComparer.Ordinal) { name };
+        foreach (var (key, fieldType) in model.Fields.OrderBy(field => field.Key, StringComparer.Ordinal))
         {
-            var property = Pascal(key);
-            var child = properties.GetProperty(key);
-            var path = name + "." + key;
+            var property = Rename("memberNames", name + "." + key, Pascal(key));
+            if (!members.Add(property))
+                throw new InvalidOperationException($"Colliding Kubernetes member name: {name}.{property}");
             var required = !model.Partial && model.Schema.TryGetProperty("required", out var requiredFields)
                 && requiredFields.EnumerateArray().Any(value => value.GetString() == key);
-            var type = TypeName(child, name + property, path);
+            var type = fieldType;
             lines.Add($"    [JsonPropertyName({Literal(key)})]");
             if (required)
                 lines.Add("    [JsonRequired]");
@@ -401,6 +394,12 @@ internal sealed class KubernetesGenerator
         foreach (var name in _enums.Keys.Order(StringComparer.Ordinal))
             files.Add(name + ".g.cs", Header + EnumBody(name, _enums[name]) + "\n");
 
+        foreach (var section in new[] { "typeNames", "memberNames" })
+            if (_selection.TryGetProperty(section, out var names))
+                foreach (var entry in names.EnumerateObject())
+                    if (!_usedNames.Contains((section, entry.Name)))
+                        throw new InvalidOperationException($"Unselected name in {section}: {entry.Name}");
+
         using var output = new MemoryStream();
         using (var writer = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = true }))
         {
@@ -429,7 +428,7 @@ internal sealed class SelectedModel
 {
     internal readonly JsonElement Schema;
     internal readonly bool Partial;
-    internal readonly Dictionary<string, SelectionNode> Fields = new(StringComparer.Ordinal);
+    internal readonly Dictionary<string, string> Fields = new(StringComparer.Ordinal);
 
     internal SelectedModel(JsonElement schema, bool partial)
     {
@@ -444,6 +443,7 @@ internal static class KubernetesGeneratorTests
         {"type":"object","required":["spec"],"properties":{"spec":{
           "type":"object","required":["name","unusedRequired"],"properties":{
             "name":{"type":"string"},"unusedRequired":{"type":"string"},
+            "mode":{"type":"string","enum":["ContinueWithAnActiveSandbox"]},
             "nested":{"type":"array","items":{"$ref":"#/definitions/io.k8s.Example"}}
           }}}}
         """;
@@ -485,6 +485,39 @@ internal static class KubernetesGeneratorTests
         Check(overridden.ModelNames.ToHashSet(StringComparer.Ordinal).SetEquals(["Sandbox", "Example"])
             && overridden.ModelBody("Sandbox").Contains("public required Example Spec", StringComparison.Ordinal),
             "schema overrides must use the referenced type name");
+
+        using var names = JsonDocument.Parse("""
+            {
+              "roots":{"Sandbox":{"source":"agentSandbox","fields":["spec.name","spec.mode","spec.nested.value"]}},
+              "typeNames":{"Sandbox.spec":"RunSpec","Sandbox.spec.mode":"RunMode","Sandbox.spec.nested[]":"Entry"},
+              "memberNames":{"RunSpec.nested":"Entries","RunMode.ContinueWithAnActiveSandbox":"Running"}
+            }
+            """);
+        var files = new KubernetesGenerator(names.RootElement, sandbox.RootElement, definitionMap).Generate();
+        Check(files["Sandbox.g.cs"].Contains("public required RunSpec Spec", StringComparison.Ordinal)
+            && files["RunSpec.g.cs"].Contains("public List<Entry>? Entries", StringComparison.Ordinal)
+            && files["RunSpec.g.cs"].Contains("""[JsonPropertyName("nested")]""", StringComparison.Ordinal)
+            && files["RunSpec.g.cs"].Contains("public RunMode? Mode", StringComparison.Ordinal)
+            && files["Entry.g.cs"].Contains("public int? Value", StringComparison.Ordinal),
+            "type and member names must apply to generated files and references while preserving JSON keys");
+        Check(files["RunMode.g.cs"].Contains("[JsonStringEnumMemberName(\"ContinueWithAnActiveSandbox\")]\n    Running,", StringComparison.Ordinal),
+            "a renamed enum member must retain its wire value");
+
+        using var duplicate = JsonDocument.Parse("""
+            {"typeNames":{"Sandbox.spec":"Sandbox"}}
+            """);
+        var collision = new KubernetesGenerator(duplicate.RootElement, sandbox.RootElement, definitionMap);
+        ExpectFailure(() => collision.Select(sandbox.RootElement,
+            KubernetesGenerator.Tree(["spec.name"]), "Sandbox", "Sandbox", false),
+            "Colliding Kubernetes type name: Sandbox");
+
+        using var duplicateMember = JsonDocument.Parse("""
+            {"memberNames":{"SandboxSpec.nested":"Name"}}
+            """);
+        var memberCollision = new KubernetesGenerator(duplicateMember.RootElement, sandbox.RootElement, definitionMap);
+        memberCollision.Select(sandbox.RootElement,
+            KubernetesGenerator.Tree(["spec.name", "spec.nested.value"]), "Sandbox", "Sandbox", false);
+        ExpectFailure(() => memberCollision.ModelBody("SandboxSpec"), "Colliding Kubernetes member name: SandboxSpec.Name");
 
         var unknown = new KubernetesGenerator(selection.RootElement, sandbox.RootElement, definitionMap);
         ExpectFailure(() => unknown.Select(sandbox.RootElement,

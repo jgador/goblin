@@ -127,7 +127,7 @@ public sealed class SandboxHost : IExecutionHost
             // A duplicate start never resumes a stopped or partially prepared allocation.
             if (Owns(existing, work)) return;
             if (!CanTakeOver(existing, work)) return;
-            if (existing.Spec.OperatingMode != K.SandboxSpecOperatingMode.Suspended ||
+            if (existing.Spec.OperatingMode != K.SandboxOperatingMode.Suspended ||
                 existing.Metadata?.Labels?.GetValueOrDefault("goblin-phase") != "stopped" ||
                 await _api.GetAsync<K.Pod>(address.Core + "/pods/" + address.Name, token) is not null)
                 throw new IOException("Workspace suspension is not confirmed.");
@@ -270,7 +270,7 @@ public sealed class SandboxHost : IExecutionHost
                 }
             }
         }
-        if (stop || sandbox?.Spec.OperatingMode == K.SandboxSpecOperatingMode.Suspended)
+        if (stop || sandbox?.Spec.OperatingMode == K.SandboxOperatingMode.Suspended)
         {
             if (!await SuspendAsync(address, sandbox, token)) return new(ObservationKind.Pending);
             // Suspension is intent. Confirm only after every owned pod is gone.

@@ -7,7 +7,7 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpec
+public sealed class SandboxPodSpec
 {
     [JsonPropertyName("activeDeadlineSeconds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -15,15 +15,15 @@ public sealed class SandboxSpecPodTemplateSpec
 
     [JsonPropertyName("automountServiceAccountToken")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? AutomountServiceAccountToken { get; init; }
+    public bool? MountServiceAccountToken { get; init; }
 
     [JsonPropertyName("containers")]
     [JsonRequired]
-    public required List<SandboxSpecPodTemplateSpecContainersItem> Containers { get; init; }
+    public required List<SandboxContainer> Containers { get; init; }
 
     [JsonPropertyName("initContainers")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<SandboxSpecPodTemplateSpecInitContainersItem>? InitContainers { get; init; }
+    public List<SandboxInitContainer>? InitContainers { get; init; }
 
     [JsonPropertyName("restartPolicy")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -31,14 +31,14 @@ public sealed class SandboxSpecPodTemplateSpec
 
     [JsonPropertyName("securityContext")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSpecPodTemplateSpecSecurityContext? SecurityContext { get; init; }
+    public SandboxPodSecurityContext? SecurityContext { get; init; }
 
     [JsonPropertyName("terminationGracePeriodSeconds")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public long? TerminationGracePeriodSeconds { get; init; }
+    public long? TerminationGraceSeconds { get; init; }
 
     [JsonPropertyName("volumes")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<SandboxSpecPodTemplateSpecVolumesItem>? Volumes { get; init; }
+    public List<SandboxVolume>? Volumes { get; init; }
 
 }

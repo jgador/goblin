@@ -7,10 +7,14 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecVolumesItemConfigMap
+public sealed class SandboxVolumeSecret
 {
-    [JsonPropertyName("name")]
+    [JsonPropertyName("defaultMode")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? Name { get; init; }
+    public int? DefaultMode { get; init; }
+
+    [JsonPropertyName("secretName")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SecretName { get; init; }
 
 }

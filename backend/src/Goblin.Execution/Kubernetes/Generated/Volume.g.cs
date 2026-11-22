@@ -11,6 +11,6 @@ public sealed class Volume
 {
     [JsonPropertyName("persistentVolumeClaim")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public PersistentVolumeClaimVolumeSource? PersistentVolumeClaim { get; init; }
+    public PersistentVolumeClaimVolumeSource? VolumeClaim { get; init; }
 
 }

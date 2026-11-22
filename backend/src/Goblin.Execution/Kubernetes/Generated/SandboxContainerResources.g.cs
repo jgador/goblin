@@ -7,10 +7,14 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecContainersItemSecurityContextCapabilities
+public sealed class SandboxContainerResources
 {
-    [JsonPropertyName("drop")]
+    [JsonPropertyName("limits")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<string>? Drop { get; init; }
+    public Dictionary<string, KubernetesIntOrString>? Limits { get; init; }
+
+    [JsonPropertyName("requests")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, KubernetesIntOrString>? Requests { get; init; }
 
 }

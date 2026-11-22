@@ -675,6 +675,67 @@ test("global Ask Goblin has its own draft and leaves Work context scoped", async
     expect(commands).toEqual([]);
 });
 
+test("a delayed conversation reservation and resend stay bound to the submitted draft", async ({
+    page,
+}) => {
+    await workspace(page);
+    const { promise: requested, resolve: reservedStarted } =
+        Promise.withResolvers<void>();
+    const { promise: waitForReservation, resolve: releaseReservation } =
+        Promise.withResolvers<void>();
+    const commands: unknown[] = [];
+    await page.route("**/api/identities", async (route) => {
+        expect(route.request().postDataJSON()).toEqual({
+            kinds: ["Message", "Conversation"],
+        });
+        reservedStarted();
+        await waitForReservation;
+        await route.fulfill({ json: { ids: ["21", "22"] } });
+    });
+    await page.route("**/api/conversations/commands", (route) => {
+        commands.push(route.request().postDataJSON());
+        return commands.length === 1
+            ? route.fulfill({
+                  status: 503,
+                  json: { error: { message: "Save unconfirmed" } },
+              })
+            : route.fulfill({ json: {} });
+    });
+    await page.goto("/work?item=1");
+    const workDraft = page.getByPlaceholder("Add context to this work…");
+    await workDraft.fill("Keep the Work draft");
+    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
+    const conversationDraft = page.getByPlaceholder("Add to the conversation…");
+    await conversationDraft.fill("Save this conversation draft");
+    await page.getByRole("button", { name: "Send message" }).click();
+    await requested;
+    await page
+        .getByRole("button", { name: "Ideas for the next release" })
+        .click();
+    releaseReservation();
+    const resend = page.getByRole("button", { name: "Resend command" });
+    await expect(resend).toBeVisible();
+    await expect(page).toHaveURL(/\?conversation=8$/);
+    await conversationDraft.fill("Keep the other conversation draft");
+    await resend.click();
+    await expect(resend).toHaveCount(0);
+    await expect(page).toHaveURL(/\?conversation=8$/);
+    await expect(conversationDraft).toHaveValue(
+        "Keep the other conversation draft",
+    );
+    await page.getByRole("button", { name: /Polish the welcome page/ }).click();
+    await expect(workDraft).toHaveValue("Keep the Work draft");
+    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
+    await expect(conversationDraft).toHaveValue("");
+
+    const sent = {
+        conversationId: "22",
+        messageId: "21",
+        text: "Save this conversation draft",
+    };
+    expect(commands).toEqual([sent, sent]);
+});
+
 test("uncertain execution stays unresolved, and runtime details never become milestones or Activity", async ({
     page,
 }) => {

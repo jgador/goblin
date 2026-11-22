@@ -7,14 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecVolumesItemPersistentVolumeClaim
+public sealed class SandboxSeccompProfile
 {
-    [JsonPropertyName("claimName")]
+    [JsonPropertyName("type")]
     [JsonRequired]
-    public required string ClaimName { get; init; }
-
-    [JsonPropertyName("readOnly")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public bool? ReadOnly { get; init; }
+    public required string Type { get; init; }
 
 }

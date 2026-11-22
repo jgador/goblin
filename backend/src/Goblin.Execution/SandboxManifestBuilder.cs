@@ -54,18 +54,18 @@ internal sealed class SandboxManifestBuilder
             Metadata = metadata,
             Spec = new()
             {
-                OperatingMode = suspended ? K.SandboxSpecOperatingMode.Suspended : K.SandboxSpecOperatingMode.Running,
-                ShutdownPolicy = K.SandboxSpecShutdownPolicy.Retain,
+                OperatingMode = suspended ? K.SandboxOperatingMode.Suspended : K.SandboxOperatingMode.Running,
+                ShutdownPolicy = K.SandboxShutdownPolicy.Retain,
                 Service = false,
                 PodTemplate = new()
                 {
                     Metadata = new() { Labels = new Dictionary<string, string>(metadata.Labels!) },
                     Spec = new()
                     {
-                        AutomountServiceAccountToken = false,
+                        MountServiceAccountToken = false,
                         RestartPolicy = "Never",
                         ActiveDeadlineSeconds = 3600,
-                        TerminationGracePeriodSeconds = 15,
+                        TerminationGraceSeconds = 15,
                         SecurityContext = new()
                         {
                             RunAsNonRoot = true,
@@ -85,7 +85,7 @@ internal sealed class SandboxManifestBuilder
                                     string.Join(" ", PersistentDirectories.Select(directory => "/workspace/" + directory.SubPath))],
                                 SecurityContext = new()
                                 {
-                                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
+                                    AllowPrivilegeEscalation = false, ReadOnlyRoot = true,
                                     Capabilities = new() { Drop = ["ALL"] }
                                 },
                                 Resources = new()
@@ -104,7 +104,7 @@ internal sealed class SandboxManifestBuilder
                                 Command = ["dotnet", "Goblin.Web.dll", "--sandbox-execute"],
                                 SecurityContext = new()
                                 {
-                                    AllowPrivilegeEscalation = false, ReadOnlyRootFilesystem = true,
+                                    AllowPrivilegeEscalation = false, ReadOnlyRoot = true,
                                     Capabilities = new() { Drop = ["ALL"] }
                                 },
                                 Resources = new()
@@ -115,7 +115,7 @@ internal sealed class SandboxManifestBuilder
                                 VolumeMounts =
                                 [
                                     new() { Name = "workspace", MountPath = "/workspace" },
-                                    .. PersistentDirectories.Select(directory => new K.SandboxSpecPodTemplateSpecContainersItemVolumeMountsItem
+                                    .. PersistentDirectories.Select(directory => new K.ContainerVolumeMount
                                     {
                                         Name = "workspace", MountPath = directory.MountPath, SubPath = directory.SubPath
                                     }),
@@ -127,7 +127,7 @@ internal sealed class SandboxManifestBuilder
                         ],
                         Volumes =
                         [
-                            new() { Name = "workspace", PersistentVolumeClaim = new() { ClaimName = name } },
+                            new() { Name = "workspace", VolumeClaim = new() { ClaimName = name } },
                             // Codex keeps writable, refreshable authentication alongside native
                             // sessions. Keep this private directory off the retained Work disk.
                             new() { Name = "codex", EmptyDir = new() },

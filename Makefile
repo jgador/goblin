@@ -7,6 +7,7 @@ SHELL := /bin/bash
 export PATH := $(CURDIR)/node_modules/.bin:$(PATH)
 CARGO_ARGS ?= --workspace
 ARGS ?=
+NODE_TEST_CONCURRENCY ?= 4
 RUST_MIN_STACK ?= 8388608
 
 # Targets use <scope>-<action>[-<qualifier>]; tools and repository workflows use bare names.
@@ -225,9 +226,10 @@ node-install:
 	npm ci
 	npm --prefix frontend ci
 
-# Run compiled frontend, HTTP integration, and deployment contract tests.
+# Run compiled frontend, HTTP integration, and deployment tests with bounded file concurrency.
 node-test: tools-build
-	node --test dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js
+	mkdir -p .artifacts/node-test/tmp
+	TMPDIR="$(CURDIR)/.artifacts/node-test/tmp" node --test --test-concurrency=$(NODE_TEST_CONCURRENCY) dist/tests/frontend/*.test.js dist/tests/integration/*.test.js dist/tests/deployment/*.test.js
 
 # =============================================================================
 # Platform: installer image build checks.
@@ -237,6 +239,7 @@ node-test: tools-build
 # Build the platform image the installer builds, catching missing Docker inputs.
 platform-check-image:
 	docker build --platform linux/amd64 --progress=plain -t goblin-platform:check .
+	docker image inspect goblin-platform:check --format '{{.Id}}'
 
 # =============================================================================
 # Protocol: Codex model generation and validation.

@@ -960,7 +960,7 @@ mod tests {
         )
     }
     #[test]
-    fn pod_environment_defaults_are_accepted_without_ignoring_real_configuration_drift() {
+    fn accepts_pod_defaults_and_rejects_drift() {
         let root = fixture();
         let mut fake = Fake::new(IMAGE);
         fake.sandbox["spec"]["podTemplate"]["spec"]["containers"][0]["env"]
@@ -1106,7 +1106,7 @@ mod tests {
         assert!(fake.routes.is_empty());
     }
     #[test]
-    fn deployment_imports_and_updates_new_workers_before_replacing_only_the_platform_pod() {
+    fn updates_workers_before_platform_restart() {
         let root = fixture();
         let mut fake = Fake::new("localhost/goblin-platform:previous");
         fake.old_polls = 2;

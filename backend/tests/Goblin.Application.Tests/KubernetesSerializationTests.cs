@@ -11,7 +11,7 @@ public sealed class KubernetesSerializationTests
     {
         var patch = new SandboxSuspendPatch
         {
-            Spec = new() { OperatingMode = SandboxSuspendPatchSpecOperatingMode.Suspended }
+            Spec = new() { OperatingMode = SandboxSuspendMode.Suspended }
         };
         Assert.Equal("{\"spec\":{\"operatingMode\":\"Suspended\"}}",
             JsonSerializer.Serialize(patch, KubernetesJson.Options));
@@ -27,7 +27,7 @@ public sealed class KubernetesSerializationTests
             """;
         Sandbox sandbox = JsonSerializer.Deserialize<Sandbox>(response, KubernetesJson.Options)!;
         Assert.Equal("work-1", sandbox.Metadata?.Name);
-        Assert.Equal(SandboxSpecOperatingMode.Suspended, sandbox.Spec.OperatingMode);
+        Assert.Equal(SandboxOperatingMode.Suspended, sandbox.Spec.OperatingMode);
         Assert.Empty(sandbox.Spec.PodTemplate.Spec.Containers);
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<Sandbox>(
             response.Replace("Suspended", "Unknown", System.StringComparison.Ordinal), KubernetesJson.Options));

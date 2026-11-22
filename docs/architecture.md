@@ -81,6 +81,11 @@ The browser shows server-owned Work state and sends versioned commands. An uncon
 submission keeps its command ID for resubmission. Selection, filters, disclosures, and
 drafts are browser-only state. See the [Work usage](work-lifecycle.md#using-work).
 
+The [workspace controller](../frontend/src/work/workspace.ts) discards reads from a
+previous owner session and tracks Work and connection availability independently.
+Command submission captures the selected context before reserving identities, so a
+confirmation can clear the submitted draft even after the owner navigates elsewhere.
+
 ## Resource and storage ownership
 
 The main application is component **platform**; the public site is **website**. Their

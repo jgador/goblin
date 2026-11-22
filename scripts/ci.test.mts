@@ -66,15 +66,24 @@ test("documentation-only changes select no runtime checks and satisfy the requir
 });
 test("language extensions select their checks anywhere, including Rust under backend", () => {
     for (const [file, expected] of [
-        ["backend/new/compiler.rs", ["rust", "integration", "installer"]],
-        ["tools/component.cs", ["csharp", "integration", "installer"]],
-        ["other/component.ts", ["javascript", "integration", "installer"]],
-        ["other/component.mjs", ["javascript", "integration", "installer"]],
+        [
+            "backend/new/compiler.rs",
+            ["rust", "integration", "installer", "image"],
+        ],
+        ["tools/component.cs", ["csharp", "integration", "installer", "image"]],
+        [
+            "other/component.ts",
+            ["javascript", "integration", "installer", "image"],
+        ],
+        [
+            "other/component.mjs",
+            ["javascript", "integration", "installer", "image"],
+        ],
     ] as const)
         assert.deepEqual(enabled(select(policy, [file])), expected);
     assert.deepEqual(
         enabled(select(policy, ["code.cs", "code.rs", "README.md"])),
-        ["csharp", "rust", "integration", "installer"],
+        ["csharp", "rust", "integration", "installer", "image"],
     );
 });
 test("Markdown agentic workflows select verification because they are executable configuration", () => {
@@ -93,6 +102,7 @@ test("shared Node fixtures and pinned runtime inputs also select their C# consum
             "javascript",
             "integration",
             "installer",
+            "image",
         ]);
 });
 test("recognized dependency/toolchain filenames classify without their generic extension", () => {
@@ -107,12 +117,14 @@ test("recognized dependency/toolchain filenames classify without their generic e
             "rust",
             "integration",
             "installer",
+            "image",
         ]);
     for (const name of ["global.json", "NuGet.Config", "Directory.Build.props"])
         assert.deepEqual(enabled(select(policy, ["elsewhere/" + name])), [
             "csharp",
             "integration",
             "installer",
+            "image",
         ]);
     for (const name of [
         "package-lock.json",
@@ -123,6 +135,7 @@ test("recognized dependency/toolchain filenames classify without their generic e
             "javascript",
             "integration",
             "installer",
+            "image",
         ]);
 });
 
@@ -225,20 +238,20 @@ test("manual/full selection ignores documentation-only optimization", () => {
 });
 test("selected failure, cancellation, unexpected skip, and missing result all block merging", () => {
     const plan = select(policy, ["main.rs"]);
-    for (const status of ["failure", "cancelled", "skipped", "unknown"]) {
-        const jobs = jobResults(plan);
-        jobs.rust!.result = status;
+    for (const id of enabled(plan)) {
+        for (const status of ["failure", "cancelled", "skipped", "unknown"]) {
+            const jobs = jobResults(plan);
+            jobs[id]!.result = status;
+            assert.ok(
+                report(policy, jobs).errors.some((error) => error.includes(id)),
+            );
+        }
+        const missing = jobResults(plan);
+        delete missing[id];
         assert.ok(
-            report(policy, jobs).errors.some((error) => error.includes("rust")),
+            report(policy, missing).errors.some((error) => error.includes(id)),
         );
     }
-    const missing = jobResults(plan);
-    delete missing.installer;
-    assert.ok(
-        report(policy, missing).errors.some((error) =>
-            error.includes("installer"),
-        ),
-    );
     const unexpected = jobResults(plan);
     unexpected.csharp!.result = "success";
     assert.ok(
@@ -393,6 +406,7 @@ test("real Git diffs retain additions/deletions and both rename sides, including
             "rust",
             "integration",
             "installer",
+            "image",
         ]);
         await rm(join(directory, "spaced file\nname.cs"));
         const third = commit(directory, "deleted fixture");
@@ -564,13 +578,55 @@ test("workflow contains every configured job, condition, direct reporting depend
             source.includes("if: needs.changes.outputs." + id + " == 'true'"),
         );
         assert.ok(source.includes("run: node scripts/ci.mts run " + id));
+        assert.ok(
+            source.includes(
+                id + ": " + "$" + "{{ steps.select.outputs." + id + " }}",
+            ),
+        );
+        const job = source
+            .split("\n  " + id + ":\n")[1]!
+            .split(/\n  [a-z_]+:\n/)[0]!;
+        assert.match(job, /^    needs: changes$/m);
     }
-    assert.match(
-        source,
-        /needs: \[changes, csharp, rust, javascript, integration, installer\]\s+if: always\(\)/,
+    const reporting = source.match(
+        /test_results:\s+needs: \[([^\]]+)\]\s+if: always\(\)/,
+    );
+    assert.ok(reporting);
+    assert.deepEqual(
+        reporting[1]!.split(",").map((id) => id.trim()),
+        ["changes", ...Object.keys(policy.groups)],
     );
     assert.ok(
         source.includes("CI_JOB_RESULTS: " + "$" + "{{ toJSON(needs) }}"),
+    );
+});
+
+test("installer selection includes the independent image check without dropping browser journeys", () => {
+    assert.deepEqual(policy.groups.installer!.requires, ["image"]);
+    assert.ok(
+        policy.groups.image!.commands.includes("make platform-check-image"),
+    );
+    assert.ok(
+        !policy.groups.installer!.commands.includes(
+            "make platform-check-image",
+        ),
+    );
+    assert.ok(
+        policy.groups.installer!.commands.some((command) =>
+            command.includes(
+                "tests/e2e/setup.spec.ts tests/e2e/install.spec.ts",
+            ),
+        ),
+    );
+    const plan = select(policy, ["tests/deployment/azure-runtime.test.ts"]);
+    assert.ok(plan.groups.installer!.selected);
+    assert.ok(plan.groups.image!.selected);
+    assert.deepEqual(report(policy, jobResults(plan)).errors, []);
+    const invalid = structuredClone(plan);
+    invalid.groups.image!.selected = false;
+    assert.throws(
+        () => parsePlan(policy, invalid),
+        /missing required verification/,
     );
 });
 
@@ -623,4 +679,60 @@ test("CI and release use the shared SDK setup, which rejects corrupt downloads b
         assert.equal(await readFile(pathFile, "utf8"), "");
         assert.equal(await readFile(envFile, "utf8"), "");
     });
+});
+
+test("Cargo caches are CI-only, separate compilation profiles, and include embedded inputs", async () => {
+    const action = await readFile(
+        join(root, ".github/actions/setup-rust/action.yml"),
+        "utf8",
+    );
+    const verification = await readFile(
+        join(root, ".github/actions/setup-verification/action.yml"),
+        "utf8",
+    );
+    const workflow = await readFile(
+        join(root, ".github/workflows/ci.yml"),
+        "utf8",
+    );
+    const release = await readFile(
+        join(root, ".github/workflows/platform-release.yml"),
+        "utf8",
+    );
+    assert.match(action, /cache:[\s\S]*?default: ""/);
+    assert.equal((action.match(/if: inputs.cache != ''/g) ?? []).length, 2);
+    assert.equal(
+        (action.match(/uses: actions\/cache@[a-f0-9]{40} # v5, node24/g) ?? [])
+            .length,
+        2,
+    );
+    for (const input of [
+        "rust-toolchain.toml",
+        "Cargo.lock",
+        "Cargo.toml",
+        "tools/**/Cargo.toml",
+        ".cargo/**",
+        "tools/**",
+        "config/**",
+        "deploy/**",
+        "assets/branding/**",
+        "scripts/build-goblinctl-release.sh",
+        "scripts/k3s-reset.sh",
+    ])
+        assert.ok(action.includes("'" + input + "'"), input);
+    assert.ok(action.includes("target/debug"));
+    assert.ok(action.includes("target/release"));
+    assert.ok(action.includes("target/x86_64-unknown-linux-musl/release"));
+    assert.ok(action.includes("!target/**/incremental"));
+    assert.ok(
+        verification.includes("cache: " + "$" + "{{ inputs.rust-cache }}"),
+    );
+    for (const namespace of [
+        "host-dev-test",
+        "integration-host-dev",
+        "installer-host-dev-musl-release",
+    ])
+        assert.ok(workflow.includes("rust-cache: " + namespace));
+    assert.ok(!release.includes("rust-cache:"));
+    assert.ok(!release.includes("actions/cache@"));
+    assert.ok(!action.includes("if: steps.cache.outputs.cache-hit"));
 });

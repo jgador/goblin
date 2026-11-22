@@ -53,11 +53,12 @@ function openMenu(index) {
         320,
         innerHeight * 0.45,
     );
-    picker.dataset.side =
-        innerHeight - bounds.bottom < height + 12 &&
-        bounds.top > innerHeight - bounds.bottom
-            ? "above"
-            : "below";
+    const below = innerHeight - bounds.bottom;
+    const above = below < height + 12 && bounds.top > below;
+    picker.dataset.side = above ? "above" : "below";
+    // A centered trigger can leave too little space on either side. Keep the
+    // menu's gap and viewport margin even when the full catalog cannot fit.
+    menu.style.maxHeight = `${Math.max(0, Math.min(height, (above ? bounds.top : below) - 12))}px`;
     menu.hidden = false;
     version.setAttribute("aria-expanded", "true");
     const selected = releases.findIndex(

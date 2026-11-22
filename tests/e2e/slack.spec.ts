@@ -20,6 +20,9 @@ test("Slack setup supports manual code entry and explicit owner linking", async 
     await page.route("**/api/preferences", (route) =>
         route.fulfill({ json: { timeZone: "Asia/Manila" } }),
     );
+    await page.route("**/api/{cluster,logs}", (route) =>
+        route.fulfill({ json: { available: false } }),
+    );
     await page.route("**/api/status", (route) =>
         route.fulfill({
             json: { account: null, login: null, runtimeReady: false },

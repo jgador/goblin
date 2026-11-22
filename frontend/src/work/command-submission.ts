@@ -1,9 +1,21 @@
 import { WorkAction, isContractValue } from "../api/values.js";
 
-export type PendingCommand = {
-    path: "/api/work/commands" | "/api/conversations/commands";
-    body: Record<string, unknown>;
-};
+export type PendingCommand =
+    | {
+          path: "/api/work/commands";
+          body: Record<string, unknown> & {
+              commandId: string;
+              workId: string;
+              action: WorkAction;
+          };
+      }
+    | {
+          path: "/api/conversations/commands";
+          body: Record<string, unknown> & {
+              conversationId: string;
+              messageId: string;
+          };
+      };
 type CommandStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 const storageKey = "goblin.pendingCommand";
 

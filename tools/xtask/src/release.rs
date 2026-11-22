@@ -363,7 +363,7 @@ pub fn verify_archive(directory: &Path) -> Result<Release> {
     Ok(release)
 }
 
-fn installer_signer_identity(github_repository: &str) -> String {
+fn signer_identity(github_repository: &str) -> String {
     format!(
         r"^https://github\.com/{}/\.github/workflows/platform-release\.yml@refs/heads/master$",
         regex::escape(github_repository)
@@ -379,7 +379,7 @@ fn authenticate(github_repository: &str, artifact: &Path) -> Result<()> {
                 "--repo",
                 github_repository,
                 "--cert-identity-regex",
-                &installer_signer_identity(github_repository),
+                &signer_identity(github_repository),
                 "--deny-self-hosted-runners",
             ]),
     )
@@ -430,7 +430,7 @@ fn check_inner(
     directory: &Path,
 ) -> Result<Report> {
     crate::dependencies::check(root)?;
-    verify_github_repository(github_repository)?;
+    require_repository(github_repository)?;
     let snapshot = inputs(root)?;
     coverage(root, depfile, &snapshot)?;
     let required = capabilities(&root.join("deploy/goblinctl-requirements.json"))?;
@@ -466,7 +466,7 @@ fn check_inner(
 }
 
 pub fn pin(root: &Path, github_repository: &str, version: &str) -> Result<()> {
-    verify_github_repository(github_repository)?;
+    require_repository(github_repository)?;
     let directory = tempfile::tempdir()?;
     download(github_repository, version, directory.path())?;
     let release = verify_artifacts(github_repository, directory.path())?;
@@ -480,7 +480,7 @@ pub fn pin(root: &Path, github_repository: &str, version: &str) -> Result<()> {
     crate::dependencies::pin_release(root, &release)
 }
 
-fn verify_github_repository(github_repository: &str) -> Result<()> {
+fn require_repository(github_repository: &str) -> Result<()> {
     ensure!(
         github_repository == GITHUB_REPOSITORY,
         "goblinctl releases must come from Goblin's repository: {GITHUB_REPOSITORY}"
@@ -513,7 +513,7 @@ mod tests {
     #[test]
     fn installer_authentication_accepts_only_platform_release_on_master() {
         let repository = "sample-owner/platform.tools";
-        let identity = regex::Regex::new(&installer_signer_identity(repository)).unwrap();
+        let identity = regex::Regex::new(&signer_identity(repository)).unwrap();
         let accepted = format!(
             "https://github.com/{repository}/.github/workflows/platform-release.yml@refs/heads/master"
         );

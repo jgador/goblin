@@ -28,7 +28,7 @@ export function relativeTime(value?: string) {
 export function matchesWork(
     w: Work,
     query: string,
-    conversations: Conversation[],
+    conversations: readonly Conversation[],
     agent: string,
 ) {
     return [

@@ -12,6 +12,11 @@ selected path missing from its schema, or a checksum mismatch, fails generation.
 `SandboxSuspendPatch` is a separate root so a merge patch does not need the full Sandbox
 specification.
 
+`typeNames` assigns C# names to selected types by schema path, including `[]` for array
+items and `{}` for map values. `memberNames` uses the generated type name followed by a
+JSON property name or enum value. Both maps affect C# identifiers. The schema still
+provides the wire keys and enum strings. Generation rejects unused names and collisions.
+
 [Schema inputs](../../../schemas/kubernetes/) and their selected checksums are the
 source of truth; do not copy version numbers into this guide.
 

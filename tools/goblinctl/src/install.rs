@@ -97,7 +97,7 @@ pub fn render_bootstrap(
 }
 pub fn bootstrap(hostname: &str, source_ref: &str, certificate_email: &str) -> Result<()> {
     files::require_root()?;
-    validate_certificate_email(certificate_email)?;
+    validate_email(certificate_email)?;
     let binary = std::env::current_exe()?;
     let temporary_credentials = tempfile::tempdir()?;
     let password_path = match std::env::var_os(environment::GOBLIN_PASSWORD_HASH_FILE) {
@@ -159,7 +159,7 @@ pub fn origin_authority(origin: &str, hostname: &str) -> Result<String> {
     Ok(authority.to_owned())
 }
 
-pub fn validate_certificate_email(email: &str) -> Result<()> {
+pub fn validate_email(email: &str) -> Result<()> {
     let invalid = "Supply a certificate contact email for the public HTTPS installation.";
     let (local, domain) = email.split_once('@').context(invalid)?;
     ensure!(

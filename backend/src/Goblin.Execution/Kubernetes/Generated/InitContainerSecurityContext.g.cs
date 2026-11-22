@@ -7,14 +7,18 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecInitContainersItemResources
+public sealed class InitContainerSecurityContext
 {
-    [JsonPropertyName("limits")]
+    [JsonPropertyName("allowPrivilegeEscalation")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, KubernetesIntOrString>? Limits { get; init; }
+    public bool? AllowPrivilegeEscalation { get; init; }
 
-    [JsonPropertyName("requests")]
+    [JsonPropertyName("capabilities")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, KubernetesIntOrString>? Requests { get; init; }
+    public InitContainerCapabilities? Capabilities { get; init; }
+
+    [JsonPropertyName("readOnlyRootFilesystem")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ReadOnlyRoot { get; init; }
 
 }

@@ -76,7 +76,7 @@ public sealed class SystemMonitorTests
     }
 
     [Fact]
-    public async Task InterruptedOrOldReadingsAreStaleWithoutExposingErrorsAndRecoverWithBoundedHistory()
+    public async Task InterruptedMetricsRecoverWithBoundedHistory()
     {
         var source = new Source(Project(Node(), Summary(), [], Now));
         using var monitor = new SystemMonitor(source);

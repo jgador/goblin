@@ -93,7 +93,7 @@ public sealed partial class DurabilityTests
     }
 
     [DatabaseFact]
-    public async Task SlackCannotEnableDisabledRepositoriesOrResolveAmbiguityWithYesOrUseRevokedIdentity()
+    public async Task SlackRejectsAmbiguousOrUnauthorizedRepositorySelection()
     {
         await using Fixture fixture = await Fixture.CreateAsync();
         await EnableHandoffGitRepository(fixture);

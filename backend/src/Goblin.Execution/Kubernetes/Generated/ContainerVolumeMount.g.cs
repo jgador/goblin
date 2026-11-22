@@ -7,14 +7,22 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSpecPodTemplateSpecContainersItemResources
+public sealed class ContainerVolumeMount
 {
-    [JsonPropertyName("limits")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, KubernetesIntOrString>? Limits { get; init; }
+    [JsonPropertyName("mountPath")]
+    [JsonRequired]
+    public required string MountPath { get; init; }
 
-    [JsonPropertyName("requests")]
+    [JsonPropertyName("name")]
+    [JsonRequired]
+    public required string Name { get; init; }
+
+    [JsonPropertyName("readOnly")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public Dictionary<string, KubernetesIntOrString>? Requests { get; init; }
+    public bool? ReadOnly { get; init; }
+
+    [JsonPropertyName("subPath")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SubPath { get; init; }
 
 }

@@ -7,10 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-public sealed class SandboxSuspendPatchSpec
+public sealed class ContainerCapabilities
 {
-    [JsonPropertyName("operatingMode")]
+    [JsonPropertyName("drop")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public SandboxSuspendPatchSpecOperatingMode? OperatingMode { get; init; }
+    public List<string>? Drop { get; init; }
 
 }

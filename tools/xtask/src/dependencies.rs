@@ -515,12 +515,28 @@ mod tests {
     }
 
     #[test]
-    fn new_resources_are_discovered_and_application_images_do_not_change_installer_inputs() {
+    fn discovers_new_platform_resources() {
+        let temp = fixture();
+        let root = temp.path();
+        let lock = read_lock(root).unwrap();
+        fs::write(root.join("deploy/platform/new.yaml"), "kind: ConfigMap\n").unwrap();
+        let outputs = outputs(root, &lock, &lock).unwrap();
+        let request: goblinctl::deployment::InstallRequest =
+            serde_json::from_slice(&outputs["deploy/install-request.json"]).unwrap();
+        assert!(
+            request
+                .resources
+                .iter()
+                .any(|r| r.path == "deploy/platform/new.yaml")
+        );
+    }
+
+    #[test]
+    fn updates_headlamp_without_changing_postgres() {
         let temp = fixture();
         let root = temp.path();
         let mut lock = read_lock(root).unwrap();
         let before = outputs(root, &lock, &lock).unwrap();
-        fs::write(root.join("deploy/platform/new.yaml"), "kind: ConfigMap\n").unwrap();
         lock.images.get_mut("headlamp").unwrap().reference =
             "ghcr.io/headlamp-k8s/headlamp:new-version".into();
         let after = outputs(root, &lock, &lock).unwrap();
@@ -531,14 +547,6 @@ mod tests {
         assert_ne!(
             before["deploy/platform/headlamp.yaml"],
             after["deploy/platform/headlamp.yaml"]
-        );
-        let request: goblinctl::deployment::InstallRequest =
-            serde_json::from_slice(&after["deploy/install-request.json"]).unwrap();
-        assert!(
-            request
-                .resources
-                .iter()
-                .any(|r| r.path == "deploy/platform/new.yaml")
         );
     }
 

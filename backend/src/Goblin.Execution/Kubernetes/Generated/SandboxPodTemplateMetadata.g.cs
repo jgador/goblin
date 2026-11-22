@@ -7,12 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace Goblin.Execution.Kubernetes;
 
-[JsonConverter(typeof(KubernetesStringEnumConverter<SandboxSuspendPatchSpecOperatingMode>))]
-public enum SandboxSuspendPatchSpecOperatingMode
+public sealed class SandboxPodTemplateMetadata
 {
-    [JsonStringEnumMemberName("Running")]
-    Running,
+    [JsonPropertyName("labels")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, string>? Labels { get; init; }
 
-    [JsonStringEnumMemberName("Suspended")]
-    Suspended,
 }
