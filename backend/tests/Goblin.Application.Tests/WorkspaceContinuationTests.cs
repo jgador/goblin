@@ -32,7 +32,7 @@ public sealed class WorkspaceContinuationTests
             await File.WriteAllTextAsync(Path.Combine(root, "tracked.txt"), "original\n");
             await File.WriteAllTextAsync(Path.Combine(root, ".gitignore"), "output.log\n");
             await Git("add", "."); await Git("commit", "--quiet", "-m", "baseline");
-            await Git("checkout", "-b", "goblin/1/1");
+            await Git("checkout", "-b", "goblin/work-1");
             await File.WriteAllTextAsync(Path.Combine(root, "local.txt"), "unpublished commit\n");
             await Git("add", "local.txt"); await Git("commit", "--quiet", "-m", "unpublished");
             string head = await Git("rev-parse", "HEAD");
@@ -50,11 +50,12 @@ public sealed class WorkspaceContinuationTests
                     Login = "owner",
                     GitRepositoryId = 1,
                     BaseBranch = "main",
-                    Branch = "goblin/1/2"
+                    Branch = "goblin/work-1",
+                    AttemptId = 2
                 });
             await SandboxWorker.PrepareCheckoutAsync(root, new Dictionary<string, string>
             { [Env.Path] = Environment.GetEnvironmentVariable(Env.Path)!, [Env.GitConfigGlobal] = "/dev/null" }, gitRepository);
-            Assert.Equal("goblin/1/2", await Git("branch", "--show-current"));
+            Assert.Equal("goblin/work-1", await Git("branch", "--show-current"));
             Assert.Equal(head, await Git("rev-parse", "HEAD"));
             Assert.Equal(status, await Git("status", "--porcelain"));
             Assert.Equal(staged, await Git("diff", "--cached")); Assert.Equal(dirty, await Git("diff"));

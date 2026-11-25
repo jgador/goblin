@@ -41,8 +41,8 @@ public sealed partial class WorkStore
             Login = Account.Login,
             GitRepositoryId = Info.Id,
             BaseBranch = Delivery.BaseBranch ?? Info.DefaultBranch,
-            Branch = $"goblin/{workId}/{attemptId}",
-            PolicyVersion = 2,
+            Branch = GitRepositoryGrant.WorkBranch(workId),
+            AttemptId = attemptId,
             AllowPush = Delivery.Push,
             AllowPullRequest = Delivery.OpenPullRequest
         };

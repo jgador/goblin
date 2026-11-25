@@ -19,8 +19,8 @@ workspace: never delete it to suspend or release compute.** New compute gets fre
 attempt credentials and inputs; see
 [execution hosting](execution-hosting.md#durable-ownership) for fencing.
 
-A new attempt branch starts from the local Git HEAD on the PVC, with unpublished
-commits, staged and untracked files, installed tools, and ignored outputs. A new Codex
+A new attempt uses the Work's branch and starts from the local Git HEAD on the PVC,
+with unpublished commits, staged and untracked files, installed tools, and ignored outputs. A new Codex
 thread gets the saved Work context and checks `git status` and `git diff`. If retained
 storage is missing, Work requires attention; Goblin never replaces lost files with a
 fresh checkout or an older checkpoint.
@@ -56,7 +56,22 @@ publishing. `workspace_checkpoint` stores Work, attempt, turn, workspace number,
 repository, branch, commit SHA, and time; it holds no file data. The checkpoint also
 anchors verified repository setup memory.
 
-`.goblin/changes.patch` holds the latest turn's Git diff. A checkpoint does not back up
+Before releasing compute, the controller compares the starting commit recorded on the
+Work with the verified checkpoint and saves a standard `git format-patch` export under
+`/data/platform/work-diffs/<work-id>/<checkpoint-id>.patch` in the installed platform's private
+volume. The export applies as one commit with `git am`. For a cumulative export spanning
+multiple commits, Git generates the patch from a temporary commit with the checkpoint's
+tree. The real checkpoint SHA remains the reference for GitHub publication.
+
+**Changes** displays and downloads the latest patch without opening a sandbox or
+inspection session. On `Completed` or `Cancelled`, Goblin queues deletion of that Work's
+patch directory with the status transition. The same cleanup removes superseded copies
+for open Work. The review export is limited to 4 MiB.
+
+Work created before the review export gets a saved patch on its next verified repository
+checkpoint. Prior checkpoints and their recorded branches remain in Work history.
+
+`.goblin/changes.patch` holds the latest turn's Git diff for workspace inspection. A checkpoint does not back up
 untracked or ignored files, tools, or build outputs, and never authorizes deleting a
 volume. Files outside published commits depend on the retained PVC and any backups the
 operator manages.

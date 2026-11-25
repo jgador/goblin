@@ -26,7 +26,7 @@ public sealed class WorkspaceCheckpointCoordinator
         AttemptSnapshot attempt = work.Attempts[^1];
         if (attempt.TurnNumber != turn || !GitRepositoryAttemptPolicy.AllowsOperations(attempt.Status))
             throw new ApplicationFailure("workspace_changed");
-        await _broker.VerifyCheckpointAsync(work, commit, token);
-        return await _checkpoints.SaveVerifiedAsync(work, turn, commit, token);
+        byte[] patch = await _broker.FormatVerifiedCheckpointAsync(work, commit, token);
+        return await _checkpoints.SaveVerifiedAsync(work, turn, commit, patch, token);
     }
 }

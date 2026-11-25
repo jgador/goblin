@@ -56,7 +56,7 @@ public sealed partial class DurabilityTests
         Assert.Equal("42+owner@users.noreply.github.com", repository.GitAuthorEmail);
         Assert.Equal("slack:T123/U456", repository.RequestedBy);
         Assert.Equal("develop", repository.Grant!.BaseBranch);
-        Assert.Equal($"goblin/{work.Work.Id}/{attempt.Id}", repository.Grant.Branch);
+        Assert.Equal($"goblin/work-{work.Work.Id}", repository.Grant.Branch);
         Assert.True(repository.Grant.AllowPush);
         Assert.True(repository.Grant.AllowPullRequest);
         Assert.Equal(1, fixture.Runtime.Starts[attempt.Id]);

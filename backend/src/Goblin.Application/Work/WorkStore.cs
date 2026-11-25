@@ -243,7 +243,7 @@ public sealed partial class WorkStore
                 await outbox.PublishAsync(new ReconcileWork(work.Id, uncertain.Id));
                 break;
         }
-        await SaveAsync(db, row, work, now, token);
+        await SaveAsync(db, outbox, row, work, now, token);
         WorkView view = View(row);
         db.WorkCommands.Add(new()
         {
@@ -278,6 +278,8 @@ public sealed partial class WorkStore
         if (connection.Availability is nameof(ConnectionAvailability.Changing) or nameof(ConnectionAvailability.Verifying)) return null;
         FailureKind? failure = !supportsRuntime(attempt.Target) ? FailureKind.CapabilityUnavailable :
             connection.Availability != nameof(ConnectionAvailability.Available) ? FailureKind.ConnectionUnavailable : null;
+        if (attempt.Target.GitRepository?.Grant is { } policy && (!policy.HasSupportedPolicy() || policy.AttemptId != attempt.Id))
+            failure = FailureKind.CapabilityUnavailable;
         if (attempt.Target.GitRepository?.Grant is { } grant && !await db.GithubConnections.AnyAsync(x =>
             x.Id == grant.ConnectionId && x.Generation == grant.Generation && x.AccountId == grant.AccountId && x.Availability == nameof(GitHubConnectionStatus.Connected), token))
             failure = FailureKind.ConnectionUnavailable;
@@ -301,7 +303,7 @@ public sealed partial class WorkStore
         }
         if (failure is not null) work.DispatchFailed(attempt.Id, failure.Value, now);
         else if (!work.TryClaimExecution(attempt.Id, await IdentitySequence.NextAsync(db, IdentityKind.Event, token), environmentFor(work.Snapshot()), now)) return null;
-        await SaveAsync(db, row, work, now, token);
+        await SaveAsync(db, outbox, row, work, now, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return failure is null ? work.Snapshot() : null;
     }
@@ -317,7 +319,7 @@ public sealed partial class WorkStore
         int turnBefore = work.CurrentAttempt?.TurnNumber ?? 0;
         transition(work);
         if (before == work.History.Count) return;
-        await SaveAsync(db, row, work, DateTimeOffset.UtcNow, token);
+        await SaveAsync(db, outbox, row, work, DateTimeOffset.UtcNow, token);
         if (work.CurrentAttempt is { Status: AttemptStatus.Queued } queued && queued.TurnNumber != turnBefore)
             await outbox.PublishAsync(new DispatchWork(work.Id, queued.Id, queued.TurnNumber));
         await outbox.SaveChangesAndFlushMessagesAsync(token);
@@ -329,8 +331,10 @@ public sealed partial class WorkStore
         return await ExecutionRecoveryQuery.Select(db.ExecutionAttempts.AsNoTracking()).ToArrayAsync(token);
     }
 
-    private static async Task SaveAsync(GoblinDbContext db, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
+    private static async Task SaveAsync(GoblinDbContext db, IDbContextOutbox outbox, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
     {
+        if (WorkspaceCheckpoints.RetainsPatches(row.Status) && work.Status is WorkStatus.Completed or WorkStatus.Cancelled)
+            await outbox.PublishAsync(new ReconcileWorkPatches(work.Id));
         WorkStatePersistence.Update(row, work, now);
         foreach (ExecutionAttempt attempt in work.Attempts)
         {

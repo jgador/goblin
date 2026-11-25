@@ -20,7 +20,7 @@ internal static class GitRepositoryAccess
         AttemptSnapshot attempt = work.Attempts[^1];
         if (attempt.Id != attemptId || attempt.Target.GitRepository?.Grant is not { } grant)
             throw new ApplicationFailure("repository_operation_unavailable");
-        if (!grant.HasSupportedPolicy() ||
+        if (!grant.HasSupportedPolicy() || grant.AttemptId != attemptId ||
             work.GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approved ||
             approved.Id != attemptId || approved.Target != attempt.Target ||
             !await EnabledFor(db, grant).AnyAsync(token))
@@ -33,7 +33,7 @@ internal static class GitRepositoryAccess
         AttemptSnapshot attempt = work.Attempts[^1];
         if (attempt.Id != attemptId || attempt.TurnNumber != turnNumber ||
             attempt.Target.GitRepository?.Grant is not { } grant ||
-            !grant.HasSupportedPolicy() ||
+            !grant.HasSupportedPolicy() || grant.AttemptId != attemptId ||
             !await EnabledFor(db, grant).AnyAsync(x => x.Name == attempt.Target.GitRepository.GitRepository, token))
             throw new ApplicationFailure("repository_setup_unavailable");
     }

@@ -22,10 +22,12 @@ public static class GitRepositoryJson
         options.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
         options.TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver()).WithAddedModifier(info =>
         {
-            if (info.Type == typeof(GitRepositoryChange))
+            string? optional = info.Type == typeof(GitRepositoryChange) ? nameof(GitRepositoryChange.RequestedBy)
+                : info.Type == typeof(WorkWorkspace) ? nameof(WorkWorkspace.BaseCommitSha)
+                : info.Type == typeof(GitRepositoryGrant) ? nameof(GitRepositoryGrant.AttemptId) : null;
+            if (optional is not null)
                 foreach (JsonPropertyInfo property in info.Properties)
-                    if (property.Name == options.PropertyNamingPolicy.ConvertName(nameof(GitRepositoryChange.RequestedBy)))
-                        property.ShouldSerialize = (_, value) => value is not null;
+                    if (property.Name == options.PropertyNamingPolicy.ConvertName(optional)) property.ShouldSerialize = (_, value) => value is not null;
         });
         return options;
     }

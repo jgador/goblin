@@ -148,7 +148,6 @@ export class WorkspaceDom {
                               "work-effort",
                               "model-connection",
                               "work-view",
-                              "board-filter",
                               "work-search",
                           ].includes(x.id),
                   )
@@ -204,7 +203,8 @@ export class WorkspaceDom {
                 ".sidebar",
                 ".workspace-header",
                 ".workspace-notices",
-                ".coworker-strip",
+                ".board-heading",
+                ".board-summary",
                 ".board-toolbar",
                 ".board-content",
             ]);
@@ -290,7 +290,10 @@ export class WorkspaceDom {
             const element = root.querySelector<HTMLElement>(
                 `[data-scroll="${name}"]`,
             );
-            if (element && (sameContext || name === "sidebar"))
+            if (
+                element &&
+                (sameContext || name === "sidebar" || name === "board")
+            )
                 element.scrollTop = top;
         }
         if (active?.isConnected && active.closest(".settings-page"))

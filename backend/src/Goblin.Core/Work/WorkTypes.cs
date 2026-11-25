@@ -215,11 +215,14 @@ public sealed record GitRepositoryGrant
     public long GitRepositoryId { get; init; }
     public string BaseBranch { get; init; } = null!;
     public string Branch { get; init; } = null!;
-    public int PolicyVersion { get; init; } = 2;
+    public long? AttemptId { get; init; }
+    public int PolicyVersion { get; init; } = 3;
     public bool AllowPush { get; init; }
     public bool AllowPullRequest { get; init; }
 
-    public bool HasSupportedPolicy() => PolicyVersion == 2;
+    public static string WorkBranch(long workId) => FormattableString.Invariant($"goblin/work-{workId}");
+
+    public bool HasSupportedPolicy() => PolicyVersion == 3;
 
     public bool PublishesChanges() => HasSupportedPolicy() && AllowPush;
 
@@ -234,8 +237,8 @@ public sealed record GitRepositoryGrant
 
     public void Authorize(long workId, long attemptId, string gitRepository, string requestedGitRepository, string branch, GitRepositoryOperationKind operation)
     {
-        if (ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) ||
-            Branch != $"goblin/{workId}/{attemptId}" || branch != Branch || Branch == BaseBranch ||
+        if (workId <= 0 || attemptId <= 0 || AttemptId != attemptId || ConnectionId <= 0 || string.IsNullOrWhiteSpace(Generation) ||
+            Branch != WorkBranch(workId) || branch != Branch || Branch == BaseBranch ||
             !string.Equals(gitRepository, requestedGitRepository, StringComparison.OrdinalIgnoreCase) ||
             !AllowsOperation(operation))
             throw new WorkRuleException(WorkRule.OwnershipMismatch);

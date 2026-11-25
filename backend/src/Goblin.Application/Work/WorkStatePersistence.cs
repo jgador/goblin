@@ -19,12 +19,14 @@ internal static class WorkStatePersistence
 
     internal static void Update(Row row, WorkItem work, DateTimeOffset now)
     {
-        row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
+        SaveSnapshot(row, work);
         row.Status = work.Status.ToString();
         row.AgentId = work.AgentId;
         row.Version++;
         row.UpdatedAt = now.UtcDateTime;
     }
+
+    internal static void SaveSnapshot(Row row, WorkItem work) => row.State = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options);
 
     internal static WorkItem Restore(Row row) => Restore(row.State);
 

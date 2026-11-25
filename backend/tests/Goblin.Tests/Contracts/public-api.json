@@ -400,6 +400,11 @@
     "version",
     "work"
   ],
+  "WorkPatchView": [
+    "baseCommitSha",
+    "checkpoint",
+    "patch"
+  ],
   "WorkWorkspace": [
     "attemptId",
     "environmentReference",

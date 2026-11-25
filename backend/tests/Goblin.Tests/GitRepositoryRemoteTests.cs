@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -45,12 +46,13 @@ public sealed class GitRepositoryRemoteTests
                 Login = "owner",
                 GitRepositoryId = 22,
                 BaseBranch = "main",
-                Branch = "goblin/1/2",
+                Branch = "goblin/work-1",
+                AttemptId = 2,
                 AllowPush = true,
                 AllowPullRequest = true
             });
             await remote.PrepareAsync(gitRepository, broker, null, default);
-            await Git(root, "clone", "--branch", "goblin/1/2", Path.Combine(broker, "input.bundle"), sandbox);
+            await Git(root, "clone", "--branch", "goblin/work-1", Path.Combine(broker, "input.bundle"), sandbox);
             await Git(sandbox, "config", "user.name", "Goblin"); await Git(sandbox, "config", "user.email", "goblin@example.test");
             await File.WriteAllTextAsync(Path.Combine(sandbox, "hello.txt"), "changed");
             await Git(sandbox, "add", "."); await Git(sandbox, "commit", "-m", "Change");
@@ -59,38 +61,43 @@ public sealed class GitRepositoryRemoteTests
             await File.WriteAllTextAsync(hook, "#!/bin/sh\ntouch '" + Path.Combine(root, "hook-ran") + "'\n");
             File.SetUnixFileMode(hook, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             string bundle = Path.Combine(root, "changes.bundle");
-            await Git(sandbox, "bundle", "create", bundle, "refs/heads/goblin/1/2");
+            await Git(sandbox, "bundle", "create", bundle, "refs/heads/goblin/work-1");
             string commit = await remote.InspectBundleAsync(gitRepository, broker, bundle, default);
             Assert.Equal(changed, commit);
+            Assert.Equal(initial, await remote.ResolveBaseAsync(gitRepository, broker, default));
+            Assert.StartsWith("From " + commit + " ", Encoding.UTF8.GetString(await remote.FormatPatchAsync(broker, initial, commit, default)));
             var local = new GitRepositoryChange(gitRepository.GitRepository, gitRepository.GitAuthorName, gitRepository.GitAuthorEmail,
                 gitRepository.Grant! with { AllowPush = false, AllowPullRequest = false });
             Assert.Equal(commit, await remote.InspectBundleAsync(local, broker, bundle, default));
             await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, GitRepositoryOperationKind.Publish, commit, default));
             await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(local, broker, GitRepositoryOperationKind.PullRequest, commit, default));
-            Assert.DoesNotContain("goblin/1/2", await Git(origin, "for-each-ref", "--format=%(refname)"));
+            Assert.DoesNotContain("goblin/work-1", await Git(origin, "for-each-ref", "--format=%(refname)"));
             await remote.ExecuteAsync(gitRepository, broker, GitRepositoryOperationKind.Publish, commit, default);
             Assert.Equal(initial, await Git(origin, "rev-parse", "main"));
-            Assert.Equal(changed, await Git(origin, "rev-parse", "goblin/1/2"));
+            Assert.Equal(changed, await Git(origin, "rev-parse", "goblin/work-1"));
             Assert.False(File.Exists(Path.Combine(root, "hook-ran")));
             Assert.NotNull(await remote.ReconcileAsync(gitRepository, broker, GitRepositoryOperationKind.Publish, commit, default));
             // A resumed published attempt needs its confirmed remote head for the next lease.
             Directory.Delete(broker, true);
-            await remote.PrepareCheckpointAsync(gitRepository, broker,
-                new()
-                {
-                    Id = 1,
-                    WorkId = 1,
-                    AttemptId = 2,
-                    TurnNumber = 1,
-                    WorkspaceNumber = 1,
-                    GitRepository = gitRepository.GitRepository,
-                    Branch = gitRepository.Grant!.Branch,
-                    CommitSha = commit,
-                    CreatedAt = DateTimeOffset.UtcNow
-                }, default);
+            await remote.PrepareAsync(gitRepository, broker, commit, default);
             await remote.InspectBundleAsync(gitRepository, broker, bundle, default);
             await remote.ExecuteAsync(gitRepository, broker, GitRepositoryOperationKind.Publish, commit, default);
             await Assert.ThrowsAsync<GitHubFailure>(() => remote.ExecuteAsync(gitRepository, broker, (GitRepositoryOperationKind)99, commit, default));
+            await File.WriteAllBytesAsync(Path.Combine(sandbox, "data.bin"), [0, 7, 9, 0]);
+            await Git(sandbox, "add", "data.bin");
+            await Git(sandbox, "commit", "-m", "Add binary data");
+            await Git(sandbox, "bundle", "create", bundle, "refs/heads/goblin/work-1");
+            string latest = await remote.InspectBundleAsync(gitRepository, broker, bundle, default);
+            string tree = await Git(sandbox, "rev-parse", "HEAD^{tree}");
+            byte[] cumulative = await remote.FormatPatchAsync(broker, initial, latest, default);
+            Assert.Contains("Subject: [PATCH] Goblin Work review", Encoding.UTF8.GetString(cumulative));
+            Assert.Empty(await remote.FormatPatchAsync(broker, latest, latest, default));
+            string patch = Path.Combine(root, "review.patch");
+            await File.WriteAllBytesAsync(patch, cumulative);
+            await Git(sandbox, "checkout", "--detach", initial);
+            await Git(sandbox, "am", patch);
+            Assert.Equal(tree, await Git(sandbox, "rev-parse", "HEAD^{tree}"));
+            await Git(sandbox, "checkout", "goblin/work-1");
             await Git(sandbox, "checkout", "-b", "wrong-branch");
             await Git(sandbox, "bundle", "create", Path.Combine(root, "wrong.bundle"), "refs/heads/wrong-branch");
             await Assert.ThrowsAsync<GitHubFailure>(() => remote.InspectBundleAsync(gitRepository, broker, Path.Combine(root, "wrong.bundle"), default));

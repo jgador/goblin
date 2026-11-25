@@ -787,9 +787,13 @@ public sealed partial class DurabilityTests
         Assert.Equal(0, fixture.Remote.Calls); // Local checkpoint did not invoke GitHub.
         Assert.Equal(0, fixture.Remote.CheckpointPreparations);
         IDbContextFactory<GoblinDbContext> factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>();
-        var store = new WorkspaceCheckpoints(factory);
+        WorkspaceCheckpoints store = scope.ServiceProvider.GetRequiredService<WorkspaceCheckpoints>();
         WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
         WorkspaceCheckpoint saved = await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default);
+        WorkPatch patch = (await store.ReadPatchAsync(id, saved.Id, default))!;
+        Assert.Equal(saved.Id, patch.Checkpoint.Id);
+        Assert.Equal(fixture.Remote.BaseCommit, patch.BaseCommitSha);
+        Assert.Equal("saved review patch"u8.ToArray(), patch.Content);
         AssertCheckpoint(saved, (await store.LatestAsync(id, "owner/repo", default))!);
         AssertCheckpoint(saved, Assert.Single(await store.ListAsync(id, default)));
         Assert.Equal(saved.Id, (await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default)).Id);
@@ -799,13 +803,18 @@ public sealed partial class DurabilityTests
         Assert.False(await store.VerifiedAsync(saved.Id, attempt, 2, default));
         await fixture.RestartAsync();
         using IServiceScope restartedScope = fixture.Host.Services.CreateScope();
-        var reopened = new WorkspaceCheckpoints(restartedScope.ServiceProvider.GetRequiredService<IDbContextFactory<GoblinDbContext>>());
+        WorkspaceCheckpoints reopened = restartedScope.ServiceProvider.GetRequiredService<WorkspaceCheckpoints>();
         AssertCheckpoint(saved, (await reopened.LatestAsync(id, "owner/repo", default))!);
-        Assert.Equal(work.Work.Workspace, (await fixture.Get(id)).Work.Workspace);
+        Assert.Equal(work.Work.Workspace! with { BaseCommitSha = fixture.Remote.BaseCommit }, (await fixture.Get(id)).Work.Workspace);
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
         await fixture.Apply(WorkCommands.Approve(NextId(), id, work.Version, attempt));
+        Assert.Null(await reopened.ReadPatchAsync(id, saved.Id, default));
+        string patchDirectory = fixture.PatchDirectory(id);
+        for (int i = 0; i < 100 && Directory.Exists(patchDirectory); i++) await Task.Delay(50);
+        Assert.False(Directory.Exists(patchDirectory));
+        Assert.True(await reopened.VerifiedAsync(saved.Id, attempt, 1, default));
     }
 
     private static void AssertCheckpoint(WorkspaceCheckpoint expected, WorkspaceCheckpoint actual)
@@ -950,7 +959,9 @@ public sealed partial class DurabilityTests
         Assert.Equal(reference, work.Work.Attempts[^1].EnvironmentReference);
         Assert.NotEqual(first, work.Work.Workspace.AttemptId);
         Assert.Equal(AttemptStatus.Failed, work.Work.Attempts[0].Status);
-        Assert.NotEqual(work.Work.Attempts[0].Target.GitRepository!.Grant!.Branch, work.Work.Attempts[1].Target.GitRepository!.Grant!.Branch);
+        Assert.Equal(work.Work.Attempts[0].Target.GitRepository!.Grant!.Branch, work.Work.Attempts[1].Target.GitRepository!.Grant!.Branch);
+        Assert.Equal(first, work.Work.Attempts[0].Target.GitRepository!.Grant!.AttemptId);
+        Assert.Equal(work.Work.Attempts[1].Id, work.Work.Attempts[1].Target.GitRepository!.Grant!.AttemptId);
     }
 
     [DatabaseFact]
@@ -976,7 +987,7 @@ public sealed partial class DurabilityTests
         });
         long attempt = w.Work.Attempts[^1].Id;
         GitRepositoryGrant original = w.Work.Attempts[^1].Target.GitRepository!.Grant!;
-        Assert.Equal($"goblin/{id}/{attempt}", original.Branch);
+        Assert.Equal($"goblin/work-{id}", original.Branch);
         Assert.Equal("first", original.Generation);
         await Assert.ThrowsAsync<ApplicationFailure>(() => settings.BeginChangeAsync());
         await fixture.Until(id, x => x.Work.Attempts[^1].Status == AttemptStatus.Starting);
@@ -1695,10 +1706,19 @@ public sealed partial class DurabilityTests
         public int Calls { get; private set; }
         public int CheckpointPreparations { get; private set; }
 
-        public Task PrepareCheckpointAsync(GitRepositoryChange gitRepository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token)
-        { CheckpointPreparations++; return PrepareAsync(gitRepository, directory, checkpoint.Branch, token); }
+        public string BaseCommit { get; } = new string('b', 40);
 
-        public Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? checkpoint, CancellationToken token) { Directory.CreateDirectory(directory); return Task.CompletedTask; }
+        public Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? publishedCommit, CancellationToken token)
+        {
+            if (publishedCommit is not null) CheckpointPreparations++;
+            Directory.CreateDirectory(directory);
+            return Task.CompletedTask;
+        }
+
+        public Task<string> ResolveBaseAsync(GitRepositoryChange gitRepository, string directory, CancellationToken token) => Task.FromResult(BaseCommit);
+
+        public Task<byte[]> FormatPatchAsync(string directory, string baseCommit, string checkpoint, CancellationToken token) =>
+            Task.FromResult("saved review patch"u8.ToArray());
 
         public Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token) => Task.FromResult(InspectedCommit);
 
@@ -1818,6 +1838,7 @@ public sealed partial class DurabilityTests
             if (_catalog is not null) builder.Services.AddSingleton(_catalog);
             builder.Services.AddSingleton<IExecutionHost>(Runtime);
             builder.Services.AddSingleton(new WorkspaceLimits());
+            builder.Services.AddSingleton(new WorkPatchFiles(Path.Combine(_directory, "work-diffs")));
             builder.Services.AddSingleton<WorkspaceCheckpoints>();
             builder.Services.AddSingleton<IWorkspaceCheckpoints>(services => services.GetRequiredService<WorkspaceCheckpoints>());
             builder.Services.AddSingleton<IInspectionHost>(Inspection);
@@ -1943,6 +1964,8 @@ public sealed partial class DurabilityTests
             return await Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>()
                 .SaveAsync(attempt, work.Attempts[^1].TurnNumber, new string('a', 40), default);
         }
+
+        public string PatchDirectory(long workId) => Path.Combine(_directory, "work-diffs", workId.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
         public async Task<WorkView> Until(long id, Func<WorkView, bool> ready)
         {

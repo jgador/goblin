@@ -1,18 +1,14 @@
-import {
-    AttentionReason,
-    ConnectionAvailability,
-    WorkStatus,
-} from "../api/values.js";
-import type { Agent, Connection } from "../api/workspace-contracts.js";
+import { AttentionReason, WorkStatus } from "../api/values.js";
 import type { View, Work } from "./contracts.js";
 import { escapeHtml as e, icon } from "./presentation.js";
 import { relativeTime } from "./surface.js";
 
 const filters = {
     all: "All work",
-    assigned: "My work",
     attention: "Needs attention",
+    active: "In progress",
     done: "Completed",
+    assigned: "My work",
 } as const;
 
 export type WorkFilter = keyof typeof filters;
@@ -26,6 +22,8 @@ export function workInFilter(work: Work, filter: WorkFilter) {
     switch (filter) {
         case "attention":
             return work.status === WorkStatus.NeedsAttention;
+        case "active":
+            return laneByStatus[work.status] === "active";
         case "done":
             return work.status === WorkStatus.Completed;
         case "assigned":
@@ -73,7 +71,7 @@ const attentionLabels: Record<AttentionReason, string> = {
     RepositoryRequired: "Repository access needed",
 };
 
-function workStatus(work: Work) {
+export function workStatus(work: Work) {
     if (work.status === WorkStatus.NeedsAttention)
         return work.attention
             ? attentionLabels[work.attention.reason]
@@ -111,33 +109,33 @@ function updated(item: View) {
     return `<time datetime="${e(item.updatedAt)}">${e(relativeTime(item.updatedAt))}</time>`;
 }
 
-function card(item: View) {
+function card(item: View, selected: string) {
     const { work } = item;
     const detail = preview(work)?.trim();
     const excerpt =
         detail && (detail.length > 200 ? detail.slice(0, 200) + "…" : detail);
     const id = e(work.id);
-    return `<li><button class="board-card board-entry" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id}${excerpt ? ` board-preview-${id}` : ""}">
+    return `<li><button class="board-card board-entry" data-action="select-work" data-id="${id}" aria-current="${work.id === selected}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id}${excerpt ? ` board-preview-${id}` : ""}">
         <span id="board-title-${id}" class="board-card-title" title="${e(work.objective)}">${e(work.objective)}</span>
         ${excerpt ? `<span id="board-preview-${id}" class="board-card-preview">${e(excerpt)}</span>` : ""}
         <span class="board-card-meta">${status(item)}${updated(item)}</span>
     </button></li>`;
 }
 
-function rows(items: readonly View[]) {
-    return `<ul class="board-list" role="list" aria-label="Work list">${items
+function rows(items: readonly View[], selected: string) {
+    return `<div class="board-table"><div class="board-table-heading" aria-hidden="true"><span>Work</span><span>Status</span><span>Updated</span></div><ul class="board-list" role="list" aria-label="Work list">${items
         .map((item) => {
             const id = e(item.work.id);
             const title = e(item.work.objective);
-            return `<li><button class="board-entry board-list-item" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
-            ${icon("work")}<span id="board-title-${id}" class="board-list-title" title="${title}">${title}</span>
+            return `<li><button class="board-entry board-list-item" data-action="select-work" data-id="${id}" aria-current="${item.work.id === selected}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
+            <span class="board-list-copy"><span class="board-list-icon">${icon("work")}</span><span class="board-list-label"><span id="board-title-${id}" class="board-list-title" title="${title}">${title}</span><span class="board-list-id">Work ${id}</span></span></span>
             ${status(item)}<span id="board-updated-${id}"><span class="sr-only">Updated </span>${updated(item)}</span>
         </button></li>`;
         })
-        .join("")}</ul>`;
+        .join("")}</ul></div>`;
 }
 
-function columns(items: readonly View[]) {
+function columns(items: readonly View[], selected: string) {
     const groups = lanes
         .map((lane) => ({
             ...lane,
@@ -156,31 +154,27 @@ function columns(items: readonly View[]) {
                     items,
                 }) => `<section class="board-lane" data-lane="${id}" aria-labelledby="lane-${id}"><div class="board-lane-heading">
                 <h2 id="lane-${id}">${icon(symbol)}${name}</h2><span class="board-lane-count">${items.length}</span>
-            </div><ul>${items.map(card).join("")}</ul></section>`,
+            </div><ul>${items.map((item) => card(item, selected)).join("")}</ul></section>`,
             )
             .join("")}
     </div>`;
 }
 
-const connectionLabels: Record<ConnectionAvailability, string> = {
-    Available: "Connected",
-    Disconnected: "Disconnected",
-    Unavailable: "Unavailable",
-    Changing: "Updating connection",
-    Verifying: "Checking connection",
-};
+const summary = [
+    { filter: "attention", icon: "wait" },
+    { filter: "active", icon: "progress" },
+    { filter: "done", icon: "circleCheck" },
+] as const;
 
 type BoardInput = {
     work: readonly View[];
     matches: readonly View[];
     loaded: boolean;
     workUnavailable: boolean;
-    connectionsLoaded: boolean;
-    agent?: Agent;
-    connection?: Connection;
     filter: WorkFilter;
     layout: BoardLayout;
     search: string;
+    selected: string;
     sidebarCollapsed: boolean;
 };
 
@@ -189,21 +183,14 @@ export function renderBoard({
     matches,
     loaded,
     workUnavailable,
-    connectionsLoaded,
-    agent,
-    connection,
     filter,
     layout,
     search,
+    selected,
     sidebarCollapsed,
 }: BoardInput) {
     const shown = matches.filter(({ work }) => workInFilter(work, filter));
-    const next = work.find(({ work }) => workInFilter(work, "attention"))?.work;
-    const connectionLabel = connection
-        ? `${connection.name} · ${connectionLabels[connection.availability]}`
-        : connectionsLoaded
-          ? "No AI connection"
-          : "Checking AI connection…";
+    const counts = workFilters(matches);
     const count = `${shown.length} ${shown.length === 1 ? "work item" : "work items"}`;
     const empty = !loaded
         ? workUnavailable
@@ -217,38 +204,40 @@ export function renderBoard({
     return `<section class="board-workspace" aria-labelledby="board-heading" data-scroll="board">
         <div class="board-inner">
             <div class="board-heading">
-                <h1 id="board-heading" tabindex="-1">Work</h1>
+                <h1 id="board-heading" tabindex="-1">Work inbox</h1>
                 <div class="board-actions">
-                    <button class="secondary coworker-ask" data-action="new-chat">${icon("chat")}Ask Goblin</button>
-                    ${sidebarCollapsed ? `<button class="primary board-new" data-action="new-work">${icon("plus")}New work</button>` : ""}
+                    ${sidebarCollapsed ? `<button class="secondary" data-action="new-chat">${icon("chat")}Ask Goblin</button>` : ""}
+                    <button class="primary" data-action="new-work">${icon("plus")}New work</button>
                 </div>
             </div>
-            <section class="coworker-strip" aria-label="Goblin coworker">
-                <div class="coworker-identity"><img class="coworker-mark" src="/assets/branding/icon.svg" alt="">
-                    <p><strong>${e(agent?.name ?? "Goblin")}</strong><span class="coworker-connection" data-available="${connection?.availability === ConnectionAvailability.Available}">${e(connectionLabel)}</span></p>
-                </div>
-                ${next ? `<button id="coworker-next" class="coworker-next" data-action="select-work" data-id="${e(next.id)}" title="${e(next.objective)}"><span class="coworker-next-label">${e(workStatus(next))}</span><span class="coworker-next-title">${e(next.objective)}</span>${icon("chevron")}</button>` : ""}
-            </section>
+            <div class="board-summary" role="group" aria-label="Work status summary" ${loaded ? "" : "hidden"}>
+                ${summary
+                    .map(({ filter: value, icon: symbol }) => {
+                        const total = counts.find(
+                            (entry) => entry.value === value,
+                        )!.count;
+                        return `<button id="inbox-summary-${value}" class="board-summary-card" data-action="board-filter" data-value="${value}" aria-pressed="${filter === value}">
+                        <span><span class="board-summary-label">${filters[value]}</span><strong>${total}</strong></span><span class="board-summary-icon">${icon(symbol)}</span>
+                    </button>`;
+                    })
+                    .join("")}
+            </div>
             <div class="board-toolbar" ${loaded ? "" : "hidden"}>
-                <div class="board-filter"><label class="sr-only" for="board-filter">Filter work</label><select id="board-filter" class="field-control select-control">${Object.entries(
-                    filters,
-                )
-                    .map(
-                        ([value, name]) =>
-                            `<option value="${value}" ${filter === value ? "selected" : ""}>${name}</option>`,
-                    )
-                    .join("")}</select><p class="board-count">${count}</p></div>
+                <div class="board-list-heading"><h2>Work items</h2><p class="board-count" role="status">${count}</p></div>
                 <div class="board-layout" role="group" aria-label="Work layout">
                     <button data-action="board-layout" data-value="list" aria-pressed="${layout === "list"}">${icon("list")}List</button>
                     <button data-action="board-layout" data-value="board" aria-pressed="${layout === "board"}">${icon("board")}Board</button>
+                </div>
+                <div class="board-filter" role="group" aria-label="Filter work">
+                    ${counts.map(({ value, name, count }) => `<button id="inbox-filter-${value}" class="board-filter-option" data-action="board-filter" data-value="${value}" aria-pressed="${filter === value}">${name}<span>${count}</span></button>`).join("")}
                 </div>
             </div>
             <div class="board-content">
                 ${
                     loaded && shown.length
                         ? layout === "board"
-                            ? columns(shown)
-                            : rows(shown)
+                            ? columns(shown, selected)
+                            : rows(shown, selected)
                         : `<p class="board-empty">${empty}${loaded && search ? '<button class="text-button" data-action="clear-search">Clear search</button>' : ""}</p>`
                 }
             </div>

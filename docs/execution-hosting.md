@@ -14,7 +14,7 @@ Sandbox and no database credentials, and answers from the supplied Work context.
 Repository execution needs a repository enabled in Settings, or one enabled through a
 saved authorization preview in the Work conversation. Each attempt records the GitHub
 account and connection generation, repository ID, base branch, policy version, and
-branch `goblin/<work-id>/<attempt-id>`. The agent's Git author name and email are
+branch `goblin/work-<work-id>`. Each grant also binds the specific attempt ID. The agent's Git author name and email are
 separate from the connected GitHub account. The first repository allocation for a Work
 creates a Sandbox and private PVC named `work-<work-id>` in the execution namespace
 (`agents` in the deployed manifests). Recorded references preserve the namespace and
@@ -35,8 +35,10 @@ cannot publish again. External processes and complete operations have enforced t
 bounds. An uncertain response is reconciled by checking the exact remote branch commit
 or PR. After controller loss, a saved boot ID and system uptime bound how long a child
 process could still run; remote absence alone does not prove a write stopped. A
-replacement attempt gets a new branch and continues from the local Git HEAD on the Work
-PVC, including unpublished commits. A missing volume requires attention.
+replacement attempt uses the same Work branch and continues from the local Git HEAD on
+the Work PVC, including unpublished commits. A publishing attempt uses the last verified
+publication for that branch as its expected remote head. A missing volume or an independent
+remote change requires attention.
 
 GitHub account and repository changes are rejected while a repository attempt is queued,
 running, uncertain, cleanup-pending, or holding compute. Signing in with a different

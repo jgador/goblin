@@ -118,6 +118,7 @@ internal static class WebServices
         builder.Services.AddWorkApplication();
         WorkspaceLimits workspaceLimits = configuration.WorkspaceLimits;
         builder.Services.AddSingleton(workspaceLimits);
+        builder.Services.AddSingleton(new WorkPatchFiles(Path.Combine(workspace.DataDirectory, "work-diffs")));
         builder.Services.AddSingleton<WorkspaceCheckpoints>();
         builder.Services.AddSingleton<IWorkspaceCheckpoints>(services => services.GetRequiredService<WorkspaceCheckpoints>());
         IExecutionHost executionHost = new LocalTextHost(new(

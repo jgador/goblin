@@ -15,7 +15,8 @@ public sealed class GitRepositoryPolicyTests
         Login = "owner",
         GitRepositoryId = 22,
         BaseBranch = "main",
-        Branch = "goblin/10/20",
+        Branch = "goblin/work-10",
+        AttemptId = 20,
         AllowPush = true,
         AllowPullRequest = true
     };
@@ -24,15 +25,15 @@ public sealed class GitRepositoryPolicyTests
     [InlineData(GitRepositoryOperationKind.Publish)]
     [InlineData(GitRepositoryOperationKind.PullRequest)]
     [InlineData(GitRepositoryOperationKind.Fetch)]
-    public void AssignedBranchCanBePublished(GitRepositoryOperationKind operation) => Grant.Authorize(10, 20, "owner/repo", "owner/repo", "goblin/10/20", operation);
+    public void AssignedBranchCanBePublished(GitRepositoryOperationKind operation) => Grant.Authorize(10, 20, "owner/repo", "owner/repo", "goblin/work-10", operation);
 
     [Theory]
     [InlineData("owner/repo", "main", "publish")]
-    [InlineData("owner/repo", "goblin/10/21", "publish")]
-    [InlineData("owner/other", "goblin/10/20", "publish")]
-    [InlineData("owner/repo", "goblin/10/20", "merge")]
-    [InlineData("owner/repo", "goblin/10/20", "auto-merge")]
-    [InlineData("owner/repo", "goblin/10/20", "delete")]
+    [InlineData("owner/repo", "goblin/work-11", "publish")]
+    [InlineData("owner/other", "goblin/work-10", "publish")]
+    [InlineData("owner/repo", "goblin/work-10", "merge")]
+    [InlineData("owner/repo", "goblin/work-10", "auto-merge")]
+    [InlineData("owner/repo", "goblin/work-10", "delete")]
     public void OtherDestinationsAndOperationsAreRejected(string gitRepository, string branch, string operation) =>
         Assert.Throws<WorkRuleException>(() => Grant.Authorize(10, 20, "owner/repo", gitRepository, branch, GitRepositoryOperationNames.Parse(operation)));
 
@@ -75,7 +76,7 @@ public sealed class GitRepositoryPolicyTests
         Assert.False(push.AllowsOperation(GitRepositoryOperationKind.PullRequest));
         Assert.True((push with { AllowPullRequest = true }).AllowsOperation(GitRepositoryOperationKind.PullRequest));
 
-        foreach (int version in new[] { 1, 3 })
+        foreach (int version in new[] { 1, 2 })
         {
             GitRepositoryGrant unsupported = Grant with { PolicyVersion = version };
             Assert.False(unsupported.HasSupportedPolicy());
@@ -100,7 +101,8 @@ public sealed class GitRepositoryPolicyTests
             Grant with { Login = "another-owner" },
             Grant with { GitRepositoryId = 23 },
             Grant with { BaseBranch = "develop" },
-            Grant with { Branch = "goblin/10/21" },
+            Grant with { Branch = "goblin/work-11" },
+            Grant with { AttemptId = 21 },
             Grant with { PolicyVersion = 1 },
             Grant with { AllowPush = false },
             Grant with { AllowPullRequest = false }

@@ -23,11 +23,13 @@ public static class ApplicationServices
         options.Discovery.IncludeType(typeof(DispatchWorkHandler));
         options.Discovery.IncludeType(typeof(ReconcileWorkHandler));
         options.Discovery.IncludeType(typeof(ExecuteGitRepositoryOperationHandler));
+        options.Discovery.IncludeType(typeof(ReconcileWorkPatchesHandler));
         if (inspectionEnabled) options.Discovery.IncludeType(typeof(InspectionHandler));
         options.LocalQueue("work").UseDurableInbox();
         options.PublishMessage<DispatchWork>().ToLocalQueue("work");
         options.PublishMessage<ReconcileWork>().ToLocalQueue("work");
         options.PublishMessage<ExecuteGitRepositoryOperation>().ToLocalQueue("work");
+        options.PublishMessage<ReconcileWorkPatches>().ToLocalQueue("work");
         options.PublishMessage<StartInspection>().ToLocalQueue("work");
         options.PublishMessage<StopInspection>().ToLocalQueue("work");
         options.Policies.OnException<System.Exception>().MoveToErrorQueue();

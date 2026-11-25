@@ -7,12 +7,13 @@ attempts, Git checkpoints, and PVCs.
 
 ## Using Work
 
-**Work** opens as a list ordered by most recently updated. Choose **Board** to
+**Work inbox** opens as a list ordered by most recently updated. Choose **Board** to
 group items into Ready, In progress, Needs attention, and Closed. The board
 shows groups with matching items. Closed includes completed and cancelled Work.
-Use search and **Filter work** to narrow either layout. Open an item to see its
-conversation, next action, outputs, and activity. The dashboard shows the default
-agent’s connection and links to the most recently updated item awaiting attention.
+Use search, a status count, or a filter to narrow either layout. On wide screens,
+selecting an item keeps the inbox beside its next action, outputs, and activity.
+Choose **Open full work** for a wider detail view. On smaller screens, the selected
+item uses the full workspace. The sidebar shows the default agent’s connection.
 **Ask Goblin** opens an untracked conversation.
 
 In the browser, **Create work** saves a goal and assigns the default agent; **Start**
@@ -26,6 +27,10 @@ retry or reconciliation. Repository setup uses a saved authorization preview; se
 [repository authority](git-repository-intent.md). Reading or expanding content never
 submits a command. Execution details preserve agent, runtime, requested and reported
 model, branch, and environment provenance.
+
+**Changes** opens the latest verified repository patch for review and download. The
+[Work's patch](workspace-lifecycle.md#files-and-git-checkpoints) is available while
+the execution pod is stopped and is cleared when the Work closes.
 
 If a command response is lost, **Resend command** sends the original command ID and
 payload; **Keep saved state** keeps the server view. Refresh never replays a command.

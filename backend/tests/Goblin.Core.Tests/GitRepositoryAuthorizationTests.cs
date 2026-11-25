@@ -18,8 +18,8 @@ public sealed class GitRepositoryAuthorizationTests
             Login = "owner",
             GitRepositoryId = 22,
             BaseBranch = "develop",
-            Branch = $"goblin/1/{id}",
-            PolicyVersion = 2,
+            Branch = "goblin/work-1",
+            AttemptId = id,
             AllowPush = push,
             AllowPullRequest = pr
         }));
@@ -50,14 +50,14 @@ public sealed class GitRepositoryAuthorizationTests
 
     [Theory]
     [InlineData(1)]
-    [InlineData(3)]
+    [InlineData(2)]
     public void RestoredUnsupportedPolicyCannotClaimEvenWithMatchingApproval(int policyVersion)
     {
         WorkItem work = Ready();
         work.QueueExecution(10, Target(10), Now);
         work.AuthorizeGitRepository(10, Target(10), Now);
         string state = JsonSerializer.Serialize(work.Snapshot())
-            .Replace("\"PolicyVersion\":2", $"\"PolicyVersion\":{policyVersion}", StringComparison.Ordinal);
+            .Replace("\"PolicyVersion\":3", $"\"PolicyVersion\":{policyVersion}", StringComparison.Ordinal);
         work = WorkItem.Restore(JsonSerializer.Deserialize<WorkSnapshot>(state)!);
         Assert.False(work.TryClaimExecution(10, 100, "sandbox", Now));
         Assert.Equal(AttemptStatus.Queued, work.CurrentAttempt!.Status);

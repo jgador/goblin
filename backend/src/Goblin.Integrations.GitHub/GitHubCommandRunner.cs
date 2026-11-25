@@ -29,8 +29,16 @@ internal sealed class GitHubCommandRunner
         RunAsync("git", ["-c", "core.hooksPath=/dev/null", "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential", .. arguments],
             _profile, token, workingDirectory: directory);
 
+    internal async Task<byte[]> ReadGitPatchAsync(string directory, string[] arguments, CancellationToken token)
+    {
+        using var patch = new MemoryStream();
+        await RunAsync("git", ["-c", "core.hooksPath=/dev/null", .. arguments], _profile, token,
+            workingDirectory: directory, patch: patch);
+        return patch.ToArray();
+    }
+
     private static async Task<string> RunAsync(string command, string[] arguments, string profile, CancellationToken token,
-        Action<string>? progress = null, string? workingDirectory = null)
+        Action<string>? progress = null, string? workingDirectory = null, MemoryStream? patch = null)
     {
         bool watchdog = OperatingSystem.IsLinux();
         var info = new ProcessStartInfo(watchdog ? "/usr/bin/timeout" : command)
@@ -63,7 +71,9 @@ internal sealed class GitHubCommandRunner
         deadline.CancelAfter(progress is null ? TimeSpan.FromMinutes(2) : TimeSpan.FromMinutes(15));
         using Process process = Process.Start(info) ?? throw new GitHubFailure();
         process.StandardInput.Close();
-        Task<string> output = ReadAsync(process.StandardOutput, null), errors = ReadAsync(process.StandardError, progress);
+        Task<string> output = patch is null ? ReadAsync(process.StandardOutput, null)
+            : ReadPatchAsync(process.StandardOutput.BaseStream, patch, deadline);
+        Task<string> errors = ReadAsync(process.StandardError, progress);
         try { await process.WaitForExitAsync(deadline.Token); }
         catch
         {
@@ -73,8 +83,25 @@ internal sealed class GitHubCommandRunner
         }
         string result = await output;
         await errors;
-        if (process.ExitCode != 0) throw new GitHubFailure();
+        if (process.ExitCode != 0 || deadline.IsCancellationRequested) throw new GitHubFailure();
         return result;
+    }
+
+    private static async Task<string> ReadPatchAsync(Stream input, MemoryStream patch, CancellationTokenSource deadline)
+    {
+        const int maximumLength = 4 * 1024 * 1024;
+        byte[] buffer = new byte[16 * 1024];
+        int read;
+        while ((read = await input.ReadAsync(buffer)) > 0)
+        {
+            if (patch.Length + read > maximumLength)
+            {
+                deadline.Cancel();
+                break;
+            }
+            patch.Write(buffer, 0, read);
+        }
+        return "";
     }
 
     private static async Task<string> ReadAsync(StreamReader reader, Action<string>? progress)

@@ -110,12 +110,15 @@ public sealed partial class WorkItem
         if (CurrentAttempt is not { Status: AttemptStatus.Queued } attempt || attempt.Id != attemptId ||
             Status != WorkStatus.Queued) return false;
         if (attempt.Target.GitRepository?.Grant is { } grant &&
-            (!grant.HasSupportedPolicy() || GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approval ||
+            (!grant.HasSupportedPolicy() || grant.AttemptId != attemptId || GitRepositoryAuthorization is not { Status: GitRepositoryAuthorizationStatus.Authorized } approval ||
              approval.Id != attempt.Id || approval.Target != attempt.Target)) return false;
         if (attempt.Target.GitRepository is { } gitRepository && !attempt.ReasoningOnly)
         {
             environment = Workspace?.EnvironmentReference ?? environment;
-            Workspace = new(gitRepository.GitRepository, environment, attempt.Id, attempt.WorkspaceNumber, attempt.TurnNumber);
+            Workspace = new(gitRepository.GitRepository, environment, attempt.Id, attempt.WorkspaceNumber, attempt.TurnNumber)
+            {
+                BaseCommitSha = Workspace?.BaseCommitSha
+            };
         }
         attempt.Status = AttemptStatus.Starting;
         attempt.OwnerId = ownerId;

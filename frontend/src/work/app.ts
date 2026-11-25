@@ -16,6 +16,7 @@ import {
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
 import { isWorkFilter } from "./board.js";
 import type { BoardLayout, WorkFilter } from "./board.js";
+import { WorkChangesDialog } from "./changes.js";
 import { CommandSubmission } from "./command-submission.js";
 import type { PendingCommand } from "./command-submission.js";
 import { WorkCommands } from "./commands.js";
@@ -55,6 +56,7 @@ const drafts = new ComposerDrafts();
 const repositoryDrafts = new RepositoryDrafts();
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const dom = new WorkspaceDom(root, repositoryDrafts);
+const workChanges = new WorkChangesDialog(api);
 const commands = new WorkCommands(
     async (...kinds) =>
         (await api<{ ids: string[] }>("/api/identities", { kinds })).ids,
@@ -67,6 +69,7 @@ let activityOpen = false,
     filter: WorkFilter = "all",
     boardFilter: WorkFilter = "all",
     boardLayout: BoardLayout = "list",
+    searchOpen = false,
     search = "";
 let sidebarCollapsed =
     mobile.matches ||
@@ -220,6 +223,7 @@ function api<T>(path: string, body?: unknown) {
 }
 
 function forgetWorkspace() {
+    workChanges.retain();
     workspace.reset();
     activeRefresh = undefined;
     timezoneSetup.reset();
@@ -231,6 +235,7 @@ function forgetWorkspace() {
     changing = false;
     filter = "all";
     boardFilter = "all";
+    searchOpen = false;
     search = "";
     modelCatalogs.clear();
     modelSelections.clear();
@@ -409,6 +414,7 @@ function navigate(
         navigation.view === "settings" && next !== "settings";
     if (leavingSettings) settings.reset();
     navigation.navigate(next, id, historyMode);
+    searchOpen = false;
     if (navigation.isDirectory) search = "";
     changing = false;
     conversationExpanded = false;
@@ -429,6 +435,13 @@ function render(preserveMounted = false, forceSelect = false) {
         modelListOpen = false;
     }
     const work = view === "work" ? current()?.work : undefined;
+    workChanges.retain(
+        work &&
+            work.status !== WorkStatus.Completed &&
+            work.status !== WorkStatus.Cancelled
+            ? work.id
+            : undefined,
+    );
     const draft = drafts.get(context);
     const submissionState = {
         sending: commandActive,
@@ -449,7 +462,7 @@ function render(preserveMounted = false, forceSelect = false) {
                 : view === "knowledge"
                   ? "Knowledge · Goblin"
                   : view === "board" && authenticated
-                    ? "Work · Goblin"
+                    ? "Work inbox · Goblin"
                     : work && authenticated
                       ? work.objective.slice(0, 70) + " · Goblin"
                       : "Goblin",
@@ -467,6 +480,7 @@ function render(preserveMounted = false, forceSelect = false) {
                 boardFilter,
                 boardLayout,
                 search,
+                searchOpen,
                 draft,
                 changing,
                 authenticated,
@@ -687,7 +701,9 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "browse-work") {
-        const returning = target.classList.contains("back-to-work");
+        const returning =
+            navigation.inboxSelection ||
+            target.classList.contains("back-to-work");
         filter = "all";
         if (returning && navigation.canReturnToBoard) {
             history.back();
@@ -701,6 +717,21 @@ document.addEventListener("click", async (event) => {
     if (action === "board-layout" && (value === "board" || value === "list")) {
         boardLayout = value;
         render();
+        return;
+    }
+    if (action === "board-filter" && value && isWorkFilter(value)) {
+        boardFilter = value;
+        render();
+        return;
+    }
+    if (action === "expand-work" && navigation.inboxSelection) {
+        navigation.expandWork();
+        render();
+        document.getElementById("work-title-heading")?.focus();
+        return;
+    }
+    if (action === "inbox-overview") {
+        document.getElementById("detail-content")?.scrollTo({ top: 0 });
         return;
     }
     if (action === "view-outputs") {
@@ -796,6 +827,11 @@ document.addEventListener("click", async (event) => {
         }
         return;
     }
+    if (action === "view-changes") {
+        const work = current()?.work;
+        if (work) await workChanges.open(work.id);
+        return;
+    }
     if (action === "lock") {
         try {
             await api("/api/session/lock", {});
@@ -810,7 +846,10 @@ document.addEventListener("click", async (event) => {
         render();
         return;
     }
-    if (action === "clear-search") search = "";
+    if (action === "clear-search") {
+        search = "";
+        searchOpen = false;
+    }
     if (action === "search-work" || action === "search-chat") {
         search = "";
         navigate(
@@ -987,20 +1026,11 @@ document.addEventListener("input", (event) => {
         event.target.id === "work-search"
     ) {
         search = event.target.value;
+        searchOpen = true;
         render();
     }
 });
 document.addEventListener("change", (event) => {
-    if (
-        event.target instanceof HTMLSelectElement &&
-        event.target.id === "board-filter"
-    ) {
-        const nextFilter = event.target.value;
-        if (!isWorkFilter(nextFilter)) return;
-        boardFilter = nextFilter;
-        render(false, true);
-        return;
-    }
     if (
         event.target instanceof HTMLSelectElement &&
         event.target.id === "work-view"
@@ -1033,11 +1063,15 @@ document.addEventListener("change", (event) => {
     }
 });
 document.addEventListener("focusin", (event) => {
-    if (
-        modelPickerOpen &&
-        event.target instanceof Element &&
-        !event.target.closest(".model-picker")
-    ) {
+    if (!(event.target instanceof Element)) return;
+    if (event.target.id === "work-search" && search && !searchOpen) {
+        searchOpen = true;
+        render(true);
+    } else if (searchOpen && !event.target.closest(".workspace-header")) {
+        searchOpen = false;
+        root.querySelector(".search-results")?.remove();
+    }
+    if (modelPickerOpen && !event.target.closest(".model-picker")) {
         modelPickerOpen = false;
         modelListOpen = false;
         root.querySelector("#model-popover")?.remove();
@@ -1141,6 +1175,7 @@ document.addEventListener("keydown", (event) => {
         !activityOpen
     ) {
         search = "";
+        searchOpen = false;
         render();
         document.getElementById("work-search")?.focus();
         return;

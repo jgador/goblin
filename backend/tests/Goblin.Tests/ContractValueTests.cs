@@ -61,7 +61,8 @@ public sealed class ContractValueTests
             Login = "owner",
             GitRepositoryId = 22,
             BaseBranch = "main",
-            Branch = "goblin/10/20",
+            Branch = "goblin/work-10",
+            AttemptId = 20,
             AllowPush = true,
             AllowPullRequest = true
         };

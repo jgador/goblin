@@ -18,7 +18,8 @@ public sealed class GitRepositoryHandoffTests
             Login = "owner",
             GitRepositoryId = 7,
             BaseBranch = "main",
-            Branch = $"goblin/1/{attempt}"
+            Branch = "goblin/work-1",
+            AttemptId = attempt
         }), "high");
 
     private static WorkItem Ready()

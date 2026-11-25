@@ -255,15 +255,15 @@
     "Type": "Goblin.Core.Work.GitRepositoryGrant",
     "Web": false,
     "Scenario": "populated",
-    "Input": "{\u0022ConnectionId\u0022:9007199254750263,\u0022Generation\u0022:\u0022example-.generation\u0022,\u0022AccountId\u0022:\u0022example-.accountid\u0022,\u0022Login\u0022:\u0022example-.login\u0022,\u0022RepositoryId\u0022:9007199254744211,\u0022BaseBranch\u0022:\u0022example-.basebranch\u0022,\u0022Branch\u0022:\u0022example-.branch\u0022,\u0022PolicyVersion\u0022:5594,\u0022AllowPush\u0022:true,\u0022AllowPullRequest\u0022:true}",
-    "Expected": "{\u0022ConnectionId\u0022:9007199254750263,\u0022Generation\u0022:\u0022example-.generation\u0022,\u0022AccountId\u0022:\u0022example-.accountid\u0022,\u0022Login\u0022:\u0022example-.login\u0022,\u0022RepositoryId\u0022:9007199254744211,\u0022BaseBranch\u0022:\u0022example-.basebranch\u0022,\u0022Branch\u0022:\u0022example-.branch\u0022,\u0022PolicyVersion\u0022:5594,\u0022AllowPush\u0022:true,\u0022AllowPullRequest\u0022:true}"
+    "Input": "{\u0022ConnectionId\u0022:9007199254750263,\u0022Generation\u0022:\u0022example-.generation\u0022,\u0022AccountId\u0022:\u0022example-.accountid\u0022,\u0022Login\u0022:\u0022example-.login\u0022,\u0022RepositoryId\u0022:9007199254744211,\u0022BaseBranch\u0022:\u0022example-.basebranch\u0022,\u0022Branch\u0022:\u0022example-.branch\u0022,\u0022AttemptId\u0022:9007199254743007,\u0022PolicyVersion\u0022:5594,\u0022AllowPush\u0022:true,\u0022AllowPullRequest\u0022:true}",
+    "Expected": "{\u0022ConnectionId\u0022:9007199254750263,\u0022Generation\u0022:\u0022example-.generation\u0022,\u0022AccountId\u0022:\u0022example-.accountid\u0022,\u0022Login\u0022:\u0022example-.login\u0022,\u0022RepositoryId\u0022:9007199254744211,\u0022BaseBranch\u0022:\u0022example-.basebranch\u0022,\u0022Branch\u0022:\u0022example-.branch\u0022,\u0022AttemptId\u0022:9007199254743007,\u0022PolicyVersion\u0022:5594,\u0022AllowPush\u0022:true,\u0022AllowPullRequest\u0022:true}"
   },
   {
     "Type": "Goblin.Core.Work.GitRepositoryGrant",
     "Web": false,
     "Scenario": "omitted",
     "Input": "{}",
-    "Expected": "{\u0022ConnectionId\u0022:0,\u0022Generation\u0022:null,\u0022AccountId\u0022:null,\u0022Login\u0022:null,\u0022RepositoryId\u0022:0,\u0022BaseBranch\u0022:null,\u0022Branch\u0022:null,\u0022PolicyVersion\u0022:2,\u0022AllowPush\u0022:false,\u0022AllowPullRequest\u0022:false}"
+    "Expected": "{\u0022ConnectionId\u0022:0,\u0022Generation\u0022:null,\u0022AccountId\u0022:null,\u0022Login\u0022:null,\u0022RepositoryId\u0022:0,\u0022BaseBranch\u0022:null,\u0022Branch\u0022:null,\u0022PolicyVersion\u0022:3,\u0022AllowPush\u0022:false,\u0022AllowPullRequest\u0022:false}"
   },
   {
     "Type": "Goblin.Core.Work.GitRepositoryGrant",
@@ -276,15 +276,15 @@
     "Type": "Goblin.Core.Work.GitRepositoryGrant",
     "Web": true,
     "Scenario": "populated",
-    "Input": "{\u0022connectionId\u0022:9007199254750263,\u0022generation\u0022:\u0022example-.generation\u0022,\u0022accountId\u0022:\u0022example-.accountid\u0022,\u0022login\u0022:\u0022example-.login\u0022,\u0022repositoryId\u0022:9007199254744211,\u0022baseBranch\u0022:\u0022example-.basebranch\u0022,\u0022branch\u0022:\u0022example-.branch\u0022,\u0022policyVersion\u0022:5594,\u0022allowPush\u0022:true,\u0022allowPullRequest\u0022:true}",
-    "Expected": "{\u0022connectionId\u0022:9007199254750263,\u0022generation\u0022:\u0022example-.generation\u0022,\u0022accountId\u0022:\u0022example-.accountid\u0022,\u0022login\u0022:\u0022example-.login\u0022,\u0022repositoryId\u0022:9007199254744211,\u0022baseBranch\u0022:\u0022example-.basebranch\u0022,\u0022branch\u0022:\u0022example-.branch\u0022,\u0022policyVersion\u0022:5594,\u0022allowPush\u0022:true,\u0022allowPullRequest\u0022:true}"
+    "Input": "{\u0022connectionId\u0022:9007199254750263,\u0022generation\u0022:\u0022example-.generation\u0022,\u0022accountId\u0022:\u0022example-.accountid\u0022,\u0022login\u0022:\u0022example-.login\u0022,\u0022repositoryId\u0022:9007199254744211,\u0022baseBranch\u0022:\u0022example-.basebranch\u0022,\u0022branch\u0022:\u0022example-.branch\u0022,\u0022attemptId\u0022:9007199254743007,\u0022policyVersion\u0022:5594,\u0022allowPush\u0022:true,\u0022allowPullRequest\u0022:true}",
+    "Expected": "{\u0022connectionId\u0022:9007199254750263,\u0022generation\u0022:\u0022example-.generation\u0022,\u0022accountId\u0022:\u0022example-.accountid\u0022,\u0022login\u0022:\u0022example-.login\u0022,\u0022repositoryId\u0022:9007199254744211,\u0022baseBranch\u0022:\u0022example-.basebranch\u0022,\u0022branch\u0022:\u0022example-.branch\u0022,\u0022attemptId\u0022:9007199254743007,\u0022policyVersion\u0022:5594,\u0022allowPush\u0022:true,\u0022allowPullRequest\u0022:true}"
   },
   {
     "Type": "Goblin.Core.Work.GitRepositoryGrant",
     "Web": true,
     "Scenario": "omitted",
     "Input": "{}",
-    "Expected": "{\u0022connectionId\u0022:0,\u0022generation\u0022:null,\u0022accountId\u0022:null,\u0022login\u0022:null,\u0022repositoryId\u0022:0,\u0022baseBranch\u0022:null,\u0022branch\u0022:null,\u0022policyVersion\u0022:2,\u0022allowPush\u0022:false,\u0022allowPullRequest\u0022:false}"
+    "Expected": "{\u0022connectionId\u0022:0,\u0022generation\u0022:null,\u0022accountId\u0022:null,\u0022login\u0022:null,\u0022repositoryId\u0022:0,\u0022baseBranch\u0022:null,\u0022branch\u0022:null,\u0022policyVersion\u0022:3,\u0022allowPush\u0022:false,\u0022allowPullRequest\u0022:false}"
   },
   {
     "Type": "Goblin.Core.Work.GitRepositoryGrant",

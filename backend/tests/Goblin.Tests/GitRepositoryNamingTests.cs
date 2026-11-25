@@ -54,7 +54,8 @@ public sealed class GitRepositoryNamingTests
             Login = "owner",
             GitRepositoryId = 4,
             BaseBranch = "main",
-            Branch = "goblin/1/5"
+            Branch = "goblin/work-1",
+            AttemptId = 5
         });
         work.PrepareGitRepositoryAuthorization(5, new ExecutionTarget("codex", 6, gitRepository: change),
             true, false, DateTimeOffset.UnixEpoch);

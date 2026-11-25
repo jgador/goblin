@@ -20,7 +20,8 @@ the connected GitHub account can access.
 Goblin reads repository metadata through the connected GitHub account before it saves
 the preview. This does not fetch a checkout or enable access. The base branch defaults
 to the repository's default branch, and Goblin creates the Work branch
-`goblin/<work>/<attempt>`. The Git commit name defaults to the connected GitHub login
+`goblin/work-<work-id>`. Retries and revisions reuse this branch with a fresh attempt
+grant. The Git commit name defaults to the connected GitHub login
 and the email to `<account-id>+<login>@users.noreply.github.com`, so no private email
 scope is needed. The Work UI lets the user set the base branch, Git actions, and commit
 identity under **Branch, delivery, and commit identity**.
@@ -98,8 +99,9 @@ the GitHub adapter checks publication permission again.
 
 The worker pushes only when approved and opens a draft PR when requested on a result
 turn. Without push permission it submits a `checkpoint` operation: the broker checks the
-Git bundle and records a receipt without calling GitHub. PostgreSQL stores only
-checkpoint metadata. Files, including unpublished commits and ignored outputs, stay on
+Git bundle and records a receipt without calling GitHub. PostgreSQL stores checkpoint
+metadata and the Work's starting commit. The controller saves a standard Git review patch
+from those commits on its private volume. Files, including unpublished commits and ignored outputs, stay on
 the Work PVC. A new attempt uses that checkout, so its previous commit does not need to
 exist on GitHub.
 

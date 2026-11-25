@@ -198,6 +198,14 @@ public sealed class GitRepositoryOperationStore
             x.State == nameof(GitRepositoryOperationState.Succeeded) && x.CommitSha == commit, token);
     }
 
+    internal async Task<string?> LastPublishedAsync(long[] attemptIds, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        return await db.GitRepositoryOperations.Where(x => attemptIds.Contains(x.AttemptId) &&
+                x.Kind == GitRepositoryOperationKind.Publish.WireValue() && x.State == nameof(GitRepositoryOperationState.Succeeded))
+            .OrderByDescending(x => x.Id).Select(x => x.CommitSha).FirstOrDefaultAsync(token);
+    }
+
     private static GitRepositoryOperationView View(GitRepositoryOperation row) =>
         new(row.Id, ContractValue.Parse<GitRepositoryOperationState>(row.State), row.ResultUrl);
 

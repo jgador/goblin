@@ -256,6 +256,15 @@ const conversationEvents = new Set<WorkEventKind>([
     WorkEventKind.WorkspaceReleased,
 ]);
 
+export function renderRecentActivity(work: Work) {
+    const events = work.history
+        .filter((event) => eventNames[event.kind])
+        .slice(-3)
+        .reverse();
+    if (!events.length) return "";
+    return `<section class="inbox-recent" aria-labelledby="inbox-activity-heading"><h3 id="inbox-activity-heading">Recent activity</h3><ol>${events.map((event) => `<li><span>${e(eventNames[event.kind])}</span><time datetime="${e(event.occurredAt)}" title="${e(timestamp(event.occurredAt))}">${e(relativeTime(event.occurredAt))}</time></li>`).join("")}</ol></section>`;
+}
+
 export function renderActivity(w?: Work) {
     if (!w)
         return (

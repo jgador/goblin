@@ -35,26 +35,24 @@ public sealed class GitHubRepositoryRemote : IGitRepositoryRemote
         if (info.Id != grant.GitRepositoryId || (grant.PublishesChanges() && !info.CanPush) || info.DefaultBranch == grant.Branch) throw new GitHubFailure();
     }
 
-    public async Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? checkpoint, CancellationToken token)
+    public async Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? publishedCommit, CancellationToken token)
     {
         await VerifyAsync(gitRepository, token);
         GitHubConnection.PrivateDirectory(directory);
         string git = GitDirectory(directory);
         await _commands.RunGitAsync(directory, ["init", "--bare", git], token);
         await _commands.RunGitAsync(git, ["fetch", "--no-tags", "--", _url(gitRepository), "+refs/heads/*:refs/heads/*"], token);
-        string start = (await _commands.RunGitAsync(git, ["rev-parse", "--verify", "refs/heads/" + (checkpoint ?? gitRepository.Grant!.BaseBranch) + "^{commit}"], token)).Trim();
+        GitRepositoryGrant grant = gitRepository.Grant!;
+        string start = (await _commands.RunGitAsync(git, ["rev-parse", "--verify",
+            "refs/heads/" + (publishedCommit is null ? grant.BaseBranch : grant.Branch) + "^{commit}"], token)).Trim();
+        if (publishedCommit is not null)
+        {
+            if (start != publishedCommit) throw new GitHubFailure();
+            await File.WriteAllTextAsync(Path.Combine(directory, "published-head"), publishedCommit, token);
+        }
         await _commands.RunGitAsync(git, ["update-ref", "refs/heads/" + gitRepository.Grant!.Branch, start], token);
         await _commands.RunGitAsync(git, ["symbolic-ref", "HEAD", "refs/heads/" + gitRepository.Grant.Branch], token);
         await _commands.RunGitAsync(git, ["bundle", "create", Path.Combine(directory, "input.bundle"), "--all"], token);
-    }
-
-    public async Task PrepareCheckpointAsync(GitRepositoryChange gitRepository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token)
-    {
-        await PrepareAsync(gitRepository, directory, checkpoint.Branch, token);
-        string actual = (await _commands.RunGitAsync(GitDirectory(directory), ["rev-parse", "--verify", "refs/heads/" + checkpoint.Branch + "^{commit}"], token)).Trim();
-        if (actual != checkpoint.CommitSha) throw new GitHubFailure();
-        if (gitRepository.Grant!.Branch == checkpoint.Branch)
-            await File.WriteAllTextAsync(Path.Combine(directory, "published-head"), checkpoint.CommitSha, token);
     }
 
     public async Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token)
@@ -66,6 +64,30 @@ public sealed class GitHubRepositoryRemote : IGitRepositoryRemote
         string head = Path.Combine(directory, "published-head");
         if (File.Exists(head)) await _commands.RunGitAsync(git, ["merge-base", "--is-ancestor", (await File.ReadAllTextAsync(head, token)).Trim(), commit], token);
         return commit;
+    }
+
+    public async Task<string> ResolveBaseAsync(GitRepositoryChange gitRepository, string directory, CancellationToken token) =>
+        (await _commands.RunGitAsync(GitDirectory(directory),
+            ["rev-parse", "--verify", "refs/heads/" + gitRepository.Grant!.BaseBranch + "^{commit}"], token)).Trim();
+
+    public async Task<byte[]> FormatPatchAsync(string directory, string baseCommit, string checkpoint, CancellationToken token)
+    {
+        string git = GitDirectory(directory);
+        string baseTree = (await _commands.RunGitAsync(git, ["rev-parse", "--verify", baseCommit + "^{tree}"], token)).Trim();
+        string headTree = (await _commands.RunGitAsync(git, ["rev-parse", "--verify", checkpoint + "^{tree}"], token)).Trim();
+        if (baseTree == headTree) return [];
+
+        string parents = (await _commands.RunGitAsync(git, ["rev-list", "--parents", "-n", "1", checkpoint], token)).Trim();
+        string reviewCommit = checkpoint;
+        if (parents != checkpoint + " " + baseCommit)
+        {
+            // Use the actual trees so repeated edits, reversions and merges all
+            // produce one patch with the same result as the checkpoint checkout.
+            reviewCommit = (await _commands.RunGitAsync(git, ["-c", "user.name=Goblin", "-c", "user.email=goblin@localhost",
+                "commit-tree", headTree, "-p", baseCommit, "-m", "Goblin Work review"], token)).Trim();
+        }
+        return await _commands.ReadGitPatchAsync(git, ["format-patch", "-1", "--stdout", "--binary", "--no-ext-diff", "--no-textconv",
+            "--no-signature", reviewCommit], token);
     }
 
     public async Task<GitRepositoryOperationResult> ExecuteAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token)

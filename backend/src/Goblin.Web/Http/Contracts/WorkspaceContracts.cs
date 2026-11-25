@@ -4,6 +4,26 @@ using Goblin.Core.Work;
 
 namespace Goblin.Web.Http.Contracts;
 
+public sealed class WorkPatchView
+{
+    [JsonConstructor]
+    public WorkPatchView(WorkspaceCheckpoint checkpoint, string baseCommitSha, string patch)
+    {
+        Checkpoint = checkpoint;
+        BaseCommitSha = baseCommitSha;
+        Patch = patch;
+    }
+
+    [JsonPropertyName("checkpoint")]
+    public WorkspaceCheckpoint Checkpoint { get; }
+
+    [JsonPropertyName("baseCommitSha")]
+    public string BaseCommitSha { get; }
+
+    [JsonPropertyName("patch")]
+    public string Patch { get; }
+}
+
 public sealed class WorkspaceView
 {
     [JsonConstructor]

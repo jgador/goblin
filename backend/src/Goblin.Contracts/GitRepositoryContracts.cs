@@ -75,12 +75,13 @@ public interface IGitRepositoryCatalog
 
 public interface IGitRepositoryRemote
 {
-    Task PrepareCheckpointAsync(GitRepositoryChange gitRepository, string directory, WorkspaceCheckpoint checkpoint, CancellationToken token) =>
-        throw new System.NotSupportedException("Git checkpoint preparation is unavailable.");
-
-    Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? checkpoint, CancellationToken token);
+    Task PrepareAsync(GitRepositoryChange gitRepository, string directory, string? publishedCommit, CancellationToken token);
 
     Task<string> InspectBundleAsync(GitRepositoryChange gitRepository, string directory, string bundle, CancellationToken token);
+
+    Task<string> ResolveBaseAsync(GitRepositoryChange gitRepository, string directory, CancellationToken token);
+
+    Task<byte[]> FormatPatchAsync(string directory, string baseCommit, string checkpoint, CancellationToken token);
 
     Task<GitRepositoryOperationResult> ExecuteAsync(GitRepositoryChange gitRepository, string directory, GitRepositoryOperationKind operation, string commit, CancellationToken token);
 

@@ -5,11 +5,23 @@ namespace Goblin.Core.Work;
 // A Work owns the durable workspace. The opaque location outlives attempts and
 // compute allocations; the last writer identifies the files owned by this Work.
 public sealed record WorkWorkspace(string GitRepository, string EnvironmentReference,
-    long AttemptId, int WorkspaceNumber, int TurnNumber);
+    long AttemptId, int WorkspaceNumber, int TurnNumber)
+{
+    public string? BaseCommitSha { get; init; }
+}
 
 public sealed partial class WorkItem
 {
     public WorkWorkspace? Workspace { get; private set; }
+
+    public void PinWorkspaceBase(long attemptId, long ownerId, string commit)
+    {
+        ExecutionAttempt attempt = OwnedAttempt(attemptId, ownerId);
+        Require(attempt.Status == AttemptStatus.Starting && Workspace?.AttemptId == attemptId &&
+            Workspace.TurnNumber == attempt.TurnNumber, WorkRule.OwnershipMismatch);
+        Require(commit.Length == 40 && Array.TrueForAll(commit.ToCharArray(), Uri.IsHexDigit), WorkRule.InvalidValue);
+        if (Workspace!.BaseCommitSha is null) Workspace = Workspace with { BaseCommitSha = commit };
+    }
 
     public void SaveWorkspace(long attemptId, long ownerId, long checkpointId, DateTimeOffset now)
     {

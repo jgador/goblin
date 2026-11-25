@@ -59,6 +59,13 @@ export class WorkspaceNavigation {
     get canReturnToBoard() {
         return history.state?.returnToBoard === true;
     }
+    get inboxSelection() {
+        return this.page === "work" && history.state?.inboxSelection === true;
+    }
+
+    expandWork() {
+        history.replaceState({ ...history.state, inboxSelection: false }, "");
+    }
 
     get context(): WorkspaceContext {
         if (this.page === "work") return `work:${this.workId}`;
@@ -115,7 +122,10 @@ export class WorkspaceNavigation {
         else path = next === "board" ? "/work" : "/?new=work";
         if (push)
             history.pushState(
-                { returnToBoard: previous === "board" },
+                {
+                    returnToBoard: previous === "board",
+                    inboxSelection: previous === "board" && next === "work",
+                },
                 "",
                 path,
             );

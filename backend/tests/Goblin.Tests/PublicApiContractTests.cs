@@ -32,7 +32,7 @@ public sealed class PublicApiContractTests
         typeof(Api.ConversationView), typeof(Api.AuthenticationState), typeof(Api.PromptResult),
         typeof(Api.ModelCatalogView), typeof(Api.RuntimeCapabilities), typeof(Api.GitHubState),
         typeof(Api.EnabledGitRepository), typeof(Api.GitRepositoryInfo), typeof(Api.WorkspaceView),
-        typeof(Api.SlackState), typeof(Api.SlackLinkCode)
+        typeof(Api.SlackState), typeof(Api.SlackLinkCode), typeof(Api.WorkPatchView)
     ];
 
     [Fact]
@@ -91,7 +91,18 @@ public sealed class PublicApiContractTests
         object response = map.Invoke(null, [source])!;
         foreach (JsonSerializerOptions options in new[] { GitRepositoryJson.CreateOptions(JsonSerializerDefaults.Web), WorkJson })
         {
-            JsonElement expected = JsonSerializer.SerializeToElement(source, sourceType, options);
+            // Work snapshots carry private authority and checkpoint metadata that
+            // are deliberately excluded from the existing public Work response.
+            var publicSource = new JsonSerializerOptions(options)
+            {
+                TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver()).WithAddedModifier(info =>
+                {
+                    string? internalField = info.Type == typeof(Goblin.Core.Work.GitRepositoryGrant) ? "attemptId"
+                        : info.Type == typeof(Goblin.Core.Work.WorkWorkspace) ? "baseCommitSha" : null;
+                    if (internalField is not null) info.Properties.Single(p => p.Name == internalField).ShouldSerialize = (_, _) => false;
+                })
+            };
+            JsonElement expected = JsonSerializer.SerializeToElement(source, sourceType, publicSource);
             JsonElement actual = JsonSerializer.SerializeToElement(response, contract, options);
             Assert.True(JsonElement.DeepEquals(expected, actual), contract.FullName + " changed the JSON payload.");
             object roundTrip = actual.Deserialize(contract, options)!;
