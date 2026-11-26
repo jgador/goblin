@@ -89,7 +89,11 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     await page
         .getByPlaceholder("Describe the intended outcome…")
         .fill("Keep this draft while I connect GitHub");
-    await page.locator('.sidebar [data-action="settings"]').click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page
+        .locator("#workspace-menu")
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
     const dialog = page.getByRole("region", { name: "Settings" });
     await expect(dialog).toBeVisible();
     await expect(
@@ -110,12 +114,16 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     await expect(
         dialog.getByRole("link", { name: "Open GitHub sign-in" }),
     ).toHaveAttribute("href", "https://github.com/login/device");
-    await dialog.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await expect(dialog).not.toBeVisible();
     await expect(
         page.getByPlaceholder("Describe the intended outcome…"),
     ).toHaveValue("Keep this draft while I connect GitHub");
-    await page.locator('.sidebar [data-action="settings"]').click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page
+        .locator("#workspace-menu")
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
     await dialog
         .getByRole("link", { name: "Connections", exact: true })
         .click();
@@ -134,15 +142,15 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
         path: test.info().outputPath("settings-github.png"),
         fullPage: true,
     });
-    await dialog.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await expect(
-        page.locator('.sidebar [data-action="settings"]'),
+        page.getByLabel("Workspace menu", { exact: true }),
     ).toBeFocused();
     expect(errors).toEqual([]);
 });
 
 for (const width of [1280, 390]) {
-    test(`Cluster and Logs open directly from Tools at ${width}px without leaving Settings`, async ({
+    test(`Cluster and Logs open directly from System at ${width}px without leaving Settings`, async ({
         page,
         context,
     }) => {
@@ -154,10 +162,12 @@ for (const width of [1280, 390]) {
                 body: "<title>Tool fixture</title><h1>Tool opened</h1>",
             }),
         );
-        await page.goto("/settings?section=connections&provider=codex");
-        await expect(page.getByText("owner@example.test · plus")).toBeVisible();
+        await page.goto("/settings?section=system");
+        await expect(
+            page.getByRole("heading", { name: "System", exact: true }),
+        ).toBeVisible();
         const tools = page.getByRole("navigation", {
-            name: "Tools",
+            name: "Operator tools",
             exact: true,
         });
         for (const [label, path] of [
@@ -179,11 +189,9 @@ for (const width of [1280, 390]) {
             const popup = await opened;
             await expect(popup).toHaveURL(new RegExp(`${path}$`));
             await popup.close();
-            await expect(page).toHaveURL(
-                /\/settings\?section=connections&provider=codex$/,
-            );
+            await expect(page).toHaveURL(/\/settings\?section=system$/);
             await expect(
-                page.getByText("owner@example.test · plus"),
+                page.getByRole("heading", { name: "System", exact: true }),
             ).toBeVisible();
         }
         await expect(
@@ -216,8 +224,11 @@ test("an unconfigured tool explains its availability while the other tool stays 
             body: "<title>Logs fixture</title>",
         }),
     );
-    await page.goto("/settings?section=connections");
-    const tools = page.getByRole("navigation", { name: "Tools", exact: true });
+    await page.goto("/settings?section=system");
+    const tools = page.getByRole("navigation", {
+        name: "Operator tools",
+        exact: true,
+    });
     const cluster = tools.locator('[data-settings-tool="cluster"]');
     await expect(cluster).toHaveAttribute("aria-disabled", "true");
     await expect(cluster).not.toHaveAttribute("href", /./);
@@ -242,7 +253,11 @@ test("GitHub sign-in survives refresh and can be cancelled on mobile", async ({
     await page
         .getByRole("button", { name: "Show sidebar", exact: true })
         .click();
-    await page.locator('.sidebar [data-action="settings"]').click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page
+        .locator("#workspace-menu")
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
     const dialog = page.getByRole("region", { name: "Settings" });
     await dialog.locator("#connection-github").click();
     await dialog
@@ -275,7 +290,11 @@ test("settings sections have direct links and restore browser history without lo
     await page.goto("/?new=work");
     const draft = page.getByPlaceholder("Describe the intended outcome…");
     await draft.fill("Keep this idea through settings navigation");
-    await page.locator('.sidebar [data-action="settings"]').click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page
+        .locator("#workspace-menu")
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
     await expect(page).toHaveURL(/\/settings\?section=connections$/);
     const settings = page.getByRole("region", {
         name: "Settings",
@@ -306,7 +325,7 @@ test("settings sections have direct links and restore browser history without lo
         page.getByRole("dialog", { name: "Settings", exact: true }),
     ).toHaveCount(0);
     await expect(
-        page.locator('.sidebar [data-action="settings"]'),
+        settings.getByRole("link", { name: "Connections", exact: true }),
     ).toHaveAttribute("aria-current", "page");
 });
 

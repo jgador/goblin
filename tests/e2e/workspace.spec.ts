@@ -122,6 +122,15 @@ async function workspace(
     return commands;
 }
 
+async function selectWorkFromSearch(page: Page, title: string) {
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("searchbox").fill(title);
+    await page
+        .getByRole("region", { name: "Search results", exact: true })
+        .getByRole("button", { name: title, exact: true })
+        .click();
+}
+
 test("Changes opens an in-page diff with all files and individual file views", async ({
     page,
 }) => {
@@ -336,7 +345,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     await expect(
         settings.getByRole("button", { name: "Continue with ChatGPT" }),
     ).toBeVisible();
-    await settings.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await expect(draft).toHaveValue(
         "Keep my idea while I connect an AI account",
     );
@@ -426,7 +435,7 @@ test("the result leads the Work page, Activity opens on demand, and inspection p
     await page
         .getByPlaceholder("Describe the intended outcome…")
         .fill("A second idea");
-    await page.getByRole("button", { name: /Polish the welcome page/ }).click();
+    await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(draft).toHaveValue("Keep the review draft");
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await expect(
@@ -436,7 +445,7 @@ test("the result leads the Work page, Activity opens on demand, and inspection p
     expect(errors).toEqual([]);
 });
 
-test("search finds output content and filters keep selection independent from browsing", async ({
+test("workspace search finds Work content without changing the open item", async ({
     page,
 }) => {
     await workspace(page);
@@ -444,42 +453,30 @@ test("search finds output content and filters keep selection independent from br
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
     );
+    await page.getByRole("button", { name: "Search", exact: true }).click();
     const search = page.getByRole("searchbox");
+    const results = page.getByRole("region", {
+        name: "Search results",
+        exact: true,
+    });
+    const items = results.locator('[data-action="search-work"]');
+    await expect(search).toBeFocused();
     await search.fill("repository clones");
-    const list = page.getByRole("navigation", { name: "Recent work" });
-    await expect(list.getByRole("button")).toHaveCount(1);
-    await search.fill("shorter"); // Result text, not a Work title.
-    await expect(list.getByRole("button")).toHaveCount(3);
-    await search.fill("");
-    const workView = page.getByRole("combobox", { name: "Work view" });
-    await workView.selectOption("attention");
-    await expect(list.getByRole("button")).toHaveCount(1);
+    await expect(items).toHaveCount(1);
+    await search.fill("shorter");
+    await expect(items).toHaveCount(3);
     await expect(page.locator(".detail h2")).toHaveText(
         "Polish the welcome page",
     );
-    await workView.selectOption("done");
-    await expect(list.getByRole("button")).toHaveCount(1);
-    await page.getByRole("button", { name: /Write the release notes/ }).click();
-    await expect(page.locator(".detail .status-pill")).toHaveText("Completed");
-    await workView.selectOption("assigned");
-    await expect(list.getByRole("button")).toHaveCount(2);
-    await search.fill("release notes");
-    await expect(list.getByRole("button")).toHaveCount(1);
-    await expect(list.getByRole("button")).toContainText(
-        "Write the release notes",
-    );
-    await search.fill("");
-    await expect(list.getByRole("button")).toHaveCount(2);
-    await expect(workView).toHaveValue("assigned");
-    await page
-        .getByRole("button", { name: "Back to work", exact: true })
+    await results
+        .getByRole("button", { name: "Write the release notes" })
         .click();
-    await expect(
-        page.getByRole("heading", { name: "Work inbox", exact: true }),
-    ).toBeVisible();
-    await expect(
-        page.getByRole("list", { name: "Work list" }).getByRole("button"),
-    ).toHaveCount(3);
+    await expect(page.locator(".detail h2")).toBeFocused();
+    await expect(page.locator(".detail .status-pill")).toHaveText("Completed");
+    await expect(search).toBeHidden();
+    await expect(page.getByRole("combobox", { name: "Work view" })).toHaveCount(
+        0,
+    );
 });
 
 test("Work inbox scopes status to List and restores inbox state after viewing Work", async ({
@@ -599,6 +596,7 @@ test("Work inbox scopes status to List and restores inbox state after viewing Wo
         path: test.info().outputPath("work-inbox-board.png"),
     });
 
+    await page.keyboard.press("Control+k");
     await search.fill("release notes");
     await expect(inbox.locator(".board-lane")).toHaveCount(1);
     const closed = lane("Closed").getByRole("button", {
@@ -646,8 +644,13 @@ test("Work inbox scopes status to List and restores inbox state after viewing Wo
     await expect(
         detail.getByRole("button", { name: "Activity", exact: true }),
     ).toBeVisible();
-    await search.focus();
+    await page.keyboard.press("Control+k");
     await search.fill("export");
+    await expect(search).toHaveValue("export");
+    await search.press("Escape");
+    await expect(
+        page.getByRole("region", { name: "Search results" }),
+    ).toBeHidden();
     await expect(search).toHaveValue("export");
     await detail.getByRole("button", { name: "Back to work" }).click();
     await expect(row).toBeFocused();
@@ -666,53 +669,95 @@ test("Work inbox scopes status to List and restores inbox state after viewing Wo
     expect(commands).toEqual([]);
 });
 
-test("the Recent work filter fits its labels and keeps the open item selected", async ({
+test("the workspace menu supports mouse and keyboard and returns to the same inbox", async ({
     page,
 }) => {
-    const commands = await workspace(page);
-    const filter = page.getByRole("combobox", { name: "Work view" });
-    const list = page.getByRole("navigation", { name: "Recent work" });
-    const draft = page.locator("#reply");
+    await workspace(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/work");
+    const sidebar = page.getByRole("complementary", { name: "Workspace" });
+    const nav = sidebar.getByRole("navigation", { name: "Work navigation" });
+    await expect(nav.locator("button, a")).toHaveText([
+        "New work",
+        "SearchCtrl K",
+        /Work inbox/,
+        "Knowledge",
+    ]);
+    await expect(
+        sidebar.getByRole("navigation", { name: "Saved conversations" }),
+    ).toBeHidden();
+    await expect(
+        sidebar.getByRole("button", { name: "Ask Goblin", exact: true }),
+    ).toBeVisible();
 
-    for (const width of [1105, 800, 320]) {
-        await page.setViewportSize({ width, height: 893 });
-        await page.goto("/work?item=1");
-        await draft.fill("A note about the welcome page");
-        if (width === 320)
-            await page.getByRole("button", { name: "Show sidebar" }).click();
-        await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    const menu = page.getByLabel("Workspace menu", { exact: true });
+    const menuItems = page.locator("#workspace-menu").getByRole("button");
+    await expect(sidebar.locator("#workspace-menu")).toHaveCount(1);
+    await menu.click();
+    await expect(menuItems).toHaveText([
+        "Settings",
+        "System",
+        "Lock workspace",
+    ]);
+    await page.screenshot({
+        path: test.info().outputPath("workspace-menu-desktop.png"),
+    });
+    await page
+        .getByRole("heading", { name: "Work inbox", exact: true })
+        .click();
+    await expect(menuItems).toHaveCount(0);
 
-        await filter.click();
-        await expect(filter.locator("option").last()).toBeVisible();
-        const labelsFit = await filter.evaluate((select: HTMLSelectElement) => {
-            const style = getComputedStyle(select);
-            const contentWidth =
-                select.clientWidth -
-                parseFloat(style.paddingLeft) -
-                parseFloat(style.paddingRight);
-            return Array.from(select.options, (option) => {
-                const label = document.createRange();
-                label.selectNodeContents(option);
-                return (
-                    label.getClientRects().length === 1 &&
-                    label.getBoundingClientRect().width <= contentWidth
-                );
-            });
-        });
-        expect(labelsFit).toEqual([true, true, true, true, true]);
+    const status = page.getByRole("combobox", { name: "Status", exact: true });
+    await status.selectOption("attention");
+    await nav.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("searchbox").fill("welcome");
+    const list = page.getByRole("list", { name: "Work list", exact: true });
+    await expect(list.getByRole("button")).toHaveCount(1);
 
-        await filter
-            .getByRole("option", { name: "Needs attention (1)" })
-            .click();
-        await expect(filter).toHaveValue("attention");
-        await expect(list.getByRole("button")).toHaveCount(1);
-        await expect(
-            list.getByRole("button", { name: /Polish the welcome page/ }),
-        ).toHaveAttribute("aria-current", "page");
-        await expect(page).toHaveURL(/\/work\?item=1$/);
-        await expect(draft).toHaveValue("A note about the welcome page");
-    }
-    expect(commands).toEqual([]);
+    await menu.press("Enter");
+    await page.keyboard.press("Tab");
+    await expect(menuItems.first()).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeFocused();
+    await expect(menuItems).toHaveCount(0);
+    await menu.press("Space");
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/settings\?section=connections$/);
+    const back = page
+        .getByRole("banner")
+        .getByRole("button", { name: "Back to work", exact: true });
+    await expect(back).toBeVisible();
+    await expect(
+        page
+            .getByRole("banner")
+            .getByRole("button", { name: "Refresh", exact: true }),
+    ).toHaveCount(0);
+    await back.click();
+    await expect(menu).toBeFocused();
+    await expect(
+        page.getByRole("button", { name: "List", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("searchbox")).toHaveValue("welcome");
+    await expect(status).toHaveValue("attention");
+    await expect(list.getByRole("button")).toHaveCount(1);
+
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(
+        page.getByRole("button", { name: "Show sidebar", exact: true }),
+    ).toBeVisible();
+    await menu.click();
+    await page
+        .locator("#workspace-menu")
+        .getByRole("button", { name: "System", exact: true })
+        .click();
+    await expect(page).toHaveURL(/\/settings\?section=system$/);
+    await expect(
+        page.getByRole("heading", { name: "System", exact: true }),
+    ).toBeVisible();
+    await back.click();
+    await expect(status).toHaveValue("attention");
+    await expect(page.getByRole("searchbox")).toHaveValue("welcome");
 });
 
 test("Work inbox refresh updates results while preserving keyboard focus", async ({
@@ -765,6 +810,7 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     await expect(updated).toHaveCount(0);
     await expect(status).toBeFocused();
 
+    await page.keyboard.press("Control+k");
     const search = page.getByRole("searchbox");
     await search.fill("welcome");
     await search.evaluate((input: HTMLInputElement) =>
@@ -794,17 +840,34 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
     const modes = page.getByRole("group", { name: "Work layout" });
     const list = inbox.getByRole("list", { name: "Work list" });
     const checkWidths = async () => {
-        for (const locator of [page.locator(".workspace-header"), inbox])
+        for (const locator of [page.locator(".workspace-header"), inbox]) {
+            const dimensions = await locator.evaluate((el) => ({
+                name: el.className,
+                scrollWidth: el.scrollWidth,
+                clientWidth: el.clientWidth,
+            }));
             expect(
-                await locator.evaluate(
-                    (el) => el.scrollWidth <= el.clientWidth,
-                ),
-            ).toBe(true);
+                dimensions.scrollWidth,
+                JSON.stringify(dimensions),
+            ).toBeLessThanOrEqual(dimensions.clientWidth);
+        }
     };
-    await expect(inbox.getByRole("button", { name: "New work" })).toBeVisible();
+    await page
+        .getByRole("button", { name: "Show sidebar", exact: true })
+        .click();
+    const sidebar = page.getByRole("dialog", {
+        name: "Workspace",
+        exact: true,
+    });
     await expect(
-        inbox.getByRole("button", { name: "Ask Goblin" }),
+        sidebar.getByRole("button", { name: "New work" }),
     ).toBeVisible();
+    await expect(
+        sidebar.getByRole("button", { name: "Ask Goblin" }),
+    ).toBeVisible();
+    await expect(sidebar.getByLabel("Workspace menu")).toBeVisible();
+    await sidebar.getByRole("button", { name: "Search", exact: true }).click();
+    await expect(sidebar).toBeHidden();
     const search = page.getByRole("searchbox");
     expect((await search.boundingBox())?.width).toBeGreaterThan(100);
     await status.selectOption("attention");
@@ -827,6 +890,7 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
     await expect(list.getByRole("listitem")).toHaveCount(1);
     await checkWidths();
 
+    await page.keyboard.press("Control+k");
     await search.fill("welcome page");
     await list.getByRole("button", { name: "Polish the welcome page" }).click();
     await expect(inbox).toHaveCount(0);
@@ -883,16 +947,16 @@ for (const width of [1024, 390, 320]) {
             await page.keyboard.press("Escape");
             await expect(show).toBeFocused();
             await show.click();
-            await page
-                .getByRole("button", {
-                    name: /Investigate slow repository clones/,
-                })
-                .click();
+            await selectWorkFromSearch(
+                page,
+                "Investigate slow repository clones",
+            );
             await expect(page.locator(".detail h2")).toBeFocused();
             await expect(
                 page.getByRole("dialog", { name: "Workspace" }),
             ).toHaveCount(0);
             // Search remains usable while the navigation drawer is closed.
+            await page.keyboard.press("Control+k");
             await page.getByRole("searchbox").fill("Polish");
             await page
                 .getByRole("region", { name: "Search results" })
@@ -901,7 +965,7 @@ for (const width of [1024, 390, 320]) {
             await expect(page.locator(".detail h2")).toHaveText(
                 "Polish the welcome page",
             );
-            await expect(page.getByRole("searchbox")).toHaveValue("");
+            await expect(page.getByRole("searchbox")).toBeHidden();
         } else
             await expect(
                 page.getByRole("complementary", { name: "Workspace" }),
@@ -1051,7 +1115,7 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     await expect(
         settings.getByRole("heading", { name: "Goblin", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator(".detail-body").evaluate((element) => {
         element.scrollTop = 0;
@@ -1176,7 +1240,7 @@ test("global Ask Goblin has its own draft and leaves Work context scoped", async
     await page
         .getByPlaceholder("Add to the conversation…")
         .fill("An unrelated idea");
-    await page.getByRole("button", { name: /Polish the welcome page/ }).click();
+    await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(
         page.getByPlaceholder("Add context to this work…"),
     ).toHaveValue("Check the introduction again");
@@ -1235,7 +1299,7 @@ test("a delayed conversation reservation and resend stay bound to the submitted 
     await expect(conversationDraft).toHaveValue(
         "Keep the other conversation draft",
     );
-    await page.getByRole("button", { name: /Polish the welcome page/ }).click();
+    await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(workDraft).toHaveValue("Keep the Work draft");
     await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
     await expect(conversationDraft).toHaveValue("");

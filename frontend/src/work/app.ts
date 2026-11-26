@@ -14,8 +14,8 @@ import {
     savedTimeZone,
 } from "../settings/timezone.js";
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
-import { isListStatus, isWorkFilter } from "./board.js";
-import type { BoardLayout, ListStatus, WorkFilter } from "./board.js";
+import { isListStatus } from "./board.js";
+import type { BoardLayout, ListStatus } from "./board.js";
 import { WorkChangesPanel } from "./changes.js";
 import { CommandSubmission } from "./command-submission.js";
 import type { PendingCommand } from "./command-submission.js";
@@ -66,7 +66,6 @@ const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
     conversationExpanded = false,
     conversationsOpen = navigation.view === "chat",
-    filter: WorkFilter = "all",
     listStatus: ListStatus = "all",
     boardLayout: BoardLayout = "list",
     searchOpen = false,
@@ -117,17 +116,21 @@ error = submission.recoveryNotice;
 const system = new SystemResources();
 let settingsOpener: { id?: string; action?: string; provider?: string } = {};
 const settings = new Settings(system, (provider) => {
+    const menu = document.querySelector<HTMLDetailsElement>("#workspace-menu");
     if (navigation.view !== "settings") {
         const trigger =
             document.activeElement instanceof HTMLElement
                 ? document.activeElement.closest<HTMLElement>("[data-action]")
                 : null;
-        settingsOpener = {
-            id: trigger?.id,
-            action: trigger?.dataset.action,
-            provider: trigger?.dataset.provider,
-        };
+        settingsOpener = menu?.contains(document.activeElement)
+            ? { id: "workspace-menu-trigger" }
+            : {
+                  id: trigger?.id,
+                  action: trigger?.dataset.action,
+                  provider: trigger?.dataset.provider,
+              };
     }
+    if (menu) menu.open = false;
     const previous = navigation.settingsSection;
     navigate("settings", provider);
     render();
@@ -234,7 +237,6 @@ function forgetWorkspace() {
     repositoryDrafts.clear();
     pendingContext = undefined;
     changing = false;
-    filter = "all";
     listStatus = "all";
     searchOpen = false;
     search = "";
@@ -295,7 +297,11 @@ async function loadWorkspace(preserveError: boolean) {
             return;
         }
         void refreshConnections();
-        void system.refresh();
+        if (
+            navigation.view === "settings" &&
+            navigation.settingsSection === "system"
+        )
+            void system.refresh();
         const loaded = await workspace.refreshWork();
         signal.throwIfAborted();
         if (loaded) {
@@ -438,6 +444,17 @@ function closeChanges() {
     document.getElementById("show-changes")?.focus();
 }
 
+function openSearch() {
+    const requiresNavigation =
+        navigation.isDirectory || (mobile.matches && !sidebarCollapsed);
+    if (navigation.isDirectory) navigate("board");
+    if (mobile.matches) sidebarCollapsed = true;
+    if (requiresNavigation) render();
+    const panel = document.getElementById("workspace-search");
+    if (panel) panel.hidden = false;
+    document.getElementById("work-search")?.focus();
+}
+
 function render(preserveMounted = false, forceSelect = false) {
     const { context, view, settingsSection } = navigation;
     if (context !== dom.context) {
@@ -488,7 +505,6 @@ function render(preserveMounted = false, forceSelect = false) {
                 changesOpen: workChanges.isOpen,
                 conversationExpanded,
                 conversationsOpen,
-                filter,
                 listStatus,
                 boardLayout,
                 search,
@@ -501,7 +517,6 @@ function render(preserveMounted = false, forceSelect = false) {
                 timezoneError,
                 error,
                 submission: submissionState,
-                systemSummary: system.summary(),
                 canExecute: !!work && modelCanSubmit(work),
                 model: choice && {
                     choice,
@@ -612,6 +627,10 @@ document.addEventListener("click", async (event) => {
     }
     const action = target.dataset.action,
         value = target.dataset.value;
+    if (action === "open-search") {
+        openSearch();
+        return;
+    }
     if (action === "knowledge") {
         navigate(action);
         render();
@@ -714,7 +733,6 @@ document.addEventListener("click", async (event) => {
     }
     if (action === "browse-work") {
         const returning = navigation.view === "work";
-        filter = "all";
         if (returning && navigation.canReturnToBoard) {
             history.back();
             return;
@@ -852,7 +870,7 @@ document.addEventListener("click", async (event) => {
     }
     if (action === "clear-search") {
         search = "";
-        searchOpen = false;
+        searchOpen = true;
     }
     if (action === "search-work" || action === "search-chat") {
         navigate(
@@ -1042,11 +1060,6 @@ document.addEventListener("change", (event) => {
             render(true);
             return;
         }
-        if (id === "work-view" && isWorkFilter(value)) {
-            filter = value;
-            render(false, true);
-            return;
-        }
     }
     if (
         event.target instanceof HTMLInputElement &&
@@ -1065,12 +1078,20 @@ document.addEventListener("change", (event) => {
 });
 document.addEventListener("focusin", (event) => {
     if (!(event.target instanceof Element)) return;
-    if (event.target.id === "work-search" && search && !searchOpen) {
+    if (!event.target.closest("#workspace-menu"))
+        root.querySelector<HTMLDetailsElement>(
+            "#workspace-menu",
+        )?.removeAttribute("open");
+    if (event.target.id === "work-search" && !searchOpen) {
         searchOpen = true;
-        render(true);
-    } else if (searchOpen && !event.target.closest(".workspace-header")) {
+        if (search) render(true);
+    } else if (searchOpen && !event.target.closest("#workspace-search")) {
         searchOpen = false;
         root.querySelector(".search-results")?.remove();
+        if (!search)
+            document
+                .getElementById("workspace-search")
+                ?.setAttribute("hidden", "");
     }
     if (modelPickerOpen && !event.target.closest(".model-picker")) {
         modelPickerOpen = false;
@@ -1121,17 +1142,10 @@ document.addEventListener("keydown", (event) => {
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "k" &&
         authenticated &&
-        !activityOpen &&
-        !(mobile.matches && !sidebarCollapsed)
+        !activityOpen
     ) {
         event.preventDefault();
-        document
-            .getElementById(
-                navigation.view === "knowledge"
-                    ? "knowledge-search"
-                    : "work-search",
-            )
-            ?.focus();
+        openSearch();
         return;
     }
     if (
@@ -1180,15 +1194,29 @@ document.addEventListener("keydown", (event) => {
     }
     if (
         event.key === "Escape" &&
-        search &&
-        !(event.target instanceof HTMLSelectElement) &&
-        !(mobile.matches && !sidebarCollapsed) &&
-        !activityOpen
+        event.target instanceof Element &&
+        event.target.closest("#workspace-search")
     ) {
+        event.preventDefault();
+        const results = root.querySelector(".search-results");
+        if (results) {
+            document.getElementById("work-search")?.focus();
+            searchOpen = false;
+            results.remove();
+            return;
+        }
+        searchOpen = !!search;
         search = "";
-        searchOpen = false;
         render();
-        document.getElementById("work-search")?.focus();
+        document
+            .getElementById(
+                searchOpen
+                    ? "work-search"
+                    : sidebarCollapsed
+                      ? "show-work-search"
+                      : "nav-work-search",
+            )
+            ?.focus();
         return;
     }
     if (activityOpen) {

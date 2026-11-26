@@ -10,25 +10,14 @@ const listStatuses = {
     done: "Completed",
 } as const;
 
-const filters = {
-    ...listStatuses,
-    all: "All work",
-    assigned: "My work",
-} as const;
-
-export type WorkFilter = keyof typeof filters;
 export type ListStatus = keyof typeof listStatuses;
 export type BoardLayout = "board" | "list";
-
-export function isWorkFilter(value: string): value is WorkFilter {
-    return Object.hasOwn(filters, value);
-}
 
 export function isListStatus(value: string): value is ListStatus {
     return Object.hasOwn(listStatuses, value);
 }
 
-export function workInFilter(work: Work, filter: WorkFilter) {
+function workInFilter(work: Work, filter: ListStatus) {
     switch (filter) {
         case "attention":
             return work.status === WorkStatus.NeedsAttention;
@@ -36,23 +25,9 @@ export function workInFilter(work: Work, filter: WorkFilter) {
             return laneByStatus[work.status] === "active";
         case "done":
             return work.status === WorkStatus.Completed;
-        case "assigned":
-            return (
-                !!work.agentId &&
-                work.status !== WorkStatus.Completed &&
-                work.status !== WorkStatus.Cancelled
-            );
         default:
             return true;
     }
-}
-
-export function workFilters(work: readonly View[]) {
-    return (Object.keys(filters) as WorkFilter[]).map((value) => ({
-        value,
-        name: filters[value],
-        count: work.filter((item) => workInFilter(item.work, value)).length,
-    }));
 }
 
 const lanes = [
@@ -184,7 +159,6 @@ type BoardInput = {
     listStatus: ListStatus;
     layout: BoardLayout;
     search: string;
-    sidebarCollapsed: boolean;
 };
 
 export function renderBoard({
@@ -195,7 +169,6 @@ export function renderBoard({
     listStatus,
     layout,
     search,
-    sidebarCollapsed,
 }: BoardInput) {
     const shown =
         layout === "list" && listStatus !== "all"
@@ -216,17 +189,7 @@ export function renderBoard({
             : "No work matches this status.";
     return `<section class="board-workspace" aria-labelledby="board-heading" data-scroll="board">
         <div class="board-inner">
-            <div class="board-heading">
-                <h1 id="board-heading" tabindex="-1">Work inbox</h1>
-                ${
-                    sidebarCollapsed
-                        ? `<div class="board-actions">
-                    <button class="secondary" data-action="new-chat">${icon("chat")}Ask Goblin</button>
-                    <button class="primary" data-action="new-work">${icon("plus")}New work</button>
-                </div>`
-                        : ""
-                }
-            </div>
+            <h1 id="board-heading" class="board-heading" tabindex="-1">Work inbox</h1>
             <p class="board-result-count" role="status"><span class="board-count" ${loaded ? "" : "hidden"}>${count}</span></p>
             <div class="board-content">
                 ${

@@ -64,7 +64,7 @@ async function fixture(page: Page) {
     return state;
 }
 
-test("VM resources are one click away, preserve drafts, and distinguish stale readings", async ({
+test("VM resources open from the workspace menu, preserve drafts, and distinguish stale readings", async ({
     page,
     context,
 }) => {
@@ -75,16 +75,11 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
     await page
         .getByPlaceholder("Describe the intended outcome…")
         .fill("Keep my work draft");
-    await expect(
-        page.getByRole("button", { name: "System resources", exact: true }),
-    ).toContainText("CPU 25% · Memory 75%");
-    await page
-        .getByRole("button", { name: "System resources", exact: true })
-        .click();
+    const menu = page.getByLabel("Workspace menu", { exact: true });
+    await menu.click();
+    await page.getByRole("button", { name: "System", exact: true }).click();
     const panel = page.getByRole("region", { name: "System resources" });
-    await expect(
-        panel.getByRole("heading", { name: "Your system" }),
-    ).toBeVisible();
+    await expect(panel.getByRole("heading", { name: "System" })).toBeVisible();
     await expect(panel.getByText("No resource warnings")).toBeVisible();
     await expect(
         panel.getByText("4 GiB available", { exact: true }),
@@ -105,18 +100,14 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
     );
     const opened = page.waitForEvent("popup");
     await panel
-        .getByRole("link", { name: /Open detailed cluster view/ })
+        .getByRole("link", { name: "Cluster (opens in a new tab)" })
         .click();
     const popup = await opened;
     await expect(popup).toHaveURL(/\/headlamp\/$/);
     await popup.close();
-    await expect(
-        panel.getByRole("heading", { name: "Your system" }),
-    ).toBeVisible();
-    await page.getByRole("button", { name: "Back to workspace" }).click();
-    await expect(
-        page.getByRole("button", { name: "System resources", exact: true }),
-    ).toBeFocused();
+    await expect(panel.getByRole("heading", { name: "System" })).toBeVisible();
+    await page.getByRole("button", { name: "Back to work" }).click();
+    await expect(menu).toBeFocused();
     await expect(
         page.getByPlaceholder("Describe the intended outcome…"),
     ).toHaveValue("Keep my work draft");
@@ -124,12 +115,8 @@ test("VM resources are one click away, preserve drafts, and distinguish stale re
     state.notice =
         "Updates are interrupted. These are the last reported readings.";
     await page.reload();
-    await expect(
-        page.getByRole("button", { name: "System resources", exact: true }),
-    ).toContainText("Readings out of date");
-    await page
-        .getByRole("button", { name: "System resources", exact: true })
-        .click();
+    await menu.click();
+    await page.getByRole("button", { name: "System", exact: true }).click();
     await expect(panel.getByText("No resource warnings")).not.toBeVisible();
     await expect(panel.getByText(/Current health is unknown/)).toBeVisible();
     expect(errors).toEqual([]);

@@ -272,7 +272,7 @@ test.describe("durable Work", () => {
     }) => {
         await unlock(page);
         await page
-            .getByRole("button", { name: "New conversation", exact: true })
+            .getByRole("button", { name: "Ask Goblin", exact: true })
             .click();
         await page.getByRole("textbox").fill("Plan a release " + Date.now());
         await page.getByRole("button", { name: "Send message" }).click();
@@ -429,7 +429,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Conversations", exact: true })
             .click();
         await page
-            .getByRole("button", { name: "New conversation", exact: true })
+            .getByRole("button", { name: "Ask Goblin", exact: true })
             .click();
         const text =
             "Release context " + Date.now() + ' <img src=x onerror="alert(1)">';
@@ -443,9 +443,11 @@ test.describe("durable Work", () => {
             .click();
         await expect(page.locator(".detail h2")).toHaveText(text);
         await page.reload();
+        await page.keyboard.press("Control+k");
+        await page.getByRole("searchbox").fill(text);
         await page
-            .getByRole("button", { name: text, exact: false })
-            .first()
+            .getByRole("region", { name: "Search results", exact: true })
+            .getByRole("button", { name: text, exact: true })
             .click();
         await expect(page.locator(".goal-text")).toHaveText(text);
         await expect(page.locator('img[src="x"]')).toHaveCount(0);
@@ -468,7 +470,10 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Show sidebar", exact: true })
             .click();
         await expect(
-            page.getByRole("navigation", { name: "Recent work", exact: true }),
+            page.getByRole("navigation", {
+                name: "Work navigation",
+                exact: true,
+            }),
         ).toBeVisible();
     });
 

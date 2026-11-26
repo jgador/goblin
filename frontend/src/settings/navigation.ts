@@ -4,6 +4,34 @@ export const settingsPanels = [...sections, ...connectionProviders] as const;
 export type ConnectionProvider = (typeof connectionProviders)[number];
 export type SettingsSelection = (typeof sections)[number] | ConnectionProvider;
 
+export const settingsGroups: {
+    label: string;
+    items: { id: (typeof sections)[number]; label: string; glyph: string }[];
+}[] = [
+    {
+        label: "Workspace",
+        items: [
+            { id: "connections", label: "Connections", glyph: "integrations" },
+            { id: "agents", label: "Agents", glyph: "agents" },
+        ],
+    },
+    {
+        label: "Preferences",
+        items: [{ id: "timezone", label: "Time & date", glyph: "clock" }],
+    },
+    {
+        label: "Administration",
+        items: [{ id: "system", label: "System", glyph: "activity" }],
+    },
+];
+
+export function settingsSectionName(selection: SettingsSelection) {
+    const section = isConnectionProvider(selection) ? "connections" : selection;
+    return settingsGroups
+        .flatMap(({ items }) => items)
+        .find(({ id }) => id === section)!.label;
+}
+
 export function isConnectionProvider(
     value: string,
 ): value is ConnectionProvider {

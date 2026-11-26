@@ -61,7 +61,8 @@ export class WorkspaceDom {
 
     private refreshHome(html: string, options: RenderOptions) {
         this.refreshRegions(html, [
-            ".sidebar",
+            ".sidebar-start",
+            ".sidebar-history",
             ".workspace-notices",
             ".connection-choice",
             ".connection-nudge",
@@ -158,7 +159,6 @@ export class WorkspaceDom {
                               "work-model",
                               "work-effort",
                               "model-connection",
-                              "work-view",
                               "inbox-status",
                               "work-search",
                           ].includes(x.id),
@@ -206,7 +206,8 @@ export class WorkspaceDom {
             this.refreshHome(html, options);
         else if (refreshInbox)
             this.refreshRegions(html, [
-                ".sidebar",
+                ".sidebar-start",
+                ".sidebar-history",
                 ".workspace-search-results",
                 ".workspace-notices",
                 ".board-count",

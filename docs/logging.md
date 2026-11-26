@@ -1,7 +1,7 @@
 # Monitoring and saved logs
 
-Installed Goblin exposes **Settings → System**, **Tools → Cluster**, and **Tools →
-Logs**. Tools open on Goblin's origin with its owner login. Standalone development
+Installed Goblin exposes **Cluster** and **Logs** under **Settings → System → Operator
+tools**. Tools open on Goblin's origin with its owner login. Standalone development
 reports unsupported monitoring unless the required private services and node
 configuration are supplied. Tool failure does not fail readiness or change Work
 admission.

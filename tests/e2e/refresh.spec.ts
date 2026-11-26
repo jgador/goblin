@@ -8,6 +8,7 @@ async function home(page: Page) {
         authenticated: true,
         workUnavailable: false,
         objective: "Existing work",
+        status: "NeedsAttention",
         connectionName: "Codex",
         availability: "Disconnected",
         connectionWait: null as Promise<void> | null,
@@ -33,7 +34,7 @@ async function home(page: Page) {
                     work: {
                         id: "1",
                         objective: state.objective,
-                        status: "Ready",
+                        status: state.status,
                         attempts: [],
                         history: [],
                         decisions: [],
@@ -54,7 +55,7 @@ async function home(page: Page) {
         await route.fulfill({ json: data[path] ?? [] });
     });
     await page.goto("/?new=work");
-    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    await expect(page.locator(".inbox-nav-count")).toHaveText("1");
     await expect(page.locator(".connection-nudge")).toBeVisible();
     return state;
 }
@@ -204,7 +205,7 @@ for (const viewport of [
             state.connectionWait = new Promise<void>((resolve) => {
                 release = resolve;
             });
-            state.objective = "New server state";
+            state.status = "Ready";
             if (mode === "manual")
                 await page
                     .getByRole("button", { name: "Refresh", exact: true })
@@ -213,9 +214,7 @@ for (const viewport of [
 
             // Work finishes first; connection checks must not hide the existing
             // prompt or recenter the home while their response is outstanding.
-            await expect(page.locator(".work-title")).toHaveText(
-                state.objective,
-            );
+            await expect(page.locator(".inbox-nav-count")).toHaveCount(0);
             await expect(page.locator(".connection-nudge")).toBeVisible();
             expect(await page.locator(".home-content").boundingBox()).toEqual(
                 contentBounds,
@@ -262,10 +261,9 @@ test("home refresh applies connection changes, reports failures, and clears a lo
         name: "Create work",
         exact: true,
     });
-    state.objective = "Connection updated";
     state.availability = "Available";
     await refresh.click();
-    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    await expect(page.locator(".inbox-nav-count")).toHaveText("1");
     await expect(page.locator(".connection-nudge")).toBeHidden();
 
     state.workUnavailable = true;
@@ -344,11 +342,11 @@ test("a delayed Work read cannot restore private content after locking and unloc
     await page
         .getByRole("button", { name: "Open workspace", exact: true })
         .click();
-    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    await expect(page.locator(".inbox-nav-count")).toHaveText("1");
     release();
-    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    await expect(page.locator(".inbox-nav-count")).toHaveText("1");
     await page.getByRole("button", { name: "Refresh", exact: true }).click();
-    await expect(page.locator(".work-title")).toHaveText(state.objective);
+    await expect(page.locator(".inbox-nav-count")).toHaveText("1");
 });
 
 test("a non-JSON unauthorized connection response locks the workspace immediately", async ({

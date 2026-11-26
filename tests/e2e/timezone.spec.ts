@@ -459,7 +459,7 @@ test("leaving Settings cancels its pending IP lookup", async ({
     const aborted = page.waitForEvent("requestfailed", (request) =>
         request.url().startsWith("https://ipwho.is/"),
     );
-    await page.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await aborted;
     await expect(
         page.getByRole("region", { name: "Settings" }),

@@ -5,15 +5,10 @@ import {
     WorkStatus,
 } from "../api/values.js";
 import { renderKnowledge } from "../knowledge/page.js";
+import { settingsSectionName } from "../settings/navigation.js";
 import { formatTimestamp as time } from "../settings/timezone.js";
-import {
-    renderBoard,
-    renderInboxControls,
-    workFilters,
-    workInFilter,
-    workStatus,
-} from "./board.js";
-import type { BoardLayout, ListStatus, WorkFilter } from "./board.js";
+import { renderBoard, renderInboxControls, workStatus } from "./board.js";
+import type { BoardLayout, ListStatus } from "./board.js";
 import type { View, Work } from "./contracts.js";
 import { renderModelPicker } from "./model-picker.js";
 import type { WorkspaceNavigation } from "./navigation.js";
@@ -34,7 +29,7 @@ import type { WorkspaceController } from "./workspace.js";
 type WorkspaceViewInput = {
     navigation: Pick<
         WorkspaceNavigation,
-        "view" | "selected" | "activeChat" | "isDirectory"
+        "view" | "selected" | "activeChat" | "isDirectory" | "settingsSection"
     >;
     workspace: WorkspaceController["state"];
     mobile: boolean;
@@ -43,7 +38,6 @@ type WorkspaceViewInput = {
     changesOpen: boolean;
     conversationExpanded: boolean;
     conversationsOpen: boolean;
-    filter: WorkFilter;
     listStatus: ListStatus;
     boardLayout: BoardLayout;
     search: string;
@@ -56,7 +50,6 @@ type WorkspaceViewInput = {
     timezoneError: string;
     error: string;
     submission: { sending: boolean; pending: boolean };
-    systemSummary: string;
     model: Parameters<typeof renderModelPicker>[0] | undefined;
     canExecute: boolean;
 };
@@ -71,7 +64,6 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         changesOpen,
         conversationExpanded,
         conversationsOpen,
-        filter,
         listStatus,
         boardLayout,
         search,
@@ -84,7 +76,6 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         timezoneError,
         error,
         submission,
-        systemSummary,
         model,
         canExecute,
     } = input;
@@ -121,15 +112,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
               matchesWork(w, query, conversations, workAgent(w)?.name ?? ""),
           )
         : ordered;
-    const chats = conversations.filter(
-        (chat) =>
-            !chat.workId &&
-            (!query ||
-                [
-                    chat.title,
-                    ...chat.messages.map((message) => message.text),
-                ].some((text) => text.toLocaleLowerCase().includes(query))),
-    );
+    const chats = conversations.filter((chat) => !chat.workId);
     const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
     const attention = (w: Work) => w.status === WorkStatus.NeedsAttention;
     const statusClass = (w: Work) =>
@@ -171,60 +154,88 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                       : "Saves context with this work";
         return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
     }
-    function renderWorkHistory() {
-        const shown = matches.filter(
-            ({ work: w }) => query || workInFilter(w, filter),
-        );
-        return `<div class="history-heading"><h2>${query ? "Matching work" : "Recent work"}</h2>
-            <label class="sr-only" for="work-view">Work view</label><select id="work-view" class="field-control select-control work-view">${workFilters(
-                work,
-            )
-                .map(
-                    ({ value, name, count }) =>
-                        `<option value="${value}" ${filter === value ? "selected" : ""}>${name} (${count})</option>`,
-                )
-                .join("")}</select></div>
-            <nav class="work-history" aria-label="Recent work">${shown.map(({ work: w, updatedAt }) => `<button class="work-card ${view === "work" && selected === w.id ? "selected" : ""}" data-action="select-work" data-id="${e(w.id)}" aria-current="${view === "work" && selected === w.id ? "page" : "false"}" title="${e(w.objective)}"><span class="work-card-copy"><span class="work-title">${e(w.objective)}</span><time class="work-card-meta" datetime="${e(updatedAt)}">${e(relativeTime(updatedAt))}</time></span><span class="work-indicator ${statusClass(w)}" aria-label="${e(label(w.attention?.reason ?? w.status))}" title="${e(label(w.attention?.reason ?? w.status))}">${icon(attention(w) ? "wait" : w.status === WorkStatus.Completed ? "circleCheck" : w.status === WorkStatus.InProgress ? "progress" : "circle")}</span></button>`).join("") || `<p class="sidebar-empty">${query || filter !== "all" ? "No matching work." : loaded ? "No work yet." : workUnavailable ? "Work unavailable." : "Loading work…"}</p>`}</nav>`;
+    function renderWorkspaceMenu() {
+        return `<details id="workspace-menu" class="workspace-menu">
+            <summary id="workspace-menu-trigger" aria-label="Workspace menu" title="Workspace menu">${icon("settings")}<span>Goblin workspace</span>${icon("chevron", "workspace-menu-chevron")}</summary>
+            <div class="workspace-menu-items">
+                <button data-action="settings">${icon("settings")}Settings</button>
+                <button data-action="settings-system">${icon("activity")}System</button>
+                <button data-action="lock">${icon("lock")}Lock workspace</button>
+            </div>
+        </details>`;
     }
     function renderSidebar() {
         const attentionCount = work.filter(({ work: item }) =>
             attention(item),
         ).length;
-        const connectionLabel = defaultConnection
-            ? `${defaultConnection.name} · ${label(defaultConnection.availability)}`
-            : connectionsLoaded
-              ? "No AI connection"
-              : "Checking AI connection…";
         return `<aside id="workspace-sidebar" class="sidebar" aria-label="Workspace" ${sidebarCollapsed || activityOpen ? "inert" : ""} ${mobile && !sidebarCollapsed ? 'role="dialog" aria-modal="true"' : ""}>
-            <div class="sidebar-heading"><a class="brand" href="/" data-action="browse-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button></div>
-            ${inbox ? "" : `<button class="new-chat" data-action="new-work">${icon("plus")}New work</button>`}
+            <div class="sidebar-heading">
+                <a class="brand" href="/" data-action="browse-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a>
+                <button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button>
+            </div>
             <nav class="sidebar-start" aria-label="Work navigation">
-                ${inbox ? `<button class="nav-button" data-action="new-work">${icon("plus")}New work</button>` : ""}
-                <button class="nav-button ${inbox ? "active" : ""}" data-action="browse-work" aria-current="${inbox ? "page" : "false"}" ${attentionCount ? 'aria-describedby="work-inbox-attention"' : ""}>${icon("inbox")}<span>Work inbox</span>${attentionCount ? `<span class="inbox-nav-count" aria-hidden="true">${attentionCount}</span>` : ""}</button>
+                <button class="nav-button" data-action="new-work">${icon("plus")}New work</button>
+                <button id="nav-work-search" class="nav-button" data-action="open-search" aria-keyshortcuts="Control+K Meta+K">${icon("search")}<span>Search</span><kbd aria-hidden="true">Ctrl K</kbd></button>
+                <button class="nav-button ${inbox ? "active" : ""}" data-action="browse-work" ${inbox ? 'aria-current="page"' : ""} ${attentionCount ? 'aria-describedby="work-inbox-attention"' : ""}>${icon("inbox")}<span>Work inbox</span>${attentionCount ? `<span class="inbox-nav-count" aria-hidden="true">${attentionCount}</span>` : ""}</button>
                 ${attentionCount ? `<span class="sr-only" id="work-inbox-attention">${attentionCount} ${attentionCount === 1 ? "Work item needs" : "Work items need"} attention</span>` : ""}
-                ${inbox ? `<button class="nav-button" data-action="new-chat">${icon("chat")}Ask Goblin</button>` : ""}
+                <a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" ${view === "knowledge" ? 'aria-current="page"' : ""}>${icon("knowledge")}Knowledge</a>
             </nav>
             <div class="sidebar-history" data-scroll="sidebar">
-                <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen || !!query}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
-                <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen || query ? "" : "hidden"}>${chats.map((chat) => `<button class="work-card ${view === "chat" && activeChat === chat.id ? "selected" : ""}" data-action="select-chat" data-id="${e(chat.id)}" aria-current="${view === "chat" && activeChat === chat.id ? "page" : "false"}"><span class="work-title">${e(chat.title)}</span></button>`).join("") || '<p class="sidebar-empty">No saved conversations.</p>'}</nav>
-                ${inbox ? "" : renderWorkHistory()}
+                <button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen}" aria-controls="conversation-history">Conversations${icon("chevron")}</button>
+                <button class="nav-button" data-action="new-chat">${icon("chat")}Ask Goblin</button>
+                <nav id="conversation-history" class="work-history" aria-label="Saved conversations" ${conversationsOpen ? "" : "hidden"}>${chats.map((chat) => `<button class="work-card ${view === "chat" && activeChat === chat.id ? "selected" : ""}" data-action="select-chat" data-id="${e(chat.id)}" aria-current="${view === "chat" && activeChat === chat.id ? "page" : "false"}">${icon("chat")}<span class="work-title">${e(chat.title)}</span></button>`).join("") || '<p class="sidebar-empty">No saved conversations.</p>'}</nav>
             </div>
-            <nav class="primary-navigation" aria-label="Workspace navigation"><a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" aria-current="${view === "knowledge" ? "page" : "false"}">${icon("knowledge")}Knowledge</a><button id="nav-settings" class="nav-button sidebar-settings ${view === "settings" ? "active" : ""}" aria-current="${view === "settings" ? "page" : "false"}" data-action="settings">${icon("settings")}Settings</button></nav>
-            ${inbox ? `<button class="inbox-connection nav-button" data-action="settings-codex">${icon("activity")}<span>${e(connectionLabel)}</span></button>` : ""}
-            <button class="sidebar-system" data-action="settings-system" data-system-summary aria-label="System resources">${systemSummary}</button>
+            ${sidebarCollapsed ? "" : renderWorkspaceMenu()}
         </aside>`;
     }
     function renderHeader() {
-        return `<header class="workspace-header${inbox ? " inbox-header" : ""}" ${(mobile && !sidebarCollapsed) || activityOpen ? "inert" : ""}><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button>${isDirectory ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "settings" ? "Settings" : "Knowledge"}</span>` : `${inbox ? '<span class="workspace-section-label inbox-breadcrumb">Workspace <span aria-hidden="true">/</span> Work inbox</span>' : ""}<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="${mobile ? "Search work…" : "Search work and conversations"}" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions">${inbox ? "" : `<button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button>`}<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${inbox ? renderInboxControls(boardLayout, listStatus) : ""}<div class="workspace-search-results">${renderSearchResults()}</div></header>`;
+        const section =
+            view === "settings"
+                ? "Settings"
+                : view === "knowledge"
+                  ? "Knowledge"
+                  : inbox
+                    ? "Work inbox"
+                    : "Work";
+        const breadcrumb = `<div class="workspace-breadcrumb"><span>Workspace</span>${icon("chevron")}<strong>${section}</strong>${view === "settings" ? `${icon("chevron")}<span>${e(settingsSectionName(navigation.settingsSection))}</span>` : ""}</div>`;
+        const actions =
+            view === "settings"
+                ? `<button class="text-button settings-return" data-action="return-settings">${icon("back")}Back to work</button>`
+                : inbox
+                  ? renderInboxControls(boardLayout, listStatus)
+                  : !isDirectory
+                    ? `<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button>`
+                    : "";
+        return `<header class="workspace-header${inbox ? " inbox-header" : ""}" ${(mobile && !sidebarCollapsed) || activityOpen ? "inert" : ""}>
+            ${
+                sidebarCollapsed
+                    ? `<div class="header-navigation">
+                <button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar">${icon("sidebar")}</button>
+                <button id="show-work-search" class="icon-button" data-action="open-search" aria-label="Search" title="Search" aria-keyshortcuts="Control+K Meta+K">${icon("search")}</button>
+                ${renderWorkspaceMenu()}
+            </div>`
+                    : ""
+            }
+            ${breadcrumb}
+            ${inbox ? `<button class="icon-button inbox-refresh" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button>` : ""}
+            <div class="header-actions">${actions}</div>
+            <div id="workspace-search" class="workspace-search" ${!isDirectory && (searchOpen || search) ? "" : "hidden"}>
+                <label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work and conversations" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"></label>
+                <div class="workspace-search-results">${renderSearchResults()}</div>
+            </div>
+        </header>`;
     }
     function renderSearchResults() {
-        if (isDirectory || !query || !sidebarCollapsed || !searchOpen)
-            return "";
-        const items = view === "board" ? [] : matches;
-        if (view === "board" && !chats.length) return "";
-        const heading =
-            view === "board" ? "Matching conversations" : "Search results";
-        return `<section class="search-results" aria-label="${heading}"><div class="section-heading"><h3>${heading}</h3><button class="text-button" data-action="clear-search">Clear search</button></div>${items.map(({ work: w }) => `<button class="work-card" data-action="search-work" data-id="${e(w.id)}">${icon("work")}<span class="work-title">${e(w.objective)}</span></button>`).join("")}${chats.map((chat) => `<button class="work-card" data-action="search-chat" data-id="${e(chat.id)}">${icon("chat")}<span class="work-title">${e(chat.title)}</span></button>`).join("")}${!items.length && !chats.length ? '<p class="section-empty">No matching work or conversations.</p>' : ""}</section>`;
+        if (isDirectory || !query || !searchOpen) return "";
+        const items = inbox ? [] : matches;
+        const matchingChats = chats.filter(({ title, messages }) =>
+            [title, ...messages.map(({ text }) => text)].some((text) =>
+                text.toLocaleLowerCase().includes(query),
+            ),
+        );
+        if (inbox && !matchingChats.length) return "";
+        const heading = inbox ? "Matching conversations" : "Search results";
+        return `<section class="search-results" aria-label="${heading}"><div class="section-heading"><h3>${heading}</h3><button class="text-button" data-action="clear-search">Clear search</button></div>${items.map(({ work: w }) => `<button class="work-card" data-action="search-work" data-id="${e(w.id)}">${icon("work")}<span class="work-title">${e(w.objective)}</span></button>`).join("")}${matchingChats.map((chat) => `<button class="work-card" data-action="search-chat" data-id="${e(chat.id)}">${icon("chat")}<span class="work-title">${e(chat.title)}</span></button>`).join("")}${!items.length && !matchingChats.length ? '<p class="section-empty">No matching work or conversations.</p>' : ""}</section>`;
     }
     function renderBoardView() {
         return renderBoard({
@@ -235,7 +246,6 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             listStatus,
             layout: boardLayout,
             search: query,
-            sidebarCollapsed,
         });
     }
     function renderActivityPanel() {

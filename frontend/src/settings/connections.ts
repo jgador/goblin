@@ -18,7 +18,6 @@ type Summary = {
     tone: "neutral" | "connected" | "attention";
     detail: string;
     action: "Connect" | "Manage" | "View setup";
-    connected: boolean;
     failed?: boolean;
 };
 const providers = [
@@ -26,12 +25,6 @@ const providers = [
         id: "codex",
         name: "Codex",
         description: "Run Work with your ChatGPT account or an OpenAI API key.",
-    },
-    {
-        id: "chatgpt",
-        name: "ChatGPT",
-        description:
-            "Read and manage all Work through your private ChatGPT plugin.",
     },
     {
         id: "github",
@@ -42,6 +35,12 @@ const providers = [
         id: "slack",
         name: "Slack",
         description: "Start and continue Work from DMs and mentions.",
+    },
+    {
+        id: "chatgpt",
+        name: "ChatGPT",
+        description:
+            "Read and manage all Work through your private ChatGPT plugin.",
     },
     {
         id: "teams",
@@ -55,14 +54,12 @@ const loading = (): Summary => ({
     tone: "neutral",
     detail: "Loading connection status.",
     action: "Manage",
-    connected: false,
 });
 const unknown = (): Summary => ({
     status: "Status unavailable",
     tone: "attention",
     detail: "Connection status could not be checked.",
     action: "Manage",
-    connected: false,
     failed: true,
 });
 
@@ -75,7 +72,6 @@ function githubSummary(state: GitHubState): Summary {
                 tone: "connected",
                 detail: account,
                 action: "Manage",
-                connected: true,
             };
         case GitHubConnectionStatus.Connecting:
             return {
@@ -83,7 +79,6 @@ function githubSummary(state: GitHubState): Summary {
                 tone: "attention",
                 detail: "Finish authorizing your GitHub account.",
                 action: "Manage",
-                connected: false,
             };
         case GitHubConnectionStatus.Unavailable:
             return {
@@ -91,7 +86,6 @@ function githubSummary(state: GitHubState): Summary {
                 tone: "attention",
                 detail: "Review your GitHub connection in settings.",
                 action: "Manage",
-                connected: false,
             };
         case GitHubConnectionStatus.Disconnected:
             return {
@@ -99,7 +93,6 @@ function githubSummary(state: GitHubState): Summary {
                 tone: "neutral",
                 detail: "Choose the repositories Goblin can access.",
                 action: "Connect",
-                connected: false,
             };
         default:
             return unknown();
@@ -113,7 +106,6 @@ function slackSummary(state: SlackState): Summary {
             tone: "neutral",
             detail: "Slack isn’t enabled in this workspace.",
             action: "View setup",
-            connected: false,
         };
     const { connection, setup } = state;
     if (connection.status === SlackConnectionStatus.Connected)
@@ -122,7 +114,6 @@ function slackSummary(state: SlackState): Summary {
             tone: "connected",
             detail: connection.workspace ?? "Slack workspace",
             action: "Manage",
-            connected: true,
         };
     if (
         setup.status === SlackSetupStatus.NeedsAttention ||
@@ -133,7 +124,6 @@ function slackSummary(state: SlackState): Summary {
             tone: "attention",
             detail: "Review your Slack connection in settings.",
             action: "Manage",
-            connected: false,
         };
     if (setup.status === SlackSetupStatus.AwaitingAuthorization)
         return {
@@ -141,7 +131,6 @@ function slackSummary(state: SlackState): Summary {
             tone: "attention",
             detail: "Finish authorizing your Slack app.",
             action: "Manage",
-            connected: false,
         };
     if (
         connection.status === SlackConnectionStatus.Connecting ||
@@ -153,7 +142,6 @@ function slackSummary(state: SlackState): Summary {
             tone: "neutral",
             detail: "Your Slack connection is being set up.",
             action: "Manage",
-            connected: false,
         };
     if (connection.status === SlackConnectionStatus.Disconnected)
         return {
@@ -161,7 +149,6 @@ function slackSummary(state: SlackState): Summary {
             tone: "neutral",
             detail: "Connect an app owned by your workspace.",
             action: "Connect",
-            connected: false,
         };
     return unknown();
 }
@@ -176,6 +163,7 @@ function providerLogo(provider: (typeof providers)[number]["id"]) {
 }
 
 function chatgptSummary(state: ChatGptState): Summary {
+    // Configuration alone cannot attest to installation or OAuth in ChatGPT.
     return {
         status: state.configured ? "Configured" : "Not configured",
         tone: "neutral",
@@ -183,8 +171,6 @@ function chatgptSummary(state: ChatGptState): Summary {
             ? "Verify full Work access and sign-in in ChatGPT."
             : "Connect a plugin to your own Goblin instance.",
         action: "View setup",
-        // Configuration alone cannot attest to installation or OAuth in ChatGPT.
-        connected: false,
     };
 }
 
@@ -199,7 +185,6 @@ function codexSummary(connections: Connection[]): Summary {
             tone: "neutral",
             detail: "",
             action: "Connect",
-            connected: false,
         };
     if (connection.availability === ConnectionAvailability.Available)
         return {
@@ -207,14 +192,25 @@ function codexSummary(connections: Connection[]): Summary {
             tone: "connected",
             detail: "Ready to run Work.",
             action: "Manage",
-            connected: true,
+        };
+    if (
+        connection.availability === ConnectionAvailability.Verifying ||
+        connection.availability === ConnectionAvailability.Changing
+    )
+        return {
+            status:
+                connection.availability === ConnectionAvailability.Verifying
+                    ? "Verifying sign-in"
+                    : "Changing connection",
+            tone: "neutral",
+            detail: "",
+            action: "Manage",
         };
     return {
         status: "Needs attention",
         tone: "attention",
         detail: "Review your AI connection.",
         action: "Manage",
-        connected: false,
     };
 }
 
@@ -305,27 +301,31 @@ export class Connections {
         const failed = Object.values(this.states).some(
             (summary) => summary.failed,
         );
-        this.element.innerHTML = `<h2 id="connections-title" tabindex="-1">Connections</h2><p class="settings-description">Manage the AI and tools connected to your workspace.</p>
+        const [runtime, ...integrations] = providers;
+        const row = (provider: (typeof providers)[number]) => {
+            const planned = provider.id === "teams";
+            const summary = planned ? undefined : this.states[provider.id];
+            const action =
+                summary && provider.id !== "teams"
+                    ? `<a id="connection-${provider.id}" class="connection-action" href="${settingsHref(provider.id)}" data-provider="${provider.id}" aria-label="${summary.action} ${provider.name}">${summary.action}${icon("chevron")}</a>`
+                    : "";
+            return `<li class="connection-row" data-connection="${provider.id}">
+                ${providerLogo(provider.id)}
+                <div class="connection-copy"><h4>${provider.name}</h4><p>${provider.description}</p></div>
+                <div class="connection-meta"><span class="connection-status ${summary?.tone ?? "neutral"}">${e(summary?.status ?? "Planned")}</span>${summary?.detail ? `<span class="connection-detail">${e(summary.detail)}</span>` : ""}</div>
+                ${action}
+            </li>`;
+        };
+        this.element.innerHTML = `<h2 id="connections-title" tabindex="-1">Connections</h2><p class="settings-description">Manage the runtime and services Goblin uses to do Work.</p>
             ${failed ? '<p class="settings-notice" role="status">Some connection statuses are unavailable. <button id="retry-connections" class="text-button" data-refresh-connections>Try again</button></p>' : ""}
-            <ul class="connection-list" aria-label="Workspace connections" aria-busy="${!this.loaded}">${providers
-                .map((provider) => {
-                    const summary: Summary =
-                        provider.id === "teams"
-                            ? {
-                                  status: "Planned",
-                                  tone: "neutral",
-                                  detail: "Not available to connect yet.",
-                                  action: "Connect",
-                                  connected: false,
-                              }
-                            : this.states[provider.id];
-                    const action =
-                        provider.id === "teams"
-                            ? ""
-                            : `<a id="connection-${provider.id}" class="secondary button-link connection-action" href="${settingsHref(provider.id)}" data-provider="${provider.id}" aria-label="${summary.action} ${provider.name}">${summary.action}${icon("chevron")}</a>`;
-                    return `<li class="connection-row" data-connection="${provider.id}">${providerLogo(provider.id)}<div class="connection-copy"><h3>${provider.name}</h3><p>${provider.description}</p><div class="connection-meta"><span class="connection-status ${summary.tone}">${summary.connected ? icon("check") : summary.tone === "attention" ? icon("wait") : ""}${e(summary.status)}</span>${summary.detail ? `<span class="connection-detail">${e(summary.detail)}</span>` : ""}</div></div>${action}</li>`;
-                })
-                .join("")}</ul>`;
+            <section class="connection-group" aria-labelledby="connection-runtime-title">
+                <h3 id="connection-runtime-title">Agent runtime</h3>
+                <ul class="connection-list" role="list" aria-labelledby="connection-runtime-title" aria-busy="${!this.loaded}">${row(runtime)}</ul>
+            </section>
+            <section class="connection-group" aria-labelledby="connection-integrations-title">
+                <h3 id="connection-integrations-title">Integrations</h3>
+                <ul class="connection-list" role="list" aria-labelledby="connection-integrations-title" aria-busy="${!this.loaded}">${integrations.map(row).join("")}</ul>
+            </section>`;
         if (focusId)
             this.element.querySelector<HTMLElement>("#" + focusId)?.focus();
     }

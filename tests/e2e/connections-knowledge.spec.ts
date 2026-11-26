@@ -9,6 +9,7 @@ async function workspace(page: Page) {
     await page.clock.pauseAt(now);
     const state = {
         authenticated: true,
+        runtimeAvailability: "Available",
         github: {
             configured: true,
             status: "Connected",
@@ -101,7 +102,7 @@ async function workspace(page: Page) {
                     id: "1",
                     runtime: "codex",
                     name: "Codex",
-                    availability: "Available",
+                    availability: state.runtimeAvailability,
                 },
             ],
             "/api/status": { account: null, login: null, runtimeReady: false },
@@ -119,9 +120,19 @@ test("Connections groups every tool under one Settings section without changing 
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("/settings?section=connections");
     await expect(page).toHaveTitle("Settings · Goblin");
-    await expect(
-        page.getByRole("list", { name: "Workspace connections" }),
-    ).toHaveAttribute("aria-busy", "false");
+    const runtime = page.getByRole("list", {
+        name: "Agent runtime",
+        exact: true,
+    });
+    const integrations = page.getByRole("list", {
+        name: "Integrations",
+        exact: true,
+    });
+    await expect(runtime).toHaveAttribute("aria-busy", "false");
+    await expect(integrations).toHaveAttribute("aria-busy", "false");
+    await expect(runtime.getByRole("listitem")).toHaveCount(1);
+    await expect(runtime.getByRole("heading", { name: "Codex" })).toBeVisible();
+    await expect(integrations.getByRole("listitem")).toHaveCount(4);
     await expect(
         page.locator('.settings-nav [data-provider="connections"]'),
     ).toHaveAttribute("aria-current", "page");
@@ -238,7 +249,7 @@ test("failed reads clear connected state, isolate provider errors, and can recov
         page.locator('[data-connection="github"] .connection-status'),
     ).toHaveText("Connected");
     state.githubFailure = true;
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await page.clock.runFor(3000);
     await expect(
         page.locator('[data-connection="github"] .connection-status'),
     ).toHaveText("Status unavailable");
@@ -258,6 +269,7 @@ test("pending setup is distinct from connected and initial reads show loading", 
 }) => {
     const state = await workspace(page);
     state.github.status = "Connecting";
+    state.runtimeAvailability = "Verifying";
     state.slack.setup.status = "AwaitingAuthorization";
     let release = () => {};
     state.slackWait = new Promise<void>((resolve) => {
@@ -268,6 +280,9 @@ test("pending setup is distinct from connected and initial reads show loading", 
         "Checking…",
     );
     release();
+    await expect(
+        page.locator('[data-connection="codex"] .connection-status'),
+    ).toHaveText("Verifying sign-in");
     await expect(
         page.locator('[data-connection="github"] .connection-status'),
     ).toHaveText("Awaiting sign-in");
@@ -283,7 +298,11 @@ test("connection management stays accessible when Work storage is unavailable", 
     const state = await workspace(page);
     state.workFailure = true;
     state.slack.available = false;
-    await page.goto("/settings?section=connections");
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto("/work");
+    await expect(page.getByText(/Work could not be loaded/)).toBeVisible();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(
         page.getByRole("heading", { name: "Connections", exact: true }),
     ).toBeVisible();
@@ -295,6 +314,9 @@ test("connection management stays accessible when Work storage is unavailable", 
     ).toBeVisible();
     await page
         .getByRole("link", { name: "Back to connections", exact: true })
+        .click();
+    await page
+        .getByRole("button", { name: "Show sidebar", exact: true })
         .click();
     await page.getByRole("link", { name: "Knowledge", exact: true }).click();
     await expect(
@@ -387,7 +409,7 @@ test("Connections and Knowledge fit desktop and mobile with keyboard navigation"
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page
-        .getByRole("button", { name: "Back to workspace", exact: true })
+        .getByRole("button", { name: "Back to work", exact: true })
         .click();
     await page.screenshot({
         path: ".artifacts/settings-coherence/knowledge-mobile.png",

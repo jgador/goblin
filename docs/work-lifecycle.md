@@ -14,7 +14,7 @@ Use **Status** in List to narrow those results to work in progress, completed wo
 or work that needs attention for any reason. The sidebar count shows all Work that
 needs attention across the inbox. Open a card or row to see the Work conversation,
 activity, and outputs. Returning to the inbox restores the last layout, search, and
-List status. The inbox sidebar shows the default agent’s connection.
+List status. The sidebar’s **Search** action searches loaded Work and conversations.
 **Ask Goblin** opens an untracked conversation.
 
 In the browser, **Create work** saves a goal and assigns the default agent; **Start**
@@ -43,7 +43,10 @@ reload. Browser search covers loaded content, not a server index.
 Commands cannot edit a saved goal, and Work has no milestone model. Artifacts expose
 metadata and references rather than content retrieval; there is no execution-log view.
 
-**Settings → Connections** manages Codex, GitHub, Slack, and the private ChatGPT plugin.
+Open the workspace menu at the bottom of the sidebar to find **Settings**, **System**,
+and **Lock workspace**. With the sidebar collapsed, the menu opens from the left side
+of the header. **Settings → Connections** manages the Codex runtime, GitHub, Slack, and
+the private ChatGPT plugin. **Back to work** returns to where you opened Settings.
 Knowledge indexing and Teams are unavailable. Workspace inspection is currently an
 [API](workspace-lifecycle.md#inspection), without a browser file or terminal view. The
 [browser journeys](../tests/e2e/) exercise navigation, draft preservation, command

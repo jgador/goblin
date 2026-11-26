@@ -11,6 +11,8 @@ import type { Agent } from "../api/workspace-contracts.js";
 import { Connections } from "./connections.js";
 import {
     isConnectionProvider,
+    settingsGroups,
+    settingsHref,
     settingsPanels,
     settingsTarget,
 } from "./navigation.js";
@@ -27,7 +29,6 @@ export class Settings {
     private githubDispose?: () => void;
     private timezoneDispose?: () => void;
     private selected?: SettingsSelection;
-    private toolsLoaded = false;
     private readonly reads = new ReadScope();
     private readonly connections = new Connections();
 
@@ -38,37 +39,24 @@ export class Settings {
         this.element.className = "settings-page";
         this.element.dataset.scroll = "settings";
         this.element.setAttribute("aria-labelledby", "settings-title");
-        const groups = [
-            {
-                label: "Workspace",
-                items: [
-                    ["connections", "Connections", "integrations"],
-                    ["agents", "Agents", "agents"],
-                    ["timezone", "Time & date", "clock"],
-                ],
-            },
-            {
-                label: "Administration",
-                items: [["system", "System", "activity"]],
-            },
-        ];
-        this.element.innerHTML = `<header class="settings-page-heading"><div><h1 id="settings-title" tabindex="-1">Settings</h1><p>Manage your workspace.</p></div><button class="secondary" data-action="return-settings" type="button">${icon("arrow")}<span>Back to workspace</span></button></header><label class="settings-section-select">Settings section<select id="settings-section" aria-label="Settings section" class="field-control select-control">${groups.map((group) => `<optgroup label="${group.label}">${group.items.map(([provider, label]) => `<option value="${provider}">${label}</option>`).join("")}</optgroup>`).join("")}</select></label><div class="settings-layout"><nav class="settings-nav" aria-label="Settings sections">${groups.map((group) => `<div class="settings-nav-group"><p>${group.label}</p>${group.items.map(([provider, label, glyph]) => `<a href="/settings?section=${provider}" data-provider="${provider}">${icon(glyph!)}${label}</a>`).join("")}</div>`).join("")}<button class="settings-lock" data-action="lock">${icon("lock")}Lock workspace</button></nav><div class="settings-content"><a class="connection-back" href="/settings?section=connections" data-provider="connections" data-connection-back hidden>${icon("arrow")}Back to connections</a>${settingsPanels.map((provider) => `<section data-provider-panel="${provider}" aria-label="${provider === "system" ? "System resources" : provider === "codex" ? "Codex connection" : provider === "github" ? "GitHub connection" : provider}" class="${provider === "codex" ? "codex-settings" : ""}" hidden></section>`).join("")}</div></div>`;
-        this.element
-            .querySelector(".settings-page-heading")!
-            .insertAdjacentHTML(
-                "afterend",
-                `<nav class="settings-tools" aria-label="Tools"><span class="settings-tools-label">Tools</span><div class="settings-tool-links">${[
-                    ["cluster", "Cluster", "/headlamp/", "work"],
-                    ["logs", "Logs", "/logs/", "file"],
-                ]
-                    .map(
-                        ([id, label, href, glyph]) =>
-                            `<a href="${href}" data-settings-tool="${id}" target="_blank" rel="noopener" aria-label="${label} (opens in a new tab)" title="${label} (opens in a new tab)">${icon(glyph!)}<span>${label}</span>${icon("external")}</a>`,
-                    )
-                    .join(
-                        "",
-                    )}</div><small data-tools-notice role="status" hidden></small></nav>`,
-            );
+        this.element.innerHTML = `<header class="settings-page-heading">
+            <h1 id="settings-title" tabindex="-1">Settings</h1>
+            <p>Manage your workspace and self-hosted installation.</p>
+        </header>
+        <label class="settings-section-select">Settings section
+            <select id="settings-section" class="field-control select-control">
+                ${settingsGroups.map(({ label, items }) => `<optgroup label="${label}">${items.map(({ id, label }) => `<option value="${id}">${label}</option>`).join("")}</optgroup>`).join("")}
+            </select>
+        </label>
+        <div class="settings-layout">
+            <nav class="settings-nav" aria-label="Settings sections">
+                ${settingsGroups.map(({ label, items }) => `<div class="settings-nav-group"><p>${label}</p>${items.map(({ id, label, glyph }) => `<a href="${settingsHref(id)}" data-provider="${id}">${icon(glyph)}${label}</a>`).join("")}</div>`).join("")}
+            </nav>
+            <div class="settings-content">
+                <a class="connection-back" href="/settings?section=connections" data-provider="connections" data-connection-back hidden>${icon("arrow")}Back to connections</a>
+                ${settingsPanels.map((provider) => `<section data-provider-panel="${provider}" aria-label="${provider === "system" ? "System resources" : provider === "codex" ? "Codex connection" : provider === "github" ? "GitHub connection" : provider}" class="${provider === "codex" ? "codex-settings" : ""}" hidden></section>`).join("")}
+            </div>
+        </div>`;
         this.element
             .querySelector<HTMLSelectElement>("#settings-section")!
             .addEventListener("change", (event) => {
@@ -108,23 +96,6 @@ export class Settings {
                 undefined;
         this.codexMounted = this.githubMounted = false;
         this.selected = undefined;
-        this.toolsLoaded = false;
-        for (const link of this.element.querySelectorAll<HTMLAnchorElement>(
-            "[data-settings-tool]",
-        )) {
-            link.href =
-                link.dataset.settingsTool === "cluster"
-                    ? "/headlamp/"
-                    : "/logs/";
-            link.removeAttribute("aria-disabled");
-            link.setAttribute(
-                "aria-label",
-                `${link.textContent} (opens in a new tab)`,
-            );
-            link.title = `${link.textContent} (opens in a new tab)`;
-        }
-        this.element.querySelector<HTMLElement>("[data-tools-notice]")!.hidden =
-            true;
         this.element.remove();
         for (const panel of this.element.querySelectorAll<HTMLElement>(
             "[data-provider-panel]",
@@ -156,10 +127,6 @@ export class Settings {
     }
     attach(host: HTMLElement, value: string) {
         host.append(this.element);
-        if (!this.toolsLoaded) {
-            this.toolsLoaded = true;
-            void this.loadTools();
-        }
         const provider = settingsTarget(value);
         if (this.selected === provider) return;
         this.selected = provider;
@@ -208,39 +175,59 @@ export class Settings {
                 window.dispatchEvent(new Event("goblin-workspace-locked")),
         });
     }
-    private async loadTools() {
+    private async loadTools(panel: HTMLElement) {
         const generation = this.generation;
-        const tools = ["cluster", "logs"] as const;
+        const tools = [
+            {
+                id: "cluster",
+                label: "Cluster",
+                href: "/headlamp/",
+                glyph: "cube",
+            },
+            { id: "logs", label: "Logs", href: "/logs/", glyph: "file" },
+        ];
+        panel.innerHTML = `<nav class="settings-tools" aria-label="Operator tools">
+            <h4>Operator tools</h4>
+            <div class="settings-tool-links">${tools.map(({ id, label, glyph }) => `<a data-settings-tool="${id}" aria-disabled="true" target="_blank" rel="noopener">${icon(glyph)}<span>${label}</span>${icon("external")}</a>`).join("")}</div>
+            <p data-tools-notice role="status">Checking tool availability…</p>
+        </nav>`;
         const results = await Promise.allSettled(
-            tools.map((tool) =>
-                this.api<{ available: boolean }>(`/api/${tool}`),
+            tools.map(({ id }) =>
+                this.api<{ available: boolean }>(`/api/${id}`),
             ),
         );
         if (generation !== this.generation) return;
         const unavailable: string[] = [];
         results.forEach((result, index) => {
-            if (
-                result.status !== "fulfilled" ||
-                result.value.available !== false
-            )
-                return;
-            const link = this.element.querySelector<HTMLAnchorElement>(
-                `[data-settings-tool="${tools[index]}"]`,
+            const { id, label, href } = tools[index]!;
+            const link = panel.querySelector<HTMLAnchorElement>(
+                `[data-settings-tool="${id}"]`,
             )!;
-            unavailable.push(link.textContent!);
-            link.removeAttribute("href");
-            link.setAttribute("aria-disabled", "true");
-            link.setAttribute(
-                "aria-label",
-                `${link.textContent} (not configured)`,
-            );
-            link.title = `${link.textContent} is not configured for this installation.`;
+            const available =
+                result.status === "fulfilled"
+                    ? result.value?.available
+                    : undefined;
+            if (available === true) {
+                link.href = href;
+                link.removeAttribute("aria-disabled");
+                link.setAttribute(
+                    "aria-label",
+                    `${label} (opens in a new tab)`,
+                );
+            } else {
+                const state =
+                    available === false ? "not configured" : "unavailable";
+                link.setAttribute("aria-label", `${label} (${state})`);
+                unavailable.push(
+                    available === false
+                        ? `${label} is not configured for this installation.`
+                        : `${label} availability could not be checked.`,
+                );
+            }
         });
-        const notice = this.element.querySelector<HTMLElement>(
-            "[data-tools-notice]",
-        )!;
+        const notice = panel.querySelector<HTMLElement>("[data-tools-notice]")!;
         notice.hidden = unavailable.length === 0;
-        notice.textContent = `${unavailable.join(" and ")} ${unavailable.length === 1 ? "is" : "are"} not configured for this installation.`;
+        notice.textContent = unavailable.join(" ");
     }
     private async mount(provider: SettingsSelection) {
         if (provider === "chatgpt") {
@@ -290,10 +277,14 @@ export class Settings {
             return;
         }
         if (provider === "system") {
-            this.system.mount(
-                this.element.querySelector<HTMLElement>(
-                    '[data-provider-panel="system"]',
-                )!,
+            const panel = this.element.querySelector<HTMLElement>(
+                '[data-provider-panel="system"]',
+            )!;
+            panel.innerHTML =
+                '<h3>System</h3><p class="settings-description">Monitor the machine and services behind this Goblin installation.</p><div data-system-overview></div><div data-system-tools></div><div data-system-history></div>';
+            this.system.mount(panel);
+            void this.loadTools(
+                panel.querySelector<HTMLElement>("[data-system-tools]")!,
             );
             return;
         }

@@ -251,11 +251,12 @@ test("execution options preserve model and effort across refresh and stay out of
         .first()
         .click();
     await expect(picker).toHaveCount(0);
-    await page
-        .getByRole("button", { name: "New conversation", exact: true })
-        .click();
+    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
     await expect(picker).toHaveCount(0);
+    await page.keyboard.press("Control+k");
+    await page.getByRole("searchbox").fill("Review the release checklist");
     await page
+        .getByRole("region", { name: "Search results" })
         .getByRole("button", { name: /Review the release checklist/ })
         .click();
     await page.setViewportSize({ width: 390, height: 844 });
@@ -332,7 +333,7 @@ test("disconnected Codex leads to connection setup and returns to Start work", a
             ],
         }),
     );
-    await page.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await expect(
         page.getByRole("button", { name: "Start work", exact: true }),
     ).toBeEnabled();
@@ -376,9 +377,12 @@ test("repository setup validates locally and keeps the branch and Git identity t
         .getByLabel("Git commit email (optional)")
         .fill("reviewer@example.com");
     await page.getByRole("button", { name: "Manage repositories" }).click();
-    await page.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await page.getByRole("button", { name: "New work", exact: true }).click();
+    await page.keyboard.press("Control+k");
+    await page.getByRole("searchbox").fill("Review the release checklist");
     await page
+        .getByRole("region", { name: "Search results" })
         .getByRole("button", { name: /Review the release checklist/ })
         .click();
     await expect(page.locator("#github-repository-options")).toHaveAttribute(
@@ -409,7 +413,6 @@ test("repository setup validates locally and keeps the branch and Git identity t
 
 test("Settings keeps one content scroller and exposes repository loading without losing navigation", async ({
     page,
-    context,
 }) => {
     await setup(page);
     let finish: () => void = () => {};
@@ -430,7 +433,11 @@ test("Settings keeps one content scroller and exposes repository loading without
             });
         },
     );
-    await page.locator('.sidebar [data-action="settings"]').click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page
+        .locator("#workspace-menu")
+        .getByRole("button", { name: "Settings", exact: true })
+        .click();
     const dialog = page.getByRole("region", { name: "Settings" });
     await dialog.locator("#connection-github").click();
     await dialog.getByRole("button", { name: "Choose repositories" }).click();
@@ -454,7 +461,7 @@ test("Settings keeps one content scroller and exposes repository loading without
             element.scrollTop = 0;
         });
         await expect(
-            dialog.getByRole("button", { name: "Back to workspace" }),
+            page.getByRole("button", { name: "Back to work" }),
         ).toBeInViewport();
         const content = dialog;
         await content.evaluate((element) => {
@@ -477,29 +484,13 @@ test("Settings keeps one content scroller and exposes repository loading without
         ).toBe(true);
     }
     await page.setViewportSize({ width: 1280, height: 720 });
-    await context.route("**/headlamp/", (route) =>
-        route.fulfill({
-            contentType: "text/html",
-            body: "<h1>Cluster fixture</h1>",
-        }),
-    );
-    const opened = page.waitForEvent("popup");
-    await dialog
-        .getByRole("link", {
-            name: "Cluster (opens in a new tab)",
-            exact: true,
-        })
-        .click();
-    const popup = await opened;
-    await expect(popup).toHaveURL(/\/headlamp\/$/);
-    await popup.close();
     await expect(
-        dialog.getByRole("button", { name: "Back to workspace" }),
+        page.getByRole("button", { name: "Back to work" }),
     ).toBeInViewport();
     await expect(
         dialog.locator(".github-repository-picker .github-repository-row"),
     ).toHaveCount(30);
-    await dialog.getByRole("button", { name: "Back to workspace" }).click();
+    await page.getByRole("button", { name: "Back to work" }).click();
     await expect(dialog).not.toBeVisible();
 });
 

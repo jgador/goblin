@@ -39,7 +39,7 @@ The progress page shows stages, tasks, and live logs. Progress counts completed 
 not time remaining. On failure, running tasks finish and no new tasks start; enter the
 Goblin password and select **Retry installation** to resume.
 
-Open **Settings → Tools → Cluster**, or **http://localhost:8788/headlamp/**, for
+Open **Settings → System → Cluster**, or **http://localhost:8788/headlamp/**, for
 read-only Kubernetes access in Headlamp with your Goblin login. See
 [cluster access](../../docs/logging.md#cluster-view).
 

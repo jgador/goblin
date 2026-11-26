@@ -74,7 +74,7 @@ for the Chisel client only.
    conversation with the intended plugin selected using **@**.
 2. Ask: **Call goblin_ping now and show every field from the tool response unchanged.**
 3. Match its `responseId` to the `goblin_ping response` event in Goblin's
-   **Settings → Tools → Logs**, using `state.ResponseId`.
+   **Settings → System → Logs**, using `state.ResponseId`.
 4. Call again and confirm a different response ID and advancing UTC timestamp.
 
 This establishes a fresh invocation of the selected instance. Ping needs no Work, GitHub
