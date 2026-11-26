@@ -87,7 +87,7 @@ test("chat shows enablement and exact Git scope before submitting only the saved
     });
     await page.goto("/work");
     await page
-        .getByRole("list", { name: "Work list" })
+        .getByRole("region", { name: "Work inbox" })
         .getByRole("button", { name: /Fix owner\/project and open a PR/ })
         .click();
     const preview = page.getByRole("region", { name: "GitHub authorization" });

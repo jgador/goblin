@@ -7,11 +7,11 @@ attempts, Git checkpoints, and PVCs.
 
 ## Using Work
 
-**Work inbox** opens as a list ordered by most recently updated. Choose **Board** to
-group search matches into Ready, In progress, Needs attention, and Closed. The board
-shows lanes with matching items. Closed includes completed and cancelled Work.
-Use **Status** in List to narrow those results to work in progress, completed work,
-or work that needs attention for any reason. The sidebar count shows all Work that
+**Work inbox** opens in **Board** view, grouping search matches into Ready, In progress,
+Needs attention, and Closed. The board shows lanes with matching items. Closed includes
+completed and cancelled Work. Choose **List** to see items ordered by most recently
+updated. Use **Status** in List to narrow those results to work in progress, completed
+work, or work that needs attention for any reason. The sidebar count shows all Work that
 needs attention across the inbox. Open a card or row to see the Work conversation,
 activity, and outputs. Returning to the inbox restores the last layout, search, and
 List status. The sidebar’s **Search** action searches loaded Work and conversations.
@@ -34,11 +34,15 @@ reconciliation. Repository setup uses a
 content never submits a command. Execution details preserve agent, runtime, requested and reported
 model, branch, and environment provenance.
 
-**Changes** in the workspace toolbar opens and closes the latest verified repository
-diff. **All files** shows a continuous review, and **By file** lets you select a
-path. Expand a file or load more lines to read longer diffs. The
-[saved diff](workspace-lifecycle.md#files-and-git-checkpoints) is available while the
-execution pod is stopped and is cleared when the Work closes.
+Repository-backed Work opens with a floating preview of the latest verified patch.
+Use the **Changes** list-controls button in the workspace toolbar to hide or show it.
+Select the repository and branch row to open the full diff beside the conversation
+on wide screens or across the Work area on narrow screens.
+Close the full diff or press **Escape** while reviewing to return to the summary.
+**All files** shows a continuous review, and **By file** lets you select a path.
+Expand a file or load more lines to read longer diffs. The
+[saved diff](workspace-lifecycle.md#files-and-git-checkpoints)
+is available while the execution pod is stopped and is cleared when the Work closes.
 
 If a command response is lost, **Resend command** sends the original command ID and
 payload; **Keep saved state** keeps the server view. Refresh never replays a command.

@@ -36,7 +36,9 @@ type WorkspaceViewInput = {
     mobile: boolean;
     sidebarCollapsed: boolean;
     activityOpen: boolean;
+    showChanges: boolean;
     changesOpen: boolean;
+    changesPreviewOpen: boolean;
     conversationsOpen: boolean;
     listStatus: ListStatus;
     boardLayout: BoardLayout;
@@ -61,7 +63,9 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         mobile,
         sidebarCollapsed,
         activityOpen,
+        showChanges,
         changesOpen,
+        changesPreviewOpen,
         conversationsOpen,
         listStatus,
         boardLayout,
@@ -200,14 +204,9 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         </aside>`;
     }
     function renderHeader() {
-        const w = view === "work" ? item?.work : undefined;
-        const changes =
-            w &&
-            w.status !== WorkStatus.Completed &&
-            w.status !== WorkStatus.Cancelled &&
-            w.attempts.some((entry) => entry.target.repository?.grant)
-                ? `<button id="show-changes" class="secondary changes-toggle" data-action="view-changes" aria-expanded="${changesOpen}" aria-controls="work-changes-host">${icon("branch")}Changes</button>`
-                : "";
+        const changes = showChanges
+            ? `<button id="show-changes" class="icon-button changes-toggle" type="button" data-action="view-changes" aria-label="Changes" title="Changes" aria-expanded="${changesPreviewOpen || changesOpen}" aria-controls="${changesOpen ? "work-changes-host" : "work-changes-preview-host"}">${icon("listControls")}</button>`
+            : "";
         const section =
             view === "settings"
                 ? "Settings"
@@ -223,7 +222,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                 : inbox
                   ? renderInboxControls(boardLayout, listStatus)
                   : !isDirectory
-                    ? `${changes}<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button>`
+                    ? `<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button>${changes}`
                     : "";
         return `<header class="workspace-header${inbox ? " inbox-header" : ""}" ${(mobile && !sidebarCollapsed) || activityOpen ? "inert" : ""}>
             ${
@@ -299,16 +298,19 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             : w.attention?.reason === AttentionReason.InputRequired
               ? "Answer Goblin’s question…"
               : "Add context to this work…";
-        return `<div class="work-selection ${changesOpen ? "work-review-layout" : ""}">
+        return `<div class="work-selection${changesOpen ? " work-review-layout" : ""}">
             <section class="detail" aria-label="Selected work">
-                <header class="selected-work-header">
-                    <button class="icon-button" data-action="browse-work" aria-label="Back to work" title="Back to work">${icon("back")}</button>
-                    <div class="selected-work-identity"><h2 id="work-title-heading" tabindex="-1">Work ${e(w.id)}</h2>${status(w)}</div>
-                    <div class="selected-work-actions">
-                        <button class="icon-button" data-action="share-work" aria-label="Share" title="Share work">${icon("share")}</button>
-                        <button id="show-activity" class="icon-button" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}</button>
-                    </div>
-                </header>
+                <div class="selected-work-top">
+                    <header class="selected-work-header">
+                        <button class="icon-button" data-action="browse-work" aria-label="Back to work" title="Back to work">${icon("back")}</button>
+                        <div class="selected-work-identity"><h2 id="work-title-heading" tabindex="-1">Work ${e(w.id)}</h2>${status(w)}</div>
+                        <div class="selected-work-actions">
+                            <button class="icon-button" data-action="share-work" aria-label="Share" title="Share work">${icon("share")}</button>
+                            <button id="show-activity" class="icon-button" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}</button>
+                        </div>
+                    </header>
+                    <div id="work-changes-preview-host"></div>
+                </div>
                 <div class="detail-body work-thread" data-scroll="detail">
                     <div class="work-thread-content">
                         <section id="work-conversation" class="work-conversation" aria-label="Conversation about this Work">

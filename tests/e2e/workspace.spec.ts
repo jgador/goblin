@@ -5,6 +5,7 @@ type WorkFixture = {
     id: string;
     objective: string;
     status: string;
+    checkpointId?: string;
     attention?: { reason: string };
 };
 const welcomeResult =
@@ -34,7 +35,7 @@ async function workspace(
                 status: "Completed",
             },
             ...extraItems,
-        ].map((work) => ({
+        ].map(({ checkpointId, ...work }: WorkFixture) => ({
             version: "1",
             createdAt: "2026-09-21T00:00:00Z",
             updatedAt: "2026-09-21T00:00:00Z",
@@ -45,6 +46,7 @@ async function workspace(
                     {
                         id: "1",
                         status: "Succeeded",
+                        checkpointId,
                         target: {
                             runtime: "codex",
                             repository: {
@@ -77,6 +79,8 @@ async function workspace(
         const path = new URL(route.request().url()).pathname;
         if (route.request().resourceType() === "script")
             return route.continue();
+        if (/^\/api\/work\/\d+\/changes$/.test(path))
+            return route.fulfill({ status: 404, json: {} });
         if (route.request().method() === "POST") commands.push(path);
         let json: unknown = [];
         if (path === "/api/session") json = { authenticated: true };
@@ -134,10 +138,10 @@ async function selectWorkFromSearch(page: Page, title: string) {
         .click();
 }
 
-test("Changes opens an in-page diff with all files and individual file views", async ({
+test("Changes previews the patch before opening the side-by-side diff", async ({
     page,
 }) => {
-    await page.setViewportSize({ width: 1600, height: 960 });
+    await page.setViewportSize({ width: 1720, height: 960 });
     const commands = await workspace(page);
     const base = "b".repeat(40);
     const head = "a".repeat(40);
@@ -173,32 +177,66 @@ test("Changes opens an in-page diff with all files and individual file views", a
         "hidden-binary-data",
         "",
     ].join("\n");
-    await page.route("**/api/work/1/changes", (route) =>
-        route.fulfill({
+    let patchReads = 0;
+    await page.route("**/api/work/1/changes", (route) => {
+        patchReads++;
+        return route.fulfill({
             json: {
                 checkpoint: {
                     id: "91",
                     workId: "1",
+                    repository: "owner/project",
                     branch: "goblin/work-1",
                     commitSha: head,
                 },
                 baseCommitSha: base,
                 patch,
             },
-        }),
-    );
+        });
+    });
     await page.goto("/work?item=1");
     const trigger = page.getByRole("button", { name: "Changes", exact: true });
+    const conversation = page.getByRole("region", {
+        name: "Conversation about this Work",
+    });
+    const detail = page.getByRole("region", { name: "Selected work" });
     const closedPosition = await trigger.boundingBox();
-    await trigger.click();
+    const workBounds = (await detail.boundingBox())!;
+    const preview = page.getByRole("region", { name: "Changes", exact: true });
+    const previewEntry = preview.getByRole("button", {
+        name: /Review changes for owner\/project · goblin\/work-1/,
+    });
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(previewEntry).toHaveAccessibleName(
+        /owner\/project · goblin\/work-1 3 files changed 2 added, 2 removed/,
+    );
+    await expect(previewEntry.getByText("+2")).toBeVisible();
+    await expect(previewEntry.getByText("−2")).toBeVisible();
+    await expect(page.getByRole("group", { name: "Diff view" })).toHaveCount(0);
+    await expect(
+        page.getByRole("region", { name: "Conversation about this Work" }),
+    ).toBeVisible();
+    await page.screenshot({
+        path: test.info().outputPath("changes-preview.png"),
+    });
+    await previewEntry.press("Enter");
     const review = page.getByRole("region", { name: "Changes", exact: true });
     await expect(
         review.getByRole("heading", { name: "Changes" }),
     ).toBeFocused();
-    await expect(
-        page.getByRole("region", { name: "Conversation about this Work" }),
-    ).toBeVisible();
+    await expect(conversation).toBeVisible();
+    await expect(previewEntry).toBeHidden();
+    const splitWork = (await detail.boundingBox())!;
+    const diffBounds = (await review.boundingBox())!;
+    expect(splitWork.width).toBeLessThan(workBounds.width);
+    expect(diffBounds.x).toBeCloseTo(splitWork.x + splitWork.width + 1);
+    expect(diffBounds.x + diffBounds.width).toBeCloseTo(
+        workBounds.x + workBounds.width,
+    );
+    expect(diffBounds.y).toBe(workBounds.y);
+    expect(diffBounds.height).toBe(workBounds.height);
     await expect(review.getByText("3 files changed")).toBeVisible();
+    expect(patchReads).toBe(1);
     expect(await trigger.boundingBox()).toEqual(closedPosition);
     expect(
         await page.evaluate(() => document.documentElement.scrollHeight),
@@ -207,6 +245,9 @@ test("Changes opens an in-page diff with all files and individual file views", a
         review.getByRole("button", { name: "All files", pressed: true }),
     ).toBeVisible();
     await expect(review.getByText("+<welcome>", { exact: true })).toBeVisible();
+    await page.screenshot({
+        path: test.info().outputPath("changes-review.png"),
+    });
     await expect(review.getByText("Binary file changed.")).toBeVisible();
     await expect(review.getByText("example.txt")).toHaveCount(0);
     await expect(review.getByText("hidden-binary-data")).toHaveCount(0);
@@ -228,12 +269,114 @@ test("Changes opens an in-page diff with all files and individual file views", a
     await review.getByRole("button", { name: "All files" }).click();
     await expect(review.getByText("+<welcome>", { exact: true })).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(review).toBeHidden();
+    await expect(page.getByRole("group", { name: "Diff view" })).toBeHidden();
+    await expect(previewEntry).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(patchReads).toBe(1);
+    await previewEntry.press("Escape");
+    await expect(previewEntry).toBeVisible();
+    await trigger.press("Enter");
     await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(preview).toBeHidden();
+    await trigger.press("Enter");
+    await expect(previewEntry).toBeVisible();
+    await expect(
+        preview.getByRole("heading", { name: "Changes" }),
+    ).toBeFocused();
     expect(commands).toEqual([]);
 });
 
-test("Changes keeps long files readable from the narrow in-page review", async ({
+test("Changes follows new checkpoints while the list control keeps it hidden when requested", async ({
+    page,
+}) => {
+    const work: WorkFixture = {
+        id: "4",
+        objective: "Update the release checklist",
+        status: "InProgress",
+    };
+    await workspace(page, true, [work]);
+    let patchReads = 0;
+    await page.route("**/api/work/4/changes", (route) => {
+        patchReads++;
+        if (!work.checkpointId) return route.fulfill({ status: 404, json: {} });
+        const lines = work.checkpointId === "11" ? 1 : 2;
+        return route.fulfill({
+            json: {
+                checkpoint: {
+                    repository: "owner/project",
+                    branch: "goblin/work-4",
+                    commitSha: "a".repeat(40),
+                },
+                baseCommitSha: "b".repeat(40),
+                patch: `diff --git a/notes.txt b/notes.txt\n@@ -0,0 +1,${lines} @@\n${"+Check the release\n".repeat(lines)}`,
+            },
+        });
+    });
+
+    await page.goto("/work?item=4");
+    const toggle = page.getByRole("button", { name: "Changes", exact: true });
+    const preview = page.getByRole("region", { name: "Changes", exact: true });
+    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(preview.getByRole("status")).toHaveText(
+        "No changes have been saved for review.",
+    );
+    work.checkpointId = "11";
+    await refresh.click();
+    const reviewEntry = preview.getByRole("button", {
+        name: /Review changes for owner\/project · goblin\/work-4/,
+    });
+    await expect(reviewEntry).toBeVisible();
+    expect(patchReads).toBe(2);
+
+    await reviewEntry.click();
+    const diff = page.getByRole("group", { name: "Diff view" });
+    await expect(diff).toBeVisible();
+    work.checkpointId = "12";
+    work.objective = "Review the updated checklist";
+    await refresh.click();
+    await expect(
+        page
+            .getByLabel("Work objective")
+            .getByText(work.objective, { exact: true }),
+    ).toBeVisible();
+    expect(patchReads).toBe(2);
+    await page.getByRole("button", { name: "Close diff" }).click();
+    await expect(diff).toBeHidden();
+    await expect(reviewEntry.getByText("+2")).toBeVisible();
+    await expect(reviewEntry).toBeFocused();
+    expect(patchReads).toBe(3);
+
+    await toggle.click();
+    work.checkpointId = "13";
+    work.objective = "Finish the checklist review";
+    await refresh.click();
+    await expect(
+        page
+            .getByLabel("Work objective")
+            .getByText(work.objective, { exact: true }),
+    ).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(preview).toBeHidden();
+    expect(patchReads).toBe(3);
+
+    await toggle.click();
+    await expect(reviewEntry).toBeVisible();
+    expect(patchReads).toBe(4);
+
+    await toggle.click();
+    await page.getByRole("button", { name: "Back to work" }).click();
+    await page
+        .getByRole("button", { name: "Investigate slow repository clones" })
+        .click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(preview.getByRole("status")).toHaveText(
+        "No changes have been saved for review.",
+    );
+});
+
+test("Changes keeps long files readable in the narrow in-page diff", async ({
     page,
 }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -243,7 +386,8 @@ test("Changes keeps long files readable from the narrow in-page review", async (
         route.fulfill({
             json: {
                 checkpoint: {
-                    branch: "goblin/work-1",
+                    repository: "owner/project-with-a-long-repository-name",
+                    branch: "goblin/a-long-branch-for-checking-the-preview-layout",
                     commitSha: "a".repeat(40),
                 },
                 baseCommitSha: "b".repeat(40),
@@ -259,13 +403,40 @@ test("Changes keeps long files readable from the narrow in-page review", async (
     );
     await page.goto("/work?item=1");
     const trigger = page.getByRole("button", { name: "Changes", exact: true });
-    await trigger.click();
+    const detail = page.getByRole("region", { name: "Selected work" });
+    const workBounds = (await detail.boundingBox())!;
+    const preview = page.getByRole("region", { name: "Changes", exact: true });
+    const entry = preview.getByRole("button", {
+        name: /Review changes for owner\/project-with-a-long-repository-name/,
+    });
+    await expect(entry).toBeVisible();
+    await page.getByRole("button", { name: "Activity", exact: true }).click({
+        trial: true,
+    });
+    await page.getByLabel("Work objective").click({ trial: true });
+    const bounds = (await preview.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+    await expect(
+        entry.getByText("goblin/a-long-branch-for-checking-the-preview-layout"),
+    ).toBeVisible();
+    await expect(entry.getByText("+401")).toBeInViewport();
+    await expect(
+        page.getByRole("region", { name: "Conversation about this Work" }),
+    ).toBeVisible();
+    await page.screenshot({
+        path: test.info().outputPath("changes-preview-narrow.png"),
+    });
+    await entry.click();
     const review = page.getByRole("region", { name: "Changes", exact: true });
     await expect(trigger).toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect(
-        page.getByRole("region", { name: "Conversation about this Work" }),
-    ).toBeHidden();
+    await expect(detail).toBeHidden();
+    await expect(entry).toBeHidden();
+    expect(await review.boundingBox()).toEqual(workBounds);
+    await page.screenshot({
+        path: test.info().outputPath("changes-review-narrow.png"),
+    });
     await review.getByRole("button", { name: "By file" }).click();
     await expect(
         review.getByRole("combobox", { name: "Changed file" }),
@@ -275,8 +446,10 @@ test("Changes keeps long files readable from the narrow in-page review", async (
     await expect(
         review.getByText("+++ final line", { exact: true }),
     ).toBeVisible();
-    await trigger.click();
-    await expect(trigger).toBeFocused();
+    await review.getByRole("button", { name: "Close diff" }).click();
+    await expect(page.getByRole("group", { name: "Diff view" })).toBeHidden();
+    await expect(entry).toBeFocused();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(
         page.getByRole("region", { name: "Conversation about this Work" }),
     ).toBeVisible();
@@ -386,10 +559,20 @@ test("review feedback uses the Work composer without consuming the context draft
     const changes = page
         .getByRole("banner")
         .getByRole("button", { name: "Changes", exact: true });
-    await changes.click();
+    const preview = page.getByRole("region", { name: "Changes", exact: true });
+    await expect(preview.getByRole("status")).toHaveText(
+        "No changes have been saved for review.",
+    );
+    await expect(preview.getByRole("button")).toHaveCount(0);
     await expect(thread).toBeVisible();
     await expect(feedback).toHaveValue("Add a keyboard navigation example.");
+    await feedback.click();
+    await expect(preview).toBeVisible();
     await changes.click();
+    await expect(preview).toBeHidden();
+    await expect(changes).toHaveAttribute("aria-expanded", "false");
+    await feedback.click();
+    await expect(feedback).toBeFocused();
     await page.getByRole("button", { name: "Cancel change request" }).click();
     await expect(normal).toHaveValue("Keep the introduction short.");
     await ask.click();
@@ -659,7 +842,7 @@ test("workspace search finds Work content without changing the open item", async
     );
 });
 
-test("Work inbox scopes status to List and restores inbox state after viewing Work", async ({
+test("Work inbox opens in Board, scopes status to List, and restores inbox state after viewing Work", async ({
     page,
 }) => {
     const longTitle =
@@ -701,6 +884,11 @@ test("Work inbox scopes status to List and restores inbox state after viewing Wo
         inbox.getByRole("region", { name, exact: true });
 
     await expect(modes.getByRole("button")).toHaveCount(2);
+    await expect(boardMode).toHaveAttribute("aria-pressed", "true");
+    await expect(status).toHaveCount(0);
+    await expect(inbox.getByRole("status")).toHaveText("9 work items");
+    await expect(lane("Ready").getByRole("listitem")).toHaveCount(1);
+    await listMode.click();
     await expect(listMode).toHaveAttribute("aria-pressed", "true");
     await expect(status).toHaveValue("all");
     await expect(list.getByRole("listitem")).toHaveCount(9);
@@ -887,6 +1075,7 @@ test("the workspace menu supports mouse and keyboard and returns to the same inb
         .click();
     await expect(menuItems).toHaveCount(0);
 
+    await page.getByRole("button", { name: "List", exact: true }).click();
     const status = page.getByRole("combobox", { name: "Status", exact: true });
     await status.selectOption("attention");
     await nav.getByRole("button", { name: "Search", exact: true }).click();
@@ -956,6 +1145,7 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     await workspace(page, true, extra);
     await page.goto("/work");
     const inbox = page.getByRole("region", { name: "Work inbox", exact: true });
+    await page.getByRole("button", { name: "List", exact: true }).click();
     const status = page.getByRole("combobox", { name: "Status", exact: true });
     const list = inbox.getByRole("list", { name: "Work list" });
     await expect(list.getByRole("listitem")).toHaveCount(3);
@@ -1018,6 +1208,8 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
     const inbox = page.getByRole("region", { name: "Work inbox", exact: true });
     const status = page.getByRole("combobox", { name: "Status", exact: true });
     const modes = page.getByRole("group", { name: "Work layout" });
+    const boardMode = modes.getByRole("button", { name: "Board", exact: true });
+    const listMode = modes.getByRole("button", { name: "List", exact: true });
     const list = inbox.getByRole("list", { name: "Work list" });
     const checkWidths = async () => {
         for (const locator of [page.locator(".workspace-header"), inbox]) {
@@ -1032,6 +1224,9 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
             ).toBeLessThanOrEqual(dimensions.clientWidth);
         }
     };
+    await expect(boardMode).toHaveAttribute("aria-pressed", "true");
+    await expect(inbox.locator(".board-lane")).toHaveCount(3);
+    await checkWidths();
     await page
         .getByRole("button", { name: "Show sidebar", exact: true })
         .click();
@@ -1050,6 +1245,7 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
     await expect(sidebar).toBeHidden();
     const search = page.getByRole("searchbox");
     expect((await search.boundingBox())?.width).toBeGreaterThan(100);
+    await listMode.click();
     await status.selectOption("attention");
     await expect(list.getByRole("listitem")).toHaveCount(1);
     await expect(status).toBeInViewport();
@@ -1059,13 +1255,13 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
         path: test.info().outputPath("work-inbox-list-narrow.png"),
     });
 
-    await modes.getByRole("button", { name: "Board", exact: true }).click();
+    await boardMode.click();
     await expect(inbox.locator(".board-lane")).toHaveCount(3);
     const lastLane = inbox.getByRole("region", { name: "Closed", exact: true });
     await lastLane.scrollIntoViewIfNeeded();
     await expect(lastLane).toBeInViewport();
     await checkWidths();
-    await modes.getByRole("button", { name: "List", exact: true }).click();
+    await listMode.click();
     await expect(status).toHaveValue("attention");
     await expect(list.getByRole("listitem")).toHaveCount(1);
     await checkWidths();
@@ -1131,7 +1327,9 @@ for (const width of [1024, 390, 320]) {
                 page,
                 "Investigate slow repository clones",
             );
-            await expect(page.locator(".detail h2")).toBeFocused();
+            await expect(
+                page.getByRole("heading", { name: "Work 2", exact: true }),
+            ).toBeFocused();
             await expect(
                 page.getByRole("dialog", { name: "Workspace" }),
             ).toHaveCount(0);

@@ -44,6 +44,7 @@ internal sealed class StaticAssets
             ("/styles.css", "work/styles.css", "text/css; charset=utf-8"),
             ("/work", "work/index.html", "text/html; charset=utf-8"),
             ("/settings", "work/index.html", "text/html; charset=utf-8"),
+            ("/assets/fonts/inter-regular.ttf", "assets/fonts/inter-regular.ttf", "font/ttf"),
             ("/assets/fonts/inter-medium.ttf", "assets/fonts/inter-medium.ttf", "font/ttf"),
             ("/assets/fonts/inter-semibold.ttf", "assets/fonts/inter-semibold.ttf", "font/ttf"),
             ("/assets/chatgpt/oauth.css", "assets/chatgpt/oauth.css", "text/css; charset=utf-8"),

@@ -32,7 +32,7 @@ h3{font-size:16px;font-weight:650;margin:0}
 .secondary:hover{background:#edf4ed}
 .full{width:100%}
 .button-link{text-decoration:none}
-.quiet{padding:6px 0;background:transparent;border:0;color:#617159;font-size:12px;font-weight:550;white-space:nowrap}
+.quiet{padding:6px 0;background:transparent;border:0;color:#617159;font-size:12px;font-weight:500;white-space:nowrap}
 .quiet:hover{text-decoration:underline;text-underline-offset:3px}
 .topbar-nav{display:flex;align-items:center;justify-content:flex-end;gap:18px;flex-wrap:wrap}
 .topbar-nav a{text-decoration:none}
@@ -44,7 +44,7 @@ summary::-webkit-details-marker{display:none}
 summary span{font-size:17px;font-weight:400}
 details[open] summary{margin-bottom:18px}
 details[open] summary span{transform:rotate(45deg)}
-label{display:block;font-size:12px;font-weight:550;margin-bottom:7px}
+label{display:block;font-size:12px;font-weight:500;margin-bottom:7px}
 .field-control{margin-bottom:13px}
 .below-card{font-size:11px;color:#5c6c63;text-align:center;margin:18px 0 0}
 .device-code-row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f0f5ee;border:1px solid #dce5dc;padding:16px;border-radius:9px;margin:22px 0 15px}

@@ -3,7 +3,7 @@ import { hunkRange, parseDiff, type DiffFile } from "./diff.js";
 import { escapeHtml as e, icon } from "./presentation.js";
 
 type SavedPatch = {
-    checkpoint: { branch: string; commitSha: string };
+    checkpoint: { repository: string; branch: string; commitSha: string };
     baseCommitSha: string;
     patch: string;
 };
@@ -14,20 +14,33 @@ const initialLineBudget = 8_000;
 const number = new Intl.NumberFormat();
 
 export class WorkChangesPanel {
+    readonly preview = document.createElement("section");
     readonly element = document.createElement("section");
+    private readonly previewBody: HTMLElement;
     private readonly meta: HTMLElement;
     private readonly toolbar: HTMLElement;
+    private readonly totals: HTMLElement;
     private readonly body: HTMLElement;
     private readonly positions = new WeakMap<
         HTMLDetailsElement,
         DiffPosition
     >();
-    private selected?: { workId: string };
+    private workId?: string;
+    private checkpointId?: string;
+    private selected?: { review: boolean; previewCheckpointId?: string };
     private files: DiffFile[] = [];
     private fileIndex = 0;
     private byFile = false;
 
     constructor(private readonly request: <T>(path: string) => Promise<T>) {
+        this.preview.className = "changes-preview";
+        this.preview.setAttribute("aria-labelledby", "changes-preview-title");
+        this.preview.innerHTML = `
+            <header class="changes-preview-header">
+                <h2 id="changes-preview-title" tabindex="-1">Changes</h2>
+            </header>
+            <div class="changes-preview-body"></div>`;
+        this.previewBody = this.preview.querySelector(".changes-preview-body")!;
         this.element.className = "work-changes";
         this.element.id = "work-changes";
         this.element.setAttribute("aria-labelledby", "work-changes-title");
@@ -37,6 +50,7 @@ export class WorkChangesPanel {
                     <h2 id="work-changes-title" tabindex="-1">Changes</h2>
                     <div class="work-changes-meta"></div>
                 </div>
+                <button class="icon-button changes-close" type="button" data-action="close-diff" aria-label="Close diff" title="Close diff">${icon("close")}</button>
             </header>
             <div class="work-changes-toolbar" hidden>
                 <div class="work-changes-modes" role="group" aria-label="Diff view">
@@ -48,6 +62,7 @@ export class WorkChangesPanel {
             <div class="work-changes-body"></div>`;
         this.meta = this.element.querySelector(".work-changes-meta")!;
         this.toolbar = this.element.querySelector(".work-changes-toolbar")!;
+        this.totals = this.toolbar.querySelector(".work-changes-totals")!;
         this.body = this.element.querySelector(".work-changes-body")!;
 
         this.element.addEventListener("click", (event) => {
@@ -88,70 +103,130 @@ export class WorkChangesPanel {
     }
 
     get isOpen() {
-        return this.selected !== undefined;
+        return this.selected?.review === true;
+    }
+
+    get isPreviewing() {
+        return this.selected?.review === false;
     }
 
     focus() {
-        this.element.querySelector<HTMLElement>("#work-changes-title")?.focus();
+        (this.isOpen ? this.element : this.preview)
+            .querySelector("h2")
+            ?.focus();
     }
 
-    async open(workId: string) {
-        const selection = { workId };
+    async openPreview() {
+        const workId = this.workId;
+        if (!workId) return;
+        const checkpointId = this.checkpointId;
+        const wasPreviewing = this.isPreviewing;
+        const selection = {
+            review: false,
+            previewCheckpointId: this.selected?.previewCheckpointId,
+        };
         this.selected = selection;
-        this.toolbar.hidden = true;
-        this.meta.replaceChildren();
-        this.status("Loading changes…");
+        if (!wasPreviewing) this.previewStatus("Loading changes…");
         try {
             const saved = await this.request<SavedPatch>(
                 `/api/work/${encodeURIComponent(workId)}/changes`,
             );
-            if (this.selected !== selection) return;
+            if (this.selected !== selection || selection.review) return;
             const { checkpoint, baseCommitSha, patch } = saved;
-            this.meta.innerHTML = `${icon("branch")}<code>${e(checkpoint.branch)}</code><code title="${e(baseCommitSha)} → ${e(checkpoint.commitSha)}">${e(baseCommitSha.slice(0, 7))} → ${e(checkpoint.commitSha.slice(0, 7))}</code>`;
             this.files = parseDiff(patch);
+            selection.previewCheckpointId = checkpointId;
             if (!this.files.length) {
-                this.status(
+                this.previewStatus(
                     patch
                         ? "Could not display the saved diff."
                         : "No changes at this checkpoint.",
                 );
                 return;
             }
-            this.fileIndex = 0;
-            this.byFile = false;
             const totals = { added: 0, removed: 0 };
             for (const file of this.files) {
                 totals.added += file.added;
                 totals.removed += file.removed;
             }
-            this.toolbar.querySelector(".work-changes-totals")!.innerHTML =
-                `<span>${number.format(this.files.length)} ${this.files.length === 1 ? "file" : "files"} changed</span>${counts(totals)}`;
-            this.toolbar.hidden = false;
-            this.renderFiles();
+            const label = `${number.format(this.files.length)} ${this.files.length === 1 ? "file" : "files"} changed`;
+            const reference = `${checkpoint.repository} · ${checkpoint.branch}`;
+            const totalsMarkup = counts(totals);
+            const restoreFocus = this.previewBody.contains(
+                document.activeElement,
+            );
+            this.previewBody.innerHTML = `
+                <button type="button" class="changes-preview-entry" data-action="review-diff">
+                    ${icon("branch")}
+                    <span class="changes-preview-copy">
+                        <span class="sr-only">Review changes for </span>
+                        <span class="changes-preview-reference" title="${e(reference)}">
+                            <span class="changes-preview-ref-part">${e(checkpoint.repository)}</span>
+                            <span>·</span>
+                            <span class="changes-preview-ref-part">${e(checkpoint.branch)}</span>
+                        </span>
+                        <span class="changes-preview-files">${label}</span>
+                    </span>
+                    ${totalsMarkup}
+                    ${icon("chevron")}
+                </button>`;
+            if (restoreFocus) this.previewBody.querySelector("button")?.focus();
+            this.meta.innerHTML = `<span class="work-changes-branch">${icon("branch")}<code>${e(checkpoint.branch)}</code></span><code title="${e(baseCommitSha)} → ${e(checkpoint.commitSha)}">${e(baseCommitSha.slice(0, 7))} → ${e(checkpoint.commitSha.slice(0, 7))}</code>`;
+            this.totals.innerHTML = `<span>${label}</span>${totalsMarkup}`;
         } catch (failure) {
-            if (this.selected !== selection) return;
+            if (this.selected !== selection || selection.review) return;
             const message =
                 failure instanceof ApiError && failure.status === 404
                     ? "No changes have been saved for review."
                     : errorMessage(failure, "Could not load changes.");
-            this.status(message);
+            this.previewStatus(message);
         }
     }
 
-    retain(workId?: string) {
-        if (this.selected && this.selected.workId !== workId) this.close();
+    openReview() {
+        if (!this.selected || this.selected.review || !this.files.length)
+            return false;
+        this.selected.review = true;
+        this.fileIndex = 0;
+        this.byFile = false;
+        this.toolbar.hidden = false;
+        this.renderFiles();
+        return true;
+    }
+
+    closeReview() {
+        if (!this.selected?.review) return false;
+        this.selected.review = false;
+        this.body.replaceChildren();
+        if (this.selected.previewCheckpointId !== this.checkpointId)
+            void this.openPreview();
+        return true;
+    }
+
+    setWork(workId?: string, checkpointId?: string) {
+        const newWork = this.workId !== workId;
+        const newCheckpoint = this.checkpointId !== checkpointId;
+        if (newWork) this.close();
+        this.workId = workId;
+        this.checkpointId = checkpointId;
+        if (workId && (newWork || (newCheckpoint && this.isPreviewing)))
+            void this.openPreview();
     }
 
     close() {
         this.selected = undefined;
         this.files = [];
+        this.preview.remove();
+        this.previewBody.replaceChildren();
         this.meta.replaceChildren();
         this.toolbar.hidden = true;
+        this.totals.replaceChildren();
         this.body.replaceChildren();
     }
 
-    private status(message: string) {
-        this.body.innerHTML = `<p class="work-changes-status" role="status">${e(message)}</p>`;
+    private previewStatus(message: string) {
+        const restoreFocus = this.previewBody.contains(document.activeElement);
+        this.previewBody.innerHTML = `<p class="changes-preview-status" role="status">${e(message)}</p>`;
+        if (restoreFocus) this.focus();
     }
 
     private renderFiles() {

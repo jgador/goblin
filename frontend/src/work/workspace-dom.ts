@@ -8,6 +8,7 @@ type RenderOptions = {
     preserveMounted: boolean;
     forceSelect: boolean;
     changesPanel?: HTMLElement;
+    changesPreview?: HTMLElement;
     draft: string;
     sending: boolean;
     pending: boolean;
@@ -76,7 +77,7 @@ export class WorkspaceDom {
 
     render(options: RenderOptions) {
         const { root } = this;
-        const { changesPanel } = options;
+        const { changesPanel, changesPreview } = options;
         const {
             context,
             approvalKey,
@@ -220,6 +221,10 @@ export class WorkspaceDom {
             settings?.attach();
             if (changesPanel)
                 root.querySelector("#work-changes-host")!.append(changesPanel);
+            if (changesPreview)
+                root.querySelector("#work-changes-preview-host")!.append(
+                    changesPreview,
+                );
         }
         for (const [id, value] of preserved) {
             const field = document.getElementById(id) as
@@ -312,7 +317,9 @@ export class WorkspaceDom {
         if (
             active?.isConnected &&
             !active.closest("[inert]") &&
-            (active.closest(".settings-page") || changesPanel?.contains(active))
+            (active.closest(".settings-page") ||
+                changesPanel?.contains(active) ||
+                changesPreview?.contains(active))
         )
             active.focus({ preventScroll: true });
 

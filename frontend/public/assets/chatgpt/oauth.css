@@ -1,7 +1,13 @@
 @font-face {
     font-family: Inter;
-    src: url("/assets/fonts/inter-medium.ttf") format("truetype");
-    font-weight: 400 600;
+    src: url("/assets/fonts/inter-regular.ttf") format("truetype");
+    font-weight: 400;
+    font-display: swap;
+}
+@font-face {
+    font-family: Inter;
+    src: url("/assets/fonts/inter-semibold.ttf") format("truetype");
+    font-weight: 600;
     font-display: swap;
 }
 :root {
@@ -21,6 +27,7 @@ main {
 }
 h1 {
     font-size: 1.5rem;
+    font-weight: 600;
 }
 p {
     color: #5c6c63;

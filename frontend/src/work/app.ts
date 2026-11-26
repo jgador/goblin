@@ -67,7 +67,7 @@ const compact = matchMedia("(max-width: 1199px)");
 let activityOpen = false,
     conversationsOpen = navigation.view === "chat",
     listStatus: ListStatus = "all",
-    boardLayout: BoardLayout = "list",
+    boardLayout: BoardLayout = "board",
     searchOpen = false,
     search = "",
     inboxSearch = "";
@@ -227,7 +227,7 @@ function api<T>(path: string, body?: unknown) {
 }
 
 function forgetWorkspace() {
-    workChanges.retain();
+    workChanges.setWork();
     workspace.reset();
     activeRefresh = undefined;
     timezoneSetup.reset();
@@ -443,9 +443,21 @@ function navigate(
 }
 
 function closeChanges() {
+    const wasReviewing = workChanges.isOpen;
     workChanges.close();
+    if (wasReviewing) render(false, true);
+    const trigger = document.getElementById("show-changes");
+    trigger?.setAttribute("aria-expanded", "false");
+    trigger?.focus();
+}
+
+function closeDiff() {
+    if (!workChanges.closeReview()) return;
     render(false, true);
-    document.getElementById("show-changes")?.focus();
+    (
+        workChanges.preview.querySelector("button") ??
+        document.getElementById("show-changes")
+    )?.focus({ preventScroll: true });
 }
 
 function openSearch() {
@@ -470,13 +482,24 @@ function render(preserveMounted = false, forceSelect = false) {
         modelListOpen = false;
     }
     const work = view === "work" ? current()?.work : undefined;
-    workChanges.retain(
+    const changesWorkId =
         work &&
-            work.status !== WorkStatus.Completed &&
-            work.status !== WorkStatus.Cancelled
+        work.status !== WorkStatus.Completed &&
+        work.status !== WorkStatus.Cancelled &&
+        work.attempts.some((entry) => entry.target.repository?.grant)
             ? work.id
-            : undefined,
-    );
+            : undefined;
+    const changesCheckpointId = changesWorkId
+        ? work?.attempts
+              .map(
+                  ({ checkpointId, priorTurns }) =>
+                      checkpointId ??
+                      priorTurns?.findLast((turn) => turn.checkpointId)
+                          ?.checkpointId,
+              )
+              .findLast((id) => id !== undefined)
+        : undefined;
+    workChanges.setWork(changesWorkId, changesCheckpointId);
     if (reviewableResult(work)?.attemptId !== reviewAttempt)
         reviewAttempt = undefined;
     const draft = drafts.get(context, composerDraftMode());
@@ -491,6 +514,9 @@ function render(preserveMounted = false, forceSelect = false) {
         preserveMounted,
         forceSelect,
         changesPanel: workChanges.isOpen ? workChanges.element : undefined,
+        changesPreview: workChanges.isPreviewing
+            ? workChanges.preview
+            : undefined,
         draft,
         ...submissionState,
         workUnavailable: workspace.state.workUnavailable,
@@ -512,7 +538,9 @@ function render(preserveMounted = false, forceSelect = false) {
                 mobile: mobile.matches,
                 sidebarCollapsed,
                 activityOpen,
+                showChanges: !!changesWorkId,
                 changesOpen: workChanges.isOpen,
+                changesPreviewOpen: workChanges.isPreviewing,
                 conversationsOpen,
                 listStatus,
                 boardLayout,
@@ -851,13 +879,23 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "view-changes") {
-        const work = current()?.work;
-        if (workChanges.isOpen) closeChanges();
-        else if (work) {
-            void workChanges.open(work.id);
+        if (workChanges.isOpen || workChanges.isPreviewing) closeChanges();
+        else {
+            void workChanges.openPreview();
             render(false, true);
             workChanges.focus();
         }
+        return;
+    }
+    if (action === "review-diff") {
+        if (workChanges.openReview()) {
+            render(false, true);
+            workChanges.focus();
+        }
+        return;
+    }
+    if (action === "close-diff") {
+        closeDiff();
         return;
     }
     if (action === "lock") {
@@ -1161,7 +1199,7 @@ document.addEventListener("keydown", (event) => {
             event.target.id === "show-changes")
     ) {
         event.preventDefault();
-        closeChanges();
+        closeDiff();
         return;
     }
     const workspaceMenu =
