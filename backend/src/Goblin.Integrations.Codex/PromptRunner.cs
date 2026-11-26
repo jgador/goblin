@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Goblin.Protocol;
@@ -19,7 +20,9 @@ public sealed class PromptRunner
 
     private static IntegrationFailure Cancelled() => new("prompt_cancelled", "The prompt was cancelled.");
 
-    public async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt, CancellationToken cancellationToken = default)
+    public async Task<(string Reply, string Model, long DurationMs)> RunAsync(string prompt,
+        CancellationToken cancellationToken = default, string? instructions = null, JsonElement? outputSchema = null,
+        TimeSpan? timeout = null)
     {
         if (cancellationToken.IsCancellationRequested) throw Cancelled();
         var elapsed = Stopwatch.StartNew();
@@ -42,7 +45,7 @@ public sealed class PromptRunner
                 Ephemeral = true,
                 ApprovalPolicy = AskForApproval.Never,
                 Sandbox = SandboxMode.ReadOnly,
-                BaseInstructions = "Answer the user's prompt briefly, using only the text in this conversation. Do not call tools, inspect files, browse, or perform any actions."
+                BaseInstructions = instructions ?? "Answer the user's prompt briefly, using only the text in this conversation. Do not call tools, inspect files, browse, or perform any actions."
             });
             transcript.SetThread(thread.Thread.Id);
             if (!thread.Thread.Ephemeral || thread.ModelProvider != "openai" ||
@@ -55,11 +58,12 @@ public sealed class PromptRunner
                 ThreadId = transcript.ThreadId!,
                 Input = [new TextUserInput { Text = prompt }],
                 ApprovalPolicy = AskForApproval.Never,
-                SandboxPolicy = new ReadOnlySandboxPolicy { NetworkAccess = false }
+                SandboxPolicy = new ReadOnlySandboxPolicy { NetworkAccess = false },
+                OutputSchema = outputSchema
             });
             transcript.SetTurn(started.Turn.Id);
             string reply;
-            try { reply = await transcript.Completion.Task.WaitAsync(_timeout); }
+            try { reply = await transcript.Completion.Task.WaitAsync(timeout ?? _timeout); }
             catch (TimeoutException)
             {
                 throw new IntegrationFailure("prompt_timeout", "The prompt took too long and was cancelled. Please retry.");

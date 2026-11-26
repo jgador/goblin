@@ -56,6 +56,7 @@ async function setup(
                     updatedAt: "2026-09-22T00:00:00Z",
                     work: {
                         id: "1",
+                        title: "Review the release checklist",
                         objective: "Review the release checklist",
                         status: waiting ? "NeedsAttention" : "Ready",
                         attention: waiting ? { reason: "InputRequired" } : null,

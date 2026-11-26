@@ -308,7 +308,7 @@ public sealed class PostgresTests
     }
 
     private static string WorkState(long id, string objective) =>
-        JsonSerializer.Serialize(new Core.Work.WorkItem(id, objective, DateTimeOffset.UtcNow).Snapshot(), ContractJson.Options);
+        JsonSerializer.Serialize(new Core.Work.WorkItem(id, objective, DateTimeOffset.UtcNow, "Test work").Snapshot(), ContractJson.Options);
 
     private sealed class TestDatabase : IAsyncDisposable
     {

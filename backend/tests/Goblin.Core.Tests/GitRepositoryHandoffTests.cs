@@ -24,7 +24,7 @@ public sealed class GitRepositoryHandoffTests
 
     private static WorkItem Ready()
     {
-        var work = new WorkItem(1, "Update the repository", Now);
+        var work = new WorkItem(1, "Update the repository", Now, "Test work");
         work.Assign(1, Now);
         return work;
     }

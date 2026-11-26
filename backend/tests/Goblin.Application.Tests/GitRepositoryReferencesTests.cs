@@ -18,7 +18,7 @@ public sealed class GitRepositoryReferencesTests
     [InlineData("Use https://github.com.evil/owner/repo", null)]
     public void OnlyExplicitReferencesSuggestGitRepositories(string objective, string? expected)
     {
-        var work = new WorkItem(1, objective, DateTimeOffset.UtcNow);
+        var work = new WorkItem(1, objective, DateTimeOffset.UtcNow, "Test work");
         string[] matches = GitRepositoryReferences.Find(work.Snapshot(), ["owner/repo"]);
         Assert.Equal(expected is null ? [] : [expected], matches);
     }
@@ -26,7 +26,7 @@ public sealed class GitRepositoryReferencesTests
     [Fact]
     public void AmbiguousReferencesAndFollowupAnswersAreRetainedForSelection()
     {
-        var work = new WorkItem(1, "Compare owner/repo and https://github.com/other/repo", DateTimeOffset.UtcNow);
+        var work = new WorkItem(1, "Compare owner/repo and https://github.com/other/repo", DateTimeOffset.UtcNow, "Test work");
         Assert.Equal(new[] { "other/repo", "owner/repo" }, GitRepositoryReferences.Find(work.Snapshot(), ["owner/repo"], "Clone OWNER/REPO"));
     }
 }

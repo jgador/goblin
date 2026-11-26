@@ -206,7 +206,7 @@ public sealed class ExecutionHostTests
     private static WorkSnapshot Claimed()
     {
         DateTimeOffset now = DateTimeOffset.UtcNow;
-        var work = new WorkItem(NextId(), "Answer a question", now);
+        var work = new WorkItem(NextId(), "Answer a question", now, "Test work");
         work.Assign(NextId(), now);
         work.QueueExecution(NextId(), new("codex", NextId()), now);
         work.TryClaimExecution(work.CurrentAttempt!.Id, NextId(), "text-test", now);

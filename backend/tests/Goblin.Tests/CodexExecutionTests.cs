@@ -129,7 +129,7 @@ public sealed class CodexExecutionTests
             await client.StartAsync(timeout.Token);
             await client.RequestAsync<LoginAccountParams, LoginAccountResponse>("account/login/start",
                 new ApiKeyLoginAccountParams { ApiKey = "sk-goblin-command-test-not-a-real-key" }, timeout.Token);
-            var work = new WorkItem(1, "Exercise the command host", DateTimeOffset.UtcNow);
+            var work = new WorkItem(1, "Exercise the command host", DateTimeOffset.UtcNow, "Test work");
             work.Assign(1, DateTimeOffset.UtcNow);
             work.QueueExecution(1, new("codex", 1, "gpt-5.6-sol", requestedEffort: "high"), DateTimeOffset.UtcNow);
             ExecutionObservation result;

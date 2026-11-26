@@ -4,6 +4,7 @@ import {
     FailureKind,
     GitRepositoryAuthorizationStatus,
     WorkEventKind,
+    WorkTitleLimit,
     WorkStatus,
 } from "../api/values.js";
 import { renderKnowledge } from "../knowledge/page.js";
@@ -33,6 +34,7 @@ import {
     reviewableResult,
 } from "./surface.js";
 import type { WorkspaceController } from "./workspace.js";
+import { canGenerateWorkTitle } from "./workspace.js";
 
 type WorkspaceState = WorkspaceController["state"];
 
@@ -105,7 +107,7 @@ export function renderSearch(workspace: WorkspaceState, search: string) {
                     option(
                         "work",
                         item.id,
-                        workTitle(item.objective),
+                        workTitle(item),
                         `Work ${item.id} · ${workStatus(item)}`,
                     ),
                 ),
@@ -155,7 +157,12 @@ type WorkspaceViewInput = {
     sessionFailures: number;
     timezoneError: string;
     error: string;
-    submission: { sending: boolean; pending: boolean };
+    submission: {
+        sending: boolean;
+        pending: boolean;
+        generatingTitle: boolean;
+    };
+    titleEdit?: { workId: string; original: string | null; value: string };
     model: Parameters<typeof renderModelPicker>[0] | undefined;
     canExecute: boolean;
 };
@@ -184,6 +191,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         timezoneError,
         error,
         submission,
+        titleEdit,
         model,
         canExecute,
     } = input;
@@ -212,6 +220,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
     const codexAvailability =
         connections.find((connection) => connection.runtime === "codex")
             ?.availability ?? ConnectionAvailability.Disconnected;
+    const canCreate = canGenerateWorkTitle(workspace);
     const chats = conversations.filter((chat) => !chat.workId);
     const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
     const attention = (w: Work) => w.status === WorkStatus.NeedsAttention;
@@ -275,10 +284,13 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         const help = closed ? "Saving a note keeps this Work closed." : "";
         const input = `<label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="${prompt ? 1 : 2}" maxlength="4000" placeholder="${e(placeholder)}" required ${prompt || help ? 'aria-describedby="composer-help"' : ""} ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea>`;
         const blocked =
-            submission.sending || submission.pending || workUnavailable;
+            submission.sending ||
+            submission.pending ||
+            workUnavailable ||
+            (kind === "new" && !canCreate);
         const send = `<button class="send" type="submit" ${blocked ? 'data-blocked="true"' : ""} ${blocked || !draft.trim() ? "disabled" : ""}>${sendLabel}${icon(prompt && kind === "new" ? "plus" : "up")}</button>`;
         if (prompt)
-            return `<div class="composer-wrap"><form class="composer prompt-composer" data-form="${kind}">${input}<div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionMenu() : ""}</div>${send}</div></form><p id="composer-help" class="composer-hint">${kind === "new" ? "Create a goal now, then start execution from the Ready item." : "Save messages in this conversation. Choose Track this work to turn it into a Work item."}</p></div>`;
+            return `<div class="composer-wrap"><form class="composer prompt-composer" data-form="${kind}">${input}<div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionMenu() : ""}</div>${send}</div></form><p id="composer-help" class="composer-hint">${kind === "new" ? "Codex writes a title for your goal. Start execution from the Ready item." : "Save messages in this conversation. Choose Track this work to turn it into a Work item."}</p></div>`;
         const workTools = `${work && (work.results.length || work.artifacts.length) ? `<button class="composer-chip" type="button" data-action="view-outputs" aria-controls="work-outputs">${icon("file")}Outputs</button>` : ""}${changing ? `<button class="composer-chip" type="button" data-action="changes" ${submission.sending ? "disabled" : ""}>${icon("close")}Cancel change request</button>` : ""}${help ? `<p id="composer-help" class="composer-hint">${help}</p>` : ""}`;
         return `<div class="composer-wrap"><form class="composer" data-form="work">${input}<div class="composer-footer"><div class="composer-footer-start">${workTools}</div>${send}</div></form></div>`;
     }
@@ -398,6 +410,9 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         return `<aside id="work-activity" class="activity-panel ${activityOpen ? "is-open" : ""}" aria-label="Activity timeline" ${activityOpen ? 'role="dialog" aria-modal="true"' : "inert"}><div class="activity-heading"><h2>${icon("activity")}Activity timeline</h2><button id="close-activity" class="icon-button" data-action="toggle-activity" aria-label="Close activity">${icon("close")}</button></div><div class="activity-body" data-scroll="activity">${renderActivity(view === "work" ? item?.work : undefined)}</div></aside>`;
     }
     function renderHome() {
+        return `<section class="home" aria-labelledby="home-title"><div class="home-content"><h1 id="home-title" tabindex="-1">New work</h1>${composer("new", "Describe the work")}${connectionNoticeForTitle("new")}</div></section>`;
+    }
+    function connectionNoticeForTitle(id: "new" | "chat") {
         const showNotice =
             connectionsLoaded &&
             (connectionsUnavailable ||
@@ -408,11 +423,33 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         const notice = disconnected
             ? "Codex is not connected."
             : `Codex · ${currentConnectionStatus(codexAvailability)}`;
-        return `<section class="home" aria-labelledby="home-title"><div class="home-content"><h1 id="home-title" tabindex="-1">New work</h1>${composer("new", "Describe the work")}
-            <div class="connection-nudge" ${showNotice ? "" : "hidden"}>
+        return `<div class="connection-nudge" ${showNotice ? "" : "hidden"}>
                 <p role="status">${icon("wait")}${notice}</p>
-                <a id="new-work-codex-settings" href="${settingsHref("codex")}" data-action="settings-codex" data-settings-return-focus="codex-connection-trigger">${disconnected ? "Connect Codex" : "Open Codex settings"}${icon("arrow")}</a>
-            </div></div></section>`;
+                <a id="${id === "new" ? "new-work-codex-settings" : "chat-work-codex-settings"}" href="${settingsHref("codex")}" data-action="settings-codex" data-settings-return-focus="${id === "new" ? "codex-connection-trigger" : "chat-work-codex-settings"}">${disconnected ? "Connect Codex" : "Open Codex settings"}${icon("arrow")}</a>
+            </div>`;
+    }
+    function renderWorkTitle(work: Work) {
+        const title = e(workTitle(work));
+        if (titleEdit?.workId !== work.id)
+            return `<div class="work-title-row"><h1 id="work-title-heading" tabindex="-1">${title}</h1><button id="rename-work" class="icon-button" type="button" data-action="rename-work" aria-label="Rename work" title="Rename work" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${icon("pencil")}</button></div>`;
+        const length = Array.from(titleEdit.value.trim()).length;
+        const conflict = titleEdit.original !== (work.title ?? null);
+        const blocked =
+            submission.sending ||
+            submission.pending ||
+            workUnavailable ||
+            conflict;
+        return `<h1 id="work-title-heading" class="sr-only" tabindex="-1">${title}</h1>
+            <form class="work-title-edit" data-form="rename-work">
+                <label class="sr-only" for="work-title-input">Work title</label>
+                <input class="field-control" id="work-title-input" name="title" type="text" autocomplete="off" required value="${e(titleEdit.value)}" aria-describedby="work-title-count${conflict ? " work-title-conflict" : ""}" aria-invalid="${length > WorkTitleLimit}" ${submission.sending ? "readonly" : ""}>
+                <div class="work-title-edit-actions">
+                    <span id="work-title-count" class="field-hint">${length} / ${WorkTitleLimit}</span>
+                    <button class="secondary" type="button" data-action="cancel-rename" ${submission.sending ? "disabled" : ""}>Cancel</button>
+                    <button class="primary" type="submit" ${blocked ? 'data-blocked="true"' : ""} ${blocked || !length || length > WorkTitleLimit ? "disabled" : ""}>Save</button>
+                </div>
+                ${conflict ? '<p id="work-title-conflict" class="field-hint" role="status">The title changed to “' + title + "”. Reopen Rename to edit the latest title.</p>" : ""}
+            </form>`;
     }
     function renderWorkReferences(item: View) {
         const w = item.work,
@@ -447,7 +484,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             <section class="detail" aria-label="Selected work">
                 <div class="selected-work-top">
                     <header class="selected-work-header">
-                        <div class="selected-work-identity"><h1 id="work-title-heading" tabindex="-1">${e(workTitle(w.objective))}</h1><div class="work-heading-meta"><span>Work ${e(w.id)}</span>${status(w)}</div></div>
+                        <div class="selected-work-identity">${renderWorkTitle(w)}<div class="work-heading-meta">${w.title ? `<span>Work ${e(w.id)}</span>` : ""}${status(w)}</div></div>
                         <div class="selected-work-actions">
                             <button class="icon-button" data-action="share-work" aria-label="Share" title="Share work">${icon("share")}</button>
                             <button id="show-activity" class="text-button activity-trigger" data-action="toggle-activity" aria-label="Activity timeline" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button>
@@ -689,7 +726,8 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             .join("");
         const tracking = c.workId
             ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>`
-            : button("track", "Track this work", true);
+            : button("track", "Track this work", true, !canCreate) +
+              connectionNoticeForTitle("chat");
         return `<section class="chat-workspace" aria-labelledby="chat-title"><div class="detail-body" data-scroll="chat"><div class="thread-content"><h1 id="chat-title" class="conversation-title" tabindex="-1">${e(c.title)}</h1>${messages}${tracking}</div></div>${composer("chat", "Write a message")}</section>`;
     }
     const connectionNotice =
@@ -701,6 +739,6 @@ export function renderWorkspace(input: WorkspaceViewInput) {
     }
     const modal = (mobile && !sidebarCollapsed) || activityOpen;
     return `<a class="skip-link" href="#main-content">Skip to main content</a><div class="app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}">${renderHeader()}${renderSidebar()}${mobile && !sidebarCollapsed ? '<button class="sidebar-backdrop" data-action="toggle-sidebar" aria-label="Close navigation" tabindex="-1"></button>' : ""}<main id="main-content" class="main-shell" tabindex="-1" ${modal ? "inert" : ""}>
-            <div class="workspace-notices">${connectionNotice}${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? "Saving command…" : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
+            <div class="workspace-notices">${connectionNotice}${timezoneError ? `<div class="command-notice" role="status">${e(timezoneError)}</div>` : ""}${error ? `<div class="command-notice" role="alert">${e(error)}</div>` : ""}${submission.pending ? `<div class="command-notice" role="status">${submission.sending ? (submission.generatingTitle ? "Generating title…" : "Saving command…") : "Command unconfirmed. Inspect the saved state or resend this same command."}${!submission.sending ? button("resend", "Resend command") + button("dismiss", "Keep saved state") : ""}</div>` : ""}</div>
             ${view === "settings" ? '<div id="settings-host"></div>' : view === "knowledge" ? renderKnowledge() : view === "chat" ? renderChat() : view === "work" ? (item ? renderSelectedWork(item) : `<p class="board-empty" role="status">${workUnavailable ? "Work unavailable." : "Loading work…"}</p>`) : view === "new" ? renderHome() : renderBoardView()}</main>${renderActivityPanel()}${activityOpen ? '<button class="activity-backdrop" data-action="toggle-activity" aria-label="Close activity panel" tabindex="-1"></button>' : ""}</div>`;
 }

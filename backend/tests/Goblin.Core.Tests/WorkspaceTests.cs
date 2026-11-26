@@ -11,7 +11,7 @@ public sealed class WorkspaceTests
 
     private static WorkItem Running()
     {
-        var work = new WorkItem(1, "Investigate and fix the issue", Now);
+        var work = new WorkItem(1, "Investigate and fix the issue", Now, "Test work");
         work.Assign(1, Now);
         work.QueueExecution(1, new("codex", 1, gitRepository: new("owner/repo", "Goblin", "agent@example.com")), Now);
         work.TryClaimExecution(1, 10, "k8s/agents/run-1/1", Now);

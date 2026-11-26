@@ -24,16 +24,22 @@ automatic updates, including when returning to the tab or reconnecting. Your cho
 is saved in browser local storage and reused on reload. Select **Refresh now** in
 the same menu to update the workspace immediately.
 
-In **New work**, **Create work** saves a goal and assigns the default agent.
+In **New work**, **Create work** uses the connected Codex account to generate a title
+of up to 90 characters, then saves it with the full goal and assigns the default agent.
+A failed title request keeps the draft available to retry.
 The **Codex** button shows the current status and links to connection settings.
 When Codex is disconnected, **Connect Codex** below the composer opens its setup page.
 **Start work** begins execution from the Ready item. Use **Add repository** to
 select a repository from the Ready item. In **New chat**, **Save message** saves a
 message in an untracked conversation. **Track this work** creates Work from it.
-An authorized Slack DM or mention creates and starts Work.
+**Track this work**, the ChatGPT plugin, and authorized Slack requests also use Codex
+to title new Work. An authorized Slack DM or mention starts Work after it is saved.
 See [Slack](slack-integration.md).
 
-Open **Full objective** to read the original goal. Goblin posts questions and
+Choose **Rename work** beside the title to edit it. **Enter** saves and **Escape**
+cancels. Renaming works with Codex disconnected. Work created before titles were
+introduced is identified by its Work number and can receive a title through the same
+editor. Open **Full objective** to read the original goal. Goblin posts questions and
 proposed results in the Work conversation. The review area offers **Approve &
 complete** and **Request changes**. The composer keeps separate drafts for context
 and review feedback. **Saved outputs** contains results and artifacts, and
@@ -67,7 +73,7 @@ payload; **Keep saved state** keeps the server view. Refresh never replays a com
 Drafts survive navigation within the page; unsent conversation drafts do not survive a
 reload. Browser search covers loaded content, not a server index.
 
-Commands cannot edit a saved goal, and Work has no milestone model. Artifacts expose
+The title and original goal are stored separately in the Work snapshot. Artifacts expose
 metadata and references rather than content retrieval; there is no execution-log view.
 
 Open the workspace menu at the bottom of the sidebar to find **Settings**, **System**,

@@ -3,8 +3,9 @@ import {
     ConnectionAvailability,
     WorkAction,
     WorkStatus,
+    WorkTitleLimit,
 } from "../api/values.js";
-import { errorMessage } from "../api/client.js";
+import { ApiError, errorMessage } from "../api/client.js";
 import "../focus.js";
 import { Settings } from "../settings/settings.js";
 import { SystemResources } from "../settings/system.js";
@@ -47,7 +48,7 @@ import {
     RepositoryDrafts,
 } from "./repository-setup.js";
 import { reviewableResult } from "./surface.js";
-import { WorkspaceController } from "./workspace.js";
+import { canGenerateWorkTitle, WorkspaceController } from "./workspace.js";
 import { WorkspaceDom } from "./workspace-dom.js";
 import { renderSearch, renderWorkspace } from "./workspace-view.js";
 
@@ -129,6 +130,8 @@ let modelPickerOpen = false,
 let authenticated = false,
     error = "";
 let reviewAttempt: string | undefined;
+let titleEdit:
+    { workId: string; original: string | null; value: string } | undefined;
 let activeRefresh: Promise<void> | undefined;
 let commandActive = false;
 type SubmissionContext = { origin: WorkspaceContext; draft?: DraftSnapshot };
@@ -263,6 +266,7 @@ function forgetWorkspace() {
     repositoryDrafts.clear();
     pendingContext = undefined;
     reviewAttempt = undefined;
+    titleEdit = undefined;
     listStatus = "all";
     closeSearch(false);
     inboxSearch = "";
@@ -406,6 +410,7 @@ async function send(
     commandActive = true;
     let confirmed = false;
     let destination: WorkspaceContext | undefined;
+    let renamed = false;
     try {
         const saved = prepare
             ? await submission.submit(async () => {
@@ -421,6 +426,13 @@ async function send(
         confirmed = true;
         if (context.draft) drafts.confirm(context.draft);
         if (navigation.context === context.origin) {
+            if (
+                saved.path === "/api/work/commands" &&
+                saved.body.action === WorkAction.Rename
+            ) {
+                titleEdit = undefined;
+                renamed = true;
+            }
             if (
                 saved.path === "/api/work/commands" &&
                 saved.body.action === WorkAction.RequestChanges &&
@@ -448,6 +460,20 @@ async function send(
         }
     } catch (failure) {
         if (!signal.aborted) {
+            const attempted = submission.pending;
+            if (
+                failure instanceof ApiError &&
+                ([
+                    "work_title_failed",
+                    "work_title_connection_required",
+                ].includes(failure.code) ||
+                    (attempted?.path === "/api/work/commands" &&
+                        attempted.body.action === WorkAction.Rename &&
+                        ["work_changed", "invalid_work_title"].includes(
+                            failure.code,
+                        )))
+            )
+                submission.dismiss();
             if (submission.pending) pendingContext = context;
             error = errorMessage(
                 failure,
@@ -459,8 +485,11 @@ async function send(
         if (!signal.aborted) {
             if (!submission.pending) pendingContext = undefined;
             await refresh(!confirmed);
-            if (destination === navigation.context && !searchDialog.open)
-                focusDestination();
+            if (!searchDialog.open) {
+                if (destination === navigation.context) focusDestination();
+                if (renamed && navigation.context === context.origin)
+                    document.getElementById("rename-work")?.focus();
+            }
         } else render();
     }
 }
@@ -481,6 +510,7 @@ function navigate(
     closeSearch(false);
     navigation.navigate(next, id, historyMode);
     reviewAttempt = undefined;
+    titleEdit = undefined;
     activityOpen = false;
     modelPickerOpen = false;
     modelListOpen = false;
@@ -698,9 +728,14 @@ function render(preserveMounted = false, forceSelect = false) {
     workChanges.setWork(changesWorkId, changesCheckpointId, !!review);
     if (review?.attemptId !== reviewAttempt) reviewAttempt = undefined;
     const draft = drafts.get(context, composerDraftMode());
+    const pending = submission.pending;
     const submissionState = {
         sending: commandActive,
-        pending: !!submission.pending,
+        pending: !!pending,
+        generatingTitle:
+            pending?.path === "/api/work/commands"
+                ? pending.body.action === WorkAction.Create
+                : typeof pending?.body.workId === "string",
     };
     const rendered = dom.render({
         context,
@@ -714,7 +749,9 @@ function render(preserveMounted = false, forceSelect = false) {
             : undefined,
         draft,
         ...submissionState,
-        workUnavailable: workspace.state.workUnavailable,
+        creationUnavailable:
+            workspace.state.workUnavailable ||
+            !canGenerateWorkTitle(workspace.state),
         title: authenticated
             ? `${
                   {
@@ -722,7 +759,7 @@ function render(preserveMounted = false, forceSelect = false) {
                       knowledge: "Knowledge",
                       board: "Work inbox",
                       new: "New work",
-                      work: work ? workTitle(work.objective) : "Work",
+                      work: work ? workTitle(work) : "Work",
                       chat:
                           workspace.state.conversations.find(
                               (chat) => chat.id === navigation.activeChat,
@@ -755,6 +792,7 @@ function render(preserveMounted = false, forceSelect = false) {
                 timezoneError,
                 error,
                 submission: submissionState,
+                titleEdit,
                 canExecute: !!work && modelCanSubmit(work),
                 model: choice && {
                     choice,
@@ -1194,7 +1232,26 @@ document.addEventListener("click", async (event) => {
                 attemptId: result.attemptId,
             });
     }
-    if (action === "track" && navigation.activeChat) {
+    if (action === "rename-work" && work) {
+        const original = work.title ?? null;
+        titleEdit = { workId: work.id, original, value: original ?? "" };
+        render();
+        const field = document.getElementById(
+            "work-title-input",
+        ) as HTMLInputElement;
+        field.focus();
+        field.select();
+        return;
+    }
+    if (action === "cancel-rename") {
+        cancelRename();
+        return;
+    }
+    if (
+        action === "track" &&
+        navigation.activeChat &&
+        canGenerateWorkTitle(workspace.state)
+    ) {
         const conversationId = navigation.activeChat;
         await send(() => commands.track(conversationId));
     }
@@ -1213,6 +1270,19 @@ document.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.target;
     const kind = form.dataset.form;
+    if (kind === "rename-work") {
+        const item = current();
+        const text = String(new FormData(form).get("title") ?? "").trim();
+        if (
+            item &&
+            titleEdit?.workId === item.work.id &&
+            titleEdit.original === (item.work.title ?? null) &&
+            text &&
+            Array.from(text).length <= WorkTitleLimit
+        )
+            await command({ action: WorkAction.Rename, text });
+        return;
+    }
     if (kind === "github-repository") {
         const work = current()?.work;
         if (!work) return;
@@ -1254,6 +1324,7 @@ document.addEventListener("submit", async (event) => {
     const text = String(data.get("reply") ?? "").trim();
     if (!text) return;
     if (kind === "new") {
+        if (!canGenerateWorkTitle(workspace.state)) return;
         await send(() => commands.create(text), true);
     } else if (kind === "chat") {
         const conversationId = navigation.activeChat;
@@ -1284,6 +1355,27 @@ document.addEventListener("submit", async (event) => {
     render();
 });
 document.addEventListener("input", (event) => {
+    if (
+        event.target instanceof HTMLInputElement &&
+        event.target.id === "work-title-input" &&
+        titleEdit
+    ) {
+        titleEdit.value = event.target.value;
+        const length = Array.from(titleEdit.value.trim()).length;
+        const count = document.getElementById("work-title-count");
+        const save = event.target.form?.querySelector<HTMLButtonElement>(
+            'button[type="submit"]',
+        );
+        if (count) count.textContent = `${length} / ${WorkTitleLimit}`;
+        event.target.setAttribute(
+            "aria-invalid",
+            String(length > WorkTitleLimit),
+        );
+        if (save)
+            save.disabled =
+                !!save.dataset.blocked || !length || length > WorkTitleLimit;
+        return;
+    }
     if (
         event.target instanceof HTMLInputElement &&
         event.target.id === "work-effort"
@@ -1412,6 +1504,12 @@ function trapFocus(event: KeyboardEvent, selector: string) {
         first?.focus();
     }
 }
+function cancelRename() {
+    titleEdit = undefined;
+    render();
+    document.getElementById("rename-work")?.focus();
+}
+
 document.addEventListener("keydown", (event) => {
     if (
         (event.ctrlKey || event.metaKey) &&
@@ -1424,6 +1522,17 @@ document.addEventListener("keydown", (event) => {
         return;
     }
     if (searchDialog.open) return;
+    if (
+        event.key === "Escape" &&
+        !event.isComposing &&
+        !commandActive &&
+        event.target instanceof Element &&
+        event.target.closest(".work-title-edit")
+    ) {
+        event.preventDefault();
+        cancelRename();
+        return;
+    }
     if (
         event.key === "Escape" &&
         workChanges.isOpen &&

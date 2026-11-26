@@ -25,7 +25,9 @@ public enum WorkAction
     AuthorizeGitRepository,
 
     [JsonStringEnumMemberName("DenyRepository")]
-    DenyGitRepository
+    DenyGitRepository,
+
+    Rename
 }
 
 public sealed class WorkCommand

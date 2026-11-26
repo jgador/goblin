@@ -47,6 +47,12 @@ public sealed class OAuthDatabaseFactAttribute : FactAttribute
 
 public sealed class ChatGptOAuthTests
 {
+    private sealed class TitleGenerator : IWorkTitleGenerator
+    {
+        public Task<string?> GenerateAsync(string objective, CancellationToken cancellationToken) =>
+            Task.FromResult<string?>("Review the request");
+    }
+
     private const string Origin = "https://goblin.example.test";
     private const string Callback = "https://chatgpt.com/connector_platform_oauth_redirect";
     private const string Password = "fixture-owner-password";
@@ -157,7 +163,7 @@ public sealed class ChatGptOAuthTests
                 mcp.DefaultRequestHeaders.Authorization = new("Bearer", access);
                 await using var transport = new HttpClientTransport(new HttpClientTransportOptions { Endpoint = new Uri(Origin + "/mcp"), OAuth = null, TransportMode = HttpTransportMode.StreamableHttp }, mcp, ownsHttpClient: false);
                 await using McpClient client = await McpClient.CreateAsync(transport);
-                Assert.Equal(23, (await client.ListToolsAsync()).Count);
+                Assert.Equal(24, (await client.ListToolsAsync()).Count);
                 CallToolResult ping = await client.CallToolAsync("goblin_ping");
                 Assert.False(ping.IsError ?? false);
                 Assert.Equal("Goblin MCP connection is working.", ping.StructuredContent!.Value.GetProperty("message").GetString());
@@ -182,6 +188,7 @@ public sealed class ChatGptOAuthTests
                 };
                 CallToolResult created = await client.CallToolAsync("goblin_create_work", create);
                 Assert.False(created.IsError ?? false);
+                Assert.Equal("Review the request", created.StructuredContent!.Value.GetProperty("work").GetProperty("title").GetString());
                 Assert.Equal("Plugin objective", created.StructuredContent!.Value.GetProperty("work").GetProperty("objective").GetString());
                 CallToolResult repeated = await client.CallToolAsync("goblin_create_work", create);
                 Assert.Equal(created.StructuredContent.Value.GetProperty("work").GetProperty("version").GetInt64(),
@@ -486,6 +493,7 @@ public sealed class ChatGptOAuthTests
             builder.Services.AddGoblinPersistence(connection);
             builder.Services.AddSingleton<WorkOutboxFactory>();
             builder.Services.AddSingleton<WorkStore>();
+            builder.Services.AddSingleton<IWorkTitleGenerator, TitleGenerator>();
             builder.Services.AddSingleton<IdentityStore>();
             builder.Services.AddSingleton<GitHubStore>();
             builder.Host.UseWolverine(o => ApplicationServices.ConfigureMessaging(o, connection));
@@ -566,7 +574,7 @@ public sealed class ChatGptOAuthTests
             DateTimeOffset now = DateTimeOffset.UtcNow;
             foreach ((long id, string objective) in new[] { (101L, "Existing objective"), (102L, "Another objective") })
             {
-                var work = new WorkItem(id, objective, now);
+                var work = new WorkItem(id, objective, now, "Test work");
                 work.Assign(1, now);
                 await using var command = new NpgsqlCommand("INSERT INTO work_item (id, objective, state, status, agent_id) VALUES (@id, @objective, @state::jsonb, @status, 1)", db);
                 command.Parameters.AddWithValue("id", id);

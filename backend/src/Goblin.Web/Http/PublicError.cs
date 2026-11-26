@@ -44,6 +44,8 @@ public sealed class PublicError : Exception
             "workspace_not_found" => "This saved workspace or file could not be found.",
             "workspace_changed" => "The workspace changed. Refresh before continuing.",
             "work_changed" => "This work changed. Refresh it before submitting another action.",
+            "work_title_connection_required" => "Connect Codex to create work.",
+            "work_title_failed" => "Could not generate a title. Try creating work again.",
             "command_id_reused" => "That command identifier was already used for another action.",
             "connection_in_use" => "This connection is in use. Stop or reconcile its execution before changing accounts.",
             "connection_not_found" => "This AI connection could not be found.",
@@ -64,6 +66,8 @@ public sealed class PublicError : Exception
             _ => "This command could not be accepted. Refresh the work and check the requested action."
         }, failure.Code is "work_not_found" or "connection_not_found" ? 404 :
             failure.Code == "invalid_model_selection" ? 400 : 409),
+        WorkRuleException { Rule: WorkRule.InvalidTitle } => new("invalid_work_title",
+            $"Enter a title of 1–{WorkTitle.MaxLength} characters on one line."),
         WorkRuleException failure => new("work_rule_" + failure.Rule, failure.Rule == WorkRule.ReconciliationRequired
             ? "Reconcile the previous execution before retrying."
             : "This action is not available in the current work state.", 409),

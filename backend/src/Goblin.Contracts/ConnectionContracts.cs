@@ -17,6 +17,12 @@ public interface ICodexAuthentication
     Task<PromptResult> SendPromptAsync(string? value, CancellationToken cancellationToken = default);
 }
 
+public interface IWorkTitleGenerator
+{
+    // Null indicates that the runtime account is disconnected.
+    Task<string?> GenerateAsync(string objective, CancellationToken cancellationToken);
+}
+
 public abstract class ConnectionFailure : Exception
 {
     protected ConnectionFailure(string message) : base(message) { }

@@ -274,7 +274,7 @@ public static class StorageTransactionHandler
         {
             Id = message.Id,
             Objective = "Storage transaction",
-            State = JsonSerializer.Serialize(new Core.Work.WorkItem(message.Id, "Storage transaction", DateTimeOffset.UtcNow).Snapshot(), ContractJson.Options)
+            State = JsonSerializer.Serialize(new Core.Work.WorkItem(message.Id, "Storage transaction", DateTimeOffset.UtcNow, "Test work").Snapshot(), ContractJson.Options)
         });
         return new StorageConsumed(message.Id);
     }

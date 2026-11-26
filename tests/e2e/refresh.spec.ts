@@ -37,6 +37,7 @@ async function home(page: Page) {
                     version: "1",
                     work: {
                         id: "1",
+                        title: state.objective,
                         objective: state.objective,
                         status: state.status,
                         attempts: [],
@@ -464,6 +465,7 @@ test("a delayed Work read cannot restore private content after locking and unloc
                 version: "1",
                 work: {
                     id: "1",
+                    title: "Obsolete session work",
                     objective: "Obsolete session work",
                     status: "Ready",
                     attempts: [],

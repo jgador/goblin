@@ -101,7 +101,7 @@ public sealed class DispatchFailureTransitionTests
 
     private static WorkItem Queued()
     {
-        var work = new WorkItem(1, "Inspect production", Now);
+        var work = new WorkItem(1, "Inspect production", Now, "Test work");
         work.Assign(2, Now);
         work.QueueExecution(3, new("codex", 4), Now);
         return work;

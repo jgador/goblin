@@ -373,6 +373,7 @@
     "results",
     "schemaVersion",
     "status",
+    "title",
     "workspace"
   ],
   "WorkspaceCheckpoint": [

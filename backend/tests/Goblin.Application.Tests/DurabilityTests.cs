@@ -1814,6 +1814,56 @@ public sealed partial class DurabilityTests
             Task.FromResult(Started.GetValueOrDefault(session.Id) ? InspectionObservation.Running : InspectionObservation.Missing);
     }
 
+    [DatabaseFact]
+    public async Task WorkCreationRequiresAValidTitleAndRenameIsDurableWithoutCodex()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        WorkStore store = fixture.Host.Services.GetRequiredService<WorkStore>();
+        long id = NextId();
+        const string objective = "Make the weekly reports easier to review. Preserve all totals and examples.";
+        WorkCommand create = WorkCommands.Create(NextId(), id, objective);
+        fixture.Titles.Title = null;
+        Assert.Equal("work_title_connection_required", (await Assert.ThrowsAsync<ApplicationFailure>(() => store.ApplyAsync(create))).Code);
+        fixture.Titles.Title = new string('x', 91);
+        Assert.Equal("work_title_failed", (await Assert.ThrowsAsync<ApplicationFailure>(() => store.ApplyAsync(create))).Code);
+        Assert.Equal("work_not_found", (await Assert.ThrowsAsync<ApplicationFailure>(() => store.GetAsync(id))).Code);
+
+        fixture.Titles.Title = "Improve weekly reports";
+        WorkView created = await store.ApplyAsync(create);
+        Assert.Equal("Improve weekly reports", created.Work.Title);
+        Assert.Equal(objective, created.Work.Objective);
+        Assert.Empty(created.Work.Attempts);
+        fixture.Titles.Title = null;
+        Assert.Equal(created.Work.Title, (await store.ApplyAsync(create)).Work.Title);
+        Assert.Equal(3, fixture.Titles.Calls);
+
+        WorkCommand rename = new(NextId(), id, WorkAction.Rename)
+        { Text = "Simplify the weekly report format", ExpectedVersion = created.Version };
+        WorkView renamed = await store.ApplyAsync(rename);
+        Assert.Equal(rename.Text, renamed.Work.Title);
+        Assert.Equal(WorkEventKind.Renamed, renamed.Work.History[^1].Kind);
+        Assert.Equal(objective, renamed.Work.Objective);
+        Assert.Equal(renamed.Version, (await store.ApplyAsync(rename)).Version);
+        WorkCommand stale = new(NextId(), id, WorkAction.Rename) { Text = "Stale title", ExpectedVersion = created.Version };
+        Assert.Equal("work_changed", (await Assert.ThrowsAsync<ApplicationFailure>(() => store.ApplyAsync(stale))).Code);
+        Assert.Equal(3, fixture.Titles.Calls);
+        await fixture.RestartAsync();
+        Assert.Equal(renamed.Work.Title, (await fixture.Host.Services.GetRequiredService<WorkStore>().GetAsync(id)).Work.Title);
+    }
+
+    private sealed class TitleGenerator : IWorkTitleGenerator
+    {
+        private int _calls;
+        public int Calls => _calls;
+        public string? Title { get; set; } = "Review the request";
+
+        public Task<string?> GenerateAsync(string objective, CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _calls);
+            return Task.FromResult(Title);
+        }
+    }
+
     private sealed class Fixture : IAsyncDisposable
     {
         private readonly string _app;
@@ -1830,6 +1880,7 @@ public sealed partial class DurabilityTests
         }
 
         public Runtime Runtime { get; } = new();
+        public TitleGenerator Titles { get; } = new();
         public GitRepositoryRemote Remote { get; } = new();
         public InspectionRuntime Inspection { get; } = new();
         public IHost Host { get; private set; } = null!;
@@ -1872,6 +1923,7 @@ public sealed partial class DurabilityTests
             builder.Logging.ClearProviders();
             builder.Services.AddGoblinPersistence(_app);
             builder.Services.AddWorkApplication();
+            builder.Services.AddSingleton<IWorkTitleGenerator>(Titles);
             builder.Services.AddSingleton<IModelCatalogSource, CatalogSource>();
             builder.Services.AddModelCatalog();
             if (_catalog is not null) builder.Services.AddSingleton(_catalog);

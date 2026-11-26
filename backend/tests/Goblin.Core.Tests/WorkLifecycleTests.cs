@@ -8,6 +8,22 @@ namespace Goblin.Core.Tests;
 
 public sealed class WorkLifecycleTests
 {
+    [Fact]
+    public void WorkTitleCountsUnicodeCharactersAndRejectsBlankOrMultilineValues()
+    {
+        string limit = string.Concat(Enumerable.Repeat("𠮷", WorkTitle.MaxLength));
+        Assert.Equal(limit, WorkTitle.Normalize(" " + limit + " "));
+        Assert.Null(WorkTitle.Normalize(limit + "x"));
+        Assert.Null(WorkTitle.Normalize(" "));
+        Assert.Null(WorkTitle.Normalize("One\nTwo"));
+        Assert.Null(WorkTitle.Normalize("One\u2028Two"));
+        var work = new WorkItem(1, "Full objective", Now, limit);
+        Reject(WorkRule.InvalidTitle, () => work.Rename(" ", Now));
+        work.Rename("Short title", Now);
+        Assert.Equal("Short title", WorkItem.Restore(work.Snapshot()).Title);
+        Assert.Equal("Full objective", work.Objective);
+    }
+
     private static long _nextId = int.MaxValue;
 
     private static long NextId() => System.Threading.Interlocked.Increment(ref _nextId);
@@ -20,9 +36,9 @@ public sealed class WorkLifecycleTests
     [InlineData(long.MinValue)]
     public void ProductIdentitiesMustBePositive(long id)
     {
-        Reject(WorkRule.InvalidValue, () => new WorkItem(id, "Invalid identity", Now));
+        Reject(WorkRule.InvalidValue, () => new WorkItem(id, "Invalid identity", Now, "Test work"));
         Reject(WorkRule.InvalidValue, () => new ExecutionTarget("codex", id));
-        var work = new WorkItem(NextId(), "Check identities", Now);
+        var work = new WorkItem(NextId(), "Check identities", Now, "Test work");
         Reject(WorkRule.InvalidValue, () => work.Assign(id, Now));
         Reject(WorkRule.InvalidValue, () => work.AddContext(id, "Context", Now));
         work.Assign(NextId(), Now);
@@ -36,7 +52,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void SnapshotRetainsFullInt64IdentitiesAndRejectsThePreviousSchema()
     {
-        var work = new WorkItem(long.MaxValue, "Preserve all bits", Now);
+        var work = new WorkItem(long.MaxValue, "Preserve all bits", Now, "Test work");
         work.Assign(long.MaxValue - 1, Now);
         work.QueueExecution(long.MaxValue - 2, new("codex", long.MaxValue - 3), Now);
         work.TryClaimExecution(long.MaxValue - 2, long.MaxValue - 4, "test", Now);
@@ -70,7 +86,7 @@ public sealed class WorkLifecycleTests
     [Fact]
     public void WorkExistsBeforeAssignmentConversationOrExecution()
     {
-        var work = new WorkItem(NextId(), "Investigate the slow build", Now);
+        var work = new WorkItem(NextId(), "Investigate the slow build", Now, "Test work");
         Assert.Equal(WorkStatus.Ready, work.Status);
         Assert.Null(work.AgentId);
         Assert.Null(work.Attention);
@@ -400,7 +416,7 @@ public sealed class WorkLifecycleTests
 
     private static (WorkItem Work, long Attempt) Queued(string runtime = "codex")
     {
-        var work = new WorkItem(NextId(), "Prepare a reviewable change", Now);
+        var work = new WorkItem(NextId(), "Prepare a reviewable change", Now, "Test work");
         work.Assign(NextId(), Now);
         long attempt = NextId();
         work.QueueExecution(attempt, Target(runtime), Now);

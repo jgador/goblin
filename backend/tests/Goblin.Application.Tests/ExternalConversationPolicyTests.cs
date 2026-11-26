@@ -64,7 +64,7 @@ public sealed class ExternalConversationPolicyTests
         Assert.Equal(6, answer.DecisionId);
         Assert.Equal("Production", answer.Text);
 
-        WorkCommand context = ExternalConversationPolicy.Continue(new WorkItem(1, "Inspect", Now).Snapshot(),
+        WorkCommand context = ExternalConversationPolicy.Continue(new WorkItem(1, "Inspect", Now, "Test work").Snapshot(),
             9, 1, 10, "Additional detail");
         Assert.Equal(WorkAction.AddContext, context.Action);
         Assert.Null(context.DecisionId);
@@ -96,7 +96,7 @@ public sealed class ExternalConversationPolicyTests
 
     private static WorkItem RunningWork()
     {
-        var work = new WorkItem(1, "Inspect", Now);
+        var work = new WorkItem(1, "Inspect", Now, "Test work");
         work.Assign(2, Now);
         work.QueueExecution(3, new("codex", 4), Now);
         Assert.True(work.TryClaimExecution(3, 5, "sandbox/3", Now));

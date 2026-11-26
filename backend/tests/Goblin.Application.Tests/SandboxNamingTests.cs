@@ -106,7 +106,7 @@ public sealed class SandboxNamingTests
         using var api = new KubernetesApi("http://127.0.0.1:1");
         var text = new LocalTextHost(new("/unused", "/unused", "codex", "/unused"));
         var host = new SandboxHost(api, new("agents", "image", "/private", "http://repository"), text, new Broker());
-        var work = new WorkItem(101, "Discuss a change", DateTimeOffset.UtcNow);
+        var work = new WorkItem(101, "Discuss a change", DateTimeOffset.UtcNow, "Test work");
         work.Assign(1, DateTimeOffset.UtcNow);
         work.QueueExecution(12, new("codex", 1), DateTimeOffset.UtcNow);
         Assert.Equal("text/12", host.EnvironmentFor(work.Snapshot()));
@@ -183,7 +183,7 @@ public sealed class SandboxNamingTests
 
     private static WorkSnapshot Work(string reference, long workId = 101, long attemptId = 12)
     {
-        var work = new WorkItem(workId, "Edit repository", DateTimeOffset.UtcNow);
+        var work = new WorkItem(workId, "Edit repository", DateTimeOffset.UtcNow, "Test work");
         work.Assign(1, DateTimeOffset.UtcNow);
         work.QueueExecution(attemptId, new("codex", 1, gitRepository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         Assert.True(work.TryClaimExecution(attemptId, 1, reference, DateTimeOffset.UtcNow));

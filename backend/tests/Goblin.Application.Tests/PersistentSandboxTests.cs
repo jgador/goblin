@@ -221,7 +221,7 @@ public sealed class PersistentSandboxTests
 
     private static WorkItem Running(long id, long attempt, SandboxHost host)
     {
-        var work = new WorkItem(id, "Edit repository", Now); work.Assign(1, Now);
+        var work = new WorkItem(id, "Edit repository", Now, "Test work"); work.Assign(1, Now);
         work.QueueExecution(attempt, new("codex", 1, gitRepository: new("owner/repo", "Goblin", "goblin@example.test")), Now);
         work.TryClaimExecution(attempt, 100, host.EnvironmentFor(id, attempt), Now); return work;
     }

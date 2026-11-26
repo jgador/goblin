@@ -8,6 +8,7 @@ import {
 type WorkFixture = {
     id: string;
     objective: string;
+    title?: string | null;
     status: string;
     checkpointId?: string;
     attention?: { reason: string; failure?: string };
@@ -44,6 +45,7 @@ async function workspace(
             createdAt: "2026-09-21T00:00:00Z",
             updatedAt: "2026-09-21T00:00:00Z",
             work: {
+                title: work.objective,
                 ...work,
                 agentId: "1",
                 attempts: [
@@ -546,6 +548,7 @@ test("review feedback uses the Work composer without consuming the context draft
                     updatedAt: at,
                     work: {
                         id: "1",
+                        title: "Review the welcome page",
                         objective: "Review the welcome page",
                         status: commands.length ? "Ready" : "NeedsAttention",
                         attention: commands.length
@@ -735,6 +738,7 @@ for (const width of [1440, 390]) {
                     work: {
                         id: command.workId,
                         objective: command.text,
+                        title: "Simplify the release guide",
                         status: "Ready",
                         agentId: "1",
                         attempts: [],
@@ -755,7 +759,7 @@ for (const width of [1440, 390]) {
         await expect(create).toBeDisabled();
         await expect(
             page.getByText(
-                "Create a goal now, then start execution from the Ready item.",
+                "Codex writes a title for your goal. Start execution from the Ready item.",
             ),
         ).toBeVisible();
         await page
@@ -765,7 +769,7 @@ for (const width of [1440, 390]) {
         else await page.getByPlaceholder("Describe the work").press("Enter");
         await expect(
             page.getByRole("heading", {
-                name: "Make the release guide easier to follow",
+                name: "Simplify the release guide",
             }),
         ).toBeFocused();
         await expect(page.locator(".work-objective-full")).toHaveText(
@@ -882,6 +886,133 @@ test("the New work Codex menu opens in place and keeps the draft when returning 
     await expect(codex).toBeFocused();
     await expect(manage).toBeHidden();
     expect(commands).toEqual([]);
+});
+
+test("a failed title request keeps the objective ready for another attempt", async ({
+    page,
+}) => {
+    await workspace(page);
+    await page.route("**/api/identities", (route) =>
+        route.fulfill({ json: { ids: ["20", "21"] } }),
+    );
+    const response = Promise.withResolvers<void>();
+    await page.route("**/api/work/commands", async (route) => {
+        await response.promise;
+        await route.fulfill({
+            status: 409,
+            json: {
+                error: {
+                    code: "work_title_failed",
+                    message:
+                        "Could not generate a title. Try creating work again.",
+                },
+            },
+        });
+    });
+    await page.goto("/?new=work");
+    const objective = page.getByPlaceholder("Describe the work");
+    const create = page.getByRole("button", {
+        name: "Create work",
+        exact: true,
+    });
+    await objective.fill("Preserve the examples in the release guide");
+    await create.click();
+    await expect(
+        page.getByText("Generating title…", { exact: true }),
+    ).toBeVisible();
+    await expect(create).toBeDisabled();
+    response.resolve();
+    await expect(page.getByRole("alert")).toHaveText(
+        "Could not generate a title. Try creating work again.",
+    );
+    await expect(objective).toHaveValue(
+        "Preserve the examples in the release guide",
+    );
+    await expect(create).toBeEnabled();
+    await expect(
+        page.getByRole("button", { name: "Resend command" }),
+    ).toHaveCount(0);
+    await expect(page).toHaveURL(/\?new=work$/);
+});
+
+test("renaming works without Codex and a wide 90-character title wraps on the Board", async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const item: WorkFixture = {
+        id: "4",
+        title: "Review exports",
+        objective: "Review exports and preserve original totals.",
+        status: "Ready",
+    };
+    await workspace(page, false, [item]);
+    const commands: Record<string, unknown>[] = [];
+    await page.route("**/api/identities", (route) =>
+        route.fulfill({ json: { ids: ["55"] } }),
+    );
+    await page.route("**/api/work/commands", (route) => {
+        const command = route.request().postDataJSON();
+        commands.push(command);
+        item.title = command.text;
+        return route.fulfill({ json: {} });
+    });
+    await page.goto("/?new=work");
+    await page
+        .getByPlaceholder("Describe the work")
+        .fill("Keep this objective");
+    await expect(
+        page.getByRole("button", { name: "Create work", exact: true }),
+    ).toBeDisabled();
+    await expect(
+        page.getByRole("link", { name: "Connect Codex", exact: true }),
+    ).toBeVisible();
+
+    await page.goto("/work?item=4");
+    const rename = page.getByRole("button", { name: "Rename work" });
+    const editor = page.getByRole("textbox", { name: "Work title" });
+    const title = "報".repeat(89) + "𠮷";
+    await rename.click();
+    await expect(editor).toHaveValue("Review exports");
+    await editor.fill(title + "x");
+    await expect(page.getByText("91 / 90")).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Save", exact: true }),
+    ).toBeDisabled();
+    await editor.press("Escape");
+    await expect(rename).toBeFocused();
+    await rename.click();
+    await editor.fill(title);
+    await expect(page.getByText("90 / 90")).toBeVisible();
+    await editor.press("Enter");
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await expect(rename).toBeFocused();
+    await expect(page.locator(".work-objective-full")).toHaveText(
+        item.objective,
+    );
+    expect(commands).toEqual([
+        {
+            action: "Rename",
+            commandId: "55",
+            workId: "4",
+            expectedVersion: "1",
+            text: title,
+        },
+    ]);
+
+    await page.reload();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await page.getByRole("button", { name: "Back to inbox" }).click();
+    const cardTitle = page.locator("#board-title-4");
+    await expect(cardTitle).toHaveText(title);
+    const geometry = await cardTitle.evaluate((element) => ({
+        client: element.clientHeight,
+        scroll: element.scrollHeight,
+        line: parseFloat(getComputedStyle(element).lineHeight),
+    }));
+    expect(geometry.client).toBeGreaterThan(geometry.line * 2);
+    expect(geometry.scroll).toBe(geometry.client);
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.locator("#board-title-4")).toHaveText(title);
 });
 
 test("composer and search show focus outlines for keyboard navigation", async ({
@@ -1062,7 +1193,7 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
         summary +
         "\nhttps://example.test/guides/release-checklist-with-an-unbroken-path\nInclude acceptance criteria and follow-up checks for every supported environment.";
     const commands = await workspace(page, true, [
-        { id: "4", objective: longTitle, status: "Ready" },
+        { id: "4", title: summary, objective: longTitle, status: "Ready" },
         { id: "5", objective: "Queue the build", status: "Queued" },
         { id: "6", objective: "Stop the build", status: "Cancelling" },
         {
@@ -1932,6 +2063,7 @@ test("a result stays prominent among newer artifacts and older executions remain
                     updatedAt: at,
                     work: {
                         id: "1",
+                        title: "Draft a weekend garden checklist",
                         objective: "Draft a weekend garden checklist",
                         status: "Completed",
                         agentId: "1",
@@ -2111,6 +2243,7 @@ test("uncertain execution stays unresolved, and runtime details never become mil
                     updatedAt: now,
                     work: {
                         id: "1",
+                        title: "Validate the release",
                         objective: "Validate the release",
                         status: "NeedsAttention",
                         attention: { reason: "UncertainExecution" },

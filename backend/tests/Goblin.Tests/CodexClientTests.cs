@@ -190,7 +190,7 @@ public sealed class CodexClientTests
     public async Task WorkAdapterUsesPersistedContextAndKeepsEarlyResultProvenance(string scenario, ObservationKind expected)
     {
         await using Fixture fixture = await Fixture.CreateAsync(scenario);
-        var work = new WorkItem(NextId(), "Answer the durable objective", DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Answer the durable objective", DateTimeOffset.UtcNow, "Test work");
         work.Assign(NextId(), DateTimeOffset.UtcNow);
         work.AddContext(NextId(), "Retained context", DateTimeOffset.UtcNow);
         work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
@@ -219,7 +219,7 @@ public sealed class CodexClientTests
     public async Task WorkAdapterInterruptsEvenAnUpstreamRetryableFailure()
     {
         await using Fixture fixture = await Fixture.CreateAsync("work-retryable-error");
-        var work = new WorkItem(NextId(), "Surface every failure", DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Surface every failure", DateTimeOffset.UtcNow, "Test work");
         work.Assign(NextId(), DateTimeOffset.UtcNow);
         work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
         IntegrationFailure failure = await Assert.ThrowsAsync<IntegrationFailure>(() =>
@@ -243,6 +243,29 @@ public sealed class CodexClientTests
         string requests = await File.ReadAllTextAsync(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl"));
         Assert.Contains("\"ephemeral\":true", requests);
         Assert.Contains("\"networkAccess\":false", requests);
+    }
+
+    [Fact]
+    public async Task WorkTitleUsesTheConnectedAccountAndAnIsolatedStructuredTurn()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        using var auth = new Authentication(fixture.Client, _ => Task.FromResult(Goblin.Contracts.VerificationState.Accepted),
+            TimeSpan.FromSeconds(3));
+        Assert.Null(await auth.GenerateAsync("Review weekly reports", default));
+        Assert.False(File.Exists(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl")));
+
+        await auth.LoginApiKeyAsync("test-key-for-the-codex-fixture");
+        const string objective = "Review weekly reports\nKeep the original figures.";
+        Assert.Equal("Review weekly reports", await auth.GenerateAsync(objective, default));
+        string[] requests = await File.ReadAllLinesAsync(Path.Combine(fixture.Workspace.CodexHome, "prompt-requests.jsonl"));
+        using JsonDocument thread = JsonDocument.Parse(requests.Single(line => line.Contains("\"method\":\"thread/start\"", StringComparison.Ordinal)));
+        Assert.True(thread.RootElement.GetProperty("params").GetProperty("ephemeral").GetBoolean());
+        using JsonDocument turn = JsonDocument.Parse(requests.Single(line => line.Contains("\"method\":\"turn/start\"", StringComparison.Ordinal)));
+        JsonElement parameters = turn.RootElement.GetProperty("params");
+        Assert.False(parameters.GetProperty("sandboxPolicy").GetProperty("networkAccess").GetBoolean());
+        Assert.Equal("title", parameters.GetProperty("outputSchema").GetProperty("required")[0].GetString());
+        using JsonDocument input = JsonDocument.Parse(parameters.GetProperty("input")[0].GetProperty("text").GetString()!);
+        Assert.Equal(objective, input.RootElement.GetProperty("objective").GetString());
     }
 
     [Theory]
@@ -270,7 +293,7 @@ public sealed class CodexClientTests
     public async Task UnknownCodexErrorsFailWorkWithoutRetryingOrLeakingDetails(string scenario)
     {
         await using Fixture fixture = await Fixture.CreateAsync(scenario);
-        var work = new WorkItem(NextId(), "Surface unknown runtime failures", DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Surface unknown runtime failures", DateTimeOffset.UtcNow, "Test work");
         work.Assign(NextId(), DateTimeOffset.UtcNow);
         work.QueueExecution(NextId(), new("codex", NextId()), DateTimeOffset.UtcNow);
         IntegrationFailure failure = await Assert.ThrowsAsync<IntegrationFailure>(() =>

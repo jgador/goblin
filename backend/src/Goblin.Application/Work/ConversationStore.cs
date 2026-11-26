@@ -96,8 +96,13 @@ public sealed class ConversationCommand
 public sealed class ConversationStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _dbFactory;
+    private readonly WorkStore _work;
 
-    public ConversationStore(IDbContextFactory<GoblinDbContext> dbFactory) => _dbFactory = dbFactory;
+    public ConversationStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkStore work)
+    {
+        _dbFactory = dbFactory;
+        _work = work;
+    }
 
     public async Task<ConversationView[]> ListAsync(CancellationToken token = default)
     {
@@ -121,6 +126,19 @@ public sealed class ConversationStore
         if (command.ConversationId <= 0 || command.MessageId <= 0 || command.Text?.Length > 4000)
             throw new ApplicationFailure("invalid_command");
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync();
+        string? objective = null;
+        string? title = null;
+        if (command.WorkId is { } proposedId)
+        {
+            if (proposedId <= 0) throw new ApplicationFailure("invalid_command");
+            bool linked = await db.Conversations.AnyAsync(x => x.Id == command.ConversationId && x.WorkId != null);
+            if (!linked)
+            {
+                objective = await db.ConversationMessages.Where(x => x.ConversationId == command.ConversationId)
+                    .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Select(x => x.Body).FirstOrDefaultAsync() ?? command.Text;
+                title = await _work.GenerateTitleAsync(objective, default);
+            }
+        }
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, default);
         Persistence.Entities.Conversation? conversation = await db.Conversations.SingleOrDefaultAsync(x => x.Id == command.ConversationId);
         if (conversation is null)
@@ -141,11 +159,14 @@ public sealed class ConversationStore
             await db.SaveChangesAsync();
             Persistence.Entities.ConversationMessage[] messages = await db.ConversationMessages.Where(x => x.ConversationId == conversation.Id)
                 .OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).ToArrayAsync();
-            var work = new WorkItem(workId, messages[0].Body, DateTimeOffset.UtcNow);
-            work.Assign(WorkStore.DefaultAgentId, DateTimeOffset.UtcNow);
+            if (title is null || messages.FirstOrDefault()?.Body != objective)
+                throw new ApplicationFailure("work_changed");
+            DateTimeOffset now = DateTimeOffset.UtcNow;
+            var work = new WorkItem(workId, messages[0].Body, now, title);
+            work.Assign(WorkStore.DefaultAgentId, now);
             foreach (Persistence.Entities.ConversationMessage? message in messages.Skip(1))
                 work.AddContext(await IdentitySequence.NextAsync(db, IdentityKind.Event), message.Body, message.CreatedAt);
-            db.WorkItems.Add(WorkStatePersistence.Create(work, DateTimeOffset.UtcNow));
+            db.WorkItems.Add(WorkStatePersistence.Create(work, now));
             conversation.WorkId = workId;
         }
         else if (conversation.WorkId is { } linked && existing is null && !string.IsNullOrWhiteSpace(command.Text))

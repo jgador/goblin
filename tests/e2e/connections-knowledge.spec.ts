@@ -477,6 +477,7 @@ for (const width of [1440, 390]) {
                         updatedAt: "2026-09-21T00:00:00Z",
                         work: {
                             id: "10",
+                            title: "Release checklist",
                             objective: "Release checklist",
                             status: "Ready",
                             attempts: [],

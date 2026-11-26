@@ -26,7 +26,7 @@ public sealed class GitRepositoryAuthorizationTests
 
     private static WorkItem Ready()
     {
-        var work = new WorkItem(1, "Fix owner/repo", Now);
+        var work = new WorkItem(1, "Fix owner/repo", Now, "Test work");
         work.Assign(1, Now);
         return work;
     }

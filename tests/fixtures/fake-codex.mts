@@ -281,11 +281,25 @@ for await (const line of createInterface({ input: process.stdin })) {
             cwd: process.cwd(),
         });
     } else if (method === "turn/start") {
-        const { threadId, input } = params as {
+        const { threadId, input, outputSchema } = params as {
             threadId: string;
             input: { text: string }[];
+            outputSchema?: { properties: Record<string, unknown> };
         };
         const prompt = input[0].text;
+        const titleRequest = Object.hasOwn(
+            outputSchema?.properties ?? {},
+            "title",
+        );
+        const title = titleRequest
+            ? Array.from(
+                  (JSON.parse(prompt).objective as string)
+                      .trim()
+                      .split(/[\r\n]/)[0]!,
+              )
+                  .slice(0, 90)
+                  .join("")
+            : undefined;
         const turnId = `test-turn-${threadNumber}`;
         const started = { id: turnId, status: "inProgress", items: [] };
         send({ method: "turn/started", params: { threadId, turn: started } });
@@ -319,20 +333,21 @@ for await (const line of createInterface({ input: process.stdin })) {
                 type: "agentMessage",
                 id: "answer",
                 phase: "final_answer",
-                text:
-                    scenario === "prompt-large"
-                        ? "x".repeat(8001)
-                        : scenario === "work-result"
+                text: title
+                    ? JSON.stringify({ title })
+                    : scenario === "prompt-large"
+                      ? "x".repeat(8001)
+                      : scenario === "work-result"
+                        ? JSON.stringify({
+                              kind: "result",
+                              text: "A proposed Work outcome",
+                          })
+                        : scenario === "work-input"
                           ? JSON.stringify({
-                                kind: "result",
-                                text: "A proposed Work outcome",
+                                kind: "input",
+                                text: "Which outcome matters?",
                             })
-                          : scenario === "work-input"
-                            ? JSON.stringify({
-                                  kind: "input",
-                                  text: "Which outcome matters?",
-                              })
-                            : "Hello from the connected account.",
+                          : "Hello from the connected account.",
             };
             send({
                 method: "item/completed",

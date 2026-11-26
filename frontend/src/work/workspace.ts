@@ -23,6 +23,18 @@ type WorkspaceState = {
     connectionsUnavailable: boolean;
 };
 
+export function canGenerateWorkTitle(state: WorkspaceState) {
+    return (
+        state.connectionsLoaded &&
+        !state.connectionsUnavailable &&
+        state.connections.some(
+            ({ runtime, availability }) =>
+                runtime === "codex" &&
+                availability === ConnectionAvailability.Available,
+        )
+    );
+}
+
 const emptyWorkspace: Readonly<WorkspaceState> = {
     work: [],
     conversations: [],

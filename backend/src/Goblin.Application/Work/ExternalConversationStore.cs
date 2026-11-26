@@ -228,8 +228,21 @@ public sealed partial class ExternalConversationStore
         try
         {
             await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+            ExternalMessageRow? candidate = await NextAsync(db, installation.Id, token);
+            if (candidate is null) return null;
+            string? title = null;
+            ApplicationFailure? titleFailure = null;
+            if (candidate.State == nameof(ExternalMessageState.Pending) && candidate.Body is { } objective &&
+                await AuthorizedAsync(db, installation.Id, candidate.WorkspaceId, candidate.UserId, token) &&
+                !await SourceQuery(db, candidate).AnyAsync(token))
+            {
+                try { title = await _work.GenerateTitleAsync(objective, token); }
+                catch (ApplicationFailure failure) { titleFailure = failure; }
+            }
+            db.ChangeTracker.Clear();
             await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
-            ExternalMessageRow? message = await NextAsync(db, installation.Id, token);
+            ExternalMessageRow? message = await db.ExternalMessages.SingleOrDefaultAsync(x => x.Id == candidate.Id &&
+                (x.State == nameof(ExternalMessageState.Pending) || x.State == nameof(ExternalMessageState.PendingLink)), token);
             if (message is null) return null;
             rejectedId = message.Id;
             if (message.State == nameof(ExternalMessageState.PendingLink))
@@ -247,20 +260,22 @@ public sealed partial class ExternalConversationStore
                 return new(message.Id, message.ChannelId, message.ThreadId, null, ExternalReplyKind.AccessRequired);
             }
             IDbContextOutbox outbox = _outboxes.Create(db);
-            ExternalConversation? source = await db.ExternalConversations.SingleOrDefaultAsync(x => x.InstallationId == installation.Id &&
-                x.WorkspaceId == message.WorkspaceId && x.ChannelId == message.ChannelId && x.ThreadId == message.ThreadId, token);
+            ExternalConversation? source = await SourceQuery(db, message).SingleOrDefaultAsync(token);
             Conversation conversation;
             WorkView view;
             if (source is null)
             {
+                if (titleFailure is not null) throw titleFailure;
+                // A concurrent authorization change can require fresh title preparation.
+                if (title is null || candidate.Body != message.Body) return null;
                 long workId = await IdentitySequence.NextAsync(db, IdentityKind.Work, token);
                 view = await _work.ApplyConversationCommandAsync(db, outbox,
-                    WorkCommands.Create(await IdentitySequence.NextAsync(db, IdentityKind.Command, token), workId, message.Body), token);
+                    WorkCommands.Create(await IdentitySequence.NextAsync(db, IdentityKind.Command, token), workId, message.Body), token, title);
                 conversation = new()
                 {
                     Id = await IdentitySequence.NextAsync(db, IdentityKind.Conversation, token),
                     WorkId = workId,
-                    Title = message.Body[..Math.Min(80, message.Body.Length)],
+                    Title = title,
                     CreatedAt = message.ReceivedAt
                 };
                 db.Conversations.Add(conversation);
@@ -306,9 +321,21 @@ public sealed partial class ExternalConversationStore
             message.State = nameof(ExternalMessageState.Rejected);
             await db.SaveChangesAsync(token);
             await transaction.CommitAsync(token);
-            return new(message.Id, message.ChannelId, message.ThreadId, null, ExternalReplyKind.CommandRejected);
+            return new(message.Id, message.ChannelId, message.ThreadId, null, ExternalReplyKind.CommandRejected)
+            {
+                Notice = (error as ApplicationFailure)?.Code switch
+                {
+                    "work_title_connection_required" => "Connect Codex in Goblin, then send your request again.",
+                    "work_title_failed" => "Goblin could not generate a title. Send your request again to retry.",
+                    _ => null
+                }
+            };
         }
     }
+
+    private static IQueryable<ExternalConversation> SourceQuery(GoblinDbContext db, ExternalMessageRow message) =>
+        db.ExternalConversations.Where(x => x.InstallationId == message.InstallationId && x.WorkspaceId == message.WorkspaceId &&
+            x.ChannelId == message.ChannelId && x.ThreadId == message.ThreadId);
 
     private static Task<ExternalMessageRow?> NextAsync(GoblinDbContext db, string installation, CancellationToken token) =>
         db.ExternalMessages.Where(x => x.InstallationId == installation &&

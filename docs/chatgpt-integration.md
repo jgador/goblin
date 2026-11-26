@@ -124,6 +124,9 @@ supported artifact metadata and references; it does not read arbitrary files or 
 credentials.
 
 All tools declare OAuth security and truthful MCP annotations. Read tools are read-only.
+Creating Work sends the objective to the connected Codex account for title generation.
+`goblin_rename_work` edits the saved title with the same 90-character limit and command
+version check as the web editor.
 ID reservation is a state change. Command tools that can start or cancel execution or
 authorize repository work declare their side effects. The command tools are idempotent
 because identical calls with the same command ID return one receipt. Goblin adds no

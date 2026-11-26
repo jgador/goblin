@@ -73,6 +73,7 @@ internal static class WebServices
         builder.Services.AddSingleton(services => new Authentication(services.GetRequiredService<CodexClient>(),
             options.VerifyApiKey ?? services.GetRequiredService<ApiKeyVerifier>().VerifyAsync, options.PromptTimeout));
         builder.Services.AddSingleton<ICodexAuthentication>(services => services.GetRequiredService<Authentication>());
+        builder.Services.AddSingleton<IWorkTitleGenerator>(services => services.GetRequiredService<Authentication>());
         builder.Services.AddSingleton(services => options.EnableWork
             ? new ConnectionService(services.GetRequiredService<ICodexAuthentication>(),
                 services.GetRequiredService<ConnectionStore>(), services.GetRequiredService<ModelCatalogStore>())

@@ -12,7 +12,7 @@ type RenderOptions = {
     draft: string;
     sending: boolean;
     pending: boolean;
-    workUnavailable: boolean;
+    creationUnavailable: boolean;
     title: string;
     markup: () => string;
     settings?: { detach: () => void; attach: () => void };
@@ -82,7 +82,7 @@ export class WorkspaceDom {
         reply.disabled = options.sending;
         const send = this.root.querySelector<HTMLButtonElement>(".send")!;
         const blocked =
-            options.sending || options.pending || options.workUnavailable;
+            options.sending || options.pending || options.creationUnavailable;
         if (blocked) send.dataset.blocked = "true";
         else delete send.dataset.blocked;
         send.disabled = blocked || !options.draft.trim();

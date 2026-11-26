@@ -124,7 +124,7 @@ public sealed class ExecutionObservationTransitionTests
 
     private static WorkItem Claimed()
     {
-        var work = new WorkItem(1, "Inspect production", Now);
+        var work = new WorkItem(1, "Inspect production", Now, "Test work");
         work.Assign(2, Now);
         work.QueueExecution(3, new("codex", 4), Now);
         Assert.True(work.TryClaimExecution(3, 5, "sandbox/3", Now));

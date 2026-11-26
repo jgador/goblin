@@ -83,7 +83,8 @@ public enum WorkEventKind
     GitRepositoryRequested,
     GitRepositoryAuthorized,
     GitRepositoryDenied,
-    GitRepositoryAuthorizationInvalidated
+    GitRepositoryAuthorizationInvalidated,
+    Renamed
 }
 
 public enum WorkRule
@@ -95,7 +96,8 @@ public enum WorkRule
     AttemptNotCurrent,
     OwnershipMismatch,
     ReconciliationRequired,
-    DecisionNotCurrent
+    DecisionNotCurrent,
+    InvalidTitle
 }
 
 // These errors express product rules; the HTTP adapter chooses status codes.

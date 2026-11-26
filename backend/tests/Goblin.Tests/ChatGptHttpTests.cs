@@ -184,6 +184,7 @@ public sealed class ChatGptHttpTests
         var actions = new Dictionary<WorkAction, string>
         {
             [WorkAction.Create] = "goblin_create_work",
+            [WorkAction.Rename] = "goblin_rename_work",
             [WorkAction.Assign] = "goblin_assign_work",
             [WorkAction.AddContext] = "goblin_add_work_context",
             [WorkAction.Execute] = "goblin_execute_work",
@@ -210,7 +211,7 @@ public sealed class ChatGptHttpTests
                 or "goblin_authorize_work_repository" or "goblin_deny_work_repository";
             Assert.Equal(destructive, tool.ProtocolTool.Annotations?.DestructiveHint);
             Assert.Equal(destructive && tool.Name != "goblin_deny_work_repository" ||
-                tool.Name == "goblin_list_available_repositories", tool.ProtocolTool.Annotations?.OpenWorldHint);
+                tool.Name is "goblin_list_available_repositories" or "goblin_create_work", tool.ProtocolTool.Annotations?.OpenWorldHint);
             Assert.Equal(tool.Name != "goblin_ping" && tool.Name != "goblin_reserve_work_ids", tool.ProtocolTool.Annotations?.IdempotentHint);
             Assert.NotNull(tool.ProtocolTool.OutputSchema);
             Assert.NotNull(tool.ProtocolTool.Meta?["securitySchemes"]);

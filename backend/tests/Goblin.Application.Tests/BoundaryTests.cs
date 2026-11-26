@@ -43,7 +43,7 @@ public sealed class BoundaryTests
     [Fact]
     public void GitRepositorySandboxMountsOnlyItsOwnInputsWorkspaceAndCredentials()
     {
-        var work = new WorkItem(NextId(), "Edit assigned repository", DateTimeOffset.UtcNow);
+        var work = new WorkItem(NextId(), "Edit assigned repository", DateTimeOffset.UtcNow, "Test work");
         work.Assign(NextId(), DateTimeOffset.UtcNow);
         work.QueueExecution(NextId(), new("codex", NextId(), gitRepository: new("owner/repo", "Goblin", "goblin@example.test")), DateTimeOffset.UtcNow);
         using var api = new KubernetesApi("http://127.0.0.1:1");

@@ -66,6 +66,7 @@ export type Attempt = {
 };
 export type Work = {
     id: string;
+    title?: string | null;
     objective: string;
     status: WorkStatus;
     agentId?: string;
@@ -165,6 +166,7 @@ export type SelectedWorkAction =
           action:
               | typeof WorkAction.RequestChanges
               | typeof WorkAction.Answer
+              | typeof WorkAction.Rename
               | typeof WorkAction.AddContext;
           text: string;
           attemptId?: string;

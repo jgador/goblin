@@ -562,6 +562,15 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
 }
 .selected-work-identity { min-width: 0; }
 .selected-work-identity h1 { font-size: clamp(17px, 2vw, 23px); font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.work-title-row { display: flex; align-items: center; gap: 4px; }
+.work-title-row h1 { min-width: 0; }
+.work-title-row .icon-button { flex: none; color: var(--muted); }
+.work-title-edit { display: grid; gap: 5px; max-width: 32rem; }
+.work-title-edit input { width: 100%; min-width: 0; font-size: 16px; }
+.work-title-edit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.work-title-edit-actions .field-hint { margin: 0 auto 0 0; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.selected-work-header:has(.work-title-edit) .selected-work-identity { flex: 1 1 15rem; }
+.selected-work-header:has(.work-title-edit) { flex-wrap: wrap; }
 .work-heading-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 12px; margin-top: 4px; }
 .selected-work-actions { display: flex; flex: none; margin-inline-start: auto; }
 .selected-work-header svg { width: 17px; height: 17px; }
@@ -1119,10 +1128,6 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
 }
 .board-card-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .board-card-title {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    overflow: hidden;
     overflow-wrap: anywhere;
     align-self: start;
     font-size: 14px;
@@ -1217,6 +1222,7 @@ kbd { background: #f3f4f5; border-radius: 4px; padding: 1px 5px; font-family: in
     .work-state, .review-decision { padding: 14px; }
     .work-state > .primary, .composer-chip { min-height: 44px; }
     .header-navigation > .icon-button, .selected-work-header .icon-button { min-width: 44px; min-height: 44px; }
+    .selected-work-header:has(.work-title-edit) .selected-work-actions { display: none; }
     .workspace-refresh .refresh-trigger, .refresh-options label, .refresh-menu button { min-height: 44px; }
 }
 @media (max-width: 395px) {

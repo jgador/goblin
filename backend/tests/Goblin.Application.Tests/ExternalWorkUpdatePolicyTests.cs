@@ -56,7 +56,7 @@ public sealed class ExternalWorkUpdatePolicyTests
     [Fact]
     public void FailureBeforeClaimAlsoNotifies()
     {
-        var work = new WorkItem(1, "Inspect", Now);
+        var work = new WorkItem(1, "Inspect", Now, "Test work");
         work.Assign(2, Now);
         work.QueueExecution(3, new("codex", 4), Now);
         work.DispatchFailed(3, FailureKind.ConnectionUnavailable, Now);
@@ -139,7 +139,7 @@ public sealed class ExternalWorkUpdatePolicyTests
 
     private static WorkItem Running()
     {
-        var work = new WorkItem(1, "Inspect", Now);
+        var work = new WorkItem(1, "Inspect", Now, "Test work");
         work.Assign(2, Now);
         work.QueueExecution(3, new("codex", 4), Now);
         Assert.True(work.TryClaimExecution(3, 5, "sandbox/3", Now));

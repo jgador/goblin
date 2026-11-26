@@ -184,12 +184,19 @@ internal sealed class ChatGptTools
         };
     }, token);
 
-    [McpServerTool(Name = "goblin_create_work", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false,
+    [McpServerTool(Name = "goblin_create_work", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptCommandReply))]
     [McpMeta("securitySchemes", JsonValue = OAuth)]
-    [Description("Create Work with the default agent. First reserve both a command ID and a Work ID with goblin_reserve_work_ids(forCreate: true). Reuse the same IDs and objective after a disconnect.")]
+    [Description("Create Work with a Codex-generated title and the default agent. Goblin needs a connected Codex account. First reserve both a command ID and a Work ID with goblin_reserve_work_ids(forCreate: true). Reuse the same IDs and objective after a disconnect.")]
     public Task<CallToolResult> CreateAsync(string commandId, string workId, string objective, CancellationToken token) =>
         ApplyAsync(new(Id(commandId), Id(workId), WorkAction.Create) { Text = objective }, token);
+
+    [McpServerTool(Name = "goblin_rename_work", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false,
+        UseStructuredContent = true, OutputSchemaType = typeof(ChatGptCommandReply))]
+    [McpMeta("securitySchemes", JsonValue = OAuth)]
+    [Description("Rename Work using its latest version and a reserved command ID. Enter a single-line title of up to 90 characters.")]
+    public Task<CallToolResult> RenameAsync(string commandId, string workId, long expectedVersion, string title, CancellationToken token) =>
+        ApplyAsync(new(Id(commandId), Id(workId), WorkAction.Rename) { ExpectedVersion = expectedVersion, Text = title }, token);
 
     [McpServerTool(Name = "goblin_assign_work", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false,
         UseStructuredContent = true, OutputSchemaType = typeof(ChatGptCommandReply))]

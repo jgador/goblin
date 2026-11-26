@@ -163,10 +163,25 @@ test(
             action: "Create",
             text: "Keep all bigint digits",
         };
+        const disconnected = await request("/api/work/commands", command);
+        assert.equal(disconnected.status, 409);
+        assert.deepEqual(disconnected.body.error, {
+            code: "work_title_connection_required",
+            message: "Connect Codex to create work.",
+        });
+        assert.equal((await request("/api/work/" + workId)).status, 404);
+        const connection = await request("/api/auth/api-key", {
+            apiKey: "test-work-title-fixture-key",
+        });
+        assert.equal(connection.status, 200);
         const created = await request("/api/work/commands", command);
         assert.equal(created.status, 200);
         assert.equal(created.body.version, "1");
         assert.equal((created.body.work as { id: string }).id, workId);
+        assert.equal(
+            (created.body.work as { title: string }).title,
+            "Keep all bigint digits",
+        );
         assert.deepEqual(
             (await request("/api/work/commands", command)).body,
             created.body,

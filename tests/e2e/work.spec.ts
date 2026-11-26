@@ -253,8 +253,9 @@ test.describe("durable Work", () => {
                 requestedEffort: "high",
             });
         await page.reload();
+        await page.locator("#work-reference > summary").click();
         await page
-            .locator(".output-row summary")
+            .locator("#work-reference .output-row summary")
             .filter({ hasText: "codex" })
             .first()
             .click();
@@ -322,6 +323,38 @@ test.describe("durable Work", () => {
                 requestedModel: "gpt-test-0",
                 requestedEffort: "high",
             });
+    });
+
+    test("a renamed Work title survives a reload with the original objective", async ({
+        page,
+    }) => {
+        await unlock(page);
+        const objective =
+            "Verify the totals in the weekly report. Keep the existing examples.";
+        await create(page, objective);
+        const title = "Check weekly report totals";
+        await page
+            .getByRole("button", { name: "Rename work", exact: true })
+            .click();
+        const editor = page.getByRole("textbox", { name: "Work title" });
+        await editor.fill(title);
+        await editor.press("Enter");
+        await expect(
+            page.getByRole("heading", { name: title, exact: true }),
+        ).toBeVisible();
+        await page.reload();
+        await expect(
+            page.getByRole("heading", { name: title, exact: true }),
+        ).toBeVisible();
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            objective,
+        );
+        await page
+            .getByRole("button", { name: "Back to inbox", exact: true })
+            .click();
+        await expect(
+            page.getByRole("button", { name: title, exact: true }),
+        ).toBeVisible();
     });
     test("decisions, revisions, provenance, and approval survive refresh and another browser", async ({
         page,
@@ -563,6 +596,8 @@ test.describe("durable Work", () => {
     test("connection failures leave Work history and controls available", async ({
         page,
     }) => {
+        await unlock(page);
+        await create(page, "History remains available " + Date.now());
         await page.route("**/api/connections", (route) =>
             route.fulfill({
                 status: 503,
@@ -581,8 +616,7 @@ test.describe("durable Work", () => {
                 }),
             }),
         );
-        await unlock(page);
-        await create(page, "History remains available " + Date.now());
+        await refreshWorkspace(page);
         await expect(
             page.getByRole("button", {
                 name: "Manage Codex connection",

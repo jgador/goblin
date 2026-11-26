@@ -23,7 +23,7 @@ public sealed class GitRepositoryWorkQueryTests
     public void OwnerProjectionRestoresPersistedAggregateState()
     {
         DateTimeOffset created = new(2026, 10, 9, 8, 0, 0, TimeSpan.Zero);
-        var work = new WorkItem(5, "Inspect repository", created);
+        var work = new WorkItem(5, "Inspect repository", created, "Test work");
         work.Assign(11, created.AddMinutes(1));
         Persistence.Entities.WorkItem saved = WorkStatePersistence.Create(work, created.AddMinutes(1));
         var row = new AttemptRow { Id = 7, Status = AttemptStatus.Running.ToString(), TurnNumber = 3, Work = saved };

@@ -16,6 +16,8 @@ public sealed class WorkSnapshot
 
     public string Objective { get; init; } = null!;
 
+    public string? Title { get; init; }
+
     public long? AgentId { get; init; }
 
     public WorkStatus Status { get; init; }
@@ -127,6 +129,7 @@ public sealed partial class WorkItem
             SchemaVersion = 2,
             Id = Id,
             Objective = Objective,
+            Title = Title,
             AgentId = AgentId,
             Status = Status,
             Attention = Attention,
@@ -147,7 +150,8 @@ public sealed partial class WorkItem
         ArgumentNullException.ThrowIfNull(state);
         Require(state.SchemaVersion == 2 && state.History.Length > 0 &&
             (state.AgentId is null or > 0) && Enum.IsDefined(state.Status), WorkRule.InvalidValue);
-        var work = new WorkItem(state.Id, state.Objective, state.History[0].OccurredAt)
+        var work = new WorkItem(state.Id, state.Objective, state.Title is null ? null : WorkTitle.Require(state.Title),
+            state.History[0].OccurredAt)
         {
             AgentId = state.AgentId,
             Status = state.Status,

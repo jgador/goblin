@@ -26,13 +26,16 @@ public sealed partial class WorkStore
 {
     private readonly IDbContextFactory<GoblinDbContext> _dbFactory;
     private readonly WorkOutboxFactory _outboxes;
+    private readonly IWorkTitleGenerator _titles;
     private readonly WorkspaceLimits _limits;
     private readonly IGitRepositoryCatalog? _gitRepositoryCatalog;
 
-    public WorkStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkOutboxFactory outboxes, WorkspaceLimits? limits = null, IGitRepositoryCatalog? gitRepositoryCatalog = null)
+    public WorkStore(IDbContextFactory<GoblinDbContext> dbFactory, WorkOutboxFactory outboxes,
+        IWorkTitleGenerator titles, WorkspaceLimits? limits = null, IGitRepositoryCatalog? gitRepositoryCatalog = null)
     {
         _dbFactory = dbFactory;
         _outboxes = outboxes;
+        _titles = titles;
         _limits = limits ?? new();
         _gitRepositoryCatalog = gitRepositoryCatalog;
     }
@@ -85,26 +88,41 @@ public sealed partial class WorkStore
         WorkCommandPolicy.Validate(command);
         WorkView? replay = await ReplayAsync(command, token);
         if (replay is not null) return replay;
+        string? title = command.Action == WorkAction.Create ? await GenerateTitleAsync(command.Text, token) : null;
         GitRepositoryProposal? proposal = await ProposalAsync(command, token);
         await using GoblinDbContext db = await _dbFactory.CreateDbContextAsync(token);
         await using IDbContextTransaction transaction = await ApplicationTransaction.BeginAsync(db, token);
         IDbContextOutbox outbox = _outboxes.Create(db);
-        WorkView view = await ApplyInTransactionAsync(db, outbox, command, proposal, token);
+        WorkView view = await ApplyInTransactionAsync(db, outbox, command, proposal, title, token);
         await outbox.SaveChangesAndFlushMessagesAsync(token);
         return view;
+    }
+
+    internal async Task<string> GenerateTitleAsync(string? objective, CancellationToken token)
+    {
+        if (string.IsNullOrWhiteSpace(objective)) throw new ApplicationFailure("invalid_command");
+        string? title;
+        try { title = await _titles.GenerateAsync(objective, token); }
+        catch (ConnectionFailure)
+        {
+            token.ThrowIfCancellationRequested();
+            throw new ApplicationFailure("work_title_failed");
+        }
+        if (title is null) throw new ApplicationFailure("work_title_connection_required");
+        return WorkTitle.Normalize(title) ?? throw new ApplicationFailure("work_title_failed");
     }
 
     // Conversation adapters share these exact commands and product checks.
     // Their actor authorization, source receipt and commands use one transaction.
     internal Task<WorkView> ApplyConversationCommandAsync(GoblinDbContext db, IDbContextOutbox outbox,
-        WorkCommand command, CancellationToken token)
+        WorkCommand command, CancellationToken token, string? title = null)
     {
         WorkCommandPolicy.ValidateConversation(command);
-        return ApplyInTransactionAsync(db, outbox, command, null, token);
+        return ApplyInTransactionAsync(db, outbox, command, null, title, token);
     }
 
     private async Task<WorkView> ApplyInTransactionAsync(GoblinDbContext db, IDbContextOutbox outbox,
-        WorkCommand command, GitRepositoryProposal? proposal, CancellationToken token)
+        WorkCommand command, GitRepositoryProposal? proposal, string? title, CancellationToken token)
     {
         string fingerprint = WorkCommandPolicy.Fingerprint(command);
         Receipt? receipt = await db.WorkCommands.SingleOrDefaultAsync(x => x.Id == command.CommandId, token);
@@ -120,7 +138,8 @@ public sealed partial class WorkStore
         if (command.Action == WorkAction.Create)
         {
             if (row is not null) throw new ApplicationFailure("work_already_exists");
-            work = new(command.WorkId, command.Text ?? "", now);
+            work = new(command.WorkId, command.Text ?? "", now,
+                title ?? throw new InvalidOperationException("Work creation requires a prepared title."));
             work.Assign(DefaultAgentId, now);
             row = new() { Id = work.Id, Objective = work.Objective, CreatedAt = now.UtcDateTime, Version = 0 };
             db.WorkItems.Add(row);
@@ -135,6 +154,9 @@ public sealed partial class WorkStore
         switch (command.Action)
         {
             case WorkAction.Create: break;
+            case WorkAction.Rename:
+                work.Rename(command.Text, now);
+                break;
             case WorkAction.Assign:
                 long agentId = command.AgentId ?? throw new ApplicationFailure("agent_required");
                 if (!await db.Agents.AnyAsync(x => x.Id == agentId, token)) throw new ApplicationFailure("agent_not_found");

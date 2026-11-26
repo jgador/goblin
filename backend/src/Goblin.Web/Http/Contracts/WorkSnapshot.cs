@@ -20,6 +20,9 @@ public sealed class WorkSnapshot
     [JsonPropertyName("objective")]
     public string Objective { get; init; } = null!;
 
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
+
     [JsonPropertyName("agentId")]
     public long? AgentId { get; init; }
 
@@ -62,6 +65,7 @@ public sealed class WorkSnapshot
             SchemaVersion = value.SchemaVersion,
             Id = value.Id,
             Objective = value.Objective,
+            Title = value.Title,
             AgentId = value.AgentId,
             Status = value.Status,
             Attention = value.Attention is null ? null : WorkAttention.From(value.Attention),

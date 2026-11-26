@@ -32,6 +32,7 @@ export function matchesWork(
     agent: string,
 ) {
     return [
+        w.title ?? "",
         w.objective,
         w.id,
         agent,
@@ -217,6 +218,7 @@ export function renderExecutions(w: Work) {
 // Explicit product events only. Claims, cleanup bookkeeping, and runtime progress
 // reports stay in execution inspection; a runtime narrative is not a milestone.
 const eventNames: Partial<Record<WorkEventKind, string>> = {
+    Renamed: "Work renamed",
     [WorkEventKind.Created]: "Work created",
     [WorkEventKind.Assigned]: "Agent assigned",
     [WorkEventKind.ExecutionQueued]: "Work queued",

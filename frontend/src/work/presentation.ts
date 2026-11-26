@@ -1,22 +1,8 @@
 import { ConnectionAvailability, FailureKind } from "../api/values.js";
+import type { Work } from "./contracts.js";
 
-export function workTitle(objective: string) {
-    const lines = objective.split(/\r?\n/).map((line) => line.trim());
-    const first = lines.find(Boolean) ?? "";
-    const summary =
-        lines
-            .map((line) =>
-                line
-                    .replace(/https?:\/\/\S+/gi, "")
-                    .replace(/\s+/g, " ")
-                    .trim(),
-            )
-            .find((line) => /[\p{L}\p{N}]/u.test(line)) ?? first;
-    const characters = Array.from(summary);
-    if (characters.length <= 96) return summary;
-    const limit = characters.slice(0, 96).join("");
-    const wordEnd = limit.lastIndexOf(" ");
-    return (wordEnd >= 72 ? limit.slice(0, wordEnd) : limit) + "…";
+export function workTitle(work: Work) {
+    return work.title ?? `Work ${work.id}`;
 }
 
 export function connectionStatus(availability?: ConnectionAvailability) {
@@ -98,6 +84,7 @@ const icons: Record<string, string> = {
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2Z"/>',
     agents: '<circle cx="7" cy="7" r="3"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="17" r="3"/><path d="m9 9 6 6M7 10v4M14 7h6m-3-3v6"/>',
     share: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m9 10 6-4m-6 8 6 4"/>',
+    pencil: '<path d="M15 5l4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z"/>',
     more: '<circle cx="5" cy="12" r=".8"/><circle cx="12" cy="12" r=".8"/><circle cx="19" cy="12" r=".8"/>',
     github: '<path d="M9 19c-4 1-4-2-6-2m12 5v-4c0-1 .1-2-1-3 3 0 6-1 6-5a4 4 0 0 0-1-3c0-1 0-2-.3-3 0 0-1-.3-3 1a10 10 0 0 0-6 0c-2-1.3-3-1-3-1-.3 1-.3 2-.3 3a4 4 0 0 0-1 3c0 4 3 5 6 5-1 1-1 2-1 3v4"/>',
 };

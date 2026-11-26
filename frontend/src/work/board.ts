@@ -99,7 +99,7 @@ function card(item: View) {
     const id = e(work.id);
     return `<li><button class="board-card board-entry" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
         <span class="board-work-id">Work ${id}</span>
-        <span id="board-title-${id}" class="board-card-title">${e(workTitle(work.objective))}</span>
+        <span id="board-title-${id}" class="board-card-title">${e(workTitle(work))}</span>
         <span class="board-card-meta">${status(item)}${updated(item, id)}</span>
     </button></li>`;
 }
@@ -108,7 +108,7 @@ function rows(items: readonly View[]) {
     return `<div class="board-table"><div class="board-table-heading" aria-hidden="true"><span>Work</span><span>Status</span><span>Updated</span></div><ul class="board-list" role="list" aria-label="Work list">${items
         .map((item) => {
             const id = e(item.work.id);
-            const title = e(workTitle(item.work.objective));
+            const title = e(workTitle(item.work));
             return `<li><button class="board-entry board-list-item" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
             <span class="board-list-copy"><span class="board-list-icon">${icon("work")}</span><span class="board-list-label"><span id="board-title-${id}" class="board-list-title">${title}</span><span class="board-work-id">Work ${id}</span></span></span>
             ${status(item)}${updated(item, id)}<span class="board-list-chevron">${icon("chevron")}</span>

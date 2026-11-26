@@ -44,7 +44,7 @@ public sealed class GitRepositoryNamingTests
     [Fact]
     public void WorkerSnapshotKeepsNestedGitRepositoryAuthorityAndSetupNames()
     {
-        var work = new WorkItem(1, "Prepare a change", DateTimeOffset.UnixEpoch);
+        var work = new WorkItem(1, "Prepare a change", DateTimeOffset.UnixEpoch, "Test work");
         work.Assign(2, DateTimeOffset.UnixEpoch);
         var change = new GitRepositoryChange("owner/repo", "Author", "author@example.test", new GitRepositoryGrant
         {

@@ -13,7 +13,7 @@ public sealed class WorkStatePersistenceTests
     public void SnapshotRestorationUsesTheAggregateBoundary()
     {
         DateTimeOffset now = new(2026, 10, 9, 0, 0, 0, TimeSpan.Zero);
-        var work = new WorkItem(11, "Validate durable Work", now);
+        var work = new WorkItem(11, "Validate durable Work", now, "Test work");
         work.Assign(12, now);
         Persistence.Entities.WorkItem row = WorkStatePersistence.Create(work, now);
 
@@ -34,7 +34,7 @@ public sealed class WorkStatePersistenceTests
     public void SnapshotRestorationRejectsInvalidAggregateState()
     {
         DateTimeOffset now = new(2026, 10, 9, 0, 0, 0, TimeSpan.Zero);
-        var work = new WorkItem(11, "Invalid schema", now);
+        var work = new WorkItem(11, "Invalid schema", now, "Test work");
         string invalid = JsonSerializer.Serialize(work.Snapshot(), ContractJson.Options)
             .Replace("\"schemaVersion\":2", "\"schemaVersion\":1", StringComparison.Ordinal);
 
