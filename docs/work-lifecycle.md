@@ -7,41 +7,57 @@ attempts, Git checkpoints, and PVCs.
 
 ## Using Work
 
-**Work inbox** opens in **Board** view, grouping search matches into Ready, In progress,
+**Work inbox** opens in **Board** view, grouping items into Ready, In progress,
 Needs attention, and Closed. The board shows lanes with matching items. Closed includes
 completed and cancelled Work. Choose **List** to see items ordered by most recently
-updated. Use **Status** in List to narrow those results to work in progress, completed
-work, or work that needs attention for any reason. The sidebar count shows all Work that
-needs attention across the inbox. Open a card or row to see the Work conversation,
-activity, and outputs. Returning to the inbox restores the last layout, search, and
-List status. The sidebar’s **Search** action searches loaded Work and conversations.
-**New work** and **New chat** both open an **Ask Goblin** composer.
+updated. **Status** in List includes the Board groups and individual Completed and
+Cancelled filters. **Filter inbox** narrows either view. The **Needs attention**
+shortcut shows that group in List, with labels that describe the next action. The
+sidebar count shows all Work that needs attention. Returning to the inbox restores the
+last layout, filter text, and List status. **Search** or **Ctrl+K** (**⌘K** on Mac)
+opens a dialog for loaded Work and conversations from any workspace page. Use the
+arrow keys and **Enter** to open a result, or **Escape** to return to the current page.
 
-In **New work**, the submit arrow saves a goal and assigns the default agent.
-The **Codex** menu shows connection status. Choose **Manage Codex connection** to open Settings.
-**Start work** begins execution separately. In **New chat**, the submit arrow saves
-messages in an untracked conversation. **Track this work** creates Work from it.
+The clock in the upper-right toolbar sets the workspace auto-refresh interval to
+3, 5, 10, 15, 30, or 60 seconds. It defaults to 3 seconds. Choose **Off** to stop
+automatic updates, including when returning to the tab or reconnecting. Your choice
+is saved in browser local storage and reused on reload. Select **Refresh now** in
+the same menu to update the workspace immediately.
+
+In **New work**, **Create work** saves a goal and assigns the default agent.
+The **Codex** button shows the current status and links to connection settings.
+When Codex is disconnected, **Connect Codex** below the composer opens its setup page.
+**Start work** begins execution from the Ready item. Use **Add repository** to
+select a repository from the Ready item. In **New chat**, **Save message** saves a
+message in an untracked conversation. **Track this work** creates Work from it.
 An authorized Slack DM or mention creates and starts Work.
 See [Slack](slack-integration.md).
 
-Open the first message to read the full objective. Goblin posts questions and
-proposed results in the Work conversation. Approve a result from its message or
-choose **Ask for changes** in the composer to send review feedback. The composer
-keeps separate drafts for context and review feedback. **Outputs** opens saved
-results and artifacts, and **Work details** opens progress and execution records.
+Open **Full objective** to read the original goal. Goblin posts questions and
+proposed results in the Work conversation. The review area offers **Approve &
+complete** and **Request changes**. The composer keeps separate drafts for context
+and review feedback. **Saved outputs** contains results and artifacts, and
+**Execution details** contains progress and attempt records. **Add note** saves
+local context to closed Work.
 
-Use the current status panel to recover failures with an explicit retry or
-reconciliation. Repository setup uses a
+Approving or cancelling repository Work schedules deletion of its local workspace
+files. Open Work keeps its workspace for retries and revisions.
+
+The recovery panel shows the last failure and current Codex status, with access
+to the **Activity timeline**. Use **Retry work** or **Reconcile execution** when
+available. Repository setup uses a
 [saved authorization preview](git-repository-intent.md). Reading or expanding
 content never submits a command. Execution details preserve agent, runtime, requested and reported
 model, branch, and environment provenance.
 
-Repository-backed Work opens with a floating preview of the latest verified patch.
-Use the **Changes** list-controls button in the workspace toolbar to hide or show it.
-Select the repository and branch row to open the full diff beside the conversation
-on wide screens or across the Work area on narrow screens.
+For repository-backed Work, **Review changes** opens the saved patch when one is
+available. During result review, find it alongside the approval and feedback
+actions. In other active states, the toolbar’s **Changes** button toggles the
+preview. The diff opens beside the conversation on wide screens or across the Work area
+on narrow screens.
 Close the full diff or press **Escape** while reviewing to return to the summary.
-**All files** shows a continuous review, and **By file** lets you select a path.
+**All files** shows a continuous review, **By file** lets you select a path, and
+**Wrap lines** fits long lines within the diff.
 Expand a file or load more lines to read longer diffs. The
 [saved diff](workspace-lifecycle.md#files-and-git-checkpoints)
 is available while the execution pod is stopped and is cleared when the Work closes.
@@ -57,7 +73,7 @@ metadata and references rather than content retrieval; there is no execution-log
 Open the workspace menu at the bottom of the sidebar to find **Settings**, **System**,
 and **Lock workspace**. With the sidebar collapsed, the menu opens from the left side
 of the header. **Settings → Connections** manages the Codex runtime, GitHub, Slack, and
-the private ChatGPT plugin. **Back to work** returns to where you opened Settings.
+the private ChatGPT plugin. The Settings back button names the page it returns to.
 Knowledge indexing and Teams are unavailable. Workspace inspection is currently an
 [API](workspace-lifecycle.md#inspection), without a browser file or terminal view. The
 [browser journeys](../tests/e2e/) exercise navigation, draft preservation, command

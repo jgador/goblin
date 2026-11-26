@@ -38,6 +38,7 @@ public sealed class PublicError : Exception
             "external_link_expired" => "This Slack link request expired or has already been used. Start linking again.",
             "workspace_checkpoint_unconfirmed" => "The Git checkpoint could not be verified. The local workspace is retained.",
             "workspace_unavailable" => "This workspace is unavailable. Check its retained volume and inspection session.",
+            "workspace_closed" => "Workspace inspection is unavailable for closed Work.",
             "workspace_session_exists" => "A workspace session is already open for this Work.",
             "workspace_file_too_large" => "This file is too large to preview. Use the workspace terminal to inspect it.",
             "workspace_not_found" => "This saved workspace or file could not be found.",

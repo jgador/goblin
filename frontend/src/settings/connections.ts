@@ -8,7 +8,11 @@ import {
     SlackSetupStatus,
     ConnectionAvailability,
 } from "../api/values.js";
-import { icon, escapeHtml as e } from "../work/presentation.js";
+import {
+    connectionStatus,
+    icon,
+    escapeHtml as e,
+} from "../work/presentation.js";
 
 import type { Connection } from "../api/workspace-contracts.js";
 import { settingsHref } from "./navigation.js";
@@ -24,7 +28,8 @@ const providers = [
     {
         id: "codex",
         name: "Codex",
-        description: "Run Work with your ChatGPT account or an OpenAI API key.",
+        description:
+            "Runs Work with your ChatGPT account or an OpenAI API key.",
     },
     {
         id: "github",
@@ -38,9 +43,8 @@ const providers = [
     },
     {
         id: "chatgpt",
-        name: "ChatGPT",
-        description:
-            "Read and manage all Work through your private ChatGPT plugin.",
+        name: "ChatGPT plugin",
+        description: "Use Goblin from ChatGPT.",
     },
     {
         id: "teams",
@@ -176,19 +180,22 @@ function chatgptSummary(state: ChatGptState): Summary {
 
 function codexSummary(connections: Connection[]): Summary {
     const connection = connections.find((value) => value.runtime === "codex");
+    const status = connectionStatus(
+        connection?.availability ?? ConnectionAvailability.Disconnected,
+    );
     if (
         !connection ||
         connection.availability === ConnectionAvailability.Disconnected
     )
         return {
-            status: "Not connected",
+            status,
             tone: "neutral",
             detail: "",
             action: "Connect",
         };
     if (connection.availability === ConnectionAvailability.Available)
         return {
-            status: "Connected",
+            status,
             tone: "connected",
             detail: "Ready to run Work.",
             action: "Manage",
@@ -198,18 +205,15 @@ function codexSummary(connections: Connection[]): Summary {
         connection.availability === ConnectionAvailability.Changing
     )
         return {
-            status:
-                connection.availability === ConnectionAvailability.Verifying
-                    ? "Verifying sign-in"
-                    : "Changing connection",
+            status,
             tone: "neutral",
             detail: "",
             action: "Manage",
         };
     return {
-        status: "Needs attention",
+        status,
         tone: "attention",
-        detail: "Review your AI connection.",
+        detail: "Review your Codex connection.",
         action: "Manage",
     };
 }

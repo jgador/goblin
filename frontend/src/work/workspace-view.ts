@@ -1,6 +1,7 @@
 import {
     AttentionReason,
     ConnectionAvailability,
+    FailureKind,
     GitRepositoryAuthorizationStatus,
     WorkEventKind,
     WorkStatus,
@@ -13,7 +14,13 @@ import type { BoardLayout, ListStatus } from "./board.js";
 import type { View, Work } from "./contracts.js";
 import { renderModelPicker } from "./model-picker.js";
 import type { WorkspaceNavigation } from "./navigation.js";
-import { icon, escapeHtml as e } from "./presentation.js";
+import {
+    connectionStatus,
+    escapeHtml as e,
+    failureLabels,
+    icon,
+    workTitle,
+} from "./presentation.js";
 import { isRepositoryHandoff } from "./repository-setup.js";
 import {
     matchesWork,
@@ -27,12 +34,108 @@ import {
 } from "./surface.js";
 import type { WorkspaceController } from "./workspace.js";
 
+type WorkspaceState = WorkspaceController["state"];
+
+function matchingWork(workspace: WorkspaceState, query: string) {
+    const { work, conversations, agents } = workspace;
+    return work
+        .filter(
+            ({ work }) =>
+                !query ||
+                matchesWork(
+                    work,
+                    query,
+                    conversations,
+                    agents.find((agent) => agent.id === work.agentId)?.name ??
+                        "",
+                ),
+        )
+        .toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+}
+
+export function renderSearch(workspace: WorkspaceState, search: string) {
+    const query = search.trim().toLocaleLowerCase();
+    if (!query)
+        return {
+            status: "Search saved objectives, results, and messages.",
+            results: "",
+        };
+    const work = matchingWork(workspace, query);
+    const chats = workspace.conversations.filter(
+        ({ workId, title, messages }) =>
+            !workId &&
+            [title, ...messages.map(({ text }) => text)].some((text) =>
+                text.toLocaleLowerCase().includes(query),
+            ),
+    );
+    const unavailable = [
+        workspace.workUnavailable ? "Work" : "",
+        workspace.conversationsUnavailable ? "Conversations" : "",
+    ].filter(Boolean);
+    const count = work.length + chats.length;
+    const status = unavailable.length
+        ? `${unavailable.join(" and ")} could not be refreshed.${count ? ` Showing ${count} available ${count === 1 ? "result" : "results"}.` : ""}`
+        : count
+          ? `${count} ${count === 1 ? "result" : "results"}`
+          : workspace.loaded
+            ? "No matching work or conversations."
+            : "Loading workspace results…";
+    const option = (
+        kind: "work" | "chat",
+        id: string,
+        title: string,
+        context: string,
+    ) => {
+        const key = `search-${kind}-${e(id)}`;
+        return `<div id="${key}" class="search-option" role="option" aria-selected="false" aria-labelledby="${key}-title" aria-describedby="${key}-context" data-action="search-${kind}" data-id="${e(id)}">${icon(kind)}
+            <span><strong id="${key}-title">${e(title)}</strong><small id="${key}-context">${e(context)}</small></span>
+        </div>`;
+    };
+    const group = (kind: string, title: string, options: string[]) =>
+        options.length
+            ? `<div class="search-group" role="group" aria-labelledby="search-group-${kind}"><h3 id="search-group-${kind}">${title} <span aria-hidden="true">${options.length}</span></h3>${options.join("")}</div>`
+            : "";
+    return {
+        status,
+        results:
+            group(
+                "work",
+                "Work",
+                work.map(({ work: item }) =>
+                    option(
+                        "work",
+                        item.id,
+                        workTitle(item.objective),
+                        `Work ${item.id} · ${workStatus(item)}`,
+                    ),
+                ),
+            ) +
+            group(
+                "chat",
+                "Conversations",
+                chats.map((chat) =>
+                    option(
+                        "chat",
+                        chat.id,
+                        chat.title,
+                        `${chat.messages.length} ${chat.messages.length === 1 ? "saved message" : "saved messages"}`,
+                    ),
+                ),
+            ),
+    };
+}
+
 type WorkspaceViewInput = {
     navigation: Pick<
         WorkspaceNavigation,
-        "view" | "selected" | "activeChat" | "isDirectory" | "settingsSection"
+        | "view"
+        | "selected"
+        | "activeChat"
+        | "isDirectory"
+        | "settingsSection"
+        | "settingsReturn"
     >;
-    workspace: WorkspaceController["state"];
+    workspace: WorkspaceState;
     mobile: boolean;
     sidebarCollapsed: boolean;
     activityOpen: boolean;
@@ -42,8 +145,9 @@ type WorkspaceViewInput = {
     conversationsOpen: boolean;
     listStatus: ListStatus;
     boardLayout: BoardLayout;
-    search: string;
-    searchOpen: boolean;
+    inboxSearch: string;
+    refreshInterval: number;
+    refreshIntervals: readonly number[];
     draft: string;
     changing: boolean;
     authenticated: boolean;
@@ -69,8 +173,9 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         conversationsOpen,
         listStatus,
         boardLayout,
-        search,
-        searchOpen,
+        inboxSearch,
+        refreshInterval,
+        refreshIntervals,
         draft,
         changing,
         authenticated,
@@ -94,28 +199,19 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         loaded,
         workUnavailable,
         connectionsLoaded,
+        connectionsUnavailable,
     } = workspace;
     const item = work.find(({ work }) => work.id === selected);
-    const review = view === "work" && reviewableResult(item?.work);
+    const review = view === "work" ? reviewableResult(item?.work) : undefined;
     const workAgent = (work: Work) =>
         agents.find((agent) => agent.id === work.agentId);
     const workConnection = (work: Work) =>
         connections.find(
             (connection) => connection.id === workAgent(work)?.connectionId,
         );
-    const defaultAgent = agents.find((agent) => agent.isDefault);
-    const defaultConnection = connections.find(
-        (connection) => connection.id === defaultAgent?.connectionId,
-    );
-    const ordered = work.toSorted(
-        (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt),
-    );
-    const query = search.trim().toLocaleLowerCase();
-    const matches = query
-        ? ordered.filter(({ work: w }) =>
-              matchesWork(w, query, conversations, workAgent(w)?.name ?? ""),
-          )
-        : ordered;
+    const codexAvailability =
+        connections.find((connection) => connection.runtime === "codex")
+            ?.availability ?? ConnectionAvailability.Disconnected;
     const chats = conversations.filter((chat) => !chat.workId);
     const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
     const attention = (w: Work) => w.status === WorkStatus.NeedsAttention;
@@ -142,21 +238,27 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         return `<div class="message"><div class="${author === "Goblin" ? "bot-avatar" : "avatar"}">${author === "Goblin" ? '<img src="/assets/branding/icon.svg" alt="">' : "You"}</div><div><div class="message-name">${e(author)}<time>${at ? e(time(at)) : ""}</time></div><div class="message-text"><p class="preserve-lines">${e(text)}</p></div></div></div>`;
     }
     function connectionMenu() {
-        const status = connectionsLoaded
-            ? (defaultConnection?.availability ??
-              ConnectionAvailability.Unavailable)
-            : "Checking connection…";
-        return `<button id="codex-connection-trigger" class="connection-choice" type="button" popovertarget="codex-connection-menu"><img src="/assets/providers/codex.png" width="24" height="24" alt=""><span class="connection-name">${e(defaultConnection?.name ?? "Codex")}</span>${icon("chevron")}</button>
+        return `<button id="codex-connection-trigger" class="connection-choice" type="button" aria-label="Codex connection" popovertarget="codex-connection-menu"><img src="/assets/providers/codex.png" width="24" height="24" alt=""><span>Codex</span></button>
             <div id="codex-connection-menu" class="connection-menu" popover>
-                <p class="connection-menu-status" role="status">${e(status)}</p>
+                <p class="connection-menu-status" role="status">${currentConnectionStatus(codexAvailability)}</p>
                 <a href="${settingsHref("codex")}" data-action="settings-codex" data-settings-return-focus="codex-connection-trigger">${icon("settings")}Manage Codex connection</a>
             </div>`;
     }
+    function currentConnectionStatus(availability?: ConnectionAvailability) {
+        if (!connectionsLoaded) return "Checking connection…";
+        return connectionStatus(
+            connectionsUnavailable ? undefined : availability,
+        );
+    }
     function composer(
         kind: "new" | "chat" | "work",
-        placeholder = "Ask Goblin",
+        placeholder: string,
+        work?: Work,
     ) {
         const prompt = kind !== "work";
+        const closed =
+            work?.status === WorkStatus.Completed ||
+            work?.status === WorkStatus.Cancelled;
         const sendLabel =
             kind === "new"
                 ? "Create work"
@@ -164,12 +266,20 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                   ? "Save message"
                   : changing
                     ? "Send change request"
-                    : "Send message";
-        const input = `<label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="${prompt ? 1 : 3}" maxlength="4000" placeholder="${e(placeholder)}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea>`;
-        const send = `<button class="send" type="submit" aria-label="${sendLabel}" ${prompt ? `title="${sendLabel}"` : ""} ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${icon("up")}</button>`;
+                    : closed
+                      ? "Add note"
+                      : work?.attention?.reason ===
+                          AttentionReason.InputRequired
+                        ? "Send answer"
+                        : "Save context";
+        const help = closed ? "Saving a note keeps this Work closed." : "";
+        const input = `<label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="${prompt ? 1 : 2}" maxlength="4000" placeholder="${e(placeholder)}" required ${prompt || help ? 'aria-describedby="composer-help"' : ""} ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea>`;
+        const blocked =
+            submission.sending || submission.pending || workUnavailable;
+        const send = `<button class="send" type="submit" ${blocked ? 'data-blocked="true"' : ""} ${blocked || !draft.trim() ? "disabled" : ""}>${sendLabel}${icon(prompt && kind === "new" ? "plus" : "up")}</button>`;
         if (prompt)
-            return `<div class="composer-wrap"><form class="composer prompt-composer" data-form="${kind}">${input}${kind === "new" ? connectionMenu() : ""}${send}</form></div>`;
-        const workTools = `<button class="composer-chip" type="button" data-action="view-outputs" aria-controls="work-outputs">${icon("file")}Outputs</button>${review ? `<button class="composer-chip review-mode ${changing ? "selected" : ""}" type="button" data-action="changes" ${submission.sending ? "disabled" : ""}>${icon(changing ? "close" : "chat")}${changing ? "Cancel change request" : "Ask for changes"}</button>` : ""}`;
+            return `<div class="composer-wrap"><form class="composer prompt-composer" data-form="${kind}">${input}<div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionMenu() : ""}</div>${send}</div></form><p id="composer-help" class="composer-hint">${kind === "new" ? "Create a goal now, then start execution from the Ready item." : "Save messages in this conversation. Choose Track this work to turn it into a Work item."}</p></div>`;
+        const workTools = `${work && (work.results.length || work.artifacts.length) ? `<button class="composer-chip" type="button" data-action="view-outputs" aria-controls="work-outputs">${icon("file")}Outputs</button>` : ""}${changing ? `<button class="composer-chip" type="button" data-action="changes" ${submission.sending ? "disabled" : ""}>${icon("close")}Cancel change request</button>` : ""}${help ? `<p id="composer-help" class="composer-hint">${help}</p>` : ""}`;
         return `<div class="composer-wrap"><form class="composer" data-form="work">${input}<div class="composer-footer"><div class="composer-footer-start">${workTools}</div>${send}</div></form></div>`;
     }
     function renderWorkspaceMenu() {
@@ -193,7 +303,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             </div>
             <nav class="sidebar-start" aria-label="Work navigation">
                 <button class="nav-button" data-action="new-work">${icon("plus")}New work</button>
-                <button id="nav-work-search" class="nav-button" data-action="open-search" aria-keyshortcuts="Control+K Meta+K">${icon("search")}<span>Search</span><kbd aria-hidden="true">Ctrl K</kbd></button>
+                <button id="nav-work-search" class="nav-button" data-action="open-search" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">${icon("search")}<span>Search</span><kbd aria-hidden="true">Ctrl K</kbd></button>
                 <button class="nav-button ${inbox ? "active" : ""}" data-action="browse-work" ${inbox ? 'aria-current="page"' : ""} ${attentionCount ? 'aria-describedby="work-inbox-attention"' : ""}>${icon("inbox")}<span>Work inbox</span>${attentionCount ? `<span class="inbox-nav-count" aria-hidden="true">${attentionCount}</span>` : ""}</button>
                 ${attentionCount ? `<span class="sr-only" id="work-inbox-attention">${attentionCount} ${attentionCount === 1 ? "Work item needs" : "Work items need"} attention</span>` : ""}
                 <a id="nav-knowledge" class="nav-button ${view === "knowledge" ? "active" : ""}" href="/knowledge" data-action="knowledge" ${view === "knowledge" ? 'aria-current="page"' : ""}>${icon("knowledge")}Knowledge</a>
@@ -207,91 +317,113 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         </aside>`;
     }
     function renderHeader() {
-        const changes = showChanges
-            ? `<button id="show-changes" class="icon-button changes-toggle" type="button" data-action="view-changes" aria-label="Changes" title="Changes" aria-expanded="${changesPreviewOpen || changesOpen}" aria-controls="${changesOpen ? "work-changes-host" : "work-changes-preview-host"}">${icon("listControls")}</button>`
-            : "";
-        const section =
-            view === "settings"
-                ? "Settings"
-                : view === "knowledge"
-                  ? "Knowledge"
-                  : inbox
-                    ? "Work inbox"
-                    : "Work";
-        const breadcrumb = `<div class="workspace-breadcrumb"><span>Workspace</span>${icon("chevron")}<strong>${section}</strong>${view === "settings" ? `${icon("chevron")}<span>${e(settingsSectionName(navigation.settingsSection))}</span>` : ""}</div>`;
+        const intervalLabel = (seconds: number) =>
+            seconds ? `${seconds} seconds` : "Off";
+        const refresh = `<details id="workspace-refresh" class="workspace-refresh${inbox ? " inbox-refresh" : ""}">
+            <summary id="workspace-refresh-trigger" class="icon-button refresh-trigger" aria-label="Auto-refresh interval, ${intervalLabel(refreshInterval)}" title="Auto-refresh interval">${icon("clock")}<span>${refreshInterval ? `${refreshInterval}s` : "Off"}</span>${icon("chevron", "refresh-chevron")}</summary>
+            <div class="refresh-menu">
+                <fieldset><legend>Auto-refresh interval</legend>
+                    <div class="refresh-options">${refreshIntervals
+                        .map(
+                            (seconds) =>
+                                `<label><input id="workspace-refresh-${seconds}" type="radio" name="workspace-refresh-interval" value="${seconds}" ${seconds === refreshInterval ? "checked" : ""}>${intervalLabel(seconds)}</label>`,
+                        )
+                        .join("")}</div>
+                </fieldset>
+                <button type="button" data-action="refresh">${icon("refresh")}Refresh now</button>
+            </div>
+        </details>`;
+        const changes =
+            showChanges && !review
+                ? `<button id="show-changes" class="icon-button changes-toggle" type="button" data-action="view-changes" aria-label="Changes" title="Changes" aria-expanded="${changesPreviewOpen || changesOpen}" aria-controls="${changesOpen ? "work-changes-host" : "work-changes-preview-host"}">${icon("listControls")}</button>`
+                : "";
+        const section = {
+            settings: "Settings",
+            knowledge: "Knowledge",
+            board: "Work inbox",
+            work: "Work",
+            new: "New work",
+            chat: activeChat ? "Conversation" : "New chat",
+        }[view];
+        const returnLabel = {
+            board: "inbox",
+            new: "New work",
+            knowledge: "Knowledge",
+            work: "Work",
+            chat: navigation.settingsReturn.id ? "conversation" : "New chat",
+            settings: "Settings",
+        }[navigation.settingsReturn.view];
+        const breadcrumb =
+            view === "work"
+                ? `<button class="text-button work-return" data-action="browse-work">${icon("back")}Back to inbox</button>`
+                : `<div class="workspace-breadcrumb"><span>Workspace</span>${icon("chevron")}<strong>${section}</strong>${view === "settings" ? `${icon("chevron")}<span>${e(settingsSectionName(navigation.settingsSection))}</span>` : ""}</div>`;
         const actions =
             view === "settings"
-                ? `<button class="text-button settings-return" data-action="return-settings">${icon("back")}Back to work</button>`
+                ? `<button class="text-button settings-return" data-action="return-settings">${icon("back")}Back to ${returnLabel}</button>`
                 : inbox
                   ? renderInboxControls(boardLayout, listStatus)
                   : !isDirectory
-                    ? `<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button>${changes}`
+                    ? `${refresh}${changes}`
                     : "";
         return `<header class="workspace-header${inbox ? " inbox-header" : ""}" ${(mobile && !sidebarCollapsed) || activityOpen ? "inert" : ""}>
             ${
                 sidebarCollapsed
                     ? `<div class="header-navigation">
                 <button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar">${icon("sidebar")}</button>
-                <button id="show-work-search" class="icon-button" data-action="open-search" aria-label="Search" title="Search" aria-keyshortcuts="Control+K Meta+K">${icon("search")}</button>
+                <button id="show-work-search" class="icon-button" data-action="open-search" aria-label="Search" title="Search" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K">${icon("search")}</button>
                 ${renderWorkspaceMenu()}
             </div>`
                     : ""
             }
             ${breadcrumb}
-            ${inbox ? `<button class="icon-button inbox-refresh" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button>` : ""}
+            ${inbox ? refresh : ""}
             <div class="header-actions">${actions}</div>
-            <div id="workspace-search" class="workspace-search" ${!isDirectory && (searchOpen || search) ? "" : "hidden"}>
-                <label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="Search work and conversations" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"></label>
-                <div class="workspace-search-results">${renderSearchResults()}</div>
-            </div>
         </header>`;
-    }
-    function renderSearchResults() {
-        if (isDirectory || !query || !searchOpen) return "";
-        const items = inbox ? [] : matches;
-        const matchingChats = chats.filter(({ title, messages }) =>
-            [title, ...messages.map(({ text }) => text)].some((text) =>
-                text.toLocaleLowerCase().includes(query),
-            ),
-        );
-        if (inbox && !matchingChats.length) return "";
-        const heading = inbox ? "Matching conversations" : "Search results";
-        return `<section class="search-results" aria-label="${heading}"><div class="section-heading"><h3>${heading}</h3><button class="text-button" data-action="clear-search">Clear search</button></div>${items.map(({ work: w }) => `<button class="work-card" data-action="search-work" data-id="${e(w.id)}">${icon("work")}<span class="work-title">${e(w.objective)}</span></button>`).join("")}${matchingChats.map((chat) => `<button class="work-card" data-action="search-chat" data-id="${e(chat.id)}">${icon("chat")}<span class="work-title">${e(chat.title)}</span></button>`).join("")}${!items.length && !matchingChats.length ? '<p class="section-empty">No matching work or conversations.</p>' : ""}</section>`;
     }
     function renderBoardView() {
         return renderBoard({
-            total: ordered.length,
-            matches,
+            total: work.length,
+            matches: matchingWork(
+                workspace,
+                inboxSearch.trim().toLocaleLowerCase(),
+            ),
             loaded,
             workUnavailable,
             listStatus,
             layout: boardLayout,
-            search: query,
+            search: inboxSearch,
         });
     }
     function renderActivityPanel() {
-        return `<aside id="work-activity" class="activity-panel ${activityOpen ? "is-open" : ""}" aria-label="Activity" ${activityOpen ? 'role="dialog" aria-modal="true"' : "inert"}><div class="activity-heading"><h2>${icon("activity")}Activity</h2><button id="close-activity" class="icon-button" data-action="toggle-activity" aria-label="Close activity">${icon("close")}</button></div><div class="activity-body" data-scroll="activity">${renderActivity(view === "work" ? item?.work : undefined)}</div></aside>`;
+        return `<aside id="work-activity" class="activity-panel ${activityOpen ? "is-open" : ""}" aria-label="Activity timeline" ${activityOpen ? 'role="dialog" aria-modal="true"' : "inert"}><div class="activity-heading"><h2>${icon("activity")}Activity timeline</h2><button id="close-activity" class="icon-button" data-action="toggle-activity" aria-label="Close activity">${icon("close")}</button></div><div class="activity-body" data-scroll="activity">${renderActivity(view === "work" ? item?.work : undefined)}</div></aside>`;
     }
     function renderHome() {
-        const available = connections.some(
-            (c) => c.availability === ConnectionAvailability.Available,
-        );
+        const showNotice =
+            connectionsLoaded &&
+            (connectionsUnavailable ||
+                codexAvailability !== ConnectionAvailability.Available);
         const disconnected =
-            !connections.length ||
-            connections.every(
-                (c) => c.availability === ConnectionAvailability.Disconnected,
-            );
-        return `<section class="home" aria-labelledby="home-title"><div class="home-content"><h1 id="home-title">What should we work on?</h1>${composer("new")}<div class="connection-nudge" ${available || !connectionsLoaded ? "hidden" : ""}><button data-action="settings">${disconnected ? "Connect an AI provider" : "Manage connections"}${icon("arrow")}</button></div></div></section>`;
+            !connectionsUnavailable &&
+            codexAvailability === ConnectionAvailability.Disconnected;
+        const notice = disconnected
+            ? "Codex is not connected."
+            : `Codex · ${currentConnectionStatus(codexAvailability)}`;
+        return `<section class="home" aria-labelledby="home-title"><div class="home-content"><h1 id="home-title" tabindex="-1">New work</h1>${composer("new", "Describe the work")}
+            <div class="connection-nudge" ${showNotice ? "" : "hidden"}>
+                <p role="status">${icon("wait")}${notice}</p>
+                <a id="new-work-codex-settings" href="${settingsHref("codex")}" data-action="settings-codex" data-settings-return-focus="codex-connection-trigger">${disconnected ? "Connect Codex" : "Open Codex settings"}${icon("arrow")}</a>
+            </div></div></section>`;
     }
     function renderWorkReferences(item: View) {
         const w = item.work,
             attempt = w.attempts.at(-1);
-        return `<details id="work-outputs" class="work-reference"><summary>Saved outputs${icon("chevron", "disclosure-icon")}</summary><section class="work-reference-content" aria-label="Outputs">${renderOutputs(w)}</section></details>
-        <details id="work-reference" class="work-reference"><summary>Work details${icon("chevron", "disclosure-icon")}</summary><div class="work-reference-content work-support">
+        const outputCount = w.results.length + w.artifacts.length;
+        return `<details id="work-outputs" class="work-reference"><summary><span>Saved outputs <span class="output-count">${outputCount}</span></span>${icon("chevron", "disclosure-icon")}</summary><section class="work-reference-content" aria-label="Outputs">${renderOutputs(w)}</section></details>
+        <details id="work-reference" class="work-reference"><summary>Execution details${icon("chevron", "disclosure-icon")}</summary><div class="work-reference-content work-support">
         ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading"><div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span class="section-count">${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
         <section class="work-section progress-section" aria-labelledby="progress-heading"><div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}</div></section>
         ${w.attempts.length ? `<section class="work-section executions-section" aria-labelledby="executions-heading"><div class="section-content"><div class="section-heading"><h3 id="executions-heading">Executions</h3><span class="section-count">${w.attempts.length}</span></div>${renderExecutions(w)}</div></section>` : ""}
-        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div>${review ? `<div class="work-state-secondary">${button("cancel", "Cancel work")}</div>` : ""}</div></section>
+        <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div>${review ? cancelWork(w) : ""}</div></section>
         </div></details>`;
     }
     function renderSelectedWork(item: View) {
@@ -300,34 +432,43 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             ? "What would you like Goblin to change?"
             : w.attention?.reason === AttentionReason.InputRequired
               ? "Answer Goblin’s question…"
-              : "Add context to this work…";
+              : w.status === WorkStatus.Completed ||
+                  w.status === WorkStatus.Cancelled
+                ? "Write a note…"
+                : "Add context to this work…";
+        const patchHost = '<div id="work-changes-preview-host"></div>';
+        const reviewArea = review
+            ? `<section class="review-decision" aria-labelledby="review-heading"><h2 id="review-heading">Review result</h2>
+                ${patchHost}
+                <p>Approving the result completes this Work.${w.workspace ? " Goblin then deletes its local workspace files." : ""}</p>
+                <div class="work-state-actions">${button("approve", "Approve & complete", true)}${button("changes", "Request changes", false, changing)}</div></section>`
+            : "";
         return `<div class="work-selection${changesOpen ? " work-review-layout" : ""}">
             <section class="detail" aria-label="Selected work">
                 <div class="selected-work-top">
                     <header class="selected-work-header">
-                        <button class="icon-button" data-action="browse-work" aria-label="Back to work" title="Back to work">${icon("back")}</button>
-                        <div class="selected-work-identity"><h2 id="work-title-heading" tabindex="-1">Work ${e(w.id)}</h2>${status(w)}</div>
+                        <div class="selected-work-identity"><h1 id="work-title-heading" tabindex="-1">${e(workTitle(w.objective))}</h1><div class="work-heading-meta"><span>Work ${e(w.id)}</span>${status(w)}</div></div>
                         <div class="selected-work-actions">
                             <button class="icon-button" data-action="share-work" aria-label="Share" title="Share work">${icon("share")}</button>
-                            <button id="show-activity" class="icon-button" data-action="toggle-activity" aria-label="Activity" title="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}</button>
+                            <button id="show-activity" class="text-button activity-trigger" data-action="toggle-activity" aria-label="Activity timeline" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button>
                         </div>
                     </header>
-                    <div id="work-changes-preview-host"></div>
+                    ${review ? "" : patchHost}
                 </div>
                 <div class="detail-body work-thread" data-scroll="detail">
                     <div class="work-thread-content">
                         <section id="work-conversation" class="work-conversation" aria-label="Conversation about this Work">
                             <details id="work-objective" class="work-objective">
-                                <summary aria-label="Work objective"><span class="work-objective-preview">${e(w.objective)}</span><span class="work-objective-heading">Work objective</span>${icon("chevron", "disclosure-icon")}</summary>
+                                <summary>Full objective${icon("chevron", "disclosure-icon")}</summary>
                                 <p class="work-objective-full preserve-lines">${e(w.objective)}</p>
                             </details>
-                            ${renderConversation(w, workAgent(w)?.name ?? "Goblin", button("approve", "Approve & complete"))}
+                            ${renderConversation(w, workAgent(w)?.name ?? "Goblin", review, reviewArea)}
                         </section>
                         ${controls(w)}
                         <div class="work-references">${renderWorkReferences(item)}</div>
                     </div>
                 </div>
-                <div class="work-composer">${composer("work", reply)}</div>
+                <div class="work-composer">${composer("work", reply, w)}</div>
             </section>
             <div id="work-changes-host" ${changesOpen ? "" : "hidden"}></div>
         </div>`;
@@ -345,6 +486,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         const suggestions = w.repositoryRequest?.repositories ?? [];
         const name =
             proposed?.repository ??
+            w.workspace?.repository ??
             (suggestions.length === 1 ? suggestions[0] : "");
         const preview =
             pendingApproval && grant
@@ -372,12 +514,12 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                     ? "<p>Repository access was declined. You can review a different request.</p>"
                     : "";
         return `${preview}<details id="github-repository-options" data-approval="${approval ? `${approval.id}:${approval.status}` : ""}" ${required && !pendingApproval ? "open" : ""}>
-        <summary>${icon("chevron")}${pendingApproval ? "Change repository or actions" : "Repository access"}</summary>
-        <p>Choose an enabled repository to continue. Goblin uses its default branch and your connected GitHub commit identity. Changes stay local unless your request asks to publish them.</p>
+        <summary>${icon("chevron")}${pendingApproval ? "Change repository or actions" : required || handoff ? "Repository access" : w.workspace ? "Repository settings" : "Add repository"}</summary>
+        <p>Choose a GitHub repository for this Work. Goblin uses the repository’s default branch and your connected GitHub commit identity unless you specify them.</p>
         ${suggestions.length > 1 ? `<p class="field-hint">Several repositories match: ${e(suggestions.join(", "))}. Choose the full name.</p>` : ""}
         <form class="work-setup github-repository-form" data-form="github-repository" novalidate>
             <div><label for="github-repository">Repository</label>
-                <input class="field-control" id="github-repository" name="github-repository" list="known-github-repositories" value="${e(name)}" placeholder="owner/repository or GitHub URL" required aria-describedby="github-repository-error">
+                <input class="field-control" id="github-repository" name="github-repository" list="known-github-repositories" value="${e(name)}" placeholder="owner/repository or GitHub URL" ${w.workspace ? "readonly" : "required"} aria-describedby="github-repository-error">
                 <datalist id="known-github-repositories">${repositories.map((r) => `<option value="${e(r.name)}">${r.enabled ? "Enabled" : "Requires enablement"}</option>`).join("")}</datalist>
                 <p class="field-error" id="github-repository-error" hidden></p>
                 <button type="button" class="text-button" data-action="settings-github">Manage repositories${icon("arrow")}</button>
@@ -400,7 +542,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                 <div><label for="git-email">Git commit email (optional)</label><input class="field-control" id="git-email" name="git-email" type="email" value="${e(proposed?.gitAuthorEmail ?? "")}" placeholder="GitHub no-reply email" aria-describedby="git-email-error"><p class="field-error" id="git-email-error" hidden></p></div>
             </div>
             </details>
-            ${runtimes.some((r) => r.repositoryExecution) ? `<div class="github-repository-actions"><button id="start-github-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !canExecute) ? "disabled" : ""}>Use repository</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
+            ${runtimes.some((r) => r.repositoryExecution) ? `<p class="field-hint">An enabled repository starts Work. Other repositories require approval first.</p><div class="github-repository-actions"><button id="start-github-repository" type="submit" class="primary" ${submission.sending || submission.pending || (!handoff && !canExecute) ? "disabled" : ""}>Use repository</button></div>` : '<p role="status">Repository execution is unavailable on this Goblin.</p>'}
         </form>
     </details>`;
     }
@@ -423,7 +565,67 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                   : connection.availability === ConnectionAvailability.Verifying
                     ? "Codex is being checked. You can start work when the check finishes."
                     : "Codex needs attention before Goblin can start working.";
-        return `<div class="work-executor"><img src="/assets/branding/icon.svg" alt=""><div class="executor-identity"><strong>${e(workAgent(w)?.name ?? "Goblin")}</strong>${runtime ? `<span>Uses ${e(runtime)}</span>` : ""}</div>${available ? (model ? renderModelPicker(model) : "") : ""}</div>${available ? "" : `<p role="status">${notice}</p>${connectionsLoaded ? button("settings-codex", disconnected ? "Connect Codex" : "Manage Codex connection", true) : ""}`}`;
+        return `<div class="work-executor"><img src="/assets/branding/icon.svg" alt=""><div class="executor-identity"><strong>${e(workAgent(w)?.name ?? "Goblin")}</strong>${runtime ? `<span>Uses ${e(runtime)}</span>` : ""}</div>${available ? (model ? renderModelPicker(model) : "") : ""}</div>${available || w.attention?.reason === AttentionReason.Failure ? "" : `<p role="status">${notice}</p>${connectionsLoaded ? button("settings-codex", disconnected ? "Connect Codex" : "Manage Codex connection", true) : ""}`}`;
+    }
+    function repositoryScope(w: Work) {
+        const previous = w.attempts.findLast(
+            (attempt) =>
+                attempt.target.repository &&
+                (!w.workspace ||
+                    attempt.target.repository.repository ===
+                        w.workspace.repository),
+        )?.target.repository;
+        const repository = w.workspace?.repository ?? previous?.repository;
+        if (!repository)
+            return '<p class="repository-scope">No repository attached</p>';
+        const grant = previous?.grant;
+        const delivery = grant?.allowPullRequest
+            ? "Push and open a draft PR"
+            : grant?.allowPush
+              ? "Push changes"
+              : "Keep changes local";
+        return `<dl class="execution-properties repository-scope">
+            <dt>${w.workspace ? "Repository" : "Previous repository"}</dt><dd>${e(repository)}</dd>
+            ${grant ? `<dt>Previous base branch</dt><dd>${e(grant.baseBranch)}</dd><dt>Previous delivery</dt><dd>${delivery}</dd>` : ""}
+        </dl>`;
+    }
+    function failureRecovery(w: Work) {
+        const attempt = w.attempts.at(-1);
+        const failure = w.attention?.failure ?? attempt?.failure;
+        const related =
+            failure === FailureKind.ConnectionUnavailable ||
+            failure === FailureKind.RuntimeDisconnected;
+        const failedAt =
+            attempt?.finishedAt ??
+            w.history.findLast(
+                (event) =>
+                    event.kind === WorkEventKind.ExecutionFailed &&
+                    (!attempt || event.attemptId === attempt.id),
+            )?.occurredAt;
+        const availability = workConnection(w)?.availability;
+        const available = availability === ConnectionAvailability.Available;
+        const manage = `<a id="recovery-codex" class="${available ? "secondary" : "primary"}" href="${settingsHref("codex")}" data-action="settings-codex">Manage Codex connection</a>`;
+        const activity = `<button id="recovery-activity" class="secondary" data-action="toggle-activity" aria-expanded="${activityOpen}" aria-controls="work-activity">View activity</button>`;
+        const guidance =
+            failure === FailureKind.WorkspaceCapacityReached
+                ? "Close Work that still has a workspace or raise the workspace limit before retrying."
+                : related
+                  ? available
+                      ? "Codex is connected now. Check the last attempt before retrying."
+                      : availability === ConnectionAvailability.Changing ||
+                          availability === ConnectionAvailability.Verifying
+                        ? "Wait for the connection check or change to finish before retrying."
+                        : "Check the Codex connection before retrying."
+                  : "Review the last attempt before deciding whether to retry.";
+        return `<h3>Recover work</h3>
+            <dl class="execution-properties recovery-facts"><dt>Last attempt</dt><dd>${failure ? failureLabels[failure] : "Execution failed"}${failedAt ? `<time datetime="${e(failedAt)}">${e(time(failedAt))}</time>` : ""}</dd>
+            <dt>Codex now</dt><dd>${currentConnectionStatus(availability)}</dd></dl>
+            <p>${guidance}</p>
+            ${available ? executionSetup(w) : ""}
+            <div class="work-state-actions">${!available && connectionsLoaded ? manage : ""}${available ? button("retry", "Retry work", true, !canExecute) : ""}${activity}${available && related ? manage : ""}</div>`;
+    }
+    function cancelWork(w: Work) {
+        return `<div class="work-state-secondary">${w.workspace ? "<p>Cancelling this Work deletes its local workspace files.</p>" : ""}${button("cancel", "Cancel work")}</div>`;
     }
     function controls(w: Work) {
         if (w.attention?.reason === AttentionReason.CleanupRequired)
@@ -432,7 +634,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             return `<section class="decision work-state" aria-label="Current status"><p>Saving the outcome and finishing execution cleanup…</p></section>`;
         let content = "";
         if (w.status === WorkStatus.Ready)
-            content = `<h3>Ready to start</h3>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `${button("execute", "Start work", true, !canExecute)}${gitHubRepositorySetup(w)}` : ""}`;
+            content = `<h3>Ready to start</h3>${executionSetup(w)}${repositoryScope(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? `${button("execute", "Start work", true, !canExecute)}${gitHubRepositorySetup(w)}` : ""}`;
         if (review) return "";
         if (w.attention?.reason === AttentionReason.InputRequired) {
             const decision = w.decisions.at(-1);
@@ -447,7 +649,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         if (w.attention?.reason === AttentionReason.GitRepositoryRequired)
             content = `${w.repositoryAuthorization?.status === GitRepositoryAuthorizationStatus.Pending ? "" : "<h3>Repository access needed</h3><p>Review and authorize the repository and Git actions to continue this Work.</p>"}${gitHubRepositorySetup(w, true)}`;
         if (w.attention?.reason === AttentionReason.Failure)
-            content = `<h3>Needs attention</h3><p>${e(label(w.attention.failure ?? "Execution failed"))}. Check the connection and execution history before retrying.</p>${executionSetup(w)}${workConnection(w)?.availability === ConnectionAvailability.Available ? button("retry", "Retry work", true, !canExecute) : ""}`;
+            content = failureRecovery(w);
         if (w.attention?.reason === AttentionReason.UncertainExecution)
             content = `<h3>Execution needs reconciliation</h3><p>Goblin cannot yet confirm the outcome. Check the execution or stop it before retrying.</p>${button("reconcile", "Reconcile execution", true)}`;
         if (
@@ -465,15 +667,15 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                 WorkStatus.Cancelling,
             ].some((value) => value === w.status)
         )
-            content += `<div class="work-state-secondary">${button("cancel", "Cancel work")}</div>`;
+            content += cancelWork(w);
         return content
-            ? `<section class="decision work-state" aria-label="Current status">${content}</section>`
+            ? `<section class="decision work-state${w.attention?.reason === AttentionReason.Failure ? " work-recovery" : ""}" aria-label="Current status">${content}</section>`
             : "";
     }
     function renderChat() {
         const c = conversations.find((x) => x.id === activeChat);
         if (!c)
-            return `<section class="home" aria-labelledby="chat-title" data-scroll="chat"><div class="home-content"><h1 id="chat-title">New chat</h1>${composer("chat")}</div></section>`;
+            return `<section class="home" aria-labelledby="chat-title" data-scroll="chat"><div class="home-content"><h1 id="chat-title" tabindex="-1">New chat</h1>${composer("chat", "Write a message")}</div></section>`;
         const messages = c.messages
             .map((m) =>
                 message(
@@ -488,7 +690,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         const tracking = c.workId
             ? `<button class="tracked-link" data-action="select-work" data-id="${c.workId}">Open tracked work ${icon("arrow")}</button>`
             : button("track", "Track this work", true);
-        return `<section class="chat-workspace" aria-labelledby="chat-title"><div class="detail-body" data-scroll="chat"><div class="thread-content"><h1 id="chat-title" class="conversation-title">${e(c.title)}</h1>${messages}${tracking}</div></div>${composer("chat")}</section>`;
+        return `<section class="chat-workspace" aria-labelledby="chat-title"><div class="detail-body" data-scroll="chat"><div class="thread-content"><h1 id="chat-title" class="conversation-title" tabindex="-1">${e(c.title)}</h1>${messages}${tracking}</div></div>${composer("chat", "Write a message")}</section>`;
     }
     const connectionNotice =
         sessionFailures && (sessionChecked || sessionFailures > 1)

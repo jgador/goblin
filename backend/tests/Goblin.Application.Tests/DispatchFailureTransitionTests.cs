@@ -59,6 +59,17 @@ public sealed class DispatchFailureTransitionTests
     }
 
     [Fact]
+    public void WorkspaceCapacityRemainsTheFailureAfterReconciliationConfirmsTheStop()
+    {
+        WorkItem work = Active("starting");
+        Apply(work, FailureKind.WorkspaceCapacityReached);
+        work.ConfirmExecutionStopped(3, 5, Now.AddMinutes(2));
+        Assert.Equal(AttentionReason.Failure, work.Attention!.Reason);
+        Assert.Equal(FailureKind.WorkspaceCapacityReached, work.Attention.Failure);
+        Assert.Equal(AttemptStatus.Failed, Assert.Single(work.Attempts).Status);
+    }
+
+    [Fact]
     public void StaleAttemptAndTurnEvidenceCannotChangeCurrentExecution()
     {
         WorkItem work = Active("running");

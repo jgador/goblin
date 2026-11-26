@@ -1,6 +1,6 @@
 import { WorkStatus, AttentionReason, WorkEventKind } from "../api/values.js";
 import type { Work, View, Conversation } from "./contracts.js";
-import { icon, escapeHtml as e } from "./presentation.js";
+import { icon, escapeHtml as e, failureLabels } from "./presentation.js";
 import { formatTimestamp } from "../settings/timezone.js";
 
 const label = (value: string) => value.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -199,7 +199,7 @@ export function renderExecutions(w: Work) {
         title: `${a.target.runtime} · ${label(a.status)}`,
         type: "Execution",
         description: `Attempt ${a.id} · ${timestamp(a.startedAt ?? a.queuedAt)}`,
-        body: `<dl class="execution-properties"><dt>Attempt</dt><dd>${e(a.id)}</dd><dt>Runtime turn</dt><dd>${a.turnNumber ?? 1}</dd><dt>Agent</dt><dd>${e(a.agentId ?? "Not recorded")}</dd><dt>Runtime</dt><dd>${e(a.target.runtime)}</dd><dt>Requested model</dt><dd>${e(a.target.requestedModel ?? "Codex default")}</dd><dt>Reasoning effort</dt><dd>${e(a.target.requestedEffort ? effortLabel(a.target.requestedEffort) : "Model default")}</dd><dt>Reported model</dt><dd>${e(a.session?.model ?? "Model not reported")}</dd><dt>Started</dt><dd>${e(timestamp(a.startedAt))}</dd><dt>Finished</dt><dd>${e(timestamp(a.finishedAt))}</dd>${a.environmentReference ? `<dt>Environment</dt><dd>${e(a.environmentReference)}</dd>` : ""}${a.target.repository ? `<dt>Repository</dt><dd>${e(a.target.repository.repository)}${a.target.repository.grant ? ` · ${e(a.target.repository.grant.branch)} · @${e(a.target.repository.grant.login)}` : ""}</dd>` : ""}${a.failure ? `<dt>Failure</dt><dd>${e(label(a.failure))}</dd>` : ""}${a.cleanupPending ? "<dt>Cleanup</dt><dd>Pending</dd>" : ""}</dl>${a.priorTurns?.length ? `<details class="execution-events"><summary>Previous runtime turns (${a.priorTurns.length})</summary>${a.priorTurns.map((t) => `<p class="inspection-meta">Turn ${t.number} · ${e(t.session?.model ?? "Model not reported")} · ${e(timestamp(t.startedAt))}${t.checkpointId ? " · Checkpoint saved" : ""}</p>`).join("")}</details>` : ""}${
+        body: `<dl class="execution-properties"><dt>Attempt</dt><dd>${e(a.id)}</dd><dt>Runtime turn</dt><dd>${a.turnNumber ?? 1}</dd><dt>Agent</dt><dd>${e(a.agentId ?? "Not recorded")}</dd><dt>Runtime</dt><dd>${e(a.target.runtime)}</dd><dt>Requested model</dt><dd>${e(a.target.requestedModel ?? "Codex default")}</dd><dt>Reasoning effort</dt><dd>${e(a.target.requestedEffort ? effortLabel(a.target.requestedEffort) : "Model default")}</dd><dt>Reported model</dt><dd>${e(a.session?.model ?? "Model not reported")}</dd><dt>Started</dt><dd>${e(timestamp(a.startedAt))}</dd><dt>Finished</dt><dd>${e(timestamp(a.finishedAt))}</dd>${a.environmentReference ? `<dt>Environment</dt><dd>${e(a.environmentReference)}</dd>` : ""}${a.target.repository ? `<dt>Repository</dt><dd>${e(a.target.repository.repository)}${a.target.repository.grant ? ` · ${e(a.target.repository.grant.branch)} · @${e(a.target.repository.grant.login)}` : ""}</dd>` : ""}${a.failure ? `<dt>Failure</dt><dd>${e(failureLabels[a.failure])}</dd>` : ""}${a.cleanupPending ? "<dt>Cleanup</dt><dd>Pending</dd>" : ""}</dl>${a.priorTurns?.length ? `<details class="execution-events"><summary>Previous runtime turns (${a.priorTurns.length})</summary>${a.priorTurns.map((t) => `<p class="inspection-meta">Turn ${t.number} · ${e(t.session?.model ?? "Model not reported")} · ${e(timestamp(t.startedAt))}${t.checkpointId ? " · Checkpoint saved" : ""}</p>`).join("")}</details>` : ""}${
             w.history.filter((h) => h.attemptId === a.id).length
                 ? `<details class="execution-events" id="execution-events-${e(a.id)}"><summary>Execution history</summary>${w.history
                       .filter((h) => h.attemptId === a.id)
@@ -287,7 +287,7 @@ export function renderActivity(w?: Work) {
                         ].some((value) => value === h.kind)
                       ? "Agent"
                       : "Goblin";
-                return `<li class="activity-item"><span class="activity-icon">${icon(source === "Goblin Web" ? "chat" : source === "Agent" ? "spark" : "activity")}</span><details id="event-${e(h.sequence)}"><summary><span class="activity-source">${source}<time datetime="${e(h.occurredAt)}" title="${e(timestamp(h.occurredAt))}">${e(relativeTime(h.occurredAt))}</time></span><span class="activity-title">${e(eventNames[h.kind])}</span>${h.text ? `<span class="activity-preview">${e(h.text)}</span>` : ""}${h.failure ? `<span class="activity-preview">${e(label(h.failure))}</span>` : ""}</summary><div class="activity-context">${h.text ? `<p class="preserve-lines">${e(h.text)}</p>` : ""}<p>${e(timestamp(h.occurredAt))}</p>${h.attemptId ? `<button class="text-button" data-action="inspect-output" data-id="execution-${e(h.attemptId)}">Attempt ${e(h.attemptId)} ${icon("arrow")}</button>` : ""}</div></details></li>`;
+                return `<li class="activity-item"><span class="activity-icon">${icon(source === "Goblin Web" ? "chat" : source === "Agent" ? "spark" : "activity")}</span><details id="event-${e(h.sequence)}"><summary><span class="activity-source">${source}<time datetime="${e(h.occurredAt)}" title="${e(timestamp(h.occurredAt))}">${e(relativeTime(h.occurredAt))}</time></span><span class="activity-title">${e(eventNames[h.kind])}</span>${h.text ? `<span class="activity-preview">${e(h.text)}</span>` : ""}${h.failure ? `<span class="activity-preview">${e(failureLabels[h.failure])}</span>` : ""}</summary><div class="activity-context">${h.text ? `<p class="preserve-lines">${e(h.text)}</p>` : ""}<p>${e(timestamp(h.occurredAt))}</p>${h.attemptId ? `<button class="text-button" data-action="inspect-output" data-id="execution-${e(h.attemptId)}">Attempt ${e(h.attemptId)} ${icon("arrow")}</button>` : ""}</div></details></li>`;
             })
             .join("")}</ol>` +
         (w.history.some((h) => eventNames[h.kind])
@@ -296,8 +296,12 @@ export function renderActivity(w?: Work) {
     );
 }
 
-export function renderConversation(w: Work, agent: string, approve: string) {
-    const review = reviewableResult(w);
+export function renderConversation(
+    w: Work,
+    agent: string,
+    review: ReturnType<typeof reviewableResult>,
+    reviewArea: string,
+) {
     const results = new Map(
         w.results.map((result) => [result.attemptId, result]),
     );
@@ -307,24 +311,24 @@ export function renderConversation(w: Work, agent: string, approve: string) {
         fromAgent: boolean,
         at?: string,
         note = "",
-        action = "",
     ) =>
-        `<article class="context-message ${fromAgent ? "agent-message" : "user-message"}"><p class="message-name">${fromAgent ? '<img src="/assets/branding/icon.svg" alt="">' + e(agent) : "You"}${note ? `<span>${e(note)}</span>` : ""}${at ? `<time datetime="${e(at)}" title="${e(timestamp(at))}">${e(relativeTime(at))}</time>` : ""}</p><p class="message-body preserve-lines">${e(text)}</p>${action ? `<div class="result-action">${action}</div>` : ""}</article>`;
+        `<article class="context-message ${fromAgent ? "agent-message" : "user-message"}"><p class="message-name">${fromAgent ? '<img src="/assets/branding/icon.svg" alt="">' + e(agent) : "You"}${note ? `<span>${e(note)}</span>` : ""}${at ? `<time datetime="${e(at)}" title="${e(timestamp(at))}">${e(relativeTime(at))}</time>` : ""}</p><p class="message-body preserve-lines">${e(text)}</p></article>`;
+    const resultMessage = (result: Work["results"][number], at?: string) => {
+        const content = message(
+            result.text,
+            true,
+            at,
+            result.approvedAt ? "Approved result" : "",
+        );
+        return result === review ? content + reviewArea : content;
+    };
     for (const event of w.history) {
         if (!conversationEvents.has(event.kind)) continue;
         if (event.kind === WorkEventKind.ResultProposed && event.attemptId) {
             const result = results.get(event.attemptId);
             if (result) {
                 results.delete(event.attemptId);
-                messages.push(
-                    message(
-                        result.text,
-                        true,
-                        event.occurredAt,
-                        "",
-                        result === review ? approve : "",
-                    ),
-                );
+                messages.push(resultMessage(result, event.occurredAt));
                 continue;
             }
         }
@@ -339,14 +343,6 @@ export function renderConversation(w: Work, agent: string, approve: string) {
         messages.push(message(event.text, fromAgent, event.occurredAt, note));
     }
     for (const result of results.values())
-        messages.push(
-            message(
-                result.text,
-                true,
-                result.proposedAt,
-                "",
-                result === review ? approve : "",
-            ),
-        );
+        messages.push(resultMessage(result, result.proposedAt));
     return messages.join("");
 }

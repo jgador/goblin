@@ -53,8 +53,8 @@ internal sealed class WebRuntimeConfiguration
     private static WorkspaceLimits ReadWorkspaceLimits(IConfiguration configuration)
     {
         var limits = new WorkspaceLimits(
-            configuration.GetValue(Env.GoblinMaxSandboxes, 2),
-            configuration.GetValue(Env.GoblinMaxCachedWorkspaces, 4));
+            configuration.GetValue(Env.GoblinMaxSandboxes, WorkspaceLimits.DefaultMaxSandboxes),
+            configuration.GetValue(Env.GoblinMaxCachedWorkspaces, WorkspaceLimits.DefaultMaxCachedVolumes));
         if (limits.MaxSandboxes < 1 || limits.MaxCachedVolumes < 1)
             throw new InvalidOperationException("Invalid workspace capacity configuration.");
         return limits;

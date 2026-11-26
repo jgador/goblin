@@ -1,13 +1,23 @@
 import { AttentionReason, WorkStatus } from "../api/values.js";
 import type { View, Work } from "./contracts.js";
-import { escapeHtml as e, icon } from "./presentation.js";
+import { escapeHtml as e, icon, workTitle } from "./presentation.js";
 import { relativeTime } from "./surface.js";
+
+const lanes = [
+    { id: "ready", name: "Ready", icon: "circle" },
+    { id: "active", name: "In progress", icon: "progress" },
+    { id: "attention", name: "Needs attention", icon: "wait" },
+    { id: "closed", name: "Closed", icon: "circleCheck" },
+] as const;
 
 const listStatuses = {
     all: "All statuses",
-    attention: "Needs attention",
-    active: "In progress",
-    done: "Completed",
+    ready: lanes[0].name,
+    active: lanes[1].name,
+    attention: lanes[2].name,
+    closed: lanes[3].name,
+    done: WorkStatus.Completed,
+    cancelled: WorkStatus.Cancelled,
 } as const;
 
 export type ListStatus = keyof typeof listStatuses;
@@ -19,23 +29,16 @@ export function isListStatus(value: string): value is ListStatus {
 
 function workInFilter(work: Work, filter: ListStatus) {
     switch (filter) {
-        case "attention":
-            return work.status === WorkStatus.NeedsAttention;
-        case "active":
-            return laneByStatus[work.status] === "active";
+        case "all":
+            return true;
         case "done":
             return work.status === WorkStatus.Completed;
+        case "cancelled":
+            return work.status === WorkStatus.Cancelled;
         default:
-            return true;
+            return laneByStatus[work.status] === filter;
     }
 }
-
-const lanes = [
-    { id: "ready", name: "Ready", icon: "circle" },
-    { id: "active", name: "In progress", icon: "progress" },
-    { id: "attention", name: "Needs attention", icon: "wait" },
-    { id: "closed", name: "Closed", icon: "circleCheck" },
-] as const;
 
 const laneByStatus: Record<WorkStatus, (typeof lanes)[number]["id"]> = {
     Ready: "ready",
@@ -56,12 +59,23 @@ const attentionLabels: Record<AttentionReason, string> = {
     RepositoryRequired: "Repository access needed",
 };
 
+const attentionActions: Record<AttentionReason, string> = {
+    InputRequired: "Reply",
+    ResultReview: "Review",
+    Failure: "Recover",
+    UncertainExecution: "Reconcile",
+    CleanupRequired: "Reconcile",
+    RepositoryRequired: "Authorize",
+};
+
 export function workStatus(work: Work) {
     if (work.status === WorkStatus.NeedsAttention)
         return work.attention
             ? attentionLabels[work.attention.reason]
             : "Needs attention";
-    return work.status === WorkStatus.InProgress ? "In progress" : work.status;
+    return work.status === WorkStatus.InProgress
+        ? listStatuses.active
+        : work.status;
 }
 
 function status(item: View) {
@@ -72,7 +86,8 @@ function status(item: View) {
             : work.status === WorkStatus.Cancelled
               ? "ready"
               : laneByStatus[work.status];
-    return `<span id="board-status-${e(work.id)}" class="board-status" data-tone="${tone}">${e(workStatus(work))}</span>`;
+    const reason = work.attention?.reason;
+    return `<span id="board-status-${e(work.id)}" class="board-status" data-tone="${tone}">${reason ? `${attentionActions[reason]}<span class="sr-only"> · ${attentionLabels[reason]}</span>` : e(workStatus(work))}</span>`;
 }
 
 function updated(item: View, id: string) {
@@ -84,7 +99,7 @@ function card(item: View) {
     const id = e(work.id);
     return `<li><button class="board-card board-entry" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
         <span class="board-work-id">Work ${id}</span>
-        <span id="board-title-${id}" class="board-card-title" title="${e(work.objective)}">${e(work.objective)}</span>
+        <span id="board-title-${id}" class="board-card-title">${e(workTitle(work.objective))}</span>
         <span class="board-card-meta">${status(item)}${updated(item, id)}</span>
     </button></li>`;
 }
@@ -93,9 +108,9 @@ function rows(items: readonly View[]) {
     return `<div class="board-table"><div class="board-table-heading" aria-hidden="true"><span>Work</span><span>Status</span><span>Updated</span></div><ul class="board-list" role="list" aria-label="Work list">${items
         .map((item) => {
             const id = e(item.work.id);
-            const title = e(item.work.objective);
+            const title = e(workTitle(item.work.objective));
             return `<li><button class="board-entry board-list-item" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
-            <span class="board-list-copy"><span class="board-list-icon">${icon("work")}</span><span class="board-list-label"><span id="board-title-${id}" class="board-list-title" title="${title}">${title}</span><span class="board-work-id">Work ${id}</span></span></span>
+            <span class="board-list-copy"><span class="board-list-icon">${icon("work")}</span><span class="board-list-label"><span id="board-title-${id}" class="board-list-title">${title}</span><span class="board-work-id">Work ${id}</span></span></span>
             ${status(item)}${updated(item, id)}<span class="board-list-chevron">${icon("chevron")}</span>
         </button></li>`;
         })
@@ -174,6 +189,9 @@ export function renderBoard({
         layout === "list" && listStatus !== "all"
             ? matches.filter(({ work }) => workInFilter(work, listStatus))
             : matches;
+    const attentionCount = matches.filter(({ work }) =>
+        workInFilter(work, "attention"),
+    ).length;
     const count =
         shown.length === total
             ? `${total} ${total === 1 ? "work item" : "work items"}`
@@ -182,7 +200,7 @@ export function renderBoard({
         ? workUnavailable
             ? "Work unavailable"
             : "Loading work…"
-        : search && !matches.length
+        : search.trim() && !matches.length
           ? "No work matches your search."
           : !total
             ? "Create work to give Goblin a goal."
@@ -190,14 +208,18 @@ export function renderBoard({
     return `<section class="board-workspace" aria-labelledby="board-heading" data-scroll="board">
         <div class="board-inner">
             <h1 id="board-heading" class="board-heading" tabindex="-1">Work inbox</h1>
-            <p class="board-result-count" role="status"><span class="board-count" ${loaded ? "" : "hidden"}>${count}</span></p>
+            <div class="board-tools">
+                <label class="inbox-search">${icon("search")}<span class="sr-only">Filter inbox</span><input id="inbox-search" type="search" placeholder="Filter inbox" value="${e(search)}" autocomplete="off"></label>
+                <div class="board-attention">${attentionCount && !(layout === "list" && listStatus === "attention") ? `<button class="secondary" data-action="filter-attention">Needs attention <span>${attentionCount}</span></button>` : ""}</div>
+                <p class="board-result-count" role="status"><span class="board-count" ${loaded ? "" : "hidden"}>${count}</span></p>
+            </div>
             <div class="board-content">
                 ${
                     loaded && shown.length
                         ? layout === "board"
                             ? columns(shown)
                             : rows(shown)
-                        : `<p class="board-empty">${empty}${loaded && search ? '<button class="text-button" data-action="clear-search">Clear search</button>' : ""}</p>`
+                        : `<div class="board-empty"><p role="status">${empty}</p>${loaded && search.trim() ? '<button class="text-button" data-action="clear-inbox-search">Clear filter</button>' : ""}</div>`
                 }
             </div>
         </div>

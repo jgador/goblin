@@ -39,6 +39,7 @@ import {
 } from "./model-selection.js";
 import { WorkspaceNavigation } from "./navigation.js";
 import type { WorkspaceContext, WorkspaceView } from "./navigation.js";
+import { workTitle } from "./presentation.js";
 import {
     isRepositoryHandoff,
     readRepositorySetup,
@@ -48,7 +49,7 @@ import {
 import { reviewableResult } from "./surface.js";
 import { WorkspaceController } from "./workspace.js";
 import { WorkspaceDom } from "./workspace-dom.js";
-import { renderWorkspace } from "./workspace-view.js";
+import { renderSearch, renderWorkspace } from "./workspace-view.js";
 
 const workspace = new WorkspaceController(() =>
     window.dispatchEvent(new Event("goblin-workspace-locked")),
@@ -57,6 +58,16 @@ const navigation = new WorkspaceNavigation();
 const drafts = new ComposerDrafts();
 const repositoryDrafts = new RepositoryDrafts();
 const root = document.querySelector<HTMLDivElement>("#app")!;
+const searchDialog =
+    document.querySelector<HTMLDialogElement>("#workspace-search")!;
+const searchInput =
+    searchDialog.querySelector<HTMLInputElement>("#work-search")!;
+const searchResults = searchDialog.querySelector<HTMLElement>(
+    "#global-search-results",
+)!;
+const searchStatus = searchDialog.querySelector<HTMLElement>(
+    "#global-search-status",
+)!;
 const dom = new WorkspaceDom(root, repositoryDrafts);
 const workChanges = new WorkChangesPanel(api);
 const commands = new WorkCommands(
@@ -65,13 +76,27 @@ const commands = new WorkCommands(
 );
 const mobile = matchMedia("(max-width: 760px)");
 const compact = matchMedia("(max-width: 1199px)");
+const refreshIntervalKey = "goblin.refreshIntervalSeconds";
+const defaultRefreshInterval = 3;
+const refreshIntervals = [defaultRefreshInterval, 5, 10, 15, 30, 60, 0];
+let refreshInterval = defaultRefreshInterval;
+let refreshTimer: number | undefined;
+try {
+    const saved = localStorage.getItem(refreshIntervalKey);
+    refreshInterval =
+        refreshIntervals.find((seconds) => String(seconds) === saved) ??
+        defaultRefreshInterval;
+} catch {
+    // Use the default when browser storage is unavailable.
+}
 let activityOpen = false,
     conversationsOpen = navigation.view === "chat",
     listStatus: ListStatus = "all",
     boardLayout: BoardLayout = "board",
-    searchOpen = false,
-    search = "",
     inboxSearch = "";
+let searchOpener: HTMLElement | undefined;
+let searchMarkup = "";
+let activityOpener = "show-activity";
 let sidebarCollapsed =
     mobile.matches ||
     localStorage.getItem("goblin.sidebarCollapsed") === "true";
@@ -239,8 +264,7 @@ function forgetWorkspace() {
     pendingContext = undefined;
     reviewAttempt = undefined;
     listStatus = "all";
-    searchOpen = false;
-    search = "";
+    closeSearch(false);
     inboxSearch = "";
     modelCatalogs.clear();
     modelSelections.clear();
@@ -262,6 +286,22 @@ function refresh(preserveError = false) {
     return task;
 }
 
+function refreshAutomatically() {
+    if (refreshInterval > 0 || !sessionChecked) void refresh();
+}
+
+function scheduleRefresh() {
+    window.clearInterval(refreshTimer);
+    // Even with auto-refresh off, recover if the first session check fails.
+    const seconds =
+        refreshInterval || (sessionChecked ? 0 : defaultRefreshInterval);
+    refreshTimer = seconds
+        ? window.setInterval(() => {
+              if (!document.hidden) refreshAutomatically();
+          }, seconds * 1000)
+        : undefined;
+}
+
 async function loadWorkspace(preserveError: boolean) {
     const signal = workspace.signal;
     try {
@@ -270,6 +310,7 @@ async function loadWorkspace(preserveError: boolean) {
         sessionFailures = 0;
         authenticated = session.authenticated;
         sessionChecked = true;
+        if (refreshInterval === 0) scheduleRefresh();
         if (!authenticated) {
             forgetWorkspace();
             render();
@@ -364,6 +405,7 @@ async function send(
     error = "";
     commandActive = true;
     let confirmed = false;
+    let destination: WorkspaceContext | undefined;
     try {
         const saved = prepare
             ? await submission.submit(async () => {
@@ -388,13 +430,20 @@ async function send(
             if (
                 saved.path === "/api/work/commands" &&
                 saved.body.action === WorkAction.Create
-            )
+            ) {
                 navigate("work", saved.body.workId);
+                destination = navigation.context;
+            }
             if (saved.path === "/api/conversations/commands") {
-                if (typeof saved.body.workId === "string")
+                if (typeof saved.body.workId === "string") {
                     navigate("work", saved.body.workId);
-                else if (navigation.activeChat !== saved.body.conversationId)
+                    destination = navigation.context;
+                } else if (
+                    navigation.activeChat !== saved.body.conversationId
+                ) {
                     navigate("chat", saved.body.conversationId);
+                    destination = navigation.context;
+                }
             }
         }
     } catch (failure) {
@@ -410,6 +459,8 @@ async function send(
         if (!signal.aborted) {
             if (!submission.pending) pendingContext = undefined;
             await refresh(!confirmed);
+            if (destination === navigation.context && !searchDialog.open)
+                focusDestination();
         } else render();
     }
 }
@@ -427,11 +478,8 @@ function navigate(
     const previous = navigation.view;
     const leavingSettings = previous === "settings" && next !== "settings";
     if (leavingSettings) settings.reset();
-    if (previous === "board" && next !== "board") inboxSearch = search;
+    closeSearch(false);
     navigation.navigate(next, id, historyMode);
-    searchOpen = false;
-    if (next === "board" && previous !== "board") search = inboxSearch;
-    else if (navigation.isDirectory) search = "";
     reviewAttempt = undefined;
     activityOpen = false;
     modelPickerOpen = false;
@@ -455,22 +503,168 @@ function closeChanges() {
 function closeDiff() {
     if (!workChanges.closeReview()) return;
     render(false, true);
+    workChanges.focusReviewEntry();
+}
+
+function openSearch(trigger = document.activeElement) {
+    if (!searchDialog.open) {
+        searchOpener = trigger instanceof HTMLElement ? trigger : undefined;
+        searchDialog.showModal();
+        updateSearch();
+    }
+    searchInput.focus();
+}
+
+function closeSearch(restoreFocus: boolean) {
+    if (!searchDialog.open) return;
+    searchDialog.close();
+    searchInput.value = "";
+    selectSearchOption();
+    searchMarkup = "";
+    searchResults.replaceChildren();
+    searchResults.hidden = true;
+    searchInput.setAttribute("aria-expanded", "false");
+    const opener = searchOpener;
+    searchOpener = undefined;
+    if (!restoreFocus) return;
+    const target = opener?.isConnected
+        ? opener
+        : opener?.id
+          ? document.getElementById(opener.id)
+          : opener?.dataset.action
+            ? Array.from(
+                  root.querySelectorAll<HTMLElement>("[data-action]"),
+              ).find(
+                  (element) =>
+                      element.dataset.action === opener.dataset.action &&
+                      element.dataset.id === opener.dataset.id &&
+                      element.dataset.value === opener.dataset.value &&
+                      !element.closest("[inert]") &&
+                      element.getClientRects().length,
+              )
+            : null;
+    if (
+        target &&
+        target !== document.body &&
+        !target.closest("[inert]") &&
+        target.getClientRects().length
+    ) {
+        target.focus({ preventScroll: true });
+    } else {
+        const fallback = activityOpen
+            ? "close-activity"
+            : sidebarCollapsed
+              ? "show-work-search"
+              : "nav-work-search";
+        document.getElementById(fallback)?.focus({ preventScroll: true });
+    }
+}
+
+function selectSearchOption(option?: HTMLElement) {
+    searchResults
+        .querySelector('[aria-selected="true"]')
+        ?.setAttribute("aria-selected", "false");
+    if (!option) {
+        searchInput.removeAttribute("aria-activedescendant");
+        return;
+    }
+    option.setAttribute("aria-selected", "true");
+    searchInput.setAttribute("aria-activedescendant", option.id);
+}
+
+function updateSearch() {
+    if (!searchDialog.open) return;
+    const { status, results } = renderSearch(
+        workspace.state,
+        searchInput.value,
+    );
+    if (status !== searchStatus.textContent) searchStatus.textContent = status;
+    if (results === searchMarkup) return;
+    const selected = searchInput.getAttribute("aria-activedescendant");
+    searchMarkup = results;
+    searchResults.innerHTML = results;
+    searchResults.hidden = !results;
+    searchInput.setAttribute("aria-expanded", String(!!results));
+    selectSearchOption(
+        selected ? (document.getElementById(selected) ?? undefined) : undefined,
+    );
+}
+
+function closeActivity() {
+    activityOpen = false;
+    render();
     (
-        workChanges.preview.querySelector("button") ??
-        document.getElementById("show-changes")
+        document.getElementById(activityOpener) ??
+        document.getElementById("show-activity")
     )?.focus({ preventScroll: true });
 }
 
-function openSearch() {
-    const requiresNavigation =
-        navigation.isDirectory || (mobile.matches && !sidebarCollapsed);
-    if (navigation.isDirectory) navigate("board");
-    if (mobile.matches) sidebarCollapsed = true;
-    if (requiresNavigation) render();
-    const panel = document.getElementById("workspace-search");
-    if (panel) panel.hidden = false;
-    document.getElementById("work-search")?.focus();
+function focusDestination() {
+    root.querySelector<HTMLElement>(
+        "#settings-title, .directory-heading h1, #work-title-heading, #chat-title, #board-heading, #home-title",
+    )?.focus();
 }
+
+function selectSearchResult(option: HTMLElement) {
+    navigate(
+        option.dataset.action === "search-work" ? "work" : "chat",
+        option.dataset.id,
+    );
+    render();
+    focusDestination();
+}
+
+searchDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeSearch(true);
+});
+searchDialog.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !event.isComposing) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeSearch(true);
+    }
+});
+searchDialog.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target === searchDialog || target.id === "close-search")
+        closeSearch(true);
+    const option = target.closest<HTMLElement>('[role="option"]');
+    if (option) selectSearchResult(option);
+});
+searchInput.addEventListener("input", () => {
+    selectSearchOption();
+    updateSearch();
+});
+searchInput.addEventListener("keydown", (event) => {
+    if (
+        event.isComposing ||
+        !["ArrowDown", "ArrowUp", "Enter"].includes(event.key)
+    )
+        return;
+    const options = Array.from(
+        searchResults.querySelectorAll<HTMLElement>('[role="option"]'),
+    );
+    if (!options.length) return;
+    event.preventDefault();
+    const active = options.findIndex(
+        (option) =>
+            option.id === searchInput.getAttribute("aria-activedescendant"),
+    );
+    if (event.key === "Enter") {
+        selectSearchResult(options[Math.max(0, active)]);
+        return;
+    }
+    const next =
+        event.key === "ArrowDown"
+            ? (active + 1) % options.length
+            : active <= 0
+              ? options.length - 1
+              : active - 1;
+    selectSearchOption(options[next]);
+    options[next].scrollIntoView({ block: "nearest" });
+});
 
 function composerDraftMode(): DraftMode {
     return reviewAttempt ? `review:${reviewAttempt}` : "message";
@@ -500,9 +694,9 @@ function render(preserveMounted = false, forceSelect = false) {
               )
               .findLast((id) => id !== undefined)
         : undefined;
-    workChanges.setWork(changesWorkId, changesCheckpointId);
-    if (reviewableResult(work)?.attemptId !== reviewAttempt)
-        reviewAttempt = undefined;
+    const review = reviewableResult(work);
+    workChanges.setWork(changesWorkId, changesCheckpointId, !!review);
+    if (review?.attemptId !== reviewAttempt) reviewAttempt = undefined;
     const draft = drafts.get(context, composerDraftMode());
     const submissionState = {
         sending: commandActive,
@@ -521,16 +715,21 @@ function render(preserveMounted = false, forceSelect = false) {
         draft,
         ...submissionState,
         workUnavailable: workspace.state.workUnavailable,
-        title:
-            view === "settings"
-                ? "Settings · Goblin"
-                : view === "knowledge"
-                  ? "Knowledge · Goblin"
-                  : view === "board" && authenticated
-                    ? "Work inbox · Goblin"
-                    : work && authenticated
-                      ? work.objective.slice(0, 70) + " · Goblin"
-                      : "Goblin",
+        title: authenticated
+            ? `${
+                  {
+                      settings: "Settings",
+                      knowledge: "Knowledge",
+                      board: "Work inbox",
+                      new: "New work",
+                      work: work ? workTitle(work.objective) : "Work",
+                      chat:
+                          workspace.state.conversations.find(
+                              (chat) => chat.id === navigation.activeChat,
+                          )?.title ?? "New chat",
+                  }[view]
+              } · Goblin`
+            : "Goblin",
         markup: () => {
             const choice = work ? modelSelection(work) : undefined;
             return renderWorkspace({
@@ -545,8 +744,9 @@ function render(preserveMounted = false, forceSelect = false) {
                 conversationsOpen,
                 listStatus,
                 boardLayout,
-                search,
-                searchOpen,
+                inboxSearch,
+                refreshInterval,
+                refreshIntervals,
                 draft,
                 changing: !!reviewAttempt,
                 authenticated,
@@ -582,6 +782,7 @@ function render(preserveMounted = false, forceSelect = false) {
                   }
                 : undefined,
     });
+    updateSearch();
     if (rendered && authenticated && view !== "settings") ensureModels();
 }
 function setModelEffort(value: string, updateOnly = false) {
@@ -641,12 +842,20 @@ function setModelEffort(value: string, updateOnly = false) {
         gitHubRepositoryButton.disabled =
             !w || !modelCanSubmit(w) || commandActive || !!submission.pending;
 }
+const openHeaderMenus = "#workspace-menu[open], #workspace-refresh[open]";
+function closeHeaderMenusOutside(target: Element) {
+    for (const menu of root.querySelectorAll<HTMLDetailsElement>(
+        openHeaderMenus,
+    ))
+        if (!menu.contains(target)) menu.open = false;
+}
+function dismissHeaderMenu(menu: HTMLDetailsElement) {
+    menu.open = false;
+    menu.querySelector("summary")?.focus({ preventScroll: true });
+}
 document.addEventListener("click", async (event) => {
     if (!(event.target instanceof Element)) return;
-    if (!event.target.closest("#workspace-menu"))
-        root.querySelector<HTMLDetailsElement>(
-            "#workspace-menu",
-        )?.removeAttribute("open");
+    closeHeaderMenusOutside(event.target);
     if (modelPickerOpen && !event.target.closest(".model-picker")) {
         modelPickerOpen = false;
         modelListOpen = false;
@@ -666,7 +875,7 @@ document.addEventListener("click", async (event) => {
     const action = target.dataset.action,
         value = target.dataset.value;
     if (action === "open-search") {
-        openSearch();
+        openSearch(target);
         return;
     }
     if (action === "knowledge") {
@@ -751,6 +960,8 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "refresh") {
+        const menu = target.closest<HTMLDetailsElement>("#workspace-refresh");
+        if (menu) dismissHeaderMenu(menu);
         await refresh();
         return;
     }
@@ -783,6 +994,19 @@ document.addEventListener("click", async (event) => {
     if (action === "board-layout" && (value === "board" || value === "list")) {
         boardLayout = value;
         render();
+        return;
+    }
+    if (action === "filter-attention") {
+        boardLayout = "list";
+        listStatus = "attention";
+        render();
+        document.getElementById("inbox-status")?.focus();
+        return;
+    }
+    if (action === "clear-inbox-search") {
+        inboxSearch = "";
+        render();
+        document.getElementById("inbox-search")?.focus();
         return;
     }
     if (action === "view-outputs") {
@@ -845,12 +1069,15 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "toggle-activity") {
-        activityOpen = !activityOpen;
+        if (activityOpen) {
+            closeActivity();
+            return;
+        }
+        activityOpener = target.id;
+        activityOpen = true;
         if (mobile.matches) sidebarCollapsed = true;
         render();
-        document
-            .getElementById(activityOpen ? "close-activity" : "show-activity")
-            ?.focus();
+        document.getElementById("close-activity")?.focus();
         return;
     }
     if (action === "discuss-goal") {
@@ -888,6 +1115,11 @@ document.addEventListener("click", async (event) => {
         }
         return;
     }
+    if (action === "reload-changes") {
+        void workChanges.openPreview();
+        workChanges.focusReviewEntry();
+        return;
+    }
     if (action === "review-diff") {
         if (workChanges.openReview()) {
             render(false, true);
@@ -913,22 +1145,6 @@ document.addEventListener("click", async (event) => {
         render();
         return;
     }
-    if (action === "clear-search") {
-        search = "";
-        searchOpen = true;
-    }
-    if (action === "search-work" || action === "search-chat") {
-        navigate(
-            action === "search-work" ? "work" : "chat",
-            target.dataset.id!,
-        );
-        search = "";
-        render();
-        root.querySelector<HTMLElement>(
-            action === "search-work" ? ".detail h2" : "#reply",
-        )?.focus();
-        return;
-    }
     if (action === "new-work") navigate("new");
     if (action === "view-chat") conversationsOpen = !conversationsOpen;
     if (action === "new-chat") {
@@ -942,9 +1158,12 @@ document.addEventListener("click", async (event) => {
     if (action === "changes") {
         const result = reviewableResult(work);
         if (!result) return;
-        reviewAttempt = reviewAttempt ? undefined : result.attemptId;
+        const cancelling = !!reviewAttempt;
+        reviewAttempt = cancelling ? undefined : result.attemptId;
         render();
-        document.getElementById("reply")?.focus();
+        root.querySelector<HTMLElement>(
+            cancelling ? '.review-decision [data-action="changes"]' : "#reply",
+        )?.focus();
         return;
     }
     if (action === "execute" && work)
@@ -980,16 +1199,10 @@ document.addEventListener("click", async (event) => {
         await send(() => commands.track(conversationId));
     }
     render();
-    if (action === "clear-search")
-        document.getElementById("work-search")?.focus();
-    if (
-        ["select-work", "select-chat", "new-work", "new-chat"].includes(
-            action ?? "",
-        )
-    )
-        root.querySelector<HTMLElement>(
-            action === "select-work" ? ".detail h2" : "#reply",
-        )?.focus();
+    if (action === "select-work" || action === "select-chat")
+        focusDestination();
+    if (action === "new-work" || action === "new-chat")
+        document.getElementById("reply")?.focus();
 });
 document.addEventListener("submit", async (event) => {
     if (
@@ -1103,18 +1316,40 @@ document.addEventListener("input", (event) => {
         event.target instanceof HTMLTextAreaElement &&
         event.target.id === "reply" &&
         root.contains(event.target)
-    )
+    ) {
         drafts.set(navigation.context, event.target.value, composerDraftMode());
+        const send =
+            event.target.form?.querySelector<HTMLButtonElement>(".send");
+        if (send)
+            send.disabled =
+                !!send.dataset.blocked || !event.target.value.trim();
+    }
     if (
         event.target instanceof HTMLInputElement &&
-        event.target.id === "work-search"
+        event.target.id === "inbox-search"
     ) {
-        search = event.target.value;
-        searchOpen = true;
-        render(navigation.view === "board");
+        inboxSearch = event.target.value;
+        render(true);
     }
 });
 document.addEventListener("change", (event) => {
+    if (
+        event.target instanceof HTMLInputElement &&
+        event.target.name === "workspace-refresh-interval"
+    ) {
+        const seconds = Number(event.target.value);
+        if (!refreshIntervals.includes(seconds) || seconds === refreshInterval)
+            return;
+        refreshInterval = seconds;
+        try {
+            localStorage.setItem(refreshIntervalKey, String(seconds));
+        } catch {
+            // The selection still applies for this page.
+        }
+        scheduleRefresh();
+        render();
+        return;
+    }
     if (event.target instanceof HTMLSelectElement) {
         const { id, value } = event.target;
         if (id === "inbox-status" && isListStatus(value)) {
@@ -1140,21 +1375,7 @@ document.addEventListener("change", (event) => {
 });
 document.addEventListener("focusin", (event) => {
     if (!(event.target instanceof Element)) return;
-    if (!event.target.closest("#workspace-menu"))
-        root.querySelector<HTMLDetailsElement>(
-            "#workspace-menu",
-        )?.removeAttribute("open");
-    if (event.target.id === "work-search" && !searchOpen) {
-        searchOpen = true;
-        if (search) render(true);
-    } else if (searchOpen && !event.target.closest("#workspace-search")) {
-        searchOpen = false;
-        root.querySelector(".search-results")?.remove();
-        if (!search)
-            document
-                .getElementById("workspace-search")
-                ?.setAttribute("hidden", "");
-    }
+    closeHeaderMenusOutside(event.target);
     if (modelPickerOpen && !event.target.closest(".model-picker")) {
         modelPickerOpen = false;
         modelListOpen = false;
@@ -1193,6 +1414,17 @@ function trapFocus(event: KeyboardEvent, selector: string) {
 }
 document.addEventListener("keydown", (event) => {
     if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "k" &&
+        authenticated
+    ) {
+        event.preventDefault();
+        document.documentElement.removeAttribute("data-pointer-focus");
+        openSearch();
+        return;
+    }
+    if (searchDialog.open) return;
+    if (
         event.key === "Escape" &&
         workChanges.isOpen &&
         event.target instanceof Element &&
@@ -1203,24 +1435,13 @@ document.addEventListener("keydown", (event) => {
         closeDiff();
         return;
     }
-    const workspaceMenu =
-        root.querySelector<HTMLDetailsElement>("#workspace-menu");
-    if (event.key === "Escape" && workspaceMenu?.open) {
-        event.preventDefault();
-        workspaceMenu.open = false;
-        workspaceMenu.querySelector<HTMLElement>("summary")?.focus();
-        return;
-    }
-    if (
-        (event.ctrlKey || event.metaKey) &&
-        event.key.toLowerCase() === "k" &&
-        authenticated &&
-        !activityOpen
-    ) {
-        event.preventDefault();
-        document.documentElement.removeAttribute("data-pointer-focus");
-        openSearch();
-        return;
+    if (event.key === "Escape") {
+        const menu = root.querySelector<HTMLDetailsElement>(openHeaderMenus);
+        if (menu) {
+            event.preventDefault();
+            dismissHeaderMenu(menu);
+            return;
+        }
     }
     if (
         event.target instanceof HTMLInputElement &&
@@ -1266,39 +1487,10 @@ document.addEventListener("keydown", (event) => {
         root.querySelector<HTMLElement>(".model-picker-trigger")?.focus();
         return;
     }
-    if (
-        event.key === "Escape" &&
-        event.target instanceof Element &&
-        event.target.closest("#workspace-search")
-    ) {
-        event.preventDefault();
-        const results = root.querySelector(".search-results");
-        if (results) {
-            document.getElementById("work-search")?.focus();
-            searchOpen = false;
-            results.remove();
-            return;
-        }
-        searchOpen = !!search;
-        search = "";
-        render();
-        document
-            .getElementById(
-                searchOpen
-                    ? "work-search"
-                    : sidebarCollapsed
-                      ? "show-work-search"
-                      : "nav-work-search",
-            )
-            ?.focus();
-        return;
-    }
     if (activityOpen) {
         if (event.key === "Escape") {
             event.preventDefault();
-            activityOpen = false;
-            render();
-            document.getElementById("show-activity")?.focus();
+            closeActivity();
         }
         if (event.key === "Tab") trapFocus(event, "#work-activity");
         return;
@@ -1319,7 +1511,9 @@ document.addEventListener("keydown", (event) => {
         !event.isComposing
     ) {
         event.preventDefault();
-        event.target.form?.requestSubmit();
+        const send =
+            event.target.form?.querySelector<HTMLButtonElement>(".send");
+        if (send && !send.disabled) event.target.form?.requestSubmit(send);
     }
 });
 let wasMobile = mobile.matches,
@@ -1347,9 +1541,7 @@ window.addEventListener("popstate", () => {
         focusBoard(fromWork);
         return;
     }
-    root.querySelector<HTMLElement>(
-        "#settings-title, .directory-heading h1, #work-title-heading, #reply",
-    )?.focus();
+    focusDestination();
 });
 function focusBoard(restoreItem: boolean) {
     const entry = restoreItem
@@ -1359,12 +1551,10 @@ function focusBoard(restoreItem: boolean) {
         : null;
     (entry ?? document.getElementById("board-heading"))?.focus();
 }
-window.addEventListener("online", () => void refresh());
+window.addEventListener("online", refreshAutomatically);
 document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) void refresh();
+    if (!document.hidden) refreshAutomatically();
 });
-setInterval(() => {
-    if (!document.hidden) void refresh();
-}, 3000);
+scheduleRefresh();
 render();
 void refresh();

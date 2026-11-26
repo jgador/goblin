@@ -809,11 +809,23 @@ public sealed partial class DurabilityTests
         fixture.Runtime.Observations[attempt] = new(ObservationKind.Result, Text: "Saved result") { CheckpointId = saved.Id };
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
+        InspectionStore inspections = restartedScope.ServiceProvider.GetRequiredService<InspectionStore>();
+        long inspectionId = NextId();
+        await inspections.OpenAsync(id, inspectionId, attempt, default);
+        for (int i = 0; i < 100 && !fixture.Inspection.Started.GetValueOrDefault(inspectionId); i++) await Task.Delay(50);
+        Assert.True(fixture.Inspection.Started.GetValueOrDefault(inspectionId));
+        await inspections.ObserveAsync(inspectionId, InspectionObservation.Running, default);
+        Assert.Empty(fixture.Runtime.DeletedWorkspaces);
         await fixture.Apply(WorkCommands.Approve(NextId(), id, work.Version, attempt));
+        Assert.Equal("workspace_closed", (await Assert.ThrowsAsync<ApplicationFailure>(() =>
+            inspections.OpenAsync(id, NextId(), attempt, default))).Code);
         Assert.Null(await reopened.ReadPatchAsync(id, default));
         string patchDirectory = fixture.PatchDirectory(id);
         for (int i = 0; i < 100 && Directory.Exists(patchDirectory); i++) await Task.Delay(50);
         Assert.False(Directory.Exists(patchDirectory));
+        for (int i = 0; i < 100 && !fixture.Runtime.DeletedWorkspaces.ContainsKey(id); i++) await Task.Delay(50);
+        Assert.Contains(id, fixture.Runtime.DeletedWorkspaces.Keys);
+        Assert.Equal(InspectionState.Stopped, Assert.Single(await inspections.ListAsync(id, default)).State);
         Assert.True(await reopened.VerifiedAsync(saved.Id, attempt, 1, default));
     }
 
@@ -825,6 +837,26 @@ public sealed partial class DurabilityTests
                 actual.GitRepository, actual.Branch, actual.CommitSha));
         // PostgreSQL timestamps retain microseconds; the immediate save response has .NET ticks.
         Assert.Equal(expected.CreatedAt.UtcTicks / 10, actual.CreatedAt.UtcTicks / 10);
+    }
+
+    [DatabaseFact]
+    public async Task CancelledWorkspaceWaitsForExecutionCleanup()
+    {
+        await using Fixture fixture = await Fixture.CreateAsync();
+        await EnableHandoffGitRepository(fixture);
+        WorkView work = await fixture.StartGitRepositoryWork("owner/repo");
+        long id = work.Work.Id, attempt = work.Work.Attempts[^1].Id;
+        fixture.Runtime.FailCleanup = true;
+        fixture.Runtime.Observations[attempt] = new(ObservationKind.Stopped);
+        await fixture.Apply(new(NextId(), id, WorkAction.Cancel) { ExpectedVersion = work.Version });
+        await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.CleanupRequired);
+        Assert.Empty(fixture.Runtime.DeletedWorkspaces);
+
+        fixture.Runtime.FailCleanup = false;
+        await fixture.Reconcile(id, attempt);
+        await fixture.Until(id, x => x.Work.Status == WorkStatus.Cancelled);
+        for (int i = 0; i < 100 && !fixture.Runtime.DeletedWorkspaces.ContainsKey(id); i++) await Task.Delay(50);
+        Assert.Contains(id, fixture.Runtime.DeletedWorkspaces.Keys);
     }
 
     [DatabaseFact]
@@ -1738,10 +1770,11 @@ public sealed partial class DurabilityTests
         }
     }
 
-    private sealed class Runtime : IExecutionHost
+    private sealed class Runtime : IExecutionHost, IWorkspaceVolumeHost
     {
         public ConcurrentDictionary<long, int> Starts { get; } = new();
         public ConcurrentDictionary<long, ExecutionObservation> Observations { get; } = new();
+        public ConcurrentDictionary<long, bool> DeletedWorkspaces { get; } = new();
         public bool FailCleanup { get; set; }
         public bool GitRepositoryExecution { get; set; }
         public RuntimeCapabilities[] Capabilities => [new("codex", true, GitRepositoryExecution, true, false, false)];
@@ -1759,6 +1792,12 @@ public sealed partial class DurabilityTests
 
         public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => FailCleanup
             ? Task.FromException(new IOException("Fixture cleanup failure")) : Task.CompletedTask;
+
+        public Task DeleteClosedWorkspaceAsync(WorkSnapshot work, CancellationToken token)
+        {
+            DeletedWorkspaces[work.Id] = true;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class InspectionRuntime : IInspectionHost

@@ -48,10 +48,11 @@ public sealed class ExecutionCoordinator
                 await _failures.RecordAsync(new(command.WorkId, command.AttemptId, FailureKind.HostUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
             throw;
         }
-        catch
+        catch (Exception failure)
         {
-            await _failures.RecordAsync(new(command.WorkId, command.AttemptId,
-                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable, turnNumber: command.TurnNumber), CancellationToken.None);
+            FailureKind kind = failure is WorkspaceCapacityException ? FailureKind.WorkspaceCapacityReached :
+                claimed is null ? FailureKind.DispatchFailed : FailureKind.HostUnavailable;
+            await _failures.RecordAsync(new(command.WorkId, command.AttemptId, kind, turnNumber: command.TurnNumber), CancellationToken.None);
             await DrainFailuresAsync(CancellationToken.None);
         }
     }

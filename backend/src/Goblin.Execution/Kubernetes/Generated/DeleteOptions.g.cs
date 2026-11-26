@@ -9,6 +9,10 @@ namespace Goblin.Execution.Kubernetes;
 
 public sealed class DeleteOptions
 {
+    [JsonPropertyName("preconditions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Preconditions? Preconditions { get; init; }
+
     [JsonPropertyName("propagationPolicy")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? PropagationPolicy { get; init; }

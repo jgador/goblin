@@ -124,7 +124,7 @@
       "source": "kubernetes",
       "definition": "io.k8s.api.core.v1.PersistentVolumeClaim",
       "fields": [
-        "apiVersion", "kind", "metadata.name", "metadata.labels",
+        "apiVersion", "kind", "metadata.name", "metadata.labels", "metadata.resourceVersion",
         "spec.accessModes", "spec.resources.requests"
       ]
     },
@@ -136,7 +136,7 @@
     "DeleteOptions": {
       "source": "kubernetes",
       "definition": "io.k8s.apimachinery.pkg.apis.meta.v1.DeleteOptions",
-      "fields": ["propagationPolicy"]
+      "fields": ["propagationPolicy", "preconditions.resourceVersion"]
     }
   }
 }

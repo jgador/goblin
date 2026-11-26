@@ -26,8 +26,8 @@ public sealed class WebRuntimeConfigurationTests
         Assert.Equal("http://goblin-repository.goblin.svc:8788", configuration.GitRepositoryUrl);
         Assert.Equal("2", configuration.SandboxCpuLimit);
         Assert.Equal("2Gi", configuration.SandboxMemoryLimit);
-        Assert.Equal(2, configuration.WorkspaceLimits.MaxSandboxes);
-        Assert.Equal(4, configuration.WorkspaceLimits.MaxCachedVolumes);
+        Assert.Equal(50, configuration.WorkspaceLimits.MaxSandboxes);
+        Assert.Equal(50, configuration.WorkspaceLimits.MaxCachedVolumes);
     }
 
     [Fact]
@@ -80,8 +80,8 @@ public sealed class WebRuntimeConfigurationTests
 
         WebRuntimeConfiguration configuration = WebRuntimeConfiguration.Read(source, false);
 
-        Assert.Equal(2, configuration.WorkspaceLimits.MaxSandboxes);
-        Assert.Equal(4, configuration.WorkspaceLimits.MaxCachedVolumes);
+        Assert.Equal(50, configuration.WorkspaceLimits.MaxSandboxes);
+        Assert.Equal(50, configuration.WorkspaceLimits.MaxCachedVolumes);
         Assert.Throws<InvalidOperationException>(() => WebRuntimeConfiguration.Read(source, true));
     }
 }

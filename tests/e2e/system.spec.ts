@@ -72,7 +72,7 @@ test("VM resources open from the workspace menu, preserve drafts, and distinguis
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("/?new=work");
-    await page.getByPlaceholder("Ask Goblin").fill("Keep my work draft");
+    await page.getByPlaceholder("Describe the work").fill("Keep my work draft");
     const menu = page.getByLabel("Workspace menu", { exact: true });
     await menu.click();
     await page.getByRole("button", { name: "System", exact: true }).click();
@@ -104,9 +104,9 @@ test("VM resources open from the workspace menu, preserve drafts, and distinguis
     await expect(popup).toHaveURL(/\/headlamp\/$/);
     await popup.close();
     await expect(panel.getByRole("heading", { name: "System" })).toBeVisible();
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to New work" }).click();
     await expect(menu).toBeFocused();
-    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue(
+    await expect(page.getByPlaceholder("Describe the work")).toHaveValue(
         "Keep my work draft",
     );
     state.status = "stale";

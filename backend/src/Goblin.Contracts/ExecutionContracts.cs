@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -72,6 +73,16 @@ public interface IExecutionHost
     Task<ExecutionObservation> ObserveAsync(WorkSnapshot work, bool stop, CancellationToken token);
 
     Task CleanupAsync(WorkSnapshot work, CancellationToken token);
+}
+
+public interface IWorkspaceVolumeHost
+{
+    Task DeleteClosedWorkspaceAsync(WorkSnapshot work, CancellationToken token);
+}
+
+public sealed class WorkspaceCapacityException : IOException
+{
+    public WorkspaceCapacityException() : base("The workspace volume limit has been reached.") { }
 }
 
 public sealed class DispatchFailureEvidence

@@ -61,19 +61,31 @@ export class WorkspaceDom {
     }
 
     private refreshHome(html: string, options: RenderOptions) {
+        const wasOnCodexSettings =
+            document.activeElement?.id === "new-work-codex-settings";
         this.refreshRegions(html, [
             ".sidebar-start",
             ".sidebar-history",
             ".workspace-notices",
-            ".connection-name",
             ".connection-menu-status",
             ".connection-nudge",
         ]);
+        if (
+            wasOnCodexSettings &&
+            this.root.querySelector(".connection-nudge[hidden]")
+        )
+            this.root
+                .querySelector<HTMLElement>("#codex-connection-trigger")
+                ?.focus({ preventScroll: true });
         const reply = this.root.querySelector<HTMLTextAreaElement>("#reply")!;
         if (reply.value !== options.draft) reply.value = options.draft;
         reply.disabled = options.sending;
-        this.root.querySelector<HTMLButtonElement>(".send")!.disabled =
+        const send = this.root.querySelector<HTMLButtonElement>(".send")!;
+        const blocked =
             options.sending || options.pending || options.workUnavailable;
+        if (blocked) send.dataset.blocked = "true";
+        else delete send.dataset.blocked;
+        send.disabled = blocked || !options.draft.trim();
     }
 
     render(options: RenderOptions) {
@@ -153,6 +165,7 @@ export class WorkspaceDom {
               )
                   .filter(
                       (x) =>
+                          !(x instanceof HTMLInputElement && x.readOnly) &&
                           !(
                               gitHubAuthorizationChanged &&
                               x.closest('[data-form="github-repository"]')
@@ -162,7 +175,7 @@ export class WorkspaceDom {
                               "work-effort",
                               "model-connection",
                               "inbox-status",
-                              "work-search",
+                              "inbox-search",
                           ].includes(x.id),
                   )
                   .map((x) => [x.id, x.value] as const)
@@ -210,8 +223,8 @@ export class WorkspaceDom {
             this.refreshRegions(html, [
                 ".sidebar-start",
                 ".sidebar-history",
-                ".workspace-search-results",
                 ".workspace-notices",
+                ".board-attention",
                 ".board-count",
                 ".board-content",
             ]);
@@ -230,7 +243,8 @@ export class WorkspaceDom {
         for (const [id, value] of preserved) {
             const field = document.getElementById(id) as
                 HTMLInputElement | HTMLSelectElement | null;
-            if (field) field.value = value;
+            if (field && !(field instanceof HTMLInputElement && field.readOnly))
+                field.value = value;
         }
         for (const [id, open] of detailStates) {
             const detail = document.getElementById(
@@ -242,7 +256,8 @@ export class WorkspaceDom {
         for (const [id, value] of setup?.values ?? []) {
             const field = document.getElementById(id) as
                 HTMLInputElement | HTMLSelectElement | null;
-            if (field) field.value = value;
+            if (field && !(field instanceof HTMLInputElement && field.readOnly))
+                field.value = value;
         }
         const gitHubRepositoryOptions = root.querySelector<HTMLDetailsElement>(
             "#github-repository-options",

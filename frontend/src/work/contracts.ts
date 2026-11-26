@@ -70,6 +70,7 @@ export type Work = {
     status: WorkStatus;
     agentId?: string;
     attention?: { reason: AttentionReason; failure?: FailureKind };
+    workspace?: { repository: string };
     repositoryRequest?: WorkGitRepositoryRequest;
     repositoryAuthorization?: GitRepositoryAuthorization;
     attempts: Attempt[];

@@ -81,10 +81,12 @@ public sealed class InspectionStore
             if (row.WorkId != workId || row.AttemptId != attemptId) throw new ApplicationFailure("command_id_reused");
             return View(row);
         }
-        if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions).AnyAsync(x => x.WorkId == workId, token))
-            throw new ApplicationFailure("workspace_session_exists");
         Persistence.Entities.WorkItem workRow = await db.WorkItems.SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
         WorkSnapshot work = WorkStatePersistence.Snapshot(workRow);
+        if (!WorkWorkspace.RetainsVolume(work.Status))
+            throw new ApplicationFailure("workspace_closed");
+        if (await WorkspaceSessionQueries.Active(db.WorkspaceSessions).AnyAsync(x => x.WorkId == workId, token))
+            throw new ApplicationFailure("workspace_session_exists");
         AttemptSnapshot? attempt = work.Attempts.SingleOrDefault(x => x.Id == attemptId && x.Target.GitRepository is not null) ?? throw new ApplicationFailure("workspace_not_found");
         WorkWorkspace workspace = work.Workspace ?? throw new ApplicationFailure("workspace_not_found");
         WorkspaceSessionRules.RequireOpenable(attempt.Status);
@@ -120,6 +122,24 @@ public sealed class InspectionStore
         IDbContextOutbox outbox = _outboxes.Create(db);
         await outbox.PublishAsync(new StopInspection(id));
         await outbox.SaveChangesAndFlushMessagesAsync(token);
+    }
+
+    internal static async Task StopForWorkClosureAsync(GoblinDbContext db, IDbContextOutbox outbox, long workId,
+        DateTimeOffset now, CancellationToken token)
+    {
+        WorkspaceSession? session = await WorkspaceSessionQueries.Active(db.WorkspaceSessions)
+            .SingleOrDefaultAsync(x => x.WorkId == workId, token);
+        if (session is null || session.State == nameof(InspectionState.Stopping)) return;
+        session.State = nameof(InspectionState.Stopping);
+        session.UpdatedAt = now.UtcDateTime;
+        await outbox.PublishAsync(new StopInspection(session.Id));
+    }
+
+    internal async Task<bool> HasActiveAsync(long workId, CancellationToken token)
+    {
+        await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
+        return await WorkspaceSessionQueries.Active(db.WorkspaceSessions)
+            .AnyAsync(x => x.WorkId == workId, token);
     }
 
     public async Task<InspectionAllocation?> ClaimAsync(long id, CancellationToken token)

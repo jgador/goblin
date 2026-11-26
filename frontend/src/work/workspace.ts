@@ -18,7 +18,9 @@ type WorkspaceState = {
     repositories: readonly GitRepositoryInfo[];
     loaded: boolean;
     workUnavailable: boolean;
+    conversationsUnavailable: boolean;
     connectionsLoaded: boolean;
+    connectionsUnavailable: boolean;
 };
 
 const emptyWorkspace: Readonly<WorkspaceState> = {
@@ -30,7 +32,9 @@ const emptyWorkspace: Readonly<WorkspaceState> = {
     repositories: [],
     loaded: false,
     workUnavailable: false,
+    conversationsUnavailable: false,
     connectionsLoaded: false,
+    connectionsUnavailable: false,
 };
 
 export class WorkspaceController {
@@ -92,6 +96,7 @@ export class WorkspaceController {
                     : previous.runtimes,
             loaded: loaded || previous.loaded,
             workUnavailable: !loaded,
+            conversationsUnavailable: conversations.status === "rejected",
         };
         return loaded;
     }
@@ -121,6 +126,7 @@ export class WorkspaceController {
                     ? repositories.value
                     : previous.repositories,
             connectionsLoaded: true,
+            connectionsUnavailable: runtime.status === "rejected",
         };
         this.checkingConnections = false;
         const alreadyAvailable = new Set(

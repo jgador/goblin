@@ -254,10 +254,12 @@ test("execution options preserve model and effort across refresh and stay out of
     await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(picker).toHaveCount(0);
     await page.keyboard.press("Control+k");
-    await page.getByRole("searchbox").fill("Review the release checklist");
     await page
-        .getByRole("region", { name: "Search results" })
-        .getByRole("button", { name: /Review the release checklist/ })
+        .getByRole("combobox", { name: "Search work and conversations" })
+        .fill("Review the release checklist");
+    await page
+        .getByRole("listbox", { name: "Search results" })
+        .getByRole("option", { name: /Review the release checklist/ })
         .click();
     await page.setViewportSize({ width: 390, height: 844 });
     await picker.click();
@@ -333,7 +335,7 @@ test("disconnected Codex leads to connection setup and returns to Start work", a
             ],
         }),
     );
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to Work" }).click();
     await expect(
         page.getByRole("button", { name: "Start work", exact: true }),
     ).toBeEnabled();
@@ -377,13 +379,15 @@ test("repository setup validates locally and keeps the branch and Git identity t
         .getByLabel("Git commit email (optional)")
         .fill("reviewer@example.com");
     await page.getByRole("button", { name: "Manage repositories" }).click();
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to Work" }).click();
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await page.keyboard.press("Control+k");
-    await page.getByRole("searchbox").fill("Review the release checklist");
     await page
-        .getByRole("region", { name: "Search results" })
-        .getByRole("button", { name: /Review the release checklist/ })
+        .getByRole("combobox", { name: "Search work and conversations" })
+        .fill("Review the release checklist");
+    await page
+        .getByRole("listbox", { name: "Search results" })
+        .getByRole("option", { name: /Review the release checklist/ })
         .click();
     await expect(page.locator("#github-repository-options")).toHaveAttribute(
         "open",
@@ -461,7 +465,7 @@ test("Settings keeps one content scroller and exposes repository loading without
             element.scrollTop = 0;
         });
         await expect(
-            page.getByRole("button", { name: "Back to work" }),
+            page.getByRole("button", { name: "Back to Work" }),
         ).toBeInViewport();
         const content = dialog;
         await content.evaluate((element) => {
@@ -485,12 +489,12 @@ test("Settings keeps one content scroller and exposes repository loading without
     }
     await page.setViewportSize({ width: 1280, height: 720 });
     await expect(
-        page.getByRole("button", { name: "Back to work" }),
+        page.getByRole("button", { name: "Back to Work" }),
     ).toBeInViewport();
     await expect(
         dialog.locator(".github-repository-picker .github-repository-row"),
     ).toHaveCount(30);
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to Work" }).click();
     await expect(dialog).not.toBeVisible();
 });
 

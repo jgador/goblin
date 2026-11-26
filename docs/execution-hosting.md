@@ -82,10 +82,10 @@ Linux text-worker journals identify a process by PID, kernel start ticks, boot I
 PID namespace. Do not use `Process.StartTime` to decide that a process stopped; the
 clock can differ between worker and controller.
 
-Suspended Sandboxes and Work PVCs are kept, and there is no automatic volume expiry or
-deletion. Keep a Sandbox identity while delayed messages or controllers could still
-arrive for it. Runtime logs and sessions are execution evidence; PostgreSQL owns product
-history.
+Suspended Sandboxes retain their Work PVCs while the Work is open. Closing Work
+queues separate PVC deletion after execution and inspection shutdown. The suspended
+Sandbox identity fences delayed messages or controllers. Runtime logs and sessions are
+execution evidence; PostgreSQL owns product history.
 
 The Codex connection check is separate from Work. Overlapping checks are rejected, and
 Codex account changes are rejected while an attempt holds the connection. Queued Work

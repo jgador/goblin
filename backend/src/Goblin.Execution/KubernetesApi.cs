@@ -61,8 +61,11 @@ public sealed class KubernetesApi : IDisposable
     public async Task<bool> TryPatchAsync<T>(string path, T body, CancellationToken token) where T : class =>
         await SendAsync(HttpMethod.Patch, path, JsonSerializer.Serialize(body, KubernetesJson.Options), token, allowConflict: true) is not null;
 
-    public Task<string?> DeleteAsync(string path, CancellationToken token) => SendAsync(HttpMethod.Delete, path,
-        JsonSerializer.Serialize(new DeleteOptions { PropagationPolicy = "Foreground" }, KubernetesJson.Options), token, allowMissing: true);
+    public Task<string?> DeleteAsync(string path, CancellationToken token) =>
+        DeleteAsync(path, new() { PropagationPolicy = "Foreground" }, token);
+
+    public Task<string?> DeleteAsync(string path, DeleteOptions options, CancellationToken token) => SendAsync(HttpMethod.Delete, path,
+        JsonSerializer.Serialize(options, KubernetesJson.Options), token, allowMissing: true);
 
     private async Task<string?> SendAsync(HttpMethod method, string path, string? body,
         CancellationToken token, bool allowMissing = false, bool allowConflict = false)

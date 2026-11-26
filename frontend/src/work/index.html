@@ -15,6 +15,20 @@
   </head>
   <body>
     <div id="app"></div>
+    <dialog id="workspace-search" class="search-dialog" aria-labelledby="global-search-title">
+      <div class="search-dialog-content">
+        <header class="search-dialog-header">
+          <h2 id="global-search-title">Global search</h2>
+          <button id="close-search" class="text-button" type="button">Close</button>
+        </header>
+        <label class="sr-only" for="work-search">Search work and conversations</label>
+        <input class="field-control" id="work-search" type="search" role="combobox"
+               aria-controls="global-search-results" aria-autocomplete="list" aria-expanded="false"
+               placeholder="Search work and conversations" autocomplete="off" autofocus>
+        <p id="global-search-status" role="status"></p>
+        <div id="global-search-results" role="listbox" aria-label="Search results" hidden></div>
+      </div>
+    </dialog>
     <div id="toast" role="status" aria-live="polite"></div>
     <noscript>Goblin needs JavaScript to open your workspace.</noscript>
   </body>

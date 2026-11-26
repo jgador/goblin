@@ -37,7 +37,7 @@ public sealed class SandboxOptions
     public string MemoryLimit { get; init; } = "2Gi";
 }
 
-public sealed class SandboxHost : IExecutionHost
+public sealed class SandboxHost : IExecutionHost, IWorkspaceVolumeHost
 {
     private readonly KubernetesApi _api;
     private readonly SandboxOptions _options;
@@ -47,6 +47,7 @@ public sealed class SandboxHost : IExecutionHost
     private readonly WorkspaceLimits _limits;
     private readonly SandboxManifestBuilder _manifests;
     private readonly ConcurrentDictionary<long, SemaphoreSlim> _workLocks = new();
+    private readonly SemaphoreSlim _volumeAllocations = new(1, 1);
 
     public SandboxHost(KubernetesApi api, SandboxOptions options, IExecutionHost textHost, IGitRepositoryBroker gitRepositories, IWorkspaceCheckpoints? checkpoints = null, WorkspaceLimits? limits = null)
     {
@@ -147,14 +148,7 @@ public sealed class SandboxHost : IExecutionHost
                 if (requiresVolume || (existing is null && (attempt.WorkspaceNumber > 1 || attempt.TurnNumber > 1 ||
                     work.Attempts.SkipLast(1).Any(a => a.Target.GitRepository is not null && a.EnvironmentReference is not null))))
                     throw new IOException("Retained workspace storage is missing.");
-                await RequireVolumeCapacityAsync(address, token);
-                if (!await _api.CreateAsync(address.Core + "/persistentvolumeclaims", new K.PersistentVolumeClaim
-                {
-                    ApiVersion = "v1",
-                    Kind = "PersistentVolumeClaim",
-                    Metadata = _manifests.Metadata(address.Name, work),
-                    Spec = new() { AccessModes = ["ReadWriteOnce"], Resources = new() { Requests = new() { ["storage"] = "2Gi" } } }
-                }, token)) throw new IOException("Workspace volume already exists.");
+                await CreateVolumeAsync(address, work, token);
             }
             else
             {
@@ -330,13 +324,58 @@ public sealed class SandboxHost : IExecutionHost
             spec = new { operatingMode = "Suspended" }
         }, token);
 
-    private async Task RequireVolumeCapacityAsync(KubernetesWorkspaceAddress address, CancellationToken token)
+    public async Task DeleteClosedWorkspaceAsync(WorkSnapshot work, CancellationToken token) =>
+        await ExclusiveAsync(work.Id, async () =>
+        {
+            await DeleteClosedVolumeAsync(work, token);
+            return true;
+        }, token);
+
+    private async Task DeleteClosedVolumeAsync(WorkSnapshot work, CancellationToken token)
     {
-        K.PersistentVolumeClaimList? volumes = await _api.GetAsync<K.PersistentVolumeClaimList>(address.Core + "/persistentvolumeclaims?labelSelector=app%3Dgoblin-execution", token);
-        // Git checkpoints do not preserve ignored/untracked files. No automatic
-        // volume deletion is safe without a separately approved retention policy.
-        if ((volumes?.Items.Count ?? 0) >= _limits.MaxCachedVolumes)
-            throw new IOException("Workspace storage needs attention before another allocation.");
+        if (WorkWorkspace.RetainsVolume(work.Status) || work.Attempts[^1].CleanupPending)
+            throw new InvalidOperationException("Workspace deletion requires closed Work with confirmed cleanup.");
+        KubernetesWorkspaceAddress address = Address(work);
+        string volumePath = address.Core + "/persistentvolumeclaims/" + address.Name;
+        K.PersistentVolumeClaim? volume = await _api.GetAsync<K.PersistentVolumeClaim>(volumePath, token);
+        if (volume is null) return;
+        string workId = work.Id.ToString(CultureInfo.InvariantCulture);
+        if (volume.Metadata is not { ResourceVersion: { } version, Labels: { } labels } ||
+            labels.GetValueOrDefault("goblin-work") != workId ||
+            labels.GetValueOrDefault("app") != "goblin-execution")
+            throw new IOException("Workspace volume ownership does not match.");
+        // Keep the suspended Sandbox as the fence for delayed execution deliveries.
+        K.Sandbox? sandbox = await _api.GetAsync<K.Sandbox>(address.Sandboxes + "/" + address.Name, token);
+        if (sandbox?.Spec.OperatingMode != K.SandboxOperatingMode.Suspended ||
+            sandbox.Metadata?.Labels?.GetValueOrDefault("goblin-work") != workId ||
+            sandbox.Metadata.Labels.GetValueOrDefault("goblin-phase") != "stopped" ||
+            await _api.GetAsync<K.Pod>(address.Core + "/pods/" + address.Name, token) is not null)
+            throw new IOException("Workspace suspension is not confirmed.");
+        await _api.DeleteAsync(volumePath, new() { Preconditions = new() { ResourceVersion = version } }, token);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        while (await _api.GetAsync<K.PersistentVolumeClaim>(volumePath, timeout.Token) is not null)
+            await Task.Delay(200, timeout.Token);
+    }
+
+    private async Task CreateVolumeAsync(KubernetesWorkspaceAddress address, WorkSnapshot work, CancellationToken token)
+    {
+        await _volumeAllocations.WaitAsync(token);
+        try
+        {
+            string claims = address.Core + "/persistentvolumeclaims";
+            K.PersistentVolumeClaimList volumes = await _api.GetAsync<K.PersistentVolumeClaimList>(
+                claims + "?labelSelector=app%3Dgoblin-execution", token) ?? throw new IOException("Workspace volumes are unavailable.");
+            if (volumes.Items.Count >= _limits.MaxCachedVolumes) throw new WorkspaceCapacityException();
+            if (!await _api.CreateAsync(claims, new K.PersistentVolumeClaim
+            {
+                ApiVersion = "v1",
+                Kind = "PersistentVolumeClaim",
+                Metadata = _manifests.Metadata(address.Name, work),
+                Spec = new() { AccessModes = ["ReadWriteOnce"], Resources = new() { Requests = new() { ["storage"] = "2Gi" } } }
+            }, token)) throw new IOException("Workspace volume already exists.");
+        }
+        finally { _volumeAllocations.Release(); }
     }
 
     public K.Sandbox Manifest(WorkSnapshot work, bool suspended, string? resourceVersion = null, string? phase = null)

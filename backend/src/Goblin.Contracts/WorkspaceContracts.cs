@@ -8,7 +8,10 @@ namespace Goblin.Contracts.Runtime;
 
 public sealed class WorkspaceLimits
 {
-    public WorkspaceLimits(int maxSandboxes = 2, int maxCachedVolumes = 4)
+    public const int DefaultMaxSandboxes = 50;
+    public const int DefaultMaxCachedVolumes = 50;
+
+    public WorkspaceLimits(int maxSandboxes = DefaultMaxSandboxes, int maxCachedVolumes = DefaultMaxCachedVolumes)
     {
         MaxSandboxes = maxSandboxes;
         MaxCachedVolumes = maxCachedVolumes;

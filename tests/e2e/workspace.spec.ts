@@ -1,4 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+    refreshIntervalControl,
+    refreshWorkspace,
+} from "../support/workspace-refresh.js";
 
 // Layout fixtures only. The durable Work journeys exercise the real API and database.
 type WorkFixture = {
@@ -6,7 +10,7 @@ type WorkFixture = {
     objective: string;
     status: string;
     checkpointId?: string;
-    attention?: { reason: string };
+    attention?: { reason: string; failure?: string };
 };
 const welcomeResult =
     "The welcome page is ready for review. The introduction is shorter, the primary action is clear, and the mobile layout keeps the important content in view.";
@@ -45,7 +49,13 @@ async function workspace(
                 attempts: [
                     {
                         id: "1",
-                        status: "Succeeded",
+                        status: work.attention?.failure
+                            ? "Failed"
+                            : "Succeeded",
+                        failure: work.attention?.failure,
+                        finishedAt: work.attention?.failure
+                            ? "2026-09-21T00:02:00Z"
+                            : undefined,
                         checkpointId,
                         target: {
                             runtime: "codex",
@@ -63,14 +73,21 @@ async function workspace(
                 history: [
                     {
                         sequence: "1",
-                        kind: "ResultProposed",
+                        kind: work.attention?.failure
+                            ? "ExecutionFailed"
+                            : "ResultProposed",
                         attemptId: "1",
-                        text: welcomeResult,
+                        text: work.attention?.failure
+                            ? undefined
+                            : welcomeResult,
+                        failure: work.attention?.failure,
                         occurredAt: "2026-09-21T00:02:00Z",
                     },
                 ],
                 decisions: [],
-                results: [{ attemptId: "1", text: welcomeResult }],
+                results: work.attention?.failure
+                    ? []
+                    : [{ attemptId: "1", text: welcomeResult }],
                 artifacts: [],
             },
         }));
@@ -131,10 +148,12 @@ async function workspace(
 
 async function selectWorkFromSearch(page: Page, title: string) {
     await page.getByRole("button", { name: "Search", exact: true }).click();
-    await page.getByRole("searchbox").fill(title);
     await page
-        .getByRole("region", { name: "Search results", exact: true })
-        .getByRole("button", { name: title, exact: true })
+        .getByRole("combobox", { name: "Search work and conversations" })
+        .fill(title);
+    await page
+        .getByRole("listbox", { name: "Search results", exact: true })
+        .getByRole("option", { name: title, exact: true })
         .click();
 }
 
@@ -180,6 +199,7 @@ test("Changes previews the patch before opening the side-by-side diff", async ({
     let patchReads = 0;
     await page.route("**/api/work/1/changes", (route) => {
         patchReads++;
+        if (patchReads === 1) return route.fulfill({ status: 503, json: {} });
         return route.fulfill({
             json: {
                 checkpoint: {
@@ -195,23 +215,38 @@ test("Changes previews the patch before opening the side-by-side diff", async ({
         });
     });
     await page.goto("/work?item=1");
-    const trigger = page.getByRole("button", { name: "Changes", exact: true });
     const conversation = page.getByRole("region", {
         name: "Conversation about this Work",
     });
     const detail = page.getByRole("region", { name: "Selected work" });
-    const closedPosition = await trigger.boundingBox();
     const workBounds = (await detail.boundingBox())!;
     const preview = page.getByRole("region", { name: "Changes", exact: true });
     const previewEntry = preview.getByRole("button", {
-        name: /Review changes for owner\/project · goblin\/work-1/,
+        name: "Review changes",
     });
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect(previewEntry).toHaveAccessibleName(
-        /owner\/project · goblin\/work-1 3 files changed 2 added, 2 removed/,
+    const decision = conversation.getByRole("region", {
+        name: "Review result",
+    });
+    await expect(preview.getByRole("status")).toHaveText(
+        "Could not load changes.",
     );
-    await expect(previewEntry.getByText("+2")).toBeVisible();
-    await expect(previewEntry.getByText("−2")).toBeVisible();
+    await expect(previewEntry).toHaveCount(0);
+    await preview.getByRole("button", { name: "Reload saved changes" }).click();
+    await expect(previewEntry).toBeFocused();
+    await expect(
+        decision.getByRole("button", { name: "Review changes" }),
+    ).toBeVisible();
+    await expect(
+        decision.getByRole("button", { name: "Approve & complete" }),
+    ).toBeVisible();
+    await expect(
+        decision.getByRole("button", { name: "Request changes" }),
+    ).toBeVisible();
+    await expect(previewEntry).toHaveAccessibleDescription(
+        /owner\/project.*goblin\/work-1.*3 files changed.*2 added, 2 removed/,
+    );
+    await expect(preview.getByText("+2")).toBeVisible();
+    await expect(preview.getByText("−2")).toBeVisible();
     await expect(page.getByRole("group", { name: "Diff view" })).toHaveCount(0);
     await expect(
         page.getByRole("region", { name: "Conversation about this Work" }),
@@ -236,8 +271,7 @@ test("Changes previews the patch before opening the side-by-side diff", async ({
     expect(diffBounds.y).toBe(workBounds.y);
     expect(diffBounds.height).toBe(workBounds.height);
     await expect(review.getByText("3 files changed")).toBeVisible();
-    expect(patchReads).toBe(1);
-    expect(await trigger.boundingBox()).toEqual(closedPosition);
+    expect(patchReads).toBe(2);
     expect(
         await page.evaluate(() => document.documentElement.scrollHeight),
     ).toBe(960);
@@ -271,19 +305,7 @@ test("Changes previews the patch before opening the side-by-side diff", async ({
     await page.keyboard.press("Escape");
     await expect(page.getByRole("group", { name: "Diff view" })).toBeHidden();
     await expect(previewEntry).toBeFocused();
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(patchReads).toBe(1);
-    await previewEntry.press("Escape");
-    await expect(previewEntry).toBeVisible();
-    await trigger.press("Enter");
-    await expect(trigger).toBeFocused();
-    await expect(trigger).toHaveAttribute("aria-expanded", "false");
-    await expect(preview).toBeHidden();
-    await trigger.press("Enter");
-    await expect(previewEntry).toBeVisible();
-    await expect(
-        preview.getByRole("heading", { name: "Changes" }),
-    ).toBeFocused();
+    expect(patchReads).toBe(2);
     expect(commands).toEqual([]);
 });
 
@@ -317,15 +339,28 @@ test("Changes follows new checkpoints while the list control keeps it hidden whe
     await page.goto("/work?item=4");
     const toggle = page.getByRole("button", { name: "Changes", exact: true });
     const preview = page.getByRole("region", { name: "Changes", exact: true });
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(preview.getByRole("status")).toHaveText(
         "No changes have been saved for review.",
     );
+    for (const width of [1280, 1720]) {
+        await page.setViewportSize({ width, height: 900 });
+        expect(
+            await preview.evaluate(
+                (card) =>
+                    card.closest(".selected-work-top")!.getBoundingClientRect()
+                        .right - card.getBoundingClientRect().right,
+            ),
+        ).toBeCloseTo(8);
+    }
+    await page.screenshot({
+        path: test.info().outputPath("changes-right-inset.png"),
+        clip: { x: 1240, y: 0, width: 480, height: 260 },
+    });
     work.checkpointId = "11";
-    await refresh.click();
+    await refreshWorkspace(page);
     const reviewEntry = preview.getByRole("button", {
-        name: /Review changes for owner\/project · goblin\/work-4/,
+        name: "Review changes",
     });
     await expect(reviewEntry).toBeVisible();
     expect(patchReads).toBe(2);
@@ -335,27 +370,23 @@ test("Changes follows new checkpoints while the list control keeps it hidden whe
     await expect(diff).toBeVisible();
     work.checkpointId = "12";
     work.objective = "Review the updated checklist";
-    await refresh.click();
+    await refreshWorkspace(page);
     await expect(
-        page
-            .getByLabel("Work objective")
-            .getByText(work.objective, { exact: true }),
+        page.getByRole("heading", { name: work.objective, exact: true }),
     ).toBeVisible();
     expect(patchReads).toBe(2);
     await page.getByRole("button", { name: "Close diff" }).click();
     await expect(diff).toBeHidden();
-    await expect(reviewEntry.getByText("+2")).toBeVisible();
+    await expect(preview.getByText("+2")).toBeVisible();
     await expect(reviewEntry).toBeFocused();
     expect(patchReads).toBe(3);
 
     await toggle.click();
     work.checkpointId = "13";
     work.objective = "Finish the checklist review";
-    await refresh.click();
+    await refreshWorkspace(page);
     await expect(
-        page
-            .getByLabel("Work objective")
-            .getByText(work.objective, { exact: true }),
+        page.getByRole("heading", { name: work.objective, exact: true }),
     ).toBeVisible();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(preview).toBeHidden();
@@ -366,7 +397,7 @@ test("Changes follows new checkpoints while the list control keeps it hidden whe
     expect(patchReads).toBe(4);
 
     await toggle.click();
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to inbox" }).click();
     await page
         .getByRole("button", { name: "Investigate slow repository clones" })
         .click();
@@ -376,83 +407,118 @@ test("Changes follows new checkpoints while the list control keeps it hidden whe
     );
 });
 
-test("Changes keeps long files readable in the narrow in-page diff", async ({
-    page,
-}) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await workspace(page);
-    const lines = Array.from({ length: 400 }, () => "+" + "x".repeat(420));
-    await page.route("**/api/work/1/changes", (route) =>
-        route.fulfill({
-            json: {
-                checkpoint: {
-                    repository: "owner/project-with-a-long-repository-name",
-                    branch: "goblin/a-long-branch-for-checking-the-preview-layout",
-                    commitSha: "a".repeat(40),
+test.describe("touch review", () => {
+    test.use({ hasTouch: true });
+    test("Changes keeps long files readable in the narrow in-page diff", async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await workspace(page);
+        const lines = Array.from({ length: 400 }, () => "+" + "x".repeat(420));
+        await page.route("**/api/work/1/changes", (route) =>
+            route.fulfill({
+                json: {
+                    checkpoint: {
+                        repository: "owner/project-with-a-long-repository-name",
+                        branch: "goblin/a-long-branch-for-checking-the-preview-layout",
+                        commitSha: "a".repeat(40),
+                    },
+                    baseCommitSha: "b".repeat(40),
+                    patch: [
+                        "diff --git a/docs/long.txt b/docs/long.txt",
+                        "@@ -0,0 +1,401 @@",
+                        ...lines,
+                        "+++ final line",
+                        "diff --git a/examples/a-long-directory-to-distinguish-the-second-file/long.txt b/examples/a-long-directory-to-distinguish-the-second-file/long.txt",
+                        "@@ -0,0 +1 @@",
+                        "+Example content",
+                        "",
+                    ].join("\n"),
                 },
-                baseCommitSha: "b".repeat(40),
-                patch: [
-                    "diff --git a/docs/long.txt b/docs/long.txt",
-                    "@@ -0,0 +1,401 @@",
-                    ...lines,
-                    "+++ final line",
-                    "",
-                ].join("\n"),
-            },
-        }),
-    );
-    await page.goto("/work?item=1");
-    const trigger = page.getByRole("button", { name: "Changes", exact: true });
-    const detail = page.getByRole("region", { name: "Selected work" });
-    const workBounds = (await detail.boundingBox())!;
-    const preview = page.getByRole("region", { name: "Changes", exact: true });
-    const entry = preview.getByRole("button", {
-        name: /Review changes for owner\/project-with-a-long-repository-name/,
+            }),
+        );
+        await page.goto("/work?item=1");
+        const detail = page.getByRole("region", { name: "Selected work" });
+        const workBounds = (await detail.boundingBox())!;
+        const preview = page.getByRole("region", {
+            name: "Changes",
+            exact: true,
+        });
+        const entry = preview.getByRole("button", {
+            name: "Review changes",
+        });
+        await expect(entry).toBeVisible();
+        await page
+            .getByRole("button", { name: "Activity timeline", exact: true })
+            .click({
+                trial: true,
+            });
+        await page
+            .getByText("Full objective", { exact: true })
+            .click({ trial: true });
+        const bounds = (await preview.boundingBox())!;
+        expect(bounds.x).toBeGreaterThanOrEqual(0);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+        await expect(
+            preview.getByText(
+                "goblin/a-long-branch-for-checking-the-preview-layout",
+            ),
+        ).toBeVisible();
+        await expect(preview.getByText("+402")).toBeInViewport();
+        await expect(
+            page.getByRole("region", { name: "Conversation about this Work" }),
+        ).toBeVisible();
+        await page.screenshot({
+            path: test.info().outputPath("changes-preview-narrow.png"),
+        });
+        await entry.tap();
+        const review = page.getByRole("region", {
+            name: "Changes",
+            exact: true,
+        });
+        await expect(detail).toBeHidden();
+        await expect(entry).toBeHidden();
+        expect(await review.boundingBox()).toEqual(workBounds);
+        await page.screenshot({
+            path: test.info().outputPath("changes-review-narrow.png"),
+        });
+        await review.getByRole("button", { name: "By file" }).tap();
+        const files = review.getByRole("combobox", { name: "Changed file" });
+        await expect(files).toHaveValue("0");
+        const secondPath =
+            "examples/a-long-directory-to-distinguish-the-second-file/long.txt";
+        await expect(
+            files.getByRole("option", { name: secondPath, exact: true }),
+        ).toBeAttached();
+        await files.selectOption({ label: secondPath });
+        await expect(review.getByText("+Example content")).toBeVisible();
+        await files.selectOption({ label: "docs/long.txt" });
+        const code = review.getByRole("region", {
+            name: "Diff for docs/long.txt",
+        });
+        await expect
+            .poll(() => code.evaluate((el) => el.scrollWidth > el.clientWidth))
+            .toBe(true);
+        await review.getByText("Wrap lines", { exact: true }).tap();
+        await expect
+            .poll(() =>
+                code.evaluate((el) => el.scrollWidth === el.clientWidth),
+            )
+            .toBe(true);
+        await review.getByRole("button", { name: "Show next 2 lines" }).click();
+        await expect(review.locator(".diff-added").last()).toContainText("401");
+        await expect(
+            review.getByText("+++ final line", { exact: true }),
+        ).toBeVisible();
+        await review.getByRole("button", { name: "Close diff" }).tap();
+        await expect(
+            page.getByRole("group", { name: "Diff view" }),
+        ).toBeHidden();
+        await expect(entry).toBeFocused();
+        await expect(
+            page.getByRole("region", { name: "Conversation about this Work" }),
+        ).toBeVisible();
     });
-    await expect(entry).toBeVisible();
-    await page.getByRole("button", { name: "Activity", exact: true }).click({
-        trial: true,
-    });
-    await page.getByLabel("Work objective").click({ trial: true });
-    const bounds = (await preview.boundingBox())!;
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-    await expect(
-        entry.getByText("goblin/a-long-branch-for-checking-the-preview-layout"),
-    ).toBeVisible();
-    await expect(entry.getByText("+401")).toBeInViewport();
-    await expect(
-        page.getByRole("region", { name: "Conversation about this Work" }),
-    ).toBeVisible();
-    await page.screenshot({
-        path: test.info().outputPath("changes-preview-narrow.png"),
-    });
-    await entry.click();
-    const review = page.getByRole("region", { name: "Changes", exact: true });
-    await expect(trigger).toBeVisible();
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect(detail).toBeHidden();
-    await expect(entry).toBeHidden();
-    expect(await review.boundingBox()).toEqual(workBounds);
-    await page.screenshot({
-        path: test.info().outputPath("changes-review-narrow.png"),
-    });
-    await review.getByRole("button", { name: "By file" }).click();
-    await expect(
-        review.getByRole("combobox", { name: "Changed file" }),
-    ).toHaveValue("0");
-    await review.getByRole("button", { name: "Show next 2 lines" }).click();
-    await expect(review.locator(".diff-added").last()).toContainText("401");
-    await expect(
-        review.getByText("+++ final line", { exact: true }),
-    ).toBeVisible();
-    await review.getByRole("button", { name: "Close diff" }).click();
-    await expect(page.getByRole("group", { name: "Diff view" })).toBeHidden();
-    await expect(entry).toBeFocused();
-    await expect(trigger).toHaveAttribute("aria-expanded", "true");
-    await expect(
-        page.getByRole("region", { name: "Conversation about this Work" }),
-    ).toBeVisible();
 });
 
 test("review feedback uses the Work composer without consuming the context draft", async ({
@@ -486,6 +552,7 @@ test("review feedback uses the Work composer without consuming the context draft
                             ? undefined
                             : { reason: "ResultReview" },
                         agentId: "1",
+                        workspace: { repository: "owner/project" },
                         attempts: [
                             {
                                 id: "1",
@@ -494,7 +561,12 @@ test("review feedback uses the Work composer without consuming the context draft
                                     runtime: "codex",
                                     repository: {
                                         repository: "owner/project",
-                                        grant: { branch: "goblin/work-1" },
+                                        grant: {
+                                            branch: "goblin/work-1",
+                                            baseBranch: "main",
+                                            allowPush: false,
+                                            allowPullRequest: false,
+                                        },
                                     },
                                 },
                             },
@@ -548,7 +620,7 @@ test("review feedback uses the Work composer without consuming the context draft
         "What would you like Goblin to change?",
     );
     const ask = page.getByRole("button", {
-        name: "Ask for changes",
+        name: "Request changes",
         exact: true,
     });
     await normal.fill("Keep the introduction short.");
@@ -556,9 +628,6 @@ test("review feedback uses the Work composer without consuming the context draft
     await expect(feedback).toBeFocused();
     await expect(feedback).toHaveValue("");
     await feedback.fill("Add a keyboard navigation example.");
-    const changes = page
-        .getByRole("banner")
-        .getByRole("button", { name: "Changes", exact: true });
     const preview = page.getByRole("region", { name: "Changes", exact: true });
     await expect(preview.getByRole("status")).toHaveText(
         "No changes have been saved for review.",
@@ -568,12 +637,9 @@ test("review feedback uses the Work composer without consuming the context draft
     await expect(feedback).toHaveValue("Add a keyboard navigation example.");
     await feedback.click();
     await expect(preview).toBeVisible();
-    await changes.click();
-    await expect(preview).toBeHidden();
-    await expect(changes).toHaveAttribute("aria-expanded", "false");
-    await feedback.click();
     await expect(feedback).toBeFocused();
     await page.getByRole("button", { name: "Cancel change request" }).click();
+    await expect(ask).toBeFocused();
     await expect(normal).toHaveValue("Keep the introduction short.");
     await ask.click();
     await expect(feedback).toHaveValue("Add a keyboard navigation example.");
@@ -581,8 +647,20 @@ test("review feedback uses the Work composer without consuming the context draft
     await expect(thread).toContainText("Requested changes");
     await expect(thread).toContainText("Add a keyboard navigation example.");
     await expect(ask).toHaveCount(0);
+    const scope = page.getByRole("region", { name: "Current status" });
+    await expect(
+        scope.getByText("owner/project", { exact: true }),
+    ).toBeVisible();
+    await expect(scope.getByText("main", { exact: true })).toBeVisible();
+    await expect(
+        scope.getByRole("definition").filter({ hasText: "Keep changes local" }),
+    ).toBeVisible();
+    await scope.getByText("Repository settings", { exact: true }).click();
+    const repo = scope.getByLabel("Repository", { exact: true });
+    await expect(repo).toHaveValue("owner/project");
+    await expect(repo).not.toBeEditable();
     await expect(normal).toHaveValue("Keep the introduction short.");
-    await page.getByRole("button", { name: "Send message" }).click();
+    await page.getByRole("button", { name: "Save context" }).click();
     await expect(thread).toContainText("Keep the introduction short.");
     await expect(normal).toHaveValue("");
     expect(commands).toMatchObject([
@@ -600,7 +678,7 @@ test("review feedback uses the Work composer without consuming the context draft
     ]);
 });
 
-test("approval from the conversation submits the displayed result's attempt", async ({
+test("approval from the review area submits the displayed result's attempt", async ({
     page,
 }) => {
     await workspace(page);
@@ -613,10 +691,11 @@ test("approval from the conversation submits the displayed result's attempt", as
         return route.fulfill({ json: {} });
     });
     await page.goto("/work?item=1");
-    const result = page
-        .locator("#work-conversation article")
-        .filter({ hasText: welcomeResult });
-    await result.getByRole("button", { name: "Approve & complete" }).click();
+    const review = page.getByRole("region", { name: "Review result" });
+    await expect(review).toContainText(
+        "Approving the result completes this Work.",
+    );
+    await review.getByRole("button", { name: "Approve & complete" }).click();
     await expect
         .poll(() => commands)
         .toEqual([
@@ -630,64 +709,87 @@ test("approval from the conversation submits the displayed result's attempt", as
         ]);
 });
 
-test("Create work saves a goal and leaves execution for an explicit Start", async ({
-    page,
-}) => {
-    await workspace(page);
-    const commands: Record<string, unknown>[] = [];
-    let saved: Record<string, unknown>[] = [];
-    await page.route("**/api/identities", (route) =>
-        route.fulfill({ json: { ids: ["10", "11"] } }),
-    );
-    await page.route("**/api/work", (route) => route.fulfill({ json: saved }));
-    await page.route("**/api/work/commands", (route) => {
-        const command = route.request().postDataJSON();
-        commands.push(command);
-        const at = "2026-11-04T00:00:00Z";
-        saved = [
-            {
-                version: "1",
-                createdAt: at,
-                updatedAt: at,
-                work: {
-                    id: command.workId,
-                    objective: command.text,
-                    status: "Ready",
-                    agentId: "1",
-                    attempts: [],
-                    history: [],
-                    decisions: [],
-                    results: [],
-                    artifacts: [],
+for (const width of [1440, 390]) {
+    test(`Create work saves a goal and leaves execution for an explicit Start at ${width}px`, async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width, height: 844 });
+        await workspace(page);
+        const commands: Record<string, unknown>[] = [];
+        let saved: Record<string, unknown>[] = [];
+        await page.route("**/api/identities", (route) =>
+            route.fulfill({ json: { ids: ["10", "11"] } }),
+        );
+        await page.route("**/api/work", (route) =>
+            route.fulfill({ json: saved }),
+        );
+        await page.route("**/api/work/commands", (route) => {
+            const command = route.request().postDataJSON();
+            commands.push(command);
+            const at = "2026-11-04T00:00:00Z";
+            saved = [
+                {
+                    version: "1",
+                    createdAt: at,
+                    updatedAt: at,
+                    work: {
+                        id: command.workId,
+                        objective: command.text,
+                        status: "Ready",
+                        agentId: "1",
+                        attempts: [],
+                        history: [],
+                        decisions: [],
+                        results: [],
+                        artifacts: [],
+                    },
                 },
+            ];
+            return route.fulfill({ json: {} });
+        });
+        await page.goto("/?new=work");
+        const create = page.getByRole("button", {
+            name: "Create work",
+            exact: true,
+        });
+        await expect(create).toBeDisabled();
+        await expect(
+            page.getByText(
+                "Create a goal now, then start execution from the Ready item.",
+            ),
+        ).toBeVisible();
+        await page
+            .getByPlaceholder("Describe the work")
+            .fill("Make the release guide easier to follow");
+        if (width === 390) await create.click();
+        else await page.getByPlaceholder("Describe the work").press("Enter");
+        await expect(
+            page.getByRole("heading", {
+                name: "Make the release guide easier to follow",
+            }),
+        ).toBeFocused();
+        await expect(page.locator(".work-objective-full")).toHaveText(
+            "Make the release guide easier to follow",
+        );
+        await expect(page).toHaveURL(/\/work\?item=11$/);
+        await expect(page.locator(".detail .status-pill")).toHaveText("Ready");
+        await expect(page.getByText("No repository attached")).toBeVisible();
+        await expect(
+            page.getByText("Add repository", { exact: true }),
+        ).toBeVisible();
+        await expect(
+            page.getByRole("button", { name: "Start work", exact: true }),
+        ).toBeVisible();
+        expect(commands).toEqual([
+            {
+                commandId: "10",
+                workId: "11",
+                action: "Create",
+                text: "Make the release guide easier to follow",
             },
-        ];
-        return route.fulfill({ json: {} });
+        ]);
     });
-    await page.goto("/?new=work");
-    await page
-        .getByPlaceholder("Ask Goblin")
-        .fill("Make the release guide easier to follow");
-    await page
-        .getByRole("button", { name: "Create work", exact: true })
-        .click();
-    await expect(page.locator(".work-objective-full")).toHaveText(
-        "Make the release guide easier to follow",
-    );
-    await expect(page).toHaveURL(/\/work\?item=11$/);
-    await expect(page.locator(".detail .status-pill")).toHaveText("Ready");
-    await expect(
-        page.getByRole("button", { name: "Start work", exact: true }),
-    ).toBeVisible();
-    expect(commands).toEqual([
-        {
-            commandId: "10",
-            workId: "11",
-            action: "Create",
-            text: "Make the release guide easier to follow",
-        },
-    ]);
-});
+}
 
 test("home, Settings, and collapsing navigation preserve a draft without executing work", async ({
     page,
@@ -695,27 +797,29 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     const commands = await workspace(page, false);
     await page.goto("/?new=work");
     await expect(
-        page.getByRole("heading", { name: "What should we work on?" }),
+        page.getByRole("heading", { name: "New work", exact: true }),
     ).toBeVisible();
     await expect(
         page.getByRole("heading", { name: "Choose how to sign in" }),
     ).toHaveCount(0);
-    const draft = page.getByPlaceholder("Ask Goblin");
+    const draft = page.getByPlaceholder("Describe the work");
     await draft.fill("Keep my idea while I connect an AI account");
-    await page
-        .getByRole("button", { name: "Connect an AI provider", exact: true })
-        .click();
-    const settings = page.getByRole("region", { name: "Settings" });
-    await expect(
-        settings.getByRole("heading", { name: "Connections" }),
-    ).toBeVisible();
-    await settings
+    const notice = page.locator(".connection-nudge");
+    await expect(notice.getByRole("status")).toHaveText(
+        "Codex is not connected.",
+    );
+    await notice
         .getByRole("link", { name: "Connect Codex", exact: true })
         .click();
+    await expect(page).toHaveURL(/section=connections&provider=codex$/);
+    const settings = page.getByRole("region", { name: "Settings" });
     await expect(
         settings.getByRole("button", { name: "Continue with ChatGPT" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to New work" }).click();
+    await expect(
+        page.getByRole("button", { name: "Codex connection", exact: true }),
+    ).toBeFocused();
     await expect(draft).toHaveValue(
         "Keep my idea while I connect an AI account",
     );
@@ -741,9 +845,12 @@ test("the New work Codex menu opens in place and keeps the draft when returning 
     const commands = await workspace(page);
     await page.setViewportSize({ width: 320, height: 640 });
     await page.goto("/?new=work");
-    const draft = page.getByPlaceholder("Ask Goblin");
+    const draft = page.getByPlaceholder("Describe the work");
     await draft.fill("Keep my release notes draft");
-    const codex = page.getByRole("button", { name: "Codex", exact: true });
+    const codex = page.getByRole("button", {
+        name: "Codex connection",
+        exact: true,
+    });
     const manage = page.getByRole("link", {
         name: "Manage Codex connection",
         exact: true,
@@ -769,7 +876,7 @@ test("the New work Codex menu opens in place and keeps the draft when returning 
     await expect(page).toHaveURL(
         /\/settings\?section=connections&provider=codex$/,
     );
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to New work" }).click();
     await expect(page).toHaveURL(/\?new=work$/);
     await expect(draft).toHaveValue("Keep my release notes draft");
     await expect(codex).toBeFocused();
@@ -784,7 +891,7 @@ test("composer and search show focus outlines for keyboard navigation", async ({
     await page.goto("/?new=work");
     const composer = page.locator(".prompt-composer");
     const draft = page.getByRole("textbox", {
-        name: "Ask Goblin",
+        name: "Describe the work",
         exact: true,
     });
     const appearance = await composer.evaluate((element) => {
@@ -800,7 +907,10 @@ test("composer and search show focus outlines for keyboard navigation", async ({
     await expect(composer).toHaveCSS("box-shadow", appearance.boxShadow);
 
     await page.keyboard.press("Tab");
-    const codex = page.getByRole("button", { name: "Codex", exact: true });
+    const codex = page.getByRole("button", {
+        name: "Codex connection",
+        exact: true,
+    });
     await expect(codex).toBeFocused();
     await expect(codex).toHaveCSS("outline-style", "solid");
     await page.keyboard.press("Shift+Tab");
@@ -809,13 +919,11 @@ test("composer and search show focus outlines for keyboard navigation", async ({
     await expect(composer).toHaveCSS("box-shadow", appearance.boxShadow);
 
     await page.getByRole("button", { name: "Search", exact: true }).click();
-    const search = page.getByRole("searchbox");
+    const search = page.getByRole("combobox", {
+        name: "Search work and conversations",
+    });
     await expect(search).toBeFocused();
     await expect(search).toHaveCSS("outline-style", "none");
-    await expect(page.locator(".global-search")).toHaveCSS(
-        "box-shadow",
-        "none",
-    );
     await page.keyboard.press("ControlOrMeta+k");
     await expect(search).toBeFocused();
     await expect(search).toHaveCSS("outline-style", "solid");
@@ -830,7 +938,10 @@ test("the Work conversation keeps the objective, review and supporting records a
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/work?item=1");
     await expect(
-        page.getByRole("heading", { name: "Work 1", exact: true }),
+        page.getByRole("heading", {
+            name: "Polish the welcome page",
+            exact: true,
+        }),
     ).toBeVisible();
     await expect(page.getByRole("tab")).toHaveCount(0);
     const conversation = page.getByRole("region", {
@@ -849,14 +960,20 @@ test("the Work conversation keeps the objective, review and supporting records a
     );
     await expect(page.locator(".activity-panel")).toBeHidden();
     await expect(
-        result.getByRole("button", { name: "Approve & complete" }),
+        conversation
+            .getByRole("region", { name: "Review result" })
+            .getByRole("button", { name: "Approve & complete" }),
     ).toBeVisible();
     const center = (await page.locator(".main-shell").boundingBox())!;
     const navigation = (await page.locator(".sidebar").boundingBox())!;
     expect(center.x).toBe(navigation.width);
     expect(center.x + center.width).toBe(1440);
-    await page.getByRole("button", { name: "Activity", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Activity" })).toBeVisible();
+    await page
+        .getByRole("button", { name: "Activity timeline", exact: true })
+        .click();
+    await expect(
+        page.getByRole("dialog", { name: "Activity timeline" }),
+    ).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(conversation).toBeVisible();
     const draft = page.getByPlaceholder("Add context to this work…");
@@ -867,12 +984,12 @@ test("the Work conversation keeps the objective, review and supporting records a
     await expect(page.locator("#work-outputs")).not.toContainText(
         "fixture-model",
     );
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await refreshWorkspace(page);
     await expect(objective).toHaveAttribute("open", "");
     await expect(page.locator("#work-outputs")).toHaveAttribute("open", "");
     await expect(draft).toHaveValue("Keep the review draft");
     await page.locator("#result-1 > summary").click();
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await refreshWorkspace(page);
     await expect(page.locator("#result-1")).not.toHaveAttribute("open", "");
     await page.locator(".detail-body").evaluate((el) => {
         el.scrollTop = 0;
@@ -881,11 +998,11 @@ test("the Work conversation keeps the objective, review and supporting records a
         path: test.info().outputPath("workspace-work.png"),
     });
     await page.getByRole("button", { name: "New work", exact: true }).click();
-    await page.getByPlaceholder("Ask Goblin").fill("A second idea");
+    await page.getByPlaceholder("Describe the work").fill("A second idea");
     await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(draft).toHaveValue("Keep the review draft");
     await page.getByRole("button", { name: "New work", exact: true }).click();
-    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue(
+    await expect(page.getByPlaceholder("Describe the work")).toHaveValue(
         "A second idea",
     );
     expect(commands).toEqual([]);
@@ -901,13 +1018,22 @@ test("workspace search finds Work content without changing the open item", async
         "Polish the welcome page",
     );
     await page.getByRole("button", { name: "Search", exact: true }).click();
-    const search = page.getByRole("searchbox");
-    const results = page.getByRole("region", {
+    const search = page.getByRole("combobox", {
+        name: "Search work and conversations",
+    });
+    const results = page.getByRole("listbox", {
         name: "Search results",
         exact: true,
     });
     const items = results.locator('[data-action="search-work"]');
     await expect(search).toBeFocused();
+    await expect(
+        page.getByRole("dialog", { name: "Global search" }),
+    ).toBeVisible();
+    await search.fill("there is no matching text");
+    await expect(page.locator("#global-search-status")).toHaveText(
+        "No matching work or conversations.",
+    );
     await search.fill("repository clones");
     await expect(items).toHaveCount(1);
     await search.fill("shorter");
@@ -915,10 +1041,12 @@ test("workspace search finds Work content without changing the open item", async
     await expect(page.locator(".work-objective-full")).toHaveText(
         "Polish the welcome page",
     );
-    await results
-        .getByRole("button", { name: "Write the release notes" })
-        .click();
-    await expect(page.locator(".detail h2")).toBeFocused();
+    await search.press("ArrowUp");
+    await expect(results.getByRole("option", { selected: true })).toHaveText(
+        /Write the release notes/,
+    );
+    await search.press("Enter");
+    await expect(page.locator("#work-title-heading")).toBeFocused();
     await expect(page.locator(".detail .status-pill")).toHaveText("Completed");
     await expect(search).toBeHidden();
     await expect(page.getByRole("combobox", { name: "Work view" })).toHaveCount(
@@ -929,8 +1057,10 @@ test("workspace search finds Work content without changing the open item", async
 test("Work inbox opens in Board, scopes status to List, and restores inbox state after viewing Work", async ({
     page,
 }) => {
+    const summary = "Draft the release checklist";
     const longTitle =
-        "Draft the release checklist with acceptance criteria and follow-up checks for every supported environment and integration";
+        summary +
+        "\nhttps://example.test/guides/release-checklist-with-an-unbroken-path\nInclude acceptance criteria and follow-up checks for every supported environment.";
     const commands = await workspace(page, true, [
         { id: "4", objective: longTitle, status: "Ready" },
         { id: "5", objective: "Queue the build", status: "Queued" },
@@ -963,7 +1093,7 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     const modes = page.getByRole("group", { name: "Work layout" });
     const boardMode = modes.getByRole("button", { name: "Board", exact: true });
     const listMode = modes.getByRole("button", { name: "List", exact: true });
-    const search = page.getByRole("searchbox");
+    const search = page.getByRole("searchbox", { name: "Filter inbox" });
     const lane = (name: string) =>
         inbox.getByRole("region", { name, exact: true });
 
@@ -996,15 +1126,23 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     );
     await status.selectOption("active");
     await expect(list.getByRole("listitem")).toHaveCount(3);
+    await status.selectOption("ready");
+    await expect(list.getByRole("button", { name: summary })).toBeVisible();
+    await status.selectOption("closed");
+    await expect(list.getByRole("listitem")).toHaveCount(2);
+    await status.selectOption("cancelled");
+    await expect(
+        list.getByRole("button", { name: "Cancel the old release" }),
+    ).toBeVisible();
     await status.selectOption("attention");
     await expect(list.getByRole("listitem")).toHaveCount(3);
     await expect(inbox.getByRole("status")).toHaveText("3 of 9 work items");
-    for (const label of [
-        "Ready for review",
-        "Input required",
-        "Execution failed",
-    ])
-        await expect(list.getByText(label, { exact: true })).toBeVisible();
+    for (const label of ["Review", "Reply", "Recover"])
+        await expect(
+            list
+                .locator(".board-status")
+                .filter({ hasText: new RegExp("^" + label) }),
+        ).toBeVisible();
     await page.screenshot({
         path: test.info().outputPath("work-inbox-list.png"),
     });
@@ -1029,26 +1167,31 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
         lane("Closed").getByText("Cancelled", { exact: true }),
     ).toBeVisible();
     const cardHeights = await inbox
-        .getByRole("button")
+        .locator(".board-card")
         .evaluateAll((cards) =>
             cards.map((card) => card.getBoundingClientRect().height),
         );
     expect(new Set(cardHeights).size).toBe(1);
-    const titleFits = await lane("Ready")
-        .getByText(longTitle)
-        .evaluate((title) => {
-            const lineHeight = parseFloat(getComputedStyle(title).lineHeight);
-            return (
-                title.clientHeight <= Math.ceil(2 * lineHeight) &&
-                title.scrollHeight > title.clientHeight
-            );
-        });
-    expect(titleFits).toBe(true);
+    const ready = lane("Ready").getByRole("button", {
+        name: summary,
+        exact: true,
+    });
+    await ready.click();
+    await expect(
+        page.getByRole("heading", { name: summary, exact: true }),
+    ).toBeFocused();
+    await page.getByText("Full objective", { exact: true }).click();
+    await expect(page.locator(".work-objective-full")).toContainText(
+        "https://example.test/guides/release-checklist-with-an-unbroken-path",
+    );
+    await page
+        .getByRole("button", { name: "Back to inbox", exact: true })
+        .click();
+    await expect(ready).toBeFocused();
     await page.screenshot({
         path: test.info().outputPath("work-inbox-board.png"),
     });
 
-    await page.keyboard.press("Control+k");
     await search.fill("release notes");
     await expect(inbox.locator(".board-lane")).toHaveCount(1);
     const closed = lane("Closed").getByRole("button", {
@@ -1062,7 +1205,10 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     await expect(page).toHaveURL(/\/work\?item=3$/);
     await expect(inbox).toHaveCount(0);
     await expect(
-        page.getByRole("heading", { name: "Work 3", exact: true }),
+        page.getByRole("heading", {
+            name: "Write the release notes",
+            exact: true,
+        }),
     ).toBeFocused();
     await page.goBack();
     await expect(closed).toBeFocused();
@@ -1085,7 +1231,10 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     await expect(inbox).toHaveCount(0);
     const detail = page.getByRole("region", { name: "Selected work" });
     await expect(
-        detail.getByRole("heading", { name: "Work 1", exact: true }),
+        detail.getByRole("heading", {
+            name: "Polish the welcome page",
+            exact: true,
+        }),
     ).toBeFocused();
     await expect(
         detail.getByRole("button", { name: "Outputs", exact: true }),
@@ -1094,17 +1243,21 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
         detail.getByRole("region", { name: "Conversation about this Work" }),
     ).toBeVisible();
     await expect(
-        detail.getByRole("button", { name: "Activity", exact: true }),
+        detail.getByRole("button", { name: "Activity timeline", exact: true }),
     ).toBeVisible();
-    await page.keyboard.press("Control+k");
-    await search.fill("export");
-    await expect(search).toHaveValue("export");
-    await search.press("Escape");
+    const opener = page.getByRole("button", { name: "Search", exact: true });
+    await opener.click();
+    const globalSearch = page.getByRole("combobox", {
+        name: "Search work and conversations",
+    });
+    await globalSearch.fill("export");
+    await expect(globalSearch).toHaveValue("export");
+    await globalSearch.press("Escape");
     await expect(
-        page.getByRole("region", { name: "Search results" }),
+        page.getByRole("listbox", { name: "Search results" }),
     ).toBeHidden();
-    await expect(search).toHaveValue("export");
-    await detail.getByRole("button", { name: "Back to work" }).click();
+    await expect(opener).toBeFocused();
+    await page.getByRole("button", { name: "Back to inbox" }).click();
     await expect(row).toBeFocused();
     await expect(listMode).toHaveAttribute("aria-pressed", "true");
     await expect(status).toHaveValue("attention");
@@ -1115,10 +1268,100 @@ test("Work inbox opens in Board, scopes status to List, and restores inbox state
     await boardMode.click();
     await expect(inbox.locator(".board-lane")).toHaveCount(0);
     await expect(inbox.getByText("No work matches your search.")).toBeVisible();
-    await search.press("Escape");
+    await inbox.getByRole("button", { name: "Clear filter" }).click();
     await expect(search).toHaveValue("");
     await expect(inbox.locator(".board-lane")).toHaveCount(4);
     expect(commands).toEqual([]);
+});
+
+test("the recovery card distinguishes a historical connection failure from Codex now", async ({
+    page,
+}) => {
+    const commands = await workspace(page, true, [
+        {
+            id: "4",
+            objective: "Recover the export",
+            status: "NeedsAttention",
+            attention: { reason: "Failure", failure: "ConnectionUnavailable" },
+        },
+    ]);
+    let availability = "Available";
+    await page.route("**/api/connections", (route) =>
+        route.fulfill({
+            json: [{ id: "1", runtime: "codex", name: "Codex", availability }],
+        }),
+    );
+    await page.goto("/work?item=4");
+    const recovery = page.getByRole("region", { name: "Current status" });
+    await expect(
+        recovery.getByText("Last attempt", { exact: true }),
+    ).toBeVisible();
+    await expect(
+        recovery
+            .getByRole("definition")
+            .filter({ hasText: "Codex connection unavailable" }),
+    ).toBeVisible();
+    await expect(recovery.locator("time")).toHaveAttribute(
+        "datetime",
+        "2026-09-21T00:02:00Z",
+    );
+    await expect(recovery.getByText("Codex now")).toBeVisible();
+    await expect(
+        recovery.getByText("Connected", { exact: true }),
+    ).toBeVisible();
+    const retry = recovery.getByRole("button", { name: "Retry work" });
+    await expect(retry).toBeEnabled();
+    const activity = recovery.getByRole("button", { name: "View activity" });
+    await activity.click();
+    await expect(
+        page.getByRole("dialog", { name: "Activity timeline" }),
+    ).toContainText("Codex connection unavailable");
+    await page.keyboard.press("Escape");
+    await expect(activity).toBeFocused();
+    const connection = recovery.getByRole("link", {
+        name: "Manage Codex connection",
+    });
+    await connection.click();
+    await expect(page).toHaveURL(/section=connections&provider=codex/);
+    await page.getByRole("button", { name: "Back to Work" }).click();
+    await expect(connection).toBeFocused();
+    availability = "Unavailable";
+    await refreshWorkspace(page);
+    await expect(
+        recovery.getByText("Needs attention", { exact: true }),
+    ).toBeVisible();
+    await expect(connection).toHaveClass("primary");
+    await expect(retry).toHaveCount(0);
+    expect(commands).toEqual([]);
+});
+
+test("workspace volume exhaustion explains the limit before retry", async ({
+    page,
+}) => {
+    await workspace(page, true, [
+        {
+            id: "4",
+            objective: "Update the release guide",
+            status: "NeedsAttention",
+            attention: {
+                reason: "Failure",
+                failure: "WorkspaceCapacityReached",
+            },
+        },
+    ]);
+    await page.goto("/work?item=4");
+    const recovery = page.getByRole("region", { name: "Current status" });
+    await expect(
+        recovery
+            .getByRole("definition")
+            .filter({ hasText: "Workspace volume limit reached" }),
+    ).toBeVisible();
+    await expect(
+        recovery.getByText(/raise the workspace limit before retrying/),
+    ).toBeVisible();
+    await expect(
+        recovery.getByRole("button", { name: "Retry work" }),
+    ).toBeEnabled();
 });
 
 test("the workspace menu supports mouse and keyboard and returns to the same inbox", async ({
@@ -1162,8 +1405,8 @@ test("the workspace menu supports mouse and keyboard and returns to the same inb
     await page.getByRole("button", { name: "List", exact: true }).click();
     const status = page.getByRole("combobox", { name: "Status", exact: true });
     await status.selectOption("attention");
-    await nav.getByRole("button", { name: "Search", exact: true }).click();
-    await page.getByRole("searchbox").fill("welcome");
+    const filter = page.getByRole("searchbox", { name: "Filter inbox" });
+    await filter.fill("welcome");
     const list = page.getByRole("list", { name: "Work list", exact: true });
     await expect(list.getByRole("button")).toHaveCount(1);
 
@@ -1179,19 +1422,15 @@ test("the workspace menu supports mouse and keyboard and returns to the same inb
     await expect(page).toHaveURL(/\/settings\?section=connections$/);
     const back = page
         .getByRole("banner")
-        .getByRole("button", { name: "Back to work", exact: true });
+        .getByRole("button", { name: "Back to inbox", exact: true });
     await expect(back).toBeVisible();
-    await expect(
-        page
-            .getByRole("banner")
-            .getByRole("button", { name: "Refresh", exact: true }),
-    ).toHaveCount(0);
+    await expect(refreshIntervalControl(page)).toHaveCount(0);
     await back.click();
     await expect(menu).toBeFocused();
     await expect(
         page.getByRole("button", { name: "List", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("searchbox")).toHaveValue("welcome");
+    await expect(filter).toHaveValue("welcome");
     await expect(status).toHaveValue("attention");
     await expect(list.getByRole("button")).toHaveCount(1);
 
@@ -1210,7 +1449,7 @@ test("the workspace menu supports mouse and keyboard and returns to the same inb
     ).toBeVisible();
     await back.click();
     await expect(status).toHaveValue("attention");
-    await expect(page.getByRole("searchbox")).toHaveValue("welcome");
+    await expect(filter).toHaveValue("welcome");
 });
 
 test("Work inbox refresh updates results while preserving keyboard focus", async ({
@@ -1265,7 +1504,9 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     await expect(status).toBeFocused();
 
     await page.keyboard.press("Control+k");
-    const search = page.getByRole("searchbox");
+    const search = page.getByRole("combobox", {
+        name: "Search work and conversations",
+    });
     await search.fill("welcome");
     await search.evaluate((input: HTMLInputElement) =>
         input.setSelectionRange(1, 4),
@@ -1274,13 +1515,56 @@ test("Work inbox refresh updates results while preserving keyboard focus", async
     added.status = "NeedsAttention";
     added.attention = { reason: "InputRequired" };
     await page.clock.runFor(3000);
-    await expect(list.getByRole("listitem")).toHaveCount(2);
+    await expect(
+        page
+            .getByRole("listbox", { name: "Search results" })
+            .getByRole("option", { name: added.objective }),
+    ).toBeVisible();
     await expect(search).toBeFocused();
     const selection = await search.evaluate((input: HTMLInputElement) => [
         input.selectionStart,
         input.selectionEnd,
     ]);
     expect(selection).toEqual([1, 4]);
+    await search.press("Escape");
+    await expect(status).toBeFocused();
+    await expect(list.getByRole("listitem")).toHaveCount(2);
+});
+
+test("a long Work inbox scrolls within the workspace viewport", async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1440, height: 720 });
+    const items = Array.from({ length: 12 }, (_, index) => ({
+        id: String(index + 10),
+        objective: `Review document ${index + 1}`,
+        status: "NeedsAttention",
+        attention: { reason: "InputRequired" },
+    }));
+    await workspace(page, true, items);
+    await page.goto("/work");
+    const inbox = page.getByRole("region", { name: "Work inbox", exact: true });
+    const end = inbox.getByRole("button", {
+        name: items.at(-1)!.objective,
+        exact: true,
+    });
+
+    for (const layout of ["Board", "List"]) {
+        await page.getByRole("button", { name: layout, exact: true }).click();
+        await end.scrollIntoViewIfNeeded();
+        await expect(end).toBeInViewport();
+        const bounds = await inbox.evaluate((element) => ({
+            viewportHeight: innerHeight,
+            documentHeight: document.scrollingElement!.scrollHeight,
+            documentScroll: scrollY,
+            inboxBottom: element.getBoundingClientRect().bottom,
+            inboxScroll: element.scrollTop,
+        }));
+        expect(bounds.inboxScroll).toBeGreaterThan(0);
+        expect(bounds.documentHeight).toBe(bounds.viewportHeight);
+        expect(bounds.documentScroll).toBe(0);
+        expect(bounds.inboxBottom).toBeCloseTo(bounds.viewportHeight);
+    }
 });
 
 test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
@@ -1325,12 +1609,24 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
         sidebar.getByRole("button", { name: "New chat" }),
     ).toBeVisible();
     await expect(sidebar.getByLabel("Workspace menu")).toBeVisible();
-    await sidebar.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(sidebar).toBeHidden();
-    const search = page.getByRole("searchbox");
-    expect((await search.boundingBox())?.width).toBeGreaterThan(100);
-    await listMode.click();
-    await status.selectOption("attention");
+    const searchButton = sidebar.getByRole("button", {
+        name: "Search",
+        exact: true,
+    });
+    await searchButton.click();
+    await expect(
+        page.getByRole("dialog", { name: "Global search" }),
+    ).toBeVisible();
+    const globalSearch = page.getByRole("combobox", {
+        name: "Search work and conversations",
+    });
+    expect((await globalSearch.boundingBox())?.width).toBeGreaterThan(100);
+    await globalSearch.press("Escape");
+    await expect(searchButton).toBeFocused();
+    await sidebar.getByRole("button", { name: "Hide sidebar" }).click();
+    const attention = inbox.getByRole("button", { name: /^Needs attention/ });
+    await expect(attention).toBeInViewport();
+    await attention.click();
     await expect(list.getByRole("listitem")).toHaveCount(1);
     await expect(status).toBeInViewport();
     await expect(modes).toBeInViewport();
@@ -1350,16 +1646,16 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
     await expect(list.getByRole("listitem")).toHaveCount(1);
     await checkWidths();
 
-    await page.keyboard.press("Control+k");
+    const search = page.getByRole("searchbox", { name: "Filter inbox" });
     await search.fill("welcome page");
     await list.getByRole("button", { name: "Polish the welcome page" }).click();
     await expect(inbox).toHaveCount(0);
     const detail = page.getByRole("region", { name: "Selected work" });
     await expect(detail).toBeVisible();
     await expect(
-        page.getByRole("region", { name: "Search results" }),
+        page.getByRole("listbox", { name: "Search results" }),
     ).toHaveCount(0);
-    await detail.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to inbox" }).click();
     await expect(inbox).toBeVisible();
     await expect(search).toHaveValue("welcome page");
     await expect(status).toHaveValue("attention");
@@ -1373,14 +1669,14 @@ for (const width of [1024, 390, 320]) {
         await page.setViewportSize({ width, height: 844 });
         await page.goto("/work?item=1");
         const toggle = page.getByRole("button", {
-            name: "Activity",
+            name: "Activity timeline",
             exact: true,
         });
         await expect(toggle).toBeVisible();
         await expect(page.locator(".activity-panel")).not.toBeVisible();
         await toggle.click();
         const panel = page.getByRole("dialog", {
-            name: "Activity",
+            name: "Activity timeline",
             exact: true,
         });
         await expect(panel).toBeVisible();
@@ -1412,22 +1708,33 @@ for (const width of [1024, 390, 320]) {
                 "Investigate slow repository clones",
             );
             await expect(
-                page.getByRole("heading", { name: "Work 2", exact: true }),
+                page.getByRole("heading", {
+                    name: "Investigate slow repository clones",
+                    exact: true,
+                }),
             ).toBeFocused();
             await expect(
                 page.getByRole("dialog", { name: "Workspace" }),
             ).toHaveCount(0);
             // Search remains usable while the navigation drawer is closed.
             await page.keyboard.press("Control+k");
-            await page.getByRole("searchbox").fill("Polish");
             await page
-                .getByRole("region", { name: "Search results" })
-                .getByRole("button", { name: "Polish the welcome page" })
+                .getByRole("combobox", {
+                    name: "Search work and conversations",
+                })
+                .fill("Polish");
+            await page
+                .getByRole("listbox", { name: "Search results" })
+                .getByRole("option", { name: "Polish the welcome page" })
                 .click();
             await expect(page.locator(".work-objective-full")).toHaveText(
                 "Polish the welcome page",
             );
-            await expect(page.getByRole("searchbox")).toBeHidden();
+            await expect(
+                page.getByRole("combobox", {
+                    name: "Search work and conversations",
+                }),
+            ).toBeHidden();
         } else
             await expect(
                 page.getByRole("complementary", { name: "Workspace" }),
@@ -1444,7 +1751,7 @@ for (const width of [1024, 390, 320]) {
             await page.locator(".workspace-header").evaluate((header) => {
                 const bounds = header.getBoundingClientRect();
                 return Array.from(
-                    header.querySelectorAll(".header-actions, .global-search"),
+                    header.querySelectorAll(".header-actions"),
                 ).every(
                     (child) =>
                         child.getBoundingClientRect().bottom <= bounds.bottom,
@@ -1537,7 +1844,10 @@ test("completed work keeps outputs, sharing, and agent inspection available with
         page.getByRole("button", { name: "Start work", exact: true }),
     ).toHaveCount(0);
     await page.keyboard.press("Control+k");
-    await expect(page.getByRole("searchbox")).toBeFocused();
+    await expect(
+        page.getByRole("combobox", { name: "Search work and conversations" }),
+    ).toBeFocused();
+    await page.keyboard.press("Escape");
     await page.getByLabel("Workspace menu", { exact: true }).click();
     await expect(
         page.getByRole("button", { name: "Lock workspace", exact: true }),
@@ -1578,7 +1888,7 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     await expect(
         settings.getByRole("heading", { name: "Goblin", exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Back to work" }).click();
+    await page.getByRole("button", { name: "Back to Work" }).click();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator(".detail-body").evaluate((element) => {
         element.scrollTop = 0;
@@ -1589,6 +1899,10 @@ test("completed work keeps outputs, sharing, and agent inspection available with
         page.getByRole("button", { name: "Share", exact: true }),
     ).toBeVisible();
     await expect(page.locator(".work-composer")).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Add note" })).toBeDisabled();
+    await expect(
+        page.getByText("Saving a note keeps this Work closed."),
+    ).toBeVisible();
     expect(
         await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth,
@@ -1597,7 +1911,7 @@ test("completed work keeps outputs, sharing, and agent inspection available with
     await page.locator(".detail-body").evaluate((element) => {
         element.scrollTop = 0;
     });
-    await expect(page.locator(".detail h2")).toBeInViewport();
+    await expect(page.locator("#work-title-heading")).toBeInViewport();
     await page.screenshot({
         path: test.info().outputPath("redesign-completed-mobile.png"),
     });
@@ -1674,16 +1988,20 @@ test("a result stays prominent among newer artifacts and older executions remain
     await expect(
         page.getByRole("region", { name: "Current status" }),
     ).toHaveCount(0);
-    const draft = page.getByPlaceholder("Add context to this work…");
+    const draft = page.getByPlaceholder("Write a note…");
     await draft.fill("Keep the planting note");
-    await page.getByRole("button", { name: "Activity", exact: true }).click();
+    await page
+        .getByRole("button", { name: "Activity timeline", exact: true })
+        .click();
     await page.locator("#event-1 > summary").click();
     await page.getByRole("button", { name: "Attempt 1", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: "Activity" })).toBeHidden();
+    await expect(
+        page.getByRole("dialog", { name: "Activity timeline" }),
+    ).toBeHidden();
     await expect(page.locator("#all-executions")).toHaveAttribute("open", "");
     await expect(page.locator("#execution-1")).toHaveAttribute("open", "");
     await expect(page.locator("#execution-1 > summary")).toBeFocused();
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await refreshWorkspace(page);
     await expect(page.locator("#execution-1")).toHaveAttribute("open", "");
     await expect(draft).toHaveValue("Keep the planting note");
     expect(commands).toEqual([]);
@@ -1698,14 +2016,20 @@ test("New chat has its own draft and leaves Work context scoped", async ({
         .getByPlaceholder("Add context to this work…")
         .fill("Check the introduction again");
     await page.getByRole("button", { name: "New chat", exact: true }).click();
-    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue("");
-    await page.getByPlaceholder("Ask Goblin").fill("An unrelated idea");
+    await expect(
+        page.getByRole("button", { name: "Save message" }),
+    ).toBeDisabled();
+    await expect(page.locator("#composer-help")).toContainText(
+        "Track this work",
+    );
+    await expect(page.getByPlaceholder("Write a message")).toHaveValue("");
+    await page.getByPlaceholder("Write a message").fill("An unrelated idea");
     await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(
         page.getByPlaceholder("Add context to this work…"),
     ).toHaveValue("Check the introduction again");
     await page.getByRole("button", { name: "New chat", exact: true }).click();
-    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue(
+    await expect(page.getByPlaceholder("Write a message")).toHaveValue(
         "An unrelated idea",
     );
     expect(commands).toEqual([]);
@@ -1741,7 +2065,7 @@ test("a delayed conversation reservation and resend stay bound to the submitted 
     const workDraft = page.getByPlaceholder("Add context to this work…");
     await workDraft.fill("Keep the Work draft");
     await page.getByRole("button", { name: "New chat", exact: true }).click();
-    const conversationDraft = page.getByPlaceholder("Ask Goblin");
+    const conversationDraft = page.getByPlaceholder("Write a message");
     await conversationDraft.fill("Save this conversation draft");
     await page.getByRole("button", { name: "Save message" }).click();
     await requested;
@@ -1922,13 +2246,13 @@ test("the scoped composer retains command identity and draft until the selected 
     await page.goto("/work?item=2");
     const draft = page.getByPlaceholder("Add context to this work…");
     await draft.fill("Check connection pooling");
-    await page.getByRole("button", { name: "Send message" }).click();
+    await page.getByRole("button", { name: "Save context" }).click();
     await expect(
         page.getByRole("button", { name: "Resend command" }),
     ).toBeVisible();
     await expect(draft).toHaveValue("Check connection pooling");
     await expect(
-        page.getByRole("button", { name: "Send message" }),
+        page.getByRole("button", { name: "Save context" }),
     ).toBeDisabled();
     await expect(page.locator(".activity-panel")).not.toContainText(
         "Check connection pooling",
@@ -1962,8 +2286,11 @@ test("corrupt command recovery does not prevent the workspace from opening", asy
     await expect(page.getByRole("alert")).toContainText(
         "saved command could not be recovered",
     );
+    await page
+        .getByPlaceholder("Add context to this work…")
+        .fill("Continue with the saved Work.");
     await expect(
-        page.getByRole("button", { name: "Send message" }),
+        page.getByRole("button", { name: "Save context" }),
     ).toBeEnabled();
     await expect(
         page.getByRole("button", { name: "Resend command" }),

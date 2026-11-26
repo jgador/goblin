@@ -49,7 +49,8 @@ public enum FailureKind
     RuntimeDisconnected,
     CancellationFailed,
     CleanupFailed,
-    StorageUnavailable
+    StorageUnavailable,
+    WorkspaceCapacityReached
 }
 
 public enum WorkEventKind

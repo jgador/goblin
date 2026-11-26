@@ -333,8 +333,17 @@ public sealed partial class WorkStore
 
     private static async Task SaveAsync(GoblinDbContext db, IDbContextOutbox outbox, Row row, WorkItem work, DateTimeOffset now, CancellationToken token)
     {
-        if (WorkspaceCheckpoints.RetainsPatches(row.Status) && work.Status is WorkStatus.Completed or WorkStatus.Cancelled)
-            await outbox.PublishAsync(new ReconcileWorkPatches(work.Id));
+        if (!WorkWorkspace.RetainsVolume(work.Status))
+        {
+            bool closing = WorkspaceCheckpoints.RetainsPatches(row.Status);
+            if (closing) await outbox.PublishAsync(new ReconcileWorkPatches(work.Id));
+            if (work.Workspace is not null && work.CurrentAttempt?.CleanupPending != true &&
+                (closing || WorkStatePersistence.Snapshot(row).Attempts.LastOrDefault()?.CleanupPending == true))
+            {
+                await InspectionStore.StopForWorkClosureAsync(db, outbox, work.Id, now, token);
+                await outbox.PublishAsync(new DeleteClosedWorkspace(work.Id));
+            }
+        }
         WorkStatePersistence.Update(row, work, now);
         foreach (ExecutionAttempt attempt in work.Attempts)
         {

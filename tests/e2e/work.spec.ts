@@ -1,5 +1,6 @@
 import { environmentVariables as Env } from "../../config/environment.mjs";
 import { test, expect } from "@playwright/test";
+import { refreshWorkspace } from "../support/workspace-refresh.js";
 
 test.describe("durable Work", () => {
     test.skip(
@@ -20,9 +21,7 @@ test.describe("durable Work", () => {
             data: { apiKey: "sk-work-browser-fixture-not-a-real-secret" },
         });
         expect([200, 409]).toContain(result.status());
-        await page
-            .getByRole("button", { name: "Refresh", exact: true })
-            .click();
+        await refreshWorkspace(page);
     }
     async function create(
         page: import("@playwright/test").Page,
@@ -32,7 +31,9 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
-        await page.getByRole("textbox", { name: "Ask Goblin" }).fill(objective);
+        await page
+            .getByRole("textbox", { name: "Describe the work" })
+            .fill(objective);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
@@ -71,9 +72,7 @@ test.describe("durable Work", () => {
                     })
                 ).ok(),
             ).toBe(true);
-            await page
-                .getByRole("button", { name: "Refresh", exact: true })
-                .click();
+            await refreshWorkspace(page);
             await create(
                 page,
                 fromConversation
@@ -177,7 +176,9 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
-        await page.getByRole("textbox", { name: "Ask Goblin" }).fill(objective);
+        await page
+            .getByRole("textbox", { name: "Describe the work" })
+            .fill(objective);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
@@ -338,7 +339,7 @@ test.describe("durable Work", () => {
             page.getByRole("heading", { name: "Needs your input" }),
         ).toBeVisible({ timeout: 15000 });
         await page.getByRole("textbox").fill("Prioritize a small release.");
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page.getByRole("button", { name: "Send answer" }).click();
         // The fixture releases compute after asking for input. Answering saves
         // context; the owner explicitly starts the next attempt.
         await page
@@ -347,7 +348,7 @@ test.describe("durable Work", () => {
         await expect(
             page.getByRole("button", { name: "Approve & complete" }),
         ).toBeVisible({ timeout: 15000 });
-        await page.getByRole("button", { name: "Ask for changes" }).click();
+        await page.getByRole("button", { name: "Request changes" }).click();
         await page.getByRole("textbox").fill("Include validation steps.");
         await page.getByRole("button", { name: "Send change request" }).click();
         await page
@@ -372,7 +373,7 @@ test.describe("durable Work", () => {
                 .filter({ hasText: "Approved result" }),
         ).toBeVisible();
         await page
-            .getByRole("button", { name: "Activity", exact: true })
+            .getByRole("button", { name: "Activity timeline", exact: true })
             .click();
         await expect(
             page
@@ -411,7 +412,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Start work", exact: true })
             .click();
         await expect(
-            page.getByRole("heading", { name: "Needs attention", exact: true }),
+            page.getByRole("heading", { name: "Recover work", exact: true }),
         ).toBeVisible({ timeout: 15000 });
         const before = (
             await (await page.request.get("/api/work")).json()
@@ -450,19 +451,21 @@ test.describe("durable Work", () => {
         await expect(page.locator(".work-objective-full")).toHaveText(text);
         await page.reload();
         await page.keyboard.press("Control+k");
-        await page.getByRole("searchbox").fill(text);
         await page
-            .getByRole("region", { name: "Search results", exact: true })
-            .getByRole("button", { name: text, exact: true })
+            .getByRole("combobox", { name: "Search work and conversations" })
+            .fill(text);
+        await page
+            .getByRole("listbox", { name: "Search results", exact: true })
+            .getByRole("option", { name: text, exact: true })
             .click();
-        await expect(page.locator(".goal-text")).toHaveText(text);
+        await expect(page.locator(".work-objective-full")).toHaveText(text);
         await expect(page.locator('img[src="x"]')).toHaveCount(0);
         await page.screenshot({
             path: test.info().outputPath("desktop-work.png"),
             fullPage: true,
         });
         await page.setViewportSize({ width: 390, height: 844 });
-        await expect(page.locator(".detail h2")).toBeVisible();
+        await expect(page.locator("#work-title-heading")).toBeVisible();
         expect(
             await page.evaluate(
                 () => document.documentElement.scrollWidth <= window.innerWidth,

@@ -65,6 +65,7 @@ export const FailureKind = {
     CancellationFailed: "CancellationFailed",
     CleanupFailed: "CleanupFailed",
     StorageUnavailable: "StorageUnavailable",
+    WorkspaceCapacityReached: "WorkspaceCapacityReached",
 } as const;
 export type FailureKind = (typeof FailureKind)[keyof typeof FailureKind];
 

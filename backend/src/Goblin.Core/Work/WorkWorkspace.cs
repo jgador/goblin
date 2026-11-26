@@ -8,6 +8,8 @@ public sealed record WorkWorkspace(string GitRepository, string EnvironmentRefer
     long AttemptId, int WorkspaceNumber, int TurnNumber)
 {
     public string? BaseCommitSha { get; init; }
+
+    public static bool RetainsVolume(WorkStatus status) => status is not (WorkStatus.Completed or WorkStatus.Cancelled);
 }
 
 public sealed partial class WorkItem

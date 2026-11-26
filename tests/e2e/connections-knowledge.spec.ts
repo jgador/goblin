@@ -320,7 +320,9 @@ test("connection management stays accessible when Work storage is unavailable", 
         .click();
     await page.getByRole("link", { name: "Knowledge", exact: true }).click();
     await expect(
-        page.getByRole("heading", { name: "No indexed sources" }),
+        page.getByRole("heading", {
+            name: "Knowledge indexing is unavailable in this deployment",
+        }),
     ).toBeVisible();
     expect(state.commands).toEqual([]);
 });
@@ -349,7 +351,9 @@ test("locking clears late connection reads and both pages retain the access gate
         page.getByRole("heading", { name: "Open your workspace" }),
     ).toBeVisible();
     await expect(
-        page.getByRole("heading", { name: "No indexed sources" }),
+        page.getByRole("heading", {
+            name: "Knowledge indexing is unavailable in this deployment",
+        }),
     ).toHaveCount(0);
 });
 
@@ -371,9 +375,8 @@ test("Connections and Knowledge fit desktop and mobile with keyboard navigation"
         path: ".artifacts/settings-coherence/knowledge-desktop.png",
     });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page
-        .getByRole("link", { name: "Manage connections", exact: true })
-        .click();
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(
         page.getByRole("combobox", { name: "Settings section", exact: true }),
     ).toHaveValue("connections");
@@ -409,7 +412,7 @@ test("Connections and Knowledge fit desktop and mobile with keyboard navigation"
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page
-        .getByRole("button", { name: "Back to work", exact: true })
+        .getByRole("button", { name: "Back to Knowledge", exact: true })
         .click();
     await page.screenshot({
         path: ".artifacts/settings-coherence/knowledge-mobile.png",
@@ -421,31 +424,32 @@ test("Knowledge stays honest, preserves Work drafts, and supports browser histor
     const state = await workspace(page);
     await page.goto("/?new=work");
     await page
-        .getByRole("textbox", { name: "Ask Goblin" })
+        .getByRole("textbox", { name: "Describe the work" })
         .fill("Keep my draft while browsing tools");
     await page.getByRole("link", { name: "Knowledge", exact: true }).click();
     await expect(page).toHaveURL(/\/knowledge$/);
     await expect(
         page.getByRole("searchbox", { name: "Search indexed knowledge" }),
-    ).toBeDisabled();
+    ).toHaveCount(0);
     await expect(
-        page.getByRole("heading", { name: "No indexed sources" }),
+        page.getByRole("heading", {
+            name: "Knowledge indexing is unavailable in this deployment",
+        }),
     ).toBeVisible();
     await expect(
-        page.getByText("Indexing unavailable", { exact: true }),
-    ).toBeVisible();
-    await page
-        .getByRole("link", { name: "Manage connections", exact: true })
-        .click();
+        page.getByRole("link", { name: "Manage connections", exact: true }),
+    ).toHaveCount(0);
+    await page.getByLabel("Workspace menu", { exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     await expect(page).toHaveURL(/\/settings\?section=connections$/);
     await page.goBack();
     await expect(
         page.getByRole("heading", { name: "Knowledge", exact: true }),
     ).toBeVisible();
     await page.goBack();
-    await expect(page.getByRole("textbox", { name: "Ask Goblin" })).toHaveValue(
-        "Keep my draft while browsing tools",
-    );
+    await expect(
+        page.getByRole("textbox", { name: "Describe the work" }),
+    ).toHaveValue("Keep my draft while browsing tools");
     await page.goForward();
     await expect(page).toHaveURL(/\/knowledge$/);
     await page.reload();
@@ -457,3 +461,81 @@ test("Knowledge stays honest, preserves Work drafts, and supports browser histor
     ).toEqual([]);
     expect(state.commands).toEqual([]);
 });
+
+for (const width of [1440, 390]) {
+    test(`global search opens and cancels on Knowledge at ${width}px`, async ({
+        page,
+    }) => {
+        await workspace(page);
+        await page.setViewportSize({ width, height: 844 });
+        await page.route("**/api/work", (route) =>
+            route.fulfill({
+                json: [
+                    {
+                        version: "1",
+                        createdAt: "2026-09-21T00:00:00Z",
+                        updatedAt: "2026-09-21T00:00:00Z",
+                        work: {
+                            id: "10",
+                            objective: "Release checklist",
+                            status: "Ready",
+                            attempts: [],
+                            history: [],
+                            decisions: [],
+                            results: [],
+                            artifacts: [],
+                        },
+                    },
+                ],
+            }),
+        );
+        await page.route("**/api/conversations", (route) =>
+            route.fulfill({
+                json: [{ id: "11", title: "Release ideas", messages: [] }],
+            }),
+        );
+        await page.goto("/knowledge");
+        const opener = page.getByRole("button", {
+            name: "Search",
+            exact: true,
+        });
+        await opener.click();
+        const dialog = page.getByRole("dialog", { name: "Global search" });
+        const query = dialog.getByRole("combobox", {
+            name: "Search work and conversations",
+        });
+        await expect(query).toBeFocused();
+        await query.fill("release");
+        await expect(
+            dialog.getByRole("group", { name: "Work", exact: true }),
+        ).toContainText("Release checklist");
+        await expect(
+            dialog.getByRole("group", { name: "Conversations", exact: true }),
+        ).toContainText("Release ideas");
+        await expect(page).toHaveURL(/\/knowledge$/);
+        expect(
+            await dialog.evaluate(
+                (panel) => panel.getBoundingClientRect().right <= innerWidth,
+            ),
+        ).toBe(true);
+        await query.press("Escape");
+        await expect(dialog).toBeHidden();
+        await expect(opener).toBeFocused();
+        await expect(page).toHaveURL(/\/knowledge$/);
+
+        await page
+            .getByRole("heading", { name: "Knowledge", exact: true })
+            .focus();
+        await page.keyboard.press("Control+k");
+        await query.fill("release");
+        await query.press("ArrowDown");
+        await query.press("ArrowDown");
+        await expect(dialog.getByRole("option", { selected: true })).toHaveText(
+            /Release ideas/,
+        );
+        await query.press("Enter");
+        await expect(
+            page.getByRole("heading", { name: "Release ideas" }),
+        ).toBeFocused();
+    });
+}

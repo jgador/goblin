@@ -124,15 +124,17 @@ public sealed class PersistentSandboxTests
         WorkItem work = Running(1, 10, plane.Host);
         await plane.Host.StartAsync(work.Snapshot(), default); await StopAsync(work, plane.Host);
         WorkItem other = Running(2, 20, plane.Host);
-        await Assert.ThrowsAsync<IOException>(() => plane.Host.StartAsync(other.Snapshot(), default));
+        await Assert.ThrowsAsync<WorkspaceCapacityException>(() => plane.Host.StartAsync(other.Snapshot(), default));
         Assert.Single(plane.Resources.Keys, x => x.Contains("/persistentvolumeclaims/", StringComparison.Ordinal));
         work.RetryExecution(11, work.CurrentAttempt!.Target, Now); work.TryClaimExecution(11, 101, plane.Host.EnvironmentFor(1, 11), Now);
         await plane.Host.StartAsync(work.Snapshot(), default);
         Assert.Equal("Running", plane.Sandbox["spec"]!["operatingMode"]!.GetValue<string>());
     }
 
-    [Fact]
-    public async Task CompletedWorkVolumeIsNotDeletedToMakeRoomForAnotherWork()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ClosingWorkReclaimsOnlyItsVolumeAndFreesCapacity(bool approve)
     {
         await using ControlPlane plane = await ControlPlane.StartAsync();
         WorkItem work = Running(1, 10, plane.Host);
@@ -143,10 +145,29 @@ public sealed class PersistentSandboxTests
         work.RequireCleanup(10, 100, Now);
         await plane.Host.CleanupAsync(work.Snapshot(), default);
         work.ConfirmCleanup(10, 100, Now);
-        work.ApproveResult(10, Now);
-        await Assert.ThrowsAsync<IOException>(() => plane.Host.StartAsync(Running(2, 20, plane.Host).Snapshot(), default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => plane.Host.DeleteClosedWorkspaceAsync(work.Snapshot(), default));
         Assert.Equal(volume, plane.VolumeUid);
-        Assert.Single(plane.Resources.Keys, x => x.Contains("/persistentvolumeclaims/", StringComparison.Ordinal));
+        if (approve) work.ApproveResult(10, Now);
+        else work.RequestCancellation(Now);
+        await plane.Host.DeleteClosedWorkspaceAsync(work.Snapshot(), default);
+        await plane.Host.DeleteClosedWorkspaceAsync(work.Snapshot(), default);
+        Assert.DoesNotContain(plane.Resources.Keys, x => x.Contains("/persistentvolumeclaims/", StringComparison.Ordinal));
+        Assert.Equal("stopped", plane.Sandbox["metadata"]!["labels"]!["goblin-phase"]!.GetValue<string>());
+        await plane.Host.StartAsync(Running(2, 20, plane.Host).Snapshot(), default);
+        Assert.Contains("/api/v1/namespaces/agents/persistentvolumeclaims/work-2", plane.Resources.Keys);
+    }
+
+    [Fact]
+    public async Task ClosedWorkspaceDeletionRefusesAVolumeThatChangesAfterTheOwnershipCheck()
+    {
+        await using ControlPlane plane = await ControlPlane.StartAsync();
+        WorkItem work = Running(1, 10, plane.Host);
+        await plane.Host.StartAsync(work.Snapshot(), default);
+        await StopAsync(work, plane.Host);
+        work.RequestCancellation(Now);
+        plane.ReplaceVolumeBeforeDelete = true;
+        await Assert.ThrowsAsync<IOException>(() => plane.Host.DeleteClosedWorkspaceAsync(work.Snapshot(), default));
+        Assert.Contains("/api/v1/namespaces/agents/persistentvolumeclaims/work-1", plane.Resources.Keys);
     }
 
     [Fact]
@@ -226,6 +247,7 @@ public sealed class PersistentSandboxTests
         public SandboxHost Host { get; }
         public bool ConflictOnActivation { get; set; }
         public bool FailPodReads { get; set; }
+        public bool ReplaceVolumeBeforeDelete { get; set; }
         public string? Logs { get; set; }
         public int Mutations { get; private set; }
         public JsonNode Sandbox => Resources["/apis/agents.x-k8s.io/v1beta1/namespaces/agents/sandboxes/work-1"];
@@ -276,7 +298,18 @@ public sealed class PersistentSandboxTests
                 { context.Response.StatusCode = 409; return; }
                 Merge(saved, body!);
             }
-            else if (method == "DELETE") { Resources.Remove(path); Mutations++; await context.Response.WriteAsync("{}"); return; }
+            else if (method == "DELETE")
+            {
+                if (path.Contains("/persistentvolumeclaims/", StringComparison.Ordinal))
+                {
+                    JsonNode metadata = Resources[path]["metadata"]!;
+                    Assert.NotNull(body?["preconditions"]?["resourceVersion"]);
+                    if (ReplaceVolumeBeforeDelete) metadata["resourceVersion"] = (++_version).ToString();
+                    if (body!["preconditions"]!["resourceVersion"]!.GetValue<string>() != metadata["resourceVersion"]!.GetValue<string>())
+                    { context.Response.StatusCode = 409; return; }
+                }
+                Resources.Remove(path); Mutations++; await context.Response.WriteAsync("{}"); return;
+            }
             JsonNode value = Resources[path];
             value["metadata"]!["resourceVersion"] = (++_version).ToString(); Mutations++;
             if (path.Contains("/sandboxes/", StringComparison.Ordinal))

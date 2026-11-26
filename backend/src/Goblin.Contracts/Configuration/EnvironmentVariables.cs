@@ -137,12 +137,12 @@ public static class EnvironmentVariables
     public const string GoblinKubernetesUrl = "GOBLIN_KUBERNETES_URL";
 
     /// <summary>Maximum cached workspace volume capacity.</summary>
-    /// <remarks>Format: Positive integer. Default/fallback: 4; invalid or nonpositive values fail configuration.
+    /// <remarks>Format: Positive integer. Default/fallback: 50; invalid or nonpositive values fail configuration.
     /// Required: Optional. Sensitive: no.</remarks>
     public const string GoblinMaxCachedWorkspaces = "GOBLIN_MAX_CACHED_WORKSPACES";
 
     /// <summary>Maximum active sandbox capacity.</summary>
-    /// <remarks>Format: Positive integer. Default/fallback: 2; invalid or nonpositive values fail configuration.
+    /// <remarks>Format: Positive integer. Default/fallback: 50; invalid or nonpositive values fail configuration.
     /// Required: Optional. Sensitive: no.</remarks>
     public const string GoblinMaxSandboxes = "GOBLIN_MAX_SANDBOXES";
 

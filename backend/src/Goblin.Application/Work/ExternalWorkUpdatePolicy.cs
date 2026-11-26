@@ -59,6 +59,7 @@ internal static class ExternalWorkUpdatePolicy
         FailureKind.CancellationFailed => "Goblin could not confirm cancellation.",
         FailureKind.CleanupFailed => "Goblin could not finish execution cleanup.",
         FailureKind.StorageUnavailable => "Work storage is unavailable.",
+        FailureKind.WorkspaceCapacityReached => "The workspace volume limit was reached. Free a workspace slot or raise the limit before retrying.",
         _ => "Execution failed and needs your attention."
     };
 }

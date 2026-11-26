@@ -41,6 +41,7 @@ public sealed class ExternalWorkUpdatePolicyTests
     [InlineData(FailureKind.CancellationFailed)]
     [InlineData(FailureKind.CleanupFailed)]
     [InlineData(FailureKind.StorageUnavailable)]
+    [InlineData(FailureKind.WorkspaceCapacityReached)]
     public void EveryConfirmedFailureNotifiesWithoutRetrying(FailureKind failure)
     {
         WorkItem work = Running();

@@ -1,4 +1,4 @@
-import { ApiError, errorMessage } from "../api/client.js";
+import { ApiError } from "../api/client.js";
 import { hunkRange, parseDiff, type DiffFile } from "./diff.js";
 import { escapeHtml as e, icon } from "./presentation.js";
 
@@ -27,10 +27,12 @@ export class WorkChangesPanel {
     >();
     private workId?: string;
     private checkpointId?: string;
+    private forReview = false;
     private selected?: { review: boolean; previewCheckpointId?: string };
     private files: DiffFile[] = [];
     private fileIndex = 0;
     private byFile = false;
+    private restoreReviewFocus = false;
 
     constructor(private readonly request: <T>(path: string) => Promise<T>) {
         this.preview.className = "changes-preview";
@@ -57,6 +59,7 @@ export class WorkChangesPanel {
                     <button data-view="all" aria-pressed="true">All files</button>
                     <button data-view="file" aria-pressed="false">By file</button>
                 </div>
+                <label class="diff-wrap"><input type="checkbox">Wrap lines</label>
                 <div class="work-changes-totals"></div>
             </div>
             <div class="work-changes-body"></div>`;
@@ -64,6 +67,12 @@ export class WorkChangesPanel {
         this.toolbar = this.element.querySelector(".work-changes-toolbar")!;
         this.totals = this.toolbar.querySelector(".work-changes-totals")!;
         this.body = this.element.querySelector(".work-changes-body")!;
+        this.toolbar
+            .querySelector("input")!
+            .addEventListener("change", (event) => {
+                const input = event.target as HTMLInputElement;
+                this.element.toggleAttribute("data-wrap-lines", input.checked);
+            });
 
         this.element.addEventListener("click", (event) => {
             if (!(event.target instanceof Element)) return;
@@ -116,17 +125,26 @@ export class WorkChangesPanel {
             ?.focus();
     }
 
+    focusReviewEntry() {
+        const entry = this.previewBody.querySelector("button");
+        if (entry) entry.focus({ preventScroll: true });
+        else {
+            this.restoreReviewFocus = true;
+            this.focus();
+        }
+    }
+
     async openPreview() {
         const workId = this.workId;
         if (!workId) return;
         const checkpointId = this.checkpointId;
-        const wasPreviewing = this.isPreviewing;
         const selection = {
             review: false,
             previewCheckpointId: this.selected?.previewCheckpointId,
         };
         this.selected = selection;
-        if (!wasPreviewing) this.previewStatus("Loading changes…");
+        this.files = [];
+        this.previewStatus("Loading changes…");
         try {
             const saved = await this.request<SavedPatch>(
                 `/api/work/${encodeURIComponent(workId)}/changes`,
@@ -149,36 +167,31 @@ export class WorkChangesPanel {
                 totals.removed += file.removed;
             }
             const label = `${number.format(this.files.length)} ${this.files.length === 1 ? "file" : "files"} changed`;
-            const reference = `${checkpoint.repository} · ${checkpoint.branch}`;
             const totalsMarkup = counts(totals);
-            const restoreFocus = this.previewBody.contains(
-                document.activeElement,
-            );
+            const restoreFocus =
+                this.previewBody.contains(document.activeElement) ||
+                (this.restoreReviewFocus &&
+                    this.preview.contains(document.activeElement));
+            this.restoreReviewFocus = false;
             this.previewBody.innerHTML = `
-                <button type="button" class="changes-preview-entry" data-action="review-diff">
-                    ${icon("branch")}
-                    <span class="changes-preview-copy">
-                        <span class="sr-only">Review changes for </span>
-                        <span class="changes-preview-reference" title="${e(reference)}">
-                            <span class="changes-preview-ref-part">${e(checkpoint.repository)}</span>
-                            <span>·</span>
-                            <span class="changes-preview-ref-part">${e(checkpoint.branch)}</span>
-                        </span>
-                        <span class="changes-preview-files">${label}</span>
-                    </span>
-                    ${totalsMarkup}
-                    ${icon("chevron")}
-                </button>`;
+                <div id="changes-preview-scope" class="changes-preview-scope">
+                    <span class="changes-preview-reference">${icon("branch")}<span>${e(checkpoint.repository)}<span class="changes-branch">${e(checkpoint.branch)}</span></span></span>
+                    <span class="changes-preview-stats">${label}${totalsMarkup}</span>
+                </div>
+                <button type="button" class="secondary changes-preview-entry" data-action="review-diff" aria-describedby="changes-preview-scope">Review changes${icon("chevron")}</button>`;
             if (restoreFocus) this.previewBody.querySelector("button")?.focus();
             this.meta.innerHTML = `<span class="work-changes-branch">${icon("branch")}<code>${e(checkpoint.branch)}</code></span><code title="${e(baseCommitSha)} → ${e(checkpoint.commitSha)}">${e(baseCommitSha.slice(0, 7))} → ${e(checkpoint.commitSha.slice(0, 7))}</code>`;
             this.totals.innerHTML = `<span>${label}</span>${totalsMarkup}`;
         } catch (failure) {
             if (this.selected !== selection || selection.review) return;
-            const message =
-                failure instanceof ApiError && failure.status === 404
+            const missing =
+                failure instanceof ApiError && failure.status === 404;
+            this.previewStatus(
+                missing
                     ? "No changes have been saved for review."
-                    : errorMessage(failure, "Could not load changes.");
-            this.previewStatus(message);
+                    : "Could not load changes.",
+                !missing,
+            );
         }
     }
 
@@ -202,18 +215,30 @@ export class WorkChangesPanel {
         return true;
     }
 
-    setWork(workId?: string, checkpointId?: string) {
+    setWork(workId?: string, checkpointId?: string, forReview = false) {
         const newWork = this.workId !== workId;
         const newCheckpoint = this.checkpointId !== checkpointId;
-        if (newWork) this.close();
+        const newReview = forReview && !this.forReview;
+        if (newWork) {
+            this.close();
+            this.toolbar.querySelector("input")!.checked = false;
+            this.element.removeAttribute("data-wrap-lines");
+        }
         this.workId = workId;
         this.checkpointId = checkpointId;
-        if (workId && (newWork || (newCheckpoint && this.isPreviewing)))
+        this.forReview = forReview;
+        if (
+            workId &&
+            (newWork ||
+                (newCheckpoint && this.isPreviewing) ||
+                (newReview && !this.selected))
+        )
             void this.openPreview();
     }
 
     close() {
         this.selected = undefined;
+        this.restoreReviewFocus = false;
         this.files = [];
         this.preview.remove();
         this.previewBody.replaceChildren();
@@ -223,9 +248,9 @@ export class WorkChangesPanel {
         this.body.replaceChildren();
     }
 
-    private previewStatus(message: string) {
+    private previewStatus(message: string, canReload = false) {
         const restoreFocus = this.previewBody.contains(document.activeElement);
-        this.previewBody.innerHTML = `<p class="changes-preview-status" role="status">${e(message)}</p>`;
+        this.previewBody.innerHTML = `<p class="changes-preview-status" role="status">${e(message)}</p>${canReload ? '<button type="button" class="secondary changes-preview-entry" data-action="reload-changes">Reload saved changes</button>' : ""}`;
         if (restoreFocus) this.focus();
     }
 

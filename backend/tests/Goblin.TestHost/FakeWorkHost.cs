@@ -7,7 +7,7 @@ using Goblin.Core.Work;
 using Goblin.Execution;
 
 // Durable browser fixture; never compiled into the application image.
-internal sealed class FakeWorkHost : IExecutionHost
+internal sealed class FakeWorkHost : IExecutionHost, IWorkspaceVolumeHost
 {
     private readonly string _root;
 
@@ -35,4 +35,6 @@ internal sealed class FakeWorkHost : IExecutionHost
         await ExecutionFiles.ReadAsync<ExecutionObservation>(PathFor(work), token) ?? new(stop ? ObservationKind.Stopped : ObservationKind.Pending);
 
     public Task CleanupAsync(WorkSnapshot work, CancellationToken token) => Task.CompletedTask;
+
+    public Task DeleteClosedWorkspaceAsync(WorkSnapshot work, CancellationToken token) => Task.CompletedTask;
 }

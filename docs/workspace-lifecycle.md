@@ -14,6 +14,12 @@ that could have changed files. Attempts keep separate claims, runtime sessions, 
 repository grants. A workspace is bound to one repository; a different repository needs
 separate Work.
 
+Approving a result or cancelling Work queues deletion of its PVC after execution cleanup
+and any inspection session have stopped. Local workspace files are lost when the PVC
+is deleted. The Work record, attempts, results, and verified checkpoint metadata stay
+in PostgreSQL. The Sandbox identity remains suspended to fence delayed execution
+messages.
+
 Suspension stops the pod and keeps the Sandbox object and PVC. **The PVC is the
 workspace: never delete it to suspend or release compute.** New compute gets fresh
 attempt credentials and inputs; see
@@ -29,7 +35,7 @@ Repository pods retain `/workspace`, `/runtime`, and `/tmp` on the Work PVC. The
 [manifest builder](../backend/src/Goblin.Execution/SandboxManifestBuilder.cs) defines
 mounts and [SandboxHost](../backend/src/Goblin.Execution/SandboxHost.cs) owns PVC
 requests; add writable mounts through the builder's shared directory definition. There
-is no automatic cache cleanup or per-directory quota. The k3s `local-path` storage class
+is no inactivity-based eviction or per-directory quota. The k3s `local-path` storage class
 does not enforce requested PVC sizes.
 
 Codex authentication and native sessions live at `/run/codex`, a pod-lifetime
@@ -63,8 +69,8 @@ volume. The export applies as one commit with `git am`. For a cumulative export 
 multiple commits, Git generates the patch from a temporary commit with the checkpoint's
 tree. The real checkpoint SHA remains the reference for GitHub publication.
 
-**Changes** previews the latest patch in the Work page without opening a sandbox or
-inspection session. On `Completed` or `Cancelled`, Goblin queues deletion of that Work's
+**Review changes** opens the latest saved patch from the Work page without opening a
+sandbox or inspection session. On `Completed` or `Cancelled`, Goblin queues deletion of that Work's
 patch directory with the status transition. The same cleanup removes superseded copies
 for open Work. The review export is limited to 4 MiB.
 
@@ -85,6 +91,7 @@ PVC read-only with private temporary storage. The inspected attempt must be the 
 that used the workspace, execution must have stopped, compute must be released, and
 cleanup must be confirmed. A Work has at most one active session, and execution waits
 until it stops. The pod gets no agent, database, or Kubernetes credentials.
+Closing Work stops its inspection session and prevents opening another.
 
 File and terminal requests need an available session that belongs to the Work; browsers
 cannot choose Kubernetes targets. File reads reject path traversal, symbolic links,
@@ -103,16 +110,18 @@ The database serializes admission of execution claims and inspection sessions.
 Repository attempts that are running, uncertain, cleanup-pending, or holding compute,
 and inspection sessions that are starting, available, stopping, or need attention, count
 toward `GOBLIN_MAX_SANDBOXES`; extra work waits. A failed inspection session keeps its
-place until explicitly stopped.
+place until stopped. The default is 50 sandbox slots.
 
 Configuration names are in the [environment catalogs](environment-variables.md). The
 [runtime configuration](../backend/src/Goblin.Web/Hosting/WebRuntimeConfiguration.cs)
 owns capacity defaults; [platform manifests](../deploy/platform/) own deployment
 overrides and isolation.
 
-Existing PVCs can resume at the PVC limit. Work that needs a new PVC beyond the limit
-fails for attention instead of deleting files. Goblin never deletes Work PVCs
-automatically, including for completed or cancelled Work.
+The default `GOBLIN_MAX_CACHED_WORKSPACES` is 50 Work PVCs. Existing PVCs can resume at
+the limit. Work that needs a new PVC reports **Workspace volume limit reached**.
+Closing Work releases a slot after Kubernetes removes its claim. The close transition
+queues deletion, so installing this behavior leaves volumes from previously closed Work
+in place.
 
 The SQL baseline holds Git checkpoints and inspection sessions; see
 [database setup](database.md#apply-the-sql-schema). Recreating the database does not

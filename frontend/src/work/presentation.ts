@@ -1,3 +1,55 @@
+import { ConnectionAvailability, FailureKind } from "../api/values.js";
+
+export function workTitle(objective: string) {
+    const lines = objective.split(/\r?\n/).map((line) => line.trim());
+    const first = lines.find(Boolean) ?? "";
+    const summary =
+        lines
+            .map((line) =>
+                line
+                    .replace(/https?:\/\/\S+/gi, "")
+                    .replace(/\s+/g, " ")
+                    .trim(),
+            )
+            .find((line) => /[\p{L}\p{N}]/u.test(line)) ?? first;
+    const characters = Array.from(summary);
+    if (characters.length <= 96) return summary;
+    const limit = characters.slice(0, 96).join("");
+    const wordEnd = limit.lastIndexOf(" ");
+    return (wordEnd >= 72 ? limit.slice(0, wordEnd) : limit) + "…";
+}
+
+export function connectionStatus(availability?: ConnectionAvailability) {
+    switch (availability) {
+        case ConnectionAvailability.Available:
+            return "Connected";
+        case ConnectionAvailability.Disconnected:
+            return "Not connected";
+        case ConnectionAvailability.Verifying:
+            return "Verifying sign-in";
+        case ConnectionAvailability.Changing:
+            return "Changing connection";
+        case ConnectionAvailability.Unavailable:
+            return "Needs attention";
+        default:
+            return "Status unavailable";
+    }
+}
+
+export const failureLabels: Record<FailureKind, string> = {
+    DispatchFailed: "Work could not be queued",
+    ConnectionUnavailable: "Codex connection unavailable",
+    CapabilityUnavailable: "Execution capability unavailable",
+    HostUnavailable: "Execution host unavailable",
+    ExecutionFailed: "Execution failed",
+    TimedOut: "Execution timed out",
+    RuntimeDisconnected: "Codex disconnected during execution",
+    CancellationFailed: "Cancellation failed",
+    CleanupFailed: "Execution cleanup failed",
+    StorageUnavailable: "Storage unavailable",
+    WorkspaceCapacityReached: "Workspace volume limit reached",
+};
+
 const icons: Record<string, string> = {
     sidebar:
         '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>',

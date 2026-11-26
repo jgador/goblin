@@ -1,4 +1,8 @@
 import { test, expect, type Page } from "@playwright/test";
+import {
+    refreshIntervalControl,
+    refreshWorkspace,
+} from "../support/workspace-refresh.js";
 
 async function home(page: Page) {
     const now = new Date("2026-09-23T00:00:00Z");
@@ -46,6 +50,7 @@ async function home(page: Page) {
             "/api/connections": [
                 {
                     id: "1",
+                    runtime: "codex",
                     name: state.connectionName,
                     availability: state.availability,
                 },
@@ -56,7 +61,9 @@ async function home(page: Page) {
     });
     await page.goto("/?new=work");
     await expect(page.locator(".inbox-nav-count")).toHaveText("1");
-    await expect(page.locator(".connection-nudge")).toBeVisible();
+    await expect(
+        page.locator(".connection-nudge").getByRole("status"),
+    ).toHaveText("Codex is not connected.");
     return state;
 }
 
@@ -134,7 +141,7 @@ test("a session connection gap preserves the workspace draft and clears its reco
     page,
 }) => {
     await home(page);
-    const draft = page.getByPlaceholder("Ask Goblin");
+    const draft = page.getByPlaceholder("Describe the work");
     await draft.fill("Keep my draft while reconnecting");
     await page.route("**/api/session", (route) =>
         route.abort("connectionfailed"),
@@ -167,7 +174,7 @@ for (const viewport of [
             const state = await home(page);
             const errors: string[] = [];
             page.on("pageerror", (error) => errors.push(error.message));
-            const draft = page.getByPlaceholder("Ask Goblin");
+            const draft = page.getByPlaceholder("Describe the work");
             const emptyHeight = await draft.evaluate(
                 (element: HTMLTextAreaElement) => element.offsetHeight,
             );
@@ -201,19 +208,14 @@ for (const viewport of [
                 homeElement.elementHandle(),
                 page.locator("#home-title").elementHandle(),
                 draft.elementHandle(),
-                page
-                    .getByRole("button", { name: "Refresh", exact: true })
-                    .elementHandle(),
+                refreshIntervalControl(page).elementHandle(),
             ]);
             let release = () => {};
             state.connectionWait = new Promise<void>((resolve) => {
                 release = resolve;
             });
             state.status = "Ready";
-            if (mode === "manual")
-                await page
-                    .getByRole("button", { name: "Refresh", exact: true })
-                    .click();
+            if (mode === "manual") await refreshWorkspace(page);
             else await page.clock.runFor(3000);
 
             // Work finishes first; connection checks must not hide the existing
@@ -223,10 +225,9 @@ for (const viewport of [
             expect(await page.locator(".home-content").boundingBox()).toEqual(
                 contentBounds,
             );
-            state.connectionName = "Updated provider";
             release();
             await expect(page.locator(".connection-choice")).toHaveText(
-                "Updated provider",
+                "Codex",
             );
 
             for (const element of retained)
@@ -246,10 +247,7 @@ for (const viewport of [
                 await homeElement.evaluate((element) => element.scrollTop),
             ).toBe(scroll);
             if (mode === "background") await expect(draft).toBeFocused();
-            else
-                await expect(
-                    page.getByRole("button", { name: "Refresh", exact: true }),
-                ).toBeFocused();
+            else await expect(refreshIntervalControl(page)).toBeFocused();
             expect(errors).toEqual([]);
         });
     }
@@ -260,18 +258,35 @@ test("home refresh applies connection changes, reports failures, and clears a lo
 }) => {
     const state = await home(page);
     const retained = await page.locator(".home").elementHandle();
-    const refresh = page.getByRole("button", { name: "Refresh", exact: true });
     const create = page.getByRole("button", {
         name: "Create work",
         exact: true,
     });
+    const notice = page.locator(".connection-nudge");
+    await page.route(
+        "**/api/connections",
+        (route) => route.fulfill({ status: 503, json: { error: {} } }),
+        { times: 1 },
+    );
+    await refreshWorkspace(page);
+    await expect(notice.getByRole("status")).toHaveText(
+        "Codex · Status unavailable",
+    );
+    await expect(
+        notice.getByRole("link", { name: "Connect Codex" }),
+    ).toHaveCount(0);
+
+    await notice.getByRole("link", { name: "Open Codex settings" }).focus();
     state.availability = "Available";
-    await refresh.click();
+    await page.clock.runFor(3000);
     await expect(page.locator(".inbox-nav-count")).toHaveText("1");
-    await expect(page.locator(".connection-nudge")).toBeHidden();
+    await expect(notice).toBeHidden();
+    await expect(
+        page.getByRole("button", { name: "Codex connection", exact: true }),
+    ).toBeFocused();
 
     state.workUnavailable = true;
-    await refresh.click();
+    await refreshWorkspace(page);
     await expect(page.getByRole("alert")).toContainText(
         "Work could not be loaded",
     );
@@ -279,14 +294,15 @@ test("home refresh applies connection changes, reports failures, and clears a lo
     expect(await retained!.evaluate((node) => node.isConnected)).toBe(true);
 
     state.workUnavailable = false;
-    await refresh.click();
+    await refreshWorkspace(page);
     await expect(page.getByRole("alert")).toHaveCount(0);
-    await expect(create).toBeEnabled();
+    await expect(create).toBeDisabled();
     expect(await retained!.evaluate((node) => node.isConnected)).toBe(true);
 
-    await page.getByPlaceholder("Ask Goblin").fill("Private draft");
+    await page.getByPlaceholder("Describe the work").fill("Private draft");
+    await expect(create).toBeEnabled();
     state.authenticated = false;
-    await refresh.click();
+    await refreshWorkspace(page);
     await expect(
         page.getByRole("heading", { name: "Open your workspace" }),
     ).toBeVisible();
@@ -294,24 +310,136 @@ test("home refresh applies connection changes, reports failures, and clears a lo
     await expect(page.getByText("Private draft")).toHaveCount(0);
 });
 
+test("the saved auto-refresh interval replaces the running timer and survives reload", async ({
+    page,
+}) => {
+    const state = await home(page);
+    const trigger = refreshIntervalControl(page);
+    const options = page.getByRole("group", { name: "Auto-refresh interval" });
+    const defaultOption = options.getByRole("radio", { name: "3 seconds" });
+    const slowerOption = options.getByRole("radio", { name: "10 seconds" });
+    const draft = page.getByPlaceholder("Describe the work");
+    await draft.fill("Keep my draft while changing the interval");
+    await expect(trigger).toHaveText("3s");
+    await trigger.press("Enter");
+    await expect(defaultOption).toBeChecked();
+    await page.keyboard.press("Tab");
+    await expect(defaultOption).toBeFocused();
+    await page.clock.runFor(1000);
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(slowerOption).toBeChecked();
+    await expect(slowerOption).toBeFocused();
+    await expect(trigger).toHaveText("10s");
+    await expect(draft).toHaveValue(
+        "Keep my draft while changing the interval",
+    );
+
+    let polls = 0;
+    page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/api/session") polls++;
+    });
+    state.status = "Ready";
+    await page.clock.runFor(9999);
+    expect(polls).toBe(0);
+    await page.clock.runFor(1);
+    await expect(page.locator(".inbox-nav-count")).toHaveCount(0);
+    expect(polls).toBe(1);
+    await expect(slowerOption).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(options).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    await page.reload();
+    await expect(trigger).toHaveText("10s");
+    await trigger.click();
+    await expect(slowerOption).toBeChecked();
+    state.status = "NeedsAttention";
+    await page.clock.runFor(3000);
+    await expect(page.locator(".inbox-nav-count")).toHaveCount(0);
+    await page.clock.runFor(7000);
+    await expect(page.locator(".inbox-nav-count")).toHaveText("1");
+});
+
+test("auto-refresh can be turned off and restored without disabling manual refresh", async ({
+    page,
+}) => {
+    const state = await home(page);
+    const trigger = refreshIntervalControl(page);
+    const off = page.getByRole("radio", { name: "Off", exact: true });
+    const count = page.locator(".inbox-nav-count");
+    await trigger.click();
+    await off.click();
+    await expect(off).toBeChecked();
+    await expect(trigger).toHaveText("Off");
+    await page.keyboard.press("Escape");
+
+    let checks = 0;
+    page.on("request", (request) => {
+        if (new URL(request.url()).pathname === "/api/session") checks++;
+    });
+    state.status = "Ready";
+    await page.clock.runFor(60_000);
+    await page.evaluate(() => {
+        window.dispatchEvent(new Event("online"));
+        document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await expect(count).toHaveText("1");
+    expect(checks).toBe(0);
+
+    await refreshWorkspace(page);
+    await expect(count).toHaveCount(0);
+    expect(checks).toBe(1);
+
+    await page.route(
+        "**/api/session",
+        (route) => route.abort("connectionfailed"),
+        { times: 1 },
+    );
+    await page.reload();
+    await expect.poll(() => checks).toBe(2);
+    await expect(
+        page.getByRole("heading", { name: "Opening your workspace…" }),
+    ).toBeVisible();
+    const workAfterStartup = page.waitForResponse("**/api/work");
+    await page.clock.runFor(3000);
+    await expect(trigger).toHaveText("Off");
+    await workAfterStartup;
+    expect(checks).toBe(3);
+    await trigger.click();
+    await expect(off).toBeChecked();
+
+    state.status = "NeedsAttention";
+    await page.clock.runFor(60_000);
+    await expect(count).toHaveCount(0);
+    expect(checks).toBe(3);
+    await page.getByRole("radio", { name: "5 seconds", exact: true }).click();
+    await page.clock.runFor(5000);
+    await expect(count).toHaveText("1");
+    expect(checks).toBe(4);
+});
+
 test("a background refresh updates the open Codex menu in place", async ({
     page,
 }) => {
     const state = await home(page);
-    const codex = page.getByRole("button", { name: "Codex", exact: true });
+    const codex = page.getByRole("button", {
+        name: "Codex connection",
+        exact: true,
+    });
     await codex.press("Enter");
     const menu = page.locator("#codex-connection-menu");
     const status = menu.getByRole("status");
-    await expect(status).toHaveText("Disconnected");
+    await expect(status).toHaveText("Not connected");
     await expect(status).toBeVisible();
 
     state.connectionName = "Updated provider";
     state.availability = "Available";
     await page.clock.runFor(3000);
-    await expect(status).toHaveText("Available");
+    await expect(status).toHaveText("Connected");
     await expect(status).toBeVisible();
     await expect(
-        page.getByRole("button", { name: "Updated provider", exact: true }),
+        page.getByRole("button", { name: "Codex connection", exact: true }),
     ).toBeFocused();
     await expect(page).toHaveURL(/\?new=work$/);
 });
@@ -350,7 +478,7 @@ test("a delayed Work read cannot restore private content after locking and unloc
         await waiting;
         await route.fulfill({ json });
     });
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await refreshWorkspace(page);
     await intercepted;
     state.authenticated = false;
     await page.evaluate(() =>
@@ -369,7 +497,7 @@ test("a delayed Work read cannot restore private content after locking and unloc
     await expect(page.locator(".inbox-nav-count")).toHaveText("1");
     release();
     await expect(page.locator(".inbox-nav-count")).toHaveText("1");
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await refreshWorkspace(page);
     await expect(page.locator(".inbox-nav-count")).toHaveText("1");
 });
 
@@ -384,7 +512,7 @@ test("a non-JSON unauthorized connection response locks the workspace immediatel
             body: "Unauthorized",
         }),
     );
-    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await refreshWorkspace(page);
     await expect(
         page.getByRole("heading", { name: "Open your workspace" }),
     ).toBeVisible();
