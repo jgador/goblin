@@ -134,7 +134,7 @@ test("a session connection gap preserves the workspace draft and clears its reco
     page,
 }) => {
     await home(page);
-    const draft = page.getByPlaceholder("Describe the intended outcome…");
+    const draft = page.getByPlaceholder("Ask Goblin");
     await draft.fill("Keep my draft while reconnecting");
     await page.route("**/api/session", (route) =>
         route.abort("connectionfailed"),
@@ -167,16 +167,20 @@ for (const viewport of [
             const state = await home(page);
             const errors: string[] = [];
             page.on("pageerror", (error) => errors.push(error.message));
-            const draft = page.getByPlaceholder(
-                "Describe the intended outcome…",
+            const draft = page.getByPlaceholder("Ask Goblin");
+            const emptyHeight = await draft.evaluate(
+                (element: HTMLTextAreaElement) => element.offsetHeight,
             );
             const text = Array.from(
                 { length: 20 },
                 (_, i) => `Draft line ${i}`,
             ).join("\n");
             await draft.fill(text);
+            const expandedHeight = await draft.evaluate(
+                (element: HTMLTextAreaElement) => element.offsetHeight,
+            );
+            expect(expandedHeight).toBeGreaterThan(emptyHeight);
             await draft.evaluate((element: HTMLTextAreaElement) => {
-                element.style.height = "128px";
                 element.setSelectionRange(5, 18);
                 element.scrollTop = 50;
             });
@@ -235,9 +239,9 @@ for (const viewport of [
                     element.selectionStart,
                     element.selectionEnd,
                     element.scrollTop,
-                    element.style.height,
+                    element.offsetHeight,
                 ]),
-            ).toEqual([5, 18, replyScroll, "128px"]);
+            ).toEqual([5, 18, replyScroll, expandedHeight]);
             expect(
                 await homeElement.evaluate((element) => element.scrollTop),
             ).toBe(scroll);
@@ -280,9 +284,7 @@ test("home refresh applies connection changes, reports failures, and clears a lo
     await expect(create).toBeEnabled();
     expect(await retained!.evaluate((node) => node.isConnected)).toBe(true);
 
-    await page
-        .getByPlaceholder("Describe the intended outcome…")
-        .fill("Private draft");
+    await page.getByPlaceholder("Ask Goblin").fill("Private draft");
     state.authenticated = false;
     await refresh.click();
     await expect(
@@ -290,6 +292,28 @@ test("home refresh applies connection changes, reports failures, and clears a lo
     ).toBeVisible();
     await expect(page.locator(".home")).toHaveCount(0);
     await expect(page.getByText("Private draft")).toHaveCount(0);
+});
+
+test("a background refresh updates the open Codex menu in place", async ({
+    page,
+}) => {
+    const state = await home(page);
+    const codex = page.getByRole("button", { name: "Codex", exact: true });
+    await codex.press("Enter");
+    const menu = page.locator("#codex-connection-menu");
+    const status = menu.getByRole("status");
+    await expect(status).toHaveText("Disconnected");
+    await expect(status).toBeVisible();
+
+    state.connectionName = "Updated provider";
+    state.availability = "Available";
+    await page.clock.runFor(3000);
+    await expect(status).toHaveText("Available");
+    await expect(status).toBeVisible();
+    await expect(
+        page.getByRole("button", { name: "Updated provider", exact: true }),
+    ).toBeFocused();
+    await expect(page).toHaveURL(/\?new=work$/);
 });
 
 test("a delayed Work read cannot restore private content after locking and unlocking", async ({

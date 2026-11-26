@@ -42,7 +42,6 @@
 .github-repository-picker { margin-top:14px; }
 .settings-github-repositories > button { margin-top:12px; }
 .settings-dialog [hidden] { display:none !important; }
-.settings-dialog button:focus-visible,.settings-dialog a:focus-visible { outline:2px solid var(--control-focus); outline-offset:3px; }
 @media(max-width:760px) { .settings-dialog { width:100vw; max-width:none; height:100dvh; max-height:none; margin:0; border:0; border-radius:0; } .settings-layout { display:flex; flex-direction:column; } .settings-header { padding:18px; } .settings-nav { display:flex; flex-shrink:0; padding:10px 12px; gap:4px; overflow:auto; } .settings-nav p { display:none; } .settings-nav button { width:auto; margin:0; font-size:12px; flex-shrink:0; } .settings-content { padding:22px; flex:1; } .settings-content > section { min-height:0; } }
 
 .provider-card { border:1px solid var(--border); border-radius:12px; padding:20px; margin:22px 0; }
@@ -102,9 +101,7 @@
 .slack-settings summary { cursor: pointer; }
 
 .chatgpt-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
-.chatgpt-heading > div { min-width: 0; }
-.settings-content .chatgpt-heading h3 { margin: 0 0 4px; font-size: 22px; letter-spacing: -.025em; line-height: 1.3; }
-.settings-content .chatgpt-heading .settings-description { margin: 0; line-height: 1.6; }
+.settings-content .chatgpt-heading h3 { margin: 0; font-size: 22px; letter-spacing: -.025em; line-height: 1.3; }
 .chatgpt-logo { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 13px; background: var(--canvas); }
 .chatgpt-notice { margin: 0 0 20px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 9px; background: var(--accent); color: var(--ink); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .chatgpt-notice[data-tone="error"] { border-color: #eed8c5; background: #fff2e9; color: #805333; }
@@ -116,7 +113,6 @@
 .chatgpt-server-status[data-enabled="true"] i { background: var(--green); }
 .chatgpt-workflow { display: grid; grid-template-columns: 156px minmax(0, 1fr); gap: 24px; align-items: start; }
 .chatgpt-progress { position: sticky; top: 24px; min-width: 0; }
-.chatgpt-rail-label { margin: 2px 0 14px 10px; font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--muted); }
 .chatgpt-stepper { display: grid; padding: 0; margin: 0; list-style: none; gap: 6px; }
 .settings-content .chatgpt-stepper button { display: flex; gap: 10px; align-items: flex-start; width: 100%; padding: 12px 9px; border: 1px solid transparent; border-radius: 9px; color: var(--muted); background: transparent; text-align: left; font-size: 12px; font-weight: 500; }
 .settings-content .chatgpt-stepper [aria-current="step"] { background: var(--accent); color: var(--green); border-color: #d5e5d8; }
@@ -127,7 +123,6 @@
 .chatgpt-settings .chatgpt-mobile-step { display: none; }
 .chatgpt-step-panel { min-width: 0; padding-left: 24px; border-left: 1px solid var(--border); }
 .chatgpt-step-body { min-width: 0; }
-.chatgpt-step-caption { font-size: 11px; font-weight: 500; color: var(--muted); margin: 0 0 10px; }
 .settings-content .chatgpt-step-body h4 { font-size: 21px; line-height: 1.3; margin: 0 0 12px; letter-spacing: -.025em; font-weight: 600; text-wrap: balance; }
 .chatgpt-step-body > p { margin: 0 0 16px; }
 .chatgpt-settings p, .chatgpt-settings code { overflow-wrap: anywhere; }
@@ -175,7 +170,6 @@
 .chatgpt-meta { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .chatgpt-progress-note { max-width: 50ch; color: var(--muted); font-size: 11px; margin: 0; }
 .settings-content .chatgpt-meta button { flex-shrink: 0; padding: 8px 0; border-color: transparent; background: transparent; color: var(--muted); font-size: 11px; }
-.chatgpt-settings :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--control-focus); outline-offset: 3px; }
 .chatgpt-settings button { transition: transform 140ms cubic-bezier(.23, 1, .32, 1); }
 .chatgpt-settings button:active:not(:disabled):not(:focus-visible) { transform: scale(.97); }
 @media (hover: hover) and (pointer: fine) {
@@ -195,7 +189,7 @@
 @container chatgpt (max-width: 520px) {
     .chatgpt-workflow { grid-template-columns: minmax(0, 1fr); gap: 20px; }
     .chatgpt-progress { position: static; }
-    .chatgpt-stepper, .chatgpt-rail-label { display: none; }
+    .chatgpt-stepper { display: none; }
     .chatgpt-settings .chatgpt-mobile-step { display: grid; }
     .chatgpt-step-panel { border-left: 0; padding-left: 0; }
     .chatgpt-meta { align-items: flex-start; flex-direction: column; gap: 8px; }
@@ -216,7 +210,6 @@
 .settings-page { flex: 1; min-width: 0; overflow-y: auto; background: var(--paper); padding: 36px clamp(24px, 4vw, 60px) 48px; }
 .settings-page-heading { max-width: 1100px; margin: 0 auto 24px; padding-bottom: 22px; border-bottom: 1px solid var(--border); }
 .settings-page-heading h1 { font-size: 34px; letter-spacing: -.04em; font-weight: 500; line-height: 1.2; color: var(--ink); }
-.settings-page-heading p { margin-top: 8px; font-size: 14px; color: var(--muted); }
 .settings-page .settings-layout { max-width: 1100px; margin-inline: auto; grid-template-columns: 192px minmax(0, 1fr); gap: clamp(24px, 3vw, 42px); align-items: start; }
 .settings-page .settings-nav { position: sticky; top: 0; padding: 0 18px 0 0; border-inline-end: 1px solid var(--border); background: transparent; overflow: visible; }
 .settings-nav-group + .settings-nav-group { margin-top: 22px; }
@@ -261,7 +254,6 @@
 .connection-back { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; margin-bottom: 16px; color: var(--muted); text-decoration: none; font-size: 13px; }
 .connection-back svg { transform: rotate(180deg); width: 16px; height: 16px; }
 .connection-back[hidden] { display: none; }
-.connection-back:focus-visible, .connection-action:focus-visible { outline: 2px solid var(--control-focus); outline-offset: 3px; }
 
 .settings-tools { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 14px; }
 .settings-content .settings-tools h4 { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
@@ -271,7 +263,6 @@
 .settings-tool-links a svg:last-child { width: 13px; height: 13px; color: var(--muted); }
 .settings-tool-links a[aria-disabled="true"] { color: var(--muted); }
 .settings-tools > p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
-.settings-tool-links a:focus-visible { outline: 2px solid var(--control-focus); outline-offset: 3px; }
 
 @media (hover: hover) and (pointer: fine) {
     .settings-nav a:hover { background: var(--accent); }

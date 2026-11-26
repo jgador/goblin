@@ -421,7 +421,7 @@ test("Knowledge stays honest, preserves Work drafts, and supports browser histor
     const state = await workspace(page);
     await page.goto("/?new=work");
     await page
-        .getByRole("textbox", { name: "Describe the intended outcome…" })
+        .getByRole("textbox", { name: "Ask Goblin" })
         .fill("Keep my draft while browsing tools");
     await page.getByRole("link", { name: "Knowledge", exact: true }).click();
     await expect(page).toHaveURL(/\/knowledge$/);
@@ -443,9 +443,9 @@ test("Knowledge stays honest, preserves Work drafts, and supports browser histor
         page.getByRole("heading", { name: "Knowledge", exact: true }),
     ).toBeVisible();
     await page.goBack();
-    await expect(
-        page.getByRole("textbox", { name: "Describe the intended outcome…" }),
-    ).toHaveValue("Keep my draft while browsing tools");
+    await expect(page.getByRole("textbox", { name: "Ask Goblin" })).toHaveValue(
+        "Keep my draft while browsing tools",
+    );
     await page.goForward();
     await expect(page).toHaveURL(/\/knowledge$/);
     await page.reload();

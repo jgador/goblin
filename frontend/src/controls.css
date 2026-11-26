@@ -13,7 +13,7 @@
     --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     --control-surface: #fff;
     --control-border: #cddace;
-    --control-focus: #247447;
+    --control-focus: #585e65;
     --control-muted: #5c6c63;
     --control-accent: #edf4ed;
     --control-radius: 8px;
@@ -26,6 +26,12 @@
 ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background-color: #97aa87; }
 ::-webkit-scrollbar-corner { background: transparent; }
+
+:focus-visible { outline: 2px solid var(--control-focus); outline-offset: 2px; }
+@media (forced-colors: none) {
+    /* A pointer-focused text field already shows its caret. */
+    :root[data-pointer-focus] :is(input, textarea):focus-visible { outline: none; }
+}
 
 .field-control {
     appearance: none;
@@ -44,15 +50,10 @@
     font-size: 14px;
     line-height: 1.5;
     box-shadow: none;
-    transition: border-color .15s ease, box-shadow .15s ease;
+    transition: border-color .15s ease;
 }
 .field-control::placeholder { color: var(--control-muted); opacity: 1; }
 .field-control:hover:not(:disabled):not(:focus) { border-color: #8cad93; }
-.field-control:focus {
-    outline: none;
-    border-color: var(--control-focus);
-    box-shadow: 0 0 0 1px var(--control-focus);
-}
 .field-control:disabled {
     cursor: not-allowed;
     background-color: #edf4ed;
@@ -137,8 +138,8 @@
     .field-control { transition: none; }
 }
 @media (forced-colors: active) {
+    :root { --control-focus: Highlight; }
     * { scrollbar-color: auto; scrollbar-width: auto; }
-    .field-control:focus { outline: 2px solid Highlight; outline-offset: 2px; }
     .select-control { appearance: auto; background-image: none; }
     .select-control::picker(select) { appearance: auto; }
 }

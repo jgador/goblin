@@ -251,7 +251,7 @@ test("execution options preserve model and effort across refresh and stay out of
         .first()
         .click();
     await expect(picker).toHaveCount(0);
-    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(picker).toHaveCount(0);
     await page.keyboard.press("Control+k");
     await page.getByRole("searchbox").fill("Review the release checklist");

@@ -30,7 +30,7 @@ const connectionHtml = await readFile(
 );
 const panel = connectionHtml.slice(
     connectionHtml.indexOf('      <div class="card"'),
-    connectionHtml.indexOf('      <p class="below-card"'),
+    connectionHtml.indexOf("    </main>"),
 );
 const help = connectionHtml.slice(
     connectionHtml.indexOf("    <template"),

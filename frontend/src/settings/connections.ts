@@ -316,7 +316,7 @@ export class Connections {
                 ${action}
             </li>`;
         };
-        this.element.innerHTML = `<h2 id="connections-title" tabindex="-1">Connections</h2><p class="settings-description">Manage the runtime and services Goblin uses to do Work.</p>
+        this.element.innerHTML = `<h2 id="connections-title" tabindex="-1">Connections</h2>
             ${failed ? '<p class="settings-notice" role="status">Some connection statuses are unavailable. <button id="retry-connections" class="text-button" data-refresh-connections>Try again</button></p>' : ""}
             <section class="connection-group" aria-labelledby="connection-runtime-title">
                 <h3 id="connection-runtime-title">Agent runtime</h3>

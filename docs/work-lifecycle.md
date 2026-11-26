@@ -15,12 +15,14 @@ work, or work that needs attention for any reason. The sidebar count shows all W
 needs attention across the inbox. Open a card or row to see the Work conversation,
 activity, and outputs. Returning to the inbox restores the last layout, search, and
 List status. The sidebar’s **Search** action searches loaded Work and conversations.
-**Ask Goblin** opens an untracked conversation.
+**New work** and **New chat** both open an **Ask Goblin** composer.
 
-In the browser, **Create work** saves a goal and assigns the default agent; **Start**
-begins execution separately. An authorized Slack DM or mention creates and starts Work;
-see [Slack](slack-integration.md). An untracked browser conversation stores context
-without running an agent; **Track this work** creates Work from it.
+In **New work**, the submit arrow saves a goal and assigns the default agent.
+The **Codex** menu shows connection status. Choose **Manage Codex connection** to open Settings.
+**Start work** begins execution separately. In **New chat**, the submit arrow saves
+messages in an untracked conversation. **Track this work** creates Work from it.
+An authorized Slack DM or mention creates and starts Work.
+See [Slack](slack-integration.md).
 
 Open the first message to read the full objective. Goblin posts questions and
 proposed results in the Work conversation. Approve a result from its message or

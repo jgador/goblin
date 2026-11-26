@@ -21,16 +21,13 @@
 
     <main>
       <div class="intro">
-        <p class="eyebrow">YOUR AI COWORKER</p>
-        <h1>A little setup.<br>A lot of possibility.</h1>
-        <p class="lead">Connect Codex to the account you want to use with Goblin.</p>
+        <h1>Codex connection</h1>
       </div>
 
       <div class="card" id="card" aria-busy="false">
         <div id="loading-panel" class="loading" role="status">Opening your workspace…</div>
 
         <section id="locked-panel" hidden aria-labelledby="locked-heading">
-          <p class="step">WORKSPACE ACCESS</p>
           <h2 id="locked-heading">Open your workspace</h2>
           <p class="description" id="unlock-description">Enter the password chosen when this Goblin workspace was set up.</p>
           <form id="unlock-form">
@@ -38,11 +35,9 @@
             <input class="field-control" id="workspace-password" name="workspace-password" type="password" autocomplete="current-password" spellcheck="false" required maxlength="128">
             <button class="primary full" type="submit">Open workspace <span aria-hidden="true">↗</span></button>
           </form>
-          <p class="footnote">This password opens Goblin. You’ll connect your ChatGPT account or API key next.</p>
         </section>
 
         <section id="connect-panel" hidden aria-labelledby="connect-heading">
-          <p class="step">CONNECT CODEX</p>
           <h2 id="connect-heading">Choose how to sign in</h2>
           <div class="option">
             <div class="option-heading"><h3>ChatGPT</h3><span class="recommended">Recommended</span></div>
@@ -64,18 +59,16 @@
         </section>
 
         <section id="pending-panel" hidden aria-labelledby="pending-heading">
-          <p class="step">CONTINUE IN YOUR BROWSER</p>
           <h2 id="pending-heading">Finish signing in to ChatGPT</h2>
           <p class="description">Open the sign-in page and enter this one-time code. Keep this tab open; it will update when you’re connected.</p>
           <div class="device-code-row"><code id="device-code" aria-label="One-time sign-in code"></code><button id="copy-code" class="quiet" type="button">Copy code</button></div>
           <a id="verification-link" class="primary full button-link" target="_blank" rel="noopener noreferrer">Open OpenAI sign-in <span aria-hidden="true">↗</span></a>
-          <p class="waiting" role="status"><span class="dot" aria-hidden="true"></span>Connecting… Waiting for you to finish signing in.</p>
+          <p class="waiting" role="status"><span class="dot" aria-hidden="true"></span>Waiting for you to sign in…</p>
           <div data-device-login-help></div>
           <button id="cancel-button" class="quiet cancel" type="button">Cancel sign-in</button>
         </section>
 
         <section id="connected-panel" hidden aria-labelledby="connected-heading">
-          <p class="step">ACCOUNT SAVED</p>
           <h2 id="connected-heading">Connection status</h2>
           <div class="account-row"><div><p id="account-method" class="account-method"></p><p id="account-detail" class="account-detail"></p></div><span class="account-badge">Saved</span></div>
           <div id="connection-check" class="connection-check" data-status="unchecked" role="status" aria-live="polite" aria-atomic="true">
@@ -91,7 +84,6 @@
         <div id="message" class="message" role="alert" hidden></div>
         <p id="working" class="working" role="status" hidden>Working…</p>
       </div>
-      <p class="below-card">Your connection stays with this workspace.</p>
     </main>
     <template id="device-login-help-template">
       <aside class="device-login-setup" aria-label="ChatGPT sign-in setup">
@@ -116,8 +108,6 @@
     </template>
     <footer>
       <a class="brand" href="/" aria-label="Goblin home"><img class="brand-logo" src="/assets/branding/icon.svg" alt="" width="650" height="602"><span>Goblin</span></a>
-      <span class="footer-divider" aria-hidden="true">/</span>
-      <span>Your self-hosted AI coworker</span>
     </footer>
   </body>
 </html>

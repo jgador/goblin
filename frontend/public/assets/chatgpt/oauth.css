@@ -67,6 +67,12 @@ button.secondary {
     border-color: #cddace;
 }
 :focus-visible {
-    outline: 2px solid #247447;
-    outline-offset: 3px;
+    outline: 2px solid #585e65;
+    outline-offset: 2px;
+}
+@media (forced-colors: none) {
+    :root[data-pointer-focus] input:focus-visible { outline: none; }
+}
+@media (forced-colors: active) {
+    :focus-visible { outline-color: Highlight; }
 }

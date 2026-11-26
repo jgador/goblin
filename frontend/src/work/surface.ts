@@ -119,8 +119,7 @@ export function renderDecisions(w: Work) {
                 (d) =>
                     `<details class="durable-row" id="decision-${e(d.id)}"><summary>${icon(d.answer ? "circleCheck" : "wait")}<span class="row-title">${e(d.question)}</span><span class="row-meta">${d.answer ? "Answered" : "Awaiting input"}</span>${icon("chevron", "disclosure-icon")}</summary><div class="inspection">${d.answer ? `<p class="preserve-lines">${e(d.answer)}</p>` : "<p>This question needs an answer before work can continue.</p>"}<p class="inspection-meta">${d.attemptId ? `Requested in attempt ${e(d.attemptId)} · ` : ""}${e(timestamp(d.requestedAt))}${d.answeredAt ? `<br>Answer recorded ${e(timestamp(d.answeredAt))}` : ""}</p></div></details>`,
             )
-            .join("") ||
-        '<p class="section-empty">No decisions recorded yet. Questions and their answers will appear here.</p>'
+            .join("") || '<p class="section-empty">No decisions yet.</p>'
     );
 }
 
@@ -188,7 +187,7 @@ export function renderOutputs(w: Work) {
     ];
     return (
         outputRows(outputs, "outputs", true) ||
-        '<p class="section-empty">Results and artifacts will appear here when they are ready.</p>'
+        '<p class="section-empty">No saved outputs yet.</p>'
     );
 }
 
@@ -272,7 +271,7 @@ export function renderActivity(w?: Work) {
         return (
             '<div class="activity-empty">' +
             icon("activity") +
-            "<p>Select Work to see what happened around it.</p></div>"
+            "<p>Select Work to see activity.</p></div>"
         );
     // Linked conversation messages already become ContextAdded history records.
     // Render the durable sequence once; do not invent connector provenance.

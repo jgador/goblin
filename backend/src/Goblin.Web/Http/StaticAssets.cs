@@ -23,6 +23,7 @@ internal sealed class StaticAssets
             ("/api/values.js", "api/values.js", "text/javascript; charset=utf-8"),
             ("/api/client.js", "api/client.js", "text/javascript; charset=utf-8"),
             ("/api/read-scope.js", "api/read-scope.js", "text/javascript; charset=utf-8"),
+            ("/focus.js", "focus.js", "text/javascript; charset=utf-8"),
             ("/app.js", "connection/app.js", "text/javascript; charset=utf-8"),
             ("/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),
             ("/connection/codex.js", "connection/codex.js", "text/javascript; charset=utf-8"),

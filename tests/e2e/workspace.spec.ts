@@ -666,7 +666,7 @@ test("Create work saves a goal and leaves execution for an explicit Start", asyn
     });
     await page.goto("/?new=work");
     await page
-        .getByPlaceholder("Describe the intended outcome…")
+        .getByPlaceholder("Ask Goblin")
         .fill("Make the release guide easier to follow");
     await page
         .getByRole("button", { name: "Create work", exact: true })
@@ -700,7 +700,7 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
     await expect(
         page.getByRole("heading", { name: "Choose how to sign in" }),
     ).toHaveCount(0);
-    const draft = page.getByPlaceholder("Describe the intended outcome…");
+    const draft = page.getByPlaceholder("Ask Goblin");
     await draft.fill("Keep my idea while I connect an AI account");
     await page
         .getByRole("button", { name: "Connect an AI provider", exact: true })
@@ -733,6 +733,92 @@ test("home, Settings, and collapsing navigation preserve a draft without executi
         page.getByRole("button", { name: "Show sidebar", exact: true }),
     ).toBeVisible();
     expect(commands).toEqual([]);
+});
+
+test("the New work Codex menu opens in place and keeps the draft when returning from Settings", async ({
+    page,
+}) => {
+    const commands = await workspace(page);
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.goto("/?new=work");
+    const draft = page.getByPlaceholder("Ask Goblin");
+    await draft.fill("Keep my release notes draft");
+    const codex = page.getByRole("button", { name: "Codex", exact: true });
+    const manage = page.getByRole("link", {
+        name: "Manage Codex connection",
+        exact: true,
+    });
+    await expect(manage).toBeHidden();
+
+    await codex.click();
+    await expect(manage).toBeVisible();
+    await expect(page).toHaveURL(/\?new=work$/);
+    await page.keyboard.press("Tab");
+    await expect(manage).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(manage).toBeHidden();
+    await expect(codex).toBeFocused();
+
+    await codex.click();
+    await draft.click();
+    await expect(manage).toBeHidden();
+    await expect(draft).toHaveValue("Keep my release notes draft");
+
+    await codex.click();
+    await manage.click();
+    await expect(page).toHaveURL(
+        /\/settings\?section=connections&provider=codex$/,
+    );
+    await page.getByRole("button", { name: "Back to work" }).click();
+    await expect(page).toHaveURL(/\?new=work$/);
+    await expect(draft).toHaveValue("Keep my release notes draft");
+    await expect(codex).toBeFocused();
+    await expect(manage).toBeHidden();
+    expect(commands).toEqual([]);
+});
+
+test("composer and search show focus outlines for keyboard navigation", async ({
+    page,
+}) => {
+    await workspace(page);
+    await page.goto("/?new=work");
+    const composer = page.locator(".prompt-composer");
+    const draft = page.getByRole("textbox", {
+        name: "Ask Goblin",
+        exact: true,
+    });
+    const appearance = await composer.evaluate((element) => {
+        const { borderColor, boxShadow } = getComputedStyle(element);
+        return { borderColor, boxShadow };
+    });
+
+    await draft.click();
+    await page.keyboard.type("A new work draft");
+    await expect(draft).toBeFocused();
+    await expect(draft).toHaveCSS("outline-style", "none");
+    await expect(composer).toHaveCSS("border-color", appearance.borderColor);
+    await expect(composer).toHaveCSS("box-shadow", appearance.boxShadow);
+
+    await page.keyboard.press("Tab");
+    const codex = page.getByRole("button", { name: "Codex", exact: true });
+    await expect(codex).toBeFocused();
+    await expect(codex).toHaveCSS("outline-style", "solid");
+    await page.keyboard.press("Shift+Tab");
+    await expect(draft).toBeFocused();
+    await expect(draft).toHaveCSS("outline-style", "solid");
+    await expect(composer).toHaveCSS("box-shadow", appearance.boxShadow);
+
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    const search = page.getByRole("searchbox");
+    await expect(search).toBeFocused();
+    await expect(search).toHaveCSS("outline-style", "none");
+    await expect(page.locator(".global-search")).toHaveCSS(
+        "box-shadow",
+        "none",
+    );
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(search).toBeFocused();
+    await expect(search).toHaveCSS("outline-style", "solid");
 });
 
 test("the Work conversation keeps the objective, review and supporting records accessible", async ({
@@ -795,15 +881,13 @@ test("the Work conversation keeps the objective, review and supporting records a
         path: test.info().outputPath("workspace-work.png"),
     });
     await page.getByRole("button", { name: "New work", exact: true }).click();
-    await page
-        .getByPlaceholder("Describe the intended outcome…")
-        .fill("A second idea");
+    await page.getByPlaceholder("Ask Goblin").fill("A second idea");
     await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(draft).toHaveValue("Keep the review draft");
     await page.getByRole("button", { name: "New work", exact: true }).click();
-    await expect(
-        page.getByPlaceholder("Describe the intended outcome…"),
-    ).toHaveValue("A second idea");
+    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue(
+        "A second idea",
+    );
     expect(commands).toEqual([]);
     expect(errors).toEqual([]);
 });
@@ -1055,7 +1139,7 @@ test("the workspace menu supports mouse and keyboard and returns to the same inb
         sidebar.getByRole("navigation", { name: "Saved conversations" }),
     ).toBeHidden();
     await expect(
-        sidebar.getByRole("button", { name: "Ask Goblin", exact: true }),
+        sidebar.getByRole("button", { name: "New chat", exact: true }),
     ).toBeVisible();
 
     const menu = page.getByLabel("Workspace menu", { exact: true });
@@ -1238,7 +1322,7 @@ test("both Work layouts fit a narrow viewport with the sidebar closed", async ({
         sidebar.getByRole("button", { name: "New work" }),
     ).toBeVisible();
     await expect(
-        sidebar.getByRole("button", { name: "Ask Goblin" }),
+        sidebar.getByRole("button", { name: "New chat" }),
     ).toBeVisible();
     await expect(sidebar.getByLabel("Workspace menu")).toBeVisible();
     await sidebar.getByRole("button", { name: "Search", exact: true }).click();
@@ -1605,7 +1689,7 @@ test("a result stays prominent among newer artifacts and older executions remain
     expect(commands).toEqual([]);
 });
 
-test("global Ask Goblin has its own draft and leaves Work context scoped", async ({
+test("New chat has its own draft and leaves Work context scoped", async ({
     page,
 }) => {
     const commands = await workspace(page);
@@ -1613,19 +1697,15 @@ test("global Ask Goblin has its own draft and leaves Work context scoped", async
     await page
         .getByPlaceholder("Add context to this work…")
         .fill("Check the introduction again");
-    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
-    await expect(page.getByPlaceholder("Add to the conversation…")).toHaveValue(
-        "",
-    );
-    await page
-        .getByPlaceholder("Add to the conversation…")
-        .fill("An unrelated idea");
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue("");
+    await page.getByPlaceholder("Ask Goblin").fill("An unrelated idea");
     await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(
         page.getByPlaceholder("Add context to this work…"),
     ).toHaveValue("Check the introduction again");
-    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
-    await expect(page.getByPlaceholder("Add to the conversation…")).toHaveValue(
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue(
         "An unrelated idea",
     );
     expect(commands).toEqual([]);
@@ -1660,10 +1740,10 @@ test("a delayed conversation reservation and resend stay bound to the submitted 
     await page.goto("/work?item=1");
     const workDraft = page.getByPlaceholder("Add context to this work…");
     await workDraft.fill("Keep the Work draft");
-    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
-    const conversationDraft = page.getByPlaceholder("Add to the conversation…");
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
+    const conversationDraft = page.getByPlaceholder("Ask Goblin");
     await conversationDraft.fill("Save this conversation draft");
-    await page.getByRole("button", { name: "Send message" }).click();
+    await page.getByRole("button", { name: "Save message" }).click();
     await requested;
     await page
         .getByRole("button", { name: "Ideas for the next release" })
@@ -1681,7 +1761,7 @@ test("a delayed conversation reservation and resend stay bound to the submitted 
     );
     await selectWorkFromSearch(page, "Polish the welcome page");
     await expect(workDraft).toHaveValue("Keep the Work draft");
-    await page.getByRole("button", { name: "Ask Goblin", exact: true }).click();
+    await page.getByRole("button", { name: "New chat", exact: true }).click();
     await expect(conversationDraft).toHaveValue("");
 
     const sent = {

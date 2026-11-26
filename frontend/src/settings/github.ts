@@ -43,7 +43,7 @@ export function mountGitHub(root: HTMLElement) {
             focusedAction = active.dataset.github;
             focusedGitHubRepository = active.dataset.githubRepository ?? "";
         }
-        root.innerHTML = `<h3>GitHub</h3><p class="settings-description">Choose the account and repositories Goblin can use.</p>
+        root.innerHTML = `<h3>GitHub</h3>
           <div class="settings-account" role="status">${e(state?.login ? `@${state.login} · ${state.status}` : (state?.status ?? "Loading connection…"))}</div>
           ${error || state?.notice ? `<p class="settings-notice" role="${error ? "alert" : "status"}">${e(error || state?.notice)}</p>` : ""}
           ${

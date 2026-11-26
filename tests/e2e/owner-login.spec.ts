@@ -60,6 +60,15 @@ test("localhost requires the chosen password without prefilling it, including af
             fullPage: true,
         });
 
+        await password.click();
+        await expect(password).toBeFocused();
+        await expect(password).toHaveCSS("outline-style", "none");
+        await page.keyboard.press("Tab");
+        await expect(open).toBeFocused();
+        await page.keyboard.press("Shift+Tab");
+        await expect(password).toBeFocused();
+        await expect(password).toHaveCSS("outline-style", "solid");
+
         await password.fill("goblin");
         await open.click();
         await expect(

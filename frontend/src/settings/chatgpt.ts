@@ -121,7 +121,7 @@ export function mountChatGpt(root: HTMLElement) {
         }
         discardDrafts = false;
         const done = state ? completed(model()) : [];
-        root.innerHTML = `<header class="chatgpt-heading"><span class="chatgpt-logo" aria-hidden="true"><img src="/assets/providers/chatgpt.svg" width="28" height="28" alt=""></span><div><h3>ChatGPT plugin</h3><p class="settings-description">Read and manage all Work through your private connection.</p></div></header>
+        root.innerHTML = `<header class="chatgpt-heading"><span class="chatgpt-logo" aria-hidden="true"><img src="/assets/providers/chatgpt.svg" width="28" height="28" alt=""></span><h3>ChatGPT plugin</h3></header>
             <p class="chatgpt-notice" role="status" data-chatgpt-notice data-tone="${noticeTone}" ${notice ? "" : "hidden"}>${e(notice)}</p>
             ${
                 !state
@@ -131,7 +131,7 @@ export function mountChatGpt(root: HTMLElement) {
                     : `<div class="chatgpt-settings">
                 <div class="chatgpt-summary"><span class="chatgpt-server-status" data-enabled="${state.configured}"><i aria-hidden="true"></i>${state.configured ? "Server enabled" : "Setup required"}</span><span>Read and manage all Work</span></div>
                 <div class="chatgpt-workflow">
-                <nav class="chatgpt-progress" aria-label="Plugin setup progress"><p class="chatgpt-rail-label">YOUR CONNECTION</p><ol class="chatgpt-stepper">${setupSteps
+                <nav class="chatgpt-progress" aria-label="Plugin setup progress"><ol class="chatgpt-stepper">${setupSteps
                     .map(
                         (label, i) =>
                             `<li><button type="button" id="chatgpt-step-${i}" data-chatgpt="step" data-step="${i}" data-complete="${done[i]}" ${i === step ? 'aria-current="step"' : ""}><span class="chatgpt-step-number" aria-hidden="true">${done[i] ? "✓" : i + 1}</span><span>${label}<small>${done[i] ? ([0, 1].includes(i) ? "Checked in Goblin" : "You confirmed") : stepHints[i]}</small></span></button></li>`,
@@ -144,7 +144,7 @@ export function mountChatGpt(root: HTMLElement) {
                             `<option value="${i}" ${i === step ? "selected" : ""}>${i + 1}. ${label}${done[i] ? " · Done" : ""}</option>`,
                     )
                     .join("")}</select></label></nav>
-                <div class="chatgpt-step-panel"><div class="chatgpt-step-body"><p class="chatgpt-step-caption">Step ${step + 1} of ${setupSteps.length}</p>${stepContent(model())}</div>
+                <div class="chatgpt-step-panel"><div class="chatgpt-step-body">${stepContent(model())}</div>
                 <div class="chatgpt-step-footer">${action("back", "Back", false, step === 0)}<span>${done.filter(Boolean).length} of ${setupSteps.length} steps complete</span>${step < setupSteps.length - 1 ? action("next", `Continue to ${setupSteps[step + 1].toLowerCase()}`, true, !done[step]) : ""}</div></div>
                 </div>
                 <details class="chatgpt-help"><summary>Need help with this step?</summary><div><p><strong>Cannot connect:</strong> check your HTTPS address and ChatGPT workspace permissions. A tunnel carries MCP traffic; sign-in still needs reachable HTTPS.</p><p><strong>Sign-in fails:</strong> check the saved callback and client secret. Unlock Goblin with your owner password and approve full Work access.</p><p><strong>Work is unavailable:</strong> refresh the connection in ChatGPT, then reconnect if it still has an old read-only token.</p><p><strong>Tools changed:</strong> refresh the custom connection in ChatGPT and start a new conversation.</p>${state.configured ? action("client/revoke", "Revoke ChatGPT connections") : ""}</div></details>

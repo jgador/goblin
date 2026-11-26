@@ -5,6 +5,7 @@ import {
     WorkStatus,
 } from "../api/values.js";
 import { errorMessage } from "../api/client.js";
+import "../focus.js";
 import { Settings } from "../settings/settings.js";
 import { SystemResources } from "../settings/system.js";
 import {
@@ -125,7 +126,7 @@ const settings = new Settings(system, (provider) => {
         settingsOpener = menu?.contains(document.activeElement)
             ? { id: "workspace-menu-trigger" }
             : {
-                  id: trigger?.id,
+                  id: trigger?.dataset.settingsReturnFocus ?? trigger?.id,
                   action: trigger?.dataset.action,
                   provider: trigger?.dataset.provider,
               };
@@ -1217,6 +1218,7 @@ document.addEventListener("keydown", (event) => {
         !activityOpen
     ) {
         event.preventDefault();
+        document.documentElement.removeAttribute("data-pointer-focus");
         openSearch();
         return;
     }

@@ -106,5 +106,5 @@ internal static class ChatGptOAuthEndpoints
     private static string Encode(string value) => WebUtility.HtmlEncode(value);
 
     private static IResult Page(string title, string description, string body) => Results.Content(
-        $"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{Encode(title)} · Goblin</title><link rel=\"stylesheet\" href=\"/assets/chatgpt/oauth.css\"></head><body><main><img src=\"/assets/branding/icon.svg\" alt=\"\" width=\"48\" height=\"48\"><h1>{Encode(title)}</h1><p>{Encode(description)}</p>{body}</main></body></html>", "text/html", Encoding.UTF8);
+        $"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{Encode(title)} · Goblin</title><link rel=\"stylesheet\" href=\"/assets/chatgpt/oauth.css\"><script type=\"module\" src=\"/focus.js\"></script></head><body><main><img src=\"/assets/branding/icon.svg\" alt=\"\" width=\"48\" height=\"48\"><h1>{Encode(title)}</h1><p>{Encode(description)}</p>{body}</main></body></html>", "text/html", Encoding.UTF8);
 }

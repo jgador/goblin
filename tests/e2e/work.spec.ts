@@ -32,9 +32,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
-        await page
-            .getByRole("textbox", { name: "Describe the intended outcome…" })
-            .fill(objective);
+        await page.getByRole("textbox", { name: "Ask Goblin" }).fill(objective);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
@@ -179,9 +177,7 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "New work", exact: true })
             .first()
             .click();
-        await page
-            .getByRole("textbox", { name: "Describe the intended outcome…" })
-            .fill(objective);
+        await page.getByRole("textbox", { name: "Ask Goblin" }).fill(objective);
         await page
             .getByRole("button", { name: "Create work", exact: true })
             .click();
@@ -276,10 +272,10 @@ test.describe("durable Work", () => {
     }) => {
         await unlock(page);
         await page
-            .getByRole("button", { name: "Ask Goblin", exact: true })
+            .getByRole("button", { name: "New chat", exact: true })
             .click();
         await page.getByRole("textbox").fill("Plan a release " + Date.now());
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page.getByRole("button", { name: "Save message" }).click();
         await page
             .getByRole("button", { name: "Track this work", exact: true })
             .click();
@@ -439,12 +435,12 @@ test.describe("durable Work", () => {
             .getByRole("button", { name: "Conversations", exact: true })
             .click();
         await page
-            .getByRole("button", { name: "Ask Goblin", exact: true })
+            .getByRole("button", { name: "New chat", exact: true })
             .click();
         const text =
             "Release context " + Date.now() + ' <img src=x onerror="alert(1)">';
         await page.getByRole("textbox").fill(text);
-        await page.getByRole("button", { name: "Send message" }).click();
+        await page.getByRole("button", { name: "Save message" }).click();
         await expect(page).toHaveURL(/\?conversation=\d+/);
         await page.reload();
         await expect(page.locator(".message-text").first()).toHaveText(text);

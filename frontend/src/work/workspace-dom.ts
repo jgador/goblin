@@ -65,7 +65,8 @@ export class WorkspaceDom {
             ".sidebar-start",
             ".sidebar-history",
             ".workspace-notices",
-            ".connection-choice",
+            ".connection-name",
+            ".connection-menu-status",
             ".connection-nudge",
         ]);
         const reply = this.root.querySelector<HTMLTextAreaElement>("#reply")!;

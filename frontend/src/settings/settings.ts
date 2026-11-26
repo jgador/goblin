@@ -41,7 +41,6 @@ export class Settings {
         this.element.setAttribute("aria-labelledby", "settings-title");
         this.element.innerHTML = `<header class="settings-page-heading">
             <h1 id="settings-title" tabindex="-1">Settings</h1>
-            <p>Manage your workspace and self-hosted installation.</p>
         </header>
         <label class="settings-section-select">Settings section
             <select id="settings-section" class="field-control select-control">
@@ -258,7 +257,7 @@ export class Settings {
             try {
                 const agents = await this.api<Agent[]>("/api/agents");
                 if (generation !== this.generation) return;
-                panel.innerHTML = `<h3>Agents</h3><p class="settings-description">Your coworkers carry work from its goal through review.</p>${agents.map((agent) => `<div class="provider-card"><div class="provider-heading">${icon("user")}<h4>${e(agent.name)}</h4>${agent.isDefault ? '<span class="provider-default">Default</span>' : ""}</div><p class="settings-description">${agent.model ? e(agent.model) : "Uses the connected runtime’s default model"}</p></div>`).join("") || '<p class="settings-description">No agents are available yet.</p>'}`;
+                panel.innerHTML = `<h3>Agents</h3>${agents.map((agent) => `<div class="provider-card"><div class="provider-heading">${icon("user")}<h4>${e(agent.name)}</h4>${agent.isDefault ? '<span class="provider-default">Default</span>' : ""}</div><p class="settings-description">${agent.model ? e(agent.model) : "Uses the connected runtime’s default model"}</p></div>`).join("") || '<p class="settings-description">No agents are available yet.</p>'}`;
             } catch {
                 if (generation !== this.generation) return;
                 panel.innerHTML =
@@ -281,7 +280,7 @@ export class Settings {
                 '[data-provider-panel="system"]',
             )!;
             panel.innerHTML =
-                '<h3>System</h3><p class="settings-description">Monitor the machine and services behind this Goblin installation.</p><div data-system-overview></div><div data-system-tools></div><div data-system-history></div>';
+                "<h3>System</h3><div data-system-overview></div><div data-system-tools></div><div data-system-history></div>";
             this.system.mount(panel);
             void this.loadTools(
                 panel.querySelector<HTMLElement>("[data-system-tools]")!,

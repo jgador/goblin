@@ -87,7 +87,7 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     await page.goto("/work");
     await page.getByRole("button", { name: "New work", exact: true }).click();
     await page
-        .getByPlaceholder("Describe the intended outcome…")
+        .getByPlaceholder("Ask Goblin")
         .fill("Keep this draft while I connect GitHub");
     await page.getByLabel("Workspace menu", { exact: true }).click();
     await page
@@ -116,9 +116,9 @@ test("Settings keeps the Work draft and uses both connection panels", async ({
     ).toHaveAttribute("href", "https://github.com/login/device");
     await page.getByRole("button", { name: "Back to work" }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(
-        page.getByPlaceholder("Describe the intended outcome…"),
-    ).toHaveValue("Keep this draft while I connect GitHub");
+    await expect(page.getByPlaceholder("Ask Goblin")).toHaveValue(
+        "Keep this draft while I connect GitHub",
+    );
     await page.getByLabel("Workspace menu", { exact: true }).click();
     await page
         .locator("#workspace-menu")
@@ -288,7 +288,7 @@ test("settings sections have direct links and restore browser history without lo
 }) => {
     await settingsFixture(page);
     await page.goto("/?new=work");
-    const draft = page.getByPlaceholder("Describe the intended outcome…");
+    const draft = page.getByPlaceholder("Ask Goblin");
     await draft.fill("Keep this idea through settings navigation");
     await page.getByLabel("Workspace menu", { exact: true }).click();
     await page
