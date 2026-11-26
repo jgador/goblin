@@ -35,6 +35,7 @@ type WorkspaceViewInput = {
     mobile: boolean;
     sidebarCollapsed: boolean;
     activityOpen: boolean;
+    changesOpen: boolean;
     conversationExpanded: boolean;
     conversationsOpen: boolean;
     filter: WorkFilter;
@@ -62,6 +63,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         mobile,
         sidebarCollapsed,
         activityOpen,
+        changesOpen,
         conversationExpanded,
         conversationsOpen,
         filter,
@@ -256,7 +258,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             w.status !== WorkStatus.Completed &&
             w.status !== WorkStatus.Cancelled &&
             w.attempts.some((entry) => entry.target.repository?.grant)
-                ? `<button class="${inboxSelection ? "text-button" : "secondary"}" data-action="view-changes" aria-haspopup="dialog">${icon("branch")}Changes</button>`
+                ? `<button id="show-changes" class="${inboxSelection ? "text-button" : "secondary"}" data-action="view-changes" aria-expanded="${changesOpen}" aria-controls="work-changes-host">${icon("branch")}Changes</button>`
                 : "";
         const actions = inboxSelection
             ? `<div class="inbox-detail-actions"><button class="icon-button" data-action="share-work" aria-label="Share" title="Share work">${icon("share")}</button><button class="icon-button inbox-expand" data-action="expand-work" aria-label="Open full work" title="Open full work">${icon("external")}</button>${back}</div>`
@@ -285,9 +287,11 @@ export function renderWorkspace(input: WorkspaceViewInput) {
     function renderSelectedWork(item: View) {
         const detail = renderDetail(item);
         const workComposer = renderWorkComposer(item.work);
+        if (changesOpen)
+            return `<div class="work-review-layout"><section class="detail" aria-label="Selected work">${detail}${workComposer}</section><div id="work-changes-host"></div></div>`;
         return inboxSelection
-            ? `<div class="inbox-split">${renderBoardView()}<aside class="detail inbox-details" aria-label="Selected work">${detail}</aside>${workComposer}</div>`
-            : `<section class="detail" aria-label="Selected work">${detail}${workComposer}</section>`;
+            ? `<div class="inbox-split">${renderBoardView()}<aside class="detail inbox-details" aria-label="Selected work">${detail}</aside>${workComposer}</div><div id="work-changes-host" hidden></div>`
+            : `<section class="detail" aria-label="Selected work">${detail}${workComposer}</section><div id="work-changes-host" hidden></div>`;
     }
     function gitHubRepositorySetup(w: Work, required = false) {
         const handoff = isRepositoryHandoff(w);

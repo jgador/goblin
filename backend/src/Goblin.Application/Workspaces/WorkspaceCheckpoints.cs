@@ -111,14 +111,14 @@ public sealed class WorkspaceCheckpoints : IWorkspaceCheckpoints
         return View(row);
     }
 
-    public async Task<WorkPatch?> ReadPatchAsync(long workId, long? checkpointId, CancellationToken token)
+    public async Task<WorkPatch?> ReadPatchAsync(long workId, CancellationToken token)
     {
         await using GoblinDbContext db = await _factory.CreateDbContextAsync(token);
         Persistence.Entities.WorkItem? row = await db.WorkItems.AsNoTracking().SingleOrDefaultAsync(x => x.Id == workId, token) ?? throw new ApplicationFailure("work_not_found");
         if (!RetainsPatches(row.Status) || WorkStatePersistence.Snapshot(row).Workspace?.BaseCommitSha is not { } baseCommit) return null;
         WorkspaceCheckpoint? checkpoint = await db.WorkspaceCheckpoints.AsNoTracking().Where(x => x.WorkId == workId)
             .OrderByDescending(x => x.Id).Select(Projection).FirstOrDefaultAsync(token);
-        if (checkpoint is null || (checkpointId.HasValue && checkpoint.Id != checkpointId.Value)) return null;
+        if (checkpoint is null) return null;
         byte[]? patch = await _patches.ReadAsync(workId, checkpoint.Id, token);
         return patch is null ? null : new(checkpoint, baseCommit, patch);
     }

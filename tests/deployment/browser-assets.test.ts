@@ -71,7 +71,7 @@ test("every browser module dependency has a public static asset route", async ()
     for (const [route, file] of modules) {
         const code = await readFile(resolve("frontend/dist", file), "utf8");
         for (const match of code.matchAll(
-            /(?:\bfrom\s*|\bimport\s*)["']([^"']+)["']/g,
+            /^(?:import(?: [^;\n]+? from)?|export [^;\n]+? from) ["']([^"']+)["']/gm,
         )) {
             const dependency = new URL(match[1]!, `https://goblin.test${route}`)
                 .pathname;

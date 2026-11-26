@@ -105,13 +105,38 @@ async function workspace(page: Page, connected = true) {
     return commands;
 }
 
-test("Changes previews and downloads the saved native patch through read-only routes", async ({
+test("Changes opens an in-page diff with all files and individual file views", async ({
     page,
 }) => {
+    await page.setViewportSize({ width: 1600, height: 960 });
     const commands = await workspace(page);
     const base = "b".repeat(40);
     const head = "a".repeat(40);
-    const patch = `From ${head} Mon Sep 17 00:00:00 2001\nFrom: Goblin <agent@example.test>\nDate: Sun, 20 Sep 2026 00:00:00 +0000\nSubject: [PATCH] Update welcome\n\ndiff --git a/welcome.txt b/welcome.txt\n@@ -1 +1 @@\n-Hello\n+<welcome>\n`;
+    const patch = [
+        `From ${head} Mon Sep 17 00:00:00 2001`,
+        "Subject: [PATCH] Update welcome",
+        "",
+        "diff --git a/example.txt b/example.txt",
+        "---",
+        " welcome.txt | 2 +-",
+        " 3 files changed",
+        "",
+        "diff --git a/welcome.txt b/welcome.txt",
+        "--- a/welcome.txt",
+        "+++ b/welcome.txt",
+        "@@ -1 +1 @@",
+        "-Hello",
+        "+<welcome>",
+        String.raw`diff --git "a/docs/caf\303\251.txt" "b/docs/caf\303\251.txt"`,
+        "similarity index 100%",
+        "rename from docs/cafe.txt",
+        String.raw`rename to "docs/caf\303\251.txt"`,
+        "diff --git a/assets/theme.png b/assets/theme.png",
+        "GIT binary patch",
+        "literal 4",
+        "hidden-binary-data",
+        "",
+    ].join("\n");
     await page.route("**/api/work/1/changes", (route) =>
         route.fulfill({
             json: {
@@ -126,24 +151,87 @@ test("Changes previews and downloads the saved native patch through read-only ro
             },
         }),
     );
-    await page.route("**/api/work/1/changes/91.patch", (route) =>
+    await page.goto("/work?item=1");
+    const trigger = page.getByRole("button", { name: "Changes", exact: true });
+    await trigger.click();
+    const review = page.getByRole("region", { name: "Changes", exact: true });
+    await expect(
+        review.getByRole("heading", { name: "Changes" }),
+    ).toBeFocused();
+    await expect(
+        page.getByRole("heading", { name: "Polish the welcome page" }),
+    ).toBeVisible();
+    await expect(review.getByText("3 files changed")).toBeVisible();
+    await expect(
+        review.getByRole("button", { name: "All files", pressed: true }),
+    ).toBeVisible();
+    await expect(review.getByText("+<welcome>", { exact: true })).toBeVisible();
+    await expect(review.getByText("Binary file changed.")).toBeVisible();
+    await expect(review.getByText("example.txt")).toHaveCount(0);
+    await expect(review.getByText("hidden-binary-data")).toHaveCount(0);
+    await expect(
+        review.getByRole("link", { name: "Download patch" }),
+    ).toHaveCount(0);
+    await review.getByRole("button", { name: "By file" }).click();
+    const files = review.getByRole("navigation", { name: "Changed files" });
+    await files.getByRole("button", { name: /café.txt/ }).click();
+    await expect(
+        review.getByText("docs/cafe.txt", { exact: true }),
+    ).toBeVisible();
+    await expect(review.getByText("+<welcome>", { exact: true })).toHaveCount(
+        0,
+    );
+    await expect(
+        files.getByRole("button", { name: /café.txt/ }),
+    ).toHaveAttribute("aria-current", "true");
+    await review.getByRole("button", { name: "All files" }).click();
+    await expect(review.getByText("+<welcome>", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(review).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect(commands).toEqual([]);
+});
+
+test("Changes keeps long files readable from the narrow in-page review", async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await workspace(page);
+    const lines = Array.from({ length: 400 }, () => "+" + "x".repeat(420));
+    await page.route("**/api/work/1/changes", (route) =>
         route.fulfill({
-            body: patch,
-            headers: {
-                "content-disposition": 'attachment; filename="work-1-91.patch"',
+            json: {
+                checkpoint: {
+                    branch: "goblin/work-1",
+                    commitSha: "a".repeat(40),
+                },
+                baseCommitSha: "b".repeat(40),
+                patch: [
+                    "diff --git a/docs/long.txt b/docs/long.txt",
+                    "@@ -0,0 +1,401 @@",
+                    ...lines,
+                    "+++ final line",
+                    "",
+                ].join("\n"),
             },
         }),
     );
     await page.goto("/work?item=1");
-    await page.getByRole("button", { name: "Changes", exact: true }).click();
-    const review = page.getByRole("dialog", { name: "Changes" });
-    await expect(review.getByText("+<welcome>", { exact: true })).toBeVisible();
-    const downloaded = page.waitForEvent("download");
-    await review.getByRole("link", { name: "Download patch" }).click();
-    expect((await downloaded).suggestedFilename()).toBe("work-1-91.patch");
-    await page.keyboard.press("Escape");
-    await expect(review).toBeHidden();
-    expect(commands).toEqual([]);
+    const trigger = page.getByRole("button", { name: "Changes", exact: true });
+    await trigger.click();
+    const review = page.getByRole("region", { name: "Changes", exact: true });
+    await expect(trigger).toBeHidden();
+    await review.getByRole("button", { name: "By file" }).click();
+    await expect(
+        review.getByRole("combobox", { name: "Changed file" }),
+    ).toHaveValue("0");
+    await review.getByRole("button", { name: "Show next 2 lines" }).click();
+    await expect(review.locator(".diff-added").last()).toContainText("401");
+    await expect(
+        review.getByText("+++ final line", { exact: true }),
+    ).toBeVisible();
+    await review.getByRole("button", { name: "Close changes" }).click();
+    await expect(trigger).toBeFocused();
 });
 
 test("Create work saves a goal and leaves execution for an explicit Start", async ({

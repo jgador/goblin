@@ -16,7 +16,7 @@ import {
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
 import { isWorkFilter } from "./board.js";
 import type { BoardLayout, WorkFilter } from "./board.js";
-import { WorkChangesDialog } from "./changes.js";
+import { WorkChangesPanel } from "./changes.js";
 import { CommandSubmission } from "./command-submission.js";
 import type { PendingCommand } from "./command-submission.js";
 import { WorkCommands } from "./commands.js";
@@ -56,7 +56,7 @@ const drafts = new ComposerDrafts();
 const repositoryDrafts = new RepositoryDrafts();
 const root = document.querySelector<HTMLDivElement>("#app")!;
 const dom = new WorkspaceDom(root, repositoryDrafts);
-const workChanges = new WorkChangesDialog(api);
+const workChanges = new WorkChangesPanel(api);
 const commands = new WorkCommands(
     async (...kinds) =>
         (await api<{ ids: string[] }>("/api/identities", { kinds })).ids,
@@ -428,6 +428,12 @@ function navigate(
     }
 }
 
+function closeChanges() {
+    workChanges.close();
+    render(false, true);
+    document.getElementById("show-changes")?.focus();
+}
+
 function render(preserveMounted = false, forceSelect = false) {
     const { context, view, settingsSection } = navigation;
     if (context !== dom.context) {
@@ -453,6 +459,7 @@ function render(preserveMounted = false, forceSelect = false) {
         authenticated,
         preserveMounted,
         forceSelect,
+        changesPanel: workChanges.isOpen ? workChanges.element : undefined,
         draft,
         ...submissionState,
         workUnavailable: workspace.state.workUnavailable,
@@ -474,6 +481,7 @@ function render(preserveMounted = false, forceSelect = false) {
                 mobile: mobile.matches,
                 sidebarCollapsed,
                 activityOpen,
+                changesOpen: workChanges.isOpen,
                 conversationExpanded,
                 conversationsOpen,
                 filter,
@@ -829,7 +837,16 @@ document.addEventListener("click", async (event) => {
     }
     if (action === "view-changes") {
         const work = current()?.work;
-        if (work) await workChanges.open(work.id);
+        if (workChanges.isOpen) closeChanges();
+        else if (work) {
+            void workChanges.open(work.id);
+            render(false, true);
+            workChanges.focus();
+        }
+        return;
+    }
+    if (action === "close-changes") {
+        closeChanges();
         return;
     }
     if (action === "lock") {
@@ -1099,6 +1116,15 @@ function trapFocus(event: KeyboardEvent, selector: string) {
     }
 }
 document.addEventListener("keydown", (event) => {
+    if (
+        event.key === "Escape" &&
+        event.target instanceof Element &&
+        workChanges.element.contains(event.target)
+    ) {
+        event.preventDefault();
+        closeChanges();
+        return;
+    }
     const workspaceMenu =
         root.querySelector<HTMLDetailsElement>("#workspace-menu");
     if (event.key === "Escape" && workspaceMenu?.open) {

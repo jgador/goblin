@@ -24,7 +24,6 @@ internal sealed class WorkspaceEndpoints
     {
         app.MapGet("/api/work/{id:long}/workspace", GetAsync);
         app.MapGet("/api/work/{id:long}/changes", ChangesAsync);
-        app.MapGet("/api/work/{id:long}/changes/{checkpoint:long}.patch", DownloadPatchAsync);
         if (_gitRepositoryListener)
         {
             app.MapPost("/api/work/{id:long}/workspace/sessions", OpenAsync);
@@ -37,18 +36,9 @@ internal sealed class WorkspaceEndpoints
     private static async Task<IResult> ChangesAsync(long id, HttpContext context, WorkspaceCheckpoints checkpoints, CancellationToken token)
     {
         context.Response.Headers.CacheControl = "no-store";
-        WorkPatch? patch = await checkpoints.ReadPatchAsync(id, null, token);
+        WorkPatch? patch = await checkpoints.ReadPatchAsync(id, token);
         return patch is null ? Results.NotFound() : WorkResponse.Json(new Api.WorkPatchView(
             Api.WorkspaceCheckpoint.From(patch.Checkpoint), patch.BaseCommitSha, Encoding.UTF8.GetString(patch.Content)));
-    }
-
-    private static async Task<IResult> DownloadPatchAsync(long id, long checkpoint, HttpContext context, WorkspaceCheckpoints checkpoints, CancellationToken token)
-    {
-        context.Response.Headers.CacheControl = "no-store";
-        WorkPatch? patch = await checkpoints.ReadPatchAsync(id, checkpoint, token);
-        return patch is { Content.Length: > 0 }
-            ? Results.File(patch.Content, "text/x-patch", FormattableString.Invariant($"work-{id}-{checkpoint}.patch"))
-            : Results.NotFound();
     }
 
     private async Task<IResult> GetAsync(long id, WorkspaceCheckpoints checkpoints, InspectionStore sessions, WorkStore store, CancellationToken token)

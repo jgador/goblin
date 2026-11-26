@@ -28,9 +28,11 @@ retry or reconciliation. Repository setup uses a saved authorization preview; se
 submits a command. Execution details preserve agent, runtime, requested and reported
 model, branch, and environment provenance.
 
-**Changes** opens the latest verified repository patch for review and download. The
-[Work's patch](workspace-lifecycle.md#files-and-git-checkpoints) is available while
-the execution pod is stopped and is cleared when the Work closes.
+**Changes** opens the latest verified repository diff within the Work page. **All files**
+shows a continuous review, and **By file** lets you select a path. Expand a file or
+load more lines to read longer diffs. The
+[saved diff](workspace-lifecycle.md#files-and-git-checkpoints) is available while the
+execution pod is stopped and is cleared when the Work closes.
 
 If a command response is lost, **Resend command** sends the original command ID and
 payload; **Keep saved state** keeps the server view. Refresh never replays a command.

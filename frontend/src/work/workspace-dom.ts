@@ -7,6 +7,7 @@ type RenderOptions = {
     authenticated: boolean;
     preserveMounted: boolean;
     forceSelect: boolean;
+    changesPanel?: HTMLElement;
     draft: string;
     sending: boolean;
     pending: boolean;
@@ -74,6 +75,7 @@ export class WorkspaceDom {
 
     render(options: RenderOptions) {
         const { root } = this;
+        const { changesPanel } = options;
         const {
             context,
             approvalKey,
@@ -213,6 +215,8 @@ export class WorkspaceDom {
             settings?.detach();
             root.innerHTML = html;
             settings?.attach();
+            if (changesPanel)
+                root.querySelector("#work-changes-host")!.append(changesPanel);
         }
         for (const [id, value] of preserved) {
             const field = document.getElementById(id) as
@@ -296,7 +300,11 @@ export class WorkspaceDom {
             )
                 element.scrollTop = top;
         }
-        if (active?.isConnected && active.closest(".settings-page"))
+        if (
+            active?.isConnected &&
+            !active.closest("[inert]") &&
+            (active.closest(".settings-page") || changesPanel?.contains(active))
+        )
             active.focus({ preventScroll: true });
 
         return true;

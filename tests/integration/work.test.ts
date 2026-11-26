@@ -24,6 +24,7 @@ test("the work preview and its assets are public while workspace APIs remain pro
         ["/work", "text/html"],
         ["/work/", "text/html"],
         ["/work/app.js", "text/javascript"],
+        ["/work/diff.js", "text/javascript"],
         ["/work/command-submission.js", "text/javascript"],
         ["/work/model-catalog.js", "text/javascript"],
         ["/work/model-picker.js", "text/javascript"],

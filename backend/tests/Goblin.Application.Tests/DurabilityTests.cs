@@ -790,7 +790,7 @@ public sealed partial class DurabilityTests
         WorkspaceCheckpoints store = scope.ServiceProvider.GetRequiredService<WorkspaceCheckpoints>();
         WorkspaceCheckpointCoordinator checkpoints = fixture.Host.Services.GetRequiredService<WorkspaceCheckpointCoordinator>();
         WorkspaceCheckpoint saved = await checkpoints.SaveAsync(attempt, 1, new string('a', 40), default);
-        WorkPatch patch = (await store.ReadPatchAsync(id, saved.Id, default))!;
+        WorkPatch patch = (await store.ReadPatchAsync(id, default))!;
         Assert.Equal(saved.Id, patch.Checkpoint.Id);
         Assert.Equal(fixture.Remote.BaseCommit, patch.BaseCommitSha);
         Assert.Equal("saved review patch"u8.ToArray(), patch.Content);
@@ -810,7 +810,7 @@ public sealed partial class DurabilityTests
         await fixture.Reconcile(id, attempt);
         work = await fixture.Until(id, x => x.Work.Attention?.Reason == AttentionReason.ResultReview && !x.Work.Attempts[^1].CleanupPending);
         await fixture.Apply(WorkCommands.Approve(NextId(), id, work.Version, attempt));
-        Assert.Null(await reopened.ReadPatchAsync(id, saved.Id, default));
+        Assert.Null(await reopened.ReadPatchAsync(id, default));
         string patchDirectory = fixture.PatchDirectory(id);
         for (int i = 0; i < 100 && Directory.Exists(patchDirectory); i++) await Task.Delay(50);
         Assert.False(Directory.Exists(patchDirectory));

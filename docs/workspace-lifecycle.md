@@ -63,7 +63,7 @@ volume. The export applies as one commit with `git am`. For a cumulative export 
 multiple commits, Git generates the patch from a temporary commit with the checkpoint's
 tree. The real checkpoint SHA remains the reference for GitHub publication.
 
-**Changes** displays and downloads the latest patch without opening a sandbox or
+**Changes** previews the latest patch in the Work page without opening a sandbox or
 inspection session. On `Completed` or `Cancelled`, Goblin queues deletion of that Work's
 patch directory with the status transition. The same cleanup removes superseded copies
 for open Work. The review export is limited to 4 MiB.
