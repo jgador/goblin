@@ -3,19 +3,29 @@ import type { View, Work } from "./contracts.js";
 import { escapeHtml as e, icon } from "./presentation.js";
 import { relativeTime } from "./surface.js";
 
-const filters = {
-    all: "All work",
+const listStatuses = {
+    all: "All statuses",
     attention: "Needs attention",
     active: "In progress",
     done: "Completed",
+} as const;
+
+const filters = {
+    ...listStatuses,
+    all: "All work",
     assigned: "My work",
 } as const;
 
 export type WorkFilter = keyof typeof filters;
+export type ListStatus = keyof typeof listStatuses;
 export type BoardLayout = "board" | "list";
 
 export function isWorkFilter(value: string): value is WorkFilter {
     return Object.hasOwn(filters, value);
+}
+
+export function isListStatus(value: string): value is ListStatus {
+    return Object.hasOwn(listStatuses, value);
 }
 
 export function workInFilter(work: Work, filter: WorkFilter) {
@@ -79,21 +89,6 @@ export function workStatus(work: Work) {
     return work.status === WorkStatus.InProgress ? "In progress" : work.status;
 }
 
-function preview(work: Work) {
-    if (work.attention?.reason === AttentionReason.InputRequired)
-        return work.decisions.findLast((decision) => !decision.answer)
-            ?.question;
-    if (
-        work.attention?.reason === AttentionReason.ResultReview ||
-        work.status === WorkStatus.Completed
-    )
-        return work.results.findLast(
-            (result) =>
-                result.attemptId === work.attempts.at(-1)?.id &&
-                !result.requestedChanges,
-        )?.text;
-}
-
 function status(item: View) {
     const { work } = item;
     const tone =
@@ -105,37 +100,34 @@ function status(item: View) {
     return `<span id="board-status-${e(work.id)}" class="board-status" data-tone="${tone}">${e(workStatus(work))}</span>`;
 }
 
-function updated(item: View) {
-    return `<time datetime="${e(item.updatedAt)}">${e(relativeTime(item.updatedAt))}</time>`;
+function updated(item: View, id: string) {
+    return `<span id="board-updated-${id}" class="board-updated"><span class="sr-only">Updated </span><time datetime="${e(item.updatedAt)}">${e(relativeTime(item.updatedAt))}</time></span>`;
 }
 
-function card(item: View, selected: string) {
+function card(item: View) {
     const { work } = item;
-    const detail = preview(work)?.trim();
-    const excerpt =
-        detail && (detail.length > 200 ? detail.slice(0, 200) + "…" : detail);
     const id = e(work.id);
-    return `<li><button class="board-card board-entry" data-action="select-work" data-id="${id}" aria-current="${work.id === selected}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id}${excerpt ? ` board-preview-${id}` : ""}">
+    return `<li><button class="board-card board-entry" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
+        <span class="board-work-id">Work ${id}</span>
         <span id="board-title-${id}" class="board-card-title" title="${e(work.objective)}">${e(work.objective)}</span>
-        ${excerpt ? `<span id="board-preview-${id}" class="board-card-preview">${e(excerpt)}</span>` : ""}
-        <span class="board-card-meta">${status(item)}${updated(item)}</span>
+        <span class="board-card-meta">${status(item)}${updated(item, id)}</span>
     </button></li>`;
 }
 
-function rows(items: readonly View[], selected: string) {
+function rows(items: readonly View[]) {
     return `<div class="board-table"><div class="board-table-heading" aria-hidden="true"><span>Work</span><span>Status</span><span>Updated</span></div><ul class="board-list" role="list" aria-label="Work list">${items
         .map((item) => {
             const id = e(item.work.id);
             const title = e(item.work.objective);
-            return `<li><button class="board-entry board-list-item" data-action="select-work" data-id="${id}" aria-current="${item.work.id === selected}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
-            <span class="board-list-copy"><span class="board-list-icon">${icon("work")}</span><span class="board-list-label"><span id="board-title-${id}" class="board-list-title" title="${title}">${title}</span><span class="board-list-id">Work ${id}</span></span></span>
-            ${status(item)}<span id="board-updated-${id}"><span class="sr-only">Updated </span>${updated(item)}</span>
+            return `<li><button class="board-entry board-list-item" data-action="select-work" data-id="${id}" aria-labelledby="board-title-${id}" aria-describedby="board-status-${id} board-updated-${id}">
+            <span class="board-list-copy"><span class="board-list-icon">${icon("work")}</span><span class="board-list-label"><span id="board-title-${id}" class="board-list-title" title="${title}">${title}</span><span class="board-work-id">Work ${id}</span></span></span>
+            ${status(item)}${updated(item, id)}<span class="board-list-chevron">${icon("chevron")}</span>
         </button></li>`;
         })
         .join("")}</ul></div>`;
 }
 
-function columns(items: readonly View[], selected: string) {
+function columns(items: readonly View[]) {
     const groups = lanes
         .map((lane) => ({
             ...lane,
@@ -154,90 +146,94 @@ function columns(items: readonly View[], selected: string) {
                     items,
                 }) => `<section class="board-lane" data-lane="${id}" aria-labelledby="lane-${id}"><div class="board-lane-heading">
                 <h2 id="lane-${id}">${icon(symbol)}${name}</h2><span class="board-lane-count">${items.length}</span>
-            </div><ul>${items.map((item) => card(item, selected)).join("")}</ul></section>`,
+            </div><ul role="list">${items.map(card).join("")}</ul></section>`,
             )
             .join("")}
     </div>`;
 }
 
-const summary = [
-    { filter: "attention", icon: "wait" },
-    { filter: "active", icon: "progress" },
-    { filter: "done", icon: "circleCheck" },
-] as const;
+export function renderInboxControls(
+    layout: BoardLayout,
+    listStatus: ListStatus,
+) {
+    return `<div class="inbox-controls">
+        ${
+            layout === "list"
+                ? `<div class="inbox-status-control"><label for="inbox-status">Status</label><select id="inbox-status" class="field-control select-control">${Object.entries(
+                      listStatuses,
+                  )
+                      .map(
+                          ([value, label]) =>
+                              `<option value="${value}" ${listStatus === value ? "selected" : ""}>${label}</option>`,
+                      )
+                      .join("")}</select></div>`
+                : ""
+        }
+        <div class="board-layout" role="group" aria-label="Work layout">
+            <button data-action="board-layout" data-value="board" aria-pressed="${layout === "board"}">${icon("board")}Board</button>
+            <button data-action="board-layout" data-value="list" aria-pressed="${layout === "list"}">${icon("list")}List</button>
+        </div>
+    </div>`;
+}
 
 type BoardInput = {
-    work: readonly View[];
+    total: number;
     matches: readonly View[];
     loaded: boolean;
     workUnavailable: boolean;
-    filter: WorkFilter;
+    listStatus: ListStatus;
     layout: BoardLayout;
     search: string;
-    selected: string;
     sidebarCollapsed: boolean;
 };
 
 export function renderBoard({
-    work,
+    total,
     matches,
     loaded,
     workUnavailable,
-    filter,
+    listStatus,
     layout,
     search,
-    selected,
     sidebarCollapsed,
 }: BoardInput) {
-    const shown = matches.filter(({ work }) => workInFilter(work, filter));
-    const counts = workFilters(matches);
-    const count = `${shown.length} ${shown.length === 1 ? "work item" : "work items"}`;
+    const shown =
+        layout === "list" && listStatus !== "all"
+            ? matches.filter(({ work }) => workInFilter(work, listStatus))
+            : matches;
+    const count =
+        shown.length === total
+            ? `${total} ${total === 1 ? "work item" : "work items"}`
+            : `${shown.length} of ${total} ${total === 1 ? "work item" : "work items"}`;
     const empty = !loaded
         ? workUnavailable
             ? "Work unavailable"
             : "Loading work…"
-        : search
+        : search && !matches.length
           ? "No work matches your search."
-          : !work.length
+          : !total
             ? "Create work to give Goblin a goal."
-            : "No work in this view.";
+            : "No work matches this status.";
     return `<section class="board-workspace" aria-labelledby="board-heading" data-scroll="board">
         <div class="board-inner">
             <div class="board-heading">
                 <h1 id="board-heading" tabindex="-1">Work inbox</h1>
-                <div class="board-actions">
-                    ${sidebarCollapsed ? `<button class="secondary" data-action="new-chat">${icon("chat")}Ask Goblin</button>` : ""}
+                ${
+                    sidebarCollapsed
+                        ? `<div class="board-actions">
+                    <button class="secondary" data-action="new-chat">${icon("chat")}Ask Goblin</button>
                     <button class="primary" data-action="new-work">${icon("plus")}New work</button>
-                </div>
+                </div>`
+                        : ""
+                }
             </div>
-            <div class="board-summary" role="group" aria-label="Work status summary" ${loaded ? "" : "hidden"}>
-                ${summary
-                    .map(({ filter: value, icon: symbol }) => {
-                        const total = counts.find(
-                            (entry) => entry.value === value,
-                        )!.count;
-                        return `<button id="inbox-summary-${value}" class="board-summary-card" data-action="board-filter" data-value="${value}" aria-pressed="${filter === value}">
-                        <span><span class="board-summary-label">${filters[value]}</span><strong>${total}</strong></span><span class="board-summary-icon">${icon(symbol)}</span>
-                    </button>`;
-                    })
-                    .join("")}
-            </div>
-            <div class="board-toolbar" ${loaded ? "" : "hidden"}>
-                <div class="board-list-heading"><h2>Work items</h2><p class="board-count" role="status">${count}</p></div>
-                <div class="board-layout" role="group" aria-label="Work layout">
-                    <button data-action="board-layout" data-value="list" aria-pressed="${layout === "list"}">${icon("list")}List</button>
-                    <button data-action="board-layout" data-value="board" aria-pressed="${layout === "board"}">${icon("board")}Board</button>
-                </div>
-                <div class="board-filter" role="group" aria-label="Filter work">
-                    ${counts.map(({ value, name, count }) => `<button id="inbox-filter-${value}" class="board-filter-option" data-action="board-filter" data-value="${value}" aria-pressed="${filter === value}">${name}<span>${count}</span></button>`).join("")}
-                </div>
-            </div>
+            <p class="board-result-count" role="status"><span class="board-count" ${loaded ? "" : "hidden"}>${count}</span></p>
             <div class="board-content">
                 ${
                     loaded && shown.length
                         ? layout === "board"
-                            ? columns(shown, selected)
-                            : rows(shown, selected)
+                            ? columns(shown)
+                            : rows(shown)
                         : `<p class="board-empty">${empty}${loaded && search ? '<button class="text-button" data-action="clear-search">Clear search</button>' : ""}</p>`
                 }
             </div>

@@ -96,15 +96,24 @@ export class WorkspaceDom {
         const buttonRegion =
             activeButton?.closest<HTMLElement>("[data-scroll]")?.dataset.scroll;
         const sameContext = context === this.renderedContext;
+        const refreshInbox =
+            authenticated &&
+            preserveMounted &&
+            sameContext &&
+            context === "board" &&
+            !!root.querySelector(".board-workspace");
+        const activeSelect = active?.closest("select");
         const previousApproval =
             root.querySelector<HTMLElement>("#github-repository-options")
                 ?.dataset.approval ?? "";
         const gitHubAuthorizationChanged =
             sameContext && approvalKey !== previousApproval;
-        // Keep the native picker and its keyboard interaction alive during polling.
-        // Loaded state is applied on the next render after the user leaves the select.
+        // Inbox refreshes leave the Status picker mounted while updating the results.
+        // Other pickers defer the render so polling cannot interrupt their interaction.
         if (
-            (active?.closest("select") || this.sliderDragging) &&
+            ((activeSelect &&
+                !(refreshInbox && activeSelect.id === "inbox-status")) ||
+                this.sliderDragging) &&
             sameContext &&
             authenticated &&
             !options.sending &&
@@ -150,6 +159,7 @@ export class WorkspaceDom {
                               "work-effort",
                               "model-connection",
                               "work-view",
+                              "inbox-status",
                               "work-search",
                           ].includes(x.id),
                   )
@@ -194,20 +204,12 @@ export class WorkspaceDom {
             root.querySelector(".home")
         )
             this.refreshHome(html, options);
-        else if (
-            authenticated &&
-            preserveMounted &&
-            sameContext &&
-            context === "board" &&
-            root.querySelector(".board-workspace")
-        )
+        else if (refreshInbox)
             this.refreshRegions(html, [
                 ".sidebar",
-                ".workspace-header",
+                ".workspace-search-results",
                 ".workspace-notices",
-                ".board-heading",
-                ".board-summary",
-                ".board-toolbar",
+                ".board-count",
                 ".board-content",
             ]);
         else {
@@ -247,7 +249,7 @@ export class WorkspaceDom {
         if (advancedRepositoryOptions && setup?.advancedOpen)
             advancedRepositoryOptions.open = true;
         this.repositoryDrafts.showErrors(root, context);
-        if (focus?.id && sameContext) {
+        if (focus?.id && sameContext && document.activeElement !== focus) {
             const replacement = document.getElementById(focus.id) as
                 HTMLInputElement | HTMLTextAreaElement | null;
             if (replacement && !replacement.closest("[inert]")) {
@@ -262,23 +264,29 @@ export class WorkspaceDom {
                     replacement.setSelectionRange(cursor, cursorEnd ?? cursor);
             }
         }
-        if (buttonData?.action)
-            Array.from(
+        if (buttonData?.action) {
+            const replacement = Array.from(
                 root.querySelectorAll<HTMLButtonElement>("button[data-action]"),
-            )
-                .find(
-                    (b) =>
-                        b.id === (activeId ?? "") &&
-                        b.dataset.action === buttonData.action &&
-                        b.dataset.id === buttonData.id &&
-                        b.dataset.value === buttonData.value &&
-                        b.dataset.provider === buttonData.provider &&
-                        b.closest<HTMLElement>("[data-scroll]")?.dataset
-                            .scroll === buttonRegion &&
-                        !b.closest("[inert]") &&
-                        b.getClientRects().length,
-                )
-                ?.focus({ preventScroll: true });
+            ).find(
+                (b) =>
+                    b.id === (activeId ?? "") &&
+                    b.dataset.action === buttonData.action &&
+                    b.dataset.id === buttonData.id &&
+                    b.dataset.value === buttonData.value &&
+                    b.dataset.provider === buttonData.provider &&
+                    b.closest<HTMLElement>("[data-scroll]")?.dataset.scroll ===
+                        buttonRegion &&
+                    !b.closest("[inert]") &&
+                    b.getClientRects().length,
+            );
+            if (replacement) replacement.focus({ preventScroll: true });
+            else if (refreshInbox && activeButton?.matches(".board-entry"))
+                this.root
+                    .querySelector<HTMLElement>(
+                        '#inbox-status, .board-layout [aria-pressed="true"]',
+                    )
+                    ?.focus({ preventScroll: true });
+        }
         if (sameContext && !focus && !buttonData) {
             const replacement = activeSummary
                 ? document

@@ -6,8 +6,14 @@ import {
 } from "../api/values.js";
 import { renderKnowledge } from "../knowledge/page.js";
 import { formatTimestamp as time } from "../settings/timezone.js";
-import { renderBoard, workFilters, workInFilter, workStatus } from "./board.js";
-import type { BoardLayout, WorkFilter } from "./board.js";
+import {
+    renderBoard,
+    renderInboxControls,
+    workFilters,
+    workInFilter,
+    workStatus,
+} from "./board.js";
+import type { BoardLayout, ListStatus, WorkFilter } from "./board.js";
 import type { View, Work } from "./contracts.js";
 import { renderModelPicker } from "./model-picker.js";
 import type { WorkspaceNavigation } from "./navigation.js";
@@ -22,14 +28,13 @@ import {
     renderExecutions,
     renderOutputs,
     renderProgress,
-    renderRecentActivity,
 } from "./surface.js";
 import type { WorkspaceController } from "./workspace.js";
 
 type WorkspaceViewInput = {
     navigation: Pick<
         WorkspaceNavigation,
-        "view" | "selected" | "activeChat" | "isDirectory" | "inboxSelection"
+        "view" | "selected" | "activeChat" | "isDirectory"
     >;
     workspace: WorkspaceController["state"];
     mobile: boolean;
@@ -39,7 +44,7 @@ type WorkspaceViewInput = {
     conversationExpanded: boolean;
     conversationsOpen: boolean;
     filter: WorkFilter;
-    boardFilter: WorkFilter;
+    listStatus: ListStatus;
     boardLayout: BoardLayout;
     search: string;
     searchOpen: boolean;
@@ -67,7 +72,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         conversationExpanded,
         conversationsOpen,
         filter,
-        boardFilter,
+        listStatus,
         boardLayout,
         search,
         searchOpen,
@@ -83,9 +88,8 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         model,
         canExecute,
     } = input;
-    const { view, selected, activeChat, isDirectory, inboxSelection } =
-        navigation;
-    const inbox = view === "board" || inboxSelection;
+    const { view, selected, activeChat, isDirectory } = navigation;
+    const inbox = view === "board";
     const {
         work,
         conversations,
@@ -165,7 +169,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
                     : item?.work.status === WorkStatus.Ready
                       ? "Saves context for this work · Start work when ready"
                       : "Saves context with this work";
-        return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button>${inboxSelection && item ? `<span class="composer-work-label">${icon("work")}Work ${e(item.work.id)}</span>` : ""}` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
+        return `<div class="composer-wrap"><form class="composer" data-form="${kind}"><label class="sr-only" for="reply">${e(placeholder)}</label><textarea id="reply" name="reply" rows="3" maxlength="4000" placeholder="${e(placeholder)}" aria-describedby="${kind === "new" ? "create-work-note" : "composer-note"}" required ${submission.sending ? "disabled" : ""}>${e(draft)}</textarea><div class="composer-footer"><div class="composer-footer-start">${kind === "new" ? connectionButton() : kind === "work" ? `<button class="composer-add icon-button" type="button" data-action="toggle-conversation" aria-label="Conversation" aria-expanded="${conversationExpanded}" aria-controls="work-conversation" title="View conversation">${icon("chat")}</button><button class="composer-chip" type="button" data-action="view-outputs">${icon("file")}Outputs</button>` : `<span id="composer-note" class="composer-note">${note}</span>`}</div><button class="send ${kind === "new" ? "create-work" : ""}" type="submit" aria-label="${kind === "new" ? "Create work" : "Send message"}" ${submission.sending || submission.pending || workUnavailable ? "disabled" : ""}>${kind === "new" ? `Create work${icon("arrow")}` : icon("up")}</button></div>${kind === "work" ? `<p id="composer-note" class="composer-note">${note}</p>` : ""}</form>${kind === "new" ? '<p id="create-work-note" class="composer-hint">Save a goal. Start when you’re ready.</p>' : ""}</div>`;
     }
     function renderWorkHistory() {
         const shown = matches.filter(
@@ -195,8 +199,10 @@ export function renderWorkspace(input: WorkspaceViewInput) {
             <div class="sidebar-heading"><a class="brand" href="/" data-action="browse-work"><img src="/assets/branding/icon.svg" alt=""><span>goblin</span></a><button id="hide-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Hide sidebar" aria-expanded="true" aria-controls="workspace-sidebar">${icon("sidebar")}</button></div>
             ${inbox ? "" : `<button class="new-chat" data-action="new-work">${icon("plus")}New work</button>`}
             <nav class="sidebar-start" aria-label="Work navigation">
+                ${inbox ? `<button class="nav-button" data-action="new-work">${icon("plus")}New work</button>` : ""}
+                <button class="nav-button ${inbox ? "active" : ""}" data-action="browse-work" aria-current="${inbox ? "page" : "false"}" ${attentionCount ? 'aria-describedby="work-inbox-attention"' : ""}>${icon("inbox")}<span>Work inbox</span>${attentionCount ? `<span class="inbox-nav-count" aria-hidden="true">${attentionCount}</span>` : ""}</button>
+                ${attentionCount ? `<span class="sr-only" id="work-inbox-attention">${attentionCount} ${attentionCount === 1 ? "Work item needs" : "Work items need"} attention</span>` : ""}
                 ${inbox ? `<button class="nav-button" data-action="new-chat">${icon("chat")}Ask Goblin</button>` : ""}
-                <button class="nav-button ${inbox ? "active" : ""}" data-action="browse-work" aria-current="${inbox ? "page" : "false"}">${icon("inbox")}<span>Work inbox</span>${attentionCount ? `<span class="inbox-nav-count" aria-hidden="true">${attentionCount}</span>` : ""}</button>
             </nav>
             <div class="sidebar-history" data-scroll="sidebar">
                 <div class="conversation-heading"><button class="history-disclosure" data-action="view-chat" aria-expanded="${conversationsOpen || !!query}" aria-controls="conversation-history">${icon("chat")}Conversations${icon("chevron")}</button><button class="icon-button" data-action="new-chat" aria-label="New conversation">${icon("plus")}</button></div>
@@ -209,7 +215,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         </aside>`;
     }
     function renderHeader() {
-        return `<header class="workspace-header" ${(mobile && !sidebarCollapsed) || activityOpen ? "inert" : ""}><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button>${isDirectory ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "settings" ? "Settings" : "Knowledge"}</span>` : `${inbox ? '<span class="workspace-section-label inbox-breadcrumb">Workspace <span aria-hidden="true">/</span> Work inbox</span>' : ""}<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="${mobile ? "Search work…" : "Search work and conversations"}" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions">${inbox ? "" : `<button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button>`}<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${renderSearchResults()}</header>`;
+        return `<header class="workspace-header${inbox ? " inbox-header" : ""}" ${(mobile && !sidebarCollapsed) || activityOpen ? "inert" : ""}><button id="show-sidebar" class="icon-button" data-action="toggle-sidebar" aria-label="Show sidebar" aria-expanded="false" aria-controls="workspace-sidebar" ${sidebarCollapsed ? "" : "hidden"}>${icon("sidebar")}</button>${isDirectory ? `<span class="workspace-section-label">Workspace <span aria-hidden="true">/</span> ${view === "settings" ? "Settings" : "Knowledge"}</span>` : `${inbox ? '<span class="workspace-section-label inbox-breadcrumb">Workspace <span aria-hidden="true">/</span> Work inbox</span>' : ""}<label class="global-search">${icon("search")}<input id="work-search" type="search" placeholder="${mobile ? "Search work…" : "Search work and conversations"}" aria-label="Search work and conversations" value="${e(search)}" autocomplete="off"><span class="search-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><kbd>K</kbd></span></label>`}<div class="header-actions">${inbox ? "" : `<button class="icon-button global-ask" data-action="new-chat" aria-label="Ask Goblin" title="Ask Goblin">${icon("chat")}</button>`}<button class="icon-button" data-action="refresh" aria-label="Refresh" title="Refresh">${icon("refresh")}</button><details id="workspace-menu" class="action-menu"><summary class="workspace-avatar" aria-label="Workspace menu">${icon("user")}</summary><div class="action-menu-items"><button data-action="settings">${icon("settings")}Settings</button><button data-action="lock">${icon("lock")}Lock workspace</button></div></details></div>${inbox ? renderInboxControls(boardLayout, listStatus) : ""}<div class="workspace-search-results">${renderSearchResults()}</div></header>`;
     }
     function renderSearchResults() {
         if (isDirectory || !query || !sidebarCollapsed || !searchOpen)
@@ -222,14 +228,13 @@ export function renderWorkspace(input: WorkspaceViewInput) {
     }
     function renderBoardView() {
         return renderBoard({
-            work: ordered,
+            total: ordered.length,
             matches,
             loaded,
             workUnavailable,
-            filter: boardFilter,
+            listStatus,
             layout: boardLayout,
             search: query,
-            selected: inboxSelection ? selected : "",
             sidebarCollapsed,
         });
     }
@@ -250,32 +255,23 @@ export function renderWorkspace(input: WorkspaceViewInput) {
     function renderDetail(item: View) {
         const w = item.work,
             attempt = w.attempts.at(-1);
-        const back = inboxSelection
-            ? `<button class="icon-button" data-action="browse-work" aria-label="Back to work" title="Back to work">${icon("close")}</button>`
-            : `<button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button>`;
-        const activityButton = `<button id="show-activity" class="${inboxSelection ? "text-button" : "secondary activity-toggle"}" data-action="toggle-activity" aria-label="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${inboxSelection ? "" : icon("activity")}Activity</button>`;
+        const back = `<button class="text-button back-to-work" data-action="browse-work">${icon("back")}Back to work</button>`;
+        const activityButton = `<button id="show-activity" class="secondary activity-toggle" data-action="toggle-activity" aria-label="Activity" aria-expanded="${activityOpen}" aria-controls="work-activity">${icon("activity")}Activity</button>`;
         const changes =
             w.status !== WorkStatus.Completed &&
             w.status !== WorkStatus.Cancelled &&
             w.attempts.some((entry) => entry.target.repository?.grant)
-                ? `<button id="show-changes" class="${inboxSelection ? "text-button" : "secondary"}" data-action="view-changes" aria-expanded="${changesOpen}" aria-controls="work-changes-host">${icon("branch")}Changes</button>`
+                ? `<button id="show-changes" class="secondary" data-action="view-changes" aria-expanded="${changesOpen}" aria-controls="work-changes-host">${icon("branch")}Changes</button>`
                 : "";
-        const actions = inboxSelection
-            ? `<div class="inbox-detail-actions"><button class="icon-button" data-action="share-work" aria-label="Share" title="Share work">${icon("share")}</button><button class="icon-button inbox-expand" data-action="expand-work" aria-label="Open full work" title="Open full work">${icon("external")}</button>${back}</div>`
-            : `<div class="detail-actions">${changes}<button class="secondary" data-action="share-work">${icon("share")}Share</button>${activityButton}</div>`;
-        const outputCount = w.results.length + w.artifacts.length;
-        const sections = inboxSelection
-            ? `<nav class="inbox-detail-nav" aria-label="Work detail sections"><button class="text-button" data-action="inbox-overview">Overview</button>${changes}<button class="text-button" data-action="view-outputs">Outputs${outputCount ? ` <span>${outputCount}</span>` : ""}</button>${activityButton}</nav>`
-            : "";
+        const actions = `<div class="detail-actions">${changes}<button class="secondary" data-action="share-work">${icon("share")}Share</button>${activityButton}</div>`;
         return `<div class="detail-body" id="detail-content" data-scroll="detail"><header class="detail-heading">
-            <div class="work-context">${inboxSelection ? `<span>Work ${e(w.id)}</span>${actions}` : `${back}<span>Work ${e(w.id)}</span>`}</div>
-            <div class="title-row"><h2 id="work-title-heading" tabindex="-1" class="preserve-lines">${e(w.objective)}</h2>${inboxSelection ? "" : actions}</div>
+            <div class="work-context">${back}<span>Work ${e(w.id)}</span></div>
+            <div class="title-row"><h2 id="work-title-heading" tabindex="-1" class="preserve-lines">${e(w.objective)}</h2>${actions}</div>
             <div class="detail-properties">${status(w)}<span>${icon("user")}${e(workAgent(w)?.name ?? "Goblin")}</span><span>Updated ${e(relativeTime(item.updatedAt))}</span></div>
-            ${sections}
         </header>
         <div class="work-layout"><div class="work-main">${controls(w)}
         ${w.decisions.length ? `<section class="work-section" aria-labelledby="decisions-heading"><div class="section-content"><div class="section-heading"><h3 id="decisions-heading">Decisions</h3><span class="section-count">${w.decisions.length}</span></div>${renderDecisions(w)}</div></section>` : ""}
-        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3>${inboxSelection ? "" : '<p class="section-description">Results and artifacts from this work.</p>'}</div>${w.results.length + w.artifacts.length > 3 ? '<button class="text-button" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section>${inboxSelection ? renderRecentActivity(w) : ""}</div>
+        <section id="work-outputs" class="work-section outputs-section" aria-labelledby="outputs-heading"><div class="section-content"><div class="section-heading"><div><h3 id="outputs-heading">Outputs</h3><p class="section-description">Results and artifacts from this work.</p></div>${w.results.length + w.artifacts.length > 3 ? '<button class="text-button" data-action="view-outputs">View all ' + icon("arrow") + "</button>" : ""}</div>${renderOutputs(w)}</div></section></div>
         <aside class="work-support" aria-label="Work details"><section class="work-section progress-section" aria-labelledby="progress-heading"><div class="section-content"><div class="section-heading"><h3 id="progress-heading">Progress</h3></div>${renderProgress(item)}</div></section>
         ${w.attempts.length ? `<section class="work-section executions-section" aria-labelledby="executions-heading"><div class="section-content"><div class="section-heading"><h3 id="executions-heading">Executions</h3><span class="section-count">${w.attempts.length}</span></div>${renderExecutions(w)}</div></section>` : ""}
         <section class="work-section work-info" aria-labelledby="work-info-heading"><div class="section-content"><div class="section-heading"><h3 id="work-info-heading">Details</h3></div><dl class="work-properties"><dt>Created</dt><dd>${e(time(item.createdAt))}</dd><dt><button class="text-button" data-action="settings-agents">Agent ${icon("arrow")}</button></dt><dd>${e(workAgent(w)?.name ?? "Goblin")}</dd>${attempt?.target.repository ? `<dt>Repository</dt><dd class="preserve-lines">${e(attempt.target.repository.repository)}${attempt.target.repository.grant ? `<span class="repository-branch">${icon("branch")}${e(attempt.target.repository.grant.branch)}</span>` : ""}</dd>` : ""}</dl><div class="work-info-actions"><button class="text-button" data-action="discuss-goal">${icon("chat")}Discuss goal</button><button class="text-button" data-action="settings-github">${icon("github")}GitHub</button></div></div></section></aside></div></div>
@@ -289,9 +285,7 @@ export function renderWorkspace(input: WorkspaceViewInput) {
         const workComposer = renderWorkComposer(item.work);
         if (changesOpen)
             return `<div class="work-review-layout"><section class="detail" aria-label="Selected work">${detail}${workComposer}</section><div id="work-changes-host"></div></div>`;
-        return inboxSelection
-            ? `<div class="inbox-split">${renderBoardView()}<aside class="detail inbox-details" aria-label="Selected work">${detail}</aside>${workComposer}</div><div id="work-changes-host" hidden></div>`
-            : `<section class="detail" aria-label="Selected work">${detail}${workComposer}</section><div id="work-changes-host" hidden></div>`;
+        return `<section class="detail" aria-label="Selected work">${detail}${workComposer}</section><div id="work-changes-host" hidden></div>`;
     }
     function gitHubRepositorySetup(w: Work, required = false) {
         const handoff = isRepositoryHandoff(w);

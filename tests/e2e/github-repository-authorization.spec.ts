@@ -120,6 +120,9 @@ test("chat shows enablement and exact Git scope before submitting only the saved
     await expect(preview).toContainText("without pushing");
     await expect(page.getByLabel("Git actions")).toHaveValue("local");
     await page.setViewportSize({ width: 390, height: 844 });
+    await expect(
+        page.getByRole("button", { name: "Show sidebar" }),
+    ).toBeVisible();
     const approve = preview.getByRole("button", {
         name: "Enable repository & authorize this Work",
     });

@@ -8,12 +8,13 @@ attempts, Git checkpoints, and PVCs.
 ## Using Work
 
 **Work inbox** opens as a list ordered by most recently updated. Choose **Board** to
-group items into Ready, In progress, Needs attention, and Closed. The board
-shows groups with matching items. Closed includes completed and cancelled Work.
-Use search, a status count, or a filter to narrow either layout. On wide screens,
-selecting an item keeps the inbox beside its next action, outputs, and activity.
-Choose **Open full work** for a wider detail view. On smaller screens, the selected
-item uses the full workspace. The sidebar shows the default agent’s connection.
+group search matches into Ready, In progress, Needs attention, and Closed. The board
+shows lanes with matching items. Closed includes completed and cancelled Work.
+Use **Status** in List to narrow those results to work in progress, completed work,
+or work that needs attention for any reason. The sidebar count shows all Work that
+needs attention across the inbox. Open a card or row to see the Work conversation,
+activity, and outputs. Returning to the inbox restores the last layout, search, and
+List status. The inbox sidebar shows the default agent’s connection.
 **Ask Goblin** opens an untracked conversation.
 
 In the browser, **Create work** saves a goal and assigns the default agent; **Start**

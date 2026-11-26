@@ -108,7 +108,7 @@ for (const authenticated of [false, true]) {
             await page.clock.runFor(3000);
             await expect(
                 page.getByRole("heading", {
-                    name: authenticated ? "Work" : "Open your workspace",
+                    name: authenticated ? "Work inbox" : "Open your workspace",
                     exact: true,
                 }),
             ).toBeVisible();

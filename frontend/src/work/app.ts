@@ -14,8 +14,8 @@ import {
     savedTimeZone,
 } from "../settings/timezone.js";
 import { TimeZoneSetup } from "../settings/timezone-picker.js";
-import { isWorkFilter } from "./board.js";
-import type { BoardLayout, WorkFilter } from "./board.js";
+import { isListStatus, isWorkFilter } from "./board.js";
+import type { BoardLayout, ListStatus, WorkFilter } from "./board.js";
 import { WorkChangesPanel } from "./changes.js";
 import { CommandSubmission } from "./command-submission.js";
 import type { PendingCommand } from "./command-submission.js";
@@ -67,10 +67,11 @@ let activityOpen = false,
     conversationExpanded = false,
     conversationsOpen = navigation.view === "chat",
     filter: WorkFilter = "all",
-    boardFilter: WorkFilter = "all",
+    listStatus: ListStatus = "all",
     boardLayout: BoardLayout = "list",
     searchOpen = false,
-    search = "";
+    search = "",
+    inboxSearch = "";
 let sidebarCollapsed =
     mobile.matches ||
     localStorage.getItem("goblin.sidebarCollapsed") === "true";
@@ -234,9 +235,10 @@ function forgetWorkspace() {
     pendingContext = undefined;
     changing = false;
     filter = "all";
-    boardFilter = "all";
+    listStatus = "all";
     searchOpen = false;
     search = "";
+    inboxSearch = "";
     modelCatalogs.clear();
     modelSelections.clear();
     modelPickerOpen = false;
@@ -410,12 +412,14 @@ function navigate(
     id = "",
     historyMode: "auto" | "restore" = "auto",
 ) {
-    const leavingSettings =
-        navigation.view === "settings" && next !== "settings";
+    const previous = navigation.view;
+    const leavingSettings = previous === "settings" && next !== "settings";
     if (leavingSettings) settings.reset();
+    if (previous === "board" && next !== "board") inboxSearch = search;
     navigation.navigate(next, id, historyMode);
     searchOpen = false;
-    if (navigation.isDirectory) search = "";
+    if (next === "board" && previous !== "board") search = inboxSearch;
+    else if (navigation.isDirectory) search = "";
     changing = false;
     conversationExpanded = false;
     activityOpen = false;
@@ -485,7 +489,7 @@ function render(preserveMounted = false, forceSelect = false) {
                 conversationExpanded,
                 conversationsOpen,
                 filter,
-                boardFilter,
+                listStatus,
                 boardLayout,
                 search,
                 searchOpen,
@@ -709,9 +713,7 @@ document.addEventListener("click", async (event) => {
         return;
     }
     if (action === "browse-work") {
-        const returning =
-            navigation.inboxSelection ||
-            target.classList.contains("back-to-work");
+        const returning = navigation.view === "work";
         filter = "all";
         if (returning && navigation.canReturnToBoard) {
             history.back();
@@ -725,21 +727,6 @@ document.addEventListener("click", async (event) => {
     if (action === "board-layout" && (value === "board" || value === "list")) {
         boardLayout = value;
         render();
-        return;
-    }
-    if (action === "board-filter" && value && isWorkFilter(value)) {
-        boardFilter = value;
-        render();
-        return;
-    }
-    if (action === "expand-work" && navigation.inboxSelection) {
-        navigation.expandWork();
-        render();
-        document.getElementById("work-title-heading")?.focus();
-        return;
-    }
-    if (action === "inbox-overview") {
-        document.getElementById("detail-content")?.scrollTo({ top: 0 });
         return;
     }
     if (action === "view-outputs") {
@@ -868,11 +855,11 @@ document.addEventListener("click", async (event) => {
         searchOpen = false;
     }
     if (action === "search-work" || action === "search-chat") {
-        search = "";
         navigate(
             action === "search-work" ? "work" : "chat",
             target.dataset.id!,
         );
+        search = "";
         render();
         root.querySelector<HTMLElement>(
             action === "search-work" ? ".detail h2" : "#reply",
@@ -1044,25 +1031,22 @@ document.addEventListener("input", (event) => {
     ) {
         search = event.target.value;
         searchOpen = true;
-        render();
+        render(navigation.view === "board");
     }
 });
 document.addEventListener("change", (event) => {
-    if (
-        event.target instanceof HTMLSelectElement &&
-        event.target.id === "work-view"
-    ) {
-        const nextFilter = event.target.value;
-        if (!isWorkFilter(nextFilter)) return;
-        filter = nextFilter;
-        const fromDirectory = navigation.isDirectory;
-        if (fromDirectory) {
-            boardFilter = nextFilter;
-            navigate("board");
+    if (event.target instanceof HTMLSelectElement) {
+        const { id, value } = event.target;
+        if (id === "inbox-status" && isListStatus(value)) {
+            listStatus = value;
+            render(true);
+            return;
         }
-        render(false, true);
-        if (fromDirectory) focusBoard(false);
-        return;
+        if (id === "work-view" && isWorkFilter(value)) {
+            filter = value;
+            render(false, true);
+            return;
+        }
     }
     if (
         event.target instanceof HTMLInputElement &&
@@ -1197,6 +1181,7 @@ document.addEventListener("keydown", (event) => {
     if (
         event.key === "Escape" &&
         search &&
+        !(event.target instanceof HTMLSelectElement) &&
         !(mobile.matches && !sidebarCollapsed) &&
         !activityOpen
     ) {
